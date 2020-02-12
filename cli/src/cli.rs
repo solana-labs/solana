@@ -334,6 +334,17 @@ pub enum CliCommand {
         nonce_authority: Option<SigningAuthority>,
         fee_payer: Option<SigningAuthority>,
     },
+    StakeSetLockup {
+        stake_account_pubkey: Pubkey,
+        lockup: Lockup,
+        custodian: Option<SigningAuthority>,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
+    },
     WithdrawStake {
         stake_account_pubkey: Pubkey,
         destination_account_pubkey: Pubkey,
@@ -565,6 +576,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
         ("stake-authorize-withdrawer", Some(matches)) => {
             parse_stake_authorize(matches, StakeAuthorize::Withdrawer)
         }
+        ("stake-set-lockup", Some(matches)) => parse_stake_set_lockup(matches),
         ("stake-account", Some(matches)) => parse_show_stake_account(matches),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Storage Commands
@@ -1665,7 +1677,29 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_authority.as_ref(),
             fee_payer.as_ref(),
         ),
-
+        CliCommand::StakeSetLockup {
+            stake_account_pubkey,
+            mut lockup,
+            ref custodian,
+            sign_only,
+            ref signers,
+            blockhash_query,
+            nonce_account,
+            ref nonce_authority,
+            ref fee_payer,
+        } => process_stake_set_lockup(
+            &rpc_client,
+            config,
+            &stake_account_pubkey,
+            &mut lockup,
+            custodian.as_ref(),
+            *sign_only,
+            signers,
+            blockhash_query,
+            *nonce_account,
+            nonce_authority.as_ref(),
+            fee_payer.as_ref(),
+        ),
         CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey,
