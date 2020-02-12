@@ -13,8 +13,10 @@ use rayon::prelude::*;
 use std::ops::{Index, IndexMut};
 use std::slice::SliceIndex;
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use std::os::raw::c_int;
+use std::mem::size_of;
 
 const CUDA_SUCCESS: c_int = 0;
 
@@ -22,7 +24,6 @@ pub fn pin<T>(_mem: &mut Vec<T>) {
     if let Some(api) = perf_libs::api() {
         unsafe {
             use core::ffi::c_void;
-            use std::mem::size_of;
 
             let err = (api.cuda_host_register)(
                 _mem.as_mut_ptr() as *mut c_void,
@@ -78,10 +79,17 @@ impl<T: Default + Clone + Sized> Reset for PinnedVec<T> {
     }
 }
 
+static ALLOC: AtomicUsize = AtomicUsize::new(0);
+static FREE: AtomicUsize = AtomicUsize::new(0);
+
 impl<T: Clone + Default + Sized> Default for PinnedVec<T> {
     fn default() -> Self {
+        let x = Vec::new();
+        let alloc = ALLOC.fetch_add(x.capacity() * size_of::<T>(), Ordering::Relaxed);
+        let freed = FREE.load(Ordering::Relaxed);
+        datapoint_error!("pinned_vec", ("alloc", alloc as i64 - freed as i64, i64));
         Self {
-            x: Vec::new(),
+            x,
             pinned: false,
             pinnable: false,
             recycler: None,
@@ -285,6 +293,9 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
             pin(&mut self.x);
             self.pinned = true;
         }
+        let freed = FREE.fetch_add(_old_capacity * size_of::<T>(), Ordering::Relaxed);
+        let alloc = ALLOC.fetch_add(self.x.capacity() * size_of::<T>(), Ordering::Relaxed);
+        datapoint_error!("pinned_vec", ("alloc", alloc as i64 - freed as i64, i64));
     }
     fn recycler_ref(&self) -> Option<Arc<RecyclerX<Self>>> {
         let r = self.recycler.as_ref()?;
@@ -326,6 +337,9 @@ impl<T: Sized + Default + Clone> Drop for PinnedVec<T> {
         if self.pinned {
             unpin(self.x.as_mut_ptr());
         }
+        let freed = FREE.fetch_add(self.x.capacity() * size_of::<T>(), Ordering::Relaxed);
+        let alloc = ALLOC.load(Ordering::Relaxed);
+        datapoint_error!("pinned_vec", ("alloc", alloc as i64 - freed as i64, i64));
     }
 }
 
