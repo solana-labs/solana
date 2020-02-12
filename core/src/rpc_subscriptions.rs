@@ -95,10 +95,11 @@ where
     let mut found = false;
     subscriptions.retain(|_, v| {
         v.retain(|k, _| {
-            if *k == *sub_id {
+            let retain = *k != *sub_id;
+            if !retain {
                 found = true;
             }
-            !found
+            retain
         });
         !v.is_empty()
     });
@@ -622,6 +623,7 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&solana_budget_program::id()));
     }
+
     #[test]
     fn test_check_signature_subscribe() {
         let GenesisConfigInfo {
@@ -675,6 +677,7 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&signature));
     }
+
     #[test]
     fn test_check_slot_subscribe() {
         let (subscriber, _id_receiver, transport_receiver) =
@@ -712,5 +715,50 @@ pub(crate) mod tests {
             .read()
             .unwrap()
             .contains_key(&sub_id));
+    }
+
+    #[test]
+    fn test_add_and_remove_subscription() {
+        let (subscriber, _id_receiver, _transport_receiver) = Subscriber::new_test("notification");
+        let sink = subscriber
+            .assign_id(SubscriptionId::String("test".to_string()))
+            .unwrap();
+        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, (Sink<()>, Confirmations)>> =
+            HashMap::new();
+
+        let num_keys = 5;
+        let mut next_id: u64 = 0;
+        for _ in 0..num_keys {
+            let key = next_id;
+            let sub_id = SubscriptionId::Number(next_id);
+            add_subscription(&mut subscriptions, &key, None, &sub_id, &sink.clone());
+            next_id += 1;
+        }
+
+        // Add another subscription to the "0" key
+        let sub_id = SubscriptionId::Number(next_id);
+        add_subscription(&mut subscriptions, &0, None, &sub_id, &sink.clone());
+
+        assert_eq!(subscriptions.len(), num_keys);
+        assert_eq!(subscriptions.get(&0).unwrap().len(), 2);
+        assert_eq!(subscriptions.get(&1).unwrap().len(), 1);
+
+        assert_eq!(
+            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
+            true
+        );
+        assert_eq!(subscriptions.len(), num_keys);
+        assert_eq!(subscriptions.get(&0).unwrap().len(), 1);
+        assert_eq!(
+            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
+            false
+        );
+
+        assert_eq!(
+            remove_subscription(&mut subscriptions, &SubscriptionId::Number(next_id)),
+            true
+        );
+        assert_eq!(subscriptions.len(), num_keys - 1);
+        assert!(subscriptions.get(&0).is_none());
     }
 }
