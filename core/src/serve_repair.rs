@@ -498,20 +498,21 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let me = ContactInfo::new(
-                &Pubkey::new_rand(),
-                socketaddr!("127.0.0.1:1234"),
-                socketaddr!("127.0.0.1:1235"),
-                socketaddr!("127.0.0.1:1236"),
-                socketaddr!("127.0.0.1:1237"),
-                socketaddr!("127.0.0.1:1238"),
-                socketaddr!("127.0.0.1:1239"),
-                socketaddr!("127.0.0.1:1240"),
-                socketaddr!("127.0.0.1:1241"),
-                socketaddr!("127.0.0.1:1242"),
-                socketaddr!("127.0.0.1:1243"),
-                0,
-            );
+            let me = ContactInfo {
+                id: Pubkey::new_rand(),
+                gossip: socketaddr!("127.0.0.1:1234"),
+                tvu: socketaddr!("127.0.0.1:1235"),
+                tvu_forwards: socketaddr!("127.0.0.1:1236"),
+                repair: socketaddr!("127.0.0.1:1237"),
+                tpu: socketaddr!("127.0.0.1:1238"),
+                tpu_forwards: socketaddr!("127.0.0.1:1239"),
+                storage_addr: socketaddr!("127.0.0.1:1240"),
+                rpc: socketaddr!("127.0.0.1:1241"),
+                rpc_pubsub: socketaddr!("127.0.0.1:1242"),
+                serve_repair: socketaddr!("127.0.0.1:1243"),
+                wallclock: 0,
+                shred_version: 0,
+            };
             let rv = ServeRepair::run_window_request(
                 &recycler,
                 &me,
@@ -569,20 +570,21 @@ mod tests {
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
-        let nxt = ContactInfo::new(
-            &Pubkey::new_rand(),
-            socketaddr!([127, 0, 0, 1], 1234),
-            socketaddr!([127, 0, 0, 1], 1235),
-            socketaddr!([127, 0, 0, 1], 1236),
-            socketaddr!([127, 0, 0, 1], 1237),
-            socketaddr!([127, 0, 0, 1], 1238),
-            socketaddr!([127, 0, 0, 1], 1239),
-            socketaddr!([127, 0, 0, 1], 1240),
-            socketaddr!([127, 0, 0, 1], 1241),
-            socketaddr!([127, 0, 0, 1], 1242),
-            serve_repair_addr,
-            0,
-        );
+        let nxt = ContactInfo {
+            id: Pubkey::new_rand(),
+            gossip: socketaddr!([127, 0, 0, 1], 1234),
+            tvu: socketaddr!([127, 0, 0, 1], 1235),
+            tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
+            repair: socketaddr!([127, 0, 0, 1], 1237),
+            tpu: socketaddr!([127, 0, 0, 1], 1238),
+            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
+            storage_addr: socketaddr!([127, 0, 0, 1], 1240),
+            rpc: socketaddr!([127, 0, 0, 1], 1241),
+            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            serve_repair: serve_repair_addr,
+            wallclock: 0,
+            shred_version: 0,
+        };
         cluster_info.write().unwrap().insert_info(nxt.clone());
         let rv = serve_repair
             .repair_request(&RepairType::Shred(0, 0))
@@ -591,20 +593,21 @@ mod tests {
         assert_eq!(rv.0, nxt.serve_repair);
 
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
-        let nxt = ContactInfo::new(
-            &Pubkey::new_rand(),
-            socketaddr!([127, 0, 0, 1], 1234),
-            socketaddr!([127, 0, 0, 1], 1235),
-            socketaddr!([127, 0, 0, 1], 1236),
-            socketaddr!([127, 0, 0, 1], 1237),
-            socketaddr!([127, 0, 0, 1], 1238),
-            socketaddr!([127, 0, 0, 1], 1239),
-            socketaddr!([127, 0, 0, 1], 1240),
-            socketaddr!([127, 0, 0, 1], 1241),
-            socketaddr!([127, 0, 0, 1], 1242),
-            serve_repair_addr2,
-            0,
-        );
+        let nxt = ContactInfo {
+            id: Pubkey::new_rand(),
+            gossip: socketaddr!([127, 0, 0, 1], 1234),
+            tvu: socketaddr!([127, 0, 0, 1], 1235),
+            tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
+            repair: socketaddr!([127, 0, 0, 1], 1237),
+            tpu: socketaddr!([127, 0, 0, 1], 1238),
+            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
+            storage_addr: socketaddr!([127, 0, 0, 1], 1240),
+            rpc: socketaddr!([127, 0, 0, 1], 1241),
+            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            serve_repair: serve_repair_addr2,
+            wallclock: 0,
+            shred_version: 0,
+        };
         cluster_info.write().unwrap().insert_info(nxt);
         let mut one = false;
         let mut two = false;
