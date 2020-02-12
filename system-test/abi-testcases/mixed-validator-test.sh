@@ -9,15 +9,16 @@ cd "$(dirname "$0")"
 
 logDir="$PWD"/logs
 ledgerDir="$PWD"/config
+rm -rf "$ledgerDir" "$logDir"
 mkdir -p "$logDir"
 
-baselineVersion=0.23.2  # <-- oldest version we remain compatible with
+baselineVersion=0.23.4  # <-- oldest version we remain compatible with
 otherVersions=(
   beta
   edge
 )
 
-solanaInstallDataDir=$PWD/config/solana
+solanaInstallDataDir=$PWD/releases
 solanaInstallGlobalOpts=(
   --data-dir "$solanaInstallDataDir"
   --config "$solanaInstallDataDir"/config.yml
@@ -31,7 +32,7 @@ bootstrapInstall() {
     curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v"$v"/install/solana-install-init.sh \
         | sh -s - "$v" "${solanaInstallGlobalOpts[@]}"
   fi
-  export PATH="$PWD/solana/active_release/bin/:$PATH"
+  export PATH="$solanaInstallDataDir/active_release/bin/:$PATH"
 }
 
 bootstrapInstall "$baselineVersion"
@@ -70,8 +71,14 @@ killSession
     ./baseline-run.sh 2>&1 | tee $logDir/$baselineVersion.log \
   "
 
-  # Give it time to boot
-  sleep 5
+  SECONDS=
+  while [[ ! -f config/baseline-run/init-completed ]]; do
+    sleep 5
+    if [[ $SECONDS -gt 60 ]]; then
+      echo "Error: validator failed to start"
+      exit 1
+    fi
+  done
 
   solana --url http://127.0.0.1:8899 show-validators
 )
@@ -122,7 +129,10 @@ for v in "${otherVersions[@]}"; do
     SECONDS=
     while [[ ! -f $ledger/snapshot.tar.bz2 ]]; do
       sleep 5
-      test $SECONDS -lt 60
+      if [[ $SECONDS -gt 60 ]]; then
+        echo "Error: validator failed to create a snapshot"
+        exit 1
+      fi
     done
   )
   echo Ok
