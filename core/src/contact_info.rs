@@ -95,53 +95,22 @@ impl Default for ContactInfo {
 }
 
 impl ContactInfo {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        id: &Pubkey,
-        gossip: SocketAddr,
-        tvu: SocketAddr,
-        tvu_forwards: SocketAddr,
-        repair: SocketAddr,
-        tpu: SocketAddr,
-        tpu_forwards: SocketAddr,
-        storage_addr: SocketAddr,
-        rpc: SocketAddr,
-        rpc_pubsub: SocketAddr,
-        serve_repair: SocketAddr,
-        now: u64,
-    ) -> Self {
+    pub fn new_localhost(id: &Pubkey, now: u64) -> Self {
         Self {
             id: *id,
-            gossip,
-            tvu,
-            tvu_forwards,
-            repair,
-            tpu,
-            tpu_forwards,
-            storage_addr,
-            rpc,
-            rpc_pubsub,
-            serve_repair,
+            gossip: socketaddr!("127.0.0.1:1234"),
+            tvu: socketaddr!("127.0.0.1:1235"),
+            tvu_forwards: socketaddr!("127.0.0.1:1236"),
+            repair: socketaddr!("127.0.0.1:1237"),
+            tpu: socketaddr!("127.0.0.1:1238"),
+            tpu_forwards: socketaddr!("127.0.0.1:1239"),
+            storage_addr: socketaddr!("127.0.0.1:1240"),
+            rpc: socketaddr!("127.0.0.1:1241"),
+            rpc_pubsub: socketaddr!("127.0.0.1:1242"),
+            serve_repair: socketaddr!("127.0.0.1:1243"),
             wallclock: now,
             shred_version: 0,
         }
-    }
-
-    pub fn new_localhost(id: &Pubkey, now: u64) -> Self {
-        Self::new(
-            id,
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-            socketaddr!("127.0.0.1:1238"),
-            socketaddr!("127.0.0.1:1239"),
-            socketaddr!("127.0.0.1:1240"),
-            socketaddr!("127.0.0.1:1241"),
-            socketaddr!("127.0.0.1:1242"),
-            socketaddr!("127.0.0.1:1243"),
-            now,
-        )
     }
 
     #[cfg(test)]
@@ -149,20 +118,21 @@ impl ContactInfo {
     pub fn new_multicast() -> Self {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
-        Self::new(
-            &Pubkey::new_rand(),
-            addr,
-            addr,
-            addr,
-            addr,
-            addr,
-            addr,
-            addr,
-            addr,
-            addr,
-            addr,
-            0,
-        )
+        Self {
+            id: Pubkey::new_rand(),
+            gossip: addr,
+            tvu: addr,
+            tvu_forwards: addr,
+            repair: addr,
+            tpu: addr,
+            tpu_forwards: addr,
+            storage_addr: addr,
+            rpc: addr,
+            rpc_pubsub: addr,
+            serve_repair: addr,
+            wallclock: 0,
+            shred_version: 0,
+        }
     }
 
     #[cfg(test)]
@@ -173,29 +143,30 @@ impl ContactInfo {
             nxt_addr
         }
 
-        let tpu_addr = *bind_addr;
-        let gossip_addr = next_port(&bind_addr, 1);
-        let tvu_addr = next_port(&bind_addr, 2);
-        let tpu_forwards_addr = next_port(&bind_addr, 3);
-        let tvu_forwards_addr = next_port(&bind_addr, 4);
+        let tpu = *bind_addr;
+        let gossip = next_port(&bind_addr, 1);
+        let tvu = next_port(&bind_addr, 2);
+        let tpu_forwards = next_port(&bind_addr, 3);
+        let tvu_forwards = next_port(&bind_addr, 4);
         let repair = next_port(&bind_addr, 5);
-        let rpc_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
-        let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
+        let rpc = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
+        let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         let serve_repair = next_port(&bind_addr, 6);
-        Self::new(
-            pubkey,
-            gossip_addr,
-            tvu_addr,
-            tvu_forwards_addr,
+        Self {
+            id: *pubkey,
+            gossip,
+            tvu,
+            tvu_forwards,
             repair,
-            tpu_addr,
-            tpu_forwards_addr,
-            "0.0.0.0:0".parse().unwrap(),
-            rpc_addr,
-            rpc_pubsub_addr,
+            tpu,
+            tpu_forwards,
+            storage_addr: "0.0.0.0:0".parse().unwrap(),
+            rpc,
+            rpc_pubsub,
             serve_repair,
-            timestamp(),
-        )
+            wallclock: timestamp(),
+            shred_version: 0,
+        }
     }
 
     #[cfg(test)]
@@ -206,21 +177,12 @@ impl ContactInfo {
 
     // Construct a ContactInfo that's only usable for gossip
     pub fn new_gossip_entry_point(gossip_addr: &SocketAddr) -> Self {
-        let daddr: SocketAddr = socketaddr!("0.0.0.0:0");
-        Self::new(
-            &Pubkey::default(),
-            *gossip_addr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            timestamp(),
-        )
+        Self {
+            id: Pubkey::default(),
+            gossip: *gossip_addr,
+            wallclock: timestamp(),
+            ..ContactInfo::default()
+        }
     }
 
     fn is_valid_ip(addr: IpAddr) -> bool {

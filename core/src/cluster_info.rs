@@ -1420,23 +1420,13 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    fn gossip_contact_info(id: &Pubkey, gossip_addr: SocketAddr) -> ContactInfo {
-        let dummy_addr = socketaddr_any!();
-
-        ContactInfo::new(
-            id,
-            gossip_addr,
-            dummy_addr,
-            dummy_addr,
-            dummy_addr,
-            dummy_addr,
-            dummy_addr,
-            dummy_addr,
-            dummy_addr,
-            dummy_addr,
-            dummy_addr,
-            timestamp(),
-        )
+    fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr) -> ContactInfo {
+        ContactInfo {
+            id: *id,
+            gossip,
+            wallclock: timestamp(),
+            ..ContactInfo::default()
+        }
     }
 
     pub fn spy_contact_info(id: &Pubkey) -> ContactInfo {
@@ -1540,20 +1530,21 @@ impl Node {
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
 
-        let info = ContactInfo::new(
-            pubkey,
-            gossip.local_addr().unwrap(),
-            tvu.local_addr().unwrap(),
-            tvu_forwards.local_addr().unwrap(),
-            repair.local_addr().unwrap(),
-            empty,
-            empty,
-            storage.local_addr().unwrap(),
-            empty,
-            empty,
-            serve_repair.local_addr().unwrap(),
-            timestamp(),
-        );
+        let info = ContactInfo {
+            id: *pubkey,
+            gossip: gossip.local_addr().unwrap(),
+            tvu: tvu.local_addr().unwrap(),
+            tvu_forwards: tvu_forwards.local_addr().unwrap(),
+            repair: repair.local_addr().unwrap(),
+            tpu: empty,
+            tpu_forwards: empty,
+            storage_addr: storage.local_addr().unwrap(),
+            rpc: empty,
+            rpc_pubsub: empty,
+            serve_repair: serve_repair.local_addr().unwrap(),
+            wallclock: timestamp(),
+            shred_version: 0,
+        };
 
         Node {
             info,
@@ -1590,20 +1581,21 @@ impl Node {
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let info = ContactInfo::new(
-            pubkey,
-            gossip_addr,
-            tvu.local_addr().unwrap(),
-            tvu_forwards.local_addr().unwrap(),
-            repair.local_addr().unwrap(),
-            tpu.local_addr().unwrap(),
-            tpu_forwards.local_addr().unwrap(),
-            storage.local_addr().unwrap(),
-            rpc_addr,
-            rpc_pubsub_addr,
-            serve_repair.local_addr().unwrap(),
-            timestamp(),
-        );
+        let info = ContactInfo {
+            id: *pubkey,
+            gossip: gossip_addr,
+            tvu: tvu.local_addr().unwrap(),
+            tvu_forwards: tvu_forwards.local_addr().unwrap(),
+            repair: repair.local_addr().unwrap(),
+            tpu: tpu.local_addr().unwrap(),
+            tpu_forwards: tpu_forwards.local_addr().unwrap(),
+            storage_addr: storage.local_addr().unwrap(),
+            rpc: rpc_addr,
+            rpc_pubsub: rpc_pubsub_addr,
+            serve_repair: serve_repair.local_addr().unwrap(),
+            wallclock: timestamp(),
+            shred_version: 0,
+        };
         Node {
             info,
             sockets: Sockets {
@@ -1664,20 +1656,21 @@ impl Node {
 
         let (_, broadcast) = multi_bind_in_range(port_range, 4).expect("broadcast multi_bind");
 
-        let info = ContactInfo::new(
-            pubkey,
-            SocketAddr::new(gossip_addr.ip(), gossip_port),
-            SocketAddr::new(gossip_addr.ip(), tvu_port),
-            SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
-            SocketAddr::new(gossip_addr.ip(), repair_port),
-            SocketAddr::new(gossip_addr.ip(), tpu_port),
-            SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
-            socketaddr_any!(),
-            socketaddr_any!(),
-            socketaddr_any!(),
-            SocketAddr::new(gossip_addr.ip(), serve_repair_port),
-            0,
-        );
+        let info = ContactInfo {
+            id: *pubkey,
+            gossip: SocketAddr::new(gossip_addr.ip(), gossip_port),
+            tvu: SocketAddr::new(gossip_addr.ip(), tvu_port),
+            tvu_forwards: SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
+            repair: SocketAddr::new(gossip_addr.ip(), repair_port),
+            tpu: SocketAddr::new(gossip_addr.ip(), tpu_port),
+            tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
+            storage_addr: socketaddr_any!(),
+            rpc: socketaddr_any!(),
+            rpc_pubsub: socketaddr_any!(),
+            serve_repair: SocketAddr::new(gossip_addr.ip(), serve_repair_port),
+            wallclock: 0,
+            shred_version: 0,
+        };
         trace!("new ContactInfo: {:?}", info);
 
         Node {
