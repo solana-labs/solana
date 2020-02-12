@@ -1420,23 +1420,12 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    fn gossip_contact_info(id: &Pubkey, gossip_addr: SocketAddr) -> ContactInfo {
-        let dummy_addr = socketaddr_any!();
-
+    fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr) -> ContactInfo {
         ContactInfo {
             id: *id,
-            gossip: gossip_addr,
-            tvu: dummy_addr,
-            tvu_forwards: dummy_addr,
-            repair: dummy_addr,
-            tpu: dummy_addr,
-            tpu_forwards: dummy_addr,
-            storage_addr: dummy_addr,
-            rpc: dummy_addr,
-            rpc_pubsub: dummy_addr,
-            serve_repair: dummy_addr,
+            gossip,
             wallclock: timestamp(),
-            shred_version: 0,
+            ..ContactInfo::default()
         }
     }
 

@@ -177,21 +177,11 @@ impl ContactInfo {
 
     // Construct a ContactInfo that's only usable for gossip
     pub fn new_gossip_entry_point(gossip_addr: &SocketAddr) -> Self {
-        let daddr: SocketAddr = socketaddr!("0.0.0.0:0");
         Self {
             id: Pubkey::default(),
             gossip: *gossip_addr,
-            tvu: daddr,
-            tvu_forwards: daddr,
-            repair: daddr,
-            tpu: daddr,
-            tpu_forwards: daddr,
-            storage_addr: daddr,
-            rpc: daddr,
-            rpc_pubsub: daddr,
-            serve_repair: daddr,
             wallclock: timestamp(),
-            shred_version: 0,
+            ..ContactInfo::default()
         }
     }
 
