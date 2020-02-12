@@ -1258,7 +1258,7 @@ fn test_stake_set_lockup() {
 }
 
 #[test]
-fn test_offline_nonced_create_stake_account() {
+fn test_offline_nonced_create_stake_account_and_withdraw() {
     solana_logger::setup();
 
     let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
@@ -1358,6 +1358,46 @@ fn test_offline_nonced_create_stake_account() {
     };
     process_command(&config).unwrap();
     check_balance(50_000, &rpc_client, &stake_pubkey);
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Offline, nonced stake-withdraw
+    let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
+    let recipient_pubkey = recipient.pubkey();
+    config_offline.command = CliCommand::WithdrawStake {
+        stake_account_pubkey: stake_pubkey,
+        destination_account_pubkey: recipient_pubkey,
+        lamports: 42,
+        withdraw_authority: None,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    let sig_response = process_command(&config_offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    config.command = CliCommand::WithdrawStake {
+        stake_account_pubkey: stake_pubkey,
+        destination_account_pubkey: recipient_pubkey,
+        lamports: 42,
+        withdraw_authority: Some(offline_pubkey.into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    check_balance(42, &rpc_client, &recipient_pubkey);
 
     // Test that offline derived addresses fail
     config_offline.command = CliCommand::CreateStakeAccount {
