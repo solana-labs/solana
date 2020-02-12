@@ -1,9 +1,5 @@
 use solana_sdk::{
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
-    system_transaction,
-    transaction::Transaction,
+    hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction, transaction::Transaction,
 };
 use std::{
     io::{Error, ErrorKind},

@@ -1,6 +1,5 @@
 use crate::result::ArchiverError;
 use crossbeam_channel::unbounded;
-use ed25519_dalek;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_archiver_utils::sample_file;
@@ -88,11 +87,11 @@ struct ArchiverMeta {
 }
 
 fn get_slot_from_signature(
-    signature: &ed25519_dalek::Signature,
+    signature: &Signature,
     storage_turn: u64,
     slots_per_segment: u64,
 ) -> u64 {
-    let signature_vec = signature.to_bytes();
+    let signature_vec = signature.as_ref();
     let mut segment_index = u64::from(signature_vec[0])
         | (u64::from(signature_vec[1]) << 8)
         | (u64::from(signature_vec[1]) << 16)
@@ -438,13 +437,13 @@ impl Archiver {
                 return Err(e);
             }
         };
-        let signature = storage_keypair.sign(segment_blockhash.as_ref());
+        let signature = storage_keypair.sign_message(segment_blockhash.as_ref());
         let slot = get_slot_from_signature(&signature, segment_slot, slots_per_segment);
         info!("replicating slot: {}", slot);
         slot_sender.send(slot)?;
         meta.slot = slot;
         meta.slots_per_segment = slots_per_segment;
-        meta.signature = Signature::new(&signature.to_bytes());
+        meta.signature = signature;
         meta.blockhash = segment_blockhash;
 
         let mut repair_slot_range = RepairSlotRange::default();
