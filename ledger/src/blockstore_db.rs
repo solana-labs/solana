@@ -10,7 +10,7 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use solana_client::rpc_response::RpcTransactionStatus;
+use solana_client::rpc_response::{RpcRewards, RpcTransactionStatus};
 use solana_sdk::{clock::Slot, signature::Signature};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
@@ -38,6 +38,8 @@ const DATA_SHRED_CF: &str = "data_shred";
 const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
+/// Column family for Rewards
+const REWARDS_CF: &str = "rewards";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -105,6 +107,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The transaction status column
     pub struct TransactionStatus;
+
+    #[derive(Debug)]
+    /// The rewards column
+    pub struct Rewards;
 }
 
 #[derive(Debug)]
@@ -113,8 +119,8 @@ struct Rocks(rocksdb::DB);
 impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
         use columns::{
-            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
-            SlotMeta, TransactionStatus,
+            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
+            ShredData, SlotMeta, TransactionStatus,
         };
 
         fs::create_dir_all(&path)?;
@@ -139,6 +145,7 @@ impl Rocks {
             ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options());
         let transaction_status_cf_descriptor =
             ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options());
+        let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -151,6 +158,7 @@ impl Rocks {
             shred_data_cf_descriptor,
             shred_code_cf_descriptor,
             transaction_status_cf_descriptor,
+            rewards_cf_descriptor,
         ];
 
         // Open the database
@@ -161,8 +169,8 @@ impl Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
-            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Root, ShredCode, ShredData,
-            SlotMeta, TransactionStatus,
+            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
+            ShredData, SlotMeta, TransactionStatus,
         };
 
         vec![
@@ -176,6 +184,7 @@ impl Rocks {
             ShredData::NAME,
             ShredCode::NAME,
             TransactionStatus::NAME,
+            Rewards::NAME,
         ]
     }
 
@@ -314,6 +323,14 @@ impl Column for columns::TransactionStatus {
 
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
+}
+
+impl SlotColumn for columns::Rewards {}
+impl ColumnName for columns::Rewards {
+    const NAME: &'static str = REWARDS_CF;
+}
+impl TypedColumn for columns::Rewards {
+    type Type = RpcRewards;
 }
 
 impl Column for columns::ShredCode {
