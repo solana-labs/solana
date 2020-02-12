@@ -386,7 +386,7 @@ pub enum AccountState {
     Verification(Proof),
     // Account holds a HeaderStore structure
     Headers(HeaderAccountInfo),
-    // Account's userdata is Unallocated
+    // Account's data is Unallocated
     Unallocated,
     // Invalid
     Invalid,

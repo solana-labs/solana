@@ -211,7 +211,7 @@ pub fn check_trade(side: OrderSide, tokens: u64, price: u64) -> Result<(), Excha
 /// Type of exchange account, account's user data is populated with this enum
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ExchangeState {
-    /// Account's Userdata is unallocated
+    /// Account's data is unallocated
     Unallocated,
     // Token account
     Account(TokenAccountInfo),

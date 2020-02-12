@@ -53,7 +53,7 @@ use std::{
     {error, fmt},
 };
 
-const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
 pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
     name: "fee_payer",
@@ -1046,13 +1046,13 @@ fn process_deploy(
     messages.push(&create_account_tx.message);
     let signers = [&config.keypair, &program_id];
     let write_transactions: Vec<_> = program_data
-        .chunks(USERDATA_CHUNK_SIZE)
+        .chunks(DATA_CHUNK_SIZE)
         .zip(0..)
         .map(|(chunk, i)| {
             let instruction = loader_instruction::write(
                 &program_id.pubkey(),
                 &bpf_loader::id(),
-                (i * USERDATA_CHUNK_SIZE) as u32,
+                (i * DATA_CHUNK_SIZE) as u32,
                 chunk.to_vec(),
             );
             let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
