@@ -66,7 +66,7 @@ declare module '@solana/web3.js' {
   };
 
   export type ContactInfo = {
-    id: string;
+    pubkey: string;
     gossip: string;
     tpu?: string;
     rpc?: string;
