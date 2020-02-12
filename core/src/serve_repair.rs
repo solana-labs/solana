@@ -4,7 +4,7 @@ use crate::{
     cluster_info::{ClusterInfo, ClusterInfoError},
     contact_info::ContactInfo,
     packet::Packet,
-    result::Result,
+    result::{Error, Result},
 };
 use bincode::serialize;
 use rand::{thread_rng, Rng};
@@ -205,18 +205,19 @@ impl ServeRepair {
         Builder::new()
             .name("solana-repair-listen".to_string())
             .spawn(move || loop {
-                let e = Self::run_listen(
+                let result = Self::run_listen(
                     &me,
                     &recycler,
                     blockstore.as_ref(),
                     &requests_receiver,
                     &response_sender,
                 );
+                match result {
+                    Err(Error::RecvTimeoutError(_)) | Ok(_) => {}
+                    Err(err) => info!("repair listener error: {:?}", err),
+                };
                 if exit.load(Ordering::Relaxed) {
                     return;
-                }
-                if e.is_err() {
-                    info!("repair listener error: {:?}", e);
                 }
                 thread_mem_usage::datapoint("solana-repair-listen");
             })
