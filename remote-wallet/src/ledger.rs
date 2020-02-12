@@ -39,7 +39,7 @@ mod commands {
     #[allow(dead_code)]
     pub const GET_APP_CONFIGURATION: u8 = 0x06;
     pub const GET_PUBKEY: u8 = 0x02;
-    pub const SIGN_MESSAGE_DATA: u8 = 0x03;
+    pub const SIGN_MESSAGE: u8 = 0x03;
 }
 
 /// Ledger Wallet device
@@ -280,7 +280,7 @@ impl RemoteWallet for LedgerWallet {
         Ok(Pubkey::new(&key))
     }
 
-    fn sign_message_data(
+    fn sign_message(
         &self,
         derivation_path: &DerivationPath,
         data: &[u8],
@@ -298,7 +298,7 @@ impl RemoteWallet for LedgerWallet {
         trace!("Serialized payload length {:?}", payload.len());
 
         let result = self.send_apdu(
-            commands::SIGN_MESSAGE_DATA,
+            commands::SIGN_MESSAGE,
             1, // In the naive implementation, default request is for requred device confirmation
             0,
             &payload,
