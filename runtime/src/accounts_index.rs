@@ -12,9 +12,6 @@ pub struct AccountsIndex<T> {
     pub account_maps: HashMap<Pubkey, RwLock<SlotList<T>>>,
 
     pub roots: HashSet<Slot>,
-
-    // This value that needs to be stored to recover the index from AppendVec
-    pub last_root: Slot,
 }
 
 impl<T: Clone> AccountsIndex<T> {
@@ -148,10 +145,6 @@ impl<T: Clone> AccountsIndex<T> {
         entry.write().unwrap().push((slot, account_info));
     }
 
-    pub fn is_purged(&self, slot: Slot) -> bool {
-        slot < self.last_root
-    }
-
     pub fn can_purge(max_root: Slot, slot: Slot) -> bool {
         slot < max_root
     }
@@ -161,11 +154,6 @@ impl<T: Clone> AccountsIndex<T> {
     }
 
     pub fn add_root(&mut self, slot: Slot) {
-        assert!(
-            (self.last_root == 0 && slot == 0) || (slot >= self.last_root),
-            "new roots must be increasing"
-        );
-        self.last_root = slot;
         self.roots.insert(slot);
     }
     /// Remove the slot when the storage for the slot is freed
@@ -268,29 +256,6 @@ mod tests {
         index.add_root(0);
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
         assert_eq!(list[idx], (0, true));
-    }
-
-    #[test]
-    fn test_is_purged() {
-        let mut index = AccountsIndex::<bool>::default();
-        assert!(!index.is_purged(0));
-        index.add_root(1);
-        assert!(index.is_purged(0));
-    }
-
-    #[test]
-    fn test_max_last_root() {
-        let mut index = AccountsIndex::<bool>::default();
-        index.add_root(1);
-        assert_eq!(index.last_root, 1);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_max_last_root_old() {
-        let mut index = AccountsIndex::<bool>::default();
-        index.add_root(1);
-        index.add_root(0);
     }
 
     #[test]
