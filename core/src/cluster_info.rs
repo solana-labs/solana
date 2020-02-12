@@ -39,7 +39,7 @@ use solana_perf::packet::{to_packets_with_destination, Packets, PacketsRecycler}
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT},
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signable, Signature},
+    signature::{Keypair, Signable, Signature},
     timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };

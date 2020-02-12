@@ -5,7 +5,7 @@ use bs58;
 use ed25519_dalek;
 use generic_array::{typenum::U64, GenericArray};
 use hmac::Hmac;
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde_json;
 use std::{
     borrow::{Borrow, Cow},
@@ -17,7 +17,35 @@ use std::{
     str::FromStr,
 };
 
-pub type Keypair = ed25519_dalek::Keypair;
+#[derive(Debug, Default)]
+pub struct Keypair(ed25519_dalek::Keypair);
+
+impl Keypair {
+    pub fn generate<R>(csprng: &mut R) -> Self
+    where
+        R: CryptoRng + RngCore,
+    {
+        Self(ed25519_dalek::Keypair::generate(csprng))
+    }
+
+    /// Return a new ED25519 keypair
+    pub fn new() -> Self {
+        let mut rng = OsRng::new().unwrap();
+        Self::generate(&mut rng)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+        ed25519_dalek::Keypair::from_bytes(bytes).map(Self)
+    }
+
+    pub fn to_bytes(&self) -> [u8; 64] {
+        self.0.to_bytes()
+    }
+
+    pub fn secret(&self) -> &ed25519_dalek::SecretKey {
+        &self.0.secret
+    }
+}
 
 #[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -103,33 +131,26 @@ impl FromStr for Signature {
 }
 
 pub trait KeypairUtil {
-    fn new() -> Self;
     fn pubkey(&self) -> Pubkey;
     fn sign_message(&self, message: &[u8]) -> Signature;
 }
 
 impl KeypairUtil for Keypair {
-    /// Return a new ED25519 keypair
-    fn new() -> Self {
-        let mut rng = OsRng::new().unwrap();
-        Keypair::generate(&mut rng)
-    }
-
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
-        Pubkey::new(self.public.as_ref())
+        Pubkey::new(self.0.public.as_ref())
     }
 
     fn sign_message(&self, message: &[u8]) -> Signature {
-        Signature::new(&self.sign(message).to_bytes())
+        Signature::new(&self.0.sign(message).to_bytes())
     }
 }
 
 pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::Error>> {
     let bytes: Vec<u8> = serde_json::from_reader(reader)?;
-    let keypair = Keypair::from_bytes(&bytes)
+    let dalek_keypair = ed25519_dalek::Keypair::from_bytes(&bytes)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-    Ok(keypair)
+    Ok(Keypair(dalek_keypair))
 }
 
 pub fn read_keypair_file(path: &str) -> Result<Keypair, Box<dyn error::Error>> {
@@ -142,7 +163,7 @@ pub fn write_keypair<W: Write>(
     keypair: &Keypair,
     writer: &mut W,
 ) -> Result<String, Box<dyn error::Error>> {
-    let keypair_bytes = keypair.to_bytes();
+    let keypair_bytes = keypair.0.to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
     writer.write_all(&serialized.clone().into_bytes())?;
     Ok(serialized)
@@ -183,8 +204,8 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
     let secret = ed25519_dalek::SecretKey::from_bytes(&seed[..ed25519_dalek::SECRET_KEY_LENGTH])
         .map_err(|e| e.to_string())?;
     let public = ed25519_dalek::PublicKey::from(&secret);
-    let keypair = Keypair { secret, public };
-    Ok(keypair)
+    let dalek_keypair = ed25519_dalek::Keypair { secret, public };
+    Ok(Keypair(dalek_keypair))
 }
 
 pub fn keypair_from_seed_phrase_and_passphrase(
@@ -228,7 +249,7 @@ mod tests {
         assert!(Path::new(&outfile).exists());
         assert_eq!(
             keypair_vec,
-            read_keypair_file(&outfile).unwrap().to_bytes().to_vec()
+            read_keypair_file(&outfile).unwrap().0.to_bytes().to_vec()
         );
 
         #[cfg(unix)]

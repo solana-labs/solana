@@ -21,7 +21,7 @@ use solana_sdk::{
     pubkey::{write_pubkey_file, Pubkey},
     signature::{
         keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
-        Keypair, KeypairUtil, Signature,
+        Keypair, KeypairUtil,
     },
 };
 use std::{
@@ -613,7 +613,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ("verify", Some(matches)) => {
             let keypair = get_keypair_from_matches(matches, config)?;
             let test_data = b"test";
-            let signature = Signature::new(&keypair.sign(test_data).to_bytes());
+            let signature = keypair.sign_message(test_data);
             let pubkey_bs58 = matches.value_of("pubkey").unwrap();
             let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
             if signature.verify(&pubkey, test_data) {

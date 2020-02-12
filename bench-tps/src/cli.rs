@@ -1,7 +1,7 @@
 use clap::{crate_description, crate_name, App, Arg, ArgMatches};
 use solana_faucet::faucet::FAUCET_PORT;
 use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::signature::{read_keypair_file, Keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair_file, Keypair};
 use std::{net::SocketAddr, process::exit, time::Duration};
 
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;

@@ -301,9 +301,9 @@ fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
         packet.meta.size >= msg_end,
         "packet is not large enough for a signature"
     );
-    let signature = keypair.sign(&packet.data[msg_start..msg_end]);
+    let signature = keypair.sign_message(&packet.data[msg_start..msg_end]);
     trace!("signature {:?}", signature);
-    packet.data[0..sig_end].copy_from_slice(&signature.to_bytes());
+    packet.data[0..sig_end].copy_from_slice(&signature.as_ref());
 }
 
 pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [Packets]) {
@@ -323,7 +323,7 @@ pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [Packets]) {
 pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) -> PinnedVec<u8> {
     let mut vec = cache.buffer().allocate("pinned_keypair");
     let pubkey = keypair.pubkey().to_bytes();
-    let secret = keypair.secret.to_bytes();
+    let secret = keypair.secret().to_bytes();
     let mut hasher = Sha512::default();
     hasher.input(&secret);
     let mut result = hasher.result();

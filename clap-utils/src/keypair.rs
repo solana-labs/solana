@@ -2,12 +2,9 @@ use crate::ArgConstant;
 use bip39::{Language, Mnemonic, Seed};
 use clap::values_t;
 use rpassword::prompt_password_stderr;
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{
-        keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
-        KeypairUtil,
-    },
+use solana_sdk::signature::{
+    keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
+    KeypairUtil,
 };
 use std::{
     error,
@@ -87,7 +84,7 @@ pub fn keypair_from_seed_phrase(
     };
 
     if confirm_pubkey {
-        let pubkey = Pubkey::new(keypair.public.as_ref());
+        let pubkey = keypair.pubkey();
         print!("Recovered pubkey `{:?}`. Continue? (y/n): ", pubkey);
         let _ignored = stdout().flush();
         let mut input = String::new();

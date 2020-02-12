@@ -1129,9 +1129,7 @@ mod tests {
     use serde_json::Number;
     use solana_logger;
     use solana_sdk::{
-        instruction::InstructionError,
-        signature::{Keypair, KeypairUtil},
-        system_transaction,
+        instruction::InstructionError, signature::Keypair, system_transaction,
         transaction::TransactionError,
     };
     use std::{sync::mpsc::channel, thread};
