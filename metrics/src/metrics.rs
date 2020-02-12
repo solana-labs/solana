@@ -197,8 +197,35 @@ impl MetricsAgent {
         let max_points = write_frequency_secs.as_secs() as usize * max_points_per_sec;
 
         loop {
-            match receiver.recv_timeout(write_frequency_secs / 2) {
-                Ok(cmd) => match cmd {
+            let mut queue = vec![];
+            let mut dropped = 0;
+            let item = receiver.recv_timeout(write_frequency_secs / 2);
+            match item {
+                Ok(item) => {
+                    queue.push(item);
+                    while let Ok(item) = receiver.try_recv() {
+                        if let MetricsCommand::Flush(_) = item {
+                            queue.push(item);
+                        } else if queue.len() < max_points_per_sec {
+                            queue.push(item);
+                        } else {
+                            dropped +=1;
+                        }
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    trace!("run: receive timeout");
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    debug!("run: sender disconnected");
+                    break;
+                }
+            }
+            if queue.len() >= max_points_per_sec {
+                warn!("metrics server full! dropped {} expecting no more than {}", dropped, max_points_per_sec);
+            }
+            for cmd in queue {
+                match cmd {
                     MetricsCommand::Flush(barrier) => {
                         debug!("metrics_thread: flush");
                         points_map.drain().for_each(|(_, (_, counters, points))| {
@@ -233,13 +260,6 @@ impl MetricsAgent {
                             counters.insert(key, counter);
                         }
                     }
-                },
-                Err(RecvTimeoutError::Timeout) => {
-                    trace!("run: receive timeout");
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    debug!("run: sender disconnected");
-                    break;
                 }
             }
 

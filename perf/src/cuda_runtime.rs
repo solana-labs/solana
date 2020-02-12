@@ -12,11 +12,11 @@ use rand::Rng;
 use rayon::prelude::*;
 use std::ops::{Index, IndexMut};
 use std::slice::SliceIndex;
-use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Weak};
 
-use std::os::raw::c_int;
 use std::mem::size_of;
+use std::os::raw::c_int;
 
 const CUDA_SUCCESS: c_int = 0;
 
