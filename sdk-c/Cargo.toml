@@ -22,4 +22,4 @@ solana-sdk = { path = "../sdk", version = "0.24.0" }
 ed25519-dalek = "1.0.0-pre.1"
 
 [build-dependencies]
-cbindgen = "0.13.0"
+cbindgen = "0.13.1"
