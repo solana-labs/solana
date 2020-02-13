@@ -131,8 +131,14 @@ impl FromStr for Signature {
 }
 
 pub trait KeypairUtil {
-    fn pubkey(&self) -> Pubkey;
-    fn sign_message(&self, message: &[u8]) -> Signature;
+    fn pubkey(&self) -> Pubkey {
+        self.try_pubkey().unwrap_or_default()
+    }
+    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>>;
+    fn sign_message(&self, message: &[u8]) -> Signature {
+        self.try_sign_message(message).unwrap_or_default()
+    }
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>>;
 }
 
 impl KeypairUtil for Keypair {
@@ -141,8 +147,16 @@ impl KeypairUtil for Keypair {
         Pubkey::new(self.0.public.as_ref())
     }
 
+    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+        Ok(self.pubkey())
+    }
+
     fn sign_message(&self, message: &[u8]) -> Signature {
         Signature::new(&self.0.sign(message).to_bytes())
+    }
+
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+        Ok(self.sign_message(message))
     }
 }
 
