@@ -26,9 +26,6 @@ Epoch Slots:
    * The `cache`: The Run-length Encoding (RLE) of the latest `N` completed
      slots starting from some some slot `M`, where `N` is the number of slots
      that will fit in an MTU-sized packet.
-   * The `heaviest_cache`: The RLE of the latest `N` completed slots
-     of the heaviest fork the validator has last detected, where `N` 
-     is the number of slots that will fit in an MTU-sized packet.
 
    `Epoch Slots` in gossip are updated every time a validator receives a
    complete slot within the epoch. Completed slots are detected by blockstore
@@ -40,16 +37,6 @@ Epoch Slots:
    Every `N/2` completed slots, the oldest `N/2` slots are moved from the 
    `cache` into the `stash`. The base value `M` for the RLE should also
    be updated.
-
-   ReplayStage should communicate the latest slot `S` on the heaviest fork
-   to RepairService, which then updates the `heaviest_cache` by:
-   1) If `S` is a descendant of the previous heaviest fork, addding `S` to the
-   `heaviest_cache`
-   2) If `S` is not a descendant of the heaviest fork, popping off
-   the non-descendants from the `heaviest_fork` until we see a common ancestor,
-   `C`, and then updating the `heaviest_cache` with the chain of slots from `C`
-   to `S`.
-
    
 ## Repair Request Protocols
 
@@ -100,12 +87,6 @@ currently chain to any known fork.
 Validators should try to send orphan requests to validators who have marked that
 orphan as completed in their EpochSlots. If no such validators exist, then
 randomly select a validator in a stake-weighted fashion.
-
-3. Heaviest Fork Repair:
-
-Periodically validators should check the `heaviest_cache` of all its neighbors
-and repair some `N` number of any of those slots that it's missing based on
-stake weight.
 
 ## Repair Response Protocol
 
