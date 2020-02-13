@@ -12,6 +12,25 @@ use std::{
     process::exit,
 };
 
+pub enum KeypairUrl {
+    Ask,
+    Filepath(String),
+    Usb(String),
+    Stdin,
+}
+
+pub fn parse_keypair_path(path: &str) -> KeypairUrl {
+    if path == "-" {
+        KeypairUrl::Stdin
+    } else if path == ASK_KEYWORD {
+        KeypairUrl::Ask
+    } else if path.starts_with("usb://") {
+        KeypairUrl::Usb(path.split_at(6).1.to_string())
+    } else {
+        KeypairUrl::Filepath(path.to_string())
+    }
+}
+
 // Keyword used to indicate that the user should be asked for a keypair seed phrase
 pub const ASK_KEYWORD: &str = "ASK";
 

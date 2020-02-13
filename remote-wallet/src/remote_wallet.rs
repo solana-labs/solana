@@ -192,7 +192,6 @@ pub struct RemoteWalletInfo {
 
 impl RemoteWalletInfo {
     pub fn parse_path(mut path: String) -> Result<(Self, DerivationPath), RemoteWalletError> {
-        let mut path = path.split_off(6);
         if path.ends_with('/') {
             path.pop();
         }
@@ -288,7 +287,22 @@ mod tests {
     fn test_parse_path() {
         let pubkey = Pubkey::new_rand();
         let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/nano-s/{:?}/44/501/1/2", pubkey))
+            RemoteWalletInfo::parse_path(format!("ledger/nano-s/{:?}/44/501/1/2", pubkey)).unwrap();
+        assert!(wallet_info.matches(&RemoteWalletInfo {
+            model: "nano-s".to_string(),
+            manufacturer: "ledger".to_string(),
+            serial: "".to_string(),
+            pubkey,
+        }));
+        assert_eq!(
+            derivation_path,
+            DerivationPath {
+                account: 1,
+                change: Some(2),
+            }
+        );
+        let (wallet_info, derivation_path) =
+            RemoteWalletInfo::parse_path(format!("ledger/nano-s/{:?}/44'/501'/1'/2'", pubkey))
                 .unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
@@ -303,35 +317,13 @@ mod tests {
                 change: Some(2),
             }
         );
-        let (wallet_info, derivation_path) = RemoteWalletInfo::parse_path(format!(
-            "usb://ledger/nano-s/{:?}/44'/501'/1'/2'",
-            pubkey
-        ))
-        .unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            pubkey,
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: 1,
-                change: Some(2),
-            }
-        );
 
-        assert!(RemoteWalletInfo::parse_path(format!(
-            "usb://ledger/nano-s/{:?}/43/501/1/2",
-            pubkey
-        ))
-        .is_err());
-        assert!(RemoteWalletInfo::parse_path(format!(
-            "usb://ledger/nano-s/{:?}/44/500/1/2",
-            pubkey
-        ))
-        .is_err());
+        assert!(
+            RemoteWalletInfo::parse_path(format!("ledger/nano-s/{:?}/43/501/1/2", pubkey)).is_err()
+        );
+        assert!(
+            RemoteWalletInfo::parse_path(format!("ledger/nano-s/{:?}/44/500/1/2", pubkey)).is_err()
+        );
     }
 
     #[test]

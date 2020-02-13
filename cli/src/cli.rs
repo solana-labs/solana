@@ -1990,8 +1990,16 @@ impl KeypairUtil for FaucetKeypair {
         self.transaction.message().account_keys[0]
     }
 
+    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+        Ok(self.pubkey())
+    }
+
     fn sign_message(&self, _msg: &[u8]) -> Signature {
         self.transaction.signatures[0]
+    }
+
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+        Ok(self.sign_message(message))
     }
 }
 
