@@ -1387,9 +1387,13 @@ impl Blockstore {
         let encoding = encoding.unwrap_or(RpcTransactionEncoding::Json);
         if self.is_root(slot) {
             let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-            let slot_meta = slot_meta_cf
-                .get(slot)?
-                .expect("Rooted slot must exist in SlotMeta");
+            let slot_meta = match slot_meta_cf.get(slot)? {
+                Some(slot_meta) => slot_meta,
+                None => {
+                    info!("SlotMeta not found for rooted slot {}", slot);
+                    return Err(BlockstoreError::SlotCleanedUp);
+                }
+            };
 
             let slot_entries = self.get_slot_entries(slot, 0, None)?;
             if !slot_entries.is_empty() {
@@ -1407,11 +1411,7 @@ impl Blockstore {
                 let blockhash = get_last_hash(slot_entries.iter())
                     .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
 
-                let rewards = self
-                    .rewards_cf
-                    .get(slot)
-                    .expect("Expect rewards get to succeed")
-                    .unwrap_or_else(|| vec![]);
+                let rewards = self.rewards_cf.get(slot)?.unwrap_or_else(|| vec![]);
 
                 let block = RpcConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
