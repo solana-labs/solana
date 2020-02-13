@@ -9,16 +9,17 @@ use solana_clap_utils::{
     input_parsers::derivation_of,
     input_validators::is_derivation,
     keypair::{
-        keypair_from_seed_phrase, prompt_passphrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+        keypair_from_seed_phrase, parse_keypair_path, prompt_passphrase, KeypairUrl,
+        SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
 use solana_cli_config::config::{Config, CONFIG_FILE};
 use solana_remote_wallet::{
-    ledger::get_ledger_from_info,
-    remote_wallet::{RemoteWallet, RemoteWalletInfo},
+    ledger::{generate_remote_keypair, get_ledger_from_info},
+    remote_wallet::RemoteWalletInfo,
 };
 use solana_sdk::{
-    pubkey::{write_pubkey_file, Pubkey},
+    pubkey::write_pubkey_file,
     signature::{
         keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
         Keypair, KeypairUtil,
@@ -56,9 +57,9 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
 fn get_keypair_from_matches(
     matches: &ArgMatches,
     config: Config,
-) -> Result<Keypair, Box<dyn error::Error>> {
+) -> Result<Box<dyn KeypairUtil>, Box<dyn error::Error>> {
     let mut path = dirs::home_dir().expect("home directory");
-    let keypair = if matches.is_present("keypair") {
+    let path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()
     } else if config.keypair_path != "" {
         &config.keypair_path
@@ -67,50 +68,28 @@ fn get_keypair_from_matches(
         path.to_str().unwrap()
     };
 
-    if keypair == "-" {
-        let mut stdin = std::io::stdin();
-        read_keypair(&mut stdin)
-    } else if keypair == ASK_KEYWORD {
-        let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-        keypair_from_seed_phrase("pubkey recovery", skip_validation, false)
-    } else if keypair.starts_with("usb://") {
-        Err(String::from("Remote wallet signing not yet implemented").into())
-    } else {
-        read_keypair_file(keypair)
-    }
-}
-
-fn get_pubkey_from_matches(
-    matches: &ArgMatches,
-    config: Config,
-) -> Result<Pubkey, Box<dyn error::Error>> {
-    let mut path = dirs::home_dir().expect("home directory");
-    let keypair = if matches.is_present("keypair") {
-        matches.value_of("keypair").unwrap()
-    } else if config.keypair_path != "" {
-        &config.keypair_path
-    } else {
-        path.extend(&[".config", "solana", "id.json"]);
-        path.to_str().unwrap()
-    };
-
-    if keypair == "-" {
-        let mut stdin = std::io::stdin();
-        read_keypair(&mut stdin).map(|keypair| keypair.pubkey())
-    } else if keypair == ASK_KEYWORD {
-        let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-        keypair_from_seed_phrase("pubkey recovery", skip_validation, false)
-            .map(|keypair| keypair.pubkey())
-    } else if keypair.starts_with("usb://") {
-        let (remote_wallet_info, mut derivation_path) =
-            RemoteWalletInfo::parse_path(keypair.to_string())?;
-        if let Some(derivation) = derivation_of(matches, "derivation_path") {
-            derivation_path = derivation;
+    match parse_keypair_path(path) {
+        KeypairUrl::Ask => {
+            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            Ok(Box::new(keypair_from_seed_phrase(
+                "pubkey recovery",
+                skip_validation,
+                false,
+            )?))
         }
-        let ledger = get_ledger_from_info(remote_wallet_info)?;
-        Ok(ledger.get_pubkey(&derivation_path)?)
-    } else {
-        read_keypair_file(keypair).map(|keypair| keypair.pubkey())
+        KeypairUrl::Filepath(path) => Ok(Box::new(read_keypair_file(&path)?)),
+        KeypairUrl::Stdin => {
+            let mut stdin = std::io::stdin();
+            Ok(Box::new(read_keypair(&mut stdin)?))
+        }
+        KeypairUrl::Usb(path) => {
+            let (remote_wallet_info, mut derivation_path) = RemoteWalletInfo::parse_path(path)?;
+            if let Some(derivation) = derivation_of(matches, "derivation_path") {
+                derivation_path = derivation;
+            }
+            let ledger = get_ledger_from_info(remote_wallet_info)?;
+            Ok(Box::new(generate_remote_keypair(ledger, derivation_path)))
+        }
     }
 }
 
@@ -434,7 +413,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     match matches.subcommand() {
         ("pubkey", Some(matches)) => {
-            let pubkey = get_pubkey_from_matches(matches, config)?;
+            let pubkey = get_keypair_from_matches(matches, config)?.try_pubkey()?;
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
@@ -613,7 +592,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ("verify", Some(matches)) => {
             let keypair = get_keypair_from_matches(matches, config)?;
             let test_data = b"test";
-            let signature = keypair.sign_message(test_data);
+            let signature = keypair.try_sign_message(test_data)?;
             let pubkey_bs58 = matches.value_of("pubkey").unwrap();
             let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
             if signature.verify(&pubkey, test_data) {

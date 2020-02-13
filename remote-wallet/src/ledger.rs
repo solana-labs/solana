@@ -1,5 +1,9 @@
-use crate::remote_wallet::{
-    initialize_wallet_manager, DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo,
+use crate::{
+    remote_keypair::RemoteKeypair,
+    remote_wallet::{
+        initialize_wallet_manager, DerivationPath, RemoteWallet, RemoteWalletError,
+        RemoteWalletInfo, RemoteWalletType,
+    },
 };
 use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
@@ -364,4 +368,14 @@ pub fn get_ledger_from_info(
         pubkeys[0]
     };
     wallet_manager.get_ledger(&wallet_base_pubkey)
+}
+
+pub fn generate_remote_keypair(
+    ledger: Arc<LedgerWallet>,
+    derivation_path: DerivationPath,
+) -> RemoteKeypair {
+    RemoteKeypair {
+        wallet_type: RemoteWalletType::Ledger(ledger),
+        derivation_path,
+    }
 }
