@@ -13,7 +13,7 @@ base32 = "0.4.0"
 dialoguer = "0.5.0"
 hidapi = { version = "1.1.1", default-features = false }
 log = "0.4.8"
-parking_lot = "0.7"
+parking_lot = "0.10"
 semver = "0.9"
 solana-sdk = { path = "../sdk", version = "0.24.0" }
 thiserror = "1.0"
