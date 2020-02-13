@@ -42,7 +42,9 @@ if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined, codecov.io upload skipped
 else
   # We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
-  CI=true bash <(curl -s https://codecov.io/bash) -X gcov -f target/cov/lcov.info
+  # Unfortunately, codecov.io fails sometimes:
+  #   curl: (7) Failed to connect to codecov.io port 443: Connection timed out
+  CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused https://codecov.io/bash; do sleep 10; done) -Z -X gcov -f target/cov/lcov.info
 
   annotate --style success --context codecov.io \
     "CodeCov report: https://codecov.io/github/solana-labs/solana/commit/${CI_COMMIT:0:9}"
