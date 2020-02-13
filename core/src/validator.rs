@@ -378,6 +378,7 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
+        let (vote_sender, vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
@@ -445,6 +446,7 @@ impl Validator {
             &config.broadcast_stage_type,
             &exit,
             node.info.shred_version,
+            vote_sender,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

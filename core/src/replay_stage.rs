@@ -2,11 +2,11 @@
 
 use crate::{
     cluster_info::ClusterInfo,
+    cluster_info_vote_listener::VoteReceiver,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
     consensus::{StakeLockout, Tower},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     result::Result,
-    rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
 use solana_ledger::{
@@ -86,7 +86,6 @@ pub struct ReplayStageConfig {
     pub snapshot_package_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
-    pub rewards_recorder_sender: Option<RewardsRecorderSender>,
 }
 
 pub struct ReplayStage {
@@ -176,6 +175,7 @@ impl ReplayStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
+        vote_receiver: VoteReceiver,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
@@ -189,7 +189,6 @@ impl ReplayStage {
             snapshot_package_sender,
             block_commitment_cache,
             transaction_status_sender,
-            rewards_recorder_sender,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
@@ -236,7 +235,6 @@ impl ReplayStage {
                         &bank_forks,
                         &leader_schedule_cache,
                         &subscriptions,
-                        rewards_recorder_sender.clone(),
                     );
                     Self::report_memory(&allocated, "generate_new_bank_forks", start);
 
@@ -440,7 +438,6 @@ impl ReplayStage {
                             &poh_recorder,
                             &leader_schedule_cache,
                             &subscriptions,
-                            rewards_recorder_sender.clone(),
                         );
 
                         if let Some(bank) = poh_recorder.lock().unwrap().bank() {
@@ -522,7 +519,6 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
-        rewards_recorder_sender: Option<RewardsRecorderSender>,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1186,7 +1182,6 @@ impl ReplayStage {
         forks_lock: &RwLock<BankForks>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
-        rewards_recorder_sender: Option<RewardsRecorderSender>,
     ) {
         // Find the next slot that chains to the old slot
         let forks = forks_lock.read().unwrap();
@@ -1335,6 +1330,7 @@ pub(crate) mod tests {
     struct ForkSelectionResponse {
         slot: u64,
         is_locked_out: bool,
+        is_available: bool,
     }
 
     fn simulate_fork_selection(
@@ -1630,7 +1626,6 @@ pub(crate) mod tests {
                 &bank_forks,
                 &leader_schedule_cache,
                 &subscriptions,
-                None,
             );
             assert!(bank_forks.read().unwrap().get(1).is_some());
 
@@ -1643,7 +1638,6 @@ pub(crate) mod tests {
                 &bank_forks,
                 &leader_schedule_cache,
                 &subscriptions,
-                None,
             );
             assert!(bank_forks.read().unwrap().get(1).is_some());
             assert!(bank_forks.read().unwrap().get(2).is_some());

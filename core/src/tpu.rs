@@ -5,7 +5,7 @@ use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType},
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::ClusterInfoVoteListener,
+    cluster_info_vote_listener::{ClusterInfoVoteListener, VoteSender},
     fetch_stage::FetchStage,
     poh_recorder::{PohRecorder, WorkingBankEntry},
     sigverify::TransactionSigVerifier,
@@ -46,6 +46,7 @@ impl Tpu {
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
         shred_version: u16,
+        vote_sender: VoteSender,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -72,6 +73,7 @@ impl Tpu {
             sigverify_disabled,
             verified_vote_sender,
             &poh_recorder,
+            vote_sender,
         );
 
         let banking_stage = BankingStage::new(
