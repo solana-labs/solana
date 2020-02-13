@@ -83,6 +83,13 @@ fn test_stake_delegation_force() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
 
@@ -168,6 +175,13 @@ fn test_seed_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -242,6 +256,13 @@ fn test_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -335,6 +356,13 @@ fn test_offline_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -431,6 +459,13 @@ fn test_nonced_stake_delegation_and_deactivation() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
 
@@ -538,6 +573,13 @@ fn test_stake_authorize() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
 
@@ -761,6 +803,13 @@ fn test_stake_authorize_with_fee_payer() {
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
     // `config` balance should be 50,000 - 1 stake account sig - 1 fee sig
@@ -890,6 +939,13 @@ fn test_stake_split() {
         withdrawer: Some(offline_pubkey),
         lockup: Lockup::default(),
         lamports: 10 * minimum_stake_balance,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
     check_balance(
@@ -1022,6 +1078,13 @@ fn test_stake_set_lockup() {
         withdrawer: Some(offline_pubkey),
         lockup,
         lamports: 10 * minimum_stake_balance,
+        sign_only: false,
+        signers: None,
+        blockhash_query: BlockhashQuery::All,
+        nonce_account: None,
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config).unwrap();
     check_balance(
@@ -1189,6 +1252,170 @@ fn test_stake_set_lockup() {
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_lockup, lockup);
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_offline_nonced_create_stake_account_and_withdraw() {
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let (sender, receiver) = channel();
+    run_local_faucet(alice, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+
+    let mut config = CliConfig::default();
+    config.keypair = keypair_from_seed(&[1u8; 32]).unwrap();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+
+    let mut config_offline = CliConfig::default();
+    config_offline.keypair = keypair_from_seed(&[2u8; 32]).unwrap();
+    let offline_pubkey = config_offline.keypair.pubkey();
+    let (offline_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
+    config_offline.json_rpc_url = String::default();
+    config_offline.command = CliCommand::ClusterVersion;
+    // Verfiy that we cannot reach the cluster
+    process_command(&config_offline).unwrap_err();
+
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 200_000)
+        .unwrap();
+    check_balance(200_000, &rpc_client, &config.keypair.pubkey());
+
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config_offline.keypair.pubkey(),
+        100_000,
+    )
+    .unwrap();
+    check_balance(100_000, &rpc_client, &config_offline.keypair.pubkey());
+
+    // Create nonce account
+    let minimum_nonce_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .unwrap();
+    let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap();
+    let nonce_pubkey = nonce_account.pubkey();
+    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
+    config.command = CliCommand::CreateNonceAccount {
+        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        seed: None,
+        nonce_authority: Some(offline_pubkey),
+        lamports: minimum_nonce_balance,
+    };
+    process_command(&config).unwrap();
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Create stake account offline
+    let stake_keypair = keypair_from_seed(&[4u8; 32]).unwrap();
+    let stake_pubkey = stake_keypair.pubkey();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
+    config_offline.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
+    };
+    let sig_response = process_command(&config_offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: stake_pubkey.into(),
+        seed: None,
+        staker: Some(offline_pubkey.into()),
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_pubkey.into()),
+        from: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    check_balance(50_000, &rpc_client, &stake_pubkey);
+
+    // Fetch nonce hash
+    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_hash = match nonce_state {
+        NonceState::Initialized(_meta, hash) => hash,
+        _ => panic!("Nonce is not initialized"),
+    };
+
+    // Offline, nonced stake-withdraw
+    let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
+    let recipient_pubkey = recipient.pubkey();
+    config_offline.command = CliCommand::WithdrawStake {
+        stake_account_pubkey: stake_pubkey,
+        destination_account_pubkey: recipient_pubkey,
+        lamports: 42,
+        withdraw_authority: None,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: None,
+        fee_payer: None,
+    };
+    let sig_response = process_command(&config_offline).unwrap();
+    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    config.command = CliCommand::WithdrawStake {
+        stake_account_pubkey: stake_pubkey,
+        destination_account_pubkey: recipient_pubkey,
+        lamports: 42,
+        withdraw_authority: Some(offline_pubkey.into()),
+        sign_only: false,
+        signers: Some(signers),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_pubkey.into()),
+    };
+    process_command(&config).unwrap();
+    check_balance(42, &rpc_client, &recipient_pubkey);
+
+    // Test that offline derived addresses fail
+    config_offline.command = CliCommand::CreateStakeAccount {
+        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        seed: Some("fail".to_string()),
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        lamports: 50_000,
+        sign_only: true,
+        signers: None,
+        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        nonce_account: Some(nonce_pubkey),
+        nonce_authority: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
+        fee_payer: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
+        from: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
+    };
+    process_command(&config_offline).unwrap_err();
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
