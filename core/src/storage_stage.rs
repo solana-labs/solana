@@ -376,7 +376,7 @@ impl StorageStage {
         total_proofs: usize,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
-        let signature = storage_keypair.sign(&blockhash.as_ref());
+        let signature = storage_keypair.sign_message(&blockhash.as_ref());
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &storage_keypair.pubkey(),
@@ -385,7 +385,7 @@ impl StorageStage {
         );
         instruction_sender.send(ix)?;
 
-        seed.copy_from_slice(&signature.to_bytes()[..32]);
+        seed.copy_from_slice(&signature.as_ref()[..32]);
 
         let mut rng = ChaChaRng::from_seed(seed);
 
@@ -406,7 +406,7 @@ impl StorageStage {
             return Ok(());
         }
         // TODO: what if the validator does not have this segment
-        let segment = signature.to_bytes()[0] as usize % num_segments;
+        let segment = signature.as_ref()[0] as usize % num_segments;
 
         debug!(
             "storage verifying: segment: {} identities: {}",
