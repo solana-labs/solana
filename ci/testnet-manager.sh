@@ -32,20 +32,10 @@ steps:
         options:
           - label: "testnet"
             value: "testnet"
-          - label: "testnet-perf"
-            value: "testnet-perf"
           - label: "testnet-edge"
             value: "testnet-edge"
-          - label: "testnet-edge-perf"
-            value: "testnet-edge-perf"
           - label: "testnet-beta"
             value: "testnet-beta"
-          - label: "testnet-beta-perf"
-            value: "testnet-beta-perf"
-          - label: "testnet-demo"
-            value: "testnet-demo"
-          - label: "tds"
-            value: "tds"
       - select: "Operation"
         key: "testnet-operation"
         default: "sanity-or-restart"
@@ -131,11 +121,11 @@ GCE_LOW_QUOTA_ZONES=(
 )
 
 case $TESTNET in
-testnet-edge|testnet-edge-perf)
+testnet-edge)
   CHANNEL_OR_TAG=edge
   CHANNEL_BRANCH=$EDGE_CHANNEL
   ;;
-testnet-beta|testnet-beta-perf)
+testnet-beta)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
@@ -143,22 +133,6 @@ testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
   export CLOUDSDK_CORE_PROJECT=testnet-solana-com
-  ;;
-testnet-perf)
-  CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
-  CHANNEL_BRANCH=$STABLE_CHANNEL
-  ;;
-testnet-demo)
-  CHANNEL_OR_TAG=beta
-  CHANNEL_BRANCH=$BETA_CHANNEL
-  : "${GCE_NODE_COUNT:=150}"
-  : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
-  ;;
-tds)
-  : "${TDS_CHANNEL_OR_TAG:=edge}"
-  CHANNEL_OR_TAG="$TDS_CHANNEL_OR_TAG"
-  CHANNEL_BRANCH="$CI_BRANCH"
-  export CLOUDSDK_CORE_PROJECT=tour-de-sol
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -238,13 +212,6 @@ sanity() {
       maybe_deploy_software
     )
     ;;
-  testnet-edge-perf)
-    (
-      set -x
-      REJECT_EXTRA_NODES=1 \
-        ci/testnet-sanity.sh edge-perf-testnet-solana-com ec2 us-west-2b
-    )
-    ;;
   testnet-beta)
     (
       set -x
@@ -253,45 +220,10 @@ sanity() {
       maybe_deploy_software --deploy-if-newer
     )
     ;;
-  testnet-beta-perf)
-    (
-      set -x
-      REJECT_EXTRA_NODES=1 \
-        ci/testnet-sanity.sh beta-perf-testnet-solana-com ec2 us-west-2b
-    )
-    ;;
   testnet)
     (
       set -x
       ci/testnet-sanity.sh testnet-solana-com gce -P us-west1-b
-    )
-    ;;
-  testnet-perf)
-    (
-      set -x
-      REJECT_EXTRA_NODES=1 \
-        ci/testnet-sanity.sh perf-testnet-solana-com gce us-west1-b
-      #ci/testnet-sanity.sh perf-testnet-solana-com ec2 us-east-1a
-    )
-    ;;
-  testnet-demo)
-    (
-      set -x
-
-      ok=true
-      if [[ -n $GCE_NODE_COUNT ]]; then
-        ci/testnet-sanity.sh demo-testnet-solana-com gce "${GCE_ZONES[0]}" -f || ok=false
-      else
-        echo "Error: no GCE nodes"
-        ok=false
-      fi
-      $ok
-    )
-    ;;
-  tds)
-    (
-      set -x
-      ci/testnet-sanity.sh tds-solana-com gce "${GCE_ZONES[0]}" -f
     )
     ;;
   *)
@@ -337,18 +269,6 @@ deploy() {
         ${maybeDelete:+-D}
     )
     ;;
-  testnet-edge-perf)
-    (
-      set -x
-      RUST_LOG=solana=warn \
-        ci/testnet-deploy.sh -p edge-perf-testnet-solana-com -C ec2 -z us-west-2b \
-          -g -t "$CHANNEL_OR_TAG" -c 2 \
-          ${skipCreate:+-e} \
-          ${skipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
-    )
-    ;;
   testnet-beta)
     (
       set -x
@@ -360,18 +280,6 @@ deploy() {
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D}
-    )
-    ;;
-  testnet-beta-perf)
-    (
-      set -x
-      RUST_LOG=solana=warn \
-        ci/testnet-deploy.sh -p beta-perf-testnet-solana-com -C ec2 -z us-west-2b \
-          -g -t "$CHANNEL_OR_TAG" -c 2 \
-          ${skipCreate:+-e} \
-          ${skipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
     )
     ;;
   testnet)
@@ -390,162 +298,6 @@ deploy() {
       echo "--- net.sh update"
       set -x
       time net/net.sh update -t "$CHANNEL_OR_TAG" --platform linux --platform osx #--platform windows
-    )
-    ;;
-  testnet-perf)
-    (
-      set -x
-      RUST_LOG=solana=warn \
-        ci/testnet-deploy.sh -p perf-testnet-solana-com -C gce -z us-west1-b \
-          -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
-          -t "$CHANNEL_OR_TAG" -c 2 \
-          -d pd-ssd \
-          ${skipCreate:+-e} \
-          ${skipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
-    )
-    ;;
-  testnet-demo)
-    (
-      set -x
-
-      if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]] || [[ -n $skipStart ]]; then
-        maybeSkipStart="skip"
-      fi
-
-      # shellcheck disable=SC2068
-      ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u --allow-boot-failures \
-        --skip-remote-log-retrieval \
-        -a demo-testnet-solana-com \
-        ${skipCreate:+-e} \
-        ${maybeSkipStart:+-s} \
-        ${maybeStop:+-S} \
-        ${maybeDelete:+-D}
-
-      if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]]; then
-        # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P --allow-boot-failures -x \
-          --skip-remote-log-retrieval \
-          ${skipCreate:+-e} \
-          ${skipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
-      fi
-    )
-    ;;
-  tds)
-    (
-      set -x
-
-      # Allow cluster configuration to be overridden from env vars
-
-      if [[ -z $TDS_ZONES ]]; then
-        TDS_ZONES="us-west1-a,us-central1-a,europe-west4-a"
-      fi
-      GCE_CLOUD_ZONES=(); while read -r -d, ; do GCE_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TDS_ZONES},"
-
-      if [[ -z $TDS_NODE_COUNT ]]; then
-        TDS_NODE_COUNT="3"
-      fi
-
-      if [[ -z $TDS_CLIENT_COUNT ]]; then
-        TDS_CLIENT_COUNT="1"
-      fi
-
-      if [[ -n $TDS_SLOTS_PER_EPOCH ]]; then
-        maybeSlotsPerEpoch=(--slots-per-epoch "$TDS_SLOTS_PER_EPOCH")
-      fi
-
-      if [[ -z $ENABLE_GPU ]]; then
-        maybeGpu=(-G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100")
-      elif [[ $ENABLE_GPU == skip ]]; then
-        maybeGpu=()
-      else
-        maybeGpu=(-G "${ENABLE_GPU}")
-      fi
-
-      if [[ -z $HASHES_PER_TICK ]]; then
-        maybeHashesPerTick="--hashes-per-tick auto"
-      elif [[ $HASHES_PER_TICK == skip ]]; then
-        maybeHashesPerTick=""
-      else
-        maybeHashesPerTick="--hashes-per-tick ${HASHES_PER_TICK}"
-      fi
-
-      if [[ -z $DISABLE_AIRDROPS ]]; then
-        DISABLE_AIRDROPS="true"
-      fi
-
-      if [[ $DISABLE_AIRDROPS == true ]] ; then
-        maybeDisableAirdrops="--no-airdrop"
-      else
-        maybeDisableAirdrops=""
-      fi
-
-      if [[ -z $INTERNAL_NODES_STAKE_LAMPORTS ]]; then
-        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports 1000000000" # 1 SOL
-      elif [[ $INTERNAL_NODES_STAKE_LAMPORTS == skip ]]; then
-        maybeInternalNodesStakeLamports=""
-      else
-        maybeInternalNodesStakeLamports="--internal-nodes-stake-lamports ${INTERNAL_NODES_STAKE_LAMPORTS}"
-      fi
-
-      if [[ -z $INTERNAL_NODES_LAMPORTS ]]; then
-        maybeInternalNodesLamports="--internal-nodes-lamports 500000000000" # 500 SOL
-      elif [[ $INTERNAL_NODES_LAMPORTS == skip ]]; then
-        maybeInternalNodesLamports=""
-      else
-        maybeInternalNodesLamports="--internal-nodes-lamports ${INTERNAL_NODES_LAMPORTS}"
-      fi
-
-      EXTERNAL_ACCOUNTS_FILE=/tmp/validator.yml
-      if [[ -z $EXTERNAL_ACCOUNTS_FILE_URL ]]; then
-        EXTERNAL_ACCOUNTS_FILE_URL=https://raw.githubusercontent.com/solana-labs/tour-de-sol/master/validators/all.yml
-        wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
-        maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
-      elif [[ $EXTERNAL_ACCOUNTS_FILE_URL == skip ]]; then
-        maybeExternalAccountsFile=""
-      else
-        wget ${EXTERNAL_ACCOUNTS_FILE_URL} -O ${EXTERNAL_ACCOUNTS_FILE}
-        maybeExternalAccountsFile="--external-accounts-file ${EXTERNAL_ACCOUNTS_FILE}"
-      fi
-
-      if [[ -z $ADDITIONAL_DISK_SIZE_GB ]]; then
-        maybeAdditionalDisk="--validator-additional-disk-size-gb 32000"
-      elif [[ $ADDITIONAL_DISK_SIZE_GB == skip ]]; then
-        maybeAdditionalDisk=""
-      else
-        maybeAdditionalDisk="--validator-additional-disk-size-gb ${ADDITIONAL_DISK_SIZE_GB}"
-      fi
-
-      # Multiple V100 GPUs are available in us-west1, us-central1 and europe-west4
-      # shellcheck disable=SC2068
-      # shellcheck disable=SC2086
-      ci/testnet-deploy.sh -p tds-solana-com -C gce \
-        "${maybeGpu[@]}" \
-        -d pd-ssd \
-        ${GCE_CLOUD_ZONES[@]/#/-z } \
-        -t "$CHANNEL_OR_TAG" \
-        -n ${TDS_NODE_COUNT} \
-        -c ${TDS_CLIENT_COUNT} \
-        --idle-clients \
-        -P -u \
-        -a tds-solana-com --letsencrypt tds.solana.com \
-        ${maybeHashesPerTick} \
-        ${skipCreate:+-e} \
-        ${skipStart:+-s} \
-        ${maybeStop:+-S} \
-        ${maybeDelete:+-D} \
-        ${maybeDisableAirdrops} \
-        ${maybeInternalNodesStakeLamports} \
-        ${maybeInternalNodesLamports} \
-        ${maybeExternalAccountsFile} \
-        --target-lamports-per-signature 0 \
-        "${maybeSlotsPerEpoch[@]}" \
-        ${maybeAdditionalDisk}
     )
     ;;
   *)
