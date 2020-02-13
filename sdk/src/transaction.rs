@@ -1,13 +1,14 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
-use crate::hash::Hash;
-use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
-use crate::message::Message;
-use crate::pubkey::Pubkey;
-use crate::short_vec;
-use crate::signature::{KeypairUtil, Signature};
-use crate::system_instruction;
-use bincode::serialize;
+use crate::{
+    hash::Hash,
+    instruction::{CompiledInstruction, Instruction, InstructionError},
+    message::Message,
+    pubkey::Pubkey,
+    short_vec,
+    signature::{KeypairUtil, Signature},
+    system_instruction,
+};
 use std::result;
 use thiserror::Error;
 
@@ -209,7 +210,7 @@ impl Transaction {
 
     /// Return the serialized message data to sign.
     pub fn message_data(&self) -> Vec<u8> {
-        serialize(&self.message()).unwrap()
+        self.message().serialize()
     }
 
     /// Check keys and keypair lengths, then sign this transaction.

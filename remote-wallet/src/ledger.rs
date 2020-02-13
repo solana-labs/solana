@@ -4,7 +4,7 @@ use crate::remote_wallet::{
 use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
 use semver::Version as FirmwareVersion;
-use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::Transaction};
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::{cmp::min, fmt, sync::Arc};
 
 const APDU_TAG: u8 = 0x05;
@@ -38,8 +38,8 @@ const HID_PREFIX_ZERO: usize = 0;
 mod commands {
     #[allow(dead_code)]
     pub const GET_APP_CONFIGURATION: u8 = 0x06;
-    pub const GET_SOL_PUBKEY: u8 = 0x02;
-    pub const SIGN_SOL_TRANSACTION: u8 = 0x03;
+    pub const GET_PUBKEY: u8 = 0x02;
+    pub const SIGN_MESSAGE: u8 = 0x03;
 }
 
 /// Ledger Wallet device
@@ -233,19 +233,6 @@ impl LedgerWallet {
             ver[3].into(),
         ))
     }
-
-    pub fn sign_raw_data(
-        &self,
-        derivation_path: &DerivationPath,
-        data: &[u8],
-    ) -> Result<Vec<u8>, RemoteWalletError> {
-        let mut payload = extend_and_serialize(&derivation_path);
-        for byte in (data.len() as u16).to_be_bytes().iter() {
-            payload.push(*byte);
-        }
-        payload.extend_from_slice(data);
-        self.send_apdu(0x03, 1, 0, &payload)
-    }
 }
 
 impl RemoteWallet for LedgerWallet {
@@ -282,7 +269,7 @@ impl RemoteWallet for LedgerWallet {
         let derivation_path = extend_and_serialize(derivation_path);
 
         let key = self.send_apdu(
-            commands::GET_SOL_PUBKEY,
+            commands::GET_PUBKEY,
             0, // In the naive implementation, default request is for no device confirmation
             0,
             &derivation_path,
@@ -293,13 +280,12 @@ impl RemoteWallet for LedgerWallet {
         Ok(Pubkey::new(&key))
     }
 
-    fn sign_transaction(
+    fn sign_message(
         &self,
         derivation_path: &DerivationPath,
-        transaction: Transaction,
+        data: &[u8],
     ) -> Result<Signature, RemoteWalletError> {
         let mut payload = extend_and_serialize(derivation_path);
-        let mut data = transaction.message_data();
         if data.len() > u16::max_value() as usize {
             return Err(RemoteWalletError::InvalidInput(
                 "Message to sign is too long".to_string(),
@@ -308,11 +294,11 @@ impl RemoteWallet for LedgerWallet {
         for byte in (data.len() as u16).to_be_bytes().iter() {
             payload.push(*byte);
         }
-        payload.append(&mut data);
+        payload.extend_from_slice(data);
         trace!("Serialized payload length {:?}", payload.len());
 
         let result = self.send_apdu(
-            commands::SIGN_SOL_TRANSACTION,
+            commands::SIGN_MESSAGE,
             1, // In the naive implementation, default request is for requred device confirmation
             0,
             &payload,

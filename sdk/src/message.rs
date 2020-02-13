@@ -206,6 +206,10 @@ impl Message {
         )
     }
 
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
+    }
+
     pub fn program_ids(&self) -> Vec<&Pubkey> {
         self.instructions
             .iter()
