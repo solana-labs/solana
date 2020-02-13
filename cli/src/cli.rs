@@ -273,12 +273,19 @@ pub enum CliCommand {
     Deploy(String),
     // Stake Commands
     CreateStakeAccount {
-        stake_account: KeypairEq,
+        stake_account: SigningAuthority,
         seed: Option<String>,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
         lockup: Lockup,
         lamports: u64,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
+        from: Option<SigningAuthority>,
     },
     DeactivateStake {
         stake_account_pubkey: Pubkey,
@@ -350,6 +357,12 @@ pub enum CliCommand {
         destination_account_pubkey: Pubkey,
         lamports: u64,
         withdraw_authority: Option<SigningAuthority>,
+        sign_only: bool,
+        signers: Option<Vec<(Pubkey, Signature)>>,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: Option<SigningAuthority>,
+        fee_payer: Option<SigningAuthority>,
     },
     // Storage Commands
     CreateStorageAccount {
@@ -1551,12 +1564,19 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Create stake account
         CliCommand::CreateStakeAccount {
-            stake_account,
+            ref stake_account,
             seed,
             staker,
             withdrawer,
             lockup,
             lamports,
+            sign_only,
+            ref signers,
+            blockhash_query,
+            ref nonce_account,
+            ref nonce_authority,
+            ref fee_payer,
+            ref from,
         } => process_create_stake_account(
             &rpc_client,
             config,
@@ -1566,6 +1586,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             withdrawer,
             lockup,
             *lamports,
+            *sign_only,
+            signers.as_ref(),
+            blockhash_query,
+            nonce_account.as_ref(),
+            nonce_authority.as_ref(),
+            fee_payer.as_ref(),
+            from.as_ref(),
         ),
         CliCommand::DeactivateStake {
             stake_account_pubkey,
@@ -1705,6 +1732,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             destination_account_pubkey,
             lamports,
             ref withdraw_authority,
+            sign_only,
+            ref signers,
+            blockhash_query,
+            ref nonce_account,
+            ref nonce_authority,
+            ref fee_payer,
         } => process_withdraw_stake(
             &rpc_client,
             config,
@@ -1712,6 +1745,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &destination_account_pubkey,
             *lamports,
             withdraw_authority.as_ref(),
+            *sign_only,
+            signers.as_ref(),
+            blockhash_query,
+            nonce_account.as_ref(),
+            nonce_authority.as_ref(),
+            fee_payer.as_ref(),
         ),
 
         // Storage Commands
@@ -3048,6 +3087,13 @@ mod tests {
                 custodian,
             },
             lamports: 1234,
+            sign_only: false,
+            signers: None,
+            blockhash_query: BlockhashQuery::All,
+            nonce_account: None,
+            nonce_authority: None,
+            fee_payer: None,
+            from: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -3059,6 +3105,12 @@ mod tests {
             destination_account_pubkey: to_pubkey,
             lamports: 100,
             withdraw_authority: None,
+            sign_only: false,
+            signers: None,
+            blockhash_query: BlockhashQuery::All,
+            nonce_account: None,
+            nonce_authority: None,
+            fee_payer: None,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
