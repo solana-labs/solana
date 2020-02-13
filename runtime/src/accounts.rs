@@ -16,7 +16,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
     clock::Slot,
-    hash::Hash,
+    hash::{Hash, Hasher},
     native_loader,
     nonce_state::NonceState,
     pubkey::Pubkey,
@@ -506,7 +506,15 @@ impl Accounts {
     }
 
     pub fn bank_hash_at(&self, slot_id: Slot, ancestors: &HashMap<Slot, usize>) -> Hash {
-        self.bank_hash_info_at(slot_id, ancestors).hash
+        let bank_hash_info = self.bank_hash_info_at(slot_id, ancestors);
+        let mut hasher = Hasher::default();
+        for acc in &bank_hash_info.end.add {
+            hasher.hash(acc.as_ref());
+        }
+        for acc in &bank_hash_info.end.delete {
+            hasher.hash(acc.as_ref());
+        }
+        hasher.result()
     }
 
     pub fn bank_hash_info_at(

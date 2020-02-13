@@ -414,17 +414,23 @@ type AccountAccumulator = Accumulator<Rsa2048, Hash>;
 // Stored in large ints in hex string
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Accumulators {
-    pub add: String,
-    pub delete: String,
+    pub add: Vec<String>,
+    pub delete: Vec<String>,
 }
+
+const NUM_ACCUMULATORS: usize = 32;
 
 impl Default for Accumulators {
     fn default() -> Self {
-        let acc = Accumulator::<Rsa2048, Hash>::empty();
-        let acc_default = acc.value.0.to_string_radix(16);
+        let accs: Vec<_> = (0..NUM_ACCUMULATORS)
+            .map(|_| {
+                let acc = Accumulator::<Rsa2048, Hash>::empty();
+                acc.value.0.to_string_radix(16)
+            })
+            .collect();
         Accumulators {
-            add: acc_default.clone(),
-            delete: acc_default,
+            add: accs.clone(),
+            delete: accs,
         }
     }
 }
@@ -434,7 +440,6 @@ impl Default for Accumulators {
 pub struct BankHashInfo {
     pub start: Accumulators,
     pub end: Accumulators,
-    pub hash: Hash,
     pub stats: BankHashStats,
 }
 
@@ -807,14 +812,13 @@ impl AccountsDB {
         let add = accumulator.end.add.clone();
         let delete = accumulator.end.delete.clone();
         trace!("setting hash on slot {}", slot);
-        trace!("add: {}", add);
-        trace!("delete: {}", delete);
+        trace!("add: {:?}", add);
+        trace!("delete: {:?}", delete);
         let start_accumulators = Accumulators { add, delete };
         let new_hash_info = BankHashInfo {
             start: start_accumulators,
             end: Accumulators::default(),
             stats: BankHashStats::default(),
-            hash: Hash::default(),
         };
         accumulators.insert(slot, new_hash_info);
     }
@@ -1076,10 +1080,15 @@ impl AccountsDB {
     pub fn get_end_delete_accumulator(
         &self,
         slot: Slot,
-    ) -> Result<AccountAccumulator, BankHashVerificationError> {
+    ) -> Result<Vec<AccountAccumulator>, BankHashVerificationError> {
         if let Some(accumulator) = self.bank_accumulators.read().unwrap().get(&slot) {
-            trace!("{} delete_str:{}", slot, accumulator.end.delete);
-            Self::accumulator_from_str(&accumulator.end.delete)
+            trace!("{} delete_str:{:?}", slot, accumulator.end.delete);
+            accumulator
+                .end
+                .delete
+                .iter()
+                .map(|a| Self::accumulator_from_str(a))
+                .collect()
         } else {
             Err(BankHashVerificationError::MissingBankHash)
         }
@@ -1092,16 +1101,22 @@ impl AccountsDB {
     ) -> Result<(), BankHashVerificationError> {
         let accumulators_r = self.bank_accumulators.read().unwrap();
         if let Some(accumulators) = accumulators_r.get(&slot) {
-            trace!("{} starting from: add: {}", slot, accumulators.start.add);
-            trace!("starting from: delete: {}", accumulators.start.delete);
-            let add_accumulator = Self::accumulator_from_str(&accumulators.start.add)?;
-            let delete_accumulator = Self::accumulator_from_str(&accumulators.start.delete)?;
+            trace!("{} starting from: add: {:?}", slot, accumulators.start.add);
+            trace!("starting from: delete: {:?}", accumulators.start.delete);
+            let mut add_accumulators = Vec::new();
+            for acc in &accumulators.start.add {
+                add_accumulators.push(Self::accumulator_from_str(acc)?);
+            }
+            let mut delete_accumulators = Vec::new();
+            for acc in &accumulators.start.delete {
+                delete_accumulators.push(Self::accumulator_from_str(acc)?);
+            }
             drop(accumulators_r);
             self.update_accumulators_from_values(
                 slot,
                 ancestors,
-                add_accumulator,
-                delete_accumulator,
+                add_accumulators,
+                delete_accumulators,
             );
             Ok(())
         } else {
@@ -1109,13 +1124,18 @@ impl AccountsDB {
         }
     }
 
+    fn get_acc_idx_from_hash(hash: &Hash) -> usize {
+        (hash.as_ref()[0] & (NUM_ACCUMULATORS as u8 - 1)) as usize
+    }
+
     pub fn update_accumulators_from_values(
         &self,
         slot: Slot,
         ancestors: &HashMap<Slot, usize>,
-        mut add_accumulator: AccountAccumulator,
-        mut delete_accumulator: AccountAccumulator,
+        add_accumulators: Vec<AccountAccumulator>,
+        delete_accumulators: Vec<AccountAccumulator>,
     ) {
+        let mut scan = Measure::start("acc::scan_accounts");
         let accumulator = self.scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, Hash, bool, Account)>,
@@ -1127,42 +1147,85 @@ impl AccountsDB {
                 }
             },
         );
+        scan.stop();
 
-        for (_pubkey, hash, has_zero_lamports, account) in &accumulator {
-            if !has_zero_lamports {
-                trace!(
-                    "added: {} key: {} zero: {} account: {:?}",
-                    hash,
-                    _pubkey,
-                    has_zero_lamports,
-                    account
-                );
-                add_accumulator = add_accumulator.add(&[*hash]);
-            }
-        }
+        let mut add = Measure::start("acc::add");
+        let add_accumulators: Vec<_> = add_accumulators.into_iter().map(RwLock::new).collect();
+        let add_accumulators = RwLock::new(add_accumulators);
+        let accumulators_r = add_accumulators.read().unwrap();
+        accumulator
+            .par_iter()
+            .for_each(|(_pubkey, hash, has_zero_lamports, account)| {
+                if !has_zero_lamports {
+                    trace!(
+                        "added: {} key: {} zero: {} account: {:?}",
+                        hash,
+                        _pubkey,
+                        has_zero_lamports,
+                        account
+                    );
+                    let mut accumulator_idx = accumulators_r[Self::get_acc_idx_from_hash(hash)]
+                        .write()
+                        .unwrap();
+                    *accumulator_idx = accumulator_idx.clone().add(&[*hash]);
+                }
+            });
+        drop(accumulators_r);
+        add.stop();
 
+        let mut delete = Measure::start("delete");
+        let delete_accumulators: Vec<_> =
+            delete_accumulators.into_iter().map(RwLock::new).collect();
+        let delete_accumulators = RwLock::new(delete_accumulators);
+        let accumulators_r = delete_accumulators.read().unwrap();
         let mut ancestors_prev = ancestors.clone();
         ancestors_prev.remove(&slot);
         trace!("ancestors: {:?}", ancestors_prev);
-        {
-            for (pubkey, _hash, _has_zero_lamports, _account) in &accumulator {
+        accumulator
+            .par_iter()
+            .for_each(|(pubkey, _hash, _has_zero_lamports, _account)| {
                 if let Some((account, _slot)) = self.load_slow(&ancestors_prev, pubkey) {
                     trace!("deleted: hash: {} account: {:?}", account.hash, account);
-                    delete_accumulator = delete_accumulator.add(&[account.hash]);
+                    let mut accumulator_idx = accumulators_r
+                        [Self::get_acc_idx_from_hash(&account.hash)]
+                    .write()
+                    .unwrap();
+                    *accumulator_idx = accumulator_idx.clone().add(&[account.hash]);
                 }
-            }
+            });
+        delete.stop();
+        let mut update = Measure::start("acc::update");
+        drop(accumulators_r);
+        let add_accumulators = add_accumulators.into_inner().unwrap();
+        let mut string_add_accumulators = Vec::new();
+        for acc in add_accumulators {
+            string_add_accumulators.push(acc.into_inner().unwrap().value.0.to_string_radix(16));
         }
-        let add_accumulator = add_accumulator.value.0.to_string_radix(16);
-        let delete_accumulator = delete_accumulator.value.0.to_string_radix(16);
+
+        let delete_accumulators = delete_accumulators.into_inner().unwrap();
+        let mut string_delete_accumulators = Vec::new();
+        for acc in delete_accumulators {
+            string_delete_accumulators.push(acc.into_inner().unwrap().value.0.to_string_radix(16));
+        }
+
         let mut accumulators = self.bank_accumulators.write().unwrap();
         let slot_accumulators = accumulators
             .get_mut(&slot)
             .expect("accumulator should exist");
         trace!("Updated accumulators {}", slot);
-        trace!("add: {}", add_accumulator);
-        trace!("delete: {}", delete_accumulator);
-        slot_accumulators.end.add = add_accumulator;
-        slot_accumulators.end.delete = delete_accumulator;
+        trace!("add: {:?}", string_add_accumulators);
+        trace!("delete: {:?}", string_delete_accumulators);
+        slot_accumulators.end.add = string_add_accumulators;
+        slot_accumulators.end.delete = string_delete_accumulators;
+        update.stop();
+        info!(
+            "{} {} {} {} for {} accounts",
+            scan,
+            add,
+            delete,
+            update,
+            accumulator.len()
+        );
     }
 
     pub fn verify_bank_hash(
@@ -1181,11 +1244,11 @@ impl AccountsDB {
         trace!("starting verify... {} ancestors: {:?}", slot, ancestors);
         trace!(
             "here starting from: {:?}",
-            start_accumulator.value.0.to_string_radix(16)
+            start_accumulator[0].value.0.to_string_radix(16)
         );
         let (mut accumulators, mismatch_found) = self.scan_accounts(
             ancestors,
-            |(collector, mismatch_found): &mut (Vec<AccountAccumulator>, bool),
+            |(collector, mismatch_found): &mut (Vec<Vec<AccountAccumulator>>, bool),
              option: Option<(&Pubkey, Account, Slot)>| {
                 if let Some((pubkey, account, slot)) = option {
                     let hash = Self::hash_account(slot, &account, pubkey);
@@ -1194,17 +1257,19 @@ impl AccountsDB {
                         return;
                     }
                     if account.lamports != 0 {
-                        let accumulator = if let Some(c) = collector.pop() {
+                        let mut accumulators = if let Some(c) = collector.pop() {
                             c
                         } else {
                             start_accumulator.clone()
                         };
-                        trace!(
+                        info!(
                             "verify: adding: {} slot: {} key: {} account: {:?}",
                             hash, slot, pubkey, account
                         );
-                        let new = accumulator.add(&[hash]);
-                        collector.push(new);
+                        let idx = Self::get_acc_idx_from_hash(&hash);
+                        info!("idx: {}", idx);
+                        accumulators[idx] = accumulators[idx].clone().add(&[hash]);
+                        collector.push(accumulators);
                     }
                     if *mismatch_found {
                         return;
@@ -1215,16 +1280,19 @@ impl AccountsDB {
         if mismatch_found {
             return Err(MismatchedAccountHash);
         }
-        if let Some(accumulator) = accumulators.pop() {
+        if let Some(accumulators) = accumulators.pop() {
             let bank_accumulators = self.bank_accumulators.read().unwrap();
-            if let Some(found_hash_info) = bank_accumulators.get(&slot) {
-                trace!("found_accumulator: {:?}", found_hash_info.end.add);
-                trace!("accumulator: {:?}", accumulator.value.0.to_string_radix(16));
-                if accumulator.value.0.to_string_radix(16) == found_hash_info.end.add {
-                    Ok(())
-                } else {
-                    Err(MismatchedBankHash)
+            if let Some(found_hash_infos) = bank_accumulators.get(&slot) {
+                for (found_hash_info, accumulator) in
+                    found_hash_infos.end.add.iter().zip(accumulators.iter())
+                {
+                    trace!("found_accumulator: {:?}", found_hash_info);
+                    trace!("accumulator: {:?}", accumulator.value.0.to_string_radix(16));
+                    if accumulator.value.0.to_string_radix(16) != *found_hash_info {
+                        return Err(MismatchedBankHash);
+                    }
                 }
+                Ok(())
             } else {
                 Err(MissingBankHash)
             }
@@ -2459,14 +2527,14 @@ pub mod tests {
         let account = Account::new(1, some_data_len, &key);
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
+        let accs: Vec<_> = (0..NUM_ACCUMULATORS)
+            .into_iter()
+            .map(|_| Accumulator::<Rsa2048, Hash>::empty())
+            .collect();
+
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accumulators_from_values(
-            some_slot,
-            &ancestors,
-            Accumulator::<Rsa2048, Hash>::empty(),
-            Accumulator::<Rsa2048, Hash>::empty(),
-        );
+        db.update_accumulators_from_values(some_slot, &ancestors, accs.clone(), accs);
         assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
 
         db.bank_accumulators
@@ -2479,17 +2547,20 @@ pub mod tests {
             Err(MissingBankHash)
         );
 
+        let accs: Vec<_> = (0..NUM_ACCUMULATORS)
+            .into_iter()
+            .map(|_| "123".to_string())
+            .collect();
         let bank_hash_info = BankHashInfo {
             start: Accumulators {
-                add: "123".to_string(),
-                delete: "123".to_string(),
+                add: accs.clone(),
+                delete: accs.clone(),
             },
             end: Accumulators {
-                add: "123".to_string(),
-                delete: "123".to_string(),
+                add: accs.clone(),
+                delete: accs,
             },
             stats: BankHashStats::default(),
-            hash: Hash::default(),
         };
         db.bank_accumulators
             .write()

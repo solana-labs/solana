@@ -76,3 +76,15 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         accounts.verify_bank_hash(0, &ancestors);
     });
 }
+
+#[bench]
+fn test_accounts_update_accumulators(bencher: &mut Bencher) {
+    solana_logger::setup();
+    let accounts = Accounts::new(vec![PathBuf::from("bench_accounts_hash_internal")]);
+    let mut pubkeys: Vec<Pubkey> = vec![];
+    create_test_accounts(&accounts, &mut pubkeys, 1000, 0);
+    let ancestors = vec![(0, 0)].into_iter().collect();
+    bencher.iter(|| {
+        accounts.bank_hash_info_at(0, &ancestors);
+    });
+}

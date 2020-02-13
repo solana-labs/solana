@@ -36,7 +36,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     genesis_config::GenesisConfig,
-    hash::{extend_and_hash, hashv, Hash},
+    hash::{extend_and_hash, hashv, Hash, Hasher},
     inflation::Inflation,
     native_loader,
     nonce_state::NonceState,
@@ -1786,20 +1786,27 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
+        let mut now = Measure::start("bank_hash_info_at");
         let accounts_delta_hash = self
             .rc
             .accounts
             .bank_hash_info_at(self.slot(), &self.ancestors);
+        now.stop();
+        info!("{}", now);
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
 
-        let mut hash = hashv(&[
-            self.parent_hash.as_ref(),
-            accounts_delta_hash.end.add.as_ref(),
-            accounts_delta_hash.end.delete.as_ref(),
-            &signature_count_buf,
-            self.last_blockhash().as_ref(),
-        ]);
+        let mut hasher = Hasher::default();
+        hasher.hash(self.parent_hash.as_ref());
+        hasher.hash(&signature_count_buf);
+        for acc in &accounts_delta_hash.end.add {
+            hasher.hash(acc.as_ref());
+        }
+        for acc in &accounts_delta_hash.end.delete {
+            hasher.hash(acc.as_ref());
+        }
+        hasher.hash(self.last_blockhash().as_ref());
+        let mut hash = hasher.result();
 
         if let Some(buf) = self
             .hard_forks
