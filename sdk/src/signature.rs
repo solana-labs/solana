@@ -160,6 +160,15 @@ impl KeypairUtil for Keypair {
     }
 }
 
+impl<T> PartialEq<T> for Keypair
+where
+    T: KeypairUtil,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.pubkey() == other.pubkey()
+    }
+}
+
 pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::Error>> {
     let bytes: Vec<u8> = serde_json::from_reader(reader)?;
     let dalek_keypair = ed25519_dalek::Keypair::from_bytes(&bytes)
@@ -366,5 +375,23 @@ mod tests {
         let keypair =
             keypair_from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
         assert_eq!(keypair.pubkey(), expected_keypair.pubkey());
+    }
+
+    #[test]
+    fn test_keypair() {
+        let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+        let pubkey = keypair.pubkey();
+        let data = [1u8];
+        let sig = keypair.sign_message(&data);
+
+        // KeypairUtil
+        assert_eq!(keypair.try_pubkey().unwrap(), pubkey);
+        assert_eq!(keypair.pubkey(), pubkey);
+        assert_eq!(keypair.try_sign_message(&data).unwrap(), sig);
+        assert_eq!(keypair.sign_message(&data), sig);
+
+        // PartialEq
+        let keypair2 = keypair_from_seed(&[0u8; 32]).unwrap();
+        assert_eq!(keypair, keypair2);
     }
 }
