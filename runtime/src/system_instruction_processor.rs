@@ -197,7 +197,6 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::CreateAccountWithSeed {
-            base,
             seed,
             lamports,
             space,
@@ -205,9 +204,9 @@ pub fn process_instruction(
         } => {
             let from = next_keyed_account(keyed_accounts_iter)?;
             let to = next_keyed_account(keyed_accounts_iter)?;
+            let base = next_keyed_account(keyed_accounts_iter)?.unsigned_key();
             let mut to_account = to.try_account_ref_mut()?;
-            let to_address =
-                Address::create(&to.unsigned_key(), Some((&base, &seed, &program_id)))?;
+            let to_address = Address::create(&to.unsigned_key(), Some((base, &seed, &program_id)))?;
             create_account(
                 from,
                 &mut to_account,
@@ -405,10 +404,10 @@ mod tests {
                 &Pubkey::default(),
                 &[
                     KeyedAccount::new(&from, true, &from_account),
-                    KeyedAccount::new(&to, false, &to_account)
+                    KeyedAccount::new(&to, false, &to_account),
+                    KeyedAccount::new(&from, true, &from_account),
                 ],
                 &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
-                    base: from,
                     seed: seed.to_string(),
                     lamports: 50,
                     space: 2,

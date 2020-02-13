@@ -80,12 +80,12 @@ pub enum SystemInstruction {
     ///    a base pubkey and a seed
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - new account key
+    /// * Transaction::keys[2] - base account key
     /// * seed - string of ascii chars, no longer than MAX_ADDRESS_SEED_LEN
     /// * lamports - number of lamports to transfer to the new account
     /// * space - number of bytes of memory to allocate
     /// * program_id - the program id of the new account
     CreateAccountWithSeed {
-        base: Pubkey,
         seed: String,
         lamports: u64,
         space: u64,
@@ -199,13 +199,12 @@ pub fn create_account_with_seed(
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
-    ]
-    .with_signer(base);
+        AccountMeta::new(*base, true),
+    ];
 
     Instruction::new(
         system_program::id(),
         &SystemInstruction::CreateAccountWithSeed {
-            base: *base,
             seed: seed.to_string(),
             lamports,
             space,
