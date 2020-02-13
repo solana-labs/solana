@@ -5,14 +5,16 @@ use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType},
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::{ClusterInfoVoteListener, VoteSender},
+    cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
     fetch_stage::FetchStage,
     poh_recorder::{PohRecorder, WorkingBankEntry},
     sigverify::TransactionSigVerifier,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
+use solana_ledger::{
+    bank_forks::BankForks, blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
+};
 use std::{
     net::UdpSocket,
     sync::{
@@ -46,7 +48,8 @@ impl Tpu {
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
         shred_version: u16,
-        vote_sender: VoteSender,
+        vote_tracker: Arc<RwLock<VoteTracker>>,
+        bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -73,7 +76,8 @@ impl Tpu {
             sigverify_disabled,
             verified_vote_sender,
             &poh_recorder,
-            vote_sender,
+            vote_tracker,
+            bank_forks,
         );
 
         let banking_stage = BankingStage::new(

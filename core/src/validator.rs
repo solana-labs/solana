@@ -3,6 +3,7 @@
 use crate::{
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
+    cluster_info_vote_listener::VoteTracker,
     commitment::BlockCommitmentCache,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
@@ -378,7 +379,15 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
-        let (vote_sender, vote_receiver) = unbounded();
+        let vote_tracker = Arc::new(RwLock::new({
+            let bank_forks = bank_forks.read().unwrap();
+            VoteTracker::new(
+                bank_forks
+                    .get(bank_forks.root())
+                    .expect("Root bank must exist"),
+            )
+        }));
+
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
@@ -446,7 +455,8 @@ impl Validator {
             &config.broadcast_stage_type,
             &exit,
             node.info.shred_version,
-            vote_sender,
+            vote_tracker,
+            bank_forks,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

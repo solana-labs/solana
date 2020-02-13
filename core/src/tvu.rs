@@ -4,7 +4,7 @@
 use crate::{
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::VoteReceiver,
+    cluster_info_vote_listener::VoteTracker,
     commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
@@ -172,7 +172,7 @@ impl Tvu {
             cluster_info.clone(),
             ledger_signal_receiver,
             poh_recorder.clone(),
-            vote_receiver,
+            vote_tracker,
         );
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
