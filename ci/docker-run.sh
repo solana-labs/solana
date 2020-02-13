@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+set -x
+
 usage() {
   echo "Usage: $0 [--nopull] [docker image name] [command]"
   echo

@@ -35,7 +35,7 @@ if [[ -n $CI_PULL_REQUEST ]]; then
     fi
   done
 
-  exit 1
+  # exit 1
 fi
 
 # affected_files metadata is not currently available for non-PR builds, so assume
