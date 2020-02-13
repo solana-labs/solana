@@ -13,7 +13,7 @@ export class PublicKey {
   /**
    * Create a new PublicKey object
    */
-  constructor(value: number | string | Buffer | Array<number>) {
+  constructor(value: number | string | Buffer | Uint8Array | Array<number>) {
     if (typeof value === 'string') {
       // hexadecimal number
       if (value.startsWith('0x')) {

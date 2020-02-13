@@ -13,6 +13,7 @@ import {PublicKey} from './publickey';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from './timing';
 import {Transaction} from './transaction';
 import {sleep} from './util/sleep';
+import {toBuffer} from './util/to-buffer';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
@@ -1281,9 +1282,9 @@ export class Connection {
    * wire format
    */
   async sendRawTransaction(
-    rawTransaction: Buffer,
+    rawTransaction: Buffer | Uint8Array | Array<number>,
   ): Promise<TransactionSignature> {
-    const encodedTransaction = bs58.encode(rawTransaction);
+    const encodedTransaction = bs58.encode(toBuffer(rawTransaction));
     const result = await this.sendEncodedTransaction(encodedTransaction);
     return result;
   }

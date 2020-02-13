@@ -3,7 +3,7 @@ declare module '@solana/web3.js' {
 
   // === src/publickey.js ===
   export class PublicKey {
-    constructor(value: number | string | Buffer | Array<number>);
+    constructor(value: number | string | Buffer | Uint8Array | Array<number>);
     static isPublicKey(o: object): boolean;
     equals(publickey: PublicKey): boolean;
     toBase58(): string;
@@ -16,7 +16,7 @@ declare module '@solana/web3.js' {
 
   // === src/account.js ===
   export class Account {
-    constructor(secretKey?: Buffer);
+    constructor(secretKey?: Buffer | Uint8Array | Array<number>);
     publicKey: PublicKey;
     secretKey: Buffer;
   }
@@ -206,7 +206,9 @@ declare module '@solana/web3.js' {
     sendEncodedTransaction(
       encodedTransaction: string,
     ): Promise<TransactionSignature>;
-    sendRawTransaction(wireTransaction: Buffer): Promise<TransactionSignature>;
+    sendRawTransaction(
+      wireTransaction: Buffer | Uint8Array | Array<number>,
+    ): Promise<TransactionSignature>;
     onAccountChange(
       publickey: PublicKey,
       callback: AccountChangeCallback,
@@ -312,7 +314,7 @@ declare module '@solana/web3.js' {
     info: Info;
 
     constructor(key: PublicKey, info: Info);
-    static fromConfigData(buffer: Buffer): ValidatorInfo | null | undefined;
+    static fromConfigData(buffer: Buffer | Uint8Array | Array<number>): ValidatorInfo | null;
   }
 
   // === src/sysvar.js ===
@@ -344,7 +346,7 @@ declare module '@solana/web3.js' {
     credits: number;
     lastEpochCredits: number;
     epochCredits: Array<EpochCredits>;
-    static fromAccountData(buffer: Buffer): VoteAccount;
+    static fromAccountData(buffer: Buffer | Uint8Array | Array<number>): VoteAccount;
   }
 
   // === src/instruction.js ===
@@ -396,7 +398,7 @@ declare module '@solana/web3.js' {
     recentBlockhash?: Blockhash;
 
     constructor(opts?: TransactionCtorFields);
-    static from(buffer: Buffer): Transaction;
+    static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
     add(
       ...items: Array<
         Transaction | TransactionInstruction | TransactionInstructionCtorFields
@@ -457,7 +459,7 @@ declare module '@solana/web3.js' {
       payer: Account,
       program: Account,
       programId: PublicKey,
-      data: Buffer | Array<number>,
+      data: Buffer | Uint8Array | Array<number>,
     ): Promise<PublicKey>;
   }
 
@@ -468,7 +470,7 @@ declare module '@solana/web3.js' {
     static load(
       connection: Connection,
       payer: Account,
-      elfBytes: Buffer | Array<number>,
+      elfBytes: Buffer | Uint8Array | Array<number>,
     ): Promise<PublicKey>;
   }
 

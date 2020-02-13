@@ -72,7 +72,7 @@ export class ValidatorInfo {
    * @param buffer config account data
    * @return null if info was not found
    */
-  static fromConfigData(buffer: Buffer): ?ValidatorInfo {
+  static fromConfigData(buffer: Buffer | Uint8Array | Array<number>): ValidatorInfo | null {
     const PUBKEY_LENGTH = 32;
 
     let byteArray = [...buffer];

@@ -2,6 +2,7 @@
 import nacl from 'tweetnacl';
 import type {KeyPair} from 'tweetnacl';
 
+import {toBuffer} from './util/to-buffer';
 import {PublicKey} from './publickey';
 
 /**
@@ -18,9 +19,9 @@ export class Account {
    *
    * @param secretKey Secret key for the account
    */
-  constructor(secretKey: ?Buffer = null) {
+  constructor(secretKey?: Buffer | Uint8Array | Array<number>) {
     if (secretKey) {
-      this._keypair = nacl.sign.keyPair.fromSecretKey(secretKey);
+      this._keypair = nacl.sign.keyPair.fromSecretKey(toBuffer(secretKey));
     } else {
       this._keypair = nacl.sign.keyPair();
     }
