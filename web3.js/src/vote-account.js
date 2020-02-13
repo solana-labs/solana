@@ -3,6 +3,7 @@ import * as BufferLayout from 'buffer-layout';
 
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
+import {toBuffer} from './util/to-buffer';
 
 export const VOTE_PROGRAM_ID = new PublicKey(
   'Vote111111111111111111111111111111111111111',
@@ -79,8 +80,8 @@ export class VoteAccount {
    * @param buffer account data
    * @return VoteAccount
    */
-  static fromAccountData(buffer: Buffer): VoteAccount {
-    const va = VoteAccountLayout.decode(buffer, 0);
+  static fromAccountData(buffer: Buffer | Uint8Array | Array<number>): VoteAccount {
+    const va = VoteAccountLayout.decode(toBuffer(buffer), 0);
     va.nodePubkey = new PublicKey(va.nodePubkey);
     va.authorizedVoterPubkey = new PublicKey(va.authorizedVoterPubkey);
     va.authorizedWithdrawerPubkey = new PublicKey(

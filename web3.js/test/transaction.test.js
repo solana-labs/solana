@@ -200,7 +200,8 @@ test('serialize unsigned transaction', () => {
   ); // Arbitrary known public key
   const transfer = SystemProgram.transfer(sender.publicKey, recipient, 49);
   const expectedTransaction = new Transaction({recentBlockhash}).add(transfer);
-  const wireTransaction = Buffer.from([
+
+  const wireTransactionArray = [
     1,
     0,
     0,
@@ -416,9 +417,11 @@ test('serialize unsigned transaction', () => {
     0,
     0,
     0,
-  ]);
-  expect(wireTransaction).toEqual(expectedTransaction.serialize());
+  ];
 
-  const tx = Transaction.from(wireTransaction);
-  expect(tx).toEqual(expectedTransaction);
+  const wireTransaction = Buffer.from(wireTransactionArray);
+  expect(wireTransaction).toEqual(expectedTransaction.serialize());
+  expect(Transaction.from(wireTransaction)).toEqual(expectedTransaction);
+  expect(Transaction.from(wireTransactionArray)).toEqual(expectedTransaction);
+  expect(Transaction.from(Uint8Array.from(wireTransactionArray))).toEqual(expectedTransaction);
 });

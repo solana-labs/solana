@@ -480,7 +480,7 @@ export class Transaction {
   /**
    * Parse a wire transaction into a Transaction object.
    */
-  static from(buffer: Buffer): Transaction {
+  static from(buffer: Buffer | Uint8Array | Array<number>): Transaction {
     // Slice up wire data
     let byteArray = [...buffer];
 
