@@ -16,7 +16,7 @@ use solana_sdk::{
     slot_hashes::SlotHash,
     sysvar::clock::Clock,
 };
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque, BTreeMap};
 
 // Maximum number of votes to keep around, tightly coupled with epoch_schedule::MIN_SLOTS_PER_EPOCH
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
@@ -104,9 +104,10 @@ const MAX_ITEMS: usize = 32;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct CircBuf<I> {
-    pub buf: [I; MAX_ITEMS],
+    buf: [I; MAX_ITEMS],
     /// next pointer
-    pub idx: usize,
+    idx: usize,
+    is_empty: bool,
 }
 
 impl<I: Default + Copy> Default for CircBuf<I> {
@@ -114,6 +115,7 @@ impl<I: Default + Copy> Default for CircBuf<I> {
         Self {
             buf: [I::default(); MAX_ITEMS],
             idx: MAX_ITEMS - 1,
+            is_empty: false,
         }
     }
 }
@@ -125,6 +127,19 @@ impl<I> CircBuf<I> {
         self.idx %= MAX_ITEMS;
 
         self.buf[self.idx] = item;
+        self.is_empty = false;
+    }
+
+    pub fn buf(&self) -> &[I; MAX_ITEMS] {
+        self.buf
+    }
+
+    pub fn last(&self) -> Option<I> {
+        if !self.is_empty {
+            Some(self.buf[self.idx])
+        } else {
+            None
+        }
     }
 }
 
@@ -134,13 +149,7 @@ pub struct VoteState {
     pub node_pubkey: Pubkey,
 
     /// the signer for vote transactions
-    pub authorized_voter: Pubkey,
-    /// when the authorized voter was set/initialized
-    pub authorized_voter_epoch: Epoch,
-
-    /// history of prior authorized voters and the epoch ranges for which
-    ///  they were set
-    pub prior_voters: CircBuf<(Pubkey, Epoch, Epoch, Slot)>,
+    pub authorized_voter: BTreeMap<u64, Pubkey>,
 
     /// the signer for withdrawals
     pub authorized_withdrawer: Pubkey,
@@ -150,6 +159,11 @@ pub struct VoteState {
 
     pub votes: VecDeque<Lockout>,
     pub root_slot: Option<u64>,
+
+    /// history of prior authorized voters and the epochs for which
+    /// they were set, the bottom end of the range is inclusive,
+    /// the top of the range is exclusive
+    prior_voters: CircBuf<(Pubkey, Epoch, Epoch)>,
 
     /// history of how many credits earned by the end of each epoch
     ///  each tuple is (Epoch, credits, prev_credits)
@@ -161,14 +175,31 @@ pub struct VoteState {
 
 impl VoteState {
     pub fn new(vote_init: &VoteInit, clock: &Clock) -> Self {
+        let mut authorized_voter = BTreeMap::new();
+        authorized_voter.insert(clock.epoch, vote_init.authorized_voter);
         Self {
             node_pubkey: vote_init.node_pubkey,
-            authorized_voter: vote_init.authorized_voter,
-            authorized_voter_epoch: clock.epoch,
+            authorized_voter,
             authorized_withdrawer: vote_init.authorized_withdrawer,
             commission: vote_init.commission,
             ..VoteState::default()
         }
+    }
+
+    pub fn prior_voters(&mut self, clock: &Clock) -> &CircBuf<(Pubkey, Epoch, Epoch)> {
+        self.remove_expired_authorized_voters(clock);
+        &self.prior_voters
+    }
+
+    pub fn get_authorized_voter(&mut self, clock: &Clock) -> Pubkey {
+        let epoch = clock.epoch;
+        *self.authorized_voter.entry(epoch).or_insert_with(|| {
+            // If no authorized voter has been set yet for this epoch,
+            // this must mean the authorized voter remains unchanged 
+            // from the earliest epoch
+            self.authorized_voter.iter().next().expect("Earlier epoch must not have been purged yet");
+        })
+        self.remove_expired_authorized_voters(clock);
     }
 
     pub fn get_rent_exempt_reserve(rent: &Rent) -> u64 {
@@ -386,6 +417,38 @@ impl VoteState {
         &self.epoch_credits
     }
 
+    fn remove_expired_authorized_voters(&mut self, clock: &Clock) {
+        let current_epoch = clock.epoch;
+
+        // Get the latest that was purged
+        let (mut latest_purged_epoch, mut latest_purged_authorized_pubkey) = (None, None);
+
+        // Iterate through the keys in order, filtering out the ones
+        // < the current epoch
+        let self.authorized_voter = self.authorized_voter.iter().filter(|(authorized_epoch, pubkey)| {
+            if let Some(purged_pubkey) = latest_purged_authorized_pubkey {
+            {
+                if current_epoch >= authorized_epoch && purged_pubkey != pubkey {
+                    let epoch_of_last_authorized_switch = self.prior_voters.last().unwrap_or(1);
+                    vote_state.prior_voters.append((
+                        purged_pubkey,
+                        epoch_of_last_authorized_switch,
+                        authorized_epoch,
+                    ));
+                }
+            }
+
+            // If this entry is going to be purged, update the state we are
+            // tracking
+            if current_epoch > authorized_epoch {
+                latest_purged_epoch = authorized_epoch;
+                latest_purged_authorized_pubkey = pubkey;
+            }
+
+            authorized_epoch >= current_epoch
+        }).collect();
+    }
+
     fn pop_expired_votes(&mut self, slot: Slot) {
         loop {
             if self.votes.back().map_or(false, |v| v.is_expired(slot)) {
@@ -439,20 +502,13 @@ pub fn authorize(
     // current authorized signer must say "yay"
     match vote_authorize {
         VoteAuthorize::Voter => {
-            verify_authorized_signer(&vote_state.authorized_voter, signers)?;
-            // only one re-authorization supported per epoch
-            if vote_state.authorized_voter_epoch == clock.epoch {
-                return Err(VoteError::TooSoonToReauthorize.into());
+            let epoch_authorized_voter = vote_state.get_authorized_voter(clock.epoch);
+            verify_authorized_signer(&epoch_authorized_voter, signers)?;
+            // The offset to the leader_schedule_epoch is the number of slots available
+            // in which to set a new voter
+            if vote_state.authorized_voter.get(&clock.leader_schedule_epoch).is_none() {
+                vote_state.authorized_voter.insert(clock.leader_schedule_epoch, *authorized);
             }
-            // remember prior
-            vote_state.prior_voters.append((
-                vote_state.authorized_voter,
-                vote_state.authorized_voter_epoch,
-                clock.epoch,
-                clock.slot,
-            ));
-            vote_state.authorized_voter = *authorized;
-            vote_state.authorized_voter_epoch = clock.epoch;
         }
         VoteAuthorize::Withdrawer => {
             verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
