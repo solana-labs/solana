@@ -156,7 +156,12 @@ mod test {
         datapoint_trace!("name", ("field name", true, bool));
         datapoint_warn!("name", ("field name", 1, i64));
         datapoint_error!("name", ("field name", 1, i64),);
-        datapoint!(log::Level::Warn, "name", ("field1 name", 2, i64), ("field2 name", 2, i64));
+        datapoint!(
+            log::Level::Warn,
+            "name",
+            ("field1 name", 2, i64),
+            ("field2 name", 2, i64)
+        );
         datapoint_info!("name", ("field1 name", 2, i64), ("field2 name", 2, i64),);
         datapoint_trace!(
             "name",
@@ -165,7 +170,7 @@ mod test {
             ("field3 name", 3, i64)
         );
         datapoint!(
-            log::Level::Error, 
+            log::Level::Error,
             "name",
             ("field1 name", 2, i64),
             ("field2 name", 2, i64),
