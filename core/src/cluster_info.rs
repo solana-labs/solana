@@ -1280,6 +1280,7 @@ impl ClusterInfo {
         Some(res)
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn handle_packets(
         me: &Arc<RwLock<Self>>,
         recycler: &PacketsRecycler,
