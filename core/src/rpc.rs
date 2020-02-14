@@ -121,7 +121,7 @@ impl JsonRpcRequestProcessor {
     ) -> Result<Vec<RpcKeyedAccount>> {
         Ok(self
             .bank(commitment)
-            .get_program_accounts(&program_id)
+            .get_program_accounts(Some(&program_id))
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
