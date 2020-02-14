@@ -287,7 +287,7 @@ setup_validator_accounts "$node_lamports"
 while true; do
   echo "$PS4$program ${args[*]}"
 
-  heaptrack $program "${args[@]}" &
+  $program "${args[@]}" &
   pid=$!
   echo "pid: $pid"
 
