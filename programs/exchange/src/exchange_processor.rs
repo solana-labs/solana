@@ -4,12 +4,36 @@ use crate::exchange_instruction::*;
 use crate::exchange_state::*;
 use crate::faucet;
 use log::*;
+use num_derive::{FromPrimitive, ToPrimitive};
+use serde_derive::Serialize;
 use solana_metrics::inc_new_counter_info;
-use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::program_utils::limited_deserialize;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    account::KeyedAccount, instruction::InstructionError, program_utils::limited_deserialize,
+    program_utils::DecodeError, pubkey::Pubkey,
+};
 use std::cmp;
+use thiserror::Error;
+
+#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum ExchangeError {
+    #[error("Signer does not own account")]
+    SignerDoesNotOwnAccount,
+    #[error("Signer does not own order")]
+    SignerDoesNotOwnOrder,
+    #[error("The From account balance is too low")]
+    FromAccountBalanceTooLow,
+    #[error("Attmept operation on mismatched tokens")]
+    TokenMismatch,
+    #[error("From trade balance is too low")]
+    FromTradeBalanceTooLow,
+    #[error("Serialization failed")]
+    SerializeFailed,
+}
+impl<T> DecodeError<T> for ExchangeError {
+    fn type_of() -> &'static str {
+        "ExchangeError"
+    }
+}
 
 pub struct ExchangeProcessor {}
 
@@ -56,7 +80,7 @@ impl ExchangeProcessor {
             Ok(_) => Ok(()),
             Err(e) => {
                 error!("Serialize failed: {:?}", e);
-                Err(InstructionError::GenericError)
+                Err(ExchangeError::SerializeFailed.into())
             }
         }
     }
@@ -204,12 +228,12 @@ impl ExchangeProcessor {
                 ExchangeState::Account(mut from_account) => {
                     if &from_account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
                         error!("Signer does not own from account");
-                        return Err(InstructionError::GenericError);
+                        return Err(ExchangeError::SignerDoesNotOwnAccount.into());
                     }
 
                     if from_account.tokens[token] < tokens {
                         error!("From account balance too low");
-                        return Err(InstructionError::GenericError);
+                        return Err(ExchangeError::FromAccountBalanceTooLow.into());
                     }
 
                     from_account.tokens[token] -= tokens;
@@ -225,7 +249,7 @@ impl ExchangeProcessor {
                 ExchangeState::Trade(mut from_trade) => {
                     if &from_trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
                         error!("Signer does not own from account");
-                        return Err(InstructionError::GenericError);
+                        return Err(ExchangeError::SignerDoesNotOwnAccount.into());
                     }
 
                     let from_token = match from_trade.side {
@@ -234,12 +258,12 @@ impl ExchangeProcessor {
                     };
                     if token != from_token {
                         error!("Trade to transfer from does not hold correct token");
-                        return Err(InstructionError::GenericError);
+                        return Err(ExchangeError::TokenMismatch.into());
                     }
 
                     if from_trade.tokens_settled < tokens {
                         error!("From trade balance too low");
-                        return Err(InstructionError::GenericError);
+                        return Err(ExchangeError::FromTradeBalanceTooLow.into());
                     }
 
                     from_trade.tokens_settled -= tokens;
@@ -285,7 +309,7 @@ impl ExchangeProcessor {
 
         if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
-            return Err(InstructionError::GenericError);
+            return Err(ExchangeError::SignerDoesNotOwnAccount.into());
         }
         let from_token = match info.side {
             OrderSide::Ask => info.pair.Base,
@@ -293,7 +317,7 @@ impl ExchangeProcessor {
         };
         if account.tokens[from_token] < info.tokens {
             error!("From token balance is too low");
-            return Err(InstructionError::GenericError);
+            return Err(ExchangeError::FromAccountBalanceTooLow.into());
         }
 
         if let Err(e) = check_trade(info.side, info.tokens, info.price) {
@@ -334,8 +358,8 @@ impl ExchangeProcessor {
         let order = Self::deserialize_order(&keyed_accounts[ORDER_INDEX].try_account_ref()?.data)?;
 
         if &order.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
-            error!("Signer does not own trade");
-            return Err(InstructionError::GenericError);
+            error!("Signer does not own order");
+            return Err(ExchangeError::SignerDoesNotOwnOrder.into());
         }
 
         let token = match order.side {

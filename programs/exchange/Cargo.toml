@@ -11,11 +11,14 @@ edition = "2018"
 [dependencies]
 bincode = "1.2.1"
 log = "0.4.8"
+num-derive = { version = "0.3" }
+num-traits = { version = "0.2" }
 serde = "1.0.104"
 serde_derive = "1.0.103"
 solana-logger = { path = "../../logger", version = "0.24.0" }
 solana-metrics = { path = "../../metrics", version = "0.24.0" }
 solana-sdk = { path = "../../sdk", version = "0.24.0" }
+thiserror = "1.0"
 
 [dev-dependencies]
 solana-runtime = { path = "../../runtime", version = "0.24.0" }
