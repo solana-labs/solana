@@ -10,6 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 bincode = "1.2.1"
+bs58 = "0.3.0"
 clap = "2.33.0"
 histogram = "*"
 serde = "1.0.104"
