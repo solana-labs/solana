@@ -47,6 +47,7 @@ impl fmt::Display for DataPoint {
         Ok(())
     }
 }
+
 #[macro_export]
 macro_rules! datapoint {
     (@field $point:ident $name:expr, $string:expr, String) => {
@@ -80,11 +81,6 @@ macro_rules! datapoint {
     };
     (@point $name:expr) => {
         $crate::datapoint::DataPoint::new(&$name)
-    };
-    ($name:expr, $($fields:tt)+) => {
-        if log::log_enabled!(log::Level::Debug) {
-            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
-        }
     };
 }
 
