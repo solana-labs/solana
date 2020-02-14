@@ -42,6 +42,6 @@ pub fn map_err_vm_status(status: VMStatus) -> InstructionError {
     // The only defined StatusCode that fails is StatusCode::UNKNOWN_ERROR
     match <StatusCode as Into<u64>>::into(status.major_status).try_into() {
         Ok(u) => InstructionError::CustomError(u),
-        Err(_) => InstructionError::GenericError,
+        Err(_) => InstructionError::InvalidError,
     }
 }

@@ -65,7 +65,9 @@ impl DataStore {
     /// Read an account's resource
     pub fn read_account_resource(&self, addr: &AccountAddress) -> Option<AccountResource> {
         let access_path = create_access_path(&addr, account_config::account_struct_tag());
-        self.data.get(&access_path).and_then(|blob| { SimpleDeserializer::deserialize(blob).ok() })
+        self.data
+            .get(&access_path)
+            .and_then(|blob| SimpleDeserializer::deserialize(blob).ok())
     }
 
     /// Sets a (key, value) pair within this data store.

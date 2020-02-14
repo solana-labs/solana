@@ -3,16 +3,19 @@ use crate::data_store::DataStore;
 use crate::error_mappers::*;
 use bytecode_verifier::verifier::{VerifiedModule, VerifiedScript};
 use log::*;
+use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount,
     account_utils::State,
     instruction::InstructionError,
     move_loader::id,
+    program_utils::DecodeError,
     program_utils::{is_executable, limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
     sysvar::rent,
 };
+use thiserror::Error;
 use types::{
     account_address::AccountAddress,
     account_config,
@@ -35,6 +38,20 @@ use vm_runtime::{
     txn_executor::TransactionExecutor,
 };
 use vm_runtime_types::value::Value;
+
+#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum MoveError {
+    #[error("Invalid Move data store")]
+    InvalidDataStore,
+    #[error("Invaid Move script")]
+    InvalidScript,
+}
+
+impl<T> DecodeError<T> for MoveError {
+    fn type_of() -> &'static str {
+        "MoveError"
+    }
+}
 
 /// Instruction data passed to perform a loader operation, must be based
 /// on solana_sdk::loader_instruction::LoaderInstruction
@@ -210,7 +227,7 @@ impl MoveProcessor {
     ) -> Result<(), InstructionError> {
         let mut write_sets = data_store
             .into_write_sets()
-            .map_err(|_| InstructionError::GenericError)?;
+            .map_err(|_| MoveError::InvalidDataStore)?;
 
         let mut keyed_accounts_iter = keyed_accounts.iter();
 
@@ -249,7 +266,7 @@ impl MoveProcessor {
         }
         if !write_sets.is_empty() {
             debug!("Error: Missing keyed accounts");
-            return Err(InstructionError::GenericError);
+            return Err(InstructionError::NotEnoughAccountKeys);
         }
         Ok(())
     }
@@ -302,7 +319,7 @@ impl MoveProcessor {
                     Ok(script) => script,
                     Err((_, errors)) => {
                         if errors.is_empty() {
-                            return Err(InstructionError::GenericError);
+                            return Err(MoveError::InvalidScript.into());
                         } else {
                             return Err(map_err_vm_status(errors[0].clone()));
                         }
@@ -333,7 +350,7 @@ impl MoveProcessor {
 
                 let mut write_sets = data_store
                     .into_write_sets()
-                    .map_err(|_| InstructionError::GenericError)?;
+                    .map_err(|_| MoveError::InvalidDataStore)?;
 
                 let write_set = write_sets
                     .remove(&pubkey_to_address(finalized.unsigned_key()))
@@ -345,7 +362,7 @@ impl MoveProcessor {
 
                 if !write_sets.is_empty() {
                     debug!("Error: Missing keyed accounts");
-                    return Err(InstructionError::GenericError);
+                    return Err(InstructionError::NotEnoughAccountKeys);
                 }
 
                 info!("Finalize module: {:?}", finalized.unsigned_key());
