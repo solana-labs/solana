@@ -1,4 +1,9 @@
-use crate::remote_wallet::{DerivationPath, RemoteWallet, RemoteWalletType};
+use crate::{
+    ledger::get_ledger_from_info,
+    remote_wallet::{
+        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletType,
+    },
+};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{KeypairUtil, Signature},
@@ -34,5 +39,24 @@ impl KeypairUtil for RemoteKeypair {
                 .sign_message(&self.derivation_path, message)
                 .map_err(|e| e.into()),
         }
+    }
+}
+
+pub fn generate_remote_keypair(
+    path: String,
+    explicit_derivation_path: Option<DerivationPath>,
+) -> Result<RemoteKeypair, RemoteWalletError> {
+    let (remote_wallet_info, mut derivation_path) = RemoteWalletInfo::parse_path(path)?;
+    if let Some(derivation) = explicit_derivation_path {
+        derivation_path = derivation;
+    }
+    if remote_wallet_info.manufacturer == "ledger" {
+        let ledger = get_ledger_from_info(remote_wallet_info)?;
+        Ok(RemoteKeypair {
+            wallet_type: RemoteWalletType::Ledger(ledger),
+            derivation_path,
+        })
+    } else {
+        Err(RemoteWalletError::DeviceTypeMismatch)
     }
 }
