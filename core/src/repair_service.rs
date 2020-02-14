@@ -9,11 +9,12 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
 };
+use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::BTreeSet,
     net::UdpSocket,
-    ops::Bound::{Excluded, Unbounded},
+    ops::Bound::{Excluded, Included, Unbounded},
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
     thread::sleep,
@@ -85,6 +86,7 @@ impl RepairService {
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let mut epoch_slots: BTreeSet<Slot> = BTreeSet::new();
+        let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
         let mut current_root = 0;
         if let RepairStrategy::RepairAll {
@@ -96,6 +98,7 @@ impl RepairService {
                 id,
                 blockstore,
                 &mut epoch_slots,
+                &old_incomplete_slots,
                 current_root,
                 epoch_schedule,
                 cluster_info,
@@ -129,6 +132,7 @@ impl RepairService {
                             lowest_slot,
                             &mut current_root,
                             &mut epoch_slots,
+                            &mut old_incomplete_slots,
                             &cluster_info,
                             completed_slots_receiver,
                         );
@@ -292,6 +296,7 @@ impl RepairService {
         id: Pubkey,
         blockstore: &Blockstore,
         slots_in_gossip: &mut BTreeSet<Slot>,
+        old_incomplete_slots: &BTreeSet<Slot>,
         root: Slot,
         epoch_schedule: &EpochSchedule,
         cluster_info: &RwLock<ClusterInfo>,
@@ -307,6 +312,7 @@ impl RepairService {
             root,
             blockstore.lowest_slot(),
             slots_in_gossip.clone(),
+            old_incomplete_slots,
         );
     }
 
@@ -318,6 +324,7 @@ impl RepairService {
         lowest_slot: Slot,
         prev_root: &mut Slot,
         slots_in_gossip: &mut BTreeSet<Slot>,
+        old_incomplete_slots: &mut BTreeSet<Slot>,
         cluster_info: &RwLock<ClusterInfo>,
         completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
@@ -325,6 +332,7 @@ impl RepairService {
         let mut should_update = latest_known_root != *prev_root;
         while let Ok(completed_slots) = completed_slots_receiver.try_recv() {
             for slot in completed_slots {
+                old_incomplete_slots.remove(&slot);
                 // If the newly completed slot > root, and the set did not contain this value
                 // before, we should update gossip.
                 if slot > latest_known_root {
@@ -336,6 +344,12 @@ impl RepairService {
         if should_update {
             // Filter out everything <= root
             if latest_known_root != *prev_root {
+                Self::retain_old_incomplete_slots(
+                    slots_in_gossip,
+                    *prev_root,
+                    latest_known_root,
+                    old_incomplete_slots,
+                );
                 *prev_root = latest_known_root;
                 Self::retain_slots_greater_than_root(slots_in_gossip, latest_known_root);
             }
@@ -345,7 +359,37 @@ impl RepairService {
                 latest_known_root,
                 lowest_slot,
                 slots_in_gossip.clone(),
+                old_incomplete_slots,
             );
+        }
+    }
+
+    fn retain_old_incomplete_slots(
+        slots_in_gossip: &BTreeSet<Slot>,
+        prev_root: Slot,
+        new_root: Slot,
+        old_incomplete_slots: &mut BTreeSet<Slot>,
+    ) {
+        // Prev root and new root are not included in incomplete slot list.
+        (prev_root + 1..new_root).into_iter().for_each(|slot| {
+            if !slots_in_gossip.contains(&slot) {
+                old_incomplete_slots.insert(slot);
+            }
+        });
+        if let Some(oldest_incomplete_slot) = old_incomplete_slots.iter().next() {
+            // Prune old slots
+            // Prune in batches to reduce overhead. Pruning starts when oldest slot is 1.5 epochs
+            // earlier than the new root. But, we prune all the slots that are older than 1 epoch.
+            // So slots in a batch of half epoch are getting pruned
+            if oldest_incomplete_slot + DEFAULT_SLOTS_PER_EPOCH + DEFAULT_SLOTS_PER_EPOCH / 2
+                < new_root
+            {
+                let oldest_slot_to_retain = new_root.saturating_sub(DEFAULT_SLOTS_PER_EPOCH);
+                *old_incomplete_slots = old_incomplete_slots
+                    .range((Included(&oldest_slot_to_retain), Unbounded))
+                    .cloned()
+                    .collect();
+            }
         }
     }
 
@@ -703,6 +747,7 @@ mod test {
                 node_info.info.clone(),
             ));
 
+            let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
             while completed_slots.len() < num_slots as usize {
                 RepairService::update_epoch_slots(
                     Pubkey::default(),
@@ -710,6 +755,7 @@ mod test {
                     blockstore.lowest_slot(),
                     &mut root.clone(),
                     &mut completed_slots,
+                    &mut old_incomplete_slots,
                     &cluster_info,
                     &completed_slots_receiver,
                 );
@@ -728,6 +774,7 @@ mod test {
                 0,
                 &mut 0,
                 &mut completed_slots,
+                &mut old_incomplete_slots,
                 &cluster_info,
                 &completed_slots_receiver,
             );
@@ -751,6 +798,7 @@ mod test {
         let my_pubkey = Pubkey::new_rand();
         let (completed_slots_sender, completed_slots_receiver) = channel();
 
+        let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
         // Send a new slot before the root is updated
         let newly_completed_slot = 63;
         completed_slots_sender
@@ -762,6 +810,7 @@ mod test {
             0,
             &mut current_root.clone(),
             &mut completed_slots,
+            &mut old_incomplete_slots,
             &cluster_info,
             &completed_slots_receiver,
         );
@@ -793,6 +842,7 @@ mod test {
             0,
             &mut current_root,
             &mut completed_slots,
+            &mut old_incomplete_slots,
             &cluster_info,
             &completed_slots_receiver,
         );
@@ -812,6 +862,7 @@ mod test {
             0,
             &mut current_root,
             &mut completed_slots,
+            &mut old_incomplete_slots,
             &cluster_info,
             &completed_slots_receiver,
         );
@@ -830,5 +881,103 @@ mod test {
         assert!(my_epoch_slots_in_gossip
             .slots
             .contains(&newly_completed_slot));
+    }
+
+    #[test]
+    fn test_retain_old_incomplete_slots() {
+        let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
+        let mut slots_in_gossip: BTreeSet<Slot> = BTreeSet::new();
+
+        // When slots_in_gossip is empty. All slots between prev and new root
+        // should be incomplete
+        RepairService::retain_old_incomplete_slots(
+            &slots_in_gossip,
+            10,
+            100,
+            &mut old_incomplete_slots,
+        );
+
+        assert!(!old_incomplete_slots.contains(&10));
+        assert!(!old_incomplete_slots.contains(&100));
+        (11..100u64)
+            .into_iter()
+            .for_each(|i| assert!(old_incomplete_slots.contains(&i)));
+
+        // Insert some slots in slots_in_gossip.
+        slots_in_gossip.insert(101);
+        slots_in_gossip.insert(102);
+        slots_in_gossip.insert(104);
+        slots_in_gossip.insert(105);
+
+        RepairService::retain_old_incomplete_slots(
+            &slots_in_gossip,
+            100,
+            105,
+            &mut old_incomplete_slots,
+        );
+
+        assert!(!old_incomplete_slots.contains(&10));
+        assert!(!old_incomplete_slots.contains(&100));
+        (11..100u64)
+            .into_iter()
+            .for_each(|i| assert!(old_incomplete_slots.contains(&i)));
+        assert!(!old_incomplete_slots.contains(&101));
+        assert!(!old_incomplete_slots.contains(&102));
+        assert!(old_incomplete_slots.contains(&103));
+        assert!(!old_incomplete_slots.contains(&104));
+        assert!(!old_incomplete_slots.contains(&105));
+
+        // Insert some slots that are 1 epoch away. It should not trigger
+        // pruning, as we wait 1.5 epoch.
+        slots_in_gossip.insert(105 + DEFAULT_SLOTS_PER_EPOCH);
+
+        RepairService::retain_old_incomplete_slots(
+            &slots_in_gossip,
+            100 + DEFAULT_SLOTS_PER_EPOCH,
+            105 + DEFAULT_SLOTS_PER_EPOCH,
+            &mut old_incomplete_slots,
+        );
+
+        assert!(!old_incomplete_slots.contains(&10));
+        assert!(!old_incomplete_slots.contains(&100));
+        (11..100u64)
+            .into_iter()
+            .for_each(|i| assert!(old_incomplete_slots.contains(&i)));
+        assert!(!old_incomplete_slots.contains(&101));
+        assert!(!old_incomplete_slots.contains(&102));
+        assert!(old_incomplete_slots.contains(&103));
+        assert!(!old_incomplete_slots.contains(&104));
+        assert!(!old_incomplete_slots.contains(&105));
+        assert!(old_incomplete_slots.contains(&(101 + DEFAULT_SLOTS_PER_EPOCH)));
+        assert!(old_incomplete_slots.contains(&(102 + DEFAULT_SLOTS_PER_EPOCH)));
+        assert!(old_incomplete_slots.contains(&(103 + DEFAULT_SLOTS_PER_EPOCH)));
+        assert!(old_incomplete_slots.contains(&(104 + DEFAULT_SLOTS_PER_EPOCH)));
+
+        // Insert some slots that are 1.5 epoch away. It should trigger
+        // pruning, as we wait 1.5 epoch.
+        let one_and_half_epoch_slots = DEFAULT_SLOTS_PER_EPOCH + DEFAULT_SLOTS_PER_EPOCH / 2;
+        slots_in_gossip.insert(100 + one_and_half_epoch_slots);
+
+        RepairService::retain_old_incomplete_slots(
+            &slots_in_gossip,
+            99 + one_and_half_epoch_slots,
+            100 + one_and_half_epoch_slots,
+            &mut old_incomplete_slots,
+        );
+
+        assert!(!old_incomplete_slots.contains(&10));
+        assert!(!old_incomplete_slots.contains(&100));
+        (11..100u64)
+            .into_iter()
+            .for_each(|i| assert!(!old_incomplete_slots.contains(&i)));
+        assert!(!old_incomplete_slots.contains(&101));
+        assert!(!old_incomplete_slots.contains(&102));
+        assert!(!old_incomplete_slots.contains(&103));
+        assert!(!old_incomplete_slots.contains(&104));
+        assert!(!old_incomplete_slots.contains(&105));
+        assert!(old_incomplete_slots.contains(&(101 + DEFAULT_SLOTS_PER_EPOCH)));
+        assert!(old_incomplete_slots.contains(&(102 + DEFAULT_SLOTS_PER_EPOCH)));
+        assert!(old_incomplete_slots.contains(&(103 + DEFAULT_SLOTS_PER_EPOCH)));
+        assert!(old_incomplete_slots.contains(&(104 + DEFAULT_SLOTS_PER_EPOCH)));
     }
 }
