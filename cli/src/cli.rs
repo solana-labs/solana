@@ -410,6 +410,7 @@ pub enum CliCommand {
     Airdrop {
         faucet_host: Option<IpAddr>,
         faucet_port: u16,
+        pubkey: Option<Pubkey>,
         lamports: u64,
     },
     Balance {
@@ -643,11 +644,13 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             } else {
                 None
             };
+            let pubkey = pubkey_of(&matches, "to");
             let lamports = lamports_of_sol(matches, "amount").unwrap();
             Ok(CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host,
                     faucet_port,
+                    pubkey,
                     lamports,
                 },
                 require_keypair: true,
@@ -943,9 +946,10 @@ fn process_airdrop(
     rpc_client: &RpcClient,
     config: &CliConfig,
     faucet_addr: &SocketAddr,
+    pubkey: &Option<Pubkey>,
     lamports: u64,
 ) -> ProcessResult {
-    let pubkey = config.pubkey()?;
+    let pubkey = pubkey.unwrap_or(config.pubkey()?);
     println!(
         "Requesting airdrop of {} from {}",
         build_balance_message(lamports, false, true),
@@ -1849,6 +1853,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Airdrop {
             faucet_host,
             faucet_port,
+            pubkey,
             lamports,
         } => {
             let faucet_addr = SocketAddr::new(
@@ -1865,7 +1870,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
                 *faucet_port,
             );
 
-            process_airdrop(&rpc_client, config, &faucet_addr, *lamports)
+            process_airdrop(&rpc_client, config, &faucet_addr, pubkey, *lamports)
         }
         // Check client balance
         CliCommand::Balance {
@@ -2098,6 +2103,14 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .validator(is_amount)
                         .required(true)
                         .help("The airdrop amount to request, in SOL"),
+                )
+                .arg(
+                    Arg::with_name("to")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("The pubkey of airdrop recipient"),
                 ),
         )
         .subcommand(
@@ -2411,15 +2424,17 @@ mod tests {
         let dt = Utc.ymd(2018, 9, 19).and_hms(17, 30, 59);
 
         // Test Airdrop Subcommand
-        let test_airdrop = test_commands
-            .clone()
-            .get_matches_from(vec!["test", "airdrop", "50"]);
+        let test_airdrop =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "airdrop", "50", &pubkey_string]);
         assert_eq!(
             parse_command(&test_airdrop).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host: None,
                     faucet_port: solana_faucet::faucet::FAUCET_PORT,
+                    pubkey: Some(pubkey),
                     lamports: 50_000_000_000,
                 },
                 require_keypair: true,
@@ -3209,9 +3224,11 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Need airdrop cases
+        let to = Pubkey::new_rand();
         config.command = CliCommand::Airdrop {
             faucet_host: None,
             faucet_port: 1234,
+            pubkey: Some(to),
             lamports: 50,
         };
         assert!(process_command(&config).is_ok());
@@ -3249,6 +3266,7 @@ mod tests {
         config.command = CliCommand::Airdrop {
             faucet_host: None,
             faucet_port: 1234,
+            pubkey: None,
             lamports: 50,
         };
         assert!(process_command(&config).is_err());
