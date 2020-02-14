@@ -16,6 +16,7 @@ use std::{
     path::Path,
     str::FromStr,
 };
+use thiserror::Error;
 
 #[derive(Debug, Default)]
 pub struct Keypair(ed25519_dalek::Keypair);
@@ -157,6 +158,60 @@ impl KeypairUtil for Keypair {
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
         Ok(self.sign_message(message))
+    }
+}
+
+impl<T> PartialEq<T> for Keypair
+where
+    T: KeypairUtil,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.pubkey() == other.pubkey()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Presigner {
+    pubkey: Pubkey,
+    signature: Signature,
+}
+
+impl Presigner {
+    #[allow(dead_code)]
+    fn new(pubkey: &Pubkey, signature: &Signature) -> Self {
+        Self {
+            pubkey: *pubkey,
+            signature: *signature,
+        }
+    }
+}
+
+#[derive(Debug, Error, PartialEq)]
+enum PresignerError {
+    #[error("pre-generated signature cannot verify data")]
+    VerificationFailure,
+}
+
+impl KeypairUtil for Presigner {
+    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+        Ok(self.pubkey)
+    }
+
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+        if self.signature.verify(self.pubkey.as_ref(), message) {
+            Ok(self.signature)
+        } else {
+            Err(PresignerError::VerificationFailure.into())
+        }
+    }
+}
+
+impl<T> PartialEq<T> for Presigner
+where
+    T: KeypairUtil,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.pubkey() == other.pubkey()
     }
 }
 
@@ -366,5 +421,47 @@ mod tests {
         let keypair =
             keypair_from_seed_phrase_and_passphrase(mnemonic.phrase(), passphrase).unwrap();
         assert_eq!(keypair.pubkey(), expected_keypair.pubkey());
+    }
+
+    #[test]
+    fn test_keypair() {
+        let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+        let pubkey = keypair.pubkey();
+        let data = [1u8];
+        let sig = keypair.sign_message(&data);
+
+        // KeypairUtil
+        assert_eq!(keypair.try_pubkey().unwrap(), pubkey);
+        assert_eq!(keypair.pubkey(), pubkey);
+        assert_eq!(keypair.try_sign_message(&data).unwrap(), sig);
+        assert_eq!(keypair.sign_message(&data), sig);
+
+        // PartialEq
+        let keypair2 = keypair_from_seed(&[0u8; 32]).unwrap();
+        assert_eq!(keypair, keypair2);
+    }
+
+    #[test]
+    fn test_presigner() {
+        let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+        let pubkey = keypair.pubkey();
+        let data = [1u8];
+        let sig = keypair.sign_message(&data);
+
+        // KeypairUtil
+        let presigner = Presigner::new(&pubkey, &sig);
+        assert_eq!(presigner.try_pubkey().unwrap(), pubkey);
+        assert_eq!(presigner.pubkey(), pubkey);
+        assert_eq!(presigner.try_sign_message(&data).unwrap(), sig);
+        assert_eq!(presigner.sign_message(&data), sig);
+        let bad_data = [2u8];
+        assert!(presigner.try_sign_message(&bad_data).is_err());
+        assert_eq!(presigner.sign_message(&bad_data), Signature::default());
+
+        // PartialEq
+        assert_eq!(presigner, keypair);
+        assert_eq!(keypair, presigner);
+        let presigner2 = Presigner::new(&pubkey, &sig);
+        assert_eq!(presigner, presigner2);
     }
 }
