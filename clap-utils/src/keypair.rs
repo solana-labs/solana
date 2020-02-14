@@ -1,9 +1,11 @@
-use crate::ArgConstant;
+use crate::{input_parsers::derivation_of, ArgConstant};
 use bip39::{Language, Mnemonic, Seed};
-use clap::values_t;
+use clap::{values_t, ArgMatches};
 use rpassword::prompt_password_stderr;
+use solana_remote_wallet::remote_keypair::generate_remote_keypair;
 use solana_sdk::signature::{
-    keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair, Signer,
+    keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair, read_keypair_file,
+    Keypair, Signer,
 };
 use std::{
     error,
@@ -27,6 +29,32 @@ pub fn parse_keypair_path(path: &str) -> KeypairUrl {
         KeypairUrl::Usb(path.split_at(6).1.to_string())
     } else {
         KeypairUrl::Filepath(path.to_string())
+    }
+}
+
+pub fn keypair_util_from_path(
+    matches: &ArgMatches,
+    path: &str,
+    keypair_name: &str,
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    match parse_keypair_path(path) {
+        KeypairUrl::Ask => {
+            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+            Ok(Box::new(keypair_from_seed_phrase(
+                keypair_name,
+                skip_validation,
+                false,
+            )?))
+        }
+        KeypairUrl::Filepath(path) => Ok(Box::new(read_keypair_file(&path)?)),
+        KeypairUrl::Stdin => {
+            let mut stdin = std::io::stdin();
+            Ok(Box::new(read_keypair(&mut stdin)?))
+        }
+        KeypairUrl::Usb(path) => Ok(Box::new(generate_remote_keypair(
+            path,
+            derivation_of(matches, "derivation_path"),
+        )?)),
     }
 }
 

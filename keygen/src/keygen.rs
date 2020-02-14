@@ -6,21 +6,16 @@ use clap::{
 };
 use num_cpus;
 use solana_clap_utils::{
-    input_parsers::derivation_of,
     input_validators::is_derivation,
     keypair::{
-        keypair_from_seed_phrase, parse_keypair_path, prompt_passphrase, KeypairUrl,
+        keypair_from_seed_phrase, keypair_util_from_path, prompt_passphrase,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
 use solana_cli_config::config::{Config, CONFIG_FILE};
-use solana_remote_wallet::remote_keypair::generate_remote_keypair;
 use solana_sdk::{
     pubkey::write_pubkey_file,
-    signature::{
-        keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
-        Keypair, Signer,
-    },
+    signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
 };
 use std::{
     collections::HashSet,
@@ -64,26 +59,7 @@ fn get_keypair_from_matches(
         path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
-
-    match parse_keypair_path(path) {
-        KeypairUrl::Ask => {
-            let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            Ok(Box::new(keypair_from_seed_phrase(
-                "pubkey recovery",
-                skip_validation,
-                false,
-            )?))
-        }
-        KeypairUrl::Filepath(path) => Ok(Box::new(read_keypair_file(&path)?)),
-        KeypairUrl::Stdin => {
-            let mut stdin = std::io::stdin();
-            Ok(Box::new(read_keypair(&mut stdin)?))
-        }
-        KeypairUrl::Usb(path) => Ok(Box::new(generate_remote_keypair(
-            path,
-            derivation_of(matches, "derivation_path"),
-        )?)),
-    }
+    keypair_util_from_path(matches, path, "pubkey recovery")
 }
 
 fn output_keypair(
