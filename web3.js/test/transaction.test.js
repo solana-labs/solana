@@ -423,5 +423,7 @@ test('serialize unsigned transaction', () => {
   expect(wireTransaction).toEqual(expectedTransaction.serialize());
   expect(Transaction.from(wireTransaction)).toEqual(expectedTransaction);
   expect(Transaction.from(wireTransactionArray)).toEqual(expectedTransaction);
-  expect(Transaction.from(Uint8Array.from(wireTransactionArray))).toEqual(expectedTransaction);
+  expect(Transaction.from(Uint8Array.from(wireTransactionArray))).toEqual(
+    expectedTransaction,
+  );
 });

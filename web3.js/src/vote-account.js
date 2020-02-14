@@ -80,7 +80,9 @@ export class VoteAccount {
    * @param buffer account data
    * @return VoteAccount
    */
-  static fromAccountData(buffer: Buffer | Uint8Array | Array<number>): VoteAccount {
+  static fromAccountData(
+    buffer: Buffer | Uint8Array | Array<number>,
+  ): VoteAccount {
     const va = VoteAccountLayout.decode(toBuffer(buffer), 0);
     va.nodePubkey = new PublicKey(va.nodePubkey);
     va.authorizedVoterPubkey = new PublicKey(va.authorizedVoterPubkey);
