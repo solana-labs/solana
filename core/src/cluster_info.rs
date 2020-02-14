@@ -2448,4 +2448,32 @@ mod tests {
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
         PACKET_DATA_SIZE - (protocol_size - filter_size)
     }
+
+    #[test]
+    fn test_compress_incomplete_slots() {
+        let mut incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
+
+        assert_eq!(
+            (0, vec![]),
+            ClusterInfo::compress_incomplete_slots(&incomplete_slots)
+        );
+
+        incomplete_slots.insert(100);
+        let (first, compressed) = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
+        assert_eq!(100, first);
+        let decompressed = ClusterInfo::decompress_incomplete_slots(first, &compressed);
+        assert_eq!(incomplete_slots, decompressed);
+
+        incomplete_slots.insert(104);
+        let (first, compressed) = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
+        assert_eq!(100, first);
+        let decompressed = ClusterInfo::decompress_incomplete_slots(first, &compressed);
+        assert_eq!(incomplete_slots, decompressed);
+
+        incomplete_slots.insert(80);
+        let (first, compressed) = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
+        assert_eq!(80, first);
+        let decompressed = ClusterInfo::decompress_incomplete_slots(first, &compressed);
+        assert_eq!(incomplete_slots, decompressed);
+    }
 }
