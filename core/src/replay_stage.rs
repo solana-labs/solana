@@ -193,6 +193,7 @@ impl ReplayStage {
         let (lockouts_sender, commitment_service) =
             AggregateCommitmentService::new(&exit, block_commitment_cache);
 
+        #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
