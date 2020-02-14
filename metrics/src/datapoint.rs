@@ -89,42 +89,55 @@ macro_rules! datapoint {
 }
 
 #[macro_export]
+macro_rules! datapoint_log {
+    ($level:expr, $name:expr) => {
+        if log::log_enabled!($level) {
+            $crate::submit($crate::datapoint!(@point $name), $level);
+        }
+    };
+    ($level:expr, $name:expr, $($fields:tt)+) => {
+        if log::log_enabled!($level) {
+            $crate::submit($crate::datapoint!(@point $name, $($fields)+), $level);
+        }
+    };
+}
+#[macro_export]
 macro_rules! datapoint_error {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Error);
+        $crate::datapoint_log!(log::Level::Error, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Error);
+        $crate::datapoint_log!(log::Level::Error, $name, $($fields)+);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_warn {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Warn);
+        $crate::datapoint_log!(log::Level::Warn, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Warn);
+        $crate::datapoint_log!(log::Level::Warn, $name, $($fields)+);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_info {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Info);
+        $crate::datapoint_log!(log::Level::Info, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Info);
+        $crate::datapoint_log!(log::Level::Info, $name, $($fields)+);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_debug {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
+        $crate::datapoint_log!(log::Level::Debug, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
+        $crate::datapoint_log!(log::Level::Debug, $name, $($fields)+);
     };
 }
 

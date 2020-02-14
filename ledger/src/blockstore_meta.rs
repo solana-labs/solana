@@ -138,7 +138,7 @@ impl SlotMeta {
 
         // Should never happen
         if self.consumed > self.last_index + 1 {
-            datapoint!(
+            datapoint_error!(
                 "blockstore_error",
                 (
                     "error",
