@@ -321,6 +321,7 @@ declare module '@solana/web3.js' {
   // === src/system-program.js ===
   declare export class SystemProgram {
     static programId: PublicKey;
+    static nonceSpace: number;
 
     static createAccount(
       from: PublicKey,
@@ -343,6 +344,27 @@ declare module '@solana/web3.js' {
       lamports: number,
       space: number,
       programId: PublicKey,
+    ): Transaction;
+    static createNonceAccount(
+      from: PublicKey,
+      nonceAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      lamports: number,
+    ): Transaction;
+    static nonceAdvance(
+      nonceAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+    ): TransactionInstruction;
+    static nonceWithdraw(
+      nonceAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      to: PublicKey,
+      lamports: number,
+    ): Transaction;
+    static nonceAuthorize(
+      nonceAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      newAuthorized: PublicKey,
     ): Transaction;
   }
 
