@@ -316,7 +316,7 @@ impl ClusterInfo {
                 .expect("expected to find at least one slot");
             let last_slot = incomplete_slots
                 .iter()
-                .last()
+                .next_back()
                 .expect("expected to find last slot");
             let mut uncompressed = vec![0u8; (last_slot.saturating_sub(*first_slot) + 1) as usize];
             incomplete_slots.iter().for_each(|slot| {
