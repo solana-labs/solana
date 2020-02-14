@@ -23,7 +23,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum OperatingMode {
     SoftLaunch,  // Cluster features incrementally enabled over time
     Development, // All features (including experimental features) available immediately from genesis
