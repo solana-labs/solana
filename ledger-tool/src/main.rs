@@ -693,6 +693,13 @@ fn main() {
                     .help("Output directory for the snapshot"),
             )
         ).subcommand(
+            SubCommand::with_name("print-accounts")
+            .about("Print account contents after processing in the ledger")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
+        ).subcommand(
             SubCommand::with_name("prune")
             .about("Prune the ledger at the block height")
             .arg(
@@ -926,6 +933,51 @@ fn main() {
                             eprintln!("Unable to create snapshot archive: {}", err);
                             exit(1);
                         });
+                }
+                Err(err) => {
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                }
+            }
+        }
+        ("print-accounts", Some(arg_matches)) => {
+            let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+            let process_options = ProcessOptions {
+                dev_halt_at_slot,
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                poh_verify: false,
+                ..ProcessOptions::default()
+            };
+            let genesis_config = open_genesis_config(&ledger_path);
+            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
+                    let slot = dev_halt_at_slot.unwrap_or_else(|| {
+                        if bank_forks_info.len() > 1 {
+                            eprintln!("Error: multiple forks present");
+                            exit(1);
+                        }
+                        bank_forks_info[0].bank_slot
+                    });
+
+                    let bank = bank_forks.get(slot).unwrap_or_else(|| {
+                        eprintln!("Error: Slot {} is not available", slot);
+                        exit(1);
+                    });
+
+                    let accounts: Vec<_> = bank
+                        .get_program_accounts(None)
+                        .into_iter()
+                        .filter(|(pubkey, _account)| !solana_sdk::sysvar::is_sysvar_id(pubkey))
+                        .collect();
+
+                    println!("---");
+                    for (pubkey, account) in accounts.into_iter() {
+                        println!("{}:", pubkey);
+                        println!("  - lamports: {}", account.lamports);
+                        println!("  - owner: '{}'", account.owner);
+                        println!("  - executable: {}", account.executable);
+                        println!("  - data: '{}'", bs58::encode(account.data).into_string());
+                    }
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);

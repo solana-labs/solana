@@ -387,13 +387,16 @@ impl Accounts {
     pub fn load_by_program(
         &self,
         ancestors: &HashMap<Slot, usize>,
-        program_id: &Pubkey,
+        program_id: Option<&Pubkey>,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
                 if let Some(data) = option
-                    .filter(|(_, account, _)| account.owner == *program_id && account.lamports != 0)
+                    .filter(|(_, account, _)| {
+                        (program_id.is_none() || Some(&account.owner) == program_id)
+                            && account.lamports != 0
+                    })
                     .map(|(pubkey, account, _slot)| (*pubkey, account))
                 {
                     collector.push(data)
