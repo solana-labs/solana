@@ -156,11 +156,12 @@ impl CrdsGossip {
     pub fn process_pull_response(
         &mut self,
         from: &Pubkey,
+        timeouts: &HashMap<Pubkey, u64>,
         response: Vec<CrdsValue>,
         now: u64,
     ) -> usize {
         self.pull
-            .process_pull_response(&mut self.crds, from, response, now)
+            .process_pull_response(&mut self.crds, from, timeouts, response, now)
     }
 
     pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
