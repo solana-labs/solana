@@ -5,12 +5,14 @@ pub mod helpers;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
+use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::{
     account::KeyedAccount,
     entrypoint::SUCCESS,
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
+    program_utils::DecodeError,
     program_utils::{is_executable, limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
     sysvar::rent,
@@ -19,12 +21,27 @@ use std::{
     io::{prelude::*, Error},
     mem,
 };
+use thiserror::Error;
 
 solana_sdk::declare_program!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
     process_instruction
 );
+
+#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum BPFLoaderError {
+    #[error("Failed to create virtual machine")]
+    VirtualMachineCreationFailed,
+    #[error("Virtual machine failed to run the program to completion")]
+    VirtualMachineFailedToRunProgram,
+}
+
+impl<E> DecodeError<E> for BPFLoaderError {
+    fn type_of() -> &'static str {
+        "BPFLoaderError"
+    }
+}
 
 pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
     let mut vm = EbpfVm::new(None)?;
@@ -138,7 +155,7 @@ pub fn process_instruction(
             Ok(info) => info,
             Err(e) => {
                 warn!("Failed to create BPF VM: {}", e);
-                return Err(InstructionError::GenericError);
+                return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
             }
         };
         let parameter_accounts = keyed_accounts_iter.as_slice();
@@ -156,7 +173,7 @@ pub fn process_instruction(
             }
             Err(e) => {
                 warn!("BPF VM failed to run program: {}", e);
-                return Err(InstructionError::GenericError);
+                return Err(BPFLoaderError::VirtualMachineFailedToRunProgram.into());
             }
         }
         deserialize_parameters(parameter_accounts, &parameter_bytes)?;
