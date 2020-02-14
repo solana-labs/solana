@@ -98,7 +98,7 @@ pub enum InstructionError {
 
 impl InstructionError {
     pub fn new_result_with_negative_lamports() -> Self {
-        InstructionError::CustomError(SystemError::ResultWithNegativeLamports as u32)
+        SystemError::ResultWithNegativeLamports.into()
     }
 }
 
