@@ -23,8 +23,11 @@ bytecode_verifier = { version = "0.0.1-sol4", package = "solana_libra_bytecode_v
 canonical_serialization = { version = "0.0.1-sol4", package = "solana_libra_canonical_serialization" }
 compiler = { version = "0.0.1-sol4", package = "solana_libra_compiler" }
 failure = { version = "0.0.1-sol4", package = "solana_libra_failure_ext" }
+num-derive = { version = "0.3" }
+num-traits = { version = "0.2" }
 state_view = { version = "0.0.1-sol4", package = "solana_libra_state_view" }
 stdlib = { version = "0.0.1-sol4", package = "solana_libra_stdlib" }
+thiserror = "1.0"
 types = { version = "0.0.1-sol4", package = "solana_libra_types" }
 vm = { version = "0.0.1-sol4", package = "solana_libra_vm" }
 vm_cache_map = { version = "0.0.1-sol4", package = "solana_libra_vm_cache_map" }
