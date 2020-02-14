@@ -14,10 +14,7 @@ use solana_clap_utils::{
     },
 };
 use solana_cli_config::config::{Config, CONFIG_FILE};
-use solana_remote_wallet::{
-    ledger::{generate_remote_keypair, get_ledger_from_info},
-    remote_wallet::RemoteWalletInfo,
-};
+use solana_remote_wallet::remote_keypair::generate_remote_keypair;
 use solana_sdk::{
     pubkey::write_pubkey_file,
     signature::{
@@ -82,14 +79,10 @@ fn get_keypair_from_matches(
             let mut stdin = std::io::stdin();
             Ok(Box::new(read_keypair(&mut stdin)?))
         }
-        KeypairUrl::Usb(path) => {
-            let (remote_wallet_info, mut derivation_path) = RemoteWalletInfo::parse_path(path)?;
-            if let Some(derivation) = derivation_of(matches, "derivation_path") {
-                derivation_path = derivation;
-            }
-            let ledger = get_ledger_from_info(remote_wallet_info)?;
-            Ok(Box::new(generate_remote_keypair(ledger, derivation_path)))
-        }
+        KeypairUrl::Usb(path) => Ok(Box::new(generate_remote_keypair(
+            path,
+            derivation_of(matches, "derivation_path"),
+        )?)),
     }
 }
 
