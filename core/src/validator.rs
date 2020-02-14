@@ -132,6 +132,7 @@ pub struct Validator {
 }
 
 impl Validator {
+    #[allow(clippy::cognitive_complexity)]
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
