@@ -399,10 +399,32 @@ fn check_vote_account(
 
     let found_vote_account = solana_vote_program::vote_state::VoteState::from(&found_vote_account);
     if let Some(found_vote_account) = found_vote_account {
-        if found_vote_account.authorized_voter != *voting_pubkey {
+        if found_vote_account.authorized_voters().is_empty() {
+            return Err("Vote account not yet initialized".to_string());
+        }
+
+        let epoch_info = rpc_client
+            .get_epoch_info()
+            .map_err(|err| format!("Failed to get epoch info: {}", err.to_string()))?;
+
+        let mut authorized_voter;
+        authorized_voter = found_vote_account.get_authorized_voter(epoch_info.epoch);
+        if authorized_voter.is_none() {
+            // Must have gotten a clock on the boundary
+            authorized_voter = found_vote_account.get_authorized_voter(epoch_info.epoch + 1);
+        }
+
+        let authorized_voter = authorized_voter.expect(
+            "Could not get the authorized voter, which only happens if the
+            client gets an epoch earlier than the current epoch,
+            but the received epoch should not be off by more than
+            one epoch",
+        );
+
+        if authorized_voter != *voting_pubkey {
             return Err(format!(
                 "account's authorized voter ({}) does not match to the given voting keypair ({}).",
-                found_vote_account.authorized_voter, voting_pubkey
+                authorized_voter, voting_pubkey
             ));
         }
         if found_vote_account.node_pubkey != *node_pubkey {

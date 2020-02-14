@@ -35,6 +35,7 @@ use solana_metrics::datapoint_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, DEFAULT_SLOTS_PER_TURN},
+    epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -562,6 +563,14 @@ fn new_banks_from_blockstore(
         error!("Failed to load genesis from {:?}: {}", blockstore_path, err);
         process::exit(1);
     });
+
+    // This needs to be limited otherwise the state in the VoteAccount data
+    // grows too large
+    let leader_schedule_slot_offset = genesis_config.epoch_schedule.leader_schedule_slot_offset;
+    let slots_per_epoch = genesis_config.epoch_schedule.slots_per_epoch;
+    let leader_epoch_offset = (leader_schedule_slot_offset + slots_per_epoch - 1) / slots_per_epoch;
+    assert!(leader_epoch_offset <= MAX_LEADER_SCHEDULE_EPOCH_OFFSET);
+
     let genesis_hash = genesis_config.hash();
     info!("genesis hash: {}", genesis_hash);
 
