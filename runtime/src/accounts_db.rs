@@ -48,7 +48,7 @@ use std::{
     fmt,
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     sync::{Arc, RwLock},
 };
 use tempfile::TempDir;
@@ -397,6 +397,7 @@ impl BankHashStats {
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BankHashInfo {
     pub hash: BankHash,
+    pub snapshot_hash: Hash,
     pub stats: BankHashStats,
 }
 
@@ -436,6 +437,8 @@ impl Default for AccountsDB {
     fn default() -> Self {
         let num_threads = get_thread_count();
 
+        let mut bank_hashes = HashMap::new();
+        bank_hashes.insert(0, BankHashInfo::default());
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
             storage: RwLock::new(AccountStorage(HashMap::new())),
@@ -449,7 +452,7 @@ impl Default for AccountsDB {
                 .build()
                 .unwrap(),
             min_num_stores: num_threads,
-            bank_hashes: RwLock::new(HashMap::default()),
+            bank_hashes: RwLock::new(bank_hashes),
         }
     }
 }
@@ -787,6 +790,7 @@ impl AccountsDB {
         let hash = hash_info.hash;
         let new_hash_info = BankHashInfo {
             hash,
+            snapshot_hash: Hash::default(),
             stats: BankHashStats::default(),
         };
         bank_hashes.insert(slot, new_hash_info);
@@ -1041,6 +1045,95 @@ impl AccountsDB {
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
 
+    fn calculate_accounts_hash(
+        &self,
+        ancestors: &HashMap<Slot, usize>,
+        check_hash: bool,
+    ) -> Result<Hash, BankHashVerificationError> {
+        use BankHashVerificationError::*;
+        let mut scan = Measure::start("scan");
+        let accounts_index = self.accounts_index.read().unwrap();
+        let storage = self.storage.read().unwrap();
+        let keys: Vec<_> = accounts_index.account_maps.keys().collect();
+        let mismatch_found = AtomicBool::new(false);
+        let mut hashes: Vec<_> = keys
+            .par_iter()
+            .filter_map(|pubkey| {
+                if let Some((list, index)) = accounts_index.get(pubkey, ancestors) {
+                    let (slot, account_info) = &list[index];
+                    if account_info.lamports != 0 {
+                        storage
+                            .0
+                            .get(&slot)
+                            .and_then(|storage_map| storage_map.get(&account_info.store_id))
+                            .and_then(|store| {
+                                let account = store.accounts.get_account(account_info.offset)?.0;
+
+                                if check_hash {
+                                    let hash = Self::hash_stored_account(*slot, &account);
+                                    if hash != *account.hash {
+                                        mismatch_found.store(true, Ordering::Relaxed);
+                                    }
+                                    debug!("xoring..{} key: {}", hash, pubkey);
+                                    if mismatch_found.load(Ordering::Relaxed) {
+                                        return None;
+                                    }
+                                }
+
+                                Some((*pubkey, *account.hash))
+                            })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if mismatch_found.load(Ordering::Relaxed) {
+            return Err(MismatchedAccountHash);
+        }
+
+        scan.stop();
+        let mut sort = Measure::start("sort");
+        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        sort.stop();
+        let mut hash_time = Measure::start("hash");
+        let hashes: Vec<_> = hashes.chunks(16).collect();
+        let hashes: Vec<_> = hashes
+            .par_iter()
+            .map(|k| {
+                let mut hasher = Hasher::default();
+                for v in k.iter() {
+                    hasher.hash(v.1.as_ref());
+                }
+                hasher.result()
+            })
+            .collect();
+        let mut hasher = Hasher::default();
+        for hash in &hashes {
+            hasher.hash(hash.as_ref());
+        }
+        hash_time.stop();
+        debug!("{} {} {}", scan, sort, hash_time);
+
+        Ok(hasher.result())
+    }
+
+    pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
+        let bank_hashes = self.bank_hashes.read().unwrap();
+        let bank_hash_info = bank_hashes.get(&slot).unwrap();
+        bank_hash_info.snapshot_hash
+    }
+
+    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> Hash {
+        let hash = self.calculate_accounts_hash(ancestors, false).unwrap();
+        let mut bank_hashes = self.bank_hashes.write().unwrap();
+        let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
+        bank_hash_info.snapshot_hash = hash;
+        hash
+    }
+
     pub fn verify_bank_hash(
         &self,
         slot: Slot,
@@ -1048,39 +1141,16 @@ impl AccountsDB {
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let (hashes, mismatch_found) = self.scan_accounts(
-            ancestors,
-            |(collector, mismatch_found): &mut (Vec<BankHash>, bool),
-             option: Option<(&Pubkey, Account, Slot)>| {
-                if let Some((pubkey, account, slot)) = option {
-                    let hash = Self::hash_account(slot, &account, pubkey);
-                    if hash != account.hash {
-                        *mismatch_found = true;
-                    }
-                    if *mismatch_found {
-                        return;
-                    }
-                    let hash = BankHash::from_hash(&hash);
-                    debug!("xoring..{} key: {}", hash, pubkey);
-                    collector.push(hash);
-                }
-            },
-        );
-        if mismatch_found {
-            return Err(MismatchedAccountHash);
-        }
-        let mut calculated_hash = BankHash::default();
-        for hash in hashes {
-            calculated_hash.xor(hash);
-        }
+        let calculated_hash = self.calculate_accounts_hash(ancestors, true)?;
+
         let bank_hashes = self.bank_hashes.read().unwrap();
         if let Some(found_hash_info) = bank_hashes.get(&slot) {
-            if calculated_hash == found_hash_info.hash {
+            if calculated_hash == found_hash_info.snapshot_hash {
                 Ok(())
             } else {
                 warn!(
                     "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                    slot, calculated_hash, found_hash_info.hash
+                    slot, calculated_hash, found_hash_info.snapshot_hash
                 );
                 Err(MismatchedBankHash)
             }
@@ -1339,6 +1409,14 @@ pub mod tests {
     use solana_sdk::{account::Account, hash::HASH_BYTES};
     use std::{fs, str::FromStr};
     use tempfile::TempDir;
+
+    fn linear_ancestors(end_slot: u64) -> HashMap<Slot, usize> {
+        let mut ancestors: HashMap<Slot, usize> = vec![(0, 0)].into_iter().collect();
+        for i in 1..end_slot {
+            ancestors.insert(i, (i - 1) as usize);
+        }
+        ancestors
+    }
 
     #[test]
     fn test_accountsdb_add_root() {
@@ -1661,8 +1739,8 @@ pub mod tests {
             accounts.store(0, &[(&key, &account)]);
             keys.push(key);
         }
+        let ancestors = vec![(0, 0)].into_iter().collect();
         for (i, key) in keys.iter().enumerate() {
-            let ancestors = vec![(0, 0)].into_iter().collect();
             assert_eq!(
                 accounts.load_slow(&ancestors, &key).unwrap().0.lamports,
                 (i as u64) + 1
@@ -1810,11 +1888,16 @@ pub mod tests {
     }
 
     fn print_index(label: &'static str, accounts: &AccountsDB) {
-        info!(
-            "{}: accounts.accounts_index roots: {:?}",
-            label,
-            accounts.accounts_index.read().unwrap().roots
-        );
+        let mut roots: Vec<_> = accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .roots
+            .iter()
+            .cloned()
+            .collect();
+        roots.sort();
+        info!("{}: accounts.accounts_index roots: {:?}", label, roots,);
         for (pubkey, list) in &accounts.accounts_index.read().unwrap().account_maps {
             info!("  key: {}", pubkey);
             info!("      slots: {:?}", *list.read().unwrap());
@@ -1844,7 +1927,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accounts_db_serialize() {
+    fn test_accounts_db_serialize1() {
         solana_logger::setup();
         let accounts = AccountsDB::new_single();
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -1905,7 +1988,7 @@ pub mod tests {
 
         // Get the hash for the latest slot, which should be the only hash in the
         // bank_hashes map on the deserialized AccountsDb
-        assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 1);
+        assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 2);
         assert_eq!(
             daccounts.bank_hashes.read().unwrap().get(&latest_slot),
             accounts.bank_hashes.read().unwrap().get(&latest_slot)
@@ -1919,6 +2002,12 @@ pub mod tests {
         assert!(check_storage(&daccounts, 0, 78));
         assert!(check_storage(&daccounts, 1, 11));
         assert!(check_storage(&daccounts, 2, 31));
+
+        let ancestors = linear_ancestors(latest_slot);
+        assert_eq!(
+            daccounts.update_accounts_hash(latest_slot, &ancestors),
+            accounts.update_accounts_hash(latest_slot, &ancestors)
+        );
     }
 
     fn assert_load_account(
@@ -2005,11 +2094,13 @@ pub mod tests {
         current_slot += 1;
         accounts.add_root(current_slot);
 
+        print_accounts("pre_purge", &accounts);
+
         purge_zero_lamport_accounts(&accounts, current_slot);
 
         print_accounts("post_purge", &accounts);
 
-        // Make sure the index is for pubkey cleared
+        // Make sure the index is not touched
         assert_eq!(
             accounts
                 .accounts_index
@@ -2030,7 +2121,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accounts_db_purge() {
+    fn test_accounts_db_purge1() {
         solana_logger::setup();
         let some_lamport = 223;
         let zero_lamport = 0;
@@ -2046,10 +2137,12 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut current_slot = 1;
+        accounts.set_hash(current_slot, current_slot - 1);
         accounts.store(current_slot, &[(&pubkey, &account)]);
         accounts.add_root(current_slot);
 
         current_slot += 1;
+        accounts.set_hash(current_slot, current_slot - 1);
         accounts.store(current_slot, &[(&pubkey, &zero_lamport_account)]);
         accounts.add_root(current_slot);
 
@@ -2057,9 +2150,21 @@ pub mod tests {
 
         // Otherwise slot 2 will not be removed
         current_slot += 1;
+        accounts.set_hash(current_slot, current_slot - 1);
         accounts.add_root(current_slot);
 
+        print_accounts("pre_purge", &accounts);
+
+        let ancestors = linear_ancestors(current_slot);
+        info!("ancestors: {:?}", ancestors);
+        let hash = accounts.update_accounts_hash(current_slot, &ancestors);
+
         purge_zero_lamport_accounts(&accounts, current_slot);
+
+        assert_eq!(
+            accounts.update_accounts_hash(current_slot, &ancestors),
+            hash
+        );
 
         print_accounts("post_purge", &accounts);
 
@@ -2390,6 +2495,7 @@ pub mod tests {
 
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
+        db.update_accounts_hash(some_slot, &ancestors);
         assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
 
         db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
@@ -2401,6 +2507,7 @@ pub mod tests {
         let some_bank_hash = BankHash::from_hash(&Hash::new(&[0xca; HASH_BYTES]));
         let bank_hash_info = BankHashInfo {
             hash: some_bank_hash,
+            snapshot_hash: Hash::new(&[0xca; HASH_BYTES]),
             stats: BankHashStats::default(),
         };
         db.bank_hashes
@@ -2426,6 +2533,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
+        db.update_accounts_hash(some_slot, &ancestors);
         assert_matches!(db.verify_bank_hash(some_slot, &ancestors), Ok(_));
     }
 

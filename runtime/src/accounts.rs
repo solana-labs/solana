@@ -1313,7 +1313,7 @@ mod tests {
     #[should_panic]
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new(Vec::new());
-        accounts.bank_hash_at(0);
+        accounts.bank_hash_at(1);
     }
 
     fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {
