@@ -5,10 +5,28 @@ use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
 use log::*;
+use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
-    account::KeyedAccount, entrypoint_native, instruction::InstructionError, pubkey::Pubkey,
+    account::KeyedAccount, entrypoint_native, instruction::InstructionError,
+    program_utils::DecodeError, pubkey::Pubkey,
 };
 use std::{env, path::PathBuf, str};
+use thiserror::Error;
+
+#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum NativeLoaderError {
+    #[error("Entrypoint name in the account data is not a valid UTF-8 string")]
+    InvalidEntrypointName,
+    #[error("Entrypoint was not found in the module")]
+    EntrypointNotFound,
+    #[error("Failed to load the module")]
+    FailedToLoad,
+}
+impl<T> DecodeError<T> for NativeLoaderError {
+    fn type_of() -> &'static str {
+        "NativeLoaderError"
+    }
+}
 
 /// Dynamic link library prefixes
 #[cfg(unix)]
@@ -79,7 +97,7 @@ pub fn invoke_entrypoint(
         Ok(v) => v,
         Err(e) => {
             warn!("Invalid UTF-8 sequence: {}", e);
-            return Err(InstructionError::GenericError);
+            return Err(NativeLoaderError::InvalidEntrypointName.into());
         }
     };
     trace!("Call native {:?}", name);
@@ -95,7 +113,7 @@ pub fn invoke_entrypoint(
                             name.as_bytes(),
                             e
                         );
-                        return Err(InstructionError::GenericError);
+                        return Err(NativeLoaderError::EntrypointNotFound.into());
                     }
                 };
             let ret = entrypoint(program_id, params, instruction_data);
@@ -106,8 +124,8 @@ pub fn invoke_entrypoint(
             ret
         },
         Err(e) => {
-            warn!("Unable to load: {:?}", e);
-            Err(InstructionError::GenericError)
+            warn!("Failed to load: {:?}", e);
+            Err(NativeLoaderError::FailedToLoad.into())
         }
     }
 }
