@@ -404,7 +404,7 @@ impl BankingStage {
                     if unprocessed_packets.is_empty() {
                         continue;
                     }
-                    let num = unprocessed_packets
+                    let num: usize = unprocessed_packets
                         .iter()
                         .map(|(_, unprocessed)| unprocessed.len())
                         .sum();
