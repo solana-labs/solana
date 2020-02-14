@@ -1,6 +1,6 @@
 // @flow
 
 /**
- * @typedef {string} Blockhhash
+ * @typedef {string} Blockhash
  */
 export type Blockhash = string;
