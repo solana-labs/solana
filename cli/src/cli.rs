@@ -20,10 +20,7 @@ use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
 use solana_faucet::faucet_mock::request_airdrop_transaction;
-use solana_remote_wallet::{
-    ledger::get_ledger_from_info,
-    remote_wallet::{DerivationPath, RemoteWallet, RemoteWalletInfo},
-};
+use solana_remote_wallet::remote_wallet::DerivationPath;
 use solana_sdk::{
     bpf_loader,
     clock::{Epoch, Slot},
@@ -496,19 +493,7 @@ impl CliConfig {
     }
 
     pub(crate) fn pubkey(&self) -> Result<Pubkey, Box<dyn std::error::Error>> {
-        if let Some(path) = &self.keypair_path {
-            if path.starts_with("usb://") {
-                let (remote_wallet_info, mut derivation_path) =
-                    RemoteWalletInfo::parse_path(path.to_string())?;
-                if let Some(derivation) = &self.derivation_path {
-                    let derivation = derivation.clone();
-                    derivation_path = derivation;
-                }
-                let ledger = get_ledger_from_info(remote_wallet_info)?;
-                return Ok(ledger.get_pubkey(&derivation_path)?);
-            }
-        }
-        Ok(self.keypair.pubkey())
+        self.keypair.try_pubkey()
     }
 }
 

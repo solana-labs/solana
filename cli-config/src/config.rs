@@ -7,6 +7,12 @@ use std::{
 };
 
 lazy_static! {
+    pub static ref DEFAULT_USER_KEYPAIR: Option<String> = {
+        dirs::home_dir().map(|mut path| {
+            path.extend(&[".config", "solana", "cli", "id.json"]);
+            path.to_str().unwrap().to_string()
+        })
+    };
     pub static ref CONFIG_FILE: Option<String> = {
         dirs::home_dir().map(|mut path| {
             path.extend(&[".config", "solana", "cli", "config.yml"]);
