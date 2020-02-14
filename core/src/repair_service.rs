@@ -371,7 +371,7 @@ impl RepairService {
         old_incomplete_slots: &mut BTreeSet<Slot>,
     ) {
         // Prev root and new root are not included in incomplete slot list.
-        (prev_root + 1..new_root).into_iter().for_each(|slot| {
+        (prev_root + 1..new_root).for_each(|slot| {
             if !slots_in_gossip.contains(&slot) {
                 old_incomplete_slots.insert(slot);
             }
