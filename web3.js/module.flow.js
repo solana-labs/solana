@@ -395,7 +395,9 @@ declare module '@solana/web3.js' {
     info: Info;
 
     constructor(key: PublicKey, info: Info): ValidatorInfo;
-    static fromConfigData(buffer: Buffer | Uint8Array | Array<number>): ValidatorInfo | null;
+    static fromConfigData(
+      buffer: Buffer | Uint8Array | Array<number>,
+    ): ValidatorInfo | null;
   }
 
   // === src/sysvar.js ===
@@ -427,7 +429,9 @@ declare module '@solana/web3.js' {
     credits: number;
     lastEpochCredits: number;
     epochCredits: Array<EpochCredits>;
-    static fromAccountData(buffer: Buffer | Uint8Array | Array<number>): VoteAccount;
+    static fromAccountData(
+      buffer: Buffer | Uint8Array | Array<number>,
+    ): VoteAccount;
   }
 
   // === src/instruction.js ===
