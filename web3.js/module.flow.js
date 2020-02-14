@@ -443,8 +443,14 @@ declare module '@solana/web3.js' {
     publicKey: PublicKey,
   |};
 
+  declare type NonceInformation = {|
+    nonce: Blockhash,
+    nonceInstruction: TransactionInstruction,
+  |};
+
   declare type TransactionCtorFields = {|
     recentBlockhash?: Blockhash,
+    nonceInfo?: NonceInformation,
     signatures?: Array<SignaturePubkeyPair>,
   |};
 
@@ -453,6 +459,7 @@ declare module '@solana/web3.js' {
     signature: ?Buffer;
     instructions: Array<TransactionInstruction>;
     recentBlockhash: ?Blockhash;
+    nonceInfo: ?NonceInformation;
 
     constructor(opts?: TransactionCtorFields): Transaction;
     static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
