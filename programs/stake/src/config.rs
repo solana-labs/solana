@@ -6,7 +6,7 @@ use solana_config_program::{create_config_account, get_config_data, ConfigState}
 use solana_sdk::{
     account::{Account, KeyedAccount},
     genesis_config::GenesisConfig,
-    instruction::InstructionError,
+    program_error::ProgramError,
 };
 
 // stake config ID
@@ -63,11 +63,11 @@ pub fn create_account(lamports: u64, config: &Config) -> Account {
     create_config_account(vec![], config, lamports)
 }
 
-pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionError> {
+pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, ProgramError> {
     if !check_id(account.unsigned_key()) {
-        return Err(InstructionError::InvalidArgument);
+        return Err(ProgramError::InvalidArgument);
     }
-    Config::from(&*account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
+    Config::from(&*account.try_account_ref()?).ok_or(ProgramError::InvalidArgument)
 }
 
 #[cfg(test)]
@@ -82,7 +82,7 @@ mod tests {
         assert_eq!(Config::from(&account.borrow()), Some(Config::default()));
         assert_eq!(
             from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &mut account)),
-            Err(InstructionError::InvalidArgument)
+            Err(ProgramError::InvalidArgument)
         );
     }
 }

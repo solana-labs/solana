@@ -7,7 +7,8 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
-    instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
+    instruction::{AccountMeta, Instruction, WithSigner},
+    program_error::ProgramError,
     program_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
@@ -371,7 +372,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     solana_logger::setup();
 
     trace!("process_instruction: {:?}", data);
@@ -440,7 +441,7 @@ mod tests {
         RefCell::new(Account::default())
     }
 
-    fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
+    fn process_instruction(instruction: &Instruction) -> Result<(), ProgramError> {
         let accounts: Vec<_> = instruction
             .accounts
             .iter()
@@ -480,7 +481,7 @@ mod tests {
                 &Authorized::default(),
                 &Lockup::default()
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&authorize(
@@ -489,7 +490,7 @@ mod tests {
                 &Pubkey::default(),
                 StakeAuthorize::Staker
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(
@@ -500,7 +501,7 @@ mod tests {
                     &Pubkey::default()
                 )[2]
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(
@@ -513,7 +514,7 @@ mod tests {
                     "seed"
                 )[1]
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&delegate_stake(
@@ -521,7 +522,7 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default()
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&withdraw(
@@ -530,11 +531,11 @@ mod tests {
                 &Pubkey::new_rand(),
                 100
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&deactivate_stake(&Pubkey::default(), &Pubkey::default())),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&set_lockup(
@@ -542,7 +543,7 @@ mod tests {
                 &Lockup::default(),
                 &Pubkey::default()
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
     }
 
@@ -561,7 +562,7 @@ mod tests {
                 ))
                 .unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
 
         // no account for rent
@@ -579,7 +580,7 @@ mod tests {
                 ))
                 .unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
 
         // rent fails to deserialize
@@ -596,7 +597,7 @@ mod tests {
                 ))
                 .unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
 
         // fails to deserialize stake state
@@ -617,7 +618,7 @@ mod tests {
                 ))
                 .unwrap(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
 
         // gets the first check in delegate, wrong number of accounts
@@ -631,7 +632,7 @@ mod tests {
                 ),],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
 
         // gets the sub-check for number of args
@@ -645,7 +646,7 @@ mod tests {
                 )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
 
         // gets the check non-deserialize-able account in delegate_stake
@@ -675,7 +676,7 @@ mod tests {
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
 
         // Tests 3rd keyed account is of correct type (Clock instead of rewards) in withdraw
@@ -701,7 +702,7 @@ mod tests {
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
 
         // Tests correct number of accounts are provided in withdraw
@@ -715,7 +716,7 @@ mod tests {
                 )],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
 
         // Tests 2nd keyed account is of correct type (Clock instead of rewards) in deactivate
@@ -732,7 +733,7 @@ mod tests {
                 ],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
 
         // Tests correct number of accounts are provided in deactivate
@@ -742,18 +743,18 @@ mod tests {
                 &[],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
     #[test]
     fn test_custom_error_decode() {
         use num_traits::FromPrimitive;
-        fn pretty_err<T>(err: InstructionError) -> String
+        fn pretty_err<T>(err: ProgramError) -> String
         where
             T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
         {
-            if let InstructionError::CustomError(code) = err {
+            if let ProgramError::CustomError(code) = err {
                 let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
                 format!(
                     "{:?}: {}::{:?} - {}",

@@ -4,7 +4,7 @@ use crate::ConfigKeys;
 use bincode::deserialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::program_error::ProgramError;
 use solana_sdk::program_utils::{limited_deserialize, next_keyed_account};
 use solana_sdk::pubkey::Pubkey;
 
@@ -12,7 +12,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let key_list: ConfigKeys = limited_deserialize(data)?;
     let keyed_accounts_iter = &mut keyed_accounts.iter();
     let config_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
@@ -25,7 +25,7 @@ pub fn process_instruction(
                 config_account.data.len(),
                 err
             );
-            InstructionError::InvalidAccountData
+            ProgramError::InvalidAccountData
         })?
     };
     let current_signer_keys: Vec<Pubkey> = current_data
@@ -40,7 +40,7 @@ pub fn process_instruction(
         // or when no signers specified in Config data
         if config_keyed_account.signer_key().is_none() {
             error!("account[0].signer_key().is_none()");
-            return Err(InstructionError::MissingRequiredSignature);
+            return Err(ProgramError::MissingRequiredSignature);
         }
     }
 
@@ -51,19 +51,19 @@ pub fn process_instruction(
             let signer_account = keyed_accounts_iter.next();
             if signer_account.is_none() {
                 error!("account {:?} is not in account list", signer);
-                return Err(InstructionError::MissingRequiredSignature);
+                return Err(ProgramError::MissingRequiredSignature);
             }
             let signer_key = signer_account.unwrap().signer_key();
             if signer_key.is_none() {
                 error!("account {:?} signer_key().is_none()", signer);
-                return Err(InstructionError::MissingRequiredSignature);
+                return Err(ProgramError::MissingRequiredSignature);
             }
             if signer_key.unwrap() != signer {
                 error!(
                     "account[{:?}].signer_key() does not match Config data)",
                     counter + 1
                 );
-                return Err(InstructionError::MissingRequiredSignature);
+                return Err(ProgramError::MissingRequiredSignature);
             }
             // If Config account is already initialized, update signatures must match Config data
             if !current_data.keys.is_empty()
@@ -73,11 +73,11 @@ pub fn process_instruction(
                     .is_none()
             {
                 error!("account {:?} is not in stored signer list", signer);
-                return Err(InstructionError::MissingRequiredSignature);
+                return Err(ProgramError::MissingRequiredSignature);
             }
         } else if config_keyed_account.signer_key().is_none() {
             error!("account[0].signer_key().is_none()");
-            return Err(InstructionError::MissingRequiredSignature);
+            return Err(ProgramError::MissingRequiredSignature);
         }
     }
 
@@ -88,12 +88,12 @@ pub fn process_instruction(
             counter,
             current_signer_keys.len()
         );
-        return Err(InstructionError::MissingRequiredSignature);
+        return Err(ProgramError::MissingRequiredSignature);
     }
 
     if config_keyed_account.data_len()? < data.len() {
         error!("instruction data too large");
-        return Err(InstructionError::InvalidInstructionData);
+        return Err(ProgramError::InvalidInstructionData);
     }
 
     config_keyed_account.try_account_ref_mut()?.data[..data.len()].copy_from_slice(&data);
@@ -215,7 +215,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::InvalidInstructionData)
+            Err(ProgramError::InvalidInstructionData)
         );
     }
 
@@ -233,7 +233,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
     }
 
@@ -290,7 +290,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
     }
 
@@ -316,7 +316,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         // Config-data pubkey not a signer
@@ -327,7 +327,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
     }
 
@@ -395,7 +395,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         // Attempt update with incorrect signatures
@@ -414,7 +414,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
     }
 
@@ -477,7 +477,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instruction.data),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
     }
 
@@ -491,7 +491,7 @@ mod tests {
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &instructions[1].data),
-            Err(InstructionError::NotEnoughAccountKeys)
+            Err(ProgramError::NotEnoughAccountKeys)
         );
     }
 }

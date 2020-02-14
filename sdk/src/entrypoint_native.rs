@@ -1,13 +1,13 @@
 //! @brief Solana Native program entry point
 
-use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
+use crate::{account::KeyedAccount, program_error::ProgramError, pubkey::Pubkey};
 
 // Prototype of a native program entry point
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
-) -> Result<(), InstructionError>;
+) -> Result<(), ProgramError>;
 
 /// Convenience macro to declare a native program
 ///
@@ -23,7 +23,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 /// # // rather than in the statement position which isn't allowed.
 /// # mod item_wrapper {
 /// use solana_sdk::account::KeyedAccount;
-/// use solana_sdk::instruction::InstructionError;
+/// use solana_sdk::instruction::ProgramError;
 /// use solana_sdk::pubkey::Pubkey;
 /// use solana_sdk::declare_program;
 ///
@@ -31,7 +31,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 ///     program_id: &Pubkey,
 ///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
-/// ) -> Result<(), InstructionError> {
+/// ) -> Result<(), ProgramError> {
 ///   // Process an instruction
 ///   Ok(())
 /// }
@@ -54,7 +54,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 /// # // rather than in the statement position which isn't allowed.
 /// # mod item_wrapper {
 /// use solana_sdk::account::KeyedAccount;
-/// use solana_sdk::instruction::InstructionError;
+/// use solana_sdk::instruction::ProgramError;
 /// use solana_sdk::pubkey::Pubkey;
 /// use solana_sdk::declare_program;
 ///
@@ -62,7 +62,7 @@ pub type Entrypoint = unsafe extern "C" fn(
 ///     program_id: &Pubkey,
 ///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
-/// ) -> Result<(), InstructionError> {
+/// ) -> Result<(), ProgramError> {
 ///   // Process an instruction
 ///   Ok(())
 /// }
@@ -94,7 +94,7 @@ macro_rules! declare_program(
             program_id: &$crate::pubkey::Pubkey,
             keyed_accounts: &[$crate::account::KeyedAccount],
             instruction_data: &[u8],
-        ) -> Result<(), $crate::instruction::InstructionError> {
+        ) -> Result<(), $crate::program_error::ProgramError> {
             $entrypoint(program_id, keyed_accounts, instruction_data)
         }
     )

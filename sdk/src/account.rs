@@ -1,6 +1,6 @@
 use crate::{
     hash::Hash,
-    instruction::InstructionError,
+    program_error::ProgramError,
     {clock::Epoch, pubkey::Pubkey},
 };
 use std::{
@@ -163,43 +163,43 @@ impl<'a> KeyedAccount<'a> {
         self.is_writable
     }
 
-    pub fn lamports(&self) -> Result<u64, InstructionError> {
+    pub fn lamports(&self) -> Result<u64, ProgramError> {
         Ok(self.try_borrow()?.lamports)
     }
 
-    pub fn data_len(&self) -> Result<usize, InstructionError> {
+    pub fn data_len(&self) -> Result<usize, ProgramError> {
         Ok(self.try_borrow()?.data.len())
     }
 
-    pub fn data_is_empty(&self) -> Result<bool, InstructionError> {
+    pub fn data_is_empty(&self) -> Result<bool, ProgramError> {
         Ok(self.try_borrow()?.data.is_empty())
     }
 
-    pub fn owner(&self) -> Result<Pubkey, InstructionError> {
+    pub fn owner(&self) -> Result<Pubkey, ProgramError> {
         Ok(self.try_borrow()?.owner)
     }
 
-    pub fn executable(&self) -> Result<bool, InstructionError> {
+    pub fn executable(&self) -> Result<bool, ProgramError> {
         Ok(self.try_borrow()?.executable)
     }
 
-    pub fn try_account_ref(&'a self) -> Result<Ref<Account>, InstructionError> {
+    pub fn try_account_ref(&'a self) -> Result<Ref<Account>, ProgramError> {
         self.try_borrow()
     }
 
-    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<Account>, InstructionError> {
+    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<Account>, ProgramError> {
         self.try_borrow_mut()
     }
 
-    fn try_borrow(&self) -> Result<Ref<Account>, InstructionError> {
+    fn try_borrow(&self) -> Result<Ref<Account>, ProgramError> {
         self.account
             .try_borrow()
-            .map_err(|_| InstructionError::AccountBorrowFailed)
+            .map_err(|_| ProgramError::AccountBorrowFailed)
     }
-    fn try_borrow_mut(&self) -> Result<RefMut<Account>, InstructionError> {
+    fn try_borrow_mut(&self) -> Result<RefMut<Account>, ProgramError> {
         self.account
             .try_borrow_mut()
-            .map_err(|_| InstructionError::AccountBorrowFailed)
+            .map_err(|_| ProgramError::AccountBorrowFailed)
     }
 
     pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a RefCell<Account>) -> Self {

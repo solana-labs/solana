@@ -2,7 +2,7 @@ use crate::{
     account::{Account, KeyedAccount},
     account_utils::State,
     hash::Hash,
-    instruction::InstructionError,
+    program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction::NonceError,
     system_program,
@@ -48,7 +48,7 @@ pub trait NonceAccount {
         &self,
         recent_blockhashes: &RecentBlockhashes,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
     fn withdraw_nonce_account(
         &self,
         lamports: u64,
@@ -56,18 +56,18 @@ pub trait NonceAccount {
         recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
     fn initialize_nonce_account(
         &self,
         nonce_authority: &Pubkey,
         recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
     fn authorize_nonce_account(
         &self,
         nonce_authority: &Pubkey,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
 }
 
 impl<'a> NonceAccount for KeyedAccount<'a> {
@@ -75,7 +75,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         &self,
         recent_blockhashes: &RecentBlockhashes,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         if recent_blockhashes.is_empty() {
             return Err(NonceError::NoRecentBlockhashes.into());
         }
@@ -83,7 +83,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         let meta = match self.state()? {
             NonceState::Initialized(meta, ref hash) => {
                 if !signers.contains(&meta.nonce_authority) {
-                    return Err(InstructionError::MissingRequiredSignature);
+                    return Err(ProgramError::MissingRequiredSignature);
                 }
                 if *hash == recent_blockhashes[0] {
                     return Err(NonceError::NotExpired.into());
@@ -103,11 +103,11 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let signer = match self.state()? {
             NonceState::Uninitialized => {
                 if lamports > self.lamports()? {
-                    return Err(InstructionError::InsufficientFunds);
+                    return Err(ProgramError::InsufficientFunds);
                 }
                 *self.unsigned_key()
             }
@@ -119,7 +119,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
                 } else {
                     let min_balance = rent.minimum_balance(self.data_len()?);
                     if lamports + min_balance > self.lamports()? {
-                        return Err(InstructionError::InsufficientFunds);
+                        return Err(ProgramError::InsufficientFunds);
                     }
                 }
                 meta.nonce_authority
@@ -127,7 +127,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         };
 
         if !signers.contains(&signer) {
-            return Err(InstructionError::MissingRequiredSignature);
+            return Err(ProgramError::MissingRequiredSignature);
         }
 
         self.try_account_ref_mut()?.lamports -= lamports;
@@ -141,7 +141,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         nonce_authority: &Pubkey,
         recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         if recent_blockhashes.is_empty() {
             return Err(NonceError::NoRecentBlockhashes.into());
         }
@@ -150,7 +150,7 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
             NonceState::Uninitialized => {
                 let min_balance = rent.minimum_balance(self.data_len()?);
                 if self.lamports()? < min_balance {
-                    return Err(InstructionError::InsufficientFunds);
+                    return Err(ProgramError::InsufficientFunds);
                 }
                 Meta::new(nonce_authority)
             }
@@ -164,11 +164,11 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         &self,
         nonce_authority: &Pubkey,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         match self.state()? {
             NonceState::Initialized(meta, nonce) => {
                 if !signers.contains(&meta.nonce_authority) {
-                    return Err(InstructionError::MissingRequiredSignature);
+                    return Err(ProgramError::MissingRequiredSignature);
                 }
                 self.set_state(&NonceState::Initialized(Meta::new(nonce_authority), nonce))
             }
@@ -309,7 +309,7 @@ mod test {
             let signers = HashSet::new();
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let result = nonce_account.advance_nonce_account(&recent_blockhashes, &signers);
-            assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
+            assert_eq!(result, Err(ProgramError::MissingRequiredSignature),);
         })
     }
 
@@ -412,7 +412,7 @@ mod test {
                     .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                     .unwrap();
                 let result = nonce_account.advance_nonce_account(&recent_blockhashes, &signers);
-                assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
+                assert_eq!(result, Err(ProgramError::MissingRequiredSignature),);
             });
         });
     }
@@ -477,7 +477,7 @@ mod test {
                     &rent,
                     &signers,
                 );
-                assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
+                assert_eq!(result, Err(ProgramError::MissingRequiredSignature),);
             })
         })
     }
@@ -504,7 +504,7 @@ mod test {
                     &rent,
                     &signers,
                 );
-                assert_eq!(result, Err(InstructionError::InsufficientFunds));
+                assert_eq!(result, Err(ProgramError::InsufficientFunds));
             })
         })
     }
@@ -671,7 +671,7 @@ mod test {
                     &rent,
                     &signers,
                 );
-                assert_eq!(result, Err(InstructionError::InsufficientFunds));
+                assert_eq!(result, Err(ProgramError::InsufficientFunds));
             })
         })
     }
@@ -701,7 +701,7 @@ mod test {
                     &rent,
                     &signers,
                 );
-                assert_eq!(result, Err(InstructionError::InsufficientFunds));
+                assert_eq!(result, Err(ProgramError::InsufficientFunds));
             })
         })
     }
@@ -780,7 +780,7 @@ mod test {
             let authorized = keyed_account.unsigned_key().clone();
             let result =
                 keyed_account.initialize_nonce_account(&authorized, &recent_blockhashes, &rent);
-            assert_eq!(result, Err(InstructionError::InsufficientFunds));
+            assert_eq!(result, Err(ProgramError::InsufficientFunds));
         })
     }
 
@@ -840,7 +840,7 @@ mod test {
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
             let result = nonce_account.authorize_nonce_account(&Pubkey::default(), &signers);
-            assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
+            assert_eq!(result, Err(ProgramError::MissingRequiredSignature));
         })
     }
 }

@@ -11,7 +11,8 @@ use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_debug;
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
-    instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
+    instruction::{AccountMeta, Instruction, WithSigner},
+    program_error::ProgramError,
     program_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
     system_instruction,
@@ -178,7 +179,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     solana_logger::setup_with_default("solana=info");
 
     trace!("process_instruction: {:?}", data);
@@ -236,11 +237,11 @@ mod tests {
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
             super::process_instruction(&Pubkey::default(), &[], &[],),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
-    fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
+    fn process_instruction(instruction: &Instruction) -> Result<(), ProgramError> {
         let mut accounts: Vec<_> = instruction
             .accounts
             .iter()
@@ -281,7 +282,7 @@ mod tests {
         );
         assert_eq!(
             process_instruction(&instructions[1]),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&vote(
@@ -289,7 +290,7 @@ mod tests {
                 &Pubkey::default(),
                 Vote::default(),
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&authorize(
@@ -298,7 +299,7 @@ mod tests {
                 &Pubkey::default(),
                 VoteAuthorize::Voter,
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&update_node(
@@ -306,7 +307,7 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
 
         assert_eq!(
@@ -316,7 +317,7 @@ mod tests {
                 0,
                 &Pubkey::default()
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
     }
 
@@ -331,11 +332,11 @@ mod tests {
     #[test]
     fn test_custom_error_decode() {
         use num_traits::FromPrimitive;
-        fn pretty_err<T>(err: InstructionError) -> String
+        fn pretty_err<T>(err: ProgramError) -> String
         where
             T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
         {
-            if let InstructionError::CustomError(code) = err {
+            if let ProgramError::CustomError(code) = err {
                 let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
                 format!(
                     "{:?}: {}::{:?} - {}",

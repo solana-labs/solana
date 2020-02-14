@@ -3,7 +3,6 @@
 use crate::{
     account::{Account, KeyedAccount},
     account_info::AccountInfo,
-    instruction::InstructionError,
     program_error::ProgramError,
     pubkey::Pubkey,
 };
@@ -77,12 +76,11 @@ pub trait Sysvar:
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
     }
-    fn from_keyed_account(keyed_account: &KeyedAccount) -> Result<Self, InstructionError> {
+    fn from_keyed_account(keyed_account: &KeyedAccount) -> Result<Self, ProgramError> {
         if !Self::check_id(keyed_account.unsigned_key()) {
-            return Err(InstructionError::InvalidArgument);
+            return Err(ProgramError::InvalidArgument);
         }
-        Self::from_account(&*keyed_account.try_account_ref()?)
-            .ok_or(InstructionError::InvalidArgument)
+        Self::from_account(&*keyed_account.try_account_ref()?).ok_or(ProgramError::InvalidArgument)
     }
     fn create_account(&self, lamports: u64) -> Account {
         let data_len = Self::size_of().max(bincode::serialized_size(self).unwrap() as usize);

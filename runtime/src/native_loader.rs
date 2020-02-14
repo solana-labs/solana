@@ -7,8 +7,12 @@ use libloading::os::windows::*;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
+<<<<<<< HEAD
     account::KeyedAccount, entrypoint_native, instruction::InstructionError,
     program_utils::DecodeError, pubkey::Pubkey,
+=======
+    account::KeyedAccount, entrypoint_native, program_error::ProgramError, pubkey::Pubkey,
+>>>>>>> Rreturn ProgramError from programs
 };
 use std::{env, path::PathBuf, str};
 use thiserror::Error;
@@ -84,7 +88,7 @@ pub fn invoke_entrypoint(
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     symbol_cache: &SymbolCache,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     // dispatch it
     let (names, params) = keyed_accounts.split_at(1);
     let name_vec = &names[0].try_account_ref()?.data;

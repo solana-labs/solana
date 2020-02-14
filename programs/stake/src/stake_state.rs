@@ -9,7 +9,7 @@ use solana_sdk::{
     account::{Account, KeyedAccount},
     account_utils::{State, StateMut},
     clock::{Clock, Epoch, UnixTimestamp},
-    instruction::InstructionError,
+    program_error::ProgramError,
     pubkey::Pubkey,
     rent::Rent,
     stake_history::{StakeHistory, StakeHistoryEntry},
@@ -122,9 +122,9 @@ impl Meta {
         &mut self,
         lockup: &Lockup,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         if !signers.contains(&self.lockup.custodian) {
-            return Err(InstructionError::MissingRequiredSignature);
+            return Err(ProgramError::MissingRequiredSignature);
         }
         self.lockup = *lockup;
         Ok(())
@@ -136,7 +136,7 @@ impl Meta {
         stake_authorize: StakeAuthorize,
         signers: &HashSet<Pubkey>,
         clock: &Clock,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         // verify that lockup has expired or that the authorization
         //  is *also* signed by the custodian
         if self.lockup.is_in_force(clock, signers) {
@@ -326,11 +326,11 @@ impl Authorized {
         &self,
         signers: &HashSet<Pubkey>,
         stake_authorize: StakeAuthorize,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         match stake_authorize {
             StakeAuthorize::Staker if signers.contains(&self.staker) => Ok(()),
             StakeAuthorize::Withdrawer if signers.contains(&self.withdrawer) => Ok(()),
-            _ => Err(InstructionError::MissingRequiredSignature),
+            _ => Err(ProgramError::MissingRequiredSignature),
         }
     }
 
@@ -339,7 +339,7 @@ impl Authorized {
         signers: &HashSet<Pubkey>,
         new_authorized: &Pubkey,
         stake_authorize: StakeAuthorize,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         self.check(signers, stake_authorize)?;
         match stake_authorize {
             StakeAuthorize::Staker => self.staker = *new_authorized,
@@ -497,14 +497,14 @@ pub trait StakeAccount {
         authorized: &Authorized,
         lockup: &Lockup,
         rent: &Rent,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
     fn authorize(
         &self,
         authority: &Pubkey,
         stake_authorize: StakeAuthorize,
         signers: &HashSet<Pubkey>,
         clock: &Clock,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
     fn delegate(
         &self,
         vote_account: &KeyedAccount,
@@ -512,19 +512,15 @@ pub trait StakeAccount {
         stake_history: &StakeHistory,
         config: &Config,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
-    fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), InstructionError>;
-    fn set_lockup(
-        &self,
-        lockup: &Lockup,
-        signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
+    fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), ProgramError>;
+    fn set_lockup(&self, lockup: &Lockup, signers: &HashSet<Pubkey>) -> Result<(), ProgramError>;
     fn split(
         &self,
         lamports: u64,
         split_stake: &KeyedAccount,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
     fn withdraw(
         &self,
         lamports: u64,
@@ -532,7 +528,7 @@ pub trait StakeAccount {
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError>;
+    ) -> Result<(), ProgramError>;
 }
 
 impl<'a> StakeAccount for KeyedAccount<'a> {
@@ -541,7 +537,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         authorized: &Authorized,
         lockup: &Lockup,
         rent: &Rent,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         if let StakeState::Uninitialized = self.state()? {
             let rent_exempt_reserve = rent.minimum_balance(self.data_len()?);
 
@@ -552,10 +548,10 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     lockup: *lockup,
                 }))
             } else {
-                Err(InstructionError::InsufficientFunds)
+                Err(ProgramError::InsufficientFunds)
             }
         } else {
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         }
     }
 
@@ -568,7 +564,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_authorize: StakeAuthorize,
         signers: &HashSet<Pubkey>,
         clock: &Clock,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         match self.state()? {
             StakeState::Stake(mut meta, stake) => {
                 meta.authorize(authority, stake_authorize, signers, clock)?;
@@ -578,7 +574,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 meta.authorize(authority, stake_authorize, signers, clock)?;
                 self.set_state(&StakeState::Initialized(meta))
             }
-            _ => Err(InstructionError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
     fn delegate(
@@ -588,7 +584,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         config: &Config,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         match self.state()? {
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
@@ -612,24 +608,20 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 )?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
-            _ => Err(InstructionError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
-    fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), InstructionError> {
+    fn deactivate(&self, clock: &Clock, signers: &HashSet<Pubkey>) -> Result<(), ProgramError> {
         if let StakeState::Stake(meta, mut stake) = self.state()? {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             stake.deactivate(clock.epoch)?;
 
             self.set_state(&StakeState::Stake(meta, stake))
         } else {
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         }
     }
-    fn set_lockup(
-        &self,
-        lockup: &Lockup,
-        signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    fn set_lockup(&self, lockup: &Lockup, signers: &HashSet<Pubkey>) -> Result<(), ProgramError> {
         match self.state()? {
             StakeState::Initialized(mut meta) => {
                 meta.set_lockup(lockup, signers)?;
@@ -639,7 +631,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 meta.set_lockup(lockup, signers)?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
-            _ => Err(InstructionError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -648,11 +640,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         lamports: u64,
         split: &KeyedAccount,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         if let StakeState::Uninitialized = split.state()? {
             // verify enough account lamports
             if lamports > self.lamports()? {
-                return Err(InstructionError::InsufficientFunds);
+                return Err(ProgramError::InsufficientFunds);
             }
 
             match self.state()? {
@@ -664,7 +656,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                      // verify enough lamports left in previous stake and not full withdrawal
                         || (lamports + meta.rent_exempt_reserve > self.lamports()? && lamports != self.lamports()?)
                     {
-                        return Err(InstructionError::InsufficientFunds);
+                        return Err(ProgramError::InsufficientFunds);
                     }
                     // split the stake, subtract rent_exempt_balance unless
                     //  the destination account already has those lamports
@@ -686,24 +678,24 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     // verify enough lamports left in previous stake
                         || (lamports + meta.rent_exempt_reserve > self.lamports()? && lamports != self.lamports()?)
                     {
-                        return Err(InstructionError::InsufficientFunds);
+                        return Err(ProgramError::InsufficientFunds);
                     }
 
                     split.set_state(&StakeState::Initialized(meta))?;
                 }
                 StakeState::Uninitialized => {
                     if !signers.contains(&self.unsigned_key()) {
-                        return Err(InstructionError::MissingRequiredSignature);
+                        return Err(ProgramError::MissingRequiredSignature);
                     }
                 }
-                _ => return Err(InstructionError::InvalidAccountData),
+                _ => return Err(ProgramError::InvalidAccountData),
             }
 
             split.try_account_ref_mut()?.lamports += lamports;
             self.try_account_ref_mut()?.lamports -= lamports;
             Ok(())
         } else {
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         }
     }
 
@@ -714,7 +706,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let (lockup, reserve, is_staked) = match self.state()? {
             StakeState::Stake(meta, stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Withdrawer)?;
@@ -737,11 +729,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             }
             StakeState::Uninitialized => {
                 if !signers.contains(&self.unsigned_key()) {
-                    return Err(InstructionError::MissingRequiredSignature);
+                    return Err(ProgramError::MissingRequiredSignature);
                 }
                 (Lockup::default(), 0, false) // no lockup, no restrictions
             }
-            _ => return Err(InstructionError::InvalidAccountData),
+            _ => return Err(ProgramError::InvalidAccountData),
         };
 
         // verify that lockup has expired or that the withdrawal is signed by
@@ -754,14 +746,14 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if is_staked // line coverage for branch coverage
             && lamports + reserve > self.lamports()?
         {
-            return Err(InstructionError::InsufficientFunds);
+            return Err(ProgramError::InsufficientFunds);
         }
 
         if lamports != self.lamports()? // not a full withdrawal
             && lamports + reserve > self.lamports()?
         {
             assert!(!is_staked);
-            return Err(InstructionError::InsufficientFunds);
+            return Err(ProgramError::InsufficientFunds);
         }
 
         self.try_account_ref_mut()?.lamports -= lamports;
@@ -776,7 +768,7 @@ pub fn redeem_rewards(
     vote_account: &mut Account,
     point_value: f64,
     stake_history: Option<&StakeHistory>,
-) -> Result<(u64, u64), InstructionError> {
+) -> Result<(u64, u64), ProgramError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
         let vote_state = vote_account.state()?;
 
@@ -793,7 +785,7 @@ pub fn redeem_rewards(
             Err(StakeError::NoCreditsToRedeem.into())
         }
     } else {
-        Err(InstructionError::InvalidAccountData)
+        Err(ProgramError::InvalidAccountData)
     }
 }
 
@@ -920,7 +912,7 @@ mod tests {
 
         assert_eq!(
             meta.authorize(&staker, StakeAuthorize::Staker, &signers, &clock),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
         signers.insert(staker);
         assert_eq!(
@@ -1029,7 +1021,7 @@ mod tests {
                 &Config::default(),
                 &signers,
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         // signed keyed account
@@ -1458,7 +1450,7 @@ mod tests {
                     ..Rent::free()
                 },
             ),
-            Err(InstructionError::InsufficientFunds)
+            Err(ProgramError::InsufficientFunds)
         );
 
         // this one works, as is uninit
@@ -1497,7 +1489,7 @@ mod tests {
                 &Lockup::default(),
                 &Rent::free()
             ),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
     }
 
@@ -1523,7 +1515,7 @@ mod tests {
         let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(
             stake_keyed_account.deactivate(&clock, &signers),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
 
         // Staking
@@ -1551,7 +1543,7 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
         assert_eq!(
             stake_keyed_account.deactivate(&clock, &HashSet::default()),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         // Deactivate after staking
@@ -1581,7 +1573,7 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
         assert_eq!(
             stake_keyed_account.set_lockup(&Lockup::default(), &HashSet::default(),),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
 
         // initalize the stake
@@ -1600,7 +1592,7 @@ mod tests {
 
         assert_eq!(
             stake_keyed_account.set_lockup(&Lockup::default(), &HashSet::default(),),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         assert_eq!(
@@ -1645,7 +1637,7 @@ mod tests {
                 },
                 &HashSet::default(),
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
         assert_eq!(
             stake_keyed_account.set_lockup(
@@ -1688,7 +1680,7 @@ mod tests {
                 &StakeHistory::default(),
                 &HashSet::default(),
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         // signed keyed account and uninitialized should work
@@ -1736,7 +1728,7 @@ mod tests {
                 &StakeHistory::default(),
                 &signers,
             ),
-            Err(InstructionError::InsufficientFunds)
+            Err(ProgramError::InsufficientFunds)
         );
 
         // Stake some lamports (available lamports for withdrawals will reduce to zero)
@@ -1789,7 +1781,7 @@ mod tests {
                 &StakeHistory::default(),
                 &signers
             ),
-            Err(InstructionError::InsufficientFunds)
+            Err(ProgramError::InsufficientFunds)
         );
 
         // deactivate the stake before withdrawal
@@ -1807,7 +1799,7 @@ mod tests {
                 &StakeHistory::default(),
                 &signers
             ),
-            Err(InstructionError::InsufficientFunds)
+            Err(ProgramError::InsufficientFunds)
         );
 
         // Try to withdraw all lamports
@@ -1889,7 +1881,7 @@ mod tests {
                 &stake_history,
                 &signers,
             ),
-            Err(InstructionError::InsufficientFunds)
+            Err(ProgramError::InsufficientFunds)
         );
     }
 
@@ -1918,7 +1910,7 @@ mod tests {
                 &StakeHistory::default(),
                 &signers,
             ),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
     }
 
@@ -2136,7 +2128,7 @@ mod tests {
                 &signers,
                 &Clock::default()
             ),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
     }
 
@@ -2197,7 +2189,7 @@ mod tests {
                 &signers,
                 &Clock::default()
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         let signers0 = vec![stake_pubkey0].into_iter().collect();
@@ -2245,7 +2237,7 @@ mod tests {
                 &StakeHistory::default(),
                 &signers, // old signer
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         // Test a successful action by the currently authorized withdrawer
@@ -2294,7 +2286,7 @@ mod tests {
                 &split_stake_keyed_account,
                 &HashSet::default() // no signers
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         // this should work
@@ -2336,7 +2328,7 @@ mod tests {
             KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
         assert_eq!(
             stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
     }
     impl Stake {
@@ -2435,7 +2427,7 @@ mod tests {
                     &split_stake_keyed_account,
                     &signers
                 ),
-                Err(InstructionError::InsufficientFunds)
+                Err(ProgramError::InsufficientFunds)
             );
 
             // doesn't leave enough for initial stake
@@ -2445,7 +2437,7 @@ mod tests {
                     &split_stake_keyed_account,
                     &signers
                 ),
-                Err(InstructionError::InsufficientFunds)
+                Err(ProgramError::InsufficientFunds)
             );
 
             // split account already has way enough lamports
@@ -2522,7 +2514,7 @@ mod tests {
             // split more than available fails
             assert_eq!(
                 stake_keyed_account.split(stake_lamports + 1, &split_stake_keyed_account, &signers),
-                Err(InstructionError::InsufficientFunds)
+                Err(ProgramError::InsufficientFunds)
             );
 
             // should work
@@ -2836,7 +2828,7 @@ mod tests {
                 &Config::default(),
                 &other_signers,
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
 
         let new_signers = vec![new_staker_pubkey].into_iter().collect();

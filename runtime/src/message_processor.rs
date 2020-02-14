@@ -7,6 +7,7 @@ use solana_sdk::{
     entrypoint_native,
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
+    program_error::ProgramError,
     pubkey::Pubkey,
     system_program,
     transaction::TransactionError,
@@ -123,7 +124,7 @@ pub fn verify_account_changes(
     Ok(())
 }
 
-pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), ProgramError>;
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<entrypoint_native::Entrypoint>>>;
 
@@ -168,7 +169,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         program_accounts: &[Rc<RefCell<Account>>],
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let program_id = instruction.program_id(&message.account_keys);
         let mut keyed_accounts = create_keyed_readonly_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
@@ -279,7 +280,11 @@ impl MessageProcessor {
         // Sum total lamports before instruction processing
         let pre_total = Self::sum_account_lamports(program_accounts);
 
-        self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
+        if let Err(err) =
+            self.process_instruction(message, instruction, executable_accounts, program_accounts)
+        {
+            return Err(InstructionError::ProgramError(err));
+        }
 
         // Verify all accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts, program_accounts)?;

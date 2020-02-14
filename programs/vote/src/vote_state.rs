@@ -10,7 +10,7 @@ use solana_sdk::{
     account_utils::State,
     clock::{Epoch, Slot, UnixTimestamp},
     hash::Hash,
-    instruction::InstructionError,
+    program_error::ProgramError,
     pubkey::Pubkey,
     rent::Rent,
     slot_hashes::SlotHash,
@@ -195,14 +195,14 @@ impl VoteState {
         Self::serialize(self, &mut account.data).ok()
     }
 
-    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
-        deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProgramError> {
+        deserialize(input).map_err(|_| ProgramError::InvalidAccountData)
     }
 
-    pub fn serialize(&self, output: &mut [u8]) -> Result<(), InstructionError> {
+    pub fn serialize(&self, output: &mut [u8]) -> Result<(), ProgramError> {
         serialize_into(output, self).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
+            ErrorKind::SizeLimit => ProgramError::AccountDataTooSmall,
+            _ => ProgramError::SerializationFailed,
         })
     }
 
@@ -433,7 +433,7 @@ pub fn authorize(
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey>,
     clock: &Clock,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
     // current authorized signer must say "yay"
@@ -468,7 +468,7 @@ pub fn update_node(
     vote_account: &KeyedAccount,
     node_pubkey: &Pubkey,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
     // current authorized voter must say "yay"
@@ -482,11 +482,11 @@ pub fn update_node(
 fn verify_authorized_signer(
     authorized: &Pubkey,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     if signers.contains(authorized) {
         Ok(())
     } else {
-        Err(InstructionError::MissingRequiredSignature)
+        Err(ProgramError::MissingRequiredSignature)
     }
 }
 
@@ -496,13 +496,13 @@ pub fn withdraw(
     lamports: u64,
     to_account: &KeyedAccount,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let vote_state: VoteState = vote_account.state()?;
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
     if vote_account.lamports()? < lamports {
-        return Err(InstructionError::InsufficientFunds);
+        return Err(ProgramError::InsufficientFunds);
     }
     vote_account.try_account_ref_mut()?.lamports -= lamports;
     to_account.try_account_ref_mut()?.lamports += lamports;
@@ -516,11 +516,11 @@ pub fn initialize_account(
     vote_account: &KeyedAccount,
     vote_init: &VoteInit,
     clock: &Clock,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let vote_state: VoteState = vote_account.state()?;
 
     if vote_state.authorized_voter != Pubkey::default() {
-        return Err(InstructionError::AccountAlreadyInitialized);
+        return Err(ProgramError::AccountAlreadyInitialized);
     }
     vote_account.set_state(&VoteState::new(vote_init, clock))
 }
@@ -531,11 +531,11 @@ pub fn process_vote(
     clock: &Clock,
     vote: &Vote,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
     if vote_state.authorized_voter == Pubkey::default() {
-        return Err(InstructionError::UninitializedAccount);
+        return Err(ProgramError::UninitializedAccount);
     }
 
     verify_authorized_signer(&vote_state.authorized_voter, signers)?;
@@ -635,7 +635,7 @@ mod tests {
             },
             &Clock::default(),
         );
-        assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
+        assert_eq!(res, Err(ProgramError::AccountAlreadyInitialized));
     }
 
     fn create_test_account() -> (Pubkey, RefCell<Account>) {
@@ -657,7 +657,7 @@ mod tests {
         vote: &Vote,
         slot_hashes: &[SlotHash],
         epoch: Epoch,
-    ) -> Result<VoteState, InstructionError> {
+    ) -> Result<VoteState, ProgramError> {
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, vote_account)];
         let signers = get_signers(keyed_accounts);
         process_vote(
@@ -678,7 +678,7 @@ mod tests {
         vote_pubkey: &Pubkey,
         vote_account: &RefCell<Account>,
         vote: &Vote,
-    ) -> Result<VoteState, InstructionError> {
+    ) -> Result<VoteState, ProgramError> {
         simulate_process_vote(
             vote_pubkey,
             vote_account,
@@ -764,7 +764,7 @@ mod tests {
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
         let signers = get_signers(keyed_accounts);
         let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(res, Err(ProgramError::MissingRequiredSignature));
         let vote_state: VoteState = vote_account.borrow().state().unwrap();
         assert!(vote_state.node_pubkey != node_pubkey);
 
@@ -791,7 +791,7 @@ mod tests {
             &vote,
             &signers,
         );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(res, Err(ProgramError::MissingRequiredSignature));
 
         // signed
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
@@ -819,7 +819,7 @@ mod tests {
                 ..Clock::default()
             },
         );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(res, Err(ProgramError::MissingRequiredSignature));
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers = get_signers(keyed_accounts);
@@ -901,7 +901,7 @@ mod tests {
             &vote,
             &signers,
         );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(res, Err(ProgramError::MissingRequiredSignature));
 
         // signed by authorized voter
         let authorized_voter_account = RefCell::new(Account::default());
@@ -931,7 +931,7 @@ mod tests {
             &vote_account,
             &Vote::new(vec![1], Hash::default()),
         );
-        assert_eq!(res, Err(InstructionError::UninitializedAccount));
+        assert_eq!(res, Err(ProgramError::UninitializedAccount));
     }
 
     #[test]
@@ -1259,7 +1259,7 @@ mod tests {
             ),
             &signers,
         );
-        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(res, Err(ProgramError::MissingRequiredSignature));
 
         // insufficient funds
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
@@ -1274,7 +1274,7 @@ mod tests {
             ),
             &signers,
         );
-        assert_eq!(res, Err(InstructionError::InsufficientFunds));
+        assert_eq!(res, Err(ProgramError::InsufficientFunds));
 
         // all good
         let to_account = RefCell::new(Account::default());

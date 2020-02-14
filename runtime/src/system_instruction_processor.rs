@@ -2,8 +2,8 @@ use log::*;
 use solana_sdk::{
     account::{get_signers, Account, KeyedAccount},
     account_utils::StateMut,
-    instruction::InstructionError,
     nonce_state::{NonceAccount, NonceState},
+    program_error::ProgramError,
     program_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
     system_instruction::{
@@ -33,7 +33,7 @@ impl Address {
     fn create(
         address: &Pubkey,
         with_seed: Option<(&Pubkey, &str, &Pubkey)>,
-    ) -> Result<Self, InstructionError> {
+    ) -> Result<Self, ProgramError> {
         let base = if let Some((base, seed, program_id)) = with_seed {
             // re-derive the address, must match the supplied address
             if *address != create_address_with_seed(base, seed, program_id)? {
@@ -56,10 +56,10 @@ fn allocate(
     address: &Address,
     space: u64,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     if !address.is_signer(signers) {
         debug!("Allocate: must carry signature of `to`");
-        return Err(InstructionError::MissingRequiredSignature);
+        return Err(ProgramError::MissingRequiredSignature);
     }
 
     // if it looks like the `to` account is already in use, bail
@@ -90,7 +90,7 @@ fn assign(
     address: &Address,
     program_id: &Pubkey,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     // no work to do, just return
     if account.owner == *program_id {
         return Ok(());
@@ -98,7 +98,7 @@ fn assign(
 
     if !address.is_signer(&signers) {
         debug!("Assign: account must sign");
-        return Err(InstructionError::MissingRequiredSignature);
+        return Err(ProgramError::MissingRequiredSignature);
     }
 
     // guard against sysvars being made
@@ -117,7 +117,7 @@ fn allocate_and_assign(
     space: u64,
     program_id: &Pubkey,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     allocate(to, to_address, space, signers)?;
     assign(to, to_address, program_id, signers)
 }
@@ -130,24 +130,24 @@ fn create_account(
     space: u64,
     program_id: &Pubkey,
     signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     allocate_and_assign(to, to_address, space, program_id, signers)?;
     transfer(from, to, lamports)
 }
 
-fn transfer(from: &KeyedAccount, to: &mut Account, lamports: u64) -> Result<(), InstructionError> {
+fn transfer(from: &KeyedAccount, to: &mut Account, lamports: u64) -> Result<(), ProgramError> {
     if lamports == 0 {
         return Ok(());
     }
 
     if from.signer_key().is_none() {
         debug!("Transfer: from must sign");
-        return Err(InstructionError::MissingRequiredSignature);
+        return Err(ProgramError::MissingRequiredSignature);
     }
 
     if !from.data_is_empty()? {
         debug!("Transfer: `from` must not carry data");
-        return Err(InstructionError::InvalidArgument);
+        return Err(ProgramError::InvalidArgument);
     }
     if lamports > from.lamports()? {
         debug!(
@@ -167,7 +167,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let instruction = limited_deserialize(instruction_data)?;
 
     trace!("process_instruction: {:?}", instruction);
@@ -326,7 +326,7 @@ mod tests {
         client::SyncClient,
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, Instruction, ProgramError},
         message::Message,
         nonce_state,
         signature::{Keypair, KeypairUtil},
@@ -458,7 +458,7 @@ mod tests {
                 &new_program_owner,
                 &HashSet::new(),
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
         assert_eq!(from_account.borrow().lamports, 100);
         assert_eq!(to_account, Account::default());
@@ -645,7 +645,7 @@ mod tests {
             &new_program_owner,
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
         );
-        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(result, Err(ProgramError::MissingRequiredSignature));
 
         // Haven't signed to account
         let mut owned_account = Account::new(0, 0, &Pubkey::default());
@@ -658,7 +658,7 @@ mod tests {
             &new_program_owner,
             &[from].iter().cloned().collect::<HashSet<_>>(),
         );
-        assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
+        assert_eq!(result, Err(ProgramError::MissingRequiredSignature));
 
         // support creation/assignment with zero lamports (ephemeral account)
         let mut owned_account = Account::new(0, 0, &Pubkey::default());
@@ -761,7 +761,7 @@ mod tests {
                 &Pubkey::new_rand(),
                 &signers
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
     }
 
@@ -779,7 +779,7 @@ mod tests {
                 &new_program_owner,
                 &HashSet::new()
             ),
-            Err(InstructionError::MissingRequiredSignature)
+            Err(ProgramError::MissingRequiredSignature)
         );
         // no change, no signature needed
         assert_eq!(
@@ -832,7 +832,7 @@ mod tests {
         };
         let data = serialize(&instruction).unwrap();
         let result = process_instruction(&system_program::id(), &[], &data);
-        assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
+        assert_eq!(result, Err(ProgramError::NotEnoughAccountKeys));
 
         let from = Pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
@@ -844,7 +844,7 @@ mod tests {
             &[KeyedAccount::new(&from, true, &from_account)],
             &data,
         );
-        assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
+        assert_eq!(result, Err(ProgramError::NotEnoughAccountKeys));
     }
 
     #[test]
@@ -894,7 +894,7 @@ mod tests {
                 &mut to_account,
                 50,
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         )
     }
 
@@ -997,13 +997,13 @@ mod tests {
                 .send_instruction(&mallory_keypair, malicious_instruction)
                 .unwrap_err()
                 .unwrap(),
-            TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
+            TransactionError::ProgramError(0, ProgramError::MissingRequiredSignature)
         );
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 50);
         assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), 50);
     }
 
-    fn process_nonce_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
+    fn process_nonce_instruction(instruction: &Instruction) -> Result<(), ProgramError> {
         let accounts: Vec<_> = instruction
             .accounts
             .iter()
@@ -1039,7 +1039,7 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default()
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
     }
 
@@ -1051,7 +1051,7 @@ mod tests {
                 &[],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap()
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
@@ -1067,7 +1067,7 @@ mod tests {
                 ),],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
@@ -1086,7 +1086,7 @@ mod tests {
                 ],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
     }
 
@@ -1138,7 +1138,7 @@ mod tests {
                 &Pubkey::default(),
                 1,
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
     }
 
@@ -1150,7 +1150,7 @@ mod tests {
                 &[],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
@@ -1166,7 +1166,7 @@ mod tests {
                 ),],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
@@ -1186,7 +1186,7 @@ mod tests {
                 ],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
     }
 
@@ -1211,7 +1211,7 @@ mod tests {
                 ],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
     }
 
@@ -1248,7 +1248,7 @@ mod tests {
                 &[],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
@@ -1264,7 +1264,7 @@ mod tests {
                 ),],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
-            Err(InstructionError::NotEnoughAccountKeys),
+            Err(ProgramError::NotEnoughAccountKeys),
         );
     }
 
@@ -1287,7 +1287,7 @@ mod tests {
                 ],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
     }
 
@@ -1311,7 +1311,7 @@ mod tests {
                 ],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
-            Err(InstructionError::InvalidArgument),
+            Err(ProgramError::InvalidArgument),
         );
     }
 
@@ -1374,7 +1374,7 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
             )),
-            Err(InstructionError::InvalidAccountData),
+            Err(ProgramError::InvalidAccountData),
         );
     }
 

@@ -1,6 +1,8 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
-use crate::{pubkey::Pubkey, short_vec, system_instruction::SystemError};
+use crate::{
+    program_error::ProgramError, pubkey::Pubkey, short_vec, system_instruction::SystemError,
+};
 use bincode::serialize;
 use serde::Serialize;
 
@@ -10,33 +12,6 @@ pub enum InstructionError {
     /// Deprecated! Use CustomError instead!
     /// The program instruction returned an error
     GenericError,
-
-    /// The arguments provided to a program instruction where invalid
-    InvalidArgument,
-
-    /// An instruction's data contents was invalid
-    InvalidInstructionData,
-
-    /// An account's data contents was invalid
-    InvalidAccountData,
-
-    /// An account's data was too small
-    AccountDataTooSmall,
-
-    /// An account's balance was too small to complete the instruction
-    InsufficientFunds,
-
-    /// The account did not have the expected program id
-    IncorrectProgramId,
-
-    /// A signature was required but not found
-    MissingRequiredSignature,
-
-    /// An initialize instruction was sent to an account that has already been initialized.
-    AccountAlreadyInitialized,
-
-    /// An attempt to operate on an account that hasn't been initialized.
-    UninitializedAccount,
 
     /// Program's instruction lamport balance does not equal the balance after the instruction
     UnbalancedInstruction,
@@ -66,9 +41,6 @@ pub enum InstructionError {
     /// Rent_epoch account changed, but shouldn't have
     RentEpochModified,
 
-    /// The instruction expected additional account keys
-    NotEnoughAccountKeys,
-
     /// A non-system program changed the size of the account data
     AccountDataSizeChanged,
 
@@ -86,14 +58,10 @@ pub enum InstructionError {
     /// the runtime cannot determine which changes to pick or how to merge them if both are modified
     DuplicateAccountOutOfSync,
 
-    /// The return value from the program was invalid.  Valid errors are either a defined builtin
-    /// error value or a user-defined error in the lower 32 bits.
-    InvalidError,
-
     /// Allows on-chain programs to implement program-specific error types and see them returned
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
-    CustomError(u32),
+    ProgramError(ProgramError),
 }
 
 impl InstructionError {

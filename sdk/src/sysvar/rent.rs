@@ -4,7 +4,7 @@ pub use crate::rent::Rent;
 
 use crate::{
     account::{Account, KeyedAccount},
-    instruction::InstructionError,
+    program_error::ProgramError,
     sysvar::Sysvar,
 };
 
@@ -19,10 +19,10 @@ pub fn create_account(lamports: u64, rent: &Rent) -> Account {
 pub fn verify_rent_exemption(
     keyed_account: &KeyedAccount,
     rent_sysvar_account: &KeyedAccount,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let rent = Rent::from_keyed_account(rent_sysvar_account)?;
     if !rent.is_exempt(keyed_account.lamports()?, keyed_account.data_len()?) {
-        Err(InstructionError::InsufficientFunds)
+        Err(ProgramError::InsufficientFunds)
     } else {
         Ok(())
     }

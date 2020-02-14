@@ -1,4 +1,4 @@
-use crate::{instruction::InstructionError, program_utils::DecodeError};
+use crate::program_utils::DecodeError;
 use num_traits::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 
@@ -37,6 +37,10 @@ pub enum ProgramError {
     NotEnoughAccountKeys,
     #[error("Failed to borrow a reference to account data, already borrowed")]
     AccountBorrowFailed,
+    #[error("Failed to serialize into acount data")]
+    SerializationFailed,
+    #[error("Invalid program error")]
+    Invalid,
 }
 
 pub trait PrintProgramError {
@@ -69,6 +73,8 @@ impl PrintProgramError for ProgramError {
             ProgramError::UninitializedAccount => info!("Error: UninitializedAccount"),
             ProgramError::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
             ProgramError::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
+            ProgramError::SerializationFailed => info!("Error: SerializationFailed"),
+            ProgramError::Invalid => info!("Error: Invalid program error"),
         }
     }
 }
@@ -93,6 +99,8 @@ const ACCOUNT_ALREADY_INITIALIZED: u64 = to_builtin!(9);
 const UNINITIALIZED_ACCOUNT: u64 = to_builtin!(10);
 const NOT_ENOUGH_ACCOUNT_KEYS: u64 = to_builtin!(11);
 const ACCOUNT_BORROW_FAILED: u64 = to_builtin!(12);
+const SERIALIATION_FAILED: u64 = to_builtin!(13);
+const INVALID: u64 = to_builtin!(14);
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
@@ -108,6 +116,8 @@ impl From<ProgramError> for u64 {
             ProgramError::UninitializedAccount => UNINITIALIZED_ACCOUNT,
             ProgramError::NotEnoughAccountKeys => NOT_ENOUGH_ACCOUNT_KEYS,
             ProgramError::AccountBorrowFailed => ACCOUNT_BORROW_FAILED,
+            ProgramError::SerializationFailed => SERIALIATION_FAILED,
+            ProgramError::Invalid => INVALID,
             ProgramError::CustomError(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -119,31 +129,33 @@ impl From<ProgramError> for u64 {
     }
 }
 
-impl<T> From<T> for InstructionError
+impl<T> From<T> for ProgramError
 where
     T: ToPrimitive,
 {
     fn from(error: T) -> Self {
         let error = error.to_u64().unwrap_or(0xbad_c0de);
         match error {
-            CUSTOM_ZERO => InstructionError::CustomError(0),
-            INVALID_ARGUMENT => InstructionError::InvalidArgument,
-            INVALID_INSTRUCTION_DATA => InstructionError::InvalidInstructionData,
-            INVALID_ACCOUNT_DATA => InstructionError::InvalidAccountData,
-            ACCOUNT_DATA_TOO_SMALL => InstructionError::AccountDataTooSmall,
-            INSUFFICIENT_FUNDS => InstructionError::InsufficientFunds,
-            INCORRECT_PROGRAM_ID => InstructionError::IncorrectProgramId,
-            MISSING_REQUIRED_SIGNATURES => InstructionError::MissingRequiredSignature,
-            ACCOUNT_ALREADY_INITIALIZED => InstructionError::AccountAlreadyInitialized,
-            UNINITIALIZED_ACCOUNT => InstructionError::UninitializedAccount,
-            NOT_ENOUGH_ACCOUNT_KEYS => InstructionError::NotEnoughAccountKeys,
-            ACCOUNT_BORROW_FAILED => InstructionError::AccountBorrowFailed,
+            CUSTOM_ZERO => ProgramError::CustomError(0),
+            INVALID_ARGUMENT => ProgramError::InvalidArgument,
+            INVALID_INSTRUCTION_DATA => ProgramError::InvalidInstructionData,
+            INVALID_ACCOUNT_DATA => ProgramError::InvalidAccountData,
+            ACCOUNT_DATA_TOO_SMALL => ProgramError::AccountDataTooSmall,
+            INSUFFICIENT_FUNDS => ProgramError::InsufficientFunds,
+            INCORRECT_PROGRAM_ID => ProgramError::IncorrectProgramId,
+            MISSING_REQUIRED_SIGNATURES => ProgramError::MissingRequiredSignature,
+            ACCOUNT_ALREADY_INITIALIZED => ProgramError::AccountAlreadyInitialized,
+            UNINITIALIZED_ACCOUNT => ProgramError::UninitializedAccount,
+            NOT_ENOUGH_ACCOUNT_KEYS => ProgramError::NotEnoughAccountKeys,
+            ACCOUNT_BORROW_FAILED => ProgramError::AccountBorrowFailed,
+            SERIALIATION_FAILED => ProgramError::SerializationFailed,
+            INVALID => ProgramError::Invalid,
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
-                    InstructionError::CustomError(error as u32)
+                    ProgramError::CustomError(error as u32)
                 } else {
-                    InstructionError::InvalidError
+                    ProgramError::Invalid
                 }
             }
         }

@@ -1,32 +1,32 @@
 //! useful extras for Account state
 use crate::{
     account::{Account, KeyedAccount},
-    instruction::InstructionError,
+    program_error::ProgramError,
 };
 use bincode::ErrorKind;
 
 /// Convenience trait to covert bincode errors to instruction errors.
 pub trait StateMut<T> {
-    fn state(&self) -> Result<T, InstructionError>;
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
+    fn state(&self) -> Result<T, ProgramError>;
+    fn set_state(&mut self, state: &T) -> Result<(), ProgramError>;
 }
 pub trait State<T> {
-    fn state(&self) -> Result<T, InstructionError>;
-    fn set_state(&self, state: &T) -> Result<(), InstructionError>;
+    fn state(&self) -> Result<T, ProgramError>;
+    fn set_state(&self, state: &T) -> Result<(), ProgramError>;
 }
 
 impl<T> StateMut<T> for Account
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn state(&self) -> Result<T, InstructionError> {
+    fn state(&self) -> Result<T, ProgramError> {
         self.deserialize_data()
-            .map_err(|_| InstructionError::InvalidAccountData)
+            .map_err(|_| ProgramError::InvalidAccountData)
     }
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
+    fn set_state(&mut self, state: &T) -> Result<(), ProgramError> {
         self.serialize_data(state).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
+            ErrorKind::SizeLimit => ProgramError::AccountDataTooSmall,
+            _ => ProgramError::SerializationFailed,
         })
     }
 }
@@ -35,10 +35,10 @@ impl<'a, T> State<T> for KeyedAccount<'a>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn state(&self) -> Result<T, InstructionError> {
+    fn state(&self) -> Result<T, ProgramError> {
         self.try_account_ref()?.state()
     }
-    fn set_state(&self, state: &T) -> Result<(), InstructionError> {
+    fn set_state(&self, state: &T) -> Result<(), ProgramError> {
         self.try_account_ref_mut()?.set_state(state)
     }
 }
@@ -53,7 +53,7 @@ mod tests {
         let state = 42u64;
 
         assert!(Account::default().set_state(&state).is_err());
-        let res = Account::default().state() as Result<u64, InstructionError>;
+        let res = Account::default().state() as Result<u64, ProgramError>;
         assert!(res.is_err());
 
         let mut account = Account::new(0, std::mem::size_of::<u64>(), &Pubkey::default());

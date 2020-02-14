@@ -4,7 +4,7 @@
 use crate::{storage_contract::StorageAccount, storage_instruction::StorageInstruction};
 use solana_sdk::{
     account::KeyedAccount,
-    instruction::InstructionError,
+    program_error::ProgramError,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     sysvar::{clock::Clock, rewards::Rewards, Sysvar},
@@ -14,7 +14,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     solana_logger::setup();
 
     let (me, rest) = keyed_accounts.split_at(1);
@@ -28,7 +28,7 @@ pub fn process_instruction(
             account_type,
         } => {
             if !rest.is_empty() {
-                return Err(InstructionError::InvalidArgument);
+                return Err(ProgramError::InvalidArgument);
             }
             storage_account.initialize_storage(owner, account_type)
         }
@@ -40,7 +40,7 @@ pub fn process_instruction(
         } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
-                return Err(InstructionError::InvalidArgument);
+                return Err(ProgramError::InvalidArgument);
             }
             let clock = Clock::from_keyed_account(&rest[0])?;
             storage_account.submit_mining_proof(
@@ -54,14 +54,14 @@ pub fn process_instruction(
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, segment } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
-                return Err(InstructionError::InvalidArgument);
+                return Err(ProgramError::InvalidArgument);
             }
             let clock = Clock::from_keyed_account(&rest[0])?;
             storage_account.advertise_storage_recent_blockhash(hash, segment, clock)
         }
         StorageInstruction::ClaimStorageReward => {
             if rest.len() != 4 {
-                return Err(InstructionError::InvalidArgument);
+                return Err(ProgramError::InvalidArgument);
             }
             let (clock, rest) = rest.split_at(1);
             let (rewards, rest) = rest.split_at(1);
@@ -76,20 +76,20 @@ pub fn process_instruction(
         }
         StorageInstruction::ProofValidation { segment, proofs } => {
             if rest.is_empty() {
-                return Err(InstructionError::InvalidArgument);
+                return Err(ProgramError::InvalidArgument);
             }
 
             let (clock, rest) = rest.split_at(1);
             if me_unsigned || rest.is_empty() {
                 // This instruction must be signed by `me` and `rest` cannot be empty
-                return Err(InstructionError::InvalidArgument);
+                return Err(ProgramError::InvalidArgument);
             }
             let me_id = storage_account.id;
             let clock = Clock::from_keyed_account(&clock[0])?;
             let mut rest = rest
                 .iter()
                 .map(|keyed_account| Ok((keyed_account, keyed_account.try_account_ref_mut()?)))
-                .collect::<Result<Vec<_>, InstructionError>>()?;
+                .collect::<Result<Vec<_>, ProgramError>>()?;
             let mut rest = rest
                 .iter_mut()
                 .map(|(keyed_account, account_ref)| {
@@ -116,7 +116,7 @@ mod tests {
         account::{create_keyed_accounts, Account, KeyedAccount},
         clock::DEFAULT_SLOTS_PER_SEGMENT,
         hash::Hash,
-        instruction::{Instruction, InstructionError},
+        instruction::{Instruction, ProgramError},
         signature::Signature,
         sysvar::{
             clock::{self, Clock},
@@ -128,7 +128,7 @@ mod tests {
     fn test_instruction(
         ix: &Instruction,
         program_accounts: &[Account],
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let program_accounts: Vec<_> = program_accounts
             .iter()
             .map(|account| RefCell::new(account.clone()))
@@ -205,7 +205,7 @@ mod tests {
 
         assert_eq!(
             process_instruction(&id(), &keyed_accounts, &ix.data),
-            Err(InstructionError::InvalidAccountData)
+            Err(ProgramError::InvalidAccountData)
         );
     }
 

@@ -7,7 +7,7 @@ use solana_sdk::{
     account_utils::StateMut,
     clock::Epoch,
     hash::Hash,
-    instruction::InstructionError,
+    program_error::ProgramError,
     pubkey::Pubkey,
     signature::Signature,
     sysvar,
@@ -137,7 +137,7 @@ impl<'a> StorageAccount<'a> {
         &mut self,
         owner: Pubkey,
         account_type: StorageAccountType,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let storage_contract = &mut self.account.state()?;
         if let StorageContract::Uninitialized = storage_contract {
             *storage_contract = match account_type {
@@ -157,7 +157,7 @@ impl<'a> StorageAccount<'a> {
             };
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::AccountAlreadyInitialized)
+            Err(ProgramError::AccountAlreadyInitialized)
         }
     }
 
@@ -168,7 +168,7 @@ impl<'a> StorageAccount<'a> {
         signature: Signature,
         blockhash: Hash,
         clock: sysvar::clock::Clock,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ArchiverStorage {
             proofs,
@@ -194,7 +194,7 @@ impl<'a> StorageAccount<'a> {
 
             if segment_index >= current_segment {
                 // attempt to submit proof for unconfirmed segment
-                return Err(InstructionError::CustomError(
+                return Err(ProgramError::CustomError(
                     StorageError::InvalidSegment as u32,
                 ));
             }
@@ -207,7 +207,7 @@ impl<'a> StorageAccount<'a> {
             // TODO check that this blockhash is valid and recent
             //            if !is_valid(&blockhash) {
             //                // proof isn't using a recent blockhash
-            //                return Err(InstructionError::CustomError(InvalidBlockhash as u32));
+            //                return Err(ProgramError::CustomError(InvalidBlockhash as u32));
             //            }
 
             let proof = Proof {
@@ -220,13 +220,13 @@ impl<'a> StorageAccount<'a> {
             let segment_proofs = proofs.entry(current_segment).or_default();
             if segment_proofs.contains(&proof) {
                 // do not accept duplicate proofs
-                return Err(InstructionError::CustomError(
+                return Err(ProgramError::CustomError(
                     StorageError::DuplicateProof as u32,
                 ));
             }
             if segment_proofs.len() >= MAX_PROOFS_PER_SEGMENT {
                 // do not accept more than MAX_PROOFS_PER_SEGMENT
-                return Err(InstructionError::CustomError(
+                return Err(ProgramError::CustomError(
                     StorageError::ProofLimitReached as u32,
                 ));
             }
@@ -234,7 +234,7 @@ impl<'a> StorageAccount<'a> {
             segment_proofs.push(proof);
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)
+            Err(ProgramError::InvalidArgument)
         }
     }
 
@@ -243,7 +243,7 @@ impl<'a> StorageAccount<'a> {
         hash: Hash,
         segment: u64,
         clock: sysvar::clock::Clock,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
             segment: state_segment,
@@ -255,7 +255,7 @@ impl<'a> StorageAccount<'a> {
         {
             debug!("advertise new segment: {} orig: {}", segment, clock.segment);
             if segment < *state_segment || segment > clock.segment {
-                return Err(InstructionError::CustomError(
+                return Err(ProgramError::CustomError(
                     StorageError::InvalidSegment as u32,
                 ));
             }
@@ -270,7 +270,7 @@ impl<'a> StorageAccount<'a> {
             credits.current_epoch += total_validations;
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)
+            Err(ProgramError::InvalidArgument)
         }
     }
 
@@ -281,7 +281,7 @@ impl<'a> StorageAccount<'a> {
         segment_index: u64,
         proofs_per_account: Vec<Vec<ProofStatus>>,
         archiver_accounts: &mut [StorageAccount],
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ValidatorStorage {
             segment: state_segment,
@@ -290,7 +290,7 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if segment_index > *state_segment {
-                return Err(InstructionError::CustomError(
+                return Err(ProgramError::CustomError(
                     StorageError::InvalidSegment as u32,
                 ));
             }
@@ -329,7 +329,7 @@ impl<'a> StorageAccount<'a> {
 
             if accounts.len() != proofs_per_account.len() {
                 // don't have all the accounts to validate the proofs_per_account against
-                return Err(InstructionError::CustomError(
+                return Err(ProgramError::CustomError(
                     StorageError::InvalidProofMask as u32,
                 ));
             }
@@ -360,7 +360,7 @@ impl<'a> StorageAccount<'a> {
 
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)
+            Err(ProgramError::InvalidArgument)
         }
     }
 
@@ -370,7 +370,7 @@ impl<'a> StorageAccount<'a> {
         clock: sysvar::clock::Clock,
         rewards: sysvar::rewards::Rewards,
         owner: &mut StorageAccount,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<(), ProgramError> {
         let mut storage_contract = &mut self.account.state()?;
 
         if let StorageContract::ValidatorStorage {
@@ -380,9 +380,7 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if owner.id != *account_owner {
-                return Err(InstructionError::CustomError(
-                    StorageError::InvalidOwner as u32,
-                ));
+                return Err(ProgramError::CustomError(StorageError::InvalidOwner as u32));
             }
 
             credits.update_epoch(clock.epoch);
@@ -397,9 +395,7 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if owner.id != *account_owner {
-                return Err(InstructionError::CustomError(
-                    StorageError::InvalidOwner as u32,
-                ));
+                return Err(ProgramError::CustomError(StorageError::InvalidOwner as u32));
             }
             credits.update_epoch(clock.epoch);
             let (num_validations, _total_proofs) = count_valid_proofs(&validations);
@@ -409,7 +405,7 @@ impl<'a> StorageAccount<'a> {
 
             self.account.set_state(storage_contract)
         } else {
-            Err(InstructionError::InvalidArgument)
+            Err(ProgramError::InvalidArgument)
         }
     }
 }
@@ -419,10 +415,10 @@ fn check_redeemable(
     storage_point_value: f64,
     rewards_pool: &KeyedAccount,
     owner: &mut StorageAccount,
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let rewards = (credits.redeemable as f64 * storage_point_value) as u64;
     if rewards_pool.lamports()? < rewards {
-        Err(InstructionError::CustomError(
+        Err(ProgramError::CustomError(
             StorageError::RewardPoolDepleted as u32,
         ))
     } else {
@@ -447,7 +443,7 @@ fn store_validation_result(
     storage_account: &mut StorageAccount,
     segment: u64,
     proof_mask: &[ProofStatus],
-) -> Result<(), InstructionError> {
+) -> Result<(), ProgramError> {
     let mut storage_contract = storage_account.account.state()?;
     match &mut storage_contract {
         StorageContract::ArchiverStorage {
@@ -457,11 +453,11 @@ fn store_validation_result(
             ..
         } => {
             if !proofs.contains_key(&segment) {
-                return Err(InstructionError::InvalidAccountData);
+                return Err(ProgramError::InvalidAccountData);
             }
 
             if proofs.get(&segment).unwrap().len() != proof_mask.len() {
-                return Err(InstructionError::InvalidAccountData);
+                return Err(ProgramError::InvalidAccountData);
             }
 
             let (recorded_validations, _) = count_valid_proofs(&validations);
@@ -473,7 +469,7 @@ fn store_validation_result(
             credits.update_epoch(clock.epoch);
             credits.current_epoch += total_validations - recorded_validations;
         }
-        _ => return Err(InstructionError::InvalidAccountData),
+        _ => return Err(ProgramError::InvalidAccountData),
     }
     storage_account.account.set_state(&storage_contract)
 }
@@ -629,7 +625,7 @@ mod tests {
         keyed_pool_account.account.borrow_mut().lamports = 0;
         assert_eq!(
             check_redeemable(&mut credits, 1.0, &keyed_pool_account, &mut owner),
-            Err(InstructionError::CustomError(
+            Err(ProgramError::CustomError(
                 StorageError::RewardPoolDepleted as u32,
             ))
         );
