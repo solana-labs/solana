@@ -2198,6 +2198,8 @@ mod tests {
             root: 0,
             lowest: 0,
             slots: btree_slots,
+            first_missing: 0,
+            stash: vec![],
             wallclock: 0,
         }));
         test_split_messages(value);
@@ -2215,6 +2217,8 @@ mod tests {
             root: 0,
             lowest: 0,
             slots: BTreeSet::new(),
+            first_missing: 0,
+            stash: vec![],
             wallclock: 0,
         }));
 
@@ -2233,6 +2237,8 @@ mod tests {
                 root: 0,
                 lowest: 0,
                 slots,
+                first_missing: 0,
+                stash: vec![],
                 wallclock: 0,
             });
             i += 1;
