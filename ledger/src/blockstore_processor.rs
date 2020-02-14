@@ -13,7 +13,7 @@ use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
 use solana_measure::{measure::Measure, thread_mem_usage};
-use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
+use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionResults},

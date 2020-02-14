@@ -1,6 +1,5 @@
 use crate::erasure::ErasureConfig;
 use serde::{Deserialize, Serialize};
-use solana_metrics::datapoint;
 use solana_sdk::clock::Slot;
 use std::{collections::BTreeSet, ops::RangeBounds};
 
