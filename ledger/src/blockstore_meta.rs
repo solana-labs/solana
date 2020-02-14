@@ -1,6 +1,5 @@
 use crate::erasure::ErasureConfig;
 use serde::{Deserialize, Serialize};
-use solana_metrics::datapoint;
 use solana_sdk::clock::Slot;
 use std::{collections::BTreeSet, ops::RangeBounds};
 
@@ -138,7 +137,7 @@ impl SlotMeta {
 
         // Should never happen
         if self.consumed > self.last_index + 1 {
-            datapoint!(
+            datapoint_error!(
                 "blockstore_error",
                 (
                     "error",
