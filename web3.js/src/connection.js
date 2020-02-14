@@ -21,6 +21,13 @@ import type {TransactionSignature} from './transaction';
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
+/**
+ * RPC Response with extra contextual information
+ *
+ * @typedef {Object} RpcResponseAndContext
+ * @property {{slot: number}} context
+ * @property {T} value response
+ */
 type RpcResponseAndContext<T> = {
   context: {
     slot: number,
@@ -659,22 +666,6 @@ export type TransactionError = {|
 |};
 
 /**
- * @ignore
- */
-type BlockhashAndFeeCalculator = {
-  blockhash: Blockhash,
-  feeCalculator: FeeCalculator,
-}; // This type exists to workaround an esdoc parse error
-
-/**
- * @ignore
- */
-type PublicKeyAndAccount = {
-  pubkey: PublicKey,
-  account: AccountInfo,
-}; // This type exists to workaround an esdoc parse error
-
-/**
  * A connection to a fullnode JSON RPC endpoint
  */
 export class Connection {
@@ -834,11 +825,13 @@ export class Connection {
 
   /**
    * Fetch all the accounts owned by the specified program id
+   *
+   * @return {Promise<Array<{pubkey: PublicKey, account: AccountInfo}>>}
    */
   async getProgramAccounts(
     programId: PublicKey,
     commitment: ?Commitment,
-  ): Promise<Array<PublicKeyAndAccount>> {
+  ): Promise<Array<{pubkey: PublicKey, account: AccountInfo}>> {
     const args = this._argsWithCommitment([programId.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
@@ -1060,10 +1053,13 @@ export class Connection {
 
   /**
    * Fetch a recent blockhash from the cluster, return with context
+   * @return {Promise<RpcResponseAndContext<{blockhash: Blockhash, feeCalculator: FeeCalculator}>>}
    */
   async getRecentBlockhashAndContext(
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<BlockhashAndFeeCalculator>> {
+  ): Promise<
+    RpcResponseAndContext<{blockhash: Blockhash, feeCalculator: FeeCalculator}>,
+  > {
     const args = this._argsWithCommitment([], commitment);
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
 
@@ -1077,10 +1073,11 @@ export class Connection {
 
   /**
    * Fetch a recent blockhash from the cluster
+   * @return {Promise<{blockhash: Blockhash, feeCalculator: FeeCalculator}>}
    */
   async getRecentBlockhash(
     commitment: ?Commitment,
-  ): Promise<BlockhashAndFeeCalculator> {
+  ): Promise<{blockhash: Blockhash, feeCalculator: FeeCalculator}> {
     return await this.getRecentBlockhashAndContext(commitment)
       .then(x => x.value)
       .catch(e => {
