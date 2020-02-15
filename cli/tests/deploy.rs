@@ -43,7 +43,6 @@ fn test_cli_deploy_program() {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
         lamports: minimum_balance_for_rent_exemption + 1, // min balance for rent exemption + leftover for tx processing
-        use_lamports_unit: true,
     };
     process_command(&config).unwrap();
 

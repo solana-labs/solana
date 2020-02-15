@@ -169,7 +169,7 @@ trigger a seed phrase input prompt for the stake account and use
 `--ask-seed-phrase keypair` to securely input the funding keypair.
 
 ```bash
-solana create-stake-account ASK 1 SOL --ask-seed-phrase keypair
+solana create-stake-account ASK 1 --ask-seed-phrase keypair
 
 [stake_account] seed phrase: 🔒
 [stake_account] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:

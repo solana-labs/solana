@@ -411,7 +411,6 @@ pub enum CliCommand {
         faucet_host: Option<IpAddr>,
         faucet_port: u16,
         lamports: u64,
-        use_lamports_unit: bool,
     },
     Balance {
         pubkey: Option<Pubkey>,
@@ -644,14 +643,12 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             } else {
                 None
             };
-            let lamports = required_lamports_from(matches, "amount", "unit")?;
-            let use_lamports_unit = matches.value_of("unit") == Some("lamports");
+            let lamports = lamports_of_sol(matches, "amount").unwrap();
             Ok(CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host,
                     faucet_port,
                     lamports,
-                    use_lamports_unit,
                 },
                 require_keypair: true,
             })
@@ -684,7 +681,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             }
         },
         ("pay", Some(matches)) => {
-            let lamports = required_lamports_from(matches, "amount", "unit")?;
+            let lamports = lamports_of_sol(matches, "amount").unwrap();
             let to = pubkey_of(&matches, "to").unwrap();
             let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
@@ -768,7 +765,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             })
         }
         ("transfer", Some(matches)) => {
-            let lamports = required_lamports_from(matches, "amount", "unit")?;
+            let lamports = lamports_of_sol(matches, "amount").unwrap();
             let to = pubkey_of(&matches, "to").unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
@@ -947,12 +944,11 @@ fn process_airdrop(
     config: &CliConfig,
     faucet_addr: &SocketAddr,
     lamports: u64,
-    use_lamports_unit: bool,
 ) -> ProcessResult {
     let pubkey = config.pubkey()?;
     println!(
         "Requesting airdrop of {} from {}",
-        build_balance_message(lamports, use_lamports_unit, true),
+        build_balance_message(lamports, false, true),
         faucet_addr
     );
     let previous_balance = match rpc_client.retry_get_balance(&pubkey, 5)? {
@@ -971,11 +967,7 @@ fn process_airdrop(
         .retry_get_balance(&pubkey, 5)?
         .unwrap_or(previous_balance);
 
-    Ok(build_balance_message(
-        current_balance,
-        use_lamports_unit,
-        true,
-    ))
+    Ok(build_balance_message(current_balance, false, true))
 }
 
 fn process_balance(
@@ -1858,7 +1850,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             faucet_host,
             faucet_port,
             lamports,
-            use_lamports_unit,
         } => {
             let faucet_addr = SocketAddr::new(
                 faucet_host.unwrap_or_else(|| {
@@ -1874,13 +1865,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
                 *faucet_port,
             );
 
-            process_airdrop(
-                &rpc_client,
-                config,
-                &faucet_addr,
-                *lamports,
-                *use_lamports_unit,
-            )
+            process_airdrop(&rpc_client, config, &faucet_addr, *lamports)
         }
         // Check client balance
         CliCommand::Balance {
@@ -2055,22 +2040,6 @@ where
     }
 }
 
-// If clap arg `name` is_required, and specifies an amount of either lamports or SOL, the only way
-// `amount_of()` can return None is if `name` is an f64 and `unit`== "lamports". This method
-// catches that case and converts it to an Error.
-pub(crate) fn required_lamports_from(
-    matches: &ArgMatches<'_>,
-    name: &str,
-    unit: &str,
-) -> Result<u64, CliError> {
-    amount_of(matches, name, unit).ok_or_else(|| {
-        CliError::BadParameter(format!(
-            "Lamports cannot be fractional: {}",
-            matches.value_of("amount").unwrap()
-        ))
-    })
-}
-
 pub(crate) fn build_balance_message(
     lamports: u64,
     use_lamports_unit: bool,
@@ -2128,15 +2097,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The airdrop amount to request (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(2)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request and balance display"),
+                        .help("The airdrop amount to request, in SOL"),
                 ),
         )
         .subcommand(
@@ -2245,15 +2206,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to send (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(3)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request"),
+                        .help("The amount to send, in SOL"),
                 )
                 .arg(
                     Arg::with_name("timestamp")
@@ -2358,15 +2311,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to send (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(3)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request"),
+                        .help("The amount to send, in SOL"),
                 )
                 .arg(
                     Arg::with_name("from")
@@ -2468,15 +2413,14 @@ mod tests {
         // Test Airdrop Subcommand
         let test_airdrop = test_commands
             .clone()
-            .get_matches_from(vec!["test", "airdrop", "50", "lamports"]);
+            .get_matches_from(vec!["test", "airdrop", "50"]);
         assert_eq!(
             parse_command(&test_airdrop).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host: None,
                     faucet_port: solana_faucet::faucet::FAUCET_PORT,
-                    lamports: 50,
-                    use_lamports_unit: true,
+                    lamports: 50_000_000_000,
                 },
                 require_keypair: true,
             }
@@ -2624,18 +2568,15 @@ mod tests {
         );
 
         // Test Simple Pay Subcommand
-        let test_pay = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            &pubkey_string,
-            "50",
-            "lamports",
-        ]);
+        let test_pay =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "pay", &pubkey_string, "50"]);
         assert_eq!(
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     ..PayCommand::default()
                 }),
@@ -2649,7 +2590,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--require-signature-from",
             &witness0_string,
             "--require-signature-from",
@@ -2659,7 +2599,7 @@ mod tests {
             parse_command(&test_pay_multiple_witnesses).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     witnesses: Some(vec![witness0, witness1]),
                     ..PayCommand::default()
@@ -2672,7 +2612,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--require-signature-from",
             &witness0_string,
         ]);
@@ -2680,7 +2619,7 @@ mod tests {
             parse_command(&test_pay_single_witness).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     witnesses: Some(vec![witness0]),
                     ..PayCommand::default()
@@ -2695,7 +2634,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--after",
             "2018-09-19T17:30:59",
             "--require-timestamp-from",
@@ -2705,7 +2643,7 @@ mod tests {
             parse_command(&test_pay_timestamp).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     timestamp: Some(dt),
                     timestamp_pubkey: Some(witness0),
@@ -2723,7 +2661,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--sign-only",
@@ -2732,7 +2669,7 @@ mod tests {
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     sign_only: true,
@@ -2751,7 +2688,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--signer",
@@ -2761,7 +2697,7 @@ mod tests {
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     signers: Some(vec![(key1, sig1)]),
@@ -2780,7 +2716,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--signer",
@@ -2792,7 +2727,7 @@ mod tests {
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
@@ -2808,7 +2743,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
         ]);
@@ -2816,7 +2750,7 @@ mod tests {
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     ..PayCommand::default()
@@ -2833,7 +2767,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--nonce",
@@ -2843,7 +2776,7 @@ mod tests {
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(pubkey),
@@ -2862,7 +2795,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--nonce",
@@ -2874,7 +2806,7 @@ mod tests {
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(pubkey),
@@ -2896,7 +2828,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--nonce",
@@ -2910,7 +2841,7 @@ mod tests {
             parse_command(&test_pay).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(pubkey),
@@ -2934,7 +2865,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--nonce",
@@ -2965,7 +2895,6 @@ mod tests {
             "pay",
             &pubkey_string,
             "50",
-            "lamports",
             "--after",
             "2018-09-19T17:30:59",
             "--require-signature-from",
@@ -2979,7 +2908,7 @@ mod tests {
             parse_command(&test_pay_multiple_witnesses).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     to: pubkey,
                     timestamp: Some(dt),
                     timestamp_pubkey: Some(witness0),
@@ -3284,7 +3213,6 @@ mod tests {
             faucet_host: None,
             faucet_port: 1234,
             lamports: 50,
-            use_lamports_unit: true,
         };
         assert!(process_command(&config).is_ok());
 
@@ -3322,7 +3250,6 @@ mod tests {
             faucet_host: None,
             faucet_port: 1234,
             lamports: 50,
-            use_lamports_unit: true,
         };
         assert!(process_command(&config).is_err());
 
@@ -3431,35 +3358,13 @@ mod tests {
     fn test_parse_transfer_subcommand() {
         let test_commands = app("test", "desc", "version");
 
-        //Test Transfer Subcommand, lamports
+        //Test Transfer Subcommand, SOL
         let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
         let from_pubkey = from_keypair.pubkey();
         let from_string = from_pubkey.to_string();
         let to_keypair = keypair_from_seed(&[1u8; 32]).unwrap();
         let to_pubkey = to_keypair.pubkey();
         let to_string = to_pubkey.to_string();
-        let test_transfer = test_commands
-            .clone()
-            .get_matches_from(vec!["test", "transfer", &to_string, "42", "lamports"]);
-        assert_eq!(
-            parse_command(&test_transfer).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Transfer {
-                    lamports: 42,
-                    to: to_pubkey,
-                    from: None,
-                    sign_only: false,
-                    signers: None,
-                    blockhash_query: BlockhashQuery::All,
-                    nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
-                },
-                require_keypair: true,
-            }
-        );
-
-        //Test Transfer Subcommand, SOL
         let test_transfer = test_commands
             .clone()
             .get_matches_from(vec!["test", "transfer", &to_string, "42"]);
@@ -3489,7 +3394,6 @@ mod tests {
             "transfer",
             &to_string,
             "42",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--sign-only",
@@ -3498,7 +3402,7 @@ mod tests {
             parse_command(&test_transfer).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42,
+                    lamports: 42_000_000_000,
                     to: to_pubkey,
                     from: None,
                     sign_only: true,
@@ -3520,7 +3424,6 @@ mod tests {
             "transfer",
             &to_string,
             "42",
-            "lamports",
             "--from",
             &from_string,
             "--fee-payer",
@@ -3534,7 +3437,7 @@ mod tests {
             parse_command(&test_transfer).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42,
+                    lamports: 42_000_000_000,
                     to: to_pubkey,
                     from: Some(from_pubkey.into()),
                     sign_only: false,
@@ -3559,7 +3462,6 @@ mod tests {
             "transfer",
             &to_string,
             "42",
-            "lamports",
             "--blockhash",
             &blockhash_string,
             "--nonce",
@@ -3571,7 +3473,7 @@ mod tests {
             parse_command(&test_transfer).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42,
+                    lamports: 42_000_000_000,
                     to: to_pubkey,
                     from: None,
                     sign_only: false,

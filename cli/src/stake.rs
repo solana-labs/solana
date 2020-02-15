@@ -1,9 +1,9 @@
 use crate::{
     cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys, fee_payer_arg,
-        log_instruction_custom_error, nonce_authority_arg, replace_signatures,
-        required_lamports_from, return_signers, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult, SigningAuthority, FEE_PAYER_ARG,
+        log_instruction_custom_error, nonce_authority_arg, replace_signatures, return_signers,
+        CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, SigningAuthority,
+        FEE_PAYER_ARG,
     },
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::*,
@@ -86,15 +86,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount of send to the vote account (default unit SOL)")
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(3)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request")
+                        .help("The amount of send to the vote account, in SOL")
                 )
                 .arg(
                     Arg::with_name("custodian")
@@ -287,15 +279,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to move into the new stake account (default unit SOL)")
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(4)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request")
+                        .help("The amount to move into the new stake account, in unit SOL")
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -338,15 +322,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to withdraw from the stake account (default unit SOL)")
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(4)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request")
+                        .help("The amount to withdraw from the stake account, in SOL")
                 )
                 .arg(withdraw_authority_arg())
                 .offline_args()
@@ -443,7 +419,7 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, STAKE_AUTHORITY_ARG.name);
     let withdrawer = pubkey_of(matches, WITHDRAW_AUTHORITY_ARG.name);
-    let lamports = required_lamports_from(matches, "amount", "unit")?;
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
@@ -557,7 +533,7 @@ pub fn parse_stake_authorize(
 pub fn parse_split_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let split_stake_account = keypair_of(matches, "split_stake_account").unwrap();
-    let lamports = required_lamports_from(matches, "amount", "unit")?;
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
@@ -622,7 +598,7 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
 pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
-    let lamports = required_lamports_from(matches, "amount", "unit")?;
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
@@ -1865,7 +1841,6 @@ mod tests {
             &custodian_string,
             "--lockup-epoch",
             "43",
-            "lamports",
         ]);
         assert_eq!(
             parse_command(&test_create_stake_account).unwrap(),
@@ -1880,7 +1855,7 @@ mod tests {
                         unix_timestamp: 0,
                         custodian,
                     },
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     sign_only: false,
                     signers: None,
                     blockhash_query: BlockhashQuery::All,
@@ -1904,7 +1879,6 @@ mod tests {
             "create-stake-account",
             &keypair_file,
             "50",
-            "lamports",
         ]);
 
         assert_eq!(
@@ -1916,7 +1890,7 @@ mod tests {
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup::default(),
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     sign_only: false,
                     signers: None,
                     blockhash_query: BlockhashQuery::All,
@@ -1944,7 +1918,6 @@ mod tests {
             "create-stake-account",
             &keypair_file,
             "50",
-            "lamports",
             "--blockhash",
             &nonce_hash_string,
             "--nonce",
@@ -1968,7 +1941,7 @@ mod tests {
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup::default(),
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     sign_only: false,
                     signers: Some(vec![(offline_pubkey, offline_sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
@@ -2270,7 +2243,6 @@ mod tests {
             &stake_account_string,
             &stake_account_string,
             "42",
-            "lamports",
         ]);
 
         assert_eq!(
@@ -2279,7 +2251,7 @@ mod tests {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
-                    lamports: 42,
+                    lamports: 42_000_000_000,
                     withdraw_authority: None,
                     sign_only: false,
                     signers: None,
@@ -2299,7 +2271,6 @@ mod tests {
             &stake_account_string,
             &stake_account_string,
             "42",
-            "lamports",
             "--withdraw-authority",
             &stake_authority_keypair_file,
         ]);
@@ -2310,7 +2281,7 @@ mod tests {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
-                    lamports: 42,
+                    lamports: 42_000_000_000,
                     withdraw_authority: Some(
                         read_keypair_file(&stake_authority_keypair_file)
                             .unwrap()
@@ -2334,7 +2305,6 @@ mod tests {
             &stake_account_string,
             &stake_account_string,
             "42",
-            "lamports",
             "--withdraw-authority",
             &stake_authority_keypair_file,
             "--blockhash",
@@ -2355,7 +2325,7 @@ mod tests {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
-                    lamports: 42,
+                    lamports: 42_000_000_000,
                     withdraw_authority: Some(
                         read_keypair_file(&stake_authority_keypair_file)
                             .unwrap()
@@ -2608,7 +2578,6 @@ mod tests {
             &keypair_file,
             &split_stake_account_keypair_file,
             "50",
-            "lamports",
         ]);
         assert_eq!(
             parse_command(&test_split_stake_account).unwrap(),
@@ -2625,7 +2594,7 @@ mod tests {
                         .unwrap()
                         .into(),
                     seed: None,
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     fee_payer: None,
                 },
                 require_keypair: true
@@ -2654,7 +2623,6 @@ mod tests {
             &keypair_file,
             &split_stake_account_keypair_file,
             "50",
-            "lamports",
             "--stake-authority",
             &stake_auth_string,
             "--blockhash",
@@ -2688,7 +2656,7 @@ mod tests {
                         .unwrap()
                         .into(),
                     seed: None,
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                     fee_payer: Some(nonce_auth_pubkey.into()),
                 },
                 require_keypair: false,

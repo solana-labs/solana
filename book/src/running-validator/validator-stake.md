@@ -35,7 +35,7 @@ solana-keygen new -o ~/validator-stake-keypair.json
 Now delegate 1 SOL to your validator by first creating your stake account:
 
 ```bash
-solana create-stake-account ~/validator-stake-keypair.json 1 SOL
+solana create-stake-account ~/validator-stake-keypair.json 1
 ```
 
 and then delegating that stake to your validator:
