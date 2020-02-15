@@ -2122,40 +2122,6 @@ mod tests {
             }
         );
 
-        // Test Delegate Subcommand w/ absentee fee-payer
-        let sig = fee_payer_keypair.sign_message(&[0u8]);
-        let signer = format!("{}={}", fee_payer_string, sig);
-        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
-            "test",
-            "delegate-stake",
-            &stake_account_string,
-            &vote_account_string,
-            "--fee-payer",
-            &fee_payer_string,
-            "--blockhash",
-            &blockhash_string,
-            "--signer",
-            &signer,
-        ]);
-        assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::DelegateStake {
-                    stake_account_pubkey,
-                    vote_account_pubkey,
-                    stake_authority: None,
-                    force: false,
-                    sign_only: false,
-                    signers: Some(vec![(fee_payer_pubkey, sig)]),
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-                    nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(fee_payer_pubkey.into()),
-                },
-                require_keypair: false
-            }
-        );
-
         // Test WithdrawStake Subcommand
         let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2448,37 +2414,6 @@ mod tests {
                     fee_payer: Some(read_keypair_file(&fee_payer_keypair_file).unwrap().into()),
                 },
                 require_keypair: true
-            }
-        );
-
-        // Test Deactivate Subcommand w/ absentee fee-payer
-        let sig = fee_payer_keypair.sign_message(&[0u8]);
-        let signer = format!("{}={}", fee_payer_string, sig);
-        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
-            "test",
-            "deactivate-stake",
-            &stake_account_string,
-            "--fee-payer",
-            &fee_payer_string,
-            "--blockhash",
-            &blockhash_string,
-            "--signer",
-            &signer,
-        ]);
-        assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::DeactivateStake {
-                    stake_account_pubkey,
-                    stake_authority: None,
-                    sign_only: false,
-                    signers: Some(vec![(fee_payer_pubkey, sig)]),
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-                    nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(fee_payer_pubkey.into()),
-                },
-                require_keypair: false
             }
         );
 
