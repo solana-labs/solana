@@ -221,8 +221,7 @@ pub struct Presigner {
 }
 
 impl Presigner {
-    #[allow(dead_code)]
-    fn new(pubkey: &Pubkey, signature: &Signature) -> Self {
+    pub fn new(pubkey: &Pubkey, signature: &Signature) -> Self {
         Self {
             pubkey: *pubkey,
             signature: *signature,

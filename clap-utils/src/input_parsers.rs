@@ -99,7 +99,7 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
 pub fn signer_of(
     name: &str,
     matches: &ArgMatches<'_>,
-) -> Result<Option<Box<dyn KeypairUtil>>, Box<dyn std::error::Error>> {
+) -> Result<Option<Box<dyn Signer>>, Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
         keypair_util_from_path(matches, location, name).map(Some)
     } else {
