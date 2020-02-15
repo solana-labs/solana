@@ -27,6 +27,9 @@ pub fn is_release_channel(channel: &str) -> Result<(), String> {
 }
 
 pub fn is_explicit_release(string: String) -> Result<(), String> {
+    if string.starts_with('v') && is_semver(string.split_at(1).1).is_ok() {
+        return Ok(());
+    }
     is_semver(&string).or_else(|_| is_release_channel(&string))
 }
 
@@ -38,7 +41,11 @@ pub fn explicit_release_of(
         .value_of(name)
         .map(ToString::to_string)
         .map(|explicit_release| {
-            if is_semver(&explicit_release).is_ok() {
+            if explicit_release.starts_with('v')
+                && is_semver(explicit_release.split_at(1).1).is_ok()
+            {
+                config::ExplicitRelease::Semver(explicit_release.split_at(1).1.to_string())
+            } else if is_semver(&explicit_release).is_ok() {
                 config::ExplicitRelease::Semver(explicit_release)
             } else {
                 config::ExplicitRelease::Channel(explicit_release)
@@ -118,7 +125,7 @@ pub fn main() -> Result<(), String> {
                         .value_name("release")
                         .index(1)
                         .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
-                        .validator(|string| is_semver(&string).or_else(|_| is_release_channel(&string)))
+                        .validator(is_explicit_release)
                         .help("The exact version to install.  Either a semver or release channel name"),
                 ),
         )
@@ -213,9 +220,7 @@ pub fn main() -> Result<(), String> {
                 .unwrap();
             let data_dir = matches.value_of("data_dir").unwrap();
             let no_modify_path = matches.is_present("no_modify_path");
-            let explicit_release = matches
-                .value_of("explicit_release")
-                .map(ToString::to_string);
+            let explicit_release = explicit_release_of(&matches, "explicit_release");
 
             command::init(
                 config_file,
@@ -223,13 +228,7 @@ pub fn main() -> Result<(), String> {
                 json_rpc_url,
                 &update_manifest_pubkey,
                 no_modify_path,
-                explicit_release.map(|explicit_release| {
-                    if is_semver(&explicit_release).is_ok() {
-                        config::ExplicitRelease::Semver(explicit_release)
-                    } else {
-                        config::ExplicitRelease::Channel(explicit_release)
-                    }
-                }),
+                explicit_release,
             )
         }
         ("info", Some(matches)) => {
