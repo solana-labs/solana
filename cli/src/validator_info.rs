@@ -301,7 +301,7 @@ pub fn process_set_validator_info(
         .unwrap_or(0);
 
     let keys = vec![(id(), false), (config.keypair.pubkey(), true)];
-    let (message, signers): (Message, Vec<&Keypair>) = if balance == 0 {
+    let (message, signers): (Message, Vec<&dyn Signer>) = if balance == 0 {
         if info_pubkey != info_keypair.pubkey() {
             println!(
                 "Account {:?} does not exist. Generating new keypair...",
@@ -327,7 +327,7 @@ pub fn process_set_validator_info(
             keys,
             &validator_info,
         )]);
-        let signers = vec![&config.keypair, &info_keypair];
+        let signers = vec![config.keypair.as_ref(), &info_keypair];
         let message = Message::new(instructions);
         (message, signers)
     } else {
@@ -343,7 +343,7 @@ pub fn process_set_validator_info(
             &validator_info,
         )];
         let message = Message::new_with_payer(instructions, Some(&config.keypair.pubkey()));
-        let signers = vec![&config.keypair];
+        let signers = vec![config.keypair.as_ref()];
         (message, signers)
     };
 
