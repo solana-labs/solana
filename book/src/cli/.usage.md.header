@@ -22,12 +22,6 @@ $ solana airdrop 2
 
 // Return
 "2.00000000 SOL"
-
-// Command
-$ solana airdrop 123 --lamports
-
-// Return
-"123 lamports"
 ```
 
 ### Get Balance

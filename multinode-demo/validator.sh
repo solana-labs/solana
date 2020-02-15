@@ -8,7 +8,7 @@ source "$here"/common.sh
 
 args=()
 airdrops_enabled=1
-node_lamports=500000000000 # 500 SOL: number of lamports to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
+node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 label=
 identity_keypair_path=
 voting_keypair_path=
@@ -33,7 +33,7 @@ OPTIONS:
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --label LABEL             - Append the given label to the configuration files, useful when running
                               multiple validators in the same workspace
-  --node-lamports LAMPORTS  - Number of lamports this node has been funded from the genesis config (default: $node_lamports)
+  --node-sol SOL            - Number of SOL this node has been funded from the genesis config (default: $node_sol)
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
   --no-restart              - do not restart the node if it exits
@@ -53,8 +53,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-restart ]]; then
       no_restart=1
       shift
-    elif [[ $1 = --node-lamports ]]; then
-      node_lamports="$2"
+    elif [[ $1 = --node-sol ]]; then
+      node_sol="$2"
       shift 2
     elif [[ $1 = --no-airdrop ]]; then
       airdrops_enabled=0
@@ -251,12 +251,12 @@ wallet() {
 }
 
 setup_validator_accounts() {
-  declare node_lamports=$1
+  declare node_sol=$1
 
   if ! wallet vote-account "$voting_keypair_path"; then
     if ((airdrops_enabled)); then
-      echo "Adding $node_lamports to validator identity account:"
-      wallet airdrop "$node_lamports" lamports || return $?
+      echo "Adding $node_sol to validator identity account:"
+      wallet airdrop "$node_sol" || return $?
     fi
 
     echo "Creating validator vote account"
@@ -271,7 +271,7 @@ setup_validator_accounts() {
   echo "Validator storage account configured"
 
   echo "Validator identity account balance:"
-  wallet balance --lamports || return $?
+  wallet balance || return $?
 
   return 0
 }
@@ -282,7 +282,7 @@ rpc_url=$($solana_gossip rpc-url --entrypoint "$gossip_entrypoint" --any)
 [[ -r "$voting_keypair_path" ]] || $solana_keygen new --no-passphrase -so "$voting_keypair_path"
 [[ -r "$storage_keypair_path" ]] || $solana_keygen new --no-passphrase -so "$storage_keypair_path"
 
-setup_validator_accounts "$node_lamports"
+setup_validator_accounts "$node_sol"
 
 while true; do
   echo "$PS4$program ${args[*]}"

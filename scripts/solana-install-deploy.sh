@@ -75,7 +75,7 @@ set -x
 balance=$(solana $maybeKeypair --url "$URL" balance --lamports)
 if [[ $balance = "0 lamports" ]]; then
   # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair
-  solana $maybeKeypair --url "$URL" airdrop 42 lamports
+  solana $maybeKeypair --url "$URL" airdrop 0.000000042
 fi
 
 # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair

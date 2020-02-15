@@ -129,7 +129,7 @@ Use solana-keygen to show the public keys for each of the keypairs, they will be
 ```text
 Then set up the storage accounts for your archiver by running:
 ```bash
-solana --keypair archiver-keypair.json airdrop 100000 lamports
+solana --keypair archiver-keypair.json airdrop .0001
 solana --keypair archiver-keypair.json create-archiver-storage-account $ARCHIVER_IDENTITY $STORAGE_IDENTITY
 ```
 
