@@ -471,6 +471,12 @@ impl error::Error for CliError {
     }
 }
 
+impl From<Box<dyn error::Error>> for CliError {
+    fn from(error: Box<dyn error::Error>) -> Self {
+        CliError::DynamicProgramError(format!("{:?}", error))
+    }
+}
+
 pub struct CliConfig {
     pub command: CliCommand,
     pub json_rpc_url: String,
