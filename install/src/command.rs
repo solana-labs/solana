@@ -219,7 +219,7 @@ fn new_update_manifest(
             vec![], // additional keys
         );
         let mut transaction = Transaction::new_unsigned_instructions(new_account);
-        let signers = [from_keypair, update_manifest_keypair];
+        let signers: [&dyn KeypairUtil; 2] = [from_keypair, update_manifest_keypair];
         transaction.sign(&signers, recent_blockhash);
 
         rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
@@ -236,7 +236,7 @@ fn store_update_manifest(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let signers = [from_keypair, update_manifest_keypair];
+    let signers: [&dyn KeypairUtil; 2] = [from_keypair, update_manifest_keypair];
     let instruction = config_instruction::store::<SignedUpdateManifest>(
         &update_manifest_keypair.pubkey(),
         true,   // update_manifest_keypair is signer

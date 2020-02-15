@@ -451,7 +451,10 @@ pub unsafe extern "C" fn transaction_partial_sign(
     } else {
         return 1;
     };
-    let keypairs_ref: Vec<&KeypairNative> = keypairs.iter().collect();
+    let mut keypairs_ref: Vec<&dyn KeypairUtil> = Vec::new();
+    for keypair in keypairs.iter() {
+        keypairs_ref.push(keypair);
+    }
 
     let positions = if let Ok(v) = tx_native.get_signing_keypair_positions(&keypairs_ref[..]) {
         v

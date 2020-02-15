@@ -1493,7 +1493,7 @@ pub(crate) mod tests {
                 &bad_hash,
                 hashes_per_tick.saturating_sub(1),
                 vec![system_transaction::transfer(
-                    &genesis_keypair,
+                    genesis_keypair,
                     &keypair2.pubkey(),
                     2,
                     blockhash,
@@ -1610,7 +1610,7 @@ pub(crate) mod tests {
                 entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash.clone());
             let last_entry_hash = entries.last().unwrap().hash;
             let tx =
-                system_transaction::transfer(&genesis_keypair, &keypair.pubkey(), 2, blockhash);
+                system_transaction::transfer(genesis_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
             entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)
@@ -1817,17 +1817,17 @@ pub(crate) mod tests {
         // Generate transactions for processing
         // Successful transaction
         let success_tx =
-            system_transaction::transfer(&mint_keypair, &keypair1.pubkey(), 2, blockhash);
+            system_transaction::transfer(mint_keypair, &keypair1.pubkey(), 2, blockhash);
         let success_signature = success_tx.signatures[0];
         let entry_1 = next_entry(&blockhash, 1, vec![success_tx]);
         // Failed transaction, InstructionError
         let ix_error_tx =
-            system_transaction::transfer(&keypair2, &keypair3.pubkey(), 10, blockhash);
+            system_transaction::transfer(keypair2, &keypair3.pubkey(), 10, blockhash);
         let ix_error_signature = ix_error_tx.signatures[0];
         let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
         // Failed transaction
         let fail_tx =
-            system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
+            system_transaction::transfer(mint_keypair, &keypair2.pubkey(), 2, Hash::default());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
         let entries = vec![entry_1, entry_2, entry_3];
 

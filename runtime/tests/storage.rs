@@ -301,13 +301,13 @@ fn init_storage_accounts(
     archiver_accounts_to_create: &[&Keypair],
     lamports: u64,
 ) {
-    let mut signers = vec![mint];
+    let mut signers: Vec<&dyn KeypairUtil> = vec![mint];
     let mut ixs: Vec<_> = vec![system_instruction::transfer(&mint.pubkey(), owner, 1)];
     ixs.append(
         &mut validator_accounts_to_create
-            .into_iter()
+            .iter()
             .flat_map(|account| {
-                signers.push(&account);
+                signers.push(*account);
                 storage_instruction::create_storage_account(
                     &mint.pubkey(),
                     owner,
@@ -318,8 +318,8 @@ fn init_storage_accounts(
             })
             .collect(),
     );
-    archiver_accounts_to_create.into_iter().for_each(|account| {
-        signers.push(&account);
+    archiver_accounts_to_create.iter().for_each(|account| {
+        signers.push(*account);
         ixs.append(&mut storage_instruction::create_storage_account(
             &mint.pubkey(),
             owner,
@@ -371,7 +371,7 @@ fn submit_proof(
     );
 
     assert_matches!(
-        bank_client.send_message(&[&mint_keypair, &storage_keypair], message),
+        bank_client.send_message(&[mint_keypair, storage_keypair], message),
         Ok(_)
     );
     ProofStatus::Valid

@@ -157,12 +157,12 @@ mod tests {
             |bank, mint_keypair| {
                 let key1 = Keypair::new().pubkey();
                 let tx =
-                    system_transaction::transfer(&mint_keypair, &key1, 1, bank.last_blockhash());
+                    system_transaction::transfer(mint_keypair, &key1, 1, bank.last_blockhash());
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
 
                 let key2 = Keypair::new().pubkey();
                 let tx =
-                    system_transaction::transfer(&mint_keypair, &key2, 0, bank.last_blockhash());
+                    system_transaction::transfer(mint_keypair, &key2, 0, bank.last_blockhash());
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
 
                 bank.freeze();
@@ -226,7 +226,7 @@ mod tests {
             );
             let slot = bank.slot();
             let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
+            let tx = system_transaction::transfer(mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
             bank_forks.insert(bank);
@@ -386,14 +386,14 @@ mod tests {
                 (MAX_CACHE_ENTRIES * 2 + 1) as u64,
                 |bank, mint_keypair| {
                     let tx = system_transaction::transfer(
-                        &mint_keypair,
+                        mint_keypair,
                         &key1,
                         1,
                         bank.parent().unwrap().last_blockhash(),
                     );
                     assert_eq!(bank.process_transaction(&tx), Ok(()));
                     let tx = system_transaction::transfer(
-                        &mint_keypair,
+                        mint_keypair,
                         &key2,
                         1,
                         bank.parent().unwrap().last_blockhash(),

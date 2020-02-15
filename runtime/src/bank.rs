@@ -4372,7 +4372,7 @@ mod tests {
         transfer_instruction.accounts[0].is_signer = false;
 
         let tx = Transaction::new_signed_instructions(
-            &Vec::<&Keypair>::new(),
+            &Vec::<&dyn KeypairUtil>::new(),
             vec![transfer_instruction],
             bank.last_blockhash(),
         );

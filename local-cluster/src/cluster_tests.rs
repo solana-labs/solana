@@ -61,7 +61,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap();
         let mut transaction =
-            system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
+            system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
             .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 10, confs)
@@ -109,7 +109,7 @@ pub fn send_many_transactions(
         let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
 
         let mut transaction = system_transaction::transfer(
-            &funding_keypair,
+            funding_keypair,
             &random_keypair.pubkey(),
             transfer_amount,
             blockhash,
@@ -246,7 +246,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                 .unwrap();
             let mut transaction = system_transaction::transfer(
-                &funding_keypair,
+                funding_keypair,
                 &random_keypair.pubkey(),
                 1,
                 blockhash,

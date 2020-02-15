@@ -384,7 +384,7 @@ impl Archiver {
                     );
                     let message =
                         Message::new_with_payer(vec![ix], Some(&archiver_keypair.pubkey()));
-                    if let Err(e) = client.send_message(&[&archiver_keypair], message) {
+                    if let Err(e) = client.send_message(&[archiver_keypair.as_ref()], message) {
                         error!("unable to redeem reward, tx failed: {:?}", e);
                     } else {
                         info!(
@@ -671,7 +671,7 @@ impl Archiver {
             blockhash,
         );
         if let Err(err) = client.send_and_confirm_transaction(
-            &[&archiver_keypair, &storage_keypair],
+            &[archiver_keypair.as_ref(), storage_keypair.as_ref()],
             &mut transaction,
             10,
             0,

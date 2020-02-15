@@ -459,7 +459,7 @@ impl LocalCluster {
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap();
         let mut tx =
-            system_transaction::transfer(&source_keypair, dest_pubkey, lamports, blockhash);
+            system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
@@ -624,7 +624,7 @@ impl LocalCluster {
             Some(&from_keypair.pubkey()),
         );
 
-        let signer_keys = vec![from_keypair.as_ref(), &storage_keypair];
+        let signer_keys: Vec<&dyn KeypairUtil> = vec![from_keypair.as_ref(), storage_keypair];
         let blockhash = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap()

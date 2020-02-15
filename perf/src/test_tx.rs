@@ -16,7 +16,7 @@ pub fn test_tx() -> Transaction {
 pub fn test_multisig_tx() -> Transaction {
     let keypair0 = Keypair::new();
     let keypair1 = Keypair::new();
-    let keypairs = vec![&keypair0, &keypair1];
+    let keypairs: Vec<&dyn KeypairUtil> = vec![&keypair0, &keypair1];
     let lamports = 5;
     let blockhash = Hash::default();
 

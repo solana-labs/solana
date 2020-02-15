@@ -282,7 +282,7 @@ mod tests {
         let john_pubkey = john_doe_keypair.pubkey();
         let jane_doe_keypair = Keypair::new();
         let jane_pubkey = jane_doe_keypair.pubkey();
-        let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
+        let doe_keypairs: Vec<&dyn KeypairUtil> = vec![&john_doe_keypair, &jane_doe_keypair];
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
 
