@@ -93,12 +93,8 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
     })
 }
 
-pub fn amount_of(matches: &ArgMatches<'_>, name: &str, unit: &str) -> Option<u64> {
-    if matches.value_of(unit) == Some("lamports") {
-        value_of(matches, name)
-    } else {
-        value_of(matches, name).map(sol_to_lamports)
-    }
+pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {
+    value_of(matches, name).map(sol_to_lamports)
 }
 
 pub fn derivation_of(matches: &ArgMatches<'_>, name: &str) -> Option<DerivationPath> {
@@ -269,24 +265,21 @@ mod tests {
     }
 
     #[test]
-    fn test_amount_of() {
+    fn test_lamports_of_sol() {
         let matches = app()
             .clone()
-            .get_matches_from(vec!["test", "--single", "50", "--unit", "lamports"]);
-        assert_eq!(amount_of(&matches, "single", "unit"), Some(50));
-        assert_eq!(amount_of(&matches, "multiple", "unit"), None);
+            .get_matches_from(vec!["test", "--single", "50"]);
+        assert_eq!(lamports_of_sol(&matches, "single"), Some(50000000000));
+        assert_eq!(lamports_of_sol(&matches, "multiple"), None);
         let matches = app()
             .clone()
-            .get_matches_from(vec!["test", "--single", "50", "--unit", "SOL"]);
-        assert_eq!(amount_of(&matches, "single", "unit"), Some(50000000000));
+            .get_matches_from(vec!["test", "--single", "1.5"]);
+        assert_eq!(lamports_of_sol(&matches, "single"), Some(1500000000));
+        assert_eq!(lamports_of_sol(&matches, "multiple"), None);
         let matches = app()
             .clone()
-            .get_matches_from(vec!["test", "--single", "1.5", "--unit", "SOL"]);
-        assert_eq!(amount_of(&matches, "single", "unit"), Some(1500000000));
-        let matches = app()
-            .clone()
-            .get_matches_from(vec!["test", "--single", "1.5", "--unit", "lamports"]);
-        assert_eq!(amount_of(&matches, "single", "unit"), None);
+            .get_matches_from(vec!["test", "--single", "0.03"]);
+        assert_eq!(lamports_of_sol(&matches, "single"), Some(30000000));
     }
 
     #[test]

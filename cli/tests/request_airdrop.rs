@@ -19,7 +19,6 @@ fn test_cli_request_airdrop() {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
         lamports: 50,
-        use_lamports_unit: true,
     };
 
     let sig_response = process_command(&bob_config);

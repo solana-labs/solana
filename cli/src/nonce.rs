@@ -1,7 +1,7 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys,
-    log_instruction_custom_error, required_lamports_from, CliCommand, CliCommandInfo, CliConfig,
-    CliError, ProcessResult, SigningAuthority,
+    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    SigningAuthority,
 };
 use crate::offline::BLOCKHASH_ARG;
 use clap::{App, Arg, ArgMatches, SubCommand};
@@ -121,15 +121,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
-                        .help("The amount to load the nonce account with (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(3)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request"),
+                        .help("The amount to load the nonce account with, in SOL"),
                 )
                 .arg(
                     Arg::with_name(NONCE_AUTHORITY_ARG.name)
@@ -216,15 +208,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
-                        .help("The amount to withdraw from the nonce account (default unit SOL)"),
-                )
-                .arg(
-                    Arg::with_name("unit")
-                        .index(4)
-                        .value_name("UNIT")
-                        .takes_value(true)
-                        .possible_values(&["SOL", "lamports"])
-                        .help("Specify unit to use for request"),
+                        .help("The amount to withdraw from the nonce account, in SOL"),
                 )
                 .arg(nonce_authority_arg()),
         )
@@ -250,7 +234,7 @@ pub fn parse_authorize_nonce_account(matches: &ArgMatches<'_>) -> Result<CliComm
 pub fn parse_nonce_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let nonce_account = keypair_of(matches, "nonce_account_keypair").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
-    let lamports = required_lamports_from(matches, "amount", "unit")?;
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let nonce_authority = pubkey_of(matches, NONCE_AUTHORITY_ARG.name);
 
     Ok(CliCommandInfo {
@@ -305,7 +289,7 @@ pub fn parse_withdraw_from_nonce_account(
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
-    let lamports = required_lamports_from(matches, "amount", "unit")?;
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let nonce_authority =
         SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, None)?;
 
@@ -689,7 +673,6 @@ mod tests {
             "create-nonce-account",
             &keypair_file,
             "50",
-            "lamports",
         ]);
         assert_eq!(
             parse_command(&test_create_nonce_account).unwrap(),
@@ -698,7 +681,7 @@ mod tests {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().into(),
                     seed: None,
                     nonce_authority: None,
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                 },
                 require_keypair: true
             }
@@ -710,7 +693,6 @@ mod tests {
             "create-nonce-account",
             &keypair_file,
             "50",
-            "lamports",
             "--nonce-authority",
             &authority_keypair_file,
         ]);
@@ -723,7 +705,7 @@ mod tests {
                     nonce_authority: Some(
                         read_keypair_file(&authority_keypair_file).unwrap().pubkey()
                     ),
-                    lamports: 50,
+                    lamports: 50_000_000_000,
                 },
                 require_keypair: true
             }
@@ -806,7 +788,6 @@ mod tests {
             &keypair_file,
             &nonce_account_string,
             "42",
-            "lamports",
         ]);
         assert_eq!(
             parse_command(&test_withdraw_from_nonce_account).unwrap(),
@@ -815,7 +796,7 @@ mod tests {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
                     nonce_authority: None,
                     destination_account_pubkey: nonce_account_pubkey,
-                    lamports: 42
+                    lamports: 42_000_000_000
                 },
                 require_keypair: true
             }
@@ -827,7 +808,6 @@ mod tests {
             &keypair_file,
             &nonce_account_string,
             "42",
-            "SOL",
         ]);
         assert_eq!(
             parse_command(&test_withdraw_from_nonce_account).unwrap(),
@@ -849,7 +829,6 @@ mod tests {
             &keypair_file,
             &nonce_account_string,
             "42",
-            "lamports",
             "--nonce-authority",
             &authority_keypair_file,
         ]);
@@ -862,7 +841,7 @@ mod tests {
                         read_keypair_file(&authority_keypair_file).unwrap().into()
                     ),
                     destination_account_pubkey: nonce_account_pubkey,
-                    lamports: 42
+                    lamports: 42_000_000_000
                 },
                 require_keypair: true
             }
