@@ -1,9 +1,8 @@
 use crate::{
     cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys, fee_payer_arg,
-        log_instruction_custom_error, nonce_authority_arg, replace_signatures, return_signers,
-        CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, SigningAuthority,
-        FEE_PAYER_ARG,
+        log_instruction_custom_error, nonce_authority_arg, return_signers, signer_from_matches,
+        CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, FEE_PAYER_ARG,
     },
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::*,
@@ -12,7 +11,6 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
 use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{
     account_utils::StateMut,
     pubkey::Pubkey,
@@ -426,18 +424,17 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority =
-        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
     let fee_payer =
-        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
-    let from = SigningAuthority::new_from_matches(&matches, "from", signers.as_deref())?;
+        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let from = signer_from_matches("from", matches)?;
     let stake_account =
-        SigningAuthority::new_from_matches(&matches, "stake_account", signers.as_deref())
-            .unwrap()
+        signer_from_matches("stake_account", matches)?
             .unwrap();
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
-            stake_account,
+            stake_account: stake_account.into(),
             seed,
             staker,
             withdrawer,
@@ -469,11 +466,11 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority =
-        SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
     let nonce_authority =
-        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
     let fee_payer =
-        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
+        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DelegateStake {
@@ -505,13 +502,13 @@ pub fn parse_stake_authorize(
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
     let authority =
-        SigningAuthority::new_from_matches(&matches, authority_flag, signers.as_deref())?;
+        signer_from_matches(authority_flag, matches)?;
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority =
-        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
     let fee_payer =
-        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
+        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeAuthorize {
@@ -532,7 +529,8 @@ pub fn parse_stake_authorize(
 
 pub fn parse_split_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let split_stake_account = keypair_of(matches, "split_stake_account").unwrap();
+    let split_stake_account =
+        signer_from_matches("split_stake_account", matches)?.unwrap();
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
 
@@ -542,11 +540,11 @@ pub fn parse_split_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cli
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority =
-        SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
     let nonce_authority =
-        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
     let fee_payer =
-        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
+        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::SplitStake {
@@ -574,11 +572,11 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority =
-        SigningAuthority::new_from_matches(&matches, STAKE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
     let nonce_authority =
-        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
     let fee_payer =
-        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
+        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
@@ -605,14 +603,10 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority =
-        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
-    let withdraw_authority = SigningAuthority::new_from_matches(
-        &matches,
-        WITHDRAW_AUTHORITY_ARG.name,
-        signers.as_deref(),
-    )?;
+        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let withdraw_authority = signer_from_matches(WITHDRAW_AUTHORITY_ARG.name, matches)?;
     let fee_payer =
-        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
+        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawStake {
@@ -643,11 +637,11 @@ pub fn parse_stake_set_lockup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
 
-    let custodian = SigningAuthority::new_from_matches(&matches, "custodian", signers.as_deref())?;
+    let custodian = signer_from_matches("custodian", matches)?;
     let nonce_authority =
-        SigningAuthority::new_from_matches(&matches, NONCE_AUTHORITY_ARG.name, signers.as_deref())?;
+        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
     let fee_payer =
-        SigningAuthority::new_from_matches(&matches, FEE_PAYER_ARG.name, signers.as_deref())?;
+        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeSetLockup {
@@ -693,7 +687,7 @@ pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandIn
 pub fn process_create_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    stake_account: &SigningAuthority,
+    stake_account: &dyn KeypairUtil,
     seed: &Option<String>,
     staker: &Option<Pubkey>,
     withdrawer: &Option<Pubkey>,
@@ -703,9 +697,9 @@ pub fn process_create_stake_account(
     signers: Option<&Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
-    nonce_authority: Option<&SigningAuthority>,
-    fee_payer: Option<&SigningAuthority>,
-    from: Option<&SigningAuthority>,
+    nonce_authority: Option<&dyn KeypairUtil>,
+    fee_payer: Option<&dyn KeypairUtil>,
+    from: Option<&dyn KeypairUtil>,
 ) -> ProcessResult {
     // Offline derived address creation currently is not possible
     // https://github.com/solana-labs/solana/pull/8252
@@ -717,17 +711,14 @@ pub fn process_create_stake_account(
         .into());
     }
 
-    let (stake_account_pubkey, stake_account) = (stake_account.pubkey(), stake_account.keypair());
     let stake_account_address = if let Some(seed) = seed {
-        create_address_with_seed(&stake_account_pubkey, &seed, &solana_stake_program::id())?
+        create_address_with_seed(&stake_account.pubkey(), &seed, &solana_stake_program::id())?
     } else {
-        stake_account_pubkey
+        stake_account.pubkey()
     };
-    let (from_pubkey, from) = from
-        .map(|f| (f.pubkey(), f.keypair()))
-        .unwrap_or((config.keypair.pubkey(), &config.keypair));
+    let from = from.unwrap_or_else(|| config.keypair.as_ref());
     check_unique_pubkeys(
-        (&from_pubkey, "from keypair".to_string()),
+        (&from.pubkey(), "from keypair".to_string()),
         (&stake_account_address, "stake_account".to_string()),
     )?;
 
@@ -757,8 +748,8 @@ pub fn process_create_stake_account(
     }
 
     let authorized = Authorized {
-        staker: staker.unwrap_or(from_pubkey),
-        withdrawer: withdrawer.unwrap_or(from_pubkey),
+        staker: staker.unwrap_or(from.pubkey()),
+        withdrawer: withdrawer.unwrap_or(from.pubkey()),
     };
 
     let ixs = if let Some(seed) = seed {
@@ -783,15 +774,13 @@ pub fn process_create_stake_account(
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
 
-    let fee_payer = fee_payer.map(|fp| fp.keypair()).unwrap_or(&config.keypair);
-    let mut tx_signers = if stake_account_pubkey != from_pubkey {
+    let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
+    let mut tx_signers = if stake_account.pubkey() != from.pubkey() {
         vec![fee_payer, from, stake_account] // both must sign if `from` and `to` differ
     } else {
         vec![fee_payer, from] // when stake_account == config.keypair and there's a seed, we only need one signature
     };
-    let (nonce_authority_pubkey, nonce_authority) = nonce_authority
-        .map(|na| (na.pubkey(), na.keypair()))
-        .unwrap_or((config.keypair.pubkey(), &config.keypair));
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
 
     let mut tx = if let Some(nonce_account) = &nonce_account {
         tx_signers.push(nonce_authority);
@@ -819,7 +808,7 @@ pub fn process_create_stake_account(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -839,19 +828,19 @@ pub fn process_stake_authorize(
     stake_account_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
-    authority: Option<&SigningAuthority>,
+    authority: Option<&dyn KeypairUtil>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&SigningAuthority>,
-    fee_payer: Option<&SigningAuthority>,
+    nonce_authority: Option<&dyn KeypairUtil>,
+    fee_payer: Option<&dyn KeypairUtil>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
         (authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
-    let authority = authority.map(|a| a.keypair()).unwrap_or(&config.keypair);
+    let authority = authority.unwrap_or_else(|| config.keypair.as_ref());
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
     let ixs = vec![stake_instruction::authorize(
@@ -861,10 +850,8 @@ pub fn process_stake_authorize(
         stake_authorize,      // stake or withdraw
     )];
 
-    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
-        .map(|a| (a.keypair(), a.pubkey()))
-        .unwrap_or((&config.keypair, config.keypair.pubkey()));
-    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
+    let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
@@ -890,7 +877,7 @@ pub fn process_stake_authorize(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -908,27 +895,23 @@ pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    stake_authority: Option<&SigningAuthority>,
+    stake_authority: Option<&dyn KeypairUtil>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&SigningAuthority>,
-    fee_payer: Option<&SigningAuthority>,
+    nonce_authority: Option<&dyn KeypairUtil>,
+    fee_payer: Option<&dyn KeypairUtil>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
-    let stake_authority = stake_authority
-        .map(|a| a.keypair())
-        .unwrap_or(&config.keypair);
+    let stake_authority = stake_authority.unwrap_or_else(|| config.keypair.as_ref());
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
         &stake_authority.pubkey(),
     )];
-    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
-        .map(|a| (a.keypair(), a.pubkey()))
-        .unwrap_or((&config.keypair, config.keypair.pubkey()));
-    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
+    let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
@@ -954,7 +937,7 @@ pub fn process_deactivate_stake_account(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -974,19 +957,17 @@ pub fn process_withdraw_stake(
     stake_account_pubkey: &Pubkey,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
-    withdraw_authority: Option<&SigningAuthority>,
+    withdraw_authority: Option<&dyn KeypairUtil>,
     sign_only: bool,
     signers: Option<&Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
-    nonce_authority: Option<&SigningAuthority>,
-    fee_payer: Option<&SigningAuthority>,
+    nonce_authority: Option<&dyn KeypairUtil>,
+    fee_payer: Option<&dyn KeypairUtil>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
-    let withdraw_authority = withdraw_authority
-        .map(|a| a.keypair())
-        .unwrap_or(&config.keypair);
+    let withdraw_authority = withdraw_authority.unwrap_or_else(|| config.keypair.as_ref());
 
     let ixs = vec![stake_instruction::withdraw(
         stake_account_pubkey,
@@ -995,10 +976,8 @@ pub fn process_withdraw_stake(
         lamports,
     )];
 
-    let fee_payer = fee_payer.map(|fp| fp.keypair()).unwrap_or(&config.keypair);
-    let (nonce_authority_pubkey, nonce_authority) = nonce_authority
-        .map(|na| (na.pubkey(), na.keypair()))
-        .unwrap_or((config.keypair.pubkey(), &config.keypair));
+    let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
@@ -1024,7 +1003,7 @@ pub fn process_withdraw_stake(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -1042,29 +1021,27 @@ pub fn process_split_stake(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    stake_authority: Option<&SigningAuthority>,
+    stake_authority: Option<&dyn KeypairUtil>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&SigningAuthority>,
-    split_stake_account: &Keypair,
+    nonce_authority: Option<&dyn KeypairUtil>,
+    split_stake_account: &dyn KeypairUtil,
     split_stake_account_seed: &Option<String>,
     lamports: u64,
-    fee_payer: Option<&SigningAuthority>,
+    fee_payer: Option<&dyn KeypairUtil>,
 ) -> ProcessResult {
-    let (fee_payer_pubkey, fee_payer) = fee_payer
-        .map(|f| (f.pubkey(), f.keypair()))
-        .unwrap_or((config.keypair.pubkey(), &config.keypair));
+    let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     check_unique_pubkeys(
-        (&fee_payer_pubkey, "fee-payer keypair".to_string()),
+        (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
         (
             &split_stake_account.pubkey(),
             "split_stake_account".to_string(),
         ),
     )?;
     check_unique_pubkeys(
-        (&fee_payer_pubkey, "fee-payer keypair".to_string()),
+        (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
         (&stake_account_pubkey, "stake_account".to_string()),
     )?;
     check_unique_pubkeys(
@@ -1075,9 +1052,7 @@ pub fn process_split_stake(
         ),
     )?;
 
-    let stake_authority = stake_authority
-        .map(|a| a.keypair())
-        .unwrap_or(&config.keypair);
+    let stake_authority = stake_authority.unwrap_or_else(|| config.keypair.as_ref());
 
     let split_stake_account_address = if let Some(seed) = split_stake_account_seed {
         create_address_with_seed(
@@ -1138,9 +1113,7 @@ pub fn process_split_stake(
         )
     };
 
-    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
-        .map(|a| (a.keypair(), a.pubkey()))
-        .unwrap_or((&config.keypair, config.keypair.pubkey()));
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
 
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
@@ -1172,7 +1145,7 @@ pub fn process_split_stake(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -1191,17 +1164,17 @@ pub fn process_stake_set_lockup(
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     lockup: &mut Lockup,
-    custodian: Option<&SigningAuthority>,
+    custodian: Option<&dyn KeypairUtil>,
     sign_only: bool,
     signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&SigningAuthority>,
-    fee_payer: Option<&SigningAuthority>,
+    nonce_authority: Option<&dyn KeypairUtil>,
+    fee_payer: Option<&dyn KeypairUtil>,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
-    let custodian = custodian.map(|a| a.keypair()).unwrap_or(&config.keypair);
+    let custodian = custodian.unwrap_or_else(|| config.keypair.as_ref());
     // If new custodian is not explicitly set, default to current custodian
     if lockup.custodian == Pubkey::default() {
         lockup.custodian = custodian.pubkey();
@@ -1211,10 +1184,8 @@ pub fn process_stake_set_lockup(
         lockup,
         &custodian.pubkey(),
     )];
-    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
-        .map(|a| (a.keypair(), a.pubkey()))
-        .unwrap_or((&config.keypair, config.keypair.pubkey()));
-    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
+    let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
@@ -1240,7 +1211,7 @@ pub fn process_stake_set_lockup(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -1324,7 +1295,7 @@ pub fn process_show_stake_account(
     if stake_account.owner != solana_stake_program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a stake account",
-            stake_account_pubkey
+            stake_account_pubkey,
         ))
         .into());
     }
@@ -1380,22 +1351,19 @@ pub fn process_delegate_stake(
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
-    stake_authority: Option<&SigningAuthority>,
+    stake_authority: Option<&dyn KeypairUtil>,
     force: bool,
     sign_only: bool,
-    signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
-    nonce_authority: Option<&SigningAuthority>,
-    fee_payer: Option<&SigningAuthority>,
+    nonce_authority: Option<&dyn KeypairUtil>,
+    fee_payer: Option<&dyn KeypairUtil>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.keypair.pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
-    let stake_authority = stake_authority
-        .map(|a| a.keypair())
-        .unwrap_or(&config.keypair);
+    let stake_authority = stake_authority.unwrap_or_else(|| config.keypair.as_ref());
 
     if !sign_only {
         // Sanity check the vote account to ensure it is attached to a validator that has recently
@@ -1450,10 +1418,8 @@ pub fn process_delegate_stake(
         &stake_authority.pubkey(),
         vote_account_pubkey,
     )];
-    let (nonce_authority, nonce_authority_pubkey) = nonce_authority
-        .map(|a| (a.keypair(), a.pubkey()))
-        .unwrap_or((&config.keypair, config.keypair.pubkey()));
-    let fee_payer = fee_payer.map(|f| f.keypair()).unwrap_or(&config.keypair);
+    let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
+    let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
@@ -1479,7 +1445,7 @@ pub fn process_delegate_stake(
     } else {
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority_pubkey, &recent_blockhash)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
         check_account_for_fee(
             rpc_client,
@@ -1499,7 +1465,7 @@ mod tests {
     use solana_sdk::{
         fee_calculator::FeeCalculator,
         hash::Hash,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil},
+        signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil, Presigner},
     };
     use tempfile::NamedTempFile;
 
@@ -1603,8 +1569,9 @@ mod tests {
                 require_keypair: true
             }
         );
-        // Test Authorize Subcommand w/ signer
+        // Test Authorize Subcommand w/ offline feepayer
         let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
         let sig = keypair.sign_message(&[0u8]);
         let signer = format!("{}={}", keypair.pubkey(), sig);
         let test_authorize = test_commands.clone().get_matches_from(vec![
@@ -1616,6 +1583,8 @@ mod tests {
             &blockhash_string,
             "--signer",
             &signer,
+            "--fee-payer",
+            &pubkey.to_string(),
         ]);
         assert_eq!(
             parse_command(&test_authorize).unwrap(),
@@ -1630,15 +1599,17 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
-                    fee_payer: None,
+                    fee_payer: Some(Presigner::new(&pubkey, &sig).into()),
                 },
                 require_keypair: true
             }
         );
-        // Test Authorize Subcommand w/ signers
+        // Test Authorize Subcommand w/ offline fee payer and nonce authority
         let keypair2 = Keypair::new();
+        let pubkey2 = keypair2.pubkey();
         let sig2 = keypair.sign_message(&[0u8]);
         let signer2 = format!("{}={}", keypair2.pubkey(), sig2);
+        let nonce_account = Pubkey::new(&[1u8; 32]);
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             &subcommand,
@@ -1650,6 +1621,12 @@ mod tests {
             &signer,
             "--signer",
             &signer2,
+            "--fee-payer",
+            &pubkey.to_string(),
+            "--nonce",
+            &nonce_account.to_string(),
+            "--nonce-authority",
+            &pubkey2.to_string(),
         ]);
         assert_eq!(
             parse_command(&test_authorize).unwrap(),
@@ -1663,8 +1640,8 @@ mod tests {
                     signers: Some(vec![(keypair.pubkey(), sig), (keypair2.pubkey(), sig2),]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: Some(Presigner::new(&pubkey2, &sig2).into()),
+                    fee_payer: Some(Presigner::new(&pubkey, &sig).into()),
                 },
                 require_keypair: true
             }
@@ -1792,7 +1769,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
-                    fee_payer: Some(fee_payer_pubkey.into()),
+                    fee_payer: Some(Presigner::new(&fee_payer_pubkey, &sig).into()),
                 },
                 require_keypair: true
             }
@@ -1946,9 +1923,9 @@ mod tests {
                     signers: Some(vec![(offline_pubkey, offline_sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: Some(offline_pubkey.into()),
-                    fee_payer: Some(offline_pubkey.into()),
-                    from: Some(offline_pubkey.into()),
+                    nonce_authority: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
+                    fee_payer: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
+                    from: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
                 },
                 require_keypair: false,
             }
@@ -2101,7 +2078,7 @@ mod tests {
             }
         );
 
-        // Test Delegate Subcommand w/ signer
+        // Test Delegate Subcommand w/ absent fee payer
         let key1 = Pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
         let signer1 = format!("{}={}", key1, sig1);
@@ -2114,6 +2091,8 @@ mod tests {
             &blockhash_string,
             "--signer",
             &signer1,
+            "--fee-payer",
+            &key1.to_string(),
         ]);
         assert_eq!(
             parse_command(&test_delegate_stake).unwrap(),
@@ -2128,13 +2107,13 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
-                    fee_payer: None,
+                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
                 },
                 require_keypair: false
             }
         );
 
-        // Test Delegate Subcommand w/ signers
+        // Test Delegate Subcommand w/ absent fee payer and absent nonce authority
         let key2 = Pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
         let signer2 = format!("{}={}", key2, sig2);
@@ -2149,6 +2128,12 @@ mod tests {
             &signer1,
             "--signer",
             &signer2,
+            "--fee-payer",
+            &key1.to_string(),
+            "--nonce",
+            &nonce_account.to_string(),
+            "--nonce_auhtority",
+            &key2.to_string(),
         ]);
         assert_eq!(
             parse_command(&test_delegate_stake).unwrap(),
@@ -2159,17 +2144,16 @@ mod tests {
                     stake_authority: None,
                     force: false,
                     sign_only: false,
-                    signers: Some(vec![(key1, sig1), (key2, sig2)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-                    nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_account: Some(nonce_account),
+                    nonce_authority: Some(Presigner::new(&key2, &sig2).into()),
+                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
                 },
                 require_keypair: false
             }
         );
 
-        // Test Delegate Subcommand w/ fee-payer
+        // Test Delegate Subcommand w/ present fee-payer
         let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
         let fee_payer_keypair = Keypair::new();
         write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
@@ -2335,8 +2319,8 @@ mod tests {
                     signers: Some(vec![(offline_pubkey, offline_sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: Some(offline_pubkey.into()),
-                    fee_payer: Some(offline_pubkey.into()),
+                    nonce_authority: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
+                    fee_payer: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
                 },
                 require_keypair: false,
             }
@@ -2446,7 +2430,7 @@ mod tests {
             }
         );
 
-        // Test Deactivate Subcommand w/ signers
+        // Test Deactivate Subcommand w/ absent fee payer
         let key1 = Pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
         let signer1 = format!("{}={}", key1, sig1);
@@ -2458,6 +2442,8 @@ mod tests {
             &blockhash_string,
             "--signer",
             &signer1,
+            "--fee-payer",
+            &key1.to_string(),
         ]);
         assert_eq!(
             parse_command(&test_deactivate_stake).unwrap(),
@@ -2470,13 +2456,13 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
-                    fee_payer: None,
+                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
                 },
                 require_keypair: false
             }
         );
 
-        // Test Deactivate Subcommand w/ signers
+        // Test Deactivate Subcommand w/ absent fee payer and nonce authority
         let key2 = Pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
         let signer2 = format!("{}={}", key2, sig2);
@@ -2490,6 +2476,12 @@ mod tests {
             &signer1,
             "--signer",
             &signer2,
+            "--fee-payer",
+            &key1.to_string(),
+            "--nonce",
+            &nonce_account.to_string(),
+            "--nonce-account",
+            &key2.to_string(),
         ]);
         assert_eq!(
             parse_command(&test_deactivate_stake).unwrap(),
@@ -2501,8 +2493,8 @@ mod tests {
                     signers: Some(vec![(key1, sig1), (key2, sig2)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: Some(Presigner::new(&key2, &sig2).into()),
+                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
                 },
                 require_keypair: false
             }
@@ -2643,7 +2635,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::SplitStake {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
-                    stake_authority: Some(stake_auth_pubkey.into()),
+                    stake_authority: Some(Presigner::new(&stake_auth_pubkey, &stake_sig).into()),
                     sign_only: false,
                     signers: Some(vec![
                         (nonce_auth_pubkey, nonce_sig),
@@ -2651,13 +2643,13 @@ mod tests {
                     ]),
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account.into()),
-                    nonce_authority: Some(nonce_auth_pubkey.into()),
+                    nonce_authority: Some(Presigner::new(&nonce_auth_pubkey, &nonce_sig).into()),
                     split_stake_account: read_keypair_file(&split_stake_account_keypair_file)
                         .unwrap()
                         .into(),
                     seed: None,
                     lamports: 50_000_000_000,
-                    fee_payer: Some(nonce_auth_pubkey.into()),
+                    fee_payer: Some(Presigner::new(&nonce_auth_pubkey, &nonce_sig).into()),
                 },
                 require_keypair: false,
             }
