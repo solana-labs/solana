@@ -6,6 +6,7 @@
 
 set -e
 cd "$(dirname "$0")"
+SOLANA_ROOT="$(cd ../..; pwd)"
 
 logDir="$PWD"/logs
 ledgerDir="$PWD"/config
@@ -29,8 +30,7 @@ solanaInstallGlobalOpts=(
 bootstrapInstall() {
   declare v=$1
   if [[ ! -h $solanaInstallDataDir/active_release ]]; then
-    curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v"$v"/install/solana-install-init.sh \
-        | sh -s - "$v" "${solanaInstallGlobalOpts[@]}"
+    sh "$SOLANA_ROOT"/install/solana-install-init.sh "$v" "${solanaInstallGlobalOpts[@]}"
   fi
   export PATH="$solanaInstallDataDir/active_release/bin/:$PATH"
 }
