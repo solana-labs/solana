@@ -139,6 +139,18 @@ pub trait KeypairUtil {
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>>;
 }
 
+impl PartialEq for dyn KeypairUtil {
+    fn eq(&self, other: &dyn KeypairUtil) -> bool {
+        self.pubkey() == other.pubkey()
+    }
+}
+
+impl std::fmt::Debug for Box<dyn KeypairUtil> {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "KeypairUtil: {:?}", self.pubkey())
+    }
+}
+
 impl KeypairUtil for Keypair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
