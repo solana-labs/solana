@@ -348,7 +348,7 @@ pub fn process_authorize_nonce_account(
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, nonce_authority],
+        &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
     );
     check_account_for_fee(
@@ -357,8 +357,8 @@ pub fn process_authorize_nonce_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, nonce_authority]);
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref(), nonce_authority]);
     log_instruction_custom_error::<NonceError>(result)
 }
 
@@ -428,9 +428,9 @@ pub fn process_create_nonce_account(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let signers = if nonce_account_pubkey != config.keypair.pubkey() {
-        vec![&config.keypair, nonce_account] // both must sign if `from` and `to` differ
+        vec![config.keypair.as_ref(), nonce_account] // both must sign if `from` and `to` differ
     } else {
-        vec![&config.keypair] // when stake_account == config.keypair and there's a seed, we only need one signature
+        vec![config.keypair.as_ref()] // when stake_account == config.keypair and there's a seed, we only need one signature
     };
 
     let mut tx = Transaction::new_signed_with_payer(
@@ -495,7 +495,7 @@ pub fn process_new_nonce(
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, nonce_authority],
+        &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
     );
     check_account_for_fee(
@@ -504,8 +504,8 @@ pub fn process_new_nonce(
         &fee_calculator,
         &tx.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, nonce_authority]);
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref(), nonce_authority]);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -580,7 +580,7 @@ pub fn process_withdraw_from_nonce_account(
     let mut tx = Transaction::new_signed_with_payer(
         vec![ix],
         Some(&config.keypair.pubkey()),
-        &[&config.keypair, nonce_authority],
+        &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
     );
     check_account_for_fee(
@@ -589,8 +589,8 @@ pub fn process_withdraw_from_nonce_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, nonce_authority]);
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref(), nonce_authority]);
     log_instruction_custom_error::<NonceError>(result)
 }
 
