@@ -2541,64 +2541,6 @@ mod tests {
             }
         );
 
-        // Test Pay Subcommand w/ signer
-        let key1 = Pubkey::new_rand();
-        let sig1 = Keypair::new().sign_message(&[0u8]);
-        let signer1 = format!("{}={}", key1, sig1);
-        let test_pay = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            &pubkey_string,
-            "50",
-            "--blockhash",
-            &blockhash_string,
-            "--signer",
-            &signer1,
-        ]);
-        assert_eq!(
-            parse_command(&test_pay).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Pay(PayCommand {
-                    lamports: 50_000_000_000,
-                    to: pubkey,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-                    signers: Some(vec![(key1, sig1)]),
-                    ..PayCommand::default()
-                }),
-                require_keypair: true
-            }
-        );
-
-        // Test Pay Subcommand w/ signers
-        let key2 = Pubkey::new_rand();
-        let sig2 = Keypair::new().sign_message(&[1u8]);
-        let signer2 = format!("{}={}", key2, sig2);
-        let test_pay = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            &pubkey_string,
-            "50",
-            "--blockhash",
-            &blockhash_string,
-            "--signer",
-            &signer1,
-            "--signer",
-            &signer2,
-        ]);
-        assert_eq!(
-            parse_command(&test_pay).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Pay(PayCommand {
-                    lamports: 50_000_000_000,
-                    to: pubkey,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-                    signers: Some(vec![(key1, sig1), (key2, sig2)]),
-                    ..PayCommand::default()
-                }),
-                require_keypair: true
-            }
-        );
-
         // Test Pay Subcommand w/ Blockhash
         let test_pay = test_commands.clone().get_matches_from(vec![
             "test",
