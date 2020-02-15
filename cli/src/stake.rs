@@ -441,7 +441,6 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
             },
             lamports,
             sign_only,
-            signers,
             blockhash_query,
             nonce_account,
             nonce_authority,
@@ -472,7 +471,6 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
             stake_authority,
             force,
             sign_only,
-            signers,
             blockhash_query,
             nonce_account,
             nonce_authority,
@@ -493,7 +491,6 @@ pub fn parse_stake_authorize(
         StakeAuthorize::Withdrawer => WITHDRAW_AUTHORITY_ARG.name,
     };
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-    let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
     let authority = signer_of(authority_flag, matches)?;
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
@@ -507,7 +504,6 @@ pub fn parse_stake_authorize(
             stake_authorize,
             authority,
             sign_only,
-            signers,
             blockhash_query,
             nonce_account,
             nonce_authority,
@@ -537,7 +533,6 @@ pub fn parse_split_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cli
             stake_account_pubkey,
             stake_authority,
             sign_only,
-            signers,
             blockhash_query,
             nonce_account,
             nonce_authority,
@@ -566,7 +561,6 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
             stake_account_pubkey,
             stake_authority,
             sign_only,
-            signers,
             blockhash_query,
             nonce_account,
             nonce_authority,
@@ -596,7 +590,6 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
             lamports,
             withdraw_authority,
             sign_only,
-            signers,
             blockhash_query,
             nonce_account,
             nonce_authority,
@@ -632,7 +625,6 @@ pub fn parse_stake_set_lockup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo
             },
             custodian,
             sign_only,
-            signers,
             blockhash_query,
             nonce_account,
             nonce_authority,
@@ -673,7 +665,6 @@ pub fn process_create_stake_account(
     lockup: &Lockup,
     lamports: u64,
     sign_only: bool,
-    signers: Option<&Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: Option<&dyn Signer>,
@@ -779,9 +770,6 @@ pub fn process_create_stake_account(
             recent_blockhash,
         )
     };
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
     if sign_only {
         return_signers(&tx)
     } else {
@@ -809,7 +797,6 @@ pub fn process_stake_authorize(
     stake_authorize: StakeAuthorize,
     authority: Option<&dyn Signer>,
     sign_only: bool,
-    signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&dyn Signer>,
@@ -848,9 +835,6 @@ pub fn process_stake_authorize(
             recent_blockhash,
         )
     };
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
     if sign_only {
         return_signers(&tx)
     } else {
@@ -876,7 +860,6 @@ pub fn process_deactivate_stake_account(
     stake_account_pubkey: &Pubkey,
     stake_authority: Option<&dyn Signer>,
     sign_only: bool,
-    signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&dyn Signer>,
@@ -908,9 +891,6 @@ pub fn process_deactivate_stake_account(
             recent_blockhash,
         )
     };
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
     if sign_only {
         return_signers(&tx)
     } else {
@@ -938,7 +918,6 @@ pub fn process_withdraw_stake(
     lamports: u64,
     withdraw_authority: Option<&dyn Signer>,
     sign_only: bool,
-    signers: Option<&Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: Option<&dyn Signer>,
@@ -974,9 +953,6 @@ pub fn process_withdraw_stake(
             recent_blockhash,
         )
     };
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
     if sign_only {
         return_signers(&tx)
     } else {
@@ -1002,7 +978,6 @@ pub fn process_split_stake(
     stake_account_pubkey: &Pubkey,
     stake_authority: Option<&dyn Signer>,
     sign_only: bool,
-    signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&dyn Signer>,
@@ -1116,9 +1091,6 @@ pub fn process_split_stake(
             recent_blockhash,
         )
     };
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
     if sign_only {
         return_signers(&tx)
     } else {
@@ -1145,7 +1117,6 @@ pub fn process_stake_set_lockup(
     lockup: &mut Lockup,
     custodian: Option<&dyn Signer>,
     sign_only: bool,
-    signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&dyn Signer>,
@@ -1182,9 +1153,6 @@ pub fn process_stake_set_lockup(
             recent_blockhash,
         )
     };
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
     if sign_only {
         return_signers(&tx)
     } else {
@@ -1416,9 +1384,6 @@ pub fn process_delegate_stake(
             recent_blockhash,
         )
     };
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
     if sign_only {
         return_signers(&tx)
     } else {
@@ -1482,7 +1447,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1509,7 +1473,6 @@ mod tests {
                     stake_authorize,
                     authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1539,7 +1502,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: true,
-                    signers: None,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1574,7 +1536,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: false,
-                    signers: Some(vec![(keypair.pubkey(), sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1616,7 +1577,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: false,
-                    signers: Some(vec![(keypair.pubkey(), sig), (keypair2.pubkey(), sig2),]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: Some(Presigner::new(&pubkey2, &sig2).into()),
@@ -1643,7 +1603,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1679,7 +1638,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account_pubkey),
                     nonce_authority: Some(nonce_authority_keypair.into()),
@@ -1711,7 +1669,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -1744,7 +1701,6 @@ mod tests {
                     stake_authorize,
                     authority: None,
                     sign_only: false,
-                    signers: Some(vec![(fee_payer_pubkey, sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1813,7 +1769,6 @@ mod tests {
                     },
                     lamports: 50_000_000_000,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -1848,7 +1803,6 @@ mod tests {
                     lockup: Lockup::default(),
                     lamports: 50_000_000_000,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -1899,7 +1853,6 @@ mod tests {
                     lockup: Lockup::default(),
                     lamports: 50_000_000_000,
                     sign_only: false,
-                    signers: Some(vec![(offline_pubkey, offline_sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account),
                     nonce_authority: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
@@ -1928,7 +1881,6 @@ mod tests {
                     stake_authority: None,
                     force: false,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1962,7 +1914,6 @@ mod tests {
                     ),
                     force: false,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -1989,7 +1940,6 @@ mod tests {
                     stake_authority: None,
                     force: true,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2019,7 +1969,6 @@ mod tests {
                     stake_authority: None,
                     force: false,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2047,7 +1996,6 @@ mod tests {
                     stake_authority: None,
                     force: false,
                     sign_only: true,
-                    signers: None,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2082,7 +2030,6 @@ mod tests {
                     stake_authority: None,
                     force: false,
                     sign_only: false,
-                    signers: Some(vec![(key1, sig1)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2155,7 +2102,6 @@ mod tests {
                     stake_authority: None,
                     force: false,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -2217,7 +2163,6 @@ mod tests {
                     lamports: 42_000_000_000,
                     withdraw_authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -2251,7 +2196,6 @@ mod tests {
                             .into()
                     ),
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -2295,7 +2239,6 @@ mod tests {
                             .into()
                     ),
                     sign_only: false,
-                    signers: Some(vec![(offline_pubkey, offline_sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account),
                     nonce_authority: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
@@ -2318,7 +2261,6 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2347,7 +2289,6 @@ mod tests {
                             .into()
                     ),
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2374,7 +2315,6 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2399,7 +2339,6 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: None,
                     sign_only: true,
-                    signers: None,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2431,7 +2370,6 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: None,
                     sign_only: false,
-                    signers: Some(vec![(key1, sig1)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2469,7 +2407,6 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: None,
                     sign_only: false,
-                    signers: Some(vec![(key1, sig1), (key2, sig2)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: Some(Presigner::new(&key2, &sig2).into()),
@@ -2494,7 +2431,6 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -2557,7 +2493,6 @@ mod tests {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
                     stake_authority: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
@@ -2616,10 +2551,6 @@ mod tests {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
                     stake_authority: Some(Presigner::new(&stake_auth_pubkey, &stake_sig).into()),
                     sign_only: false,
-                    signers: Some(vec![
-                        (nonce_auth_pubkey, nonce_sig),
-                        (stake_auth_pubkey, stake_sig)
-                    ]),
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account.into()),
                     nonce_authority: Some(Presigner::new(&nonce_auth_pubkey, &nonce_sig).into()),

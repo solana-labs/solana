@@ -105,7 +105,6 @@ pub struct PayCommand {
     pub witnesses: Option<Vec<Pubkey>>,
     pub cancelable: bool,
     pub sign_only: bool,
-    pub signers: Option<Vec<(Pubkey, Signature)>>,
     pub blockhash_query: BlockhashQuery,
     pub nonce_account: Option<Pubkey>,
     pub nonce_authority: Option<Box<dyn Signer>>,
@@ -199,7 +198,6 @@ pub enum CliCommand {
         lockup: Lockup,
         lamports: u64,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -210,7 +208,6 @@ pub enum CliCommand {
         stake_account_pubkey: Pubkey,
         stake_authority: Option<Box<dyn Signer>>,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -222,7 +219,6 @@ pub enum CliCommand {
         stake_authority: Option<Box<dyn Signer>>,
         force: bool,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -232,7 +228,6 @@ pub enum CliCommand {
         stake_account_pubkey: Pubkey,
         stake_authority: Option<Box<dyn Signer>>,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -254,7 +249,6 @@ pub enum CliCommand {
         stake_authorize: StakeAuthorize,
         authority: Option<Box<dyn Signer>>,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -265,7 +259,6 @@ pub enum CliCommand {
         lockup: Lockup,
         custodian: Option<Box<dyn Signer>>,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -277,7 +270,6 @@ pub enum CliCommand {
         lamports: u64,
         withdraw_authority: Option<Box<dyn Signer>>,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -350,7 +342,6 @@ pub enum CliCommand {
         to: Pubkey,
         from: Option<Box<dyn Signer>>,
         sign_only: bool,
-        signers: Option<Vec<(Pubkey, Signature)>>,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: Option<Box<dyn Signer>>,
@@ -614,7 +605,6 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let witnesses = values_of(&matches, "witness");
             let cancelable = matches.is_present("cancelable");
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-            let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(&matches);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
             let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches)?;
@@ -628,7 +618,6 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                     witnesses,
                     cancelable,
                     sign_only,
-                    signers,
                     blockhash_query,
                     nonce_account,
                     nonce_authority,
@@ -680,7 +669,6 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let lamports = lamports_of_sol(matches, "amount").unwrap();
             let to = pubkey_of(&matches, "to").unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-            let signers = pubkeys_sigs_of(&matches, SIGNER_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
             let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches)?;
@@ -692,7 +680,6 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
                     to,
                     from,
                     sign_only,
-                    signers,
                     blockhash_query,
                     nonce_account,
                     nonce_authority,
@@ -1028,7 +1015,6 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: bool,
     sign_only: bool,
-    signers: &Option<Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: Option<&dyn Signer>,
@@ -1060,10 +1046,6 @@ fn process_pay(
         } else {
             system_transaction::transfer(config.keypair.as_ref(), to, lamports, blockhash)
         };
-
-        if let Some(signers) = signers {
-            replace_signatures(&mut tx, &signers)?;
-        }
 
         if sign_only {
             return_signers(&tx)
@@ -1106,9 +1088,6 @@ fn process_pay(
             ixs,
             blockhash,
         );
-        if let Some(signers) = signers {
-            replace_signatures(&mut tx, &signers)?;
-        }
         if sign_only {
             return_signers(&tx)
         } else {
@@ -1154,9 +1133,6 @@ fn process_pay(
             ixs,
             blockhash,
         );
-        if let Some(signers) = signers {
-            replace_signatures(&mut tx, &signers)?;
-        }
         if sign_only {
             return_signers(&tx)
         } else {
@@ -1230,7 +1206,6 @@ fn process_transfer(
     to: &Pubkey,
     from: Option<&(dyn Signer + 'static)>,
     sign_only: bool,
-    signers: Option<&Vec<(Pubkey, Signature)>>,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: Option<&(dyn Signer + 'static)>,
@@ -1266,10 +1241,6 @@ fn process_transfer(
             recent_blockhash,
         )
     };
-
-    if let Some(signers) = signers {
-        replace_signatures(&mut tx, &signers)?;
-    }
 
     if sign_only {
         return_signers(&tx)
@@ -1468,7 +1439,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lockup,
             lamports,
             sign_only,
-            ref signers,
             blockhash_query,
             ref nonce_account,
             ref nonce_authority,
@@ -1484,7 +1454,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lockup,
             *lamports,
             *sign_only,
-            signers.as_ref(),
             blockhash_query,
             nonce_account.as_ref(),
             nonce_authority.as_deref(),
@@ -1495,7 +1464,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_account_pubkey,
             ref stake_authority,
             sign_only,
-            ref signers,
             blockhash_query,
             nonce_account,
             ref nonce_authority,
@@ -1506,7 +1474,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &stake_account_pubkey,
             stake_authority.as_deref(),
             *sign_only,
-            signers,
             blockhash_query,
             *nonce_account,
             nonce_authority.as_deref(),
@@ -1518,7 +1485,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             ref stake_authority,
             force,
             sign_only,
-            ref signers,
             blockhash_query,
             nonce_account,
             ref nonce_authority,
@@ -1531,7 +1497,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_authority.as_deref(),
             *force,
             *sign_only,
-            signers,
             blockhash_query,
             *nonce_account,
             nonce_authority.as_deref(),
@@ -1541,7 +1506,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_account_pubkey,
             ref stake_authority,
             sign_only,
-            ref signers,
             blockhash_query,
             nonce_account,
             ref nonce_authority,
@@ -1555,7 +1519,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &stake_account_pubkey,
             stake_authority.as_deref(),
             *sign_only,
-            signers,
             blockhash_query,
             *nonce_account,
             nonce_authority.as_deref(),
@@ -1582,7 +1545,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_authorize,
             ref authority,
             sign_only,
-            ref signers,
             blockhash_query,
             nonce_account,
             ref nonce_authority,
@@ -1595,7 +1557,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *stake_authorize,
             authority.as_deref(),
             *sign_only,
-            signers,
             blockhash_query,
             *nonce_account,
             nonce_authority.as_deref(),
@@ -1606,7 +1567,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             mut lockup,
             ref custodian,
             sign_only,
-            ref signers,
             blockhash_query,
             nonce_account,
             ref nonce_authority,
@@ -1618,7 +1578,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &mut lockup,
             custodian.as_deref(),
             *sign_only,
-            signers,
             blockhash_query,
             *nonce_account,
             nonce_authority.as_deref(),
@@ -1630,7 +1589,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             lamports,
             ref withdraw_authority,
             sign_only,
-            ref signers,
             blockhash_query,
             ref nonce_account,
             ref nonce_authority,
@@ -1643,7 +1601,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *lamports,
             withdraw_authority.as_deref(),
             *sign_only,
-            signers.as_ref(),
             blockhash_query,
             nonce_account.as_ref(),
             nonce_authority.as_deref(),
@@ -1791,7 +1748,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             ref witnesses,
             cancelable,
             sign_only,
-            ref signers,
             blockhash_query,
             nonce_account,
             ref nonce_authority,
@@ -1805,7 +1761,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             witnesses,
             *cancelable,
             *sign_only,
-            signers,
             blockhash_query,
             *nonce_account,
             nonce_authority.as_deref(),
@@ -1830,7 +1785,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             to,
             ref from,
             sign_only,
-            ref signers,
             ref blockhash_query,
             ref nonce_account,
             ref nonce_authority,
@@ -1842,7 +1796,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             to,
             from.as_deref(),
             *sign_only,
-            signers.as_ref(),
             blockhash_query,
             nonce_account.as_ref(),
             nonce_authority.as_deref(),
@@ -2755,7 +2708,6 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(pubkey),
                     nonce_authority: Some(Presigner::new(&authority_pubkey, &sig).into()),
-                    signers: Some(vec![(authority_pubkey, sig)]),
                     ..PayCommand::default()
                 }),
                 require_keypair: true
@@ -2934,7 +2886,6 @@ mod tests {
             },
             lamports: 1234,
             sign_only: false,
-            signers: None,
             blockhash_query: BlockhashQuery::All,
             nonce_account: None,
             nonce_authority: None,
@@ -2952,7 +2903,6 @@ mod tests {
             lamports: 100,
             withdraw_authority: None,
             sign_only: false,
-            signers: None,
             blockhash_query: BlockhashQuery::All,
             nonce_account: None,
             nonce_authority: None,
@@ -2966,7 +2916,6 @@ mod tests {
             stake_account_pubkey: stake_pubkey,
             stake_authority: None,
             sign_only: false,
-            signers: None,
             blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
             nonce_authority: None,
@@ -2981,7 +2930,6 @@ mod tests {
             stake_account_pubkey: stake_pubkey,
             stake_authority: None,
             sign_only: false,
-            signers: None,
             blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
             nonce_authority: None,
@@ -3288,7 +3236,6 @@ mod tests {
                     to: to_pubkey,
                     from: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
                     nonce_authority: None,
@@ -3318,7 +3265,6 @@ mod tests {
                     to: to_pubkey,
                     from: None,
                     sign_only: true,
-                    signers: None,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
                     nonce_authority: None,
@@ -3353,7 +3299,6 @@ mod tests {
                     to: to_pubkey,
                     from: Some(Presigner::new(&from_pubkey, &from_sig).into()),
                     sign_only: false,
-                    signers: Some(vec![(from_pubkey, from_sig)]),
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: None,
@@ -3389,7 +3334,6 @@ mod tests {
                     to: to_pubkey,
                     from: None,
                     sign_only: false,
-                    signers: None,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_address.into()),
                     nonce_authority: Some(read_keypair_file(&nonce_authority_file).unwrap().into()),
