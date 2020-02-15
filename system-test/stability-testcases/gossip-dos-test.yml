@@ -1,0 +1,3 @@
+steps:
+  - command: "system-test/stability-testcases/gossip-dos-test.sh"
+    label: "Gossip DoS Test"
