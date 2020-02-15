@@ -47,8 +47,9 @@ impl fmt::Display for DataPoint {
         Ok(())
     }
 }
+
 #[macro_export]
-macro_rules! datapoint {
+macro_rules! create_datapoint {
     (@field $point:ident $name:expr, $string:expr, String) => {
         $point.add_field_str($name, &$string);
     };
@@ -64,67 +65,85 @@ macro_rules! datapoint {
 
     (@fields $point:ident) => {};
     (@fields $point:ident ($name:expr, $value:expr, $type:ident) , $($rest:tt)*) => {
-        $crate::datapoint!(@field $point $name, $value, $type);
-        $crate::datapoint!(@fields $point $($rest)*);
+        $crate::create_datapoint!(@field $point $name, $value, $type);
+        $crate::create_datapoint!(@fields $point $($rest)*);
     };
     (@fields $point:ident ($name:expr, $value:expr, $type:ident)) => {
-        $crate::datapoint!(@field $point $name, $value, $type);
+        $crate::create_datapoint!(@field $point $name, $value, $type);
     };
 
     (@point $name:expr, $($fields:tt)+) => {
         {
             let mut point = $crate::datapoint::DataPoint::new(&$name);
-            $crate::datapoint!(@fields point $($fields)+);
+            $crate::create_datapoint!(@fields point $($fields)+);
             point
         }
     };
     (@point $name:expr) => {
         $crate::datapoint::DataPoint::new(&$name)
     };
-    ($name:expr, $($fields:tt)+) => {
-        if log::log_enabled!(log::Level::Debug) {
-            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
-        }
-    };
 }
 
 #[macro_export]
+macro_rules! datapoint {
+    ($level:expr, $name:expr) => {
+        if log::log_enabled!($level) {
+            $crate::submit($crate::create_datapoint!(@point $name), $level);
+        }
+    };
+    ($level:expr, $name:expr, $($fields:tt)+) => {
+        if log::log_enabled!($level) {
+            $crate::submit($crate::create_datapoint!(@point $name, $($fields)+), $level);
+        }
+    };
+}
+#[macro_export]
 macro_rules! datapoint_error {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Error);
+        $crate::datapoint!(log::Level::Error, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Error);
+        $crate::datapoint!(log::Level::Error, $name, $($fields)+);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_warn {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Warn);
+        $crate::datapoint!(log::Level::Warn, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Warn);
+        $crate::datapoint!(log::Level::Warn, $name, $($fields)+);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_info {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Info);
+        $crate::datapoint!(log::Level::Info, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Info);
+        $crate::datapoint!(log::Level::Info, $name, $($fields)+);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint_debug {
     ($name:expr) => {
-        $crate::submit($crate::datapoint!(@point $name), log::Level::Debug);
+        $crate::datapoint!(log::Level::Debug, $name);
     };
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
+        $crate::datapoint!(log::Level::Debug, $name, $($fields)+);
+    };
+}
+
+#[macro_export]
+macro_rules! datapoint_trace {
+    ($name:expr) => {
+        $crate::datapoint!(log::Level::Trace, $name);
+    };
+    ($name:expr, $($fields:tt)+) => {
+        $crate::datapoint!(log::Level::Trace, $name, $($fields)+);
     };
 }
 
@@ -132,27 +151,33 @@ macro_rules! datapoint_debug {
 mod test {
     #[test]
     fn test_datapoint() {
-        datapoint!("name", ("field name", "test".to_string(), String));
-        datapoint!("name", ("field name", 12.34_f64, f64));
-        datapoint!("name", ("field name", true, bool));
-        datapoint!("name", ("field name", 1, i64));
-        datapoint!("name", ("field name", 1, i64),);
-        datapoint!("name", ("field1 name", 2, i64), ("field2 name", 2, i64));
-        datapoint!("name", ("field1 name", 2, i64), ("field2 name", 2, i64),);
+        datapoint_debug!("name", ("field name", "test".to_string(), String));
+        datapoint_info!("name", ("field name", 12.34_f64, f64));
+        datapoint_trace!("name", ("field name", true, bool));
+        datapoint_warn!("name", ("field name", 1, i64));
+        datapoint_error!("name", ("field name", 1, i64),);
         datapoint!(
+            log::Level::Warn,
+            "name",
+            ("field1 name", 2, i64),
+            ("field2 name", 2, i64)
+        );
+        datapoint_info!("name", ("field1 name", 2, i64), ("field2 name", 2, i64),);
+        datapoint_trace!(
             "name",
             ("field1 name", 2, i64),
             ("field2 name", 2, i64),
             ("field3 name", 3, i64)
         );
         datapoint!(
+            log::Level::Error,
             "name",
             ("field1 name", 2, i64),
             ("field2 name", 2, i64),
             ("field3 name", 3, i64),
         );
 
-        let point = datapoint!(
+        let point = create_datapoint!(
             @point "name",
             ("i64", 1, i64),
             ("String", "string space string".to_string(), String),
