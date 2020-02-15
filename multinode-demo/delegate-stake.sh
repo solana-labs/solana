@@ -8,7 +8,7 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-stake_lamports=1000000000   # default number of lamports to assign as stake (1 SOL)
+stake_sol=1   # default number of SOL to assign as stake (1 SOL)
 url=http://127.0.0.1:8899   # default RPC url
 
 usage() {
@@ -18,7 +18,7 @@ usage() {
   fi
   cat <<EOF
 
-usage: $0 [OPTIONS] <lamports to stake ($stake_lamports)>
+usage: $0 [OPTIONS] <SOL to stake ($stake_sol)>
 
 Add stake to a validator
 
@@ -75,7 +75,7 @@ if [[ ${#positional_args[@]} -gt 1 ]]; then
   usage "$@"
 fi
 if [[ -n ${positional_args[0]} ]]; then
-  stake_lamports=${positional_args[0]}
+  stake_sol=${positional_args[0]}
 fi
 
 config_dir="$SOLANA_CONFIG_DIR/validator$label"
@@ -93,7 +93,7 @@ if [[ -f $stake_keypair_path ]]; then
 fi
 
 if ((airdrops_enabled)); then
-  $solana_cli "${common_args[@]}" airdrop "$stake_lamports" lamports
+  $solana_cli "${common_args[@]}" airdrop "$stake_sol"
 fi
 
 $solana_keygen new --no-passphrase -so "$stake_keypair_path"
@@ -102,7 +102,7 @@ set -x
 $solana_cli "${common_args[@]}" \
   vote-account "$vote_keypair_path"
 $solana_cli "${common_args[@]}" \
-  create-stake-account "$stake_keypair_path" "$stake_lamports" lamports
+  create-stake-account "$stake_keypair_path" "$stake_sol"
 $solana_cli "${common_args[@]}" \
   delegate-stake $maybe_force "$stake_keypair_path" "$vote_keypair_path"
 $solana_cli "${common_args[@]}" stakes "$stake_keypair_path"

@@ -22,7 +22,7 @@ At present, the following commands support offline signing:
 
 To sign a transaction offline, pass the following arguments on the command line
 1) `--sign-only`, prevents the client from submitting the signed transaction
-to the network. Instead, the pubkey/signature pairs are printed to stdout. 
+to the network. Instead, the pubkey/signature pairs are printed to stdout.
 2) `--blockhash BASE58_HASH`, allows the caller to specify the value used to
 fill the transaction's `recent_blockhash` field. This serves a number of
 purposes, namely:
@@ -37,7 +37,7 @@ Command
 
 ```bash
 solana@offline$ solana pay --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
-    recipient-keypair.json 1 SOL
+    recipient-keypair.json 1
 ```
 
 Output
@@ -67,7 +67,7 @@ Command
 ```bash
 solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
     --signer FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
-    recipient-keypair.json 1 SOL
+    recipient-keypair.json 1
 ```
 
 Output
