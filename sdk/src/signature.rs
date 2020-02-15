@@ -139,6 +139,18 @@ pub trait Signer {
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
 }
 
+impl PartialEq for dyn Signer {
+    fn eq(&self, other: &dyn Signer) -> bool {
+        self.pubkey() == other.pubkey()
+    }
+}
+
+impl std::fmt::Debug for dyn Signer {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "Signer: {:?}", self.pubkey())
+    }
+}
+
 impl Signer for Keypair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
