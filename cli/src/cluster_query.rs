@@ -744,7 +744,7 @@ pub fn process_ping(
         last_blockhash = recent_blockhash;
 
         let transaction =
-            system_transaction::transfer(&config.keypair, &to, lamports, recent_blockhash);
+            system_transaction::transfer(config.keypair.as_ref(), &to, lamports, recent_blockhash);
         check_account_for_fee(
             rpc_client,
             &config.keypair.pubkey(),

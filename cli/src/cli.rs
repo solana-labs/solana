@@ -474,7 +474,7 @@ impl error::Error for CliError {
 pub struct CliConfig {
     pub command: CliCommand,
     pub json_rpc_url: String,
-    pub keypair: Keypair,
+    pub keypair: Box<dyn KeypairUtil>,
     pub keypair_path: Option<String>,
     pub derivation_path: Option<DerivationPath>,
     pub rpc_client: Option<RpcClient>,
@@ -505,7 +505,7 @@ impl Default for CliConfig {
                 use_lamports_unit: false,
             },
             json_rpc_url: Self::default_json_rpc_url(),
-            keypair: Keypair::new(),
+            keypair: Box::new(Keypair::new()),
             keypair_path: Some(Self::default_keypair_path()),
             derivation_path: None,
             rpc_client: None,
@@ -1041,7 +1041,7 @@ fn process_deploy(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
     let mut create_account_tx = system_transaction::create_account(
-        &config.keypair,
+        config.keypair.as_ref(),
         &program_id,
         blockhash,
         minimum_balance.max(1),
@@ -1049,7 +1049,7 @@ fn process_deploy(
         &bpf_loader::id(),
     );
     messages.push(&create_account_tx.message);
-    let signers = [&config.keypair, &program_id];
+    let signers = [config.keypair.as_ref(), &program_id];
     let write_transactions: Vec<_> = program_data
         .chunks(DATA_CHUNK_SIZE)
         .zip(0..)
@@ -1081,16 +1081,18 @@ fn process_deploy(
     )?;
 
     trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction(&mut create_account_tx, &signers);
+    let result =
+        rpc_client.send_and_confirm_transaction_dynamic_signers(&mut create_account_tx, &signers);
     log_instruction_custom_error::<SystemError>(result)
         .map_err(|_| CliError::DynamicProgramError("Program allocate space failed".to_string()))?;
 
     trace!("Writing program data");
-    rpc_client.send_and_confirm_transactions(write_transactions, &signers)?;
+    rpc_client
+        .send_and_confirm_multiple_transactions_dynamic_signers(write_transactions, &signers)?;
 
     trace!("Finalizing program account");
     rpc_client
-        .send_and_confirm_transaction(&mut finalize_tx, &signers)
+        .send_and_confirm_transaction_dynamic_signers(&mut finalize_tx, &signers)
         .map_err(|_| {
             CliError::DynamicProgramError("Program finalize transaction failed".to_string())
         })?;
@@ -1136,7 +1138,7 @@ fn process_pay(
                 .map(|authority| authority.keypair())
                 .unwrap_or(&config.keypair);
             system_transaction::nonced_transfer(
-                &config.keypair,
+                config.keypair.as_ref(),
                 to,
                 lamports,
                 nonce_account,
@@ -1144,7 +1146,7 @@ fn process_pay(
                 blockhash,
             )
         } else {
-            system_transaction::transfer(&config.keypair, to, lamports, blockhash)
+            system_transaction::transfer(config.keypair.as_ref(), to, lamports, blockhash)
         };
 
         if let Some(signers) = signers {
@@ -1167,7 +1169,8 @@ fn process_pay(
                 &fee_calculator,
                 &tx.message,
             )?;
-            let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+            let result = rpc_client
+                .send_and_confirm_transaction_dynamic_signers(&mut tx, &[config.keypair.as_ref()]);
             log_instruction_custom_error::<SystemError>(result)
         }
     } else if *witnesses == None {
@@ -1190,7 +1193,7 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(
-            &[&config.keypair, &contract_state],
+            &[config.keypair.as_ref(), &contract_state],
             ixs,
             blockhash,
         );
@@ -1206,8 +1209,10 @@ fn process_pay(
                 &fee_calculator,
                 &tx.message,
             )?;
-            let result = rpc_client
-                .send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
+            let result = rpc_client.send_and_confirm_transaction_dynamic_signers(
+                &mut tx,
+                &[config.keypair.as_ref(), &contract_state],
+            );
             let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
             Ok(json!({
@@ -1238,7 +1243,7 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(
-            &[&config.keypair, &contract_state],
+            &[config.keypair.as_ref(), &contract_state],
             ixs,
             blockhash,
         );
@@ -1248,8 +1253,10 @@ fn process_pay(
         if sign_only {
             return_signers(&tx)
         } else {
-            let result = rpc_client
-                .send_and_confirm_transaction(&mut tx, &[&config.keypair, &contract_state]);
+            let result = rpc_client.send_and_confirm_transaction_dynamic_signers(
+                &mut tx,
+                &[config.keypair.as_ref(), &contract_state],
+            );
             check_account_for_fee(
                 rpc_client,
                 &config.keypair.pubkey(),
@@ -1276,14 +1283,16 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
         pubkey,
         &config.keypair.pubkey(),
     );
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    let mut tx =
+        Transaction::new_signed_instructions(&[config.keypair.as_ref()], vec![ix], blockhash);
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result = rpc_client
+        .send_and_confirm_transaction_dynamic_signers(&mut tx, &[config.keypair.as_ref()]);
     log_instruction_custom_error::<BudgetError>(result)
 }
 
@@ -1297,14 +1306,16 @@ fn process_time_elapsed(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    let mut tx =
+        Transaction::new_signed_instructions(&[config.keypair.as_ref()], vec![ix], blockhash);
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result = rpc_client
+        .send_and_confirm_transaction_dynamic_signers(&mut tx, &[config.keypair.as_ref()]);
     log_instruction_custom_error::<BudgetError>(result)
 }
 
@@ -1374,7 +1385,8 @@ fn process_transfer(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+        let result = rpc_client
+            .send_and_confirm_transaction_dynamic_signers(&mut tx, &[config.keypair.as_ref()]);
         log_instruction_custom_error::<SystemError>(result)
     }
 }
@@ -1388,14 +1400,16 @@ fn process_witness(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
+    let mut tx =
+        Transaction::new_signed_instructions(&[config.keypair.as_ref()], vec![ix], blockhash);
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result = rpc_client
+        .send_and_confirm_transaction_dynamic_signers(&mut tx, &[config.keypair.as_ref()]);
     log_instruction_custom_error::<BudgetError>(result)
 }
 
@@ -1997,7 +2011,7 @@ pub fn request_and_confirm_airdrop(
         }
     }?;
     let mut tx = keypair.airdrop_transaction();
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&keypair]);
+    let result = rpc_client.send_and_confirm_transaction_dynamic_signers(&mut tx, &[&keypair]);
     log_instruction_custom_error::<SystemError>(result)
 }
 
