@@ -320,7 +320,7 @@ solana-airdrop
 Request lamports
 
 USAGE:
-    solana airdrop [FLAGS] [OPTIONS] <AMOUNT>
+    solana airdrop [FLAGS] [OPTIONS] <AMOUNT> [PUBKEY]
 
 FLAGS:
     -h, --help                           Prints help information
@@ -341,6 +341,7 @@ OPTIONS:
 
 ARGS:
     <AMOUNT>    The airdrop amount to request, in SOL
+    <PUBKEY>    The pubkey of airdrop recipient
 ```
 
 #### solana-authorize-nonce-account
