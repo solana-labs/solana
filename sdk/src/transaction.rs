@@ -95,20 +95,20 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
-    pub fn new_signed_with_payer<T: KeypairUtil>(
+    pub fn new_signed_with_payer(
         instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
-        signing_keypairs: &[&T],
+        signing_keypairs: &[&dyn KeypairUtil],
         recent_blockhash: Hash,
     ) -> Self {
         let message = Message::new_with_payer(instructions, payer);
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
-    pub fn new_signed_with_nonce<T: KeypairUtil>(
+    pub fn new_signed_with_nonce(
         mut instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
-        signing_keypairs: &[&T],
+        signing_keypairs: &[&dyn KeypairUtil],
         nonce_account_pubkey: &Pubkey,
         nonce_authority_pubkey: &Pubkey,
         nonce_hash: Hash,
@@ -126,8 +126,8 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
-    pub fn new<T: KeypairUtil>(
-        from_keypairs: &[&T],
+    pub fn new(
+        from_keypairs: &[&dyn KeypairUtil],
         message: Message,
         recent_blockhash: Hash,
     ) -> Transaction {
@@ -136,8 +136,8 @@ impl Transaction {
         tx
     }
 
-    pub fn new_signed_instructions<T: KeypairUtil>(
-        from_keypairs: &[&T],
+    pub fn new_signed_instructions(
+        from_keypairs: &[&dyn KeypairUtil],
         instructions: Vec<Instruction>,
         recent_blockhash: Hash,
     ) -> Transaction {
@@ -152,8 +152,8 @@ impl Transaction {
     /// * `recent_blockhash` - The PoH hash.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - Instructions that will be executed atomically.
-    pub fn new_with_compiled_instructions<T: KeypairUtil>(
-        from_keypairs: &[&T],
+    pub fn new_with_compiled_instructions(
+        from_keypairs: &[&dyn KeypairUtil],
         keys: &[Pubkey],
         recent_blockhash: Hash,
         program_ids: Vec<Pubkey>,
@@ -214,7 +214,7 @@ impl Transaction {
     }
 
     /// Check keys and keypair lengths, then sign this transaction.
-    pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+    pub fn sign(&mut self, keypairs: &[&dyn KeypairUtil], recent_blockhash: Hash) {
         self.partial_sign(keypairs, recent_blockhash);
 
         assert_eq!(self.is_signed(), true, "not enough keypairs");
@@ -223,7 +223,7 @@ impl Transaction {
     /// Sign using some subset of required keys
     ///  if recent_blockhash is not the same as currently in the transaction,
     ///  clear any prior signatures and update recent_blockhash
-    pub fn partial_sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+    pub fn partial_sign(&mut self, keypairs: &[&dyn KeypairUtil], recent_blockhash: Hash) {
         let positions = self
             .get_signing_keypair_positions(keypairs)
             .expect("account_keys doesn't contain num_required_signatures keys");
@@ -236,9 +236,9 @@ impl Transaction {
 
     /// Sign the transaction and place the signatures in their associated positions in `signatures`
     /// without checking that the positions are correct.
-    pub fn partial_sign_unchecked<T: KeypairUtil>(
+    pub fn partial_sign_unchecked(
         &mut self,
-        keypairs: &[&T],
+        keypairs: &[&dyn KeypairUtil],
         positions: Vec<usize>,
         recent_blockhash: Hash,
     ) {
@@ -271,9 +271,9 @@ impl Transaction {
     }
 
     /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs
-    pub fn get_signing_keypair_positions<T: KeypairUtil>(
+    pub fn get_signing_keypair_positions(
         &self,
-        keypairs: &[&T],
+        keypairs: &[&dyn KeypairUtil],
     ) -> Result<Vec<Option<usize>>> {
         if self.message.account_keys.len() < self.message.header.num_required_signatures as usize {
             return Err(TransactionError::InvalidAccountIndex);
@@ -575,8 +575,9 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
+        let signers: Vec<&dyn KeypairUtil> = Vec::new();
         Transaction::new_unsigned_instructions(vec![ix])
-            .sign(&Vec::<&Keypair>::new(), Hash::default());
+            .sign(&signers, Hash::default());
     }
 
     #[test]

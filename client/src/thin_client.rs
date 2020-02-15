@@ -204,7 +204,7 @@ impl ThinClient {
     /// Retry sending a signed Transaction to the server for processing
     pub fn send_and_confirm_transaction(
         &self,
-        keypairs: &[&Keypair],
+        keypairs: &[&dyn KeypairUtil],
         transaction: &mut Transaction,
         tries: usize,
         pending_confirmations: usize,
@@ -351,7 +351,11 @@ impl Client for ThinClient {
 }
 
 impl SyncClient for ThinClient {
-    fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {
+    fn send_message(
+        &self,
+        keypairs: &[&dyn KeypairUtil],
+        message: Message,
+    ) -> TransportResult<Signature> {
         let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
         let mut transaction = Transaction::new(&keypairs, message, blockhash);
         let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0)?;
@@ -563,7 +567,7 @@ impl AsyncClient for ThinClient {
     }
     fn async_send_message(
         &self,
-        keypairs: &[&Keypair],
+        keypairs: &[&dyn KeypairUtil],
         message: Message,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {

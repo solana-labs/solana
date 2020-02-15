@@ -16,7 +16,7 @@ use crate::{
     instruction::Instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, Signature},
+    signature::{Keypair, KeypairUtil, Signature},
     transaction,
     transport::Result,
 };
@@ -29,7 +29,7 @@ pub trait Client: SyncClient + AsyncClient {
 pub trait SyncClient {
     /// Create a transaction from the given message, and send it to the
     /// server, retrying as-needed.
-    fn send_message(&self, keypairs: &[&Keypair], message: Message) -> Result<Signature>;
+    fn send_message(&self, keypairs: &[&dyn KeypairUtil], message: Message) -> Result<Signature>;
 
     /// Create a transaction from a single instruction that only requires
     /// a single signer. Then send it to the server, retrying as-needed.
@@ -123,7 +123,7 @@ pub trait AsyncClient {
     /// server, but don't wait for to see if the server accepted it.
     fn async_send_message(
         &self,
-        keypairs: &[&Keypair],
+        keypairs: &[&dyn KeypairUtil],
         message: Message,
         recent_blockhash: Hash,
     ) -> io::Result<Signature>;

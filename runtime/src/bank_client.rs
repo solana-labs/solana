@@ -44,11 +44,11 @@ impl AsyncClient for BankClient {
 
     fn async_send_message(
         &self,
-        keypairs: &[&Keypair],
+        keypairs: &[&dyn KeypairUtil],
         message: Message,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {
-        let transaction = Transaction::new(&keypairs, message, recent_blockhash);
+        let transaction = Transaction::new(keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
 
@@ -77,7 +77,7 @@ impl AsyncClient for BankClient {
 }
 
 impl SyncClient for BankClient {
-    fn send_message(&self, keypairs: &[&Keypair], message: Message) -> Result<Signature> {
+    fn send_message(&self, keypairs: &[&dyn KeypairUtil], message: Message) -> Result<Signature> {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(&keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;
