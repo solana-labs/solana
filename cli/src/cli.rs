@@ -14,7 +14,7 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
-use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
+use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::generate_keypair_util, ArgConstant};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -168,6 +168,10 @@ impl PartialEq for SigningAuthority {
             }
         }
     }
+
+pub fn signer_from_matches(name: &str, matches: &ArgMatches<'_>) -> Result<Option<Box<dyn KeypairUtil>>, Box<dyn error::Error>> {
+    let location = matches.value_of(name).unwrap();
+    generate_keypair_util(matches, location, name).map(Some)
 }
 
 pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -468,6 +472,12 @@ impl error::Error for CliError {
     fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
+    }
+}
+
+impl From<Box<dyn error::Error>> for CliError {
+    fn from(error: Box<dyn error::Error>) -> Self {
+        CliError::DynamicProgramError(format!("{:?}", error))
     }
 }
 
