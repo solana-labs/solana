@@ -8,7 +8,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{KeypairUtil, Signature},
     system_instruction,
     transaction::{self, Transaction},
     transport::{Result, TransportError},
@@ -54,7 +54,7 @@ impl AsyncClient for BankClient {
 
     fn async_send_instruction(
         &self,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         instruction: Instruction,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {
@@ -66,7 +66,7 @@ impl AsyncClient for BankClient {
     fn async_transfer(
         &self,
         lamports: u64,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {
@@ -85,13 +85,13 @@ impl SyncClient for BankClient {
     }
 
     /// Create and process a transaction from a single instruction.
-    fn send_instruction(&self, keypair: &Keypair, instruction: Instruction) -> Result<Signature> {
+    fn send_instruction(&self, keypair: &dyn KeypairUtil, instruction: Instruction) -> Result<Signature> {
         let message = Message::new(vec![instruction]);
         self.send_message(&[keypair], message)
     }
 
     /// Transfer `lamports` from `keypair` to `pubkey`
-    fn transfer(&self, lamports: u64, keypair: &Keypair, pubkey: &Pubkey) -> Result<Signature> {
+    fn transfer(&self, lamports: u64, keypair: &dyn KeypairUtil, pubkey: &Pubkey) -> Result<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
         self.send_instruction(keypair, transfer_instruction)

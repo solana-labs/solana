@@ -17,7 +17,7 @@ use solana_sdk::{
     message::Message,
     packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{KeypairUtil, Signature},
     system_instruction,
     timing::duration_as_ms,
     transaction::{self, Transaction},
@@ -183,7 +183,7 @@ impl ThinClient {
     /// Retry a sending a signed Transaction to the server for processing.
     pub fn retry_transfer_until_confirmed(
         &self,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         transaction: &mut Transaction,
         tries: usize,
         min_confirmed_blocks: usize,
@@ -191,10 +191,10 @@ impl ThinClient {
         self.send_and_confirm_transaction(&[keypair], transaction, tries, min_confirmed_blocks)
     }
 
-    /// Retry sending a signed Transaction with one signing Keypair to the server for processing.
+    /// Retry sending a signed Transaction with one signing T to the server for processing.
     pub fn retry_transfer(
         &self,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         transaction: &mut Transaction,
         tries: usize,
     ) -> io::Result<Signature> {
@@ -364,7 +364,7 @@ impl SyncClient for ThinClient {
 
     fn send_instruction(
         &self,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         instruction: Instruction,
     ) -> TransportResult<Signature> {
         let message = Message::new(vec![instruction]);
@@ -374,7 +374,7 @@ impl SyncClient for ThinClient {
     fn transfer(
         &self,
         lamports: u64,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         pubkey: &Pubkey,
     ) -> TransportResult<Signature> {
         let transfer_instruction =
@@ -576,7 +576,7 @@ impl AsyncClient for ThinClient {
     }
     fn async_send_instruction(
         &self,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         instruction: Instruction,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {
@@ -586,7 +586,7 @@ impl AsyncClient for ThinClient {
     fn async_transfer(
         &self,
         lamports: u64,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {

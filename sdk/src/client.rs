@@ -16,7 +16,7 @@ use crate::{
     instruction::Instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{KeypairUtil, Signature},
     transaction,
     transport::Result,
 };
@@ -33,11 +33,11 @@ pub trait SyncClient {
 
     /// Create a transaction from a single instruction that only requires
     /// a single signer. Then send it to the server, retrying as-needed.
-    fn send_instruction(&self, keypair: &Keypair, instruction: Instruction) -> Result<Signature>;
+    fn send_instruction(&self, keypair: &dyn KeypairUtil, instruction: Instruction) -> Result<Signature>;
 
     /// Transfer lamports from `keypair` to `pubkey`, retrying until the
     /// transfer completes or produces and error.
-    fn transfer(&self, lamports: u64, keypair: &Keypair, pubkey: &Pubkey) -> Result<Signature>;
+    fn transfer(&self, lamports: u64, keypair: &dyn KeypairUtil, pubkey: &Pubkey) -> Result<Signature>;
 
     /// Get an account or None if not found.
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>>;
@@ -132,7 +132,7 @@ pub trait AsyncClient {
     /// a single signer. Then send it to the server, but don't wait for a reply.
     fn async_send_instruction(
         &self,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         instruction: Instruction,
         recent_blockhash: Hash,
     ) -> io::Result<Signature>;
@@ -141,7 +141,7 @@ pub trait AsyncClient {
     fn async_transfer(
         &self,
         lamports: u64,
-        keypair: &Keypair,
+        keypair: &dyn KeypairUtil,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
     ) -> io::Result<Signature>;
