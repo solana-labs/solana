@@ -446,29 +446,29 @@ impl VoteState {
             at least the voter for `epoch` exists in the map",
             );
 
-        // Error to set same pubkey as authorized pubkey again
-        if latest_authorized_pubkey == authorized_pubkey {
-            return Err(VoteError::ReauthorizedSameVoter.into());
+        // If we're not setting the same pubkey as authorized pubkey again,
+        // then update the list of prior voters to mark the expiration
+        // of the old authorized pubkey
+        if latest_authorized_pubkey != authorized_pubkey {
+            // Update the epoch ranges of authorized pubkeys that will be expired
+            let epoch_of_last_authorized_switch =
+                self.prior_voters.last().map(|range| range.2).unwrap_or(0);
+
+            // leader_schedule_epoch must:
+            // 1) Be monotonically increasing due to the clock always
+            //    moving forward
+            // 2) not be equal to latest epoch otherwise this
+            //    function would have returned TooSoonToReauthorize error
+            //    above
+            assert!(leader_schedule_epoch > *latest_epoch);
+
+            // Commit the new state
+            self.prior_voters.append((
+                *latest_authorized_pubkey,
+                epoch_of_last_authorized_switch,
+                leader_schedule_epoch,
+            ));
         }
-
-        // Update the epoch ranges of authorized pubkeys that will be expired
-        let epoch_of_last_authorized_switch =
-            self.prior_voters.last().map(|range| range.2).unwrap_or(0);
-
-        // leader_schedule_epoch must:
-        // 1) Be monotonically increasing due to the clock always
-        //    moving forward
-        // 2) not be equal to latest epoch otherwise this
-        //    function would have returned TooSoonToReauthorize error
-        //    above
-        assert!(leader_schedule_epoch > *latest_epoch);
-
-        // Commit the new state
-        self.prior_voters.append((
-            *latest_authorized_pubkey,
-            epoch_of_last_authorized_switch,
-            leader_schedule_epoch,
-        ));
 
         self.authorized_voter
             .insert(leader_schedule_epoch, *authorized_pubkey);
@@ -492,7 +492,7 @@ impl VoteState {
 
     // Returns the authorized voter at the given epoch if the epoch is >= the
     // current epoch, and a bool indicating whether the entry for this epoch
-    // exisssts in the self.authorized_voter map
+    // exists in the self.authorized_voter map
     fn get_or_calculate_authorized_voter_for_epoch(&self, epoch: u64) -> Option<(Pubkey, bool)> {
         let res = self.authorized_voter.get(&epoch);
         if res.is_none() {
@@ -958,7 +958,11 @@ mod tests {
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock::default(),
+            &Clock {
+                epoch: 1,
+                leader_schedule_epoch: 2,
+                ..Clock::default()
+            },
             &vote,
             &signers,
         );
@@ -970,7 +974,11 @@ mod tests {
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock::default(),
+            &Clock {
+                epoch: 1,
+                leader_schedule_epoch: 2,
+                ..Clock::default()
+            },
             &vote,
             &signers,
         );
@@ -987,6 +995,7 @@ mod tests {
             &signers,
             &Clock {
                 epoch: 1,
+                leader_schedule_epoch: 2,
                 ..Clock::default()
             },
         );
@@ -999,10 +1008,16 @@ mod tests {
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
-            &Clock::default(),
+            &Clock {
+                epoch: 1,
+                leader_schedule_epoch: 2,
+                ..Clock::default()
+            },
         );
-        assert_eq!(res, Err(VoteError::TooSoonToReauthorize.into()));
+        assert_eq!(res, Ok(()));
 
+        // Already set an authorized voter earlier for leader_schedule_epoch == 2
+        let signers = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_voter_pubkey,
@@ -1010,10 +1025,11 @@ mod tests {
             &signers,
             &Clock {
                 epoch: 1,
+                leader_schedule_epoch: 2,
                 ..Clock::default()
             },
         );
-        assert_eq!(res, Ok(()));
+        assert_eq!(res, Err(VoteError::TooSoonToReauthorize.into()));
 
         // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
         let authorized_voter_account = RefCell::new(Account::default());
@@ -1027,7 +1043,11 @@ mod tests {
             &authorized_voter_pubkey,
             VoteAuthorize::Voter,
             &signers,
-            &Clock::default(),
+            &Clock {
+                epoch: 2,
+                leader_schedule_epoch: 3,
+                ..Clock::default()
+            },
         );
         assert_eq!(res, Ok(()));
 
@@ -1041,7 +1061,11 @@ mod tests {
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
-            &Clock::default(),
+            &Clock {
+                epoch: 2,
+                leader_schedule_epoch: 3,
+                ..Clock::default()
+            },
         );
         assert_eq!(res, Ok(()));
 
@@ -1057,7 +1081,11 @@ mod tests {
             &authorized_withdrawer_pubkey,
             VoteAuthorize::Withdrawer,
             &signers,
-            &Clock::default(),
+            &Clock {
+                epoch: 2,
+                leader_schedule_epoch: 3,
+                ..Clock::default()
+            },
         );
         assert_eq!(res, Ok(()));
 
@@ -1068,7 +1096,11 @@ mod tests {
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock::default(),
+            &Clock {
+                epoch: 2,
+                leader_schedule_epoch: 3,
+                ..Clock::default()
+            },
             &vote,
             &signers,
         );
@@ -1085,7 +1117,11 @@ mod tests {
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
-            &Clock::default(),
+            &Clock {
+                epoch: 2,
+                leader_schedule_epoch: 3,
+                ..Clock::default()
+            },
             &vote,
             &signers,
         );
@@ -1690,12 +1726,10 @@ mod tests {
             Err(VoteError::TooSoonToReauthorize.into())
         );
 
-        // Setting the same authorized voter again without changing in between
-        // should fail
-        assert_eq!(
-            vote_state.set_new_authorized_voter(&new_voter, 2, 2 + epoch_offset, |_| Ok(())),
-            Err(VoteError::ReauthorizedSameVoter.into())
-        );
+        // Setting the same authorized voter again should succeed
+        vote_state
+            .set_new_authorized_voter(&new_voter, 2, 2 + epoch_offset, |_| Ok(()))
+            .unwrap();
 
         // Set a third and fourth authorized voter
         let new_voter2 = Pubkey::new_rand();
@@ -1755,5 +1789,46 @@ mod tests {
                 original_voter
             );
         }
+    }
+
+    #[test]
+    fn test_authorized_voter_is_locked_within_epoch() {
+        let original_voter = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(
+            &VoteInit {
+                node_pubkey: original_voter,
+                authorized_voter: original_voter,
+                authorized_withdrawer: original_voter,
+                commission: 0,
+            },
+            &Clock::default(),
+        );
+
+        // Test that it's not possible to set a new authorized
+        // voter within the same epoch, even if none has been
+        // explicitly set before
+        let new_voter = Pubkey::new_rand();
+        assert_eq!(
+            vote_state.set_new_authorized_voter(&new_voter, 1, 1, |_| Ok(())),
+            Err(VoteError::TooSoonToReauthorize.into())
+        );
+
+        assert_eq!(vote_state.get_authorized_voter(1), Some(original_voter));
+
+        // Set a new authorized voter for a future epoch
+        assert_eq!(
+            vote_state.set_new_authorized_voter(&new_voter, 1, 2, |_| Ok(())),
+            Ok(())
+        );
+
+        // Test that it's not possible to set a new authorized
+        // voter within the same epoch, even if none has been
+        // explicitly set before
+        assert_eq!(
+            vote_state.set_new_authorized_voter(&original_voter, 3, 3, |_| Ok(())),
+            Err(VoteError::TooSoonToReauthorize.into())
+        );
+
+        assert_eq!(vote_state.get_authorized_voter(3), Some(new_voter));
     }
 }

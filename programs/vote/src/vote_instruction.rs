@@ -39,9 +39,6 @@ pub enum VoteError {
 
     #[error("authorized voter has already been changed this epoch")]
     TooSoonToReauthorize,
-
-    #[error("cannot set same authorized voter as latest authorized voter")]
-    ReauthorizedSameVoter,
 }
 
 impl<E> DecodeError<E> for VoteError {
