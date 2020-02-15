@@ -5,8 +5,7 @@ use solana_clap_utils::{
     input_parsers::derivation_of,
     input_validators::{is_derivation, is_url},
     keypair::{
-        self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
+        generate_keypair_util, ASK_SEED_PHRASE_ARG, SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
 use solana_cli::{
@@ -14,7 +13,6 @@ use solana_cli::{
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::config::{Config, CONFIG_FILE, DEFAULT_USER_KEYPAIR};
-use solana_sdk::signature::read_keypair_file;
 
 use std::error;
 
@@ -110,8 +108,8 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
         } else if config.keypair_path != "" {
             &config.keypair_path
         } else {
-            if let Some(path) = DEFAULT_USER_KEYPAIR {
-                if !std::path::Path::new(&default_keypair_path).exists() {
+            if let Some(path) = &*DEFAULT_USER_KEYPAIR {
+                if !std::path::Path::new(&CliConfig::default_keypair_path()).exists() {
                     return Err(CliError::KeypairFileNotFound(format!(
                         "Generate a new keypair at {} with `solana-keygen new`",
                         path
@@ -127,7 +125,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
             }
         };
 
-        let keypair = generate_keypair_util(path.clone(), "keypair")?;
+        let keypair = generate_keypair_util(matches, path.clone(), "keypair")?;
         (keypair, Some(path.to_string()))
     } else {
         let default = CliConfig::default();
