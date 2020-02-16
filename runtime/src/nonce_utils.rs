@@ -109,8 +109,11 @@ mod tests {
 
     #[test]
     fn tx_uses_nonce_empty_ix_fail() {
-        let tx =
-            Transaction::new_signed_instructions(&Vec::<&dyn KeypairUtil>::new(), vec![], Hash::default());
+        let tx = Transaction::new_signed_instructions(
+            &Vec::<&dyn KeypairUtil>::new(),
+            vec![],
+            Hash::default(),
+        );
         assert!(transaction_uses_durable_nonce(&tx).is_none());
     }
 

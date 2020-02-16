@@ -423,14 +423,10 @@ pub fn parse_stake_create_account(matches: &ArgMatches<'_>) -> Result<CliCommand
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let nonce_authority =
-        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
-    let fee_payer =
-        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, matches)?;
     let from = signer_from_matches("from", matches)?;
-    let stake_account =
-        signer_from_matches("stake_account", matches)?
-            .unwrap();
+    let stake_account = signer_from_matches("stake_account", matches)?.unwrap();
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
@@ -464,12 +460,9 @@ pub fn parse_stake_delegate_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let stake_authority =
-        signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
-    let nonce_authority =
-        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
-    let fee_payer =
-        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let stake_authority = signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
+    let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DelegateStake {
@@ -498,14 +491,11 @@ pub fn parse_stake_authorize(
         StakeAuthorize::Withdrawer => WITHDRAW_AUTHORITY_ARG.name,
     };
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-    let authority =
-        signer_from_matches(authority_flag, matches)?;
+    let authority = signer_from_matches(authority_flag, matches)?;
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let nonce_authority =
-        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
-    let fee_payer =
-        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeAuthorize {
@@ -525,8 +515,7 @@ pub fn parse_stake_authorize(
 
 pub fn parse_split_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let split_stake_account =
-        signer_from_matches("split_stake_account", matches)?.unwrap();
+    let split_stake_account = signer_from_matches("split_stake_account", matches)?.unwrap();
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
 
@@ -535,12 +524,9 @@ pub fn parse_split_stake(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cli
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let stake_authority =
-        signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
-    let nonce_authority =
-        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
-    let fee_payer =
-        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let stake_authority = signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
+    let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::SplitStake {
@@ -566,12 +552,9 @@ pub fn parse_stake_deactivate_stake(matches: &ArgMatches<'_>) -> Result<CliComma
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let stake_authority =
-        signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
-    let nonce_authority =
-        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
-    let fee_payer =
-        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let stake_authority = signer_from_matches(STAKE_AUTHORITY_ARG.name, matches)?;
+    let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
@@ -596,11 +579,9 @@ pub fn parse_stake_withdraw_stake(matches: &ArgMatches<'_>) -> Result<CliCommand
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let require_keypair = signers.is_none();
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-    let nonce_authority =
-        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
     let withdraw_authority = signer_from_matches(WITHDRAW_AUTHORITY_ARG.name, matches)?;
-    let fee_payer =
-        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawStake {
@@ -631,10 +612,8 @@ pub fn parse_stake_set_lockup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
 
     let custodian = signer_from_matches("custodian", matches)?;
-    let nonce_authority =
-        signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
-    let fee_payer =
-        signer_from_matches(FEE_PAYER_ARG.name, matches)?;
+    let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, matches)?;
+    let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, matches)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeSetLockup {

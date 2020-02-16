@@ -4,9 +4,7 @@ use console::style;
 use solana_clap_utils::{
     input_parsers::derivation_of,
     input_validators::{is_derivation, is_url},
-    keypair::{
-        generate_keypair_util, ASK_SEED_PHRASE_ARG, SKIP_SEED_PHRASE_VALIDATION_ARG,
-    },
+    keypair::{generate_keypair_util, ASK_SEED_PHRASE_ARG, SKIP_SEED_PHRASE_VALIDATION_ARG},
 };
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},

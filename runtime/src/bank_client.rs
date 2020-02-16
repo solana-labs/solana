@@ -85,13 +85,22 @@ impl SyncClient for BankClient {
     }
 
     /// Create and process a transaction from a single instruction.
-    fn send_instruction(&self, keypair: &dyn KeypairUtil, instruction: Instruction) -> Result<Signature> {
+    fn send_instruction(
+        &self,
+        keypair: &dyn KeypairUtil,
+        instruction: Instruction,
+    ) -> Result<Signature> {
         let message = Message::new(vec![instruction]);
         self.send_message(&[keypair], message)
     }
 
     /// Transfer `lamports` from `keypair` to `pubkey`
-    fn transfer(&self, lamports: u64, keypair: &dyn KeypairUtil, pubkey: &Pubkey) -> Result<Signature> {
+    fn transfer(
+        &self,
+        lamports: u64,
+        keypair: &dyn KeypairUtil,
+        pubkey: &Pubkey,
+    ) -> Result<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
         self.send_instruction(keypair, transfer_instruction)

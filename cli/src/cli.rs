@@ -14,7 +14,9 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
-use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::generate_keypair_util, ArgConstant};
+use solana_clap_utils::{
+    input_parsers::*, input_validators::*, keypair::generate_keypair_util, ArgConstant,
+};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -92,7 +94,10 @@ impl std::ops::Deref for KeypairEq {
     }
 }
 
-pub fn signer_from_matches(name: &str, matches: &ArgMatches<'_>) -> Result<Option<Box<dyn KeypairUtil>>, Box<dyn error::Error>> {
+pub fn signer_from_matches(
+    name: &str,
+    matches: &ArgMatches<'_>,
+) -> Result<Option<Box<dyn KeypairUtil>>, Box<dyn error::Error>> {
     if let Some(location) = matches.value_of(name) {
         generate_keypair_util(matches, location, name).map(Some)
     } else {

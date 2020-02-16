@@ -576,8 +576,7 @@ mod tests {
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let signers: Vec<&dyn KeypairUtil> = Vec::new();
-        Transaction::new_unsigned_instructions(vec![ix])
-            .sign(&signers, Hash::default());
+        Transaction::new_unsigned_instructions(vec![ix]).sign(&signers, Hash::default());
     }
 
     #[test]

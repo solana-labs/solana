@@ -33,11 +33,20 @@ pub trait SyncClient {
 
     /// Create a transaction from a single instruction that only requires
     /// a single signer. Then send it to the server, retrying as-needed.
-    fn send_instruction(&self, keypair: &dyn KeypairUtil, instruction: Instruction) -> Result<Signature>;
+    fn send_instruction(
+        &self,
+        keypair: &dyn KeypairUtil,
+        instruction: Instruction,
+    ) -> Result<Signature>;
 
     /// Transfer lamports from `keypair` to `pubkey`, retrying until the
     /// transfer completes or produces and error.
-    fn transfer(&self, lamports: u64, keypair: &dyn KeypairUtil, pubkey: &Pubkey) -> Result<Signature>;
+    fn transfer(
+        &self,
+        lamports: u64,
+        keypair: &dyn KeypairUtil,
+        pubkey: &Pubkey,
+    ) -> Result<Signature>;
 
     /// Get an account or None if not found.
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>>;
