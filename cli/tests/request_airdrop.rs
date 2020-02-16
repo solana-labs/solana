@@ -18,6 +18,7 @@ fn test_cli_request_airdrop() {
     bob_config.command = CliCommand::Airdrop {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
+        pubkey: None,
         lamports: 50,
     };
 

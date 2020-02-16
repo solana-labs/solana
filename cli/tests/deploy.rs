@@ -42,6 +42,7 @@ fn test_cli_deploy_program() {
     config.command = CliCommand::Airdrop {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
+        pubkey: None,
         lamports: minimum_balance_for_rent_exemption + 1, // min balance for rent exemption + leftover for tx processing
     };
     process_command(&config).unwrap();
