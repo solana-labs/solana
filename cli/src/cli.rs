@@ -93,8 +93,11 @@ impl std::ops::Deref for KeypairEq {
 }
 
 pub fn signer_from_matches(name: &str, matches: &ArgMatches<'_>) -> Result<Option<Box<dyn KeypairUtil>>, Box<dyn error::Error>> {
-    let location = matches.value_of(name).unwrap();
-    generate_keypair_util(matches, location, name).map(Some)
+    if let Some(location) = matches.value_of(name) {
+        generate_keypair_util(matches, location, name).map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
