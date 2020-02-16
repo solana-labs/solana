@@ -51,16 +51,17 @@ Blockstore tracks the latest root slot. RepairService will then periodically
 iterate every fork in blockstore starting from the root slot, sending repair
 requests to validators for any missing shreds. It will send at most some `N`
 repair reqeusts per iteration. Shred repair should prioritize repairing 
-forks with the most weight (ReplayStage communicates what the last heaviest
-fork was to RepairService). Validators should only send repair requests to 
-validators who have marked that slot as completed in their EpochSlots.
+forks based on the leader's fork weight. Validators should only send repair 
+requests to validators who have marked that slot as completed in their 
+EpochSlots.
 
    Note: Validators will only accept shreds within the current verifiable 
    epoch \(epoch the validator has a leader schedule for\).
 
 2. Preemptive Slot Repair \(Addresses Challenge \#2\): The goal of this 
 protocol is to discover the chaining relationship of "orphan" slots that do not
-currently chain to any known fork.
+currently chain to any known fork. Shred repair should prioritize repairing 
+orphan slots based on the leader's fork weight.
    * Blockstore will track the set of "orphan" slots in a separate column family.
    * RepairService will periodically make `Orphan` requests for each of
    the orphans in blockstore.
@@ -91,7 +92,10 @@ randomly select a validator in a stake-weighted fashion.
 ## Repair Response Protocol
 
 When a validator receives a request for a shred `S`, they respond with the
-shred if they have it. The validator also checks `EpochSlots` to see if
-<= `1/3` of the network has marked this slot as completed. If so, resubmit
-this shred through its associated turbine path.
+shred if they have it. 
+
+When a validator receives a shred through a repair response, they check 
+`EpochSlots` to see if <= `1/3` of the network has marked this slot as 
+completed. If so, they resubmit this shred through its associated turbine
+path.
 
