@@ -10,7 +10,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{
         keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
-        read_keypair_file, Keypair, Presigner, Signer,
+        read_keypair_file, Keypair, Presigner, Signature, Signer,
     },
 };
 use std::{
@@ -42,6 +42,19 @@ pub fn parse_keypair_path(path: &str) -> KeypairUrl {
     }
 }
 
+pub fn presigner_from_pubkey_sigs(
+    pubkey: &Pubkey,
+    signers: &[(Pubkey, Signature)],
+) -> Option<Presigner> {
+    signers.iter().find_map(|(signer, sig)| {
+        if *signer == *pubkey {
+            Some(Presigner::new(signer, sig))
+        } else {
+            None
+        }
+    })
+}
+
 pub fn keypair_util_from_path(
     matches: &ArgMatches,
     path: &str,
@@ -66,15 +79,9 @@ pub fn keypair_util_from_path(
             derivation_of(matches, "derivation_path"),
         )?)),
         KeypairUrl::Pubkey(pubkey) => {
-            let presigner = pubkeys_sigs_of(matches, "signer").and_then(|presigners| {
-                presigners.iter().find_map(|(signer, sig)| {
-                    if *signer == pubkey {
-                        Some(Presigner::new(signer, sig))
-                    } else {
-                        None
-                    }
-                })
-            });
+            let presigner = pubkeys_sigs_of(matches, "signer")
+                .as_ref()
+                .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {
                 Ok(Box::new(presigner))
             } else {
