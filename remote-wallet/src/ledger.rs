@@ -341,7 +341,7 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
 pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
 ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
-    let wallet_manager = initialize_wallet_manager();
+    let wallet_manager = initialize_wallet_manager()?;
     let _device_count = wallet_manager.update_devices()?;
     let devices = wallet_manager.list_devices();
     let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = devices
