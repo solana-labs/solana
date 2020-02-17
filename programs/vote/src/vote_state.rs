@@ -144,6 +144,104 @@ impl<I> CircBuf<I> {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct AuthorizedVoters {
+    authorized_voters: BTreeMap<u64, Pubkey>,
+}
+
+impl AuthorizedVoters {
+    pub fn new(epoch: u64, pubkey: Pubkey) -> Self {
+        let mut authorized_voters = BTreeMap::new();
+        authorized_voters.insert(epoch, pubkey);
+        Self { authorized_voters }
+    }
+
+    pub fn get_authorized_voter(&self, epoch: u64) -> Option<Pubkey> {
+        self.get_or_calculate_authorized_voter_for_epoch(epoch)
+            .map(|(pubkey, _)| pubkey)
+    }
+
+    pub fn get_and_cache_authorized_voter_for_epoch(&mut self, epoch: u64) -> Option<Pubkey> {
+        let res = self.get_or_calculate_authorized_voter_for_epoch(epoch);
+
+        res.map(|(pubkey, existed)| {
+            if !existed {
+                self.authorized_voters.insert(epoch, pubkey);
+            }
+            pubkey
+        })
+    }
+
+    pub fn insert(&mut self, epoch: u64, authorized_voter: Pubkey) {
+        self.authorized_voters.insert(epoch, authorized_voter);
+    }
+
+    pub fn purge_authorized_voters(&mut self, current_epoch: u64) -> bool {
+        // Iterate through the keys in order, filtering out the ones
+        // less than the current epoch
+        let expired_keys: Vec<_> = self
+            .authorized_voters
+            .range(0..current_epoch)
+            .map(|(authorized_epoch, _)| *authorized_epoch)
+            .collect();
+
+        for key in expired_keys {
+            self.authorized_voters.remove(&key);
+        }
+
+        // Have to uphold this invariant b/c this is
+        // 1) The check for whether the vote state is initialized
+        // 2) How future authorized voters for uninitialized epochs are set
+        //    by this function
+        assert!(!self.authorized_voters.is_empty());
+        true
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.authorized_voters.is_empty()
+    }
+
+    pub fn first(&self) -> Option<(&u64, &Pubkey)> {
+        self.authorized_voters.iter().next()
+    }
+
+    pub fn last(&self) -> Option<(&u64, &Pubkey)> {
+        self.authorized_voters.iter().next_back()
+    }
+
+    pub fn len(&self) -> usize {
+        self.authorized_voters.len()
+    }
+
+    pub fn contains(&self, epoch: u64) -> bool {
+        self.authorized_voters.get(&epoch).is_some()
+    }
+
+    // Returns the authorized voter at the given epoch if the epoch is >= the
+    // current epoch, and a bool indicating whether the entry for this epoch
+    // exists in the self.authorized_voter map
+    fn get_or_calculate_authorized_voter_for_epoch(&self, epoch: u64) -> Option<(Pubkey, bool)> {
+        let res = self.authorized_voters.get(&epoch);
+        if res.is_none() {
+            // If no authorized voter has been set yet for this epoch,
+            // this must mean the authorized voter remains unchanged
+            // from the latest epoch before this one
+            let res = self.authorized_voters.range(0..epoch).next_back();
+
+            if res.is_none() {
+                warn!(
+                    "Tried to query for the authorized voter of an epoch earlier
+                    than the current epoch. Earlier epochs have been purged"
+                );
+            }
+
+            res.map(|(_, pubkey)| (*pubkey, false))
+        } else {
+            res.map(|pubkey| (*pubkey, true))
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     /// the node that votes in this account
     pub node_pubkey: Pubkey,
@@ -158,7 +256,7 @@ pub struct VoteState {
     pub root_slot: Option<u64>,
 
     /// the signer for vote transactions
-    authorized_voter: BTreeMap<u64, Pubkey>,
+    authorized_voters: AuthorizedVoters,
 
     /// history of prior authorized voters and the epochs for which
     /// they were set, the bottom end of the range is inclusive,
@@ -175,11 +273,9 @@ pub struct VoteState {
 
 impl VoteState {
     pub fn new(vote_init: &VoteInit, clock: &Clock) -> Self {
-        let mut authorized_voter = BTreeMap::new();
-        authorized_voter.insert(clock.epoch, vote_init.authorized_voter);
         Self {
             node_pubkey: vote_init.node_pubkey,
-            authorized_voter,
+            authorized_voters: AuthorizedVoters::new(clock.epoch, vote_init.authorized_voter),
             authorized_withdrawer: vote_init.authorized_withdrawer,
             commission: vote_init.commission,
             ..VoteState::default()
@@ -187,12 +283,11 @@ impl VoteState {
     }
 
     pub fn get_authorized_voter(&self, epoch: u64) -> Option<Pubkey> {
-        self.get_or_calculate_authorized_voter_for_epoch(epoch)
-            .map(|(pubkey, _)| pubkey)
+        self.authorized_voters.get_authorized_voter(epoch)
     }
 
-    pub fn authorized_voter(&self) -> &BTreeMap<u64, Pubkey> {
-        &self.authorized_voter
+    pub fn authorized_voters(&self) -> &AuthorizedVoters {
+        &self.authorized_voters
     }
 
     pub fn prior_voters(&mut self) -> &CircBuf<(Pubkey, Epoch, Epoch)> {
@@ -300,6 +395,7 @@ impl VoteState {
         }
         Ok(())
     }
+
     pub fn process_vote(
         &mut self,
         vote: &Vote,
@@ -425,7 +521,7 @@ impl VoteState {
         F: Fn(Pubkey) -> Result<(), InstructionError>,
     {
         let epoch_authorized_voter = self.get_and_update_authorized_voter(epoch).expect(
-            "the clock epoch is monotonically increasinig, so authorized voter must be known",
+            "the clock epoch is monotonically increasing, so authorized voter must be known",
         );
 
         verify(epoch_authorized_voter)?;
@@ -435,16 +531,15 @@ impl VoteState {
         // calculated is the number of slots available from the
         // first slot `S` of an epoch in which to set a new voter for
         // the epoch at `S` + `n`
-        if self.authorized_voter.get(&leader_schedule_epoch).is_some() {
+        if self.authorized_voters.contains(leader_schedule_epoch) {
             return Err(VoteError::TooSoonToReauthorize.into());
         }
 
         // Get the latest authorized_voter
-        let (latest_epoch, latest_authorized_pubkey) =
-            self.authorized_voter.iter().next_back().expect(
-                "Earlier call to `get_and_update_authorized_voter()` guarantees
+        let (latest_epoch, latest_authorized_pubkey) = self.authorized_voters.last().expect(
+            "Earlier call to `get_and_update_authorized_voter()` guarantees
             at least the voter for `epoch` exists in the map",
-            );
+        );
 
         // If we're not setting the same pubkey as authorized pubkey again,
         // then update the list of prior voters to mark the expiration
@@ -470,69 +565,23 @@ impl VoteState {
             ));
         }
 
-        self.authorized_voter
+        self.authorized_voters
             .insert(leader_schedule_epoch, *authorized_pubkey);
 
         Ok(())
     }
 
     fn get_and_update_authorized_voter(&mut self, current_epoch: u64) -> Option<Pubkey> {
-        let (pubkey, existed) = self
-            .get_or_calculate_authorized_voter_for_epoch(current_epoch)
+        let pubkey = self
+            .authorized_voters
+            .get_and_cache_authorized_voter_for_epoch(current_epoch)
             .expect(
                 "Internal functions should
         only call this will monotonically increasing current_epoch",
             );
-        if !existed {
-            self.authorized_voter.insert(current_epoch, pubkey);
-        }
-        self.update_authorized_voters(current_epoch);
+        self.authorized_voters
+            .purge_authorized_voters(current_epoch);
         Some(pubkey)
-    }
-
-    // Returns the authorized voter at the given epoch if the epoch is >= the
-    // current epoch, and a bool indicating whether the entry for this epoch
-    // exists in the self.authorized_voter map
-    fn get_or_calculate_authorized_voter_for_epoch(&self, epoch: u64) -> Option<(Pubkey, bool)> {
-        let res = self.authorized_voter.get(&epoch);
-        if res.is_none() {
-            // If no authorized voter has been set yet for this epoch,
-            // this must mean the authorized voter remains unchanged
-            // from the latest epoch before this one
-            let res = self.authorized_voter.range(0..epoch).next_back();
-
-            if res.is_none() {
-                warn!(
-                    "Tried to query for the authorized voter of an epoch earlier
-                    than the current epoch. Earlier epochs have been purged"
-                );
-            }
-
-            res.map(|(_, pubkey)| (*pubkey, false))
-        } else {
-            res.map(|pubkey| (*pubkey, true))
-        }
-    }
-
-    fn update_authorized_voters(&mut self, current_epoch: u64) -> bool {
-        // Iterate through the keys in order, filtering out the ones
-        // less than the current epoch
-        let expired_keys: Vec<_> = self
-            .authorized_voter
-            .range(0..current_epoch)
-            .map(|(authorized_epoch, _)| *authorized_epoch)
-            .collect();
-
-        for key in expired_keys {
-            self.authorized_voter.remove(&key);
-        }
-
-        // Have to uphold this invariant b/c this is
-        // 1) The check for whether the vote state is initialized
-        // 2) How future authorized voters for uninitialized epochs are set
-        //    by this function
-        assert!(!self.authorized_voter.is_empty());
-        true
     }
 
     fn pop_expired_votes(&mut self, slot: Slot) {
@@ -664,7 +713,7 @@ pub fn initialize_account(
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
 
-    if !vote_state.authorized_voter.is_empty() {
+    if !vote_state.authorized_voters.is_empty() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
     vote_account.set_state(&VoteState::new(vote_init, clock))
@@ -679,7 +728,7 @@ pub fn process_vote(
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
-    if vote_state.authorized_voter.is_empty() {
+    if vote_state.authorized_voters.is_empty() {
         return Err(InstructionError::UninitializedAccount);
     }
 
@@ -853,9 +902,9 @@ mod tests {
         let (vote_pubkey, vote_account) = create_test_account();
 
         let vote_state: VoteState = vote_account.borrow().state().unwrap();
-        assert_eq!(vote_state.authorized_voter.len(), 1);
+        assert_eq!(vote_state.authorized_voters.len(), 1);
         assert_eq!(
-            *vote_state.authorized_voter.iter().next().unwrap().1,
+            *vote_state.authorized_voters.first().unwrap().1,
             vote_pubkey
         );
         assert!(vote_state.votes.is_empty());
@@ -1662,9 +1711,10 @@ mod tests {
 
         // Authorized voter for expired epoch 0..5 should have been
         // purged and no longer queryable
-        assert_eq!(vote_state.authorized_voter.len(), 1);
+        assert_eq!(vote_state.authorized_voters.len(), 1);
         for i in 0..5 {
             assert!(vote_state
+                .authorized_voters
                 .get_or_calculate_authorized_voter_for_epoch(i)
                 .is_none());
         }
@@ -1689,7 +1739,7 @@ mod tests {
                 new_authorized_voter
             );
         }
-        assert_eq!(vote_state.authorized_voter.len(), 1);
+        assert_eq!(vote_state.authorized_voters.len(), 1);
     }
 
     #[test]
