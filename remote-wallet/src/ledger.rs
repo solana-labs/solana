@@ -74,7 +74,7 @@ impl LedgerWallet {
     //		* APDU_INS				(1 byte)
     //		* APDU_P1				(1 byte)
     //		* APDU_P2				(1 byte)
-    //		* APDU_LENGTH				(1 byte)
+    //		* APDU_LENGTH				(2 bytes)
     //		* APDU_Payload				(Variable)
     //
     fn write(&self, command: u8, p1: u8, p2: u8, data: &[u8]) -> Result<(), RemoteWalletError> {
@@ -139,11 +139,6 @@ impl LedgerWallet {
     //		* Payload				(Optional)
     //
     // Payload
-    //		* APDU Total Length			(2 bytes big endian)
-    //		* APDU_CLA				(1 byte)
-    //		* APDU_INS				(1 byte)
-    //		* APDU_P1				(1 byte)
-    //		* APDU_P2				(1 byte)
     //		* APDU_LENGTH				(1 byte)
     //		* APDU_Payload				(Variable)
     //
