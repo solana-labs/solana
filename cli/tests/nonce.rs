@@ -4,7 +4,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, Signer},
+    signature::{keypair_from_seed, read_keypair_file, write_keypair, Keypair, Signer},
     system_instruction::create_address_with_seed,
     system_program,
 };
@@ -50,11 +50,13 @@ fn test_nonce() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_nonce = CliConfig::default();
+    config_nonce.keypair = keypair.into();
     config_nonce.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_nonce.keypair, tmp_file.as_file_mut()).unwrap();
 
     full_battery_tests(
         &rpc_client,
@@ -83,11 +85,13 @@ fn test_nonce_with_seed() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_nonce = CliConfig::default();
+    config_nonce.keypair = keypair.into();
     config_nonce.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_nonce.keypair, tmp_file.as_file_mut()).unwrap();
 
     full_battery_tests(
         &rpc_client,
@@ -116,11 +120,12 @@ fn test_nonce_with_authority() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let nonce_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonce_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_nonce = CliConfig::default();
     config_nonce.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_nonce.keypair, tmp_file.as_file_mut()).unwrap();
 
     let nonce_authority = Keypair::new();
     let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
@@ -166,14 +171,14 @@ fn full_battery_tests(
         create_address_with_seed(&config_nonce.keypair.pubkey(), seed, &system_program::id())
             .unwrap()
     } else {
-        config_nonce.keypair.pubkey()
+        read_keypair_file(&nonce_keypair_file).unwrap().pubkey()
     };
 
     // Create nonce account
     config_payer.command = CliCommand::CreateNonceAccount {
         nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file).map(|k| k.pubkey()),
         lamports: 1000,
     };
 
