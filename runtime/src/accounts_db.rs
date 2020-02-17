@@ -73,7 +73,7 @@ pub struct ErrorCounters {
     pub invalid_account_index: usize,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
