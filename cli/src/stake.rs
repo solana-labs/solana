@@ -1399,8 +1399,11 @@ mod tests {
     use solana_sdk::{
         fee_calculator::FeeCalculator,
         hash::Hash,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil, Presigner},
+        signature::{
+            keypair_from_seed, read_keypair_file, write_keypair, Keypair, KeypairUtil, Presigner,
+        },
     };
+    use std::rc::Rc;
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -1748,7 +1751,7 @@ mod tests {
             parse_command(&test_create_stake_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: stake_account_keypair.into(),
+                    stake_account: Rc::new(stake_account_keypair.into()),
                     seed: None,
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
@@ -1786,7 +1789,7 @@ mod tests {
             parse_command(&test_create_stake_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: read_keypair_file(&keypair_file).unwrap().into(),
+                    stake_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
                     seed: None,
                     staker: None,
                     withdrawer: None,
@@ -1836,7 +1839,7 @@ mod tests {
             parse_command(&test_create_stake_account2).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: read_keypair_file(&keypair_file).unwrap().into(),
+                    stake_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
                     seed: None,
                     staker: None,
                     withdrawer: None,
@@ -2073,8 +2076,6 @@ mod tests {
         let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
         let fee_payer_keypair = Keypair::new();
         write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
-        let fee_payer_pubkey = fee_payer_keypair.pubkey();
-        let fee_payer_string = fee_payer_pubkey.to_string();
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -2421,9 +2422,11 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: None,
-                    split_stake_account: read_keypair_file(&split_stake_account_keypair_file)
-                        .unwrap()
-                        .into(),
+                    split_stake_account: Rc::new(
+                        read_keypair_file(&split_stake_account_keypair_file)
+                            .unwrap()
+                            .into(),
+                    ),
                     seed: None,
                     lamports: 50_000_000_000,
                     fee_payer: None,
@@ -2479,9 +2482,11 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account.into()),
                     nonce_authority: Some(Presigner::new(&nonce_auth_pubkey, &nonce_sig).into()),
-                    split_stake_account: read_keypair_file(&split_stake_account_keypair_file)
-                        .unwrap()
-                        .into(),
+                    split_stake_account: Rc::new(
+                        read_keypair_file(&split_stake_account_keypair_file)
+                            .unwrap()
+                            .into(),
+                    ),
                     seed: None,
                     lamports: 50_000_000_000,
                     fee_payer: Some(Presigner::new(&nonce_auth_pubkey, &nonce_sig).into()),

@@ -1,6 +1,4 @@
-use solana_cli::cli::{
-    process_command, request_and_confirm_airdrop, CliCommand, CliConfig, SigningAuthority,
-};
+use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
@@ -15,6 +13,7 @@ use std::sync::mpsc::channel;
 
 #[cfg(test)]
 use solana_core::validator::new_validator_for_tests;
+use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -141,7 +140,7 @@ fn test_nonce_with_authority() {
     remove_dir_all(ledger_path).unwrap();
 }
 
-fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<SigningAuthority> {
+fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<Box<dyn KeypairUtil>> {
     keypair_file.map(|akf| read_keypair_file(&akf).unwrap().into())
 }
 
@@ -172,10 +171,9 @@ fn full_battery_tests(
 
     // Create nonce account
     config_payer.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file)
-            .map(|na: SigningAuthority| na.pubkey()),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file),
         lamports: 1000,
     };
 
