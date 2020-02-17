@@ -65,8 +65,8 @@ pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(NONCE_AUTHORITY_ARG.name)
         .long(NONCE_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY")
-        .validator(is_pubkey_or_keypair_or_ask_keyword)
+        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .validator(is_valid_signer)
         .help(NONCE_AUTHORITY_ARG.help)
 }
 
