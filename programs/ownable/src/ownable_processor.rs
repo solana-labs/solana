@@ -82,8 +82,8 @@ mod tests {
 
     fn create_ownable_account(
         bank_client: &BankClient,
-        payer_keypair: &Keypair,
-        account_keypair: &Keypair,
+        payer_keypair: &dyn KeypairUtil,
+        account_keypair: &dyn KeypairUtil,
         owner_pubkey: &Pubkey,
         lamports: u64,
     ) -> Result<Signature> {
@@ -94,14 +94,14 @@ mod tests {
             lamports,
         );
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair, &account_keypair], message)
+        bank_client.send_message(&[payer_keypair, account_keypair], message)
     }
 
     fn send_set_owner(
         bank_client: &BankClient,
-        payer_keypair: &Keypair,
+        payer_keypair: &dyn KeypairUtil,
         account_pubkey: &Pubkey,
-        old_owner_keypair: &Keypair,
+        old_owner_keypair: &dyn KeypairUtil,
         new_owner_pubkey: &Pubkey,
     ) -> Result<Signature> {
         let instruction = ownable_instruction::set_owner(
@@ -110,7 +110,7 @@ mod tests {
             new_owner_pubkey,
         );
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[&payer_keypair, &old_owner_keypair], message)
+        bank_client.send_message(&[payer_keypair, old_owner_keypair], message)
     }
 
     #[test]

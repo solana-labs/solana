@@ -450,7 +450,7 @@ impl LocalCluster {
 
     fn transfer_with_client(
         client: &ThinClient,
-        source_keypair: &Keypair,
+        source_keypair: &dyn KeypairUtil,
         dest_pubkey: &Pubkey,
         lamports: u64,
     ) -> u64 {
@@ -466,7 +466,7 @@ impl LocalCluster {
             *dest_pubkey
         );
         client
-            .retry_transfer(&source_keypair, &mut tx, 10)
+            .retry_transfer(source_keypair, &mut tx, 10)
             .expect("client transfer");
         client
             .wait_for_balance_with_commitment(
@@ -515,7 +515,7 @@ impl LocalCluster {
                     .0,
             );
             client
-                .retry_transfer(&from_account, &mut transaction, 10)
+                .retry_transfer(from_account.as_ref(), &mut transaction, 10)
                 .expect("fund vote");
             client
                 .wait_for_balance_with_commitment(
@@ -630,7 +630,7 @@ impl LocalCluster {
             .0;
         let mut transaction = Transaction::new(&signer_keys, message, blockhash);
         client
-            .retry_transfer(&from_keypair, &mut transaction, 10)
+            .retry_transfer(from_keypair.as_ref(), &mut transaction, 10)
             .map(|_signature| ())
     }
 }

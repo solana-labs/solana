@@ -41,7 +41,7 @@ const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
     entry_point_info: &ContactInfo,
-    funding_keypair: &Keypair,
+    funding_keypair: &dyn KeypairUtil,
     nodes: usize,
     ignore_nodes: HashSet<Pubkey, S>,
 ) {
@@ -64,7 +64,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
             system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
-            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 10, confs)
+            .retry_transfer_until_confirmed(funding_keypair, &mut transaction, 10, confs)
             .unwrap();
         for validator in &cluster_nodes {
             if ignore_nodes.contains(&validator.id) {
@@ -91,7 +91,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
 
 pub fn send_many_transactions(
     node: &ContactInfo,
-    funding_keypair: &Keypair,
+    funding_keypair: &dyn KeypairUtil,
     max_tokens_per_transfer: u64,
     num_txs: u64,
 ) -> HashMap<Pubkey, u64> {
@@ -116,7 +116,7 @@ pub fn send_many_transactions(
         );
 
         client
-            .retry_transfer(&funding_keypair, &mut transaction, 5)
+            .retry_transfer(funding_keypair, &mut transaction, 5)
             .unwrap();
 
         expected_balances.insert(random_keypair.pubkey(), transfer_amount);
@@ -192,7 +192,7 @@ pub fn sleep_n_epochs(
 
 pub fn kill_entry_and_spend_and_verify_rest(
     entry_point_info: &ContactInfo,
-    funding_keypair: &Keypair,
+    funding_keypair: &dyn KeypairUtil,
     nodes: usize,
     slot_millis: u64,
 ) {
@@ -255,7 +255,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
                 let sig = client.retry_transfer_until_confirmed(
-                    &funding_keypair,
+                    funding_keypair,
                     &mut transaction,
                     5,
                     confs,

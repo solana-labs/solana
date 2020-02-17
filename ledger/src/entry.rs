@@ -627,7 +627,7 @@ mod tests {
     #[test]
     fn test_verify_tick_hash_count() {
         let hashes_per_tick = 10;
-        let keypairs: Vec<&Keypair> = Vec::new();
+        let keypairs: Vec<&dyn KeypairUtil> = Vec::new();
         let tx: Transaction =
             Transaction::new(&keypairs, Message::new(Vec::new()), Hash::default());
         let tx_entry = Entry::new(&Hash::default(), 1, vec![tx]);

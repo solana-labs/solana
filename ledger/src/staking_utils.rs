@@ -133,11 +133,7 @@ pub(crate) mod tests {
         amount: u64,
     ) {
         let vote_pubkey = vote_account.pubkey();
-        fn process_instructions<T: KeypairUtil>(
-            bank: &Bank,
-            keypairs: &[&T],
-            ixs: Vec<Instruction>,
-        ) {
+        fn process_instructions(bank: &Bank, keypairs: &[&dyn KeypairUtil], ixs: Vec<Instruction>) {
             bank.process_transaction(&Transaction::new_signed_with_payer(
                 ixs,
                 Some(&keypairs[0].pubkey()),

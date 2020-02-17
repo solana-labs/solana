@@ -177,8 +177,8 @@ mod tests {
     /// Create a config account and use it as a date oracle.
     fn create_date_account(
         bank_client: &BankClient,
-        date_keypair: &Keypair,
-        payer_keypair: &Keypair,
+        date_keypair: &dyn KeypairUtil,
+        payer_keypair: &dyn KeypairUtil,
         date: Date<Utc>,
     ) -> Result<Signature> {
         let date_pubkey = date_keypair.pubkey();
@@ -188,25 +188,25 @@ mod tests {
         instructions.push(date_instruction::store(&date_pubkey, date));
 
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair, &date_keypair], message)
+        bank_client.send_message(&[payer_keypair, date_keypair], message)
     }
 
     fn store_date(
         bank_client: &BankClient,
-        date_keypair: &Keypair,
-        payer_keypair: &Keypair,
+        date_keypair: &dyn KeypairUtil,
+        payer_keypair: &dyn KeypairUtil,
         date: Date<Utc>,
     ) -> Result<Signature> {
         let date_pubkey = date_keypair.pubkey();
         let instruction = date_instruction::store(&date_pubkey, date);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[&payer_keypair, &date_keypair], message)
+        bank_client.send_message(&[payer_keypair, date_keypair], message)
     }
 
     fn create_vest_account(
         bank_client: &BankClient,
-        contract_keypair: &Keypair,
-        payer_keypair: &Keypair,
+        contract_keypair: &dyn KeypairUtil,
+        payer_keypair: &dyn KeypairUtil,
         terminator_pubkey: &Pubkey,
         payee_pubkey: &Pubkey,
         start_date: Date<Utc>,
@@ -223,42 +223,42 @@ mod tests {
             lamports,
         );
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair, &contract_keypair], message)
+        bank_client.send_message(&[payer_keypair, contract_keypair], message)
     }
 
     fn send_set_terminator(
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
-        old_keypair: &Keypair,
+        old_keypair: &dyn KeypairUtil,
         new_pubkey: &Pubkey,
     ) -> Result<Signature> {
         let instruction =
             vest_instruction::set_terminator(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
-        bank_client.send_instruction(&old_keypair, instruction)
+        bank_client.send_instruction(old_keypair, instruction)
     }
 
     fn send_set_payee(
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
-        old_keypair: &Keypair,
+        old_keypair: &dyn KeypairUtil,
         new_pubkey: &Pubkey,
     ) -> Result<Signature> {
         let instruction =
             vest_instruction::set_payee(&contract_pubkey, &old_keypair.pubkey(), &new_pubkey);
-        bank_client.send_instruction(&old_keypair, instruction)
+        bank_client.send_instruction(old_keypair, instruction)
     }
 
     fn send_redeem_tokens(
         bank_client: &BankClient,
         contract_pubkey: &Pubkey,
-        payer_keypair: &Keypair,
+        payer_keypair: &dyn KeypairUtil,
         payee_pubkey: &Pubkey,
         date_pubkey: &Pubkey,
     ) -> Result<Signature> {
         let instruction =
             vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[&payer_keypair], message)
+        bank_client.send_message(&[payer_keypair], message)
     }
 
     #[test]
