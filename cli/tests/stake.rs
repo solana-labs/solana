@@ -138,12 +138,13 @@ fn test_seed_stake_delegation_and_deactivation() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
+    let validator_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (validator_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&validator_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_validator = CliConfig::default();
+    config_validator.keypair = validator_keypair.into();
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    let (validator_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_validator.keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut config_stake = CliConfig::default();
     config_stake.json_rpc_url =
@@ -229,11 +230,13 @@ fn test_stake_delegation_and_deactivation() {
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_stake = CliConfig::default();
+    config_stake.keypair = stake_keypair.into();
     config_stake.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_stake.keypair, tmp_file.as_file_mut()).unwrap();
 
     request_and_confirm_airdrop(
         &rpc_client,
@@ -311,11 +314,13 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_stake = CliConfig::default();
+    config_stake.keypair = stake_keypair.into();
     config_stake.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_stake.keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut config_offline = CliConfig::default();
     config_offline.json_rpc_url = String::default();
@@ -430,9 +435,11 @@ fn test_nonced_stake_delegation_and_deactivation() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
-    let mut config = CliConfig::default();
+    let config_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let (config_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config.keypair, tmp_file.as_file_mut()).unwrap();
+    write_keypair(&config_keypair, tmp_file.as_file_mut()).unwrap();
+    let mut config = CliConfig::default();
+    config.keypair = config_keypair.into();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let minimum_nonce_balance = rpc_client
@@ -537,8 +544,13 @@ fn test_stake_authorize() {
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
         .unwrap();
 
+    let offline_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (offline_authority_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&offline_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_offline = CliConfig::default();
+    config_offline.keypair = offline_keypair.into();
     config_offline.json_rpc_url = String::default();
+    let offline_authority_pubkey = config_offline.keypair.pubkey();
     config_offline.command = CliCommand::ClusterVersion;
     // Verfiy that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
@@ -598,9 +610,6 @@ fn test_stake_authorize() {
     assert_eq!(current_authority, online_authority_pubkey);
 
     // Assign new offline stake authority
-    let offline_authority_pubkey = config_offline.keypair.pubkey();
-    let (offline_authority_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: offline_authority_pubkey,
@@ -755,17 +764,17 @@ fn test_stake_authorize_with_fee_payer() {
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let payer_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (payer_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&payer_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_payer = CliConfig::default();
+    config_payer.keypair = payer_keypair.into();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     let payer_pubkey = config_payer.keypair.pubkey();
-    let (payer_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_payer.keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut config_offline = CliConfig::default();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     // Verify we're offline
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
@@ -897,8 +906,6 @@ fn test_stake_split() {
     let mut config_offline = CliConfig::default();
     config_offline.json_rpc_url = String::default();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     // Verify we're offline
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
@@ -914,7 +921,7 @@ fn test_stake_split() {
     let minimum_stake_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
         .unwrap();
-    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap().into();
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
@@ -943,7 +950,7 @@ fn test_stake_split() {
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
-    let nonce_account = keypair_from_seed(&[1u8; 32]).unwrap().into();
+    let nonce_account = keypair_from_seed(&[1u8; 32]).unwrap();
     let nonce_account_pubkey = nonce_account.pubkey();
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
@@ -965,7 +972,7 @@ fn test_stake_split() {
     };
 
     // Nonced offline split
-    let split_account = keypair_from_seed(&[2u8; 32]).unwrap().into();
+    let split_account = keypair_from_seed(&[2u8; 32]).unwrap();
     let (split_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&split_account, tmp_file.as_file_mut()).unwrap();
     check_balance(0, &rpc_client, &split_account.pubkey());
@@ -1029,8 +1036,6 @@ fn test_stake_set_lockup() {
     let mut config_offline = CliConfig::default();
     config_offline.json_rpc_url = String::default();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     // Verify we're offline
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
@@ -1047,7 +1052,7 @@ fn test_stake_set_lockup() {
         .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
         .unwrap();
 
-    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap().into();
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
@@ -1172,7 +1177,7 @@ fn test_stake_set_lockup() {
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
-    let nonce_account = keypair_from_seed(&[1u8; 32]).unwrap().into();
+    let nonce_account = keypair_from_seed(&[1u8; 32]).unwrap();
     let nonce_account_pubkey = nonce_account.pubkey();
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
@@ -1253,8 +1258,6 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let mut config_offline = CliConfig::default();
     config_offline.keypair = keypair_from_seed(&[2u8; 32]).unwrap().into();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     config_offline.json_rpc_url = String::default();
     config_offline.command = CliCommand::ClusterVersion;
     // Verfiy that we cannot reach the cluster
@@ -1277,7 +1280,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
-    let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap().into();
+    let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap();
     let nonce_pubkey = nonce_account.pubkey();
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
@@ -1298,7 +1301,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     };
 
     // Create stake account offline
-    let stake_keypair = keypair_from_seed(&[4u8; 32]).unwrap().into();
+    let stake_keypair = keypair_from_seed(&[4u8; 32]).unwrap();
     let stake_pubkey = stake_keypair.pubkey();
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
@@ -1347,7 +1350,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     };
 
     // Offline, nonced stake-withdraw
-    let recipient = keypair_from_seed(&[5u8; 32]).unwrap().into();
+    let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
     let recipient_pubkey = recipient.pubkey();
     config_offline.command = CliCommand::WithdrawStake {
         stake_account_pubkey: stake_pubkey,
