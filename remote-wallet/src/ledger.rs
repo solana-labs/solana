@@ -43,7 +43,7 @@ const HID_PREFIX_ZERO: usize = 0;
 
 mod commands {
     #[allow(dead_code)]
-    pub const GET_APP_CONFIGURATION: u8 = 0x06;
+    pub const GET_APP_CONFIGURATION: u8 = 0x01;
     pub const GET_PUBKEY: u8 = 0x02;
     pub const SIGN_MESSAGE: u8 = 0x03;
 }
