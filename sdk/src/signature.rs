@@ -1,12 +1,9 @@
 //! The `signature` module provides functionality for public, and private keys.
 
 use crate::pubkey::Pubkey;
-use bs58;
-use ed25519_dalek;
 use generic_array::{typenum::U64, GenericArray};
 use hmac::Hmac;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
-use serde_json;
 use std::{
     borrow::{Borrow, Cow},
     error, fmt,
