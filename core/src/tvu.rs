@@ -304,6 +304,7 @@ pub mod tests {
             None,
             None,
             None,
+            Arc::new(RwLock::new(VoteTracker::new(&bank))),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

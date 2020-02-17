@@ -260,6 +260,10 @@ impl Message {
                     - self.header.num_readonly_unsigned_accounts as usize)
     }
 
+    pub fn is_signer(&self, i: usize) -> bool {
+        i < self.header.num_required_signatures as usize
+    }
+
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
