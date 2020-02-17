@@ -1596,7 +1596,7 @@ mod tests {
                     authority: None,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-                    nonce_account: None,
+                    nonce_account: Some(nonce_account),
                     nonce_authority: Some(Presigner::new(&pubkey2, &sig2).into()),
                     fee_payer: Some(Presigner::new(&pubkey, &sig).into()),
                 },
@@ -2076,7 +2076,7 @@ mod tests {
             &key1.to_string(),
             "--nonce",
             &nonce_account.to_string(),
-            "--nonce_auhtority",
+            "--nonce-authority",
             &key2.to_string(),
         ]);
         assert_eq!(
@@ -2379,7 +2379,7 @@ mod tests {
             &key1.to_string(),
             "--nonce",
             &nonce_account.to_string(),
-            "--nonce-account",
+            "--nonce-authority",
             &key2.to_string(),
         ]);
         assert_eq!(
@@ -2390,7 +2390,7 @@ mod tests {
                     stake_authority: None,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-                    nonce_account: None,
+                    nonce_account: Some(nonce_account),
                     nonce_authority: Some(Presigner::new(&key2, &sig2).into()),
                     fee_payer: Some(Presigner::new(&key1, &sig1).into()),
                 },
