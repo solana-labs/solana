@@ -26,6 +26,7 @@ use crate::{
     weighted_shuffle::{weighted_best, weighted_shuffle},
 };
 use bincode::{serialize, serialized_size};
+use compression::prelude::*;
 use core::cmp;
 use itertools::Itertools;
 use solana_ledger::{bank_forks::BankForks, staking_utils};
@@ -307,10 +308,75 @@ impl ClusterInfo {
         )
     }
 
-    pub fn push_epoch_slots(&mut self, id: Pubkey, root: Slot, min: Slot, slots: BTreeSet<Slot>) {
+    pub fn compress_incomplete_slots(incomplete_slots: &BTreeSet<Slot>) -> (Slot, Vec<u8>) {
+        if !incomplete_slots.is_empty() {
+            let first_slot = incomplete_slots
+                .iter()
+                .next()
+                .expect("expected to find at least one slot");
+            let last_slot = incomplete_slots
+                .iter()
+                .next_back()
+                .expect("expected to find last slot");
+            let mut uncompressed = vec![0u8; (last_slot.saturating_sub(*first_slot) + 1) as usize];
+            incomplete_slots.iter().for_each(|slot| {
+                uncompressed[slot.saturating_sub(*first_slot) as usize] = 1;
+            });
+            if let Ok(compressed) = uncompressed
+                .iter()
+                .cloned()
+                .encode(&mut GZipEncoder::new(), Action::Finish)
+                .collect::<std::result::Result<Vec<u8>, _>>()
+            {
+                (*first_slot, compressed)
+            } else {
+                (0, vec![])
+            }
+        } else {
+            (0, vec![])
+        }
+    }
+
+    pub fn decompress_incomplete_slots(first_slot: u64, compressed: &[u8]) -> BTreeSet<Slot> {
+        let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
+
+        if let Ok(decompressed) = compressed
+            .iter()
+            .cloned()
+            .decode(&mut GZipDecoder::new())
+            .collect::<std::result::Result<Vec<u8>, _>>()
+        {
+            decompressed.iter().enumerate().for_each(|(i, val)| {
+                if *val == 1 {
+                    old_incomplete_slots.insert(first_slot + i as u64);
+                }
+            })
+        }
+
+        old_incomplete_slots
+    }
+
+    pub fn push_epoch_slots(
+        &mut self,
+        id: Pubkey,
+        root: Slot,
+        min: Slot,
+        slots: BTreeSet<Slot>,
+        incomplete_slots: &BTreeSet<Slot>,
+    ) {
+        let (first_missing_slot, compressed_map) =
+            Self::compress_incomplete_slots(incomplete_slots);
         let now = timestamp();
         let entry = CrdsValue::new_signed(
-            CrdsData::EpochSlots(EpochSlots::new(id, root, min, slots, now)),
+            CrdsData::EpochSlots(EpochSlots::new(
+                id,
+                root,
+                min,
+                slots,
+                first_missing_slot,
+                compressed_map,
+                now,
+            )),
             &self.keypair,
         );
         self.gossip
@@ -2133,6 +2199,8 @@ mod tests {
             root: 0,
             lowest: 0,
             slots: btree_slots,
+            first_missing: 0,
+            stash: vec![],
             wallclock: 0,
         }));
         test_split_messages(value);
@@ -2150,6 +2218,8 @@ mod tests {
             root: 0,
             lowest: 0,
             slots: BTreeSet::new(),
+            first_missing: 0,
+            stash: vec![],
             wallclock: 0,
         }));
 
@@ -2168,6 +2238,8 @@ mod tests {
                 root: 0,
                 lowest: 0,
                 slots,
+                first_missing: 0,
+                stash: vec![],
                 wallclock: 0,
             });
             i += 1;
@@ -2314,6 +2386,8 @@ mod tests {
                 peer_root,
                 peer_lowest,
                 BTreeSet::new(),
+                0,
+                vec![],
                 timestamp(),
             )));
             let _ = cluster_info.gossip.crds.insert(value, timestamp());
@@ -2374,5 +2448,33 @@ mod tests {
         let protocol_size =
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
         PACKET_DATA_SIZE - (protocol_size - filter_size)
+    }
+
+    #[test]
+    fn test_compress_incomplete_slots() {
+        let mut incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
+
+        assert_eq!(
+            (0, vec![]),
+            ClusterInfo::compress_incomplete_slots(&incomplete_slots)
+        );
+
+        incomplete_slots.insert(100);
+        let (first, compressed) = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
+        assert_eq!(100, first);
+        let decompressed = ClusterInfo::decompress_incomplete_slots(first, &compressed);
+        assert_eq!(incomplete_slots, decompressed);
+
+        incomplete_slots.insert(104);
+        let (first, compressed) = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
+        assert_eq!(100, first);
+        let decompressed = ClusterInfo::decompress_incomplete_slots(first, &compressed);
+        assert_eq!(incomplete_slots, decompressed);
+
+        incomplete_slots.insert(80);
+        let (first, compressed) = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
+        assert_eq!(80, first);
+        let decompressed = ClusterInfo::decompress_incomplete_slots(first, &compressed);
+        assert_eq!(incomplete_slots, decompressed);
     }
 }
