@@ -179,6 +179,15 @@ where
     }
 }
 
+impl<T> From<T> for Box<dyn KeypairUtil>
+where
+    T: KeypairUtil + 'static,
+{
+    fn from(keypair_util: T) -> Self {
+        Box::new(keypair_util)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Presigner {
     pubkey: Pubkey,
