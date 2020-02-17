@@ -369,7 +369,7 @@ impl RepairService {
     }
 
     fn stash_old_incomplete_slots(cache: &mut BTreeSet<Slot>, stash: &mut BTreeSet<Slot>) {
-        if cache.len() >= MAX_COMPLETED_SLOT_CACHE_LEN + 1 {
+        if cache.len() > MAX_COMPLETED_SLOT_CACHE_LEN {
             let mut prev = cache
                 .iter()
                 .next()
