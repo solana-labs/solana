@@ -223,7 +223,7 @@ pub enum SignerError {
     UserCancel,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Presigner {
     pubkey: Pubkey,
     signature: Signature,
