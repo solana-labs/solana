@@ -67,6 +67,8 @@ pub struct EpochSlots {
     pub root: Slot,
     pub lowest: Slot,
     pub slots: BTreeSet<Slot>,
+    pub first_missing: Slot,
+    pub stash: Vec<u8>,
     pub wallclock: u64,
 }
 
@@ -76,6 +78,8 @@ impl EpochSlots {
         root: Slot,
         lowest: Slot,
         slots: BTreeSet<Slot>,
+        first_missing: Slot,
+        stash: Vec<u8>,
         wallclock: u64,
     ) -> Self {
         Self {
@@ -83,6 +87,8 @@ impl EpochSlots {
             root,
             lowest,
             slots,
+            first_missing,
+            stash,
             wallclock,
         }
     }
@@ -283,6 +289,8 @@ mod test {
             0,
             BTreeSet::new(),
             0,
+            vec![],
+            0,
         )));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
@@ -309,6 +317,8 @@ mod test {
             0,
             0,
             btreeset,
+            0,
+            vec![],
             timestamp(),
         )));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
