@@ -14,9 +14,7 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
-use solana_clap_utils::{
-    input_parsers::*, input_validators::*, keypair::generate_keypair_util, ArgConstant,
-};
+use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -91,17 +89,6 @@ impl std::ops::Deref for KeypairEq {
     type Target = Keypair;
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-pub fn signer_from_matches(
-    name: &str,
-    matches: &ArgMatches<'_>,
-) -> Result<Option<Box<dyn KeypairUtil>>, Box<dyn error::Error>> {
-    if let Some(location) = matches.value_of(name) {
-        generate_keypair_util(matches, location, name).map(Some)
-    } else {
-        Ok(None)
     }
 }
 
@@ -620,7 +607,7 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(&matches);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-            let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, &matches)?;
+            let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches)?;
 
             Ok(CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
@@ -684,9 +671,9 @@ pub fn parse_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Box<dyn
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-            let nonce_authority = signer_from_matches(NONCE_AUTHORITY_ARG.name, &matches)?;
-            let fee_payer = signer_from_matches(FEE_PAYER_ARG.name, &matches)?;
-            let from = signer_from_matches("from", &matches)?;
+            let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches)?;
+            let fee_payer = signer_of(FEE_PAYER_ARG.name, &matches)?;
+            let from = signer_of("from", &matches)?;
             Ok(CliCommandInfo {
                 command: CliCommand::Transfer {
                     lamports,
