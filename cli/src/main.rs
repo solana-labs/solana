@@ -105,25 +105,23 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
             matches.value_of("keypair").unwrap()
         } else if config.keypair_path != "" {
             &config.keypair_path
-        } else {
-            if let Some(path) = &*DEFAULT_USER_KEYPAIR {
-                if !std::path::Path::new(&CliConfig::default_keypair_path()).exists() {
-                    return Err(CliError::KeypairFileNotFound(format!(
-                        "Generate a new keypair at {} with `solana-keygen new`",
-                        path
-                    ))
-                    .into());
-                }
-                path
-            } else {
+        } else if let Some(path) = &*DEFAULT_USER_KEYPAIR {
+            if !std::path::Path::new(&CliConfig::default_keypair_path()).exists() {
                 return Err(CliError::KeypairFileNotFound(format!(
-                    "Generate a new keypair with `solana-keygen new`"
+                    "Generate a new keypair at {} with `solana-keygen new`",
+                    path
                 ))
                 .into());
             }
+            path
+        } else {
+            return Err(CliError::KeypairFileNotFound(
+                "Generate a new keypair with `solana-keygen new`".to_string(),
+            )
+            .into());
         };
 
-        let keypair = generate_keypair_util(matches, path.clone(), "keypair")?;
+        let keypair = generate_keypair_util(matches, path, "keypair")?;
         (keypair, Some(path.to_string()))
     } else {
         let default = CliConfig::default();
