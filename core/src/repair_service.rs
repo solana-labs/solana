@@ -331,11 +331,7 @@ impl RepairService {
         let mut should_update = false;
         while let Ok(completed_slots) = completed_slots_receiver.try_recv() {
             for slot in completed_slots {
-                let last_slot_in_stash = incomplete_slot_stash
-                    .iter()
-                    .next_back()
-                    .unwrap_or(&0)
-                    .clone();
+                let last_slot_in_stash = *incomplete_slot_stash.iter().next_back().unwrap_or(&0);
                 let removed_from_stash = incomplete_slot_stash.remove(&slot);
                 // If the newly completed slot was not being tracked in stash, and is > last
                 // slot being tracked in stash, add it to cache. Also, update gossip
@@ -351,7 +347,7 @@ impl RepairService {
             if completed_slot_cache.len() >= COMPLETED_SLOT_CACHE_FLUSH_TRIGGER {
                 Self::stash_old_incomplete_slots(completed_slot_cache, incomplete_slot_stash);
                 let lowest_completed_slot_in_cache =
-                    completed_slot_cache.iter().next().unwrap_or(&0).clone();
+                    *completed_slot_cache.iter().next().unwrap_or(&0);
                 Self::prune_incomplete_slot_stash(
                     incomplete_slot_stash,
                     lowest_completed_slot_in_cache,
@@ -370,18 +366,10 @@ impl RepairService {
 
     fn stash_old_incomplete_slots(cache: &mut BTreeSet<Slot>, stash: &mut BTreeSet<Slot>) {
         if cache.len() > MAX_COMPLETED_SLOT_CACHE_LEN {
-            let mut prev = cache
-                .iter()
-                .next()
-                .expect("Expected to find some slot")
-                .clone();
+            let mut prev = *cache.iter().next().expect("Expected to find some slot");
             cache.remove(&prev);
             while cache.len() >= MAX_COMPLETED_SLOT_CACHE_LEN {
-                let next = cache
-                    .iter()
-                    .next()
-                    .expect("Expected to find some slot")
-                    .clone();
+                let next = *cache.iter().next().expect("Expected to find some slot");
                 cache.remove(&next);
                 // Prev slot and next slot are not included in incomplete slot list.
                 (prev + 1..next).for_each(|slot| {
