@@ -1232,6 +1232,10 @@ fn process_transfer(
 
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
+    let mut signers = vec![fee_payer];
+    if *fee_payer != *from {
+        signers.push(from)
+    }
     let mut tx = if let Some(nonce_account) = &nonce_account {
         Transaction::new_signed_with_nonce(
             ixs,
@@ -1245,7 +1249,7 @@ fn process_transfer(
         Transaction::new_signed_with_payer(
             ixs,
             Some(&fee_payer.pubkey()),
-            &[fee_payer.as_ref(), from.as_ref()],
+            &signers,
             recent_blockhash,
         )
     };
