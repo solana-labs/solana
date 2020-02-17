@@ -65,8 +65,8 @@ pub fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(FEE_PAYER_ARG.name)
         .long(FEE_PAYER_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY")
-        .validator(is_pubkey_or_keypair_or_ask_keyword)
+        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .validator(is_valid_signer)
         .help(FEE_PAYER_ARG.help)
 }
 
@@ -1985,7 +1985,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("The public key of the balance to check"),
                 )
                 .arg(
@@ -2194,8 +2194,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("from")
                         .long("from")
                         .takes_value(true)
-                        .value_name("KEYPAIR or PUBKEY")
-                        .validator(is_pubkey_or_keypair_or_ask_keyword)
+                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .validator(is_valid_signer)
                         .help("Source account of funds (if different from client local account)"),
                 )
                 .offline_args()

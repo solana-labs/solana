@@ -45,8 +45,8 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY")
-        .validator(is_pubkey_or_keypair_or_ask_keyword)
+        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .validator(is_valid_signer)
         .help(STAKE_AUTHORITY_ARG.help)
 }
 
@@ -54,8 +54,8 @@ fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
         .long(WITHDRAW_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY")
-        .validator(is_pubkey_or_keypair_or_ask_keyword)
+        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .validator(is_valid_signer)
         .help(WITHDRAW_AUTHORITY_ARG.help)
 }
 
@@ -74,7 +74,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("STAKE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair_or_ask_keyword)
+                        .validator(is_valid_signer)
                         .help("Signing authority of the stake address to fund")
                 )
                 .arg(
@@ -136,8 +136,8 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("from")
                         .long("from")
                         .takes_value(true)
-                        .value_name("KEYPAIR or PUBKEY")
-                        .validator(is_pubkey_or_keypair_or_ask_keyword)
+                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .validator(is_valid_signer)
                         .help("Source account of funds (if different from client local account)"),
                 )
                 .offline_args()
@@ -367,8 +367,8 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("custodian")
                         .long("custodian")
                         .takes_value(true)
-                        .value_name("KEYPAIR or PUBKEY")
-                        .validator(is_pubkey_or_keypair_or_ask_keyword)
+                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .validator(is_valid_signer)
                         .help("Public key of signing custodian (defaults to cli config pubkey)")
                 )
                 .offline_args()
