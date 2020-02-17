@@ -592,9 +592,10 @@ mod tests {
         account::Account,
         hash::hash,
         nonce_state::{Meta as NonceMeta, NonceState},
-        signature::{read_keypair_file, write_keypair},
+        signature::{read_keypair_file, write_keypair, Keypair},
         system_program,
     };
+    use std::rc::Rc;
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -668,7 +669,7 @@ mod tests {
             parse_command(&test_create_nonce_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
-                    nonce_account: read_keypair_file(&keypair_file).unwrap().into(),
+                    nonce_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
                     seed: None,
                     nonce_authority: None,
                     lamports: 50_000_000_000,
@@ -690,7 +691,7 @@ mod tests {
             parse_command(&test_create_nonce_account).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
-                    nonce_account: read_keypair_file(&keypair_file).unwrap().into(),
+                    nonce_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
                     seed: None,
                     nonce_authority: Some(
                         read_keypair_file(&authority_keypair_file).unwrap().pubkey()

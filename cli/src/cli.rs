@@ -2250,7 +2250,7 @@ mod tests {
         system_program,
         transaction::TransactionError,
     };
-    use std::{collections::HashMap, path::PathBuf};
+    use std::{collections::HashMap, path::PathBuf, rc::Rc};
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
@@ -2765,7 +2765,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey().to_string();
-        config.keypair = keypair;
+        config.keypair = keypair.into();
         config.command = CliCommand::Address;
         assert_eq!(process_command(&config).unwrap(), pubkey);
 
@@ -2825,7 +2825,7 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
         let custodian = Pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
-            stake_account: bob_keypair.into(),
+            stake_account: Rc::new(bob_keypair.into()),
             seed: None,
             staker: None,
             withdrawer: None,
@@ -2883,7 +2883,7 @@ mod tests {
             blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
             nonce_authority: None,
-            split_stake_account: split_stake_account.into(),
+            split_stake_account: Rc::new(split_stake_account.into()),
             seed: None,
             lamports: 1234,
             fee_payer: None,

@@ -18,6 +18,7 @@ use std::sync::mpsc::channel;
 
 #[cfg(test)]
 use solana_core::validator::new_validator_for_tests;
+use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
 use tempfile::NamedTempFile;
@@ -303,11 +304,10 @@ fn test_offline_pay_tx() {
     check_balance(50, &rpc_client, &config_online.keypair.pubkey());
     check_balance(0, &rpc_client, &bob_pubkey);
 
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    let (blockhash, _signers) = parse_sign_only_reply_string(&sig_response);
     config_online.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         ..PayCommand::default()
     });
@@ -357,7 +357,7 @@ fn test_nonced_pay_tx() {
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
         nonce_authority: Some(config.keypair.pubkey()),
         lamports: minimum_nonce_balance,
