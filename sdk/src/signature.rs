@@ -179,6 +179,15 @@ where
     }
 }
 
+impl<T> From<T> for Box<dyn Signer>
+where
+    T: Signer + 'static,
+{
+    fn from(keypair_util: T) -> Self {
+        Box::new(keypair_util)
+    }
+}
+
 #[derive(Debug, Error, PartialEq)]
 pub enum SignerError {
     #[error("keypair-pubkey mismatch")]
