@@ -188,7 +188,7 @@ where
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Presigner {
     pubkey: Pubkey,
     signature: Signature,
