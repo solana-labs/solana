@@ -104,12 +104,18 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let default_target_lamports_per_signature = &FeeCalculator::default()
-        .target_lamports_per_signature
-        .to_string();
-    let default_target_signatures_per_slot = &FeeCalculator::default()
-        .target_signatures_per_slot
-        .to_string();
+    let fee_calculator = FeeCalculator::default();
+    let (
+        default_target_lamports_per_signature,
+        default_target_signatures_per_slot,
+        default_fee_burn_percentage,
+    ) = {
+        (
+            &fee_calculator.target_lamports_per_signature.to_string(),
+            &fee_calculator.target_signatures_per_slot.to_string(),
+            &fee_calculator.burn_percent.to_string(),
+        )
+    };
 
     let rent = Rent::default();
     let (
@@ -123,6 +129,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             &rent.burn_percent.to_string(),
         )
     };
+
     // vote account
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
         .max(VoteState::get_rent_exempt_reserve(&rent))
@@ -272,6 +279,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value(default_rent_burn_percentage)
                 .help("percentage of collected rent to burn")
+                .validator(is_valid_percentage),
+        )
+        .arg(
+            Arg::with_name("fee_burn_percentage")
+                .long("fee-burn-percentage")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(default_fee_burn_percentage)
+                .help("percentage of collected fee to burn")
                 .validator(is_valid_percentage),
         )
         .arg(
@@ -427,10 +443,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
 
-    let fee_calculator = FeeCalculator::new(
+    let mut fee_calculator = FeeCalculator::new(
         value_t_or_exit!(matches, "target_lamports_per_signature", u64),
         value_t_or_exit!(matches, "target_signatures_per_slot", usize),
     );
+    fee_calculator.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
 
     let mut poh_config = PohConfig::default();
     poh_config.target_tick_duration = if matches.is_present("target_tick_duration") {
@@ -532,7 +549,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
          Shred version: {}\n\
          Hashes per tick: {:?}\n\
          Slots per epoch: {}\n\
-         Capitalization: {} SOL in {} accounts\
+         {:?}\n\
+         {:?}\n\
+         Capitalization: {} SOL in {} accounts\n\
          ",
         Utc.timestamp(genesis_config.creation_time, 0).to_rfc3339(),
         operating_mode,
@@ -540,6 +559,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         compute_shred_version(&genesis_config.hash(), None),
         genesis_config.poh_config.hashes_per_tick,
         slots_per_epoch,
+        genesis_config.rent,
+        genesis_config.fee_calculator,
         lamports_to_sol(
             genesis_config
                 .accounts
@@ -552,7 +573,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 })
                 .sum::<u64>()
         ),
-        genesis_config.accounts.len()
+        genesis_config.accounts.len(),
     );
 
     Ok(())
