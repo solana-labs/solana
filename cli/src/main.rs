@@ -10,7 +10,7 @@ use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},
     display::{println_name_value, println_name_value_or},
 };
-use solana_cli_config::config::{Config, CONFIG_FILE, DEFAULT_USER_KEYPAIR};
+use solana_cli_config::config::{Config, CONFIG_FILE};
 
 use std::error;
 
@@ -102,27 +102,23 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
 
     let (keypair, keypair_path) = if require_keypair {
         let path = if matches.is_present("keypair") {
-            matches.value_of("keypair").unwrap()
+            matches.value_of("keypair").unwrap().to_string()
         } else if config.keypair_path != "" {
-            &config.keypair_path
-        } else if let Some(path) = &*DEFAULT_USER_KEYPAIR {
-            if !std::path::Path::new(&CliConfig::default_keypair_path()).exists() {
+            config.keypair_path
+        } else {
+            let default_keypair_path = CliConfig::default_keypair_path();
+            if !std::path::Path::new(&default_keypair_path).exists() {
                 return Err(CliError::KeypairFileNotFound(format!(
                     "Generate a new keypair at {} with `solana-keygen new`",
-                    path
+                    default_keypair_path
                 ))
                 .into());
             }
-            path
-        } else {
-            return Err(CliError::KeypairFileNotFound(
-                "Generate a new keypair with `solana-keygen new`".to_string(),
-            )
-            .into());
+            default_keypair_path
         };
 
-        let keypair = generate_keypair_util(matches, path, "keypair")?;
-        (keypair, Some(path.to_string()))
+        let keypair = generate_keypair_util(matches, &path, "keypair")?;
+        (keypair, Some(path))
     } else {
         let default = CliConfig::default();
         (default.keypair, None)
