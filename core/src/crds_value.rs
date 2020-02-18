@@ -1,14 +1,16 @@
 use crate::contact_info::ContactInfo;
 use bincode::{serialize, serialized_size};
-use solana_sdk::clock::Slot;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signable, Signature};
-use solana_sdk::transaction::Transaction;
-use std::borrow::Borrow;
-use std::borrow::Cow;
-use std::collections::BTreeSet;
-use std::collections::HashSet;
-use std::fmt;
+use solana_sdk::{
+    clock::Slot,
+    pubkey::Pubkey,
+    signature::{Keypair, Signable, Signature},
+    transaction::Transaction,
+};
+use std::{
+    borrow::{Borrow, Cow},
+    collections::{BTreeSet, HashSet},
+    fmt,
+};
 
 pub type VoteIndex = u8;
 pub const MAX_VOTES: VoteIndex = 32;
@@ -50,14 +52,12 @@ impl Signable for CrdsValue {
 }
 
 /// CrdsData that defines the different types of items CrdsValues can hold
+/// * Merge Strategy - Latest wallclock is picked
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum CrdsData {
-    /// * Merge Strategy - Latest wallclock is picked
     ContactInfo(ContactInfo),
-    /// * Merge Strategy - Latest wallclock is picked
     Vote(VoteIndex, Vote),
-    /// * Merge Strategy - Latest wallclock is picked
     EpochSlots(EpochSlots),
 }
 

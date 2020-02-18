@@ -8,25 +8,24 @@
 //!    the local nodes wallclock window they are drooped silently.
 //! 2. The prune set is stored in a Bloom filter.
 
-use crate::contact_info::ContactInfo;
-use crate::crds::{Crds, VersionedCrdsValue};
-use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
-use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_value::{CrdsValue, CrdsValueLabel};
-use crate::weighted_shuffle::weighted_shuffle;
+use crate::{
+    contact_info::ContactInfo,
+    crds::{Crds, VersionedCrdsValue},
+    crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
+    crds_gossip_error::CrdsGossipError,
+    crds_value::{CrdsValue, CrdsValueLabel},
+    weighted_shuffle::weighted_shuffle,
+};
 use bincode::serialized_size;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
-use rand;
-use rand::seq::SliceRandom;
-use rand::{thread_rng, RngCore};
+use rand::{self, seq::SliceRandom, thread_rng, RngCore};
 use solana_runtime::bloom::Bloom;
-use solana_sdk::hash::Hash;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::timestamp;
-use std::cmp;
-use std::collections::{HashMap, HashSet};
+use solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp};
+use std::{
+    cmp,
+    collections::{HashMap, HashSet},
+};
 
 pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
 pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
