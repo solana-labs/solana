@@ -86,7 +86,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         .rc
         .get_rooted_storage_entries()
         .into_iter()
-        .filter(|x| x.slot_id() <= bank.slot())
+        .filter(|(x, _)| x.slot_id() <= bank.slot())
         .collect();
 
     // Create a snapshot package
@@ -145,7 +145,7 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     )?;
 
     // Add the AppendVecs into the compressible list
-    for storage in &snapshot_package.storage_entries {
+    for (storage, should_use) in &snapshot_package.storage_candidates {
         storage.flush()?;
         let storage_path = storage.get_path();
         let output_path = staging_accounts_dir.join(
@@ -156,9 +156,14 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
 
         // `storage_path` - The file path where the AppendVec itself is located
         // `output_path` - The directory where the AppendVec will be placed in the staging directory.
-        let storage_path =
-            fs::canonicalize(storage_path).expect("Could not get absolute path for accounts");
-        symlink::symlink_dir(storage_path, &output_path)?;
+        if *should_use {
+            let storage_path =
+                fs::canonicalize(storage_path).expect("Could not get absolute path for accounts");
+            symlink::symlink_dir(storage_path, &output_path)?;
+        } else {
+            warn!("creating empty file: {:?}", output_path);
+            fs::File::create(&output_path)?;
+        }
         if !output_path.is_file() {
             return Err(SnapshotError::StoragePathSymlinkInvalid);
         }

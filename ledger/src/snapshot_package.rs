@@ -1,11 +1,8 @@
-use solana_runtime::{accounts_db::AccountStorageEntry, bank::BankSlotDelta};
+use solana_runtime::{accounts_db::SnapshotStorageCandidates, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use std::{
     path::PathBuf,
-    sync::{
-        mpsc::{Receiver, SendError, Sender},
-        Arc,
-    },
+    sync::mpsc::{Receiver, SendError, Sender},
 };
 use tempfile::TempDir;
 
@@ -18,7 +15,7 @@ pub struct SnapshotPackage {
     pub root: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
-    pub storage_entries: Vec<Arc<AccountStorageEntry>>,
+    pub storage_candidates: SnapshotStorageCandidates,
     pub tar_output_file: PathBuf,
 }
 
@@ -27,14 +24,14 @@ impl SnapshotPackage {
         root: Slot,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
-        storage_entries: Vec<Arc<AccountStorageEntry>>,
+        storage_candidates: SnapshotStorageCandidates,
         tar_output_file: PathBuf,
     ) -> Self {
         Self {
             root,
             slot_deltas,
             snapshot_links,
-            storage_entries,
+            storage_candidates,
             tar_output_file,
         }
     }

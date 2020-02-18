@@ -87,6 +87,7 @@ pub struct AccountInfo {
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
+pub type SnapshotStorageCandidates = Vec<(Arc<AccountStorageEntry>, bool)>;
 
 // Each slot has a set of storage entries.
 type SlotStores = HashMap<usize, Arc<AccountStorageEntry>>;
@@ -531,6 +532,13 @@ impl AccountsDB {
                         AppendVec::new_relative_path(slot_id, storage_entry.id);
                     let append_vec_abs_path =
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
+                    if append_vec_abs_path.is_file()
+                        && std::fs::metadata(&append_vec_abs_path)?.len() == 0
+                    {
+                        info!("skipping: id: {}, entry: {:?}", id, storage_entry);
+                        continue;
+                    }
+
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
                     let e = fs_extra::move_items(
@@ -1240,14 +1248,17 @@ impl AccountsDB {
         self.accounts_index.write().unwrap().add_root(slot)
     }
 
-    pub fn get_rooted_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
+    pub fn get_rooted_storage_entries(&self) -> SnapshotStorageCandidates {
         let accounts_index = self.accounts_index.read().unwrap();
         let r_storage = self.storage.read().unwrap();
         r_storage
             .0
             .values()
             .flat_map(|slot_store| slot_store.values().cloned())
-            .filter(|store| accounts_index.is_root(store.slot_id))
+            .map(|store| {
+                let should_use = accounts_index.is_root(store.slot_id);
+                (store, should_use)
+            })
             .collect()
     }
 
@@ -2282,15 +2293,17 @@ pub mod tests {
         output_dir: P,
     ) -> IOResult<()> {
         let storage_entries = accounts_db.get_rooted_storage_entries();
-        for storage in storage_entries {
-            let storage_path = storage.get_path();
-            let output_path = output_dir.as_ref().join(
-                storage_path
-                    .file_name()
-                    .expect("Invalid AppendVec file path"),
-            );
+        for (storage, should_use) in storage_entries {
+            if should_use {
+                let storage_path = storage.get_path();
+                let output_path = output_dir.as_ref().join(
+                    storage_path
+                        .file_name()
+                        .expect("Invalid AppendVec file path"),
+                );
 
-            fs::copy(storage_path, output_path)?;
+                fs::copy(storage_path, output_path)?;
+            }
         }
 
         Ok(())

@@ -4,7 +4,7 @@
 //! already been signed and verified.
 use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
-    accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
+    accounts_db::{AccountsDBSerialize, AppendVecId, ErrorCounters, SnapshotStorageCandidates},
     blockhash_queue::BlockhashQueue,
     hard_forks::HardForks,
     message_processor::{MessageProcessor, ProcessInstruction},
@@ -111,7 +111,7 @@ impl BankRc {
         Ok(())
     }
 
-    pub fn get_rooted_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
+    pub fn get_rooted_storage_entries(&self) -> SnapshotStorageCandidates {
         self.accounts.accounts_db.get_rooted_storage_entries()
     }
 
