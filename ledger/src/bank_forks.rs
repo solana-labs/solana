@@ -392,12 +392,19 @@ mod tests {
     fn test_bank_forks_check_interval() {
         assert!(BankForks::check_interval(1, 0, 1));
         assert!(BankForks::check_interval(0, 0, 1));
+        assert!(BankForks::check_interval(0, 0, 5));
 
         for i in 0..100 {
             assert!(BankForks::check_interval(5 + i, 0, 5));
         }
         for i in 1..100 {
             assert!(BankForks::check_interval(5 * i, 5 * i - 1, 5));
+        }
+        for i in 2..100 {
+            assert!(BankForks::check_interval(5 * i, 5 * i - 2, 5));
+        }
+        for i in 3..100 {
+            assert!(BankForks::check_interval(5 * i, 5 * i - 3, 5));
         }
         for i in 0..3 {
             assert!(!BankForks::check_interval(1 + i, 0, 5));
