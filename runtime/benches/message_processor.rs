@@ -3,8 +3,8 @@
 extern crate test;
 
 use log::*;
-use solana_runtime::{message_processor::PreAccount, rent_collector::RentCollector};
-use solana_sdk::{account::Account, pubkey::Pubkey};
+use solana_runtime::message_processor::PreAccount;
+use solana_sdk::{account::Account, pubkey::Pubkey, rent::Rent};
 use test::Bencher;
 
 #[bench]
@@ -13,28 +13,36 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
 
     let owner = Pubkey::new_rand();
     let non_owner = Pubkey::new_rand();
-    let pre = PreAccount::new(&Account::new(0, BUFSIZE, &owner), &owner, true);
+    let pre = PreAccount::new(
+        &Pubkey::new_rand(),
+        &Account::new(0, BUFSIZE, &owner),
+        true,
+        false,
+    );
     let post = Account::new(0, BUFSIZE, &owner);
-    assert_eq!(pre.verify(&owner, &RentCollector::default(), &post), Ok(()));
+    assert_eq!(pre.verify(&owner, &Rent::default(), &post), Ok(()));
 
     // this one should be faster
     bencher.iter(|| {
-        pre.verify(&owner, &RentCollector::default(), &post)
-            .unwrap();
+        pre.verify(&owner, &Rent::default(), &post).unwrap();
     });
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by owner: {} ns/iter", summary.median);
 
-    let pre = PreAccount::new(&Account::new(0, BUFSIZE, &owner), &non_owner, true);
-    match pre.data {
-        Some(ref data) => bencher.iter(|| *data == post.data),
-        None => panic!("No data!"),
-    }
+    let pre_data = vec![BUFSIZE];
+    let post_data = vec![BUFSIZE];
+    bencher.iter(|| pre_data == post_data);
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data compare {} ns/iter", summary.median);
+
+    let pre = PreAccount::new(
+        &Pubkey::new_rand(),
+        &Account::new(0, BUFSIZE, &owner),
+        true,
+        false,
+    );
     bencher.iter(|| {
-        pre.verify(&non_owner, &RentCollector::default(), &post)
-            .unwrap();
+        pre.verify(&non_owner, &Rent::default(), &post).unwrap();
     });
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by non owner: {} ns/iter", summary.median);

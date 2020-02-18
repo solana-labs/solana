@@ -8,6 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::KeyedAccount,
     account_utils::State,
+    entrypoint_native::InvokeContext,
     instruction::InstructionError,
     move_loader::id,
     program_utils::DecodeError,
@@ -445,6 +446,7 @@ impl MoveProcessor {
         _program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
+        _invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         solana_logger::setup();
 

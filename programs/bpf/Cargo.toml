@@ -40,6 +40,8 @@ members = [
     "rust/dup_accounts",
     "rust/error_handling",
     "rust/external_spend",
+    "rust/invoke",
+    "rust/invoked",
     "rust/iter",
     "rust/many_args",
     "rust/many_args_dep",
