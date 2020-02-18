@@ -189,7 +189,7 @@ impl BankForks {
                 if Self::check_interval(root, parent_slot, config.snapshot_interval_slots) {
                     // Generate a snapshot if snapshots are configured and it's been an appropriate number
                     // of banks since the last snapshot
-                    info!("setting snapshot root: {}", root);
+                    info!("setting snapshot root: {} interval: {}", root, config.snapshot_interval_slots);
                     if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
                         bank.squash();
                         let mut snapshot_time = Measure::start("total-snapshot-ms");
