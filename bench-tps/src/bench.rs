@@ -909,8 +909,10 @@ fn fund_move_keys<T: Client>(
         let keypairs: Vec<_> = keys.iter().map(|k| k).collect();
         let tx = librapay_transaction::create_accounts(funding_key, &keypairs, 1, blockhash);
         let ser_size = bincode::serialized_size(&tx).unwrap();
-        let mut keys = vec![funding_key];
-        keys.extend(&keypairs);
+        let mut keys: Vec<&dyn KeypairUtil> = vec![funding_key];
+        for keypair in keypairs.iter() {
+            keys.push(*keypair);
+        }
         client.send_message(&keys, tx.message).unwrap();
 
         if i % 10 == 0 {
@@ -957,7 +959,7 @@ fn fund_move_keys<T: Client>(
     for (i, key) in libra_funding_keys.iter().enumerate() {
         let tx = librapay_transaction::create_account(&funding_keys[i], &key, 1, blockhash);
         client
-            .send_message(&[&funding_keys[i], &key], tx.message)
+            .send_message(&[&funding_keys[i], key], tx.message)
             .unwrap();
 
         let tx = librapay_transaction::transfer(

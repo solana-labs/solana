@@ -90,8 +90,10 @@ pub fn create_accounts(
         })
         .collect();
 
-    let mut from_signers = vec![from_keypair];
-    from_signers.extend_from_slice(to_keypair);
+    let mut from_signers: Vec<&dyn KeypairUtil> = vec![from_keypair];
+    for keypair in to_keypair.iter() {
+        from_signers.push(*keypair);
+    }
     Transaction::new_signed_instructions(&from_signers, instructions, recent_blockhash)
 }
 
