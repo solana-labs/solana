@@ -85,8 +85,12 @@ pub fn to_packets_with_destination<T: Serialize>(
     );
     out.packets.resize(dests_and_data.len(), Packet::default());
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
-        if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
-            error!("Couldn't write to packet {:?}. Data skipped.", e);
+        if !dest_and_data.0.ip().is_unspecified() && dest_and_data.0.port() != 0 {
+            if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
+                error!("Couldn't write to packet {:?}. Data skipped.", e);
+            }
+        } else {
+            trace!("Dropping packet, as destination is unknown");
         }
     }
     out

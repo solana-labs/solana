@@ -1323,20 +1323,24 @@ impl ClusterInfo {
             .into_iter()
             .zip(addrs.into_iter())
             .for_each(|(response, from_addr)| {
-                let len = response.len();
-                trace!("get updates since response {}", len);
-                inc_new_counter_debug!("cluster_info-pull_request-rsp", len);
-                Self::split_gossip_messages(response)
-                    .into_iter()
-                    .for_each(|payload| {
-                        let protocol = Protocol::PullResponse(self_id, payload);
-                        // The remote node may not know its public IP:PORT. Instead of responding to the caller's
-                        // gossip addr, respond to the origin addr. The last origin addr is picked from the list of
-                        // addrs.
-                        packets
-                            .packets
-                            .push(Packet::from_data(&from_addr, protocol))
-                    })
+                if !from_addr.ip().is_unspecified() && from_addr.port() != 0 {
+                    let len = response.len();
+                    trace!("get updates since response {}", len);
+                    inc_new_counter_debug!("cluster_info-pull_request-rsp", len);
+                    Self::split_gossip_messages(response)
+                        .into_iter()
+                        .for_each(|payload| {
+                            let protocol = Protocol::PullResponse(self_id, payload);
+                            // The remote node may not know its public IP:PORT. Instead of responding to the caller's
+                            // gossip addr, respond to the origin addr. The last origin addr is picked from the list of
+                            // addrs.
+                            packets
+                                .packets
+                                .push(Packet::from_data(&from_addr, protocol))
+                        })
+                } else {
+                    trace!("Dropping Gossip pull response, as destination is unknown");
+                }
             });
         if packets.is_empty() {
             return None;
@@ -1413,8 +1417,12 @@ impl ClusterInfo {
             let pushes: Vec<_> = me.write().unwrap().new_push_requests();
             inc_new_counter_debug!("cluster_info-push_message-pushes", pushes.len());
             pushes.into_iter().for_each(|(remote_gossip_addr, req)| {
-                let p = Packet::from_data(&remote_gossip_addr, &req);
-                packets.packets.push(p);
+                if !remote_gossip_addr.ip().is_unspecified() && remote_gossip_addr.port() != 0 {
+                    let p = Packet::from_data(&remote_gossip_addr, &req);
+                    packets.packets.push(p);
+                } else {
+                    trace!("Dropping Gossip push response, as destination is unknown");
+                }
             });
             Some(packets)
         } else {
