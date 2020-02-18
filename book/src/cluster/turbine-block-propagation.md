@@ -8,7 +8,7 @@ During its slot, the leader node distributes shreds between the validator nodes 
 
 In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first nodes to make up layer 0. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer-0 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
 
-To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using randomness derived from the shred itself. Since the random seed is not known in advance, attacks that try to eclipse neighborhoods from certain leaders or blocks become very difficult, and should require almost complete control of the stake in the cluster.
+To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the leader id, slot and shred index.
 
 ## Layer and Neighborhood Structure
 

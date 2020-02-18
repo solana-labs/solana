@@ -53,7 +53,10 @@ requests to validators for any missing shreds. It will send at most some `N`
 repair reqeusts per iteration. Shred repair should prioritize repairing
 forks based on the leader's fork weight. Validators should only send repair
 requests to validators who have marked that slot as completed in their
-EpochSlots.
+EpochSlots. Validators should prioritize repairing shreds in each slot
+that they are responsible for retransmitting through turbine. Validators can
+compute which shreds they are responsible for retransmitting because the
+seed for turbine is based on leader id, slot, and shred index.
 
    Note: Validators will only accept shreds within the current verifiable
    epoch \(epoch the validator has a leader schedule for\).
