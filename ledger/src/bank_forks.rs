@@ -177,35 +177,40 @@ impl BankForks {
             .last()
             .map(|bank| bank.transaction_count())
             .unwrap_or(0);
+        // Generate each snapshot at a synchronous boundary
+        for bank in root_bank.parents().into_iter().rev() {
+            let root = bank.slot();
+            // Generate a snapshot if snapshots are configured and it's been an appropriate number
+            // of banks since the last snapshot
+            if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
+                let config = self.snapshot_config.as_ref().unwrap();
+                info!("setting snapshot root: {}", root);
+                if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
+                    bank.squash();
+                    let mut snapshot_time = Measure::start("total-snapshot-ms");
+                    let r = self.generate_snapshot(
+                        root,
+                        &bank.src.roots(),
+                        snapshot_package_sender.as_ref().unwrap(),
+                        snapshot_utils::get_snapshot_archive_path(
+                            &config.snapshot_package_output_path,
+                        ),
+                    );
+                    if r.is_err() {
+                        warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);
+                    } else {
+                        self.last_snapshot_slot = root;
+                    }
 
-        root_bank.squash();
-        let new_tx_count = root_bank.transaction_count();
-
-        // Generate a snapshot if snapshots are configured and it's been an appropriate number
-        // of banks since the last snapshot
-        if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
-            let config = self.snapshot_config.as_ref().unwrap();
-            info!("setting snapshot root: {}", root);
-            if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
-                let mut snapshot_time = Measure::start("total-snapshot-ms");
-                let r = self.generate_snapshot(
-                    root,
-                    &root_bank.src.roots(),
-                    snapshot_package_sender.as_ref().unwrap(),
-                    snapshot_utils::get_snapshot_archive_path(&config.snapshot_package_output_path),
-                );
-                if r.is_err() {
-                    warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);
-                } else {
-                    self.last_snapshot_slot = root;
+                    // Cleanup outdated snapshots
+                    self.purge_old_snapshots();
+                    snapshot_time.stop();
+                    inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
                 }
-
-                // Cleanup outdated snapshots
-                self.purge_old_snapshots();
-                snapshot_time.stop();
-                inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
             }
         }
+        root_bank.squash();
+        let new_tx_count = root_bank.transaction_count();
 
         self.prune_non_root(root);
 
