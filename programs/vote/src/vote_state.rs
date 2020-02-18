@@ -1,6 +1,7 @@
 #![allow(clippy::implicit_hasher)]
 //! Vote state, vote program
 //! Receive and processes votes from validators
+use crate::authorized_voters::AuthorizedVoters;
 use crate::{id, vote_instruction::VoteError};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
@@ -16,7 +17,7 @@ use solana_sdk::{
     slot_hashes::SlotHash,
     sysvar::clock::Clock,
 };
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 
 // Maximum number of votes to keep around, tightly coupled with epoch_schedule::MIN_SLOTS_PER_EPOCH
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
@@ -139,104 +140,6 @@ impl<I> CircBuf<I> {
             Some(&self.buf[self.idx])
         } else {
             None
-        }
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct AuthorizedVoters {
-    authorized_voters: BTreeMap<u64, Pubkey>,
-}
-
-impl AuthorizedVoters {
-    pub fn new(epoch: u64, pubkey: Pubkey) -> Self {
-        let mut authorized_voters = BTreeMap::new();
-        authorized_voters.insert(epoch, pubkey);
-        Self { authorized_voters }
-    }
-
-    pub fn get_authorized_voter(&self, epoch: u64) -> Option<Pubkey> {
-        self.get_or_calculate_authorized_voter_for_epoch(epoch)
-            .map(|(pubkey, _)| pubkey)
-    }
-
-    pub fn get_and_cache_authorized_voter_for_epoch(&mut self, epoch: u64) -> Option<Pubkey> {
-        let res = self.get_or_calculate_authorized_voter_for_epoch(epoch);
-
-        res.map(|(pubkey, existed)| {
-            if !existed {
-                self.authorized_voters.insert(epoch, pubkey);
-            }
-            pubkey
-        })
-    }
-
-    pub fn insert(&mut self, epoch: u64, authorized_voter: Pubkey) {
-        self.authorized_voters.insert(epoch, authorized_voter);
-    }
-
-    pub fn purge_authorized_voters(&mut self, current_epoch: u64) -> bool {
-        // Iterate through the keys in order, filtering out the ones
-        // less than the current epoch
-        let expired_keys: Vec<_> = self
-            .authorized_voters
-            .range(0..current_epoch)
-            .map(|(authorized_epoch, _)| *authorized_epoch)
-            .collect();
-
-        for key in expired_keys {
-            self.authorized_voters.remove(&key);
-        }
-
-        // Have to uphold this invariant b/c this is
-        // 1) The check for whether the vote state is initialized
-        // 2) How future authorized voters for uninitialized epochs are set
-        //    by this function
-        assert!(!self.authorized_voters.is_empty());
-        true
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.authorized_voters.is_empty()
-    }
-
-    pub fn first(&self) -> Option<(&u64, &Pubkey)> {
-        self.authorized_voters.iter().next()
-    }
-
-    pub fn last(&self) -> Option<(&u64, &Pubkey)> {
-        self.authorized_voters.iter().next_back()
-    }
-
-    pub fn len(&self) -> usize {
-        self.authorized_voters.len()
-    }
-
-    pub fn contains(&self, epoch: u64) -> bool {
-        self.authorized_voters.get(&epoch).is_some()
-    }
-
-    // Returns the authorized voter at the given epoch if the epoch is >= the
-    // current epoch, and a bool indicating whether the entry for this epoch
-    // exists in the self.authorized_voter map
-    fn get_or_calculate_authorized_voter_for_epoch(&self, epoch: u64) -> Option<(Pubkey, bool)> {
-        let res = self.authorized_voters.get(&epoch);
-        if res.is_none() {
-            // If no authorized voter has been set yet for this epoch,
-            // this must mean the authorized voter remains unchanged
-            // from the latest epoch before this one
-            let res = self.authorized_voters.range(0..epoch).next_back();
-
-            if res.is_none() {
-                warn!(
-                    "Tried to query for the authorized voter of an epoch earlier
-                    than the current epoch. Earlier epochs have been purged"
-                );
-            }
-
-            res.map(|(_, pubkey)| (*pubkey, false))
-        } else {
-            res.map(|pubkey| (*pubkey, true))
         }
     }
 }
@@ -513,25 +416,25 @@ impl VoteState {
     fn set_new_authorized_voter<F>(
         &mut self,
         authorized_pubkey: &Pubkey,
-        epoch: u64,
-        leader_schedule_epoch: u64,
+        current_epoch: u64,
+        target_epoch: u64,
         verify: F,
     ) -> Result<(), InstructionError>
     where
         F: Fn(Pubkey) -> Result<(), InstructionError>,
     {
-        let epoch_authorized_voter = self.get_and_update_authorized_voter(epoch).expect(
+        let epoch_authorized_voter = self.get_and_update_authorized_voter(current_epoch).expect(
             "the clock epoch is monotonically increasing, so authorized voter must be known",
         );
 
         verify(epoch_authorized_voter)?;
 
-        // The offset in slots `n` on which the leader_schedule_epoch
+        // The offset in slots `n` on which the target_epoch
         // (default value `DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET`) is
         // calculated is the number of slots available from the
         // first slot `S` of an epoch in which to set a new voter for
         // the epoch at `S` + `n`
-        if self.authorized_voters.contains(leader_schedule_epoch) {
+        if self.authorized_voters.contains(target_epoch) {
             return Err(VoteError::TooSoonToReauthorize.into());
         }
 
@@ -549,24 +452,24 @@ impl VoteState {
             let epoch_of_last_authorized_switch =
                 self.prior_voters.last().map(|range| range.2).unwrap_or(0);
 
-            // leader_schedule_epoch must:
+            // target_epoch must:
             // 1) Be monotonically increasing due to the clock always
             //    moving forward
             // 2) not be equal to latest epoch otherwise this
             //    function would have returned TooSoonToReauthorize error
             //    above
-            assert!(leader_schedule_epoch > *latest_epoch);
+            assert!(target_epoch > *latest_epoch);
 
             // Commit the new state
             self.prior_voters.append((
                 *latest_authorized_pubkey,
                 epoch_of_last_authorized_switch,
-                leader_schedule_epoch,
+                target_epoch,
             ));
         }
 
         self.authorized_voters
-            .insert(leader_schedule_epoch, *authorized_pubkey);
+            .insert(target_epoch, *authorized_pubkey);
 
         Ok(())
     }
@@ -640,7 +543,7 @@ pub fn authorize(
             vote_state.set_new_authorized_voter(
                 authorized,
                 clock.epoch,
-                clock.leader_schedule_epoch,
+                clock.leader_schedule_epoch + 1,
                 |epoch_authorized_voter| verify_authorized_signer(&epoch_authorized_voter, signers),
             )?;
         }
@@ -1093,8 +996,10 @@ mod tests {
             VoteAuthorize::Voter,
             &signers,
             &Clock {
-                epoch: 2,
-                leader_schedule_epoch: 3,
+                // The authorized voter was set when leader_schedule_epoch == 2, so will
+                // take effect when epoch == 3
+                epoch: 3,
+                leader_schedule_epoch: 4,
                 ..Clock::default()
             },
         );
@@ -1111,8 +1016,8 @@ mod tests {
             VoteAuthorize::Withdrawer,
             &signers,
             &Clock {
-                epoch: 2,
-                leader_schedule_epoch: 3,
+                epoch: 3,
+                leader_schedule_epoch: 4,
                 ..Clock::default()
             },
         );
@@ -1131,8 +1036,8 @@ mod tests {
             VoteAuthorize::Withdrawer,
             &signers,
             &Clock {
-                epoch: 2,
-                leader_schedule_epoch: 3,
+                epoch: 3,
+                leader_schedule_epoch: 4,
                 ..Clock::default()
             },
         );
@@ -1146,8 +1051,8 @@ mod tests {
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock {
-                epoch: 2,
-                leader_schedule_epoch: 3,
+                epoch: 3,
+                leader_schedule_epoch: 4,
                 ..Clock::default()
             },
             &vote,
@@ -1167,8 +1072,8 @@ mod tests {
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
             &Clock {
-                epoch: 2,
-                leader_schedule_epoch: 3,
+                epoch: 3,
+                leader_schedule_epoch: 4,
                 ..Clock::default()
             },
             &vote,
@@ -1715,7 +1620,7 @@ mod tests {
         for i in 0..5 {
             assert!(vote_state
                 .authorized_voters
-                .get_or_calculate_authorized_voter_for_epoch(i)
+                .get_authorized_voter(i)
                 .is_none());
         }
 

@@ -1,8 +1,9 @@
 use log::*;
+use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct AuthorizedVoters {
     authorized_voters: BTreeMap<u64, Pubkey>,
 }

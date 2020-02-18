@@ -350,7 +350,7 @@ fn check_vote_account(
 
     let found_vote_account = solana_vote_program::vote_state::VoteState::from(&found_vote_account);
     if let Some(found_vote_account) = found_vote_account {
-        if found_vote_account.authorized_voter().is_empty() {
+        if found_vote_account.authorized_voters().is_empty() {
             return Err("Vote account not yet initialized".to_string());
         }
 
