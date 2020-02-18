@@ -9,9 +9,26 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state;
+use std::borrow::Borrow;
 
 // The default stake placed with the bootstrap validator
 pub const BOOTSTRAP_VALIDATOR_LAMPORTS: u64 = 42;
+
+pub struct ValidatorVoteKeypairs {
+    pub node_keypair: Keypair,
+    pub vote_keypair: Keypair,
+    pub stake_keypair: Keypair,
+}
+
+impl ValidatorVoteKeypairs {
+    pub fn new(node_keypair: Keypair, vote_keypair: Keypair, stake_keypair: Keypair) -> Self {
+        Self {
+            node_keypair,
+            vote_keypair,
+            stake_keypair,
+        }
+    }
+}
 
 pub struct GenesisConfigInfo {
     pub genesis_config: GenesisConfig,
@@ -21,6 +38,36 @@ pub struct GenesisConfigInfo {
 
 pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
     create_genesis_config_with_leader(mint_lamports, &Pubkey::new_rand(), 0)
+}
+
+pub fn create_genesis_config_with_vote_accounts(
+    mint_lamports: u64,
+    voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
+) -> GenesisConfigInfo {
+    let mut genesis_config_info = create_genesis_config(mint_lamports);
+    for validator_voting_keypairs in voting_keypairs {
+        let node_pubkey = validator_voting_keypairs.borrow().node_keypair.pubkey();
+        let vote_pubkey = validator_voting_keypairs.borrow().vote_keypair.pubkey();
+        let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
+
+        // Create accounts
+        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, 100);
+        let stake_account = stake_state::create_account(
+            &stake_pubkey,
+            &vote_pubkey,
+            &vote_account,
+            &genesis_config_info.genesis_config.rent,
+            100,
+        );
+
+        // Put newly created accounts into genesis
+        genesis_config_info.genesis_config.accounts.extend(vec![
+            (vote_pubkey, vote_account.clone()),
+            (stake_pubkey, stake_account),
+        ]);
+    }
+
+    genesis_config_info
 }
 
 pub fn create_genesis_config_with_leader(
