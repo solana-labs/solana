@@ -473,7 +473,9 @@ pub mod test {
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
         bank::Bank,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        genesis_utils::{
+            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+        },
     };
     use solana_sdk::{
         clock::Slot,
@@ -482,27 +484,11 @@ pub mod test {
         signature::{Keypair, KeypairUtil},
         transaction::Transaction,
     };
-    use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state;
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::collections::{HashMap, VecDeque};
     use std::sync::RwLock;
     use std::{thread::sleep, time::Duration};
     use trees::{tr, Node, Tree};
-
-    pub(crate) struct ValidatorKeypairs {
-        node_keypair: Keypair,
-        vote_keypair: Keypair,
-    }
-
-    impl ValidatorKeypairs {
-        pub(crate) fn new(node_keypair: Keypair, vote_keypair: Keypair) -> Self {
-            Self {
-                node_keypair,
-                vote_keypair,
-            }
-        }
-    }
 
     pub(crate) struct VoteSimulator<'a> {
         searchable_nodes: HashMap<u64, &'a Node<u64>>,
@@ -521,8 +507,8 @@ pub mod test {
             vote_slot: Slot,
             bank_forks: &RwLock<BankForks>,
             cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
-            validator_keypairs: &HashMap<Pubkey, ValidatorKeypairs>,
-            my_keypairs: &ValidatorKeypairs,
+            validator_keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
+            my_keypairs: &ValidatorVoteKeypairs,
             progress: &mut HashMap<u64, ForkProgress>,
             tower: &mut Tower,
         ) -> VoteResult {
@@ -690,38 +676,18 @@ pub mod test {
 
     // Setup BankForks with bank 0 and all the validator accounts
     pub(crate) fn initialize_state(
-        validator_keypairs: &HashMap<Pubkey, ValidatorKeypairs>,
+        validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
     ) -> (BankForks, HashMap<u64, ForkProgress>) {
+        let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             voting_keypair: _,
-        } = create_genesis_config(1_000_000_000);
-
-        // Initialize BankForks
-        for keypairs in validator_keypairs.values() {
-            let node_pubkey = keypairs.node_keypair.pubkey();
-            let vote_pubkey = keypairs.vote_keypair.pubkey();
-
-            let stake_key = Pubkey::new_rand();
-            let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, 100);
-            let stake_account = stake_state::create_account(
-                &Pubkey::new_rand(),
-                &vote_pubkey,
-                &vote_account,
-                &genesis_config.rent,
-                100,
-            );
-
-            genesis_config.accounts.extend(vec![
-                (vote_pubkey, vote_account.clone()),
-                (stake_key, stake_account),
-            ]);
-        }
+        } = create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs);
 
         let bank0 = Bank::new(&genesis_config);
 
-        for pubkey in validator_keypairs.keys() {
+        for pubkey in validator_keypairs_map.keys() {
             bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
         }
 
@@ -756,7 +722,7 @@ pub mod test {
         num_slots: u64,
         bank_forks: &RwLock<BankForks>,
         cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
-        keypairs: &HashMap<Pubkey, ValidatorKeypairs>,
+        keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
         progress: &mut HashMap<u64, ForkProgress>,
     ) -> bool {
         // Check that within some reasonable time, validator can make a new
@@ -792,12 +758,13 @@ pub mod test {
     fn test_simple_votes() {
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
+        let stake_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
 
         let mut keypairs = HashMap::new();
         keypairs.insert(
             node_pubkey,
-            ValidatorKeypairs::new(node_keypair, vote_keypair),
+            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
         );
 
         // Initialize BankForks
@@ -841,6 +808,7 @@ pub mod test {
         solana_logger::setup();
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
+        let stake_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
         let vote_pubkey = vote_keypair.pubkey();
 
@@ -848,7 +816,7 @@ pub mod test {
         info!("my_pubkey: {}", node_pubkey);
         keypairs.insert(
             node_pubkey,
-            ValidatorKeypairs::new(node_keypair, vote_keypair),
+            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
         );
 
         // Create the tree of banks in a BankForks object

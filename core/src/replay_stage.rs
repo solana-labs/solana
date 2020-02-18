@@ -1055,7 +1055,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         commitment::BlockCommitment,
-        consensus::test::{initialize_state, ValidatorKeypairs, VoteResult, VoteSimulator},
+        consensus::test::{initialize_state, VoteResult, VoteSimulator},
         consensus::Tower,
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         replay_stage::ReplayStage,
@@ -1075,7 +1075,7 @@ pub(crate) mod tests {
             SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
-    use solana_runtime::genesis_utils::GenesisConfigInfo;
+    use solana_runtime::genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs};
     use solana_sdk::{
         account::Account,
         hash::{hash, Hash},
@@ -1918,11 +1918,12 @@ pub(crate) mod tests {
     fn test_child_bank_heavier() {
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
+        let stake_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
         let mut keypairs = HashMap::new();
         keypairs.insert(
             node_pubkey,
-            ValidatorKeypairs::new(node_keypair, vote_keypair),
+            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
         );
 
         let (bank_forks, mut progress) = initialize_state(&keypairs);
