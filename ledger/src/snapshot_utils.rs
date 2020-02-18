@@ -546,15 +546,8 @@ where
         &status_cache_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-<<<<<<< HEAD
             info!("Rebuilding status cache...");
-            let slot_deltas: Vec<SlotDelta<transaction::Result<()>>> =
-                deserialize_from_snapshot(stream)?;
-=======
-            // Rebuild status cache
             let slot_deltas: Vec<BankSlotDelta> = deserialize_from_snapshot(stream)?;
-
->>>>>>> 485806c48... Just define BnakSlotDelta type alias (#8186)
             Ok(slot_deltas)
         },
     )?;
