@@ -1,7 +1,7 @@
 Building the Solana book
 ---
 
-Install the book's dependnecies, build, and test the book:
+Install the book's dependencies, build, and test the book:
 
 ```bash
 $ ./build.sh
