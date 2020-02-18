@@ -177,34 +177,53 @@ impl BankForks {
             .last()
             .map(|bank| bank.transaction_count())
             .unwrap_or(0);
-
-        root_bank.squash();
-        let new_tx_count = root_bank.transaction_count();
-
-        // Generate a snapshot if snapshots are configured and it's been an appropriate number
-        // of banks since the last snapshot
+        // Generate each snapshot at a fixed interval
+        let mut is_root_bank_squashed = false;
         if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
             let config = self.snapshot_config.as_ref().unwrap();
-            info!("setting snapshot root: {}", root);
-            if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
-                let mut snapshot_time = Measure::start("total-snapshot-ms");
-                let r = self.generate_snapshot(
-                    root,
-                    &root_bank.src.roots(),
-                    snapshot_package_sender.as_ref().unwrap(),
-                );
-                if r.is_err() {
-                    warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);
-                } else {
-                    self.last_snapshot_slot = root;
-                }
+            let mut banks = vec![root_bank];
+            let parents = root_bank.parents();
+            banks.extend(parents.iter());
+            for bank in banks.iter() {
+                let bank_slot = bank.slot();
+                if bank.block_height() % (config.snapshot_interval_slots as u64) == 0 {
+                    // Generate a snapshot if snapshots are configured and it's been an appropriate number
+                    // of banks since the last snapshot
+                    info!(
+                        "setting snapshot root: {} interval: {}",
+                        bank_slot, config.snapshot_interval_slots
+                    );
+                    if bank_slot > self.last_snapshot_slot {
+                        bank.squash();
+                        is_root_bank_squashed = bank_slot == root;
+                        let mut snapshot_time = Measure::start("total-snapshot-ms");
+                        let r = self.generate_snapshot(
+                            bank_slot,
+                            &bank.src.roots(),
+                            snapshot_package_sender.as_ref().unwrap(),
+                        );
+                        if r.is_err() {
+                            warn!(
+                                "Error generating snapshot for bank: {}, err: {:?}",
+                                bank_slot, r
+                            );
+                        } else {
+                            self.last_snapshot_slot = bank_slot;
+                        }
 
-                // Cleanup outdated snapshots
-                self.purge_old_snapshots();
-                snapshot_time.stop();
-                inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
+                        // Cleanup outdated snapshots
+                        self.purge_old_snapshots();
+                        snapshot_time.stop();
+                        inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
+                    }
+                    break;
+                }
             }
         }
+        if !is_root_bank_squashed {
+            root_bank.squash();
+        }
+        let new_tx_count = root_bank.transaction_count();
 
         self.prune_non_root(root);
 
