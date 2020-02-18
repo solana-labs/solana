@@ -78,7 +78,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-fn download_tar_bz2(
+fn download_archive(
     rpc_addr: &SocketAddr,
     archive_name: &str,
     download_path: &Path,
@@ -336,7 +336,7 @@ fn download_ledger(
     ledger_path: &Path,
     no_snapshot_fetch: bool,
 ) -> Result<(), String> {
-    download_tar_bz2(rpc_addr, "genesis.tar.bz2", ledger_path, false)?;
+    download_archive(rpc_addr, "genesis.tar.bz2", ledger_path, false)?;
 
     if !no_snapshot_fetch {
         let snapshot_package =
@@ -345,7 +345,7 @@ fn download_ledger(
             fs::remove_file(&snapshot_package)
                 .map_err(|err| format!("error removing {:?}: {}", snapshot_package, err))?;
         }
-        download_tar_bz2(
+        download_archive(
             rpc_addr,
             snapshot_package.file_name().unwrap().to_str().unwrap(),
             snapshot_package.parent().unwrap(),

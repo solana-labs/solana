@@ -75,6 +75,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
         trace!("request uri: {}", request.uri());
         match request.uri().path() {
             "/snapshot.tar.bz2" => self.get("snapshot.tar.bz2"),
+            "/snapshot.tar" => self.get("snapshot.tar"),
             "/genesis.tar.bz2" => self.get("genesis.tar.bz2"),
             _ => RequestMiddlewareAction::Proceed {
                 should_continue_on_invalid_cors: false,

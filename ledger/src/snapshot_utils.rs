@@ -10,6 +10,7 @@ use solana_runtime::bank::{
 use solana_sdk::clock::Slot;
 use std::{
     cmp::Ordering,
+    env,
     fs::{self, File},
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -172,10 +173,25 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
         f.write_all(&snapshot_version.into_bytes())?;
     }
 
+    let archive_compress_options = if is_snapshot_compression_disabled() {
+        ""
+    } else {
+        "j"
+    };
+    let archive_options = format!("{}cfhS", archive_compress_options);
+
     // Tar the staging directory into the archive at `archive_path`
-    let archive_path = tar_dir.join("new_state.tar.bz2");
+    let archive_path = tar_dir.join(format!(
+        "{}.new",
+        snapshot_package
+            .tar_output_file
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+    ));
     let args = vec![
-        "jcfhS",
+        archive_options.as_str(),
         archive_path.to_str().unwrap(),
         "-C",
         staging_dir.path().to_str().unwrap(),
@@ -479,8 +495,36 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     Ok(bank)
 }
 
+fn is_snapshot_compression_disabled() -> bool {
+    if let Ok(flag) = env::var("SOLANA_DISABLE_SNAPSHOT_COMPRESSION") {
+        !(flag == "0" || flag == "false")
+    } else {
+        false
+    }
+}
+
+fn get_snapshot_archive_file_name(compression_disabled: bool) -> &'static str {
+    if compression_disabled {
+        "snapshot.tar"
+    } else {
+        "snapshot.tar.bz2"
+    }
+}
+
 pub fn get_snapshot_archive_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
-    snapshot_output_dir.as_ref().join("snapshot.tar.bz2")
+    snapshot_output_dir
+        .as_ref()
+        .join(get_snapshot_archive_file_name(
+            is_snapshot_compression_disabled(),
+        ))
+}
+
+pub fn get_fallback_snapshot_archive_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
+    snapshot_output_dir
+        .as_ref()
+        .join(get_snapshot_archive_file_name(
+            !is_snapshot_compression_disabled(),
+        ))
 }
 
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
@@ -488,10 +532,23 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     unpack_dir: Q,
 ) -> Result<()> {
     let mut measure = Measure::start("snapshot untar");
-    let tar_bz2 = File::open(snapshot_tar)?;
-    let tar = BzDecoder::new(BufReader::new(tar_bz2));
-    let mut archive = Archive::new(tar);
-    archive.unpack(&unpack_dir)?;
+
+    let archive_file = File::open(&snapshot_tar)?;
+    // use .file_name() because .extension() only returns "bz2"
+    let file_name = snapshot_tar.as_ref().file_name().unwrap().to_str().unwrap();
+    if file_name.ends_with(".tar.bz2") {
+        let mut archive = Archive::new(BzDecoder::new(BufReader::new(archive_file)));
+        archive.unpack(&unpack_dir)?;
+    } else if file_name.ends_with(".tar") {
+        let mut archive = Archive::new(BufReader::new(archive_file));
+        archive.unpack(&unpack_dir)?;
+    } else {
+        return Err(get_io_error(&format!(
+            "unknown snapshot file extention name: {:?}",
+            file_name,
+        )));
+    }
+
     measure.stop();
     info!("{}", measure);
     Ok(())
