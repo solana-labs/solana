@@ -61,7 +61,10 @@ impl VoteTracker {
         let epoch = self.epoch_schedule.get_epoch(slot);
         self.epoch_authorized_voters
             .get(pubkey)
-            .map(|authorized_voters| authorized_voters.get_authorized_voter(epoch))
+            .map(|authorized_voters| {
+                println!("authorized voters: {:?}", authorized_voters);
+                authorized_voters.get_authorized_voter(epoch)
+            })
             .unwrap_or(None)
     }
 
@@ -88,7 +91,9 @@ impl VoteTracker {
                     return None;
                 }
                 let vote_state = vote_state.unwrap();
+                println!("Found vote state");
                 if *stake > 0 {
+                    println!("Found vote state with stake > 0, key: {:?}", key);
                     let mut authorized_voters = vote_state.authorized_voters().clone();
                     authorized_voters.get_and_cache_authorized_voter_for_epoch(epoch);
                     authorized_voters.get_and_cache_authorized_voter_for_epoch(epoch + 1);
@@ -292,6 +297,10 @@ impl ClusterInfoVoteListener {
                         let actual_authorized_voter =
                             vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
 
+                        println!(
+                            "vk: {:?}, actual_av: {:?}",
+                            vote_pubkey, actual_authorized_voter
+                        );
                         if actual_authorized_voter.is_none() {
                             continue;
                         }
@@ -476,6 +485,11 @@ mod tests {
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;
             let vote_keypair = &keypairs.vote_keypair;
+            println!(
+                "nk: {:?}, vk: {:?}",
+                node_keypair.pubkey().to_string(),
+                vote_keypair.pubkey().to_string()
+            );
             let vote_ix = vote_instruction::vote(
                 &node_keypair.pubkey(),
                 &vote_keypair.pubkey(),
