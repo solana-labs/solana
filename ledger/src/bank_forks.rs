@@ -177,35 +177,42 @@ impl BankForks {
             .last()
             .map(|bank| bank.transaction_count())
             .unwrap_or(0);
-        // Generate each snapshot at a synchronous boundary
-        for bank in root_bank.parents().into_iter().rev() {
-            let root = bank.slot();
-            // Generate a snapshot if snapshots are configured and it's been an appropriate number
-            // of banks since the last snapshot
-            if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
-                let config = self.snapshot_config.as_ref().unwrap();
-                info!("setting snapshot root: {}", root);
-                if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
-                    bank.squash();
-                    let mut snapshot_time = Measure::start("total-snapshot-ms");
-                    let r = self.generate_snapshot(
-                        root,
-                        &bank.src.roots(),
-                        snapshot_package_sender.as_ref().unwrap(),
-                        snapshot_utils::get_snapshot_archive_path(
-                            &config.snapshot_package_output_path,
-                        ),
-                    );
-                    if r.is_err() {
-                        warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);
-                    } else {
-                        self.last_snapshot_slot = root;
-                    }
+        // Generate each snapshot at a fixed interval
+        if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
+            let config = self.snapshot_config.as_ref().unwrap();
+            let mut banks = vec![root_bank];
+            let parents = root_bank.parents();
+            banks.extend(parents.iter());
+            for bank in banks {
+                let parent_slot = bank.parent_slot();
+                let root = bank.slot();
+                if Self::check_interval(root, parent_slot, config.snapshot_interval_slots) {
+                    // Generate a snapshot if snapshots are configured and it's been an appropriate number
+                    // of banks since the last snapshot
+                    info!("setting snapshot root: {}", root);
+                    if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
+                        bank.squash();
+                        let mut snapshot_time = Measure::start("total-snapshot-ms");
+                        let r = self.generate_snapshot(
+                            root,
+                            &bank.src.roots(),
+                            snapshot_package_sender.as_ref().unwrap(),
+                            snapshot_utils::get_snapshot_archive_path(
+                                &config.snapshot_package_output_path,
+                            ),
+                        );
+                        if r.is_err() {
+                            warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);
+                        } else {
+                            self.last_snapshot_slot = root;
+                        }
 
-                    // Cleanup outdated snapshots
-                    self.purge_old_snapshots();
-                    snapshot_time.stop();
-                    inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
+                        // Cleanup outdated snapshots
+                        self.purge_old_snapshots();
+                        snapshot_time.stop();
+                        inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
+                    }
+                    break;
                 }
             }
         }
@@ -222,6 +229,15 @@ impl BankForks {
             "bank-forks_set_root_tx_count",
             (new_tx_count - root_tx_count) as usize
         );
+    }
+
+    fn check_interval(root: Slot, parent_slot: Slot, snapshot_interval_slots: usize) -> bool {
+        let interval = snapshot_interval_slots as u64;
+        assert!(parent_slot < root || root == 0);
+        assert!(interval > 0);
+        (root - parent_slot > interval)
+            || (root % interval == 0)
+            || (root % interval <= parent_slot % interval)
     }
 
     pub fn root(&self) -> Slot {
@@ -370,5 +386,24 @@ mod tests {
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_banks(), vec![1]);
+    }
+
+    #[test]
+    fn test_bank_forks_check_interval() {
+        assert!(BankForks::check_interval(1, 0, 1));
+        assert!(BankForks::check_interval(0, 0, 1));
+
+        for i in 0..100 {
+            assert!(BankForks::check_interval(5 + i, 0, 5));
+        }
+        for i in 1..100 {
+            assert!(BankForks::check_interval(5 * i, 5 * i - 1, 5));
+        }
+        for i in 0..3 {
+            assert!(!BankForks::check_interval(1 + i, 0, 5));
+        }
+        for i in 0..3 {
+            assert!(!BankForks::check_interval(6 + i, 5, 5));
+        }
     }
 }
