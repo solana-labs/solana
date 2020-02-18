@@ -1,3 +1,4 @@
+use crate::cluster_info::ClusterInfo;
 use solana_ledger::{
     snapshot_package::SnapshotPackageReceiver, snapshot_utils::archive_snapshot_package,
 };
@@ -5,7 +6,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::RecvTimeoutError,
-        Arc,
+        Arc, RwLock,
     },
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -16,8 +17,13 @@ pub struct SnapshotPackagerService {
 }
 
 impl SnapshotPackagerService {
-    pub fn new(snapshot_package_receiver: SnapshotPackageReceiver, exit: &Arc<AtomicBool>) -> Self {
+    pub fn new(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        snapshot_package_receiver: SnapshotPackageReceiver,
+        exit: &Arc<AtomicBool>,
+    ) -> Self {
         let exit = exit.clone();
+        let cluster_info = cluster_info.clone();
         let t_snapshot_packager = Builder::new()
             .name("solana-snapshot-packager".to_string())
             .spawn(move || loop {
@@ -31,8 +37,19 @@ impl SnapshotPackagerService {
                         while let Ok(new_snapshot_package) = snapshot_package_receiver.try_recv() {
                             snapshot_package = new_snapshot_package;
                         }
-                        if let Err(err) = archive_snapshot_package(&snapshot_package) {
-                            warn!("Failed to create snapshot archive: {}", err);
+                        match archive_snapshot_package(&snapshot_package) {
+                            Ok(()) => {
+                                let mut cluster_info = cluster_info.write().unwrap();
+                                let id = cluster_info.id();
+                                cluster_info.push_snapshot_info(
+                                    id,
+                                    snapshot_package.root,
+                                    snapshot_package.bank_hash,
+                                );
+                            }
+                            Err(err) => {
+                                warn!("Failed to create snapshot archive: {}", err);
+                            }
                         }
                     }
                     Err(RecvTimeoutError::Disconnected) => break,
@@ -61,6 +78,7 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry, bank::BankSlotDelta, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
     };
+    use solana_sdk::hash::Hash;
     use std::{
         fs::{self, remove_dir_all, OpenOptions},
         io::Write,
@@ -135,6 +153,7 @@ mod tests {
             snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
         let snapshot_package = SnapshotPackage::new(
             5,
+            Hash::default(),
             vec![],
             link_snapshots_dir,
             storage_entries.clone(),

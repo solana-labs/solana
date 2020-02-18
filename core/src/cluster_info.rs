@@ -19,7 +19,7 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, Vote},
+    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotInfo, Vote},
     packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
@@ -39,6 +39,7 @@ use solana_net_utils::{
 use solana_perf::packet::{to_packets_with_destination, Packets, PacketsRecycler};
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT},
+    hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signable, Signature},
     timing::{duration_as_ms, timestamp},
@@ -383,6 +384,21 @@ impl ClusterInfo {
             .process_push_message(&self.id(), vec![entry], now);
     }
 
+    pub fn push_snapshot_info(&mut self, id: Pubkey, slot: Slot, bank_hash: Hash) {
+        let now = timestamp();
+        let entry = CrdsValue::new_signed(
+            CrdsData::SnapshotInfo(SnapshotInfo {
+                from: id,
+                slot,
+                bank_hash,
+                wallclock: now,
+            }),
+            &self.keypair,
+        );
+        self.gossip
+            .process_push_message(&self.id(), vec![entry], now);
+    }
+
     pub fn push_vote(&mut self, tower_index: usize, vote: Transaction) {
         let now = timestamp();
         let vote = Vote::new(&self.id(), vote, now);
@@ -438,6 +454,23 @@ impl ClusterInfo {
                     .unwrap_or(true)
             })
             .map(|x| (x.value.epoch_slots().unwrap(), x.insert_timestamp))
+    }
+
+    pub fn get_snapshot_info_for_node(
+        &self,
+        pubkey: &Pubkey,
+        since: Option<u64>,
+    ) -> Option<(&SnapshotInfo, u64)> {
+        self.gossip
+            .crds
+            .table
+            .get(&CrdsValueLabel::SnapshotInfo(*pubkey))
+            .filter(|x| {
+                since
+                    .map(|since| x.insert_timestamp > since)
+                    .unwrap_or(true)
+            })
+            .map(|x| (x.value.snapshot_info().unwrap(), x.insert_timestamp))
     }
 
     pub fn get_contact_info_for_node(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {

@@ -102,6 +102,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
 
     let package = SnapshotPackage::new(
         bank.slot(),
+        bank.hash(),
         bank.src.slot_deltas(slots_to_snapshot),
         snapshot_hard_links_dir,
         account_storage_entries,

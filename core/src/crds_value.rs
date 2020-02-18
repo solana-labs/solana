@@ -2,6 +2,7 @@ use crate::contact_info::ContactInfo;
 use bincode::{serialize, serialized_size};
 use solana_sdk::{
     clock::Slot,
+    hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signable, Signature},
     transaction::Transaction,
@@ -59,6 +60,7 @@ pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
     EpochSlots(EpochSlots),
+    SnapshotInfo(SnapshotInfo),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -111,6 +113,14 @@ impl Vote {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SnapshotInfo {
+    pub from: Pubkey,
+    pub slot: Slot,
+    pub bank_hash: Hash,
+    pub wallclock: u64,
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -118,6 +128,7 @@ pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
     Vote(VoteIndex, Pubkey),
     EpochSlots(Pubkey),
+    SnapshotInfo(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -126,6 +137,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::EpochSlots(_) => write!(f, "EpochSlots({})", self.pubkey()),
+            CrdsValueLabel::SnapshotInfo(_) => write!(f, "SnapshotInfo({})", self.pubkey()),
         }
     }
 }
@@ -136,6 +148,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::ContactInfo(p) => *p,
             CrdsValueLabel::Vote(_, p) => *p,
             CrdsValueLabel::EpochSlots(p) => *p,
+            CrdsValueLabel::SnapshotInfo(p) => *p,
         }
     }
 }
@@ -161,6 +174,7 @@ impl CrdsValue {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::EpochSlots(vote) => vote.wallclock,
+            CrdsData::SnapshotInfo(snapshot_info) => snapshot_info.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -168,6 +182,7 @@ impl CrdsValue {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::EpochSlots(slots) => slots.from,
+            CrdsData::SnapshotInfo(snapshot_info) => snapshot_info.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -175,6 +190,7 @@ impl CrdsValue {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::EpochSlots(_) => CrdsValueLabel::EpochSlots(self.pubkey()),
+            CrdsData::SnapshotInfo(_) => CrdsValueLabel::SnapshotInfo(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -203,11 +219,20 @@ impl CrdsValue {
             _ => None,
         }
     }
+
+    pub fn snapshot_info(&self) -> Option<&SnapshotInfo> {
+        match &self.data {
+            CrdsData::SnapshotInfo(snapshot_info) => Some(snapshot_info),
+            _ => None,
+        }
+    }
+
     /// Return all the possible labels for a record identified by Pubkey.
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
             CrdsValueLabel::EpochSlots(*key),
+            CrdsValueLabel::SnapshotInfo(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels
@@ -263,7 +288,8 @@ mod test {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
                 CrdsValueLabel::EpochSlots(_) => hits[1] = true,
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 2] = true,
+                CrdsValueLabel::SnapshotInfo(_) => hits[2] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 3] = true,
             }
         }
         assert!(hits.iter().all(|x| *x));

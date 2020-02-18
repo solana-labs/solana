@@ -1,5 +1,5 @@
 use solana_runtime::{accounts_db::AccountStorageEntry, bank::BankSlotDelta};
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     path::PathBuf,
     sync::{
@@ -16,6 +16,7 @@ pub type SnapshotPackageSendError = SendError<SnapshotPackage>;
 #[derive(Debug)]
 pub struct SnapshotPackage {
     pub root: Slot,
+    pub bank_hash: Hash,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub storage_entries: Vec<Arc<AccountStorageEntry>>,
@@ -25,6 +26,7 @@ pub struct SnapshotPackage {
 impl SnapshotPackage {
     pub fn new(
         root: Slot,
+        bank_hash: Hash,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
         storage_entries: Vec<Arc<AccountStorageEntry>>,
@@ -32,6 +34,7 @@ impl SnapshotPackage {
     ) -> Self {
         Self {
             root,
+            bank_hash,
             slot_deltas,
             snapshot_links,
             storage_entries,

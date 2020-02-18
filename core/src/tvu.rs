@@ -153,7 +153,8 @@ impl Tvu {
             if snapshot_config.is_some() {
                 // Start a snapshot packaging service
                 let (sender, receiver) = channel();
-                let snapshot_packager_service = SnapshotPackagerService::new(receiver, exit);
+                let snapshot_packager_service =
+                    SnapshotPackagerService::new(cluster_info, receiver, exit);
                 (Some(snapshot_packager_service), Some(sender))
             } else {
                 (None, None)
@@ -251,7 +252,7 @@ impl Tvu {
 pub mod tests {
     use super::*;
     use crate::banking_stage::create_test_recorder;
-    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::cluster_info::Node;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::create_new_tmp_ledger;
     use solana_runtime::bank::Bank;
