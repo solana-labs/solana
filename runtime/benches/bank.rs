@@ -38,7 +38,7 @@ fn process_instruction(
 
 pub fn create_builtin_transactions(
     bank_client: &BankClient,
-    mint_keypair: &Keypair,
+    mint_keypair: &dyn KeypairUtil,
 ) -> Vec<Transaction> {
     let program_id = Pubkey::new(&BUILTIN_PROGRAM_ID);
 
@@ -48,7 +48,7 @@ pub fn create_builtin_transactions(
             // Seed the signer account
             let rando0 = Keypair::new();
             bank_client
-                .transfer(10_000, &mint_keypair, &rando0.pubkey())
+                .transfer(10_000, mint_keypair, &rando0.pubkey())
                 .expect(&format!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
@@ -60,7 +60,7 @@ pub fn create_builtin_transactions(
 
 pub fn create_native_loader_transactions(
     bank_client: &BankClient,
-    mint_keypair: &Keypair,
+    mint_keypair: &dyn KeypairUtil,
 ) -> Vec<Transaction> {
     let program_id = Pubkey::new(&NOOP_PROGRAM_ID);
 
@@ -70,7 +70,7 @@ pub fn create_native_loader_transactions(
             // Seed the signer account©41
             let rando0 = Keypair::new();
             bank_client
-                .transfer(10_000, &mint_keypair, &rando0.pubkey())
+                .transfer(10_000, mint_keypair, &rando0.pubkey())
                 .expect(&format!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
@@ -115,7 +115,7 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &Vec<
 fn do_bench_transactions(
     bencher: &mut Bencher,
     bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &Vec<Transaction>),
-    create_transactions: &dyn Fn(&BankClient, &Keypair) -> Vec<Transaction>,
+    create_transactions: &dyn Fn(&BankClient, &dyn KeypairUtil) -> Vec<Transaction>,
 ) {
     solana_logger::setup();
     let ns_per_s = 1_000_000_000;
