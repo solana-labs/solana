@@ -6,6 +6,8 @@ mod tests {
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
     use solana_core::{
+        cluster_info::ClusterInfo,
+        contact_info::ContactInfo,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_packager_service::SnapshotPackagerService,
     };
@@ -24,7 +26,13 @@ mod tests {
         signature::{Keypair, KeypairUtil},
         system_transaction,
     };
-    use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::AtomicBool,
+        sync::mpsc::channel,
+        sync::{Arc, RwLock},
+    };
     use tempfile::TempDir;
 
     struct SnapshotTestConfig {
@@ -52,6 +60,7 @@ mod tests {
             snapshot_interval_slots,
             snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
             snapshot_path: PathBuf::from(snapshot_dir.path()),
+            expected_snapshot_info: None,
         };
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         SnapshotTestConfig {
@@ -296,7 +305,13 @@ mod tests {
         // correctly construct the earlier snapshots because the SnapshotPackage's on the
         // channel hold hard links to these deleted snapshots. We verify this is the case below.
         let exit = Arc::new(AtomicBool::new(false));
-        let snapshot_packager_service = SnapshotPackagerService::new(receiver, &exit);
+        let snapshot_packager_service = SnapshotPackagerService::new(
+            &Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+                ContactInfo::default(),
+            ))),
+            receiver,
+            &exit,
+        );
 
         // Close the channel so that the package service will exit after reading all the
         // packages off the channel

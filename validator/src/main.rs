@@ -748,6 +748,7 @@ pub fn main() {
         },
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
+        expected_snapshot_info: None,
     });
 
     if matches.is_present("limit_ledger_size") {

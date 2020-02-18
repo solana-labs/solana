@@ -537,6 +537,7 @@ fn load_bank_forks(
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path: ledger_path.clone(),
             snapshot_path: ledger_path.clone().join("snapshot"),
+            expected_snapshot_info: None,
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {

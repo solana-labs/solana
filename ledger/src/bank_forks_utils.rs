@@ -43,6 +43,23 @@ pub fn load(
             )
             .expect("Load from snapshot failed");
 
+            if let Some((slot, bank_hash)) = snapshot_config.expected_snapshot_info {
+                if slot != deserialized_bank.slot() {
+                    panic!(
+                        "Snapshot bank slot mismatch: expected={} actual={}",
+                        slot,
+                        deserialized_bank.slot()
+                    );
+                }
+                if bank_hash != deserialized_bank.hash() {
+                    panic!(
+                        "Snapshot bank bank_hash mismatch: expected={} actual={}",
+                        bank_hash,
+                        deserialized_bank.hash()
+                    );
+                }
+            }
+
             return blockstore_processor::process_blockstore_from_root(
                 genesis_config,
                 blockstore,
