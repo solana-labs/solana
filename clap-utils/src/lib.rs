@@ -26,3 +26,4 @@ pub struct ArgConstant<'a> {
 pub mod input_parsers;
 pub mod input_validators;
 pub mod keypair;
+pub mod offline;

@@ -9,7 +9,7 @@ use crate::{
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use console::style;
-use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
+use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     account_utils::StateMut,
