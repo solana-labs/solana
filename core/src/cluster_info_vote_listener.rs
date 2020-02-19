@@ -271,7 +271,7 @@ impl ClusterInfoVoteListener {
                 old_leader_schedule_epoch = new_leader_schedule_epoch;
             }
 
-            if let Err(e) = Self::process_votes(&vote_txs_receiver, &vote_tracker) {
+            if let Err(e) = Self::get_and_process_votes(&vote_txs_receiver, &vote_tracker) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
                         return Ok(());
@@ -285,20 +285,25 @@ impl ClusterInfoVoteListener {
         }
     }
 
-    fn process_votes(
+    fn get_and_process_votes(
         vote_txs_receiver: &CrossbeamReceiver<Vec<Transaction>>,
         vote_tracker: &Arc<RwLock<VoteTracker>>,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);
         let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
+        while let Ok(new_txs) = vote_txs_receiver.try_recv() {
+            vote_txs.extend(new_txs);
+        }
+
+        Self::process_votes(vote_tracker, vote_txs);
+        Ok(())
+    }
+
+    fn process_votes(vote_tracker: &Arc<RwLock<VoteTracker>>, vote_txs: Vec<Transaction>) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
         {
             let vote_tracker = vote_tracker.read().unwrap();
             let slot_pubkeys = &vote_tracker.votes;
-            while let Ok(new_txs) = vote_txs_receiver.try_recv() {
-                vote_txs.extend(new_txs);
-            }
-
             for tx in vote_txs {
                 if let (Some(vote_pubkey), Some(vote_instruction)) = tx
                     .message
@@ -335,10 +340,6 @@ impl ClusterInfoVoteListener {
                     let actual_authorized_voter =
                         vote_tracker.get_authorized_voter(&vote_pubkey, *last_vote_slot);
 
-                    println!(
-                        "vk: {:?}, actual_av: {:?}",
-                        vote_pubkey, actual_authorized_voter
-                    );
                     if actual_authorized_voter.is_none() {
                         continue;
                     }
@@ -357,13 +358,13 @@ impl ClusterInfoVoteListener {
                         for slot in vote.slots {
                             // Don't insert if we already have marked down this pubkey
                             // voting for this slot
-                            if slot_pubkeys
-                                .get(&slot)
-                                .map(|slot_vote_pubkeys| slot_vote_pubkeys.contains(vote_pubkey))
-                                .unwrap_or(false)
-                            {
-                                diff.entry(slot).or_default().insert(vote_pubkey.clone());
+                            if let Some(slot_vote_pubkeys) = slot_pubkeys.get(&slot) {
+                                if slot_vote_pubkeys.contains(vote_pubkey) {
+                                    continue;
+                                }
                             }
+
+                            diff.entry(slot).or_default().insert(vote_pubkey.clone());
                         }
                     }
                 }
@@ -378,18 +379,36 @@ impl ClusterInfoVoteListener {
                 slot_pubkeys.insert(pk);
             }
         }
+    }
 
+    pub fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
+        }
         Ok(())
     }
 
-    pub fn process_new_leader_schedule_epoch(
+    fn process_new_leader_schedule_epoch(
         root_bank: &Bank,
         vote_tracker: &RwLock<VoteTracker>,
         new_leader_schedule_epoch: Epoch,
     ) {
-        let mut current_validators = vote_tracker.read().unwrap().epoch_authorized_voters.clone();
-        let (new_epoch_authorized_voters, mut new_node_id_to_vote_accounts) =
+        let (new_epoch_authorized_voters, new_node_id_to_vote_accounts) =
             VoteTracker::parse_epoch_state(root_bank, new_leader_schedule_epoch);
+
+        Self::process_new_leader_schedule_epoch_state(
+            vote_tracker,
+            new_epoch_authorized_voters,
+            new_node_id_to_vote_accounts,
+        );
+    }
+
+    fn process_new_leader_schedule_epoch_state(
+        vote_tracker: &RwLock<VoteTracker>,
+        new_epoch_authorized_voters: EpochAuthorizedVoters,
+        mut new_node_id_to_vote_accounts: NodeIdToVoteAccounts,
+    ) {
+        let mut current_validators = vote_tracker.read().unwrap().epoch_authorized_voters.clone();
 
         // Remove the old pubkeys
         current_validators.retain(|pubkey, _| new_epoch_authorized_voters.contains_key(pubkey));
@@ -400,6 +419,7 @@ impl ClusterInfoVoteListener {
         current_validators.extend(new_epoch_authorized_voters);
 
         let mut vote_tracker = vote_tracker.write().unwrap();
+
         std::mem::swap(
             &mut current_validators,
             &mut vote_tracker.epoch_authorized_voters,
@@ -409,13 +429,6 @@ impl ClusterInfoVoteListener {
             &mut new_node_id_to_vote_accounts,
             &mut vote_tracker.node_id_to_vote_accounts,
         )
-    }
-
-    pub fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
-        }
-        Ok(())
     }
 }
 
@@ -438,13 +451,8 @@ mod tests {
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let slots: Vec<_> = (0..31).into_iter().collect();
-        let votes = Vote::new(slots, Hash::default());
-        let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), &vote_keypair.pubkey(), votes);
 
-        let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
-
-        vote_tx.partial_sign(&[&node_keypair], Hash::default());
-        vote_tx.partial_sign(&[&vote_keypair], Hash::default());
+        let vote_tx = new_vote_tx(slots, Hash::default(), &node_keypair, &vote_keypair);
 
         use bincode::serialized_size;
         info!("max vote size {}", serialized_size(&vote_tx).unwrap());
@@ -459,16 +467,7 @@ mod tests {
         let node_keypair = Keypair::new();
         let authorized_voter = Keypair::new();
 
-        let vote_ix = vote_instruction::vote(
-            &node_keypair.pubkey(),
-            &authorized_voter.pubkey(),
-            Vote::default(),
-        );
-
-        let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
-
-        vote_tx.partial_sign(&[&node_keypair], Hash::default());
-        vote_tx.partial_sign(&[&authorized_voter], Hash::default());
+        let vote_tx = new_vote_tx(vec![0], Hash::default(), &node_keypair, &authorized_voter);
 
         // Check that the two signing keys pass the check
         assert!(VoteTracker::vote_contains_authorized_voter(
@@ -482,14 +481,7 @@ mod tests {
         ));
 
         // Set the authorized voter == node keypair
-        let vote_ix = vote_instruction::vote(
-            &node_keypair.pubkey(),
-            &node_keypair.pubkey(),
-            Vote::default(),
-        );
-        let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
-        vote_tx.partial_sign(&[&node_keypair], Hash::default());
-        vote_tx.partial_sign(&[&node_keypair], Hash::default());
+        let vote_tx = new_vote_tx(vec![0], Hash::default(), &node_keypair, &node_keypair);
 
         // Check that the node_keypair itself still passes the authorized voter check
         assert!(VoteTracker::vote_contains_authorized_voter(
@@ -497,7 +489,7 @@ mod tests {
             node_keypair.pubkey()
         ));
 
-        // The other keyapir should not pass
+        // The other keypair should not pass
         assert!(!VoteTracker::vote_contains_authorized_voter(
             &vote_tx,
             authorized_voter.pubkey()
@@ -521,32 +513,72 @@ mod tests {
         let vote_tracker = Arc::new(RwLock::new(VoteTracker::new(&bank)));
         let (votes_sender, votes_receiver) = unbounded();
 
-        let vote_slot = 1;
+        let vote_slots = vec![1, 2];
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;
             let vote_keypair = &keypairs.vote_keypair;
-
-            let vote_ix = vote_instruction::vote(
-                &vote_keypair.pubkey(),
-                &vote_keypair.pubkey(),
-                Vote::new(vec![vote_slot], Hash::default()),
+            let vote_tx = new_vote_tx(
+                vote_slots.clone(),
+                Hash::default(),
+                node_keypair,
+                vote_keypair,
             );
-
-            let mut vote_tx =
-                Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
-
-            vote_tx.partial_sign(&[vote_keypair], Hash::default());
-            vote_tx.partial_sign(&[vote_keypair], Hash::default());
             votes_sender.send(vec![vote_tx]).unwrap();
         });
 
         // Check that all the votes were registered for each validator correctly
-        ClusterInfoVoteListener::process_votes(&votes_receiver, &vote_tracker).unwrap();
+        ClusterInfoVoteListener::get_and_process_votes(&votes_receiver, &vote_tracker).unwrap();
+        for vote_slot in vote_slots {
+            let r_vote_tracker = vote_tracker.read().unwrap();
+            let votes = r_vote_tracker.votes();
+            let votes_for_slot = votes.get(&vote_slot).unwrap();
+            for voting_keypairs in &validator_voting_keypairs {
+                assert!(votes_for_slot.contains(&voting_keypairs.vote_keypair.pubkey()));
+            }
+        }
+    }
+
+    #[test]
+    fn test_process_votes2() {
+        // Create some voters at genesis
+        let num_voters = 10;
+        let validator_voting_keypairs: Vec<_> = (0..num_voters)
+            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+            .collect();
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+            );
+        let bank = Bank::new(&genesis_config);
+
+        // Send some votes to process
+        let vote_tracker = Arc::new(RwLock::new(VoteTracker::new(&bank)));
+        let (votes_sender, votes_receiver) = unbounded();
+
+        for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
+            let validator_votes: Vec<_> = keyset
+                .iter()
+                .map(|keypairs| {
+                    let node_keypair = &keypairs.node_keypair;
+                    let vote_keypair = &keypairs.vote_keypair;
+                    let vote_tx =
+                        new_vote_tx(vec![i as u64], Hash::default(), node_keypair, vote_keypair);
+                    vote_tx
+                })
+                .collect();
+            votes_sender.send(validator_votes).unwrap();
+        }
+
+        // Check that all the votes were registered for each validator correctly
+        ClusterInfoVoteListener::get_and_process_votes(&votes_receiver, &vote_tracker).unwrap();
         let r_vote_tracker = vote_tracker.read().unwrap();
         let votes = r_vote_tracker.votes();
-        let votes_for_slot = votes.get(&vote_slot).unwrap();
-        for voting_keypairs in validator_voting_keypairs {
-            assert!(votes_for_slot.contains(&voting_keypairs.node_keypair.pubkey()));
+        for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
+            let votes_for_slot = votes.get(&(i as u64)).unwrap();
+            for voting_keypairs in keyset {
+                assert!(votes_for_slot.contains(&voting_keypairs.vote_keypair.pubkey()));
+            }
         }
     }
 
@@ -597,7 +629,104 @@ mod tests {
     }
 
     #[test]
-    fn test_process_new_leader_schedule_epoch() {
-        // Make sure size doesn't grow
+    fn test_vote_tracker_references() {
+        // Create some voters at genesis
+        let validator_voting_keypairs: Vec<_> = (0..2)
+            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+            .collect();
+
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+            );
+        let bank = Bank::new(&genesis_config);
+
+        // Send a vote to process, should add a reference to the pubkey for that voter
+        // in the tracker
+        let validator0_keypairs = &validator_voting_keypairs[0];
+        let vote_tracker = Arc::new(RwLock::new(VoteTracker::new(&bank)));
+        let vote_tx = vec![new_vote_tx(
+            vec![0],
+            Hash::default(),
+            &validator0_keypairs.node_keypair,
+            &validator0_keypairs.vote_keypair,
+        )];
+
+        {
+            let r_vote_tracker = vote_tracker.read().unwrap();
+            let pubkey_ref = r_vote_tracker
+                .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey())
+                .unwrap();
+
+            // Refcount is 1 because no votes have referenced this pubkey yet
+            assert_eq!(Arc::strong_count(&pubkey_ref), 1);
+
+            ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx);
+            let pubkey_ref = r_vote_tracker
+                .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey())
+                .unwrap();
+
+            // This pubkey voted for a slot, so the refcount is now 2
+            assert_eq!(Arc::strong_count(&pubkey_ref), 2);
+        }
+
+        // Move into the next epoch, a new set of voters is introduced, with some
+        // old voters also still present
+        let new_pubkey = Arc::new(Pubkey::new_rand());
+        let old_refreshed_pubkey = Arc::new(validator0_keypairs.vote_keypair.pubkey());
+        let old_outdated_pubkey = validator_voting_keypairs[1].vote_keypair.pubkey();
+        let mut new_epoch_authorized_voters = HashMap::new();
+        let new_node_id_to_vote_accounts = HashMap::new();
+
+        // Create the set of relevant voters for the next epoch
+        new_epoch_authorized_voters
+            .insert(old_refreshed_pubkey.clone(), AuthorizedVoters::default());
+        new_epoch_authorized_voters.insert(new_pubkey.clone(), AuthorizedVoters::default());
+
+        ClusterInfoVoteListener::process_new_leader_schedule_epoch_state(
+            &vote_tracker,
+            new_epoch_authorized_voters,
+            new_node_id_to_vote_accounts,
+        );
+        let r_vote_tracker = vote_tracker.read().unwrap();
+
+        assert!(r_vote_tracker
+            .epoch_authorized_voters
+            .get(&new_pubkey)
+            .is_some());
+        assert!(r_vote_tracker
+            .epoch_authorized_voters
+            .get(&old_outdated_pubkey)
+            .is_none());
+
+        // Make sure new copies of the same pubkeys aren't constantly being
+        // introduced when the same voter is in both the old and new set
+        let pubkey_ref = r_vote_tracker
+            .get_voter_pubkey(&old_refreshed_pubkey)
+            .unwrap();
+
+        // Ref count remains unchanged from earlier
+        assert_eq!(Arc::strong_count(&pubkey_ref), 2);
+    }
+
+    fn new_vote_tx(
+        slots: Vec<Slot>,
+        blockhash: Hash,
+        node_keypair: &Keypair,
+        authorized_voter_keypair: &Keypair,
+    ) -> Transaction {
+        let votes = Vote::new(slots, blockhash);
+        let vote_ix = vote_instruction::vote(
+            &node_keypair.pubkey(),
+            &authorized_voter_keypair.pubkey(),
+            votes,
+        );
+
+        let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
+
+        vote_tx.partial_sign(&[node_keypair], blockhash);
+        vote_tx.partial_sign(&[authorized_voter_keypair], blockhash);
+        vote_tx
     }
 }
