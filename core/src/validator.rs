@@ -183,27 +183,25 @@ impl Validator {
             maybe_tower,
         );
 
-        let tower = match tower {
-            Ok(tower) => tower,
-            Err(e) => {
-                if let Some(account) = &bank_forks
-                    .get(bank_forks.root())
-                    .expect("Failed to get root bank")
-                    .get_account(vote_account)
-                {
-                    if let Some(vote_state) = VoteState::from(&account) {
-                        if !vote_state.votes.is_empty() {
-                            if allow_missing_tower_state {
-                                error!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
-                            } else {
-                                panic!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
-                            }
+        let tower = tower.unwrap_or_else(|e| {
+            if let Some(account) = &bank_forks
+                .get(bank_forks.root())
+                .expect("Failed to get root bank")
+                .get_account(vote_account)
+            {
+                if let Some(vote_state) = VoteState::from(&account) {
+                    if !vote_state.votes.is_empty() {
+                        let message = format!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
+                        if allow_missing_tower_state {
+                            error!("{}", message);
+                        } else {
+                            panic!("{}", message);
                         }
                     }
                 }
-                Tower::new(&keypair.pubkey(), vote_account, &bank_forks, ledger_path)
             }
-        };
+            Tower::new(&keypair.pubkey(), vote_account, &bank_forks, ledger_path)
+        });
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
