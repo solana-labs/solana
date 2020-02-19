@@ -2,7 +2,6 @@ pub mod address_generator;
 pub mod genesis_accounts;
 pub mod stakes;
 pub mod unlocks;
-pub mod validators;
 
 use serde::{Deserialize, Serialize};
 
