@@ -1,5 +1,6 @@
 use crate::{
     input_parsers::{derivation_of, pubkeys_sigs_of},
+    offline::SIGNER_ARG,
     ArgConstant,
 };
 use bip39::{Language, Mnemonic, Seed};
@@ -79,7 +80,7 @@ pub fn keypair_util_from_path(
             derivation_of(matches, "derivation_path"),
         )?)),
         KeypairUrl::Pubkey(pubkey) => {
-            let presigner = pubkeys_sigs_of(matches, "signer")
+            let presigner = pubkeys_sigs_of(matches, SIGNER_ARG.name)
                 .as_ref()
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {

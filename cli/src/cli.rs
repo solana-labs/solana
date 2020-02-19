@@ -14,7 +14,9 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
-use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
+use solana_clap_utils::{
+    input_parsers::*, input_validators::*, offline::SIGN_ONLY_ARG, ArgConstant,
+};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
