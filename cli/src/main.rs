@@ -4,7 +4,7 @@ use console::style;
 use solana_clap_utils::{
     input_parsers::derivation_of,
     input_validators::{is_derivation, is_url},
-    keypair::{keypair_util_from_path, ASK_SEED_PHRASE_ARG, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    keypair::{keypair_util_from_path, SKIP_SEED_PHRASE_VALIDATION_ARG},
 };
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},
@@ -190,15 +190,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .short("v")
             .global(true)
             .help("Show extra information header"),
-    )
-    .arg(
-        Arg::with_name(ASK_SEED_PHRASE_ARG.name)
-            .long(ASK_SEED_PHRASE_ARG.long)
-            .value_name("KEYPAIR NAME")
-            .global(true)
-            .takes_value(true)
-            .possible_values(&["keypair"])
-            .help(ASK_SEED_PHRASE_ARG.help),
     )
     .arg(
         Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
