@@ -4,7 +4,7 @@ use crate::{
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
-    short_vec,
+    short_vec, system_instruction,
 };
 use itertools::Itertools;
 
@@ -206,6 +206,20 @@ impl Message {
             Hash::default(),
             instructions,
         )
+    }
+
+    pub fn new_with_nonce(
+        mut instructions: Vec<Instruction>,
+        payer: Option<&Pubkey>,
+        nonce_account_pubkey: &Pubkey,
+        nonce_authority_pubkey: &Pubkey,
+    ) -> Self {
+        let nonce_ix = system_instruction::advance_nonce_account(
+            &nonce_account_pubkey,
+            &nonce_authority_pubkey,
+        );
+        instructions.insert(0, nonce_ix);
+        Self::new_with_payer(instructions, payer)
     }
 
     pub fn serialize(&self) -> Vec<u8> {

@@ -255,6 +255,54 @@ impl Transaction {
         }
     }
 
+    /// Check keys and keypair lengths, then sign this transaction, using an assortment of
+    /// KeypairUtil trait objects
+    pub fn sign_dynamic_signers(&mut self, keypairs: &[&dyn KeypairUtil], recent_blockhash: Hash) {
+        self.partial_sign_dynamic_signers(keypairs, recent_blockhash);
+
+        assert_eq!(self.is_signed(), true, "not enough keypairs");
+    }
+
+    ///  Sign using some subset of required keys, which may be an assortment of KeypairUtil trait
+    ///  objects. If recent_blockhash is not the same as currently in the transaction, clear any
+    ///  prior signatures and update recent_blockhash
+    pub fn partial_sign_dynamic_signers(
+        &mut self,
+        keypairs: &[&dyn KeypairUtil],
+        recent_blockhash: Hash,
+    ) {
+        let positions = self
+            .get_signing_keypair_positions_dynamic_signers(keypairs)
+            .expect("account_keys doesn't contain num_required_signatures keys");
+        let positions: Vec<usize> = positions
+            .iter()
+            .map(|pos| pos.expect("keypair-pubkey mismatch"))
+            .collect();
+        self.partial_sign_unchecked_dynamic_signers(keypairs, positions, recent_blockhash)
+    }
+
+    /// Sign the transaction using an assortment of KeypairUtil trait objects, and place the
+    /// signatures in their associated positions in `signatures` without checking that the
+    /// positions are correct.
+    pub fn partial_sign_unchecked_dynamic_signers(
+        &mut self,
+        keypairs: &[&dyn KeypairUtil],
+        positions: Vec<usize>,
+        recent_blockhash: Hash,
+    ) {
+        // if you change the blockhash, you're re-signing...
+        if recent_blockhash != self.message.recent_blockhash {
+            self.message.recent_blockhash = recent_blockhash;
+            self.signatures
+                .iter_mut()
+                .for_each(|signature| *signature = Signature::default());
+        }
+
+        for i in 0..positions.len() {
+            self.signatures[positions[i]] = keypairs[i].sign_message(&self.message_data())
+        }
+    }
+
     /// Verify the transaction
     pub fn verify(&self) -> Result<()> {
         if !self
@@ -274,6 +322,27 @@ impl Transaction {
     pub fn get_signing_keypair_positions<T: KeypairUtil>(
         &self,
         keypairs: &[&T],
+    ) -> Result<Vec<Option<usize>>> {
+        if self.message.account_keys.len() < self.message.header.num_required_signatures as usize {
+            return Err(TransactionError::InvalidAccountIndex);
+        }
+        let signed_keys =
+            &self.message.account_keys[0..self.message.header.num_required_signatures as usize];
+
+        Ok(keypairs
+            .iter()
+            .map(|keypair| {
+                signed_keys
+                    .iter()
+                    .position(|pubkey| pubkey == &keypair.pubkey())
+            })
+            .collect())
+    }
+
+    /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs
+    pub fn get_signing_keypair_positions_dynamic_signers(
+        &self,
+        keypairs: &[&dyn KeypairUtil],
     ) -> Result<Vec<Option<usize>>> {
         if self.message.account_keys.len() < self.message.header.num_required_signatures as usize {
             return Err(TransactionError::InvalidAccountIndex);
