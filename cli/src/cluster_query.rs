@@ -748,7 +748,7 @@ pub fn process_ping(
         let ix = system_instruction::transfer(&config.keypair.pubkey(), &to, lamports);
         let message = Message::new(vec![ix]);
         let mut transaction = Transaction::new_unsigned(message);
-        transaction.sign(&[config.keypair.as_ref()], recent_blockhash);
+        transaction.try_sign(&[config.keypair.as_ref()], recent_blockhash)?;
         check_account_for_fee(
             rpc_client,
             &config.keypair.pubkey(),

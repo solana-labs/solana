@@ -193,10 +193,10 @@ pub fn process_create_storage_account(
 
     let message = Message::new(ixs);
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(
+    tx.try_sign(
         &[config.keypair.as_ref(), storage_account],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -221,7 +221,7 @@ pub fn process_claim_storage_reward(
     let signers = [config.keypair.as_ref()];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(&signers, recent_blockhash);
+    tx.try_sign(&signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),

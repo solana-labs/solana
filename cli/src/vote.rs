@@ -319,7 +319,7 @@ pub fn process_create_vote_account(
 
     let message = Message::new(ixs);
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(&signers, recent_blockhash);
+    tx.try_sign(&signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -351,7 +351,7 @@ pub fn process_vote_authorize(
 
     let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(&[config.keypair.as_ref()], recent_blockhash);
+    tx.try_sign(&[config.keypair.as_ref()], recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -382,10 +382,10 @@ pub fn process_vote_update_validator(
 
     let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(
+    tx.try_sign(
         &[config.keypair.as_ref(), authorized_voter],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),

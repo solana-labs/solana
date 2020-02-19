@@ -343,10 +343,10 @@ pub fn process_authorize_nonce_account(
     let ix = authorize_nonce_account(nonce_account, &nonce_authority.pubkey(), new_authority);
     let message = Message::new_with_payer(vec![ix], Some(&config.keypair.pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(
+    tx.try_sign(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
-    );
+    )?;
 
     check_account_for_fee(
         rpc_client,
@@ -432,7 +432,7 @@ pub fn process_create_nonce_account(
 
     let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(&signers, recent_blockhash);
+    tx.try_sign(&signers, recent_blockhash)?;
 
     check_account_for_fee(
         rpc_client,
@@ -487,10 +487,10 @@ pub fn process_new_nonce(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let message = Message::new_with_payer(vec![ix], Some(&config.keypair.pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(
+    tx.try_sign(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -570,10 +570,10 @@ pub fn process_withdraw_from_nonce_account(
     );
     let message = Message::new_with_payer(vec![ix], Some(&config.keypair.pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign(
+    tx.try_sign(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
