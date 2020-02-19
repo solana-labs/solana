@@ -1,7 +1,6 @@
 use crate::{
     stakes::{create_and_add_stakes, StakerInfo},
     unlocks::UnlockInfo,
-    validators::create_and_add_validator,
 };
 use solana_sdk::{genesis_config::GenesisConfig, native_token::LAMPORTS_PER_SOL};
 
@@ -198,77 +197,6 @@ fn add_stakes(
         .sum::<u64>()
 }
 
-pub const VALIDATOR_PUBKEYS: &[&str] = &[
-    "27SB7d27xvtBJjgsAV8JBDjQroySmZepiNSepeRbRhe9", //
-    "2te46rxywMdCNdkvjumiBBPQoVczJFxhxEaxFavQNqe3", // ChainFlow
-    "2tvTYUajoBgeAd66Zhd5Nc2BgKGCgdmasR94fpBokzop", //
-    "3QZDKya4AHzsLAuRaMRgejrqW6mETnX88aMSkm7FEE7E", // Syncnode SRL
-    "3Z5XVczCTXeYeFABoeFm1LngC9657kZMVGNFzqFXviHb", // stake.fish
-    "3o43fXxTpndqVsCdMi16WNq6aR9er75P364ZkTHrEQJN", // mintonium
-    "44e8VyWoyZSE2oYHxMHMedAiHkGJqJgPd3tdt6iKoAFL", // P2P.ORG - Secure Non-custodial Staking
-    "4MHRFcPheQonBf1pUKrBwJAnn2wP9NEZkXYFEFMfFbWV", //
-    "4vPqTnfH2ud6hp1yFSFRy9t9xhm8sGDwU4amcZGr2gT7", // Certus One / nexantic GmbH
-    "4ydifDThiWuVtzV92eNGiznuQAnTZtGkb9b2XQoMGAUn", // Sikka
-    "54g6LdVubwthdfMKwPqLraDEDAVWNDpN6a3ZGZm2Sbjz", //
-    "592eDka2qrXWcszC3NNvViKfEyxvuoAbBgohVt75dWq1", //
-    "5JuyDi5HR2CZS39nF43Ws6nhqYWM2fgnZbtf9zRNy52a", // stakewolf
-    "5jTcJaq6gLEao1R5rscvfnUhNt6RXg4JFDCegyEhsJG2", //
-    "5n8KCdzqtvTnhkvCrFR7errH6ZUp11kL97r2awXkfzFe", // 01Node
-    "7ntcPwcaCSpH66ftVZU5oSuWSpvQfN3kfTDaGUHWsc1m", // IZO DATA NETWORK
-    "7sa8uUnjNPJ2dFwrKG2kd1XEiB4ujsJ4wGEWn7CK629K", // SparkPool
-    "7suRNpX7bJsXphHJtBv4ZsLjJZ1dTGeX256pLqJZdEAm", // Bison Trails
-    "7v5DXDvYzkgTdFYXYB12ZLKD6z8QfzR53N9hg6XgEQJE", // Cryptium Labs GmbH
-    "8LSwP5qYbmuUfKLGwi8XaKJnai9HyZAJTnBovyWebRfd", //
-    "8UPb8LMWyoJJC9Aeq9QmTzKZKV2ssov739bTJ14M4ws1", //
-    "8wFK4fCAuDoAH1fsgou9yKZPqDMFtJUVoDdkZAAMuhyA", // LunaNova Technologies Ltd
-    "94eWgQm2k8BXKEWbJP2eScHZeKopXpqkuoVrCofQWBhW", // Node A-Team
-    "9J8WcnXxo3ArgEwktfk9tsrf4Rp8h5uPUgnQbQHLvtkd", // moonli.me
-    "AYZS4CFZRi1165mmUqnpDcHbm1NT9zFGPdjG5VDuK79p", // Ubik Capital
-    "Ah5arzkbkHTMkzUaD5DiCAC1rzxqPgyQDFTnw8Krwz1V", // Moonlet
-    "ArpeD4LKYgza1o6aR5xNTQX3hxeik8URxWNQVpA8wirV", // Staking Fund
-    "B21L2hCrdE4SDhRi2fHKohfSUNAhoLeaWfBp1C9HdF6Y", // Everstake
-    "Bf6JtoLAg9zxAksgZ9gUsa6zZum1UuPWuirY6qKLXXoW", //
-    "BrFqUxNY4HstYdiYYZiyDa5KiTrdcfqoBBEky3kqKFgQ", // IRIS Foundation Ltd.
-    "C8VJytJbZM7KFMXHNUdoF4V7V2QbhkxNs1qYybRoqUEK", //
-    "CWfPaZJpy8fc2eU7qe1JNnf4oszQFJU68DZiVJGGy4Z7", //
-    "Ccq6zHdtv3DWCP4AccTi4Ya2xPGsEVHSfoPmQ1qffb8H", //
-    "ChorusXqjLC2NbiStKR6k9WoD7wu6TVTtFG8qCL5XBVa", // ChorusOne
-    "DaqUBvjHtKYiZ6exUhqrcpDqu5ffYB6QWKwXSwdvDVBj", //
-    "Daxixc1dFxxLDj85t1CWAsvNXdYq51tDAE51nhPqK9yF", //
-    "Dh1DRj5mLYMeJVGvaPZN7F4XjpX6u2dCDXVnUXrE8rwW", // POS Bakerz
-    "DxLtXrLUrqja3EFjkR4PXNYCuyVtaQnozonCdf3iZk8X", // melea
-    "ETVHRnFkZi7PihPDYibp9fmjfR8P5o7pEs92czku62VV", //
-    "EduAgutprA7Vp94ZmTU6WRAmqq7VZAXBqH1GyxjWn12D", //
-    "Ez4iUU87ViJLCnmSy1t1Ti3DLoysFXiBseNfnRfoehyY", // RockX
-    "FYbyeGqsx8G5mW4p3MfnNEsHaCQQSAmxESf7ct36moGZ", //
-    "Fe5sLQAAT7RBT8mcH1AAGCbExJQcYxcwXvp1GjrGbvxs", // Forbole Limited
-    "FhacRVSACfKcZNAbvbKuj1MunBKxQu2nHu9raJaGsZzG", //
-    "FiF184p8DYxnWkBc7WxUh49PccYwvVepmk3nxAnNgGqW", // Easy 2 Stake
-    "G47WACh32JUcxyiCna7UYw45tyYSFKQ58yFpUmhmMybm", //
-    "GRi3H2M3HxYGAKhz5VrUQipUrAhWj6jTbtjhxiKXHhRj", //
-    "GeZ5PrJi9muVCJiJAaFBNGoCEdxGEqTp7L2BmT2WTTy1", // Dokia Capital
-    "GkNQ9hQM1DoTQy9i4HVzhCjtKh9A6uSx7Z5XTAkqRGhu", //
-    "GsEofbB3rzUK78Ee4NRL6AmcPs6FKRCb7JA8tX6LZjHc", //
-    "H279DmgqTkTYnEucPdKbvT8wMTGBAuVh787FX2gRT5Bg", //
-    "Hac7hGYwbve747fGefaFoank1K1rNmvr5MjtsYvzZ37i", //
-    "HavuVVDXXsJqMzPwQ4KcF5kFm2xqjbChhyi1bgGeCQif", // Stake Capital
-    "HpzcHxARoR6HtVuZPXWJMLwgusk2UNCan343u6WSQvm2", //
-    "Luna1VCsPBE4hghuHaL9UFgimBB3V6u6johyd7hGXBL",  // LunaNova Technologies Ltd
-    "SPC3m89qwxGbqYdg1GuaoeZtgJD2hYoob6c4aKLG1zu",  // Staker Space
-    "Smith4JYx2otuFgT2dR83qJSfW8RjBZHPsXPyfZBYBu",  // MCF
-    "pbAxyqHHPMwgEjv8kmjGxysk9rhNtN7q22eAjReq6Hj",  // Staking Facilities
-    "qzCAEHbjb7AtpTPKaetY47LWNLCxFeHuFozjeXhj1k1",  // Figment Networks, Inc.
-];
-
-fn add_validators(genesis_config: &mut GenesisConfig, validator_pubkeys: &[&str]) -> u64 {
-    validator_pubkeys
-        .iter()
-        .map(|validator_pubkey| {
-            create_and_add_validator(genesis_config, validator_pubkey, 500 * LAMPORTS_PER_SOL)
-        })
-        .sum::<u64>()
-}
-
 pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lamports: u64) {
     // add_stakes() and add_validators() award tokens for rent exemption and
     //  to cover an initial transfer-free period of the network
@@ -293,7 +221,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         &COMMUNITY_STAKER_INFOS,
         &UNLOCKS_ALL_DAY_ZERO,
         1_000_000 * LAMPORTS_PER_SOL,
-    ) + add_validators(genesis_config, &VALIDATOR_PUBKEYS);
+    );
 
     // "one thanks" (community pool) gets 500_000_000SOL (total) - above distributions
     create_and_add_stakes(
@@ -325,13 +253,5 @@ mod tests {
             .sum::<u64>();
 
         assert_eq!(500_000_000 * LAMPORTS_PER_SOL, lamports);
-    }
-
-    #[test]
-    fn test_no_duplicate_validator_pubkeys() {
-        let mut v = VALIDATOR_PUBKEYS.to_vec();
-        v.sort();
-        v.dedup();
-        assert_eq!(v.len(), VALIDATOR_PUBKEYS.len());
     }
 }
