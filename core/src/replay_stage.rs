@@ -814,13 +814,13 @@ impl ReplayStage {
                 stats.weight = bank_weight;
                 stats.fork_weight = stats.weight + parent_weight;
 
-                datapoint_warn!(
+                datapoint_info!(
                     "bank_weight",
                     ("slot", bank.slot(), i64),
                     // u128 too large for influx, convert to hex
                     ("weight", format!("{:X}", stats.weight), String),
                 );
-                warn!(
+                info!(
                     "{} slot_weight: {} {} {} {}",
                     my_pubkey,
                     stats.slot,
@@ -937,7 +937,7 @@ impl ReplayStage {
                 if bank.is_frozen() && tower.is_slot_confirmed(*slot, stake_lockouts, total_staked)
                 {
                     info!("validator fork confirmed {} {}ms", *slot, duration);
-                    datapoint_warn!("validator-confirmation", ("duration_ms", duration, i64));
+                    datapoint_info!("validator-confirmation", ("duration_ms", duration, i64));
                     confirmed_forks.push(*slot);
                 } else {
                     debug!(
