@@ -274,7 +274,7 @@ pub fn process_show_storage_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -288,6 +288,10 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let pubkey_string = pubkey.to_string();
 
+        let default_keypair = Keypair::new();
+        let (default_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
+
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let storage_account_keypair = Keypair::new();
         write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
@@ -299,14 +303,21 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_archiver_storage_account).unwrap(),
+            parse_command(
+                &test_create_archiver_storage_account,
+                &default_keypair_file,
+                &None
+            )
+            .unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account: storage_account_keypair.into(),
                     account_type: StorageAccountType::Archiver,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    storage_account_keypair.into()
+                ],
             }
         );
 
@@ -323,14 +334,21 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_validator_storage_account).unwrap(),
+            parse_command(
+                &test_create_validator_storage_account,
+                &default_keypair_file,
+                &None
+            )
+            .unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account: storage_account_keypair.into(),
                     account_type: StorageAccountType::Validator,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    storage_account_keypair.into()
+                ],
             }
         );
 
@@ -341,13 +359,13 @@ mod tests {
             &storage_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_claim_storage_reward).unwrap(),
+            parse_command(&test_claim_storage_reward, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ClaimStorageReward {
                     node_account_pubkey: pubkey,
                     storage_account_pubkey,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
     }

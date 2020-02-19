@@ -270,7 +270,12 @@ pub fn parse_cluster_ping(
             timeout,
             commitment_config,
         },
-        signers: vec![signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?],
+        signers: vec![signer_from_path(
+            matches,
+            default_signer_path,
+            "keypair",
+            wallet_manager,
+        )?],
     })
 }
 
@@ -1110,28 +1115,38 @@ pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) 
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
+    use solana_sdk::signature::{write_keypair, Keypair};
+    use tempfile::NamedTempFile;
+
+    fn make_tmp_file() -> (String, NamedTempFile) {
+        let tmp_file = NamedTempFile::new().unwrap();
+        (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
+    }
 
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
+        let default_keypair = Keypair::new();
+        let (default_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_cluster_version = test_commands
             .clone()
             .get_matches_from(vec!["test", "cluster-version"]);
         assert_eq!(
-            parse_command(&test_cluster_version).unwrap(),
+            parse_command(&test_cluster_version, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ClusterVersion,
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
         let test_fees = test_commands.clone().get_matches_from(vec!["test", "fees"]);
         assert_eq!(
-            parse_command(&test_fees).unwrap(),
+            parse_command(&test_fees, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Fees,
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
@@ -1141,10 +1156,10 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "block-time", &slot.to_string()]);
         assert_eq!(
-            parse_command(&test_get_block_time).unwrap(),
+            parse_command(&test_get_block_time, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetBlockTime { slot },
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
@@ -1152,12 +1167,12 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "epoch-info"]);
         assert_eq!(
-            parse_command(&test_get_epoch_info).unwrap(),
+            parse_command(&test_get_epoch_info, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetEpochInfo {
                     commitment_config: CommitmentConfig::recent(),
                 },
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
@@ -1165,21 +1180,21 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "genesis-hash"]);
         assert_eq!(
-            parse_command(&test_get_genesis_hash).unwrap(),
+            parse_command(&test_get_genesis_hash, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetGenesisHash,
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
         let test_get_slot = test_commands.clone().get_matches_from(vec!["test", "slot"]);
         assert_eq!(
-            parse_command(&test_get_slot).unwrap(),
+            parse_command(&test_get_slot, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetSlot {
                     commitment_config: CommitmentConfig::recent(),
                 },
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
@@ -1187,12 +1202,12 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "transaction-count"]);
         assert_eq!(
-            parse_command(&test_transaction_count).unwrap(),
+            parse_command(&test_transaction_count, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetTransactionCount {
                     commitment_config: CommitmentConfig::recent(),
                 },
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
@@ -1208,7 +1223,7 @@ mod tests {
             "--confirmed",
         ]);
         assert_eq!(
-            parse_command(&test_ping).unwrap(),
+            parse_command(&test_ping, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Ping {
                     lamports: 1,
@@ -1217,7 +1232,7 @@ mod tests {
                     timeout: Duration::from_secs(3),
                     commitment_config: CommitmentConfig::default(),
                 },
-                require_default_keypair: true
+                signers: vec![default_keypair.into()],
             }
         );
     }

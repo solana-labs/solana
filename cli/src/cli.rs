@@ -2358,7 +2358,7 @@ mod tests {
         system_program,
         transaction::TransactionError,
     };
-    use std::{collections::HashMap, path::PathBuf, rc::Rc};
+    use std::{collections::HashMap, path::PathBuf};
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
@@ -2376,47 +2376,38 @@ mod tests {
 
     #[test]
     fn test_generate_unique_signers() {
-        let CliSignerInfo {
-            signers,
-            indexes,
-            require_default_keypair,
-        } = generate_unique_signers(vec![]);
+        let matches = ArgMatches::default();
+
+        let default_keypair = Keypair::new();
+        let default_keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
+
+        let CliSignerInfo { signers, indexes } =
+            generate_unique_signers(vec![], &matches, &default_keypair_file, &None).unwrap();
         assert_eq!(signers.len(), 0);
         assert_eq!(indexes.len(), 0);
-        assert_eq!(require_default_keypair, true);
 
-        let CliSignerInfo {
-            signers,
-            indexes,
-            require_default_keypair,
-        } = generate_unique_signers(vec![None, None]);
-        assert_eq!(signers.len(), 0);
+        let CliSignerInfo { signers, indexes } =
+            generate_unique_signers(vec![None, None], &matches, &default_keypair_file, &None)
+                .unwrap();
+        assert_eq!(signers.len(), 1);
         assert_eq!(indexes, vec![0, 0]);
-        assert_eq!(require_default_keypair, true);
 
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
         let signers = vec![None, Some(keypair0.into()), Some(keypair0_clone.into())];
-        let CliSignerInfo {
-            signers,
-            indexes,
-            require_default_keypair,
-        } = generate_unique_signers(signers);
-        assert_eq!(signers.len(), 1);
+        let CliSignerInfo { signers, indexes } =
+            generate_unique_signers(signers, &matches, &default_keypair_file, &None).unwrap();
+        assert_eq!(signers.len(), 2);
         assert_eq!(indexes, vec![0, 1, 1]);
-        assert_eq!(require_default_keypair, true);
 
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
         let signers = vec![Some(keypair0.into()), Some(keypair0_clone.into())];
-        let CliSignerInfo {
-            signers,
-            indexes,
-            require_default_keypair,
-        } = generate_unique_signers(signers);
+        let CliSignerInfo { signers, indexes } =
+            generate_unique_signers(signers, &matches, &default_keypair_file, &None).unwrap();
         assert_eq!(signers.len(), 1);
         assert_eq!(indexes, vec![0, 0]);
-        assert_eq!(require_default_keypair, false);
 
         // Signers with the same pubkey are not distinct
         let keypair0 = Keypair::new();
@@ -2430,14 +2421,10 @@ mod tests {
             Some(presigner1.into()),
             Some(keypair1.into()),
         ];
-        let CliSignerInfo {
-            signers,
-            indexes,
-            require_default_keypair,
-        } = generate_unique_signers(signers);
+        let CliSignerInfo { signers, indexes } =
+            generate_unique_signers(signers, &matches, &default_keypair_file, &None).unwrap();
         assert_eq!(signers.len(), 2);
         assert_eq!(indexes, vec![0, 0, 1, 1]);
-        assert_eq!(require_default_keypair, false);
     }
 
     #[test]
@@ -2458,7 +2445,7 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "airdrop", "50", &pubkey_string]);
         assert_eq!(
-            parse_command(&test_airdrop).unwrap(),
+            parse_command(&test_airdrop, "", &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host: None,
@@ -2466,13 +2453,14 @@ mod tests {
                     pubkey: Some(pubkey),
                     lamports: 50_000_000_000,
                 },
-                require_default_keypair: true,
+                signers: vec![],
             }
         );
 
         // Test Balance Subcommand, incl pubkey and keypair-file inputs
+        let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
-        write_keypair_file(&Keypair::new(), &keypair_file).unwrap();
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
         let keypair = read_keypair_file(&keypair_file).unwrap();
         let test_balance = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2480,13 +2468,13 @@ mod tests {
             &keypair.pubkey().to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_balance).unwrap(),
+            parse_command(&test_balance, "", &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: false
                 },
-                require_default_keypair: false
+                signers: vec![],
             }
         );
         let test_balance = test_commands.clone().get_matches_from(vec![
@@ -2496,13 +2484,13 @@ mod tests {
             "--lamports",
         ]);
         assert_eq!(
-            parse_command(&test_balance).unwrap(),
+            parse_command(&test_balance, "", &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: true
                 },
-                require_default_keypair: false
+                signers: vec![],
             }
         );
         let test_balance =
@@ -2510,13 +2498,13 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "balance", "--lamports"]);
         assert_eq!(
-            parse_command(&test_balance).unwrap(),
+            parse_command(&test_balance, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: None,
                     use_lamports_unit: true
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2526,10 +2514,10 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "cancel", &pubkey_string]);
         assert_eq!(
-            parse_command(&test_cancel).unwrap(),
+            parse_command(&test_cancel, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Cancel(pubkey),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2541,16 +2529,16 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "confirm", &signature_string]);
         assert_eq!(
-            parse_command(&test_confirm).unwrap(),
+            parse_command(&test_confirm, "", &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Confirm(signature),
-                require_default_keypair: false
+                signers: vec![],
             }
         );
         let test_bad_signature = test_commands
             .clone()
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
-        assert!(parse_command(&test_bad_signature).is_err());
+        assert!(parse_command(&test_bad_signature, "", &None).is_err());
 
         // Test CreateAddressWithSeed
         let from_pubkey = Some(Pubkey::new_rand());
@@ -2569,14 +2557,14 @@ mod tests {
                 &from_str,
             ]);
             assert_eq!(
-                parse_command(&test_create_address_with_seed).unwrap(),
+                parse_command(&test_create_address_with_seed, "", &None).unwrap(),
                 CliCommandInfo {
                     command: CliCommand::CreateAddressWithSeed {
                         from_pubkey,
                         seed: "seed".to_string(),
                         program_id: *program_id
                     },
-                    require_default_keypair: false
+                    signers: vec![],
                 }
             );
         }
@@ -2587,14 +2575,14 @@ mod tests {
             "STAKE",
         ]);
         assert_eq!(
-            parse_command(&test_create_address_with_seed).unwrap(),
+            parse_command(&test_create_address_with_seed, "", &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateAddressWithSeed {
                     from_pubkey: None,
                     seed: "seed".to_string(),
                     program_id: solana_stake_program::id(),
                 },
-                require_default_keypair: true
+                signers: vec![],
             }
         );
 
@@ -2604,10 +2592,10 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
         assert_eq!(
-            parse_command(&test_deploy).unwrap(),
+            parse_command(&test_deploy, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Deploy("/Users/test/program.o".to_string()),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2617,14 +2605,14 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "pay", &pubkey_string, "50"]);
         assert_eq!(
-            parse_command(&test_pay).unwrap(),
+            parse_command(&test_pay, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2640,7 +2628,7 @@ mod tests {
             &witness1_string,
         ]);
         assert_eq!(
-            parse_command(&test_pay_multiple_witnesses).unwrap(),
+            parse_command(&test_pay_multiple_witnesses, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
@@ -2648,7 +2636,7 @@ mod tests {
                     witnesses: Some(vec![witness0, witness1]),
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
         let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
@@ -2660,7 +2648,7 @@ mod tests {
             &witness0_string,
         ]);
         assert_eq!(
-            parse_command(&test_pay_single_witness).unwrap(),
+            parse_command(&test_pay_single_witness, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
@@ -2668,7 +2656,7 @@ mod tests {
                     witnesses: Some(vec![witness0]),
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2684,7 +2672,7 @@ mod tests {
             &witness0_string,
         ]);
         assert_eq!(
-            parse_command(&test_pay_timestamp).unwrap(),
+            parse_command(&test_pay_timestamp, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
@@ -2693,7 +2681,7 @@ mod tests {
                     timestamp_pubkey: Some(witness0),
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2710,7 +2698,7 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_pay).unwrap(),
+            parse_command(&test_pay, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
@@ -2719,7 +2707,7 @@ mod tests {
                     sign_only: true,
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true,
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2733,7 +2721,7 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_pay).unwrap(),
+            parse_command(&test_pay, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
@@ -2741,7 +2729,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2759,7 +2747,7 @@ mod tests {
             &pubkey_string,
         ]);
         assert_eq!(
-            parse_command(&test_pay).unwrap(),
+            parse_command(&test_pay, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
@@ -2768,7 +2756,7 @@ mod tests {
                     nonce_account: Some(pubkey),
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2789,17 +2777,17 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_pay).unwrap(),
+            parse_command(&test_pay, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(pubkey),
-                    nonce_authority: Some(keypair.into()),
+                    nonce_authority: 0,
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![keypair.into()],
             }
         );
 
@@ -2824,17 +2812,17 @@ mod tests {
             &signer_arg,
         ]);
         assert_eq!(
-            parse_command(&test_pay).unwrap(),
+            parse_command(&test_pay, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(pubkey),
-                    nonce_authority: Some(Presigner::new(&authority_pubkey, &sig).into()),
+                    nonce_authority: 0,
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![keypair.into()],
             }
         );
 
@@ -2859,7 +2847,7 @@ mod tests {
             "--signer",
             &signer_arg,
         ]);
-        assert!(parse_command(&test_pay).is_err());
+        assert!(parse_command(&test_pay, &keypair_file, &None).is_err());
 
         // Test Send-Signature Subcommand
         let test_send_signature = test_commands.clone().get_matches_from(vec![
@@ -2869,10 +2857,10 @@ mod tests {
             &pubkey_string,
         ]);
         assert_eq!(
-            parse_command(&test_send_signature).unwrap(),
+            parse_command(&test_send_signature, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Witness(pubkey, pubkey),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
         let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
@@ -2890,7 +2878,7 @@ mod tests {
             &witness1_string,
         ]);
         assert_eq!(
-            parse_command(&test_pay_multiple_witnesses).unwrap(),
+            parse_command(&test_pay_multiple_witnesses, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
@@ -2900,7 +2888,7 @@ mod tests {
                     witnesses: Some(vec![witness0, witness1]),
                     ..PayCommand::default()
                 }),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -2914,10 +2902,10 @@ mod tests {
             "2018-09-19T17:30:59",
         ]);
         assert_eq!(
-            parse_command(&test_send_timestamp).unwrap(),
+            parse_command(&test_send_timestamp, &keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::TimeElapsed(pubkey, pubkey, dt),
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
         let test_bad_timestamp = test_commands.clone().get_matches_from(vec![
@@ -2928,7 +2916,7 @@ mod tests {
             "--date",
             "20180919T17:30:59",
         ]);
-        assert!(parse_command(&test_bad_timestamp).is_err());
+        assert!(parse_command(&test_bad_timestamp, &keypair_file, &None).is_err());
     }
 
     #[test]
@@ -2939,7 +2927,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey().to_string();
-        config.signers[0] = keypair.into();
+        config.signers = vec![&keypair];
         config.command = CliCommand::Address;
         assert_eq!(process_command(&config).unwrap(), pubkey);
 
@@ -2967,17 +2955,18 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
         let node_pubkey = Pubkey::new_rand();
         config.command = CliCommand::CreateVoteAccount {
-            vote_account: bob_keypair.into(),
             seed: None,
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
             commission: 0,
         };
+        config.signers = vec![&keypair, &bob_keypair];
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let new_authorized_pubkey = Pubkey::new_rand();
+        config.signers = vec![&bob_keypair];
         config.command = CliCommand::VoteAuthorize {
             vote_account_pubkey: bob_pubkey,
             new_authorized_pubkey,
@@ -2987,10 +2976,10 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let new_identity_pubkey = Pubkey::new_rand();
+        config.signers = vec![&keypair, &bob_keypair];
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_pubkey,
-            authorized_voter: Keypair::new().into(),
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -2999,7 +2988,7 @@ mod tests {
         let bob_pubkey = bob_keypair.pubkey();
         let custodian = Pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
-            stake_account: Rc::new(bob_keypair.into()),
+            stake_account: 1,
             seed: None,
             staker: None,
             withdrawer: None,
@@ -3012,10 +3001,11 @@ mod tests {
             sign_only: false,
             blockhash_query: BlockhashQuery::All,
             nonce_account: None,
-            nonce_authority: None,
-            fee_payer: None,
-            from: None,
+            nonce_authority: 0,
+            fee_payer: 0,
+            from: 0,
         };
+        config.signers = vec![&keypair, &bob_keypair];
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -3025,25 +3015,26 @@ mod tests {
             stake_account_pubkey: stake_pubkey,
             destination_account_pubkey: to_pubkey,
             lamports: 100,
-            withdraw_authority: None,
+            withdraw_authority: 0,
             sign_only: false,
             blockhash_query: BlockhashQuery::All,
             nonce_account: None,
-            nonce_authority: None,
-            fee_payer: None,
+            nonce_authority: 0,
+            fee_payer: 0,
         };
+        config.signers = vec![&keypair];
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let stake_pubkey = Pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
             stake_account_pubkey: stake_pubkey,
-            stake_authority: None,
+            stake_authority: 0,
             sign_only: false,
             blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
-            nonce_authority: None,
-            fee_payer: None,
+            nonce_authority: 0,
+            fee_payer: 0,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -3052,16 +3043,17 @@ mod tests {
         let split_stake_account = Keypair::new();
         config.command = CliCommand::SplitStake {
             stake_account_pubkey: stake_pubkey,
-            stake_authority: None,
+            stake_authority: 0,
             sign_only: false,
             blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
-            nonce_authority: None,
-            split_stake_account: Rc::new(split_stake_account.into()),
+            nonce_authority: 0,
+            split_stake_account: 1,
             seed: None,
             lamports: 1234,
-            fee_payer: None,
+            fee_payer: 0,
         };
+        config.signers = vec![&keypair, &split_stake_account];
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -3075,6 +3067,7 @@ mod tests {
         };
         assert_eq!(process_command(&config).unwrap(), "1234");
 
+        config.signers = vec![&keypair];
         config.command = CliCommand::Pay(PayCommand {
             lamports: 10,
             to: bob_pubkey,
@@ -3176,14 +3169,16 @@ mod tests {
             to: bob_pubkey,
             blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
             nonce_account: Some(bob_pubkey),
-            nonce_authority: Some(bob_keypair.into()),
+            nonce_authority: 1,
             ..PayCommand::default()
         });
+        config.signers = vec![&keypair, &bob_keypair];
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let process_id = Pubkey::new_rand();
         config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
+        config.signers = vec![&keypair];
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -3248,13 +3243,13 @@ mod tests {
 
         let bob_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
-            vote_account: bob_keypair.into(),
             seed: None,
             node_pubkey,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
             commission: 0,
         };
+        config.signers = vec![&keypair, &bob_keypair];
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::VoteAuthorize {
@@ -3267,7 +3262,6 @@ mod tests {
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
             new_identity_pubkey: bob_pubkey,
-            authorized_voter: Keypair::new().into(),
         };
         assert!(process_command(&config).is_err());
 
@@ -3322,6 +3316,8 @@ mod tests {
         // Success case
         let mut config = CliConfig::default();
         config.rpc_client = Some(RpcClient::new_mock("deploy_succeeds".to_string()));
+        let default_keypair = Keypair::new();
+        config.signers = vec![&default_keypair];
 
         config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());
         let result = process_command(&config);
@@ -3345,6 +3341,10 @@ mod tests {
     fn test_parse_transfer_subcommand() {
         let test_commands = app("test", "desc", "version");
 
+        let default_keypair = Keypair::new();
+        let default_keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
+
         //Test Transfer Subcommand, SOL
         let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
         let from_pubkey = from_keypair.pubkey();
@@ -3356,19 +3356,19 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "transfer", &to_string, "42"]);
         assert_eq!(
-            parse_command(&test_transfer).unwrap(),
+            parse_command(&test_transfer, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     lamports: 42_000_000_000,
                     to: to_pubkey,
-                    from: None,
+                    from: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true,
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -3385,19 +3385,19 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_transfer).unwrap(),
+            parse_command(&test_transfer, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     lamports: 42_000_000_000,
                     to: to_pubkey,
-                    from: None,
+                    from: 0,
                     sign_only: true,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true,
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -3419,19 +3419,22 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_transfer).unwrap(),
+            parse_command(&test_transfer, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     lamports: 42_000_000_000,
                     to: to_pubkey,
-                    from: Some(Presigner::new(&from_pubkey, &from_sig).into()),
+                    from: 1,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(Presigner::new(&from_pubkey, &from_sig).into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: true,
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&from_pubkey, &from_sig).into()
+                ],
             }
         );
 
@@ -3454,19 +3457,22 @@ mod tests {
             &nonce_authority_file,
         ]);
         assert_eq!(
-            parse_command(&test_transfer).unwrap(),
+            parse_command(&test_transfer, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     lamports: 42_000_000_000,
                     to: to_pubkey,
-                    from: None,
+                    from: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_address.into()),
-                    nonce_authority: Some(read_keypair_file(&nonce_authority_file).unwrap().into()),
-                    fee_payer: None,
+                    nonce_authority: 1,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true,
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&nonce_authority_file).unwrap().into()
+                ],
             }
         );
     }

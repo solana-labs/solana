@@ -516,6 +516,10 @@ mod tests {
         let pubkey2 = keypair2.pubkey();
         let pubkey2_string = pubkey2.to_string();
 
+        let default_keypair = Keypair::new();
+        let (default_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
+
         let test_authorize_voter = test_commands.clone().get_matches_from(vec![
             "test",
             "vote-authorize-voter",
@@ -523,14 +527,14 @@ mod tests {
             &pubkey2_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize_voter).unwrap(),
+            parse_command(&test_authorize_voter, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::VoteAuthorize {
                     vote_account_pubkey: pubkey,
                     new_authorized_pubkey: pubkey2,
                     vote_authorize: VoteAuthorize::Voter
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -549,17 +553,19 @@ mod tests {
             "10",
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account).unwrap(),
+            parse_command(&test_create_vote_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair.into(),
                     seed: None,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 10,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(keypair)
+                ],
             }
         );
 
@@ -574,17 +580,19 @@ mod tests {
             &node_pubkey_string,
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account2).unwrap(),
+            parse_command(&test_create_vote_account2, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair.into(),
                     seed: None,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 100,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(keypair)
+                ],
             }
         );
 
@@ -603,17 +611,19 @@ mod tests {
             &authed.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account3).unwrap(),
+            parse_command(&test_create_vote_account3, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair.into(),
                     seed: None,
                     node_pubkey,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
                     commission: 100
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(keypair)
+                ],
             }
         );
 
@@ -630,17 +640,19 @@ mod tests {
             &authed.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account4).unwrap(),
+            parse_command(&test_create_vote_account4, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
-                    vote_account: keypair.into(),
                     seed: None,
                     node_pubkey,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
                     commission: 100
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(keypair)
+                ],
             }
         );
 
@@ -652,16 +664,16 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_update_validator).unwrap(),
+            parse_command(&test_update_validator, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::VoteUpdateValidator {
                     vote_account_pubkey: pubkey,
                     new_identity_pubkey: pubkey2,
-                    authorized_voter: solana_sdk::signature::read_keypair_file(&keypair_file)
-                        .unwrap()
-                        .into(),
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&keypair_file).unwrap())
+                ],
             }
         );
     }

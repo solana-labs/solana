@@ -1441,7 +1441,6 @@ mod tests {
             keypair_from_seed, read_keypair_file, write_keypair, Keypair, Presigner, Signer,
         },
     };
-    use std::rc::Rc;
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -1455,6 +1454,10 @@ mod tests {
         authority_keypair_file: &str,
         stake_authorize: StakeAuthorize,
     ) {
+        let default_keypair = Keypair::new();
+        let (default_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
+
         let stake_account_string = stake_account_pubkey.to_string();
 
         let (subcommand, authority_flag) = match stake_authorize {
@@ -1470,20 +1473,20 @@ mod tests {
             &stake_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
         // Test Staker Subcommand w/ authority
@@ -1496,20 +1499,23 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: Some(read_keypair_file(&authority_keypair_file).unwrap().into()),
+                    authority: 1,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
             }
         );
         // Test Authorize Subcommand w/ sign-only
@@ -1525,20 +1531,20 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: true,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
         // Test Authorize Subcommand w/ offline feepayer
@@ -1559,20 +1565,23 @@ mod tests {
             &pubkey.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(Presigner::new(&pubkey, &sig).into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&pubkey, &sig).into()
+                ],
             }
         );
         // Test Authorize Subcommand w/ offline fee payer and nonce authority
@@ -1600,20 +1609,24 @@ mod tests {
             &pubkey2.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: Some(Presigner::new(&pubkey2, &sig2).into()),
-                    fee_payer: Some(Presigner::new(&pubkey, &sig).into()),
+                    nonce_authority: 1,
+                    fee_payer: 2,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&pubkey2, &sig2).into(),
+                    Presigner::new(&pubkey, &sig).into(),
+                ],
             }
         );
         // Test Authorize Subcommand w/ blockhash
@@ -1626,20 +1639,20 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
         // Test Authorize Subcommand w/ nonce
@@ -1661,20 +1674,23 @@ mod tests {
             &nonce_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account_pubkey),
-                    nonce_authority: Some(nonce_authority_keypair.into()),
-                    fee_payer: None,
+                    nonce_authority: 1,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    nonce_authority_keypair.into()
+                ],
             }
         );
         // Test Authorize Subcommand w/ fee-payer
@@ -1692,20 +1708,23 @@ mod tests {
             &fee_payer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(read_keypair_file(&fee_payer_keypair_file).unwrap().into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&fee_payer_keypair_file).unwrap().into(),
+                ],
             }
         );
         // Test Authorize Subcommand w/ absentee fee-payer
@@ -1724,20 +1743,23 @@ mod tests {
             &signer,
         ]);
         assert_eq!(
-            parse_command(&test_authorize).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorized_pubkey: stake_account_pubkey,
                     stake_authorize,
-                    authority: None,
+                    authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(Presigner::new(&fee_payer_pubkey, &sig).into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&fee_payer_pubkey, &sig).into()
+                ],
             }
         );
     }
@@ -1745,6 +1767,9 @@ mod tests {
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
+        let default_keypair = Keypair::new();
+        let (default_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let stake_account_keypair = Keypair::new();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
@@ -1786,10 +1811,10 @@ mod tests {
             "43",
         ]);
         assert_eq!(
-            parse_command(&test_create_stake_account).unwrap(),
+            parse_command(&test_create_stake_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: Rc::new(stake_account_keypair.into()),
+                    stake_account: 1,
                     seed: None,
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
@@ -1802,11 +1827,14 @@ mod tests {
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
-                    from: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                    from: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    stake_account_keypair.into()
+                ],
             }
         );
 
@@ -1824,10 +1852,10 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_create_stake_account2).unwrap(),
+            parse_command(&test_create_stake_account2, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
+                    stake_account: 1,
                     seed: None,
                     staker: None,
                     withdrawer: None,
@@ -1836,11 +1864,14 @@ mod tests {
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
-                    from: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                    from: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -1874,10 +1905,10 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_create_stake_account2).unwrap(),
+            parse_command(&test_create_stake_account2, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
-                    stake_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
+                    stake_account: 1,
                     seed: None,
                     staker: None,
                     withdrawer: None,
@@ -1886,11 +1917,14 @@ mod tests {
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
-                    fee_payer: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
-                    from: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                    from: 0,
                 },
-                require_default_keypair: false,
+                signers: vec![
+                    Presigner::new(&offline_pubkey, &offline_sig).into(),
+                    read_keypair_file(&keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -1904,20 +1938,20 @@ mod tests {
             &vote_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     force: false,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -1933,24 +1967,25 @@ mod tests {
             &stake_authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: Some(
-                        read_keypair_file(&stake_authority_keypair_file)
-                            .unwrap()
-                            .into()
-                    ),
+                    stake_authority: 1,
                     force: false,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&stake_authority_keypair_file)
+                        .unwrap()
+                        .into()
+                ],
             }
         );
 
@@ -1963,20 +1998,20 @@ mod tests {
             &vote_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     force: true,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -1992,20 +2027,20 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     force: false,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -2019,20 +2054,20 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     force: false,
                     sign_only: true,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -2053,20 +2088,23 @@ mod tests {
             &key1.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     force: false,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: false
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&key1, &sig1).into()
+                ],
             }
         );
 
@@ -2093,20 +2131,24 @@ mod tests {
             &key2.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     force: false,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: Some(Presigner::new(&key2, &sig2).into()),
-                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
+                    nonce_authority: 1,
+                    fee_payer: 2,
                 },
-                require_default_keypair: false
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&key2, &sig2).into(),
+                    Presigner::new(&key1, &sig1).into()
+                ],
             }
         );
 
@@ -2123,20 +2165,23 @@ mod tests {
             &fee_payer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
                     vote_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     force: false,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(read_keypair_file(&fee_payer_keypair_file).unwrap().into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -2150,20 +2195,20 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_withdraw_stake).unwrap(),
+            parse_command(&test_withdraw_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
                     lamports: 42_000_000_000,
-                    withdraw_authority: None,
+                    withdraw_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -2179,24 +2224,25 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_withdraw_stake).unwrap(),
+            parse_command(&test_withdraw_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
                     lamports: 42_000_000_000,
-                    withdraw_authority: Some(
-                        read_keypair_file(&stake_authority_keypair_file)
-                            .unwrap()
-                            .into()
-                    ),
+                    withdraw_authority: 1,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&stake_authority_keypair_file)
+                        .unwrap()
+                        .into()
+                ],
             }
         );
 
@@ -2222,24 +2268,25 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_withdraw_stake).unwrap(),
+            parse_command(&test_withdraw_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
                     lamports: 42_000_000_000,
-                    withdraw_authority: Some(
-                        read_keypair_file(&stake_authority_keypair_file)
-                            .unwrap()
-                            .into()
-                    ),
+                    withdraw_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
-                    fee_payer: Some(Presigner::new(&offline_pubkey, &offline_sig).into()),
+                    nonce_authority: 1,
+                    fee_payer: 1,
                 },
-                require_default_keypair: false,
+                signers: vec![
+                    read_keypair_file(&stake_authority_keypair_file)
+                        .unwrap()
+                        .into(),
+                    Presigner::new(&offline_pubkey, &offline_sig).into()
+                ],
             }
         );
 
@@ -2250,18 +2297,18 @@ mod tests {
             &stake_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -2274,22 +2321,23 @@ mod tests {
             &stake_authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
-                    stake_authority: Some(
-                        read_keypair_file(&stake_authority_keypair_file)
-                            .unwrap()
-                            .into()
-                    ),
+                    stake_authority: 1,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&stake_authority_keypair_file)
+                        .unwrap()
+                        .into()
+                ],
             }
         );
 
@@ -2304,18 +2352,18 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -2328,18 +2376,18 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     sign_only: true,
                     blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -2359,18 +2407,21 @@ mod tests {
             &key1.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: false
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&key1, &sig1).into()
+                ],
             }
         );
 
@@ -2396,18 +2447,22 @@ mod tests {
             &key2.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: Some(Presigner::new(&key2, &sig2).into()),
-                    fee_payer: Some(Presigner::new(&key1, &sig1).into()),
+                    nonce_authority: 1,
+                    fee_payer: 2,
                 },
-                require_default_keypair: false
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&key2, &sig2).into(),
+                    Presigner::new(&key1, &sig1).into(),
+                ],
             }
         );
 
@@ -2420,18 +2475,21 @@ mod tests {
             &fee_payer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
-                    stake_authority: None,
+                    stake_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All,
                     nonce_account: None,
-                    nonce_authority: None,
-                    fee_payer: Some(read_keypair_file(&fee_payer_keypair_file).unwrap().into()),
+                    nonce_authority: 0,
+                    fee_payer: 1,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -2451,25 +2509,26 @@ mod tests {
             "50",
         ]);
         assert_eq!(
-            parse_command(&test_split_stake_account).unwrap(),
+            parse_command(&test_split_stake_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::SplitStake {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
-                    stake_authority: None,
+                    stake_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
-                    nonce_authority: None,
-                    split_stake_account: Rc::new(
-                        read_keypair_file(&split_stake_account_keypair_file)
-                            .unwrap()
-                            .into(),
-                    ),
+                    nonce_authority: 0,
+                    split_stake_account: 1,
                     seed: None,
                     lamports: 50_000_000_000,
-                    fee_payer: None,
+                    fee_payer: 0,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&split_stake_account_keypair_file)
+                        .unwrap()
+                        .into()
+                ],
             }
         );
 
@@ -2511,25 +2570,27 @@ mod tests {
             &stake_signer,
         ]);
         assert_eq!(
-            parse_command(&test_split_stake_account).unwrap(),
+            parse_command(&test_split_stake_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::SplitStake {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
-                    stake_authority: Some(Presigner::new(&stake_auth_pubkey, &stake_sig).into()),
+                    stake_authority: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
                     nonce_account: Some(nonce_account.into()),
-                    nonce_authority: Some(Presigner::new(&nonce_auth_pubkey, &nonce_sig).into()),
-                    split_stake_account: Rc::new(
-                        read_keypair_file(&split_stake_account_keypair_file)
-                            .unwrap()
-                            .into(),
-                    ),
+                    nonce_authority: 1,
+                    split_stake_account: 2,
                     seed: None,
                     lamports: 50_000_000_000,
-                    fee_payer: Some(Presigner::new(&nonce_auth_pubkey, &nonce_sig).into()),
+                    fee_payer: 1,
                 },
-                require_default_keypair: false,
+                signers: vec![
+                    Presigner::new(&stake_auth_pubkey, &stake_sig).into(),
+                    Presigner::new(&nonce_auth_pubkey, &nonce_sig).into(),
+                    read_keypair_file(&split_stake_account_keypair_file)
+                        .unwrap()
+                        .into(),
+                ],
             }
         );
     }

@@ -624,10 +624,9 @@ mod tests {
         account::Account,
         hash::hash,
         nonce_state::{Meta as NonceMeta, NonceState},
-        signature::{read_keypair_file, write_keypair, Keypair},
+        signature::{read_keypair_file, write_keypair, Keypair, Signer},
         system_program,
     };
-    use std::rc::Rc;
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -638,6 +637,9 @@ mod tests {
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
+        let default_keypair = Keypair::new();
+        let (default_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let nonce_account_keypair = Keypair::new();
         write_keypair(&nonce_account_keypair, tmp_file.as_file_mut()).unwrap();
@@ -656,14 +658,14 @@ mod tests {
             &Pubkey::default().to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_authorize_nonce_account).unwrap(),
+            parse_command(&test_authorize_nonce_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: nonce_account_pubkey,
-                    nonce_authority: None,
+                    nonce_authority: 0,
                     new_authority: Pubkey::default(),
                 },
-                require_default_keypair: true,
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -677,16 +679,17 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize_nonce_account).unwrap(),
+            parse_command(&test_authorize_nonce_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: Some(
-                        read_keypair_file(&authority_keypair_file).unwrap().into()
-                    ),
+                    nonce_authority: 1,
                     new_authority: Pubkey::default(),
                 },
-                require_default_keypair: true,
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -698,15 +701,18 @@ mod tests {
             "50",
         ]);
         assert_eq!(
-            parse_command(&test_create_nonce_account).unwrap(),
+            parse_command(&test_create_nonce_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
-                    nonce_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
+                    nonce_account: 1,
                     seed: None,
                     nonce_authority: None,
                     lamports: 50_000_000_000,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -720,17 +726,18 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_nonce_account).unwrap(),
+            parse_command(&test_create_nonce_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
-                    nonce_account: Rc::new(read_keypair_file(&keypair_file).unwrap().into()),
+                    nonce_account: 1,
                     seed: None,
-                    nonce_authority: Some(
-                        read_keypair_file(&authority_keypair_file).unwrap().pubkey()
-                    ),
+                    nonce_authority: Some(nonce_authority_keypair.pubkey()),
                     lamports: 50_000_000_000,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -741,10 +748,10 @@ mod tests {
             &nonce_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_get_nonce).unwrap(),
+            parse_command(&test_get_nonce, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetNonce(nonce_account_keypair.pubkey(),),
-                require_default_keypair: false
+                command: CliCommand::GetNonce(nonce_account_keypair.pubkey()),
+                signers: vec![],
             }
         );
 
@@ -755,13 +762,13 @@ mod tests {
                 .get_matches_from(vec!["test", "new-nonce", &keypair_file]);
         let nonce_account = read_keypair_file(&keypair_file).unwrap();
         assert_eq!(
-            parse_command(&test_new_nonce).unwrap(),
+            parse_command(&test_new_nonce, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
-                    nonce_authority: None,
+                    nonce_authority: 0,
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -775,15 +782,16 @@ mod tests {
         ]);
         let nonce_account = read_keypair_file(&keypair_file).unwrap();
         assert_eq!(
-            parse_command(&test_new_nonce).unwrap(),
+            parse_command(&test_new_nonce, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
-                    nonce_authority: Some(
-                        read_keypair_file(&authority_keypair_file).unwrap().into()
-                    ),
+                    nonce_authority: 1,
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
             }
         );
 
@@ -794,13 +802,13 @@ mod tests {
             &nonce_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_show_nonce_account).unwrap(),
+            parse_command(&test_show_nonce_account, &default_keypair_file, &None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ShowNonceAccount {
                     nonce_account_pubkey: nonce_account_keypair.pubkey(),
                     use_lamports_unit: false,
                 },
-                require_default_keypair: false
+                signers: vec![],
             }
         );
 
@@ -813,15 +821,20 @@ mod tests {
             "42",
         ]);
         assert_eq!(
-            parse_command(&test_withdraw_from_nonce_account).unwrap(),
+            parse_command(
+                &test_withdraw_from_nonce_account,
+                &default_keypair_file,
+                &None
+            )
+            .unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawFromNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: None,
+                    nonce_authority: 0,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42_000_000_000
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -833,15 +846,20 @@ mod tests {
             "42",
         ]);
         assert_eq!(
-            parse_command(&test_withdraw_from_nonce_account).unwrap(),
+            parse_command(
+                &test_withdraw_from_nonce_account,
+                &default_keypair_file,
+                &None
+            )
+            .unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawFromNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: None,
+                    nonce_authority: 0,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42000000000
                 },
-                require_default_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
 
@@ -856,17 +874,23 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_withdraw_from_nonce_account).unwrap(),
+            parse_command(
+                &test_withdraw_from_nonce_account,
+                &default_keypair_file,
+                &None
+            )
+            .unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawFromNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: Some(
-                        read_keypair_file(&authority_keypair_file).unwrap().into()
-                    ),
+                    nonce_authority: 1,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42_000_000_000
                 },
-                require_default_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
             }
         );
     }
