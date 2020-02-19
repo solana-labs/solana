@@ -13,6 +13,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     account_utils::StateMut,
+    message::Message,
     pubkey::Pubkey,
     signature::Signer,
     system_instruction::{create_address_with_seed, SystemError},
@@ -754,21 +755,20 @@ pub fn process_create_stake_account(
 
     let mut tx = if let Some(nonce_account) = &nonce_account {
         tx_signers.push(nonce_authority);
-        Transaction::new_signed_with_nonce(
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
-            &tx_signers,
             nonce_account,
             &nonce_authority.pubkey(),
-            recent_blockhash,
-        )
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&tx_signers, recent_blockhash);
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            &tx_signers,
-            recent_blockhash,
-        )
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&tx_signers, recent_blockhash);
+        tx
     };
     if sign_only {
         return_signers(&tx)
@@ -819,21 +819,20 @@ pub fn process_stake_authorize(
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        Transaction::new_signed_with_nonce(
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
-            &[fee_payer, nonce_authority, authority],
             nonce_account,
             &nonce_authority.pubkey(),
-            recent_blockhash,
-        )
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[fee_payer, nonce_authority, authority], recent_blockhash);
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            &[fee_payer, authority],
-            recent_blockhash,
-        )
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[fee_payer, authority], recent_blockhash);
+        tx
     };
     if sign_only {
         return_signers(&tx)
@@ -875,21 +874,23 @@ pub fn process_deactivate_stake_account(
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        Transaction::new_signed_with_nonce(
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
-            &[fee_payer, nonce_authority, stake_authority],
             nonce_account,
             &nonce_authority.pubkey(),
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(
+            &[fee_payer, nonce_authority, stake_authority],
             recent_blockhash,
-        )
+        );
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            &[fee_payer, stake_authority],
-            recent_blockhash,
-        )
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[fee_payer, stake_authority], recent_blockhash);
+        tx
     };
     if sign_only {
         return_signers(&tx)
@@ -937,21 +938,23 @@ pub fn process_withdraw_stake(
     let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        Transaction::new_signed_with_nonce(
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
-            &[fee_payer, withdraw_authority, nonce_authority],
             nonce_account,
             &nonce_authority.pubkey(),
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(
+            &[fee_payer, withdraw_authority, nonce_authority],
             recent_blockhash,
-        )
+        );
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            &[fee_payer, withdraw_authority],
-            recent_blockhash,
-        )
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[fee_payer, withdraw_authority], recent_blockhash);
+        tx
     };
     if sign_only {
         return_signers(&tx)
@@ -1070,26 +1073,31 @@ pub fn process_split_stake(
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
 
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        Transaction::new_signed_with_nonce(
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
+            nonce_account,
+            &nonce_authority.pubkey(),
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(
             &[
                 fee_payer,
                 nonce_authority,
                 stake_authority,
                 split_stake_account,
             ],
-            nonce_account,
-            &nonce_authority.pubkey(),
             recent_blockhash,
-        )
+        );
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(
             &[fee_payer, stake_authority, split_stake_account],
             recent_blockhash,
-        )
+        );
+        tx
     };
     if sign_only {
         return_signers(&tx)
@@ -1137,21 +1145,20 @@ pub fn process_stake_set_lockup(
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        Transaction::new_signed_with_nonce(
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
-            &[fee_payer, nonce_authority, custodian],
             nonce_account,
             &nonce_authority.pubkey(),
-            recent_blockhash,
-        )
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[fee_payer, nonce_authority, custodian], recent_blockhash);
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            &[fee_payer, custodian],
-            recent_blockhash,
-        )
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[fee_payer, custodian], recent_blockhash);
+        tx
     };
     if sign_only {
         return_signers(&tx)
@@ -1368,21 +1375,23 @@ pub fn process_delegate_stake(
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let fee_payer = fee_payer.unwrap_or_else(|| config.keypair.as_ref());
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        Transaction::new_signed_with_nonce(
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
-            &[fee_payer, nonce_authority, stake_authority],
             nonce_account,
             &nonce_authority.pubkey(),
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(
+            &[fee_payer, nonce_authority, stake_authority],
             recent_blockhash,
-        )
+        );
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            &[fee_payer, stake_authority],
-            recent_blockhash,
-        )
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[fee_payer, stake_authority], recent_blockhash);
+        tx
     };
     if sign_only {
         return_signers(&tx)

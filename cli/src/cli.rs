@@ -35,7 +35,6 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer, SignerError},
     system_instruction::{self, create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
-    system_transaction,
     transaction::{Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::{Lockup, StakeAuthorize};
@@ -943,14 +942,16 @@ fn process_deploy(
     let mut messages: Vec<&Message> = Vec::new();
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
-    let mut create_account_tx = system_transaction::create_account(
-        config.keypair.as_ref(),
-        &program_id,
-        blockhash,
+    let ix = system_instruction::create_account(
+        &config.keypair.pubkey(),
+        &program_id.pubkey(),
         minimum_balance.max(1),
         program_data.len() as u64,
         &bpf_loader::id(),
     );
+    let message = Message::new(vec![ix]);
+    let mut create_account_tx = Transaction::new_unsigned(message);
+    create_account_tx.sign(&[config.keypair.as_ref(), &program_id], blockhash);
     messages.push(&create_account_tx.message);
     let signers = [config.keypair.as_ref(), &program_id];
     let write_transactions: Vec<_> = program_data
@@ -964,7 +965,9 @@ fn process_deploy(
                 chunk.to_vec(),
             );
             let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
-            Transaction::new(&signers, message, blockhash)
+            let mut tx = Transaction::new_unsigned(message);
+            tx.sign(&signers, blockhash);
+            tx
         })
         .collect();
     for transaction in write_transactions.iter() {
@@ -973,7 +976,8 @@ fn process_deploy(
 
     let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
-    let mut finalize_tx = Transaction::new(&signers, message, blockhash);
+    let mut finalize_tx = Transaction::new_unsigned(message);
+    finalize_tx.sign(&signers, blockhash);
     messages.push(&finalize_tx.message);
 
     check_account_for_multiple_fees(
@@ -1034,17 +1038,18 @@ fn process_pay(
 
     if timestamp == None && *witnesses == None {
         let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
+        let ix = system_instruction::transfer(&config.keypair.pubkey(), to, lamports);
         let mut tx = if let Some(nonce_account) = &nonce_account {
-            system_transaction::nonced_transfer(
-                config.keypair.as_ref(),
-                to,
-                lamports,
-                nonce_account,
-                nonce_authority,
-                blockhash,
-            )
+            let message =
+                Message::new_with_nonce(vec![ix], None, nonce_account, &nonce_authority.pubkey());
+            let mut tx = Transaction::new_unsigned(message);
+            tx.sign(&[config.keypair.as_ref(), nonce_authority], blockhash);
+            tx
         } else {
-            system_transaction::transfer(config.keypair.as_ref(), to, lamports, blockhash)
+            let message = Message::new(vec![ix]);
+            let mut tx = Transaction::new_unsigned(message);
+            tx.sign(&[config.keypair.as_ref()], blockhash);
+            tx
         };
 
         if sign_only {
@@ -1083,11 +1088,9 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let mut tx = Transaction::new_signed_instructions(
-            &[config.keypair.as_ref(), &contract_state],
-            ixs,
-            blockhash,
-        );
+        let message = Message::new(ixs);
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[config.keypair.as_ref(), &contract_state], blockhash);
         if sign_only {
             return_signers(&tx)
         } else {
@@ -1128,11 +1131,9 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let mut tx = Transaction::new_signed_instructions(
-            &[config.keypair.as_ref(), &contract_state],
-            ixs,
-            blockhash,
-        );
+        let message = Message::new(ixs);
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[config.keypair.as_ref(), &contract_state], blockhash);
         if sign_only {
             return_signers(&tx)
         } else {
@@ -1164,8 +1165,9 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
         pubkey,
         &config.keypair.pubkey(),
     );
-    let mut tx =
-        Transaction::new_signed_instructions(&[config.keypair.as_ref()], vec![ix], blockhash);
+    let message = Message::new(vec![ix]);
+    let mut tx = Transaction::new_unsigned(message);
+    tx.sign(&[config.keypair.as_ref()], blockhash);
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -1186,8 +1188,9 @@ fn process_time_elapsed(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
-    let mut tx =
-        Transaction::new_signed_instructions(&[config.keypair.as_ref()], vec![ix], blockhash);
+    let message = Message::new(vec![ix]);
+    let mut tx = Transaction::new_unsigned(message);
+    tx.sign(&[config.keypair.as_ref()], blockhash);
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -1229,21 +1232,21 @@ fn process_transfer(
         signers.push(from)
     }
     let mut tx = if let Some(nonce_account) = &nonce_account {
-        Transaction::new_signed_with_nonce(
+        signers.push(nonce_authority);
+        let message = Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
-            &[fee_payer, from, nonce_authority],
             nonce_account,
             &nonce_authority.pubkey(),
-            recent_blockhash,
-        )
+        );
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&signers, recent_blockhash);
+        tx
     } else {
-        Transaction::new_signed_with_payer(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            &signers,
-            recent_blockhash,
-        )
+        let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&signers, recent_blockhash);
+        tx
     };
 
     if sign_only {
@@ -1273,8 +1276,9 @@ fn process_witness(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
-    let mut tx =
-        Transaction::new_signed_instructions(&[config.keypair.as_ref()], vec![ix], blockhash);
+    let message = Message::new(vec![ix]);
+    let mut tx = Transaction::new_unsigned(message);
+    tx.sign(&[config.keypair.as_ref()], blockhash);
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),

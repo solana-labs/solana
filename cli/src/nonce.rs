@@ -10,6 +10,7 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     hash::Hash,
+    message::Message,
     nonce_state::{Meta, NonceState},
     pubkey::Pubkey,
     signature::Signer,
@@ -339,12 +340,13 @@ pub fn process_authorize_nonce_account(
 
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let ix = authorize_nonce_account(nonce_account, &nonce_authority.pubkey(), new_authority);
-    let mut tx = Transaction::new_signed_with_payer(
-        vec![ix],
-        Some(&config.keypair.pubkey()),
+    let message = Message::new_with_payer(vec![ix], Some(&config.keypair.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.sign(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
     );
+
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -427,12 +429,10 @@ pub fn process_create_nonce_account(
         vec![config.keypair.as_ref()] // when stake_account == config.keypair and there's a seed, we only need one signature
     };
 
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &signers,
-        recent_blockhash,
-    );
+    let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.sign(&signers, recent_blockhash);
+
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -484,9 +484,9 @@ pub fn process_new_nonce(
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.keypair.as_ref());
     let ix = advance_nonce_account(&nonce_account, &nonce_authority.pubkey());
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut tx = Transaction::new_signed_with_payer(
-        vec![ix],
-        Some(&config.keypair.pubkey()),
+    let message = Message::new_with_payer(vec![ix], Some(&config.keypair.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.sign(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
     );
@@ -567,9 +567,9 @@ pub fn process_withdraw_from_nonce_account(
         destination_account_pubkey,
         lamports,
     );
-    let mut tx = Transaction::new_signed_with_payer(
-        vec![ix],
-        Some(&config.keypair.pubkey()),
+    let message = Message::new_with_payer(vec![ix], Some(&config.keypair.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.sign(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
     );
