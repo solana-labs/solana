@@ -6,7 +6,7 @@ Confirm the IP address and **identity pubkey** of your validator is visible in
 the gossip network by running:
 
 ```bash
-solana-gossip spy --entrypoint testnet.solana.com:8001
+solana-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
 ## Check Your Balance
@@ -35,13 +35,13 @@ cluster, as well as the health of the cluster:
 
 ```bash
 # Similar to solana-gossip, you should see your validator in the list of cluster nodes
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://testnet.solana.com:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getClusterNodes"}' http://devnet.solana.com:8899
 # If your validator is properly voting, it should appear in the list of `current` vote accounts. If staked, `stake` should be > 0
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://testnet.solana.com:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://devnet.solana.com:8899
 # Returns the current leader schedule
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://testnet.solana.com:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://devnet.solana.com:8899
 # Returns info about the current epoch. slotIndex should progress on subsequent calls.
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://testnet.solana.com:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://devnet.solana.com:8899
 ```
 
 

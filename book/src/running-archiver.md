@@ -8,9 +8,9 @@ Please note some of the information and instructions described here may change i
 
 Archivers are specialized light clients. They download a part of the ledger \(a.k.a Segment\) and store it. They earn rewards for storing segments.
 
-The testnet features a validator running at testnet.solana.com, which serves as the entrypoint to the cluster for your archiver node.
+The testnet features a validator running at devnet.solana.com, which serves as the entrypoint to the cluster for your archiver node.
 
-Additionally there is a blockexplorer available at [http://testnet.solana.com/](http://testnet.solana.com/).
+Additionally there is a blockexplorer available at [http://devnet.solana.com/](http://devnet.solana.com/).
 
 The testnet is configured to reset the ledger daily, or sooner should the hourly automated cluster sanity test fail.
 
@@ -29,10 +29,10 @@ Before starting an archiver node, sanity check that the cluster is accessible to
 Fetch the current transaction count over JSON RPC:
 
 ```bash
-curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://testnet.solana.com:8899
+curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://devnet.solana.com:8899
 ```
 
-Inspect the blockexplorer at [http://testnet.solana.com/](http://testnet.solana.com/) for activity.
+Inspect the blockexplorer at [http://devnet.solana.com/](http://devnet.solana.com/) for activity.
 
 View the [metrics dashboard](https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta?var-testnet=testnet) for more detail on cluster activity.
 
@@ -95,7 +95,7 @@ Download the binaries by navigating to [https://github.com/solana-labs/solana/re
 Try running following command to join the gossip network and view all the other nodes in the cluster:
 
 ```bash
-solana-gossip spy --entrypoint testnet.solana.com:8001
+solana-gossip spy --entrypoint devnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -138,7 +138,7 @@ Note: Every time the testnet restarts, run the steps to setup the archiver accou
 To start the archiver:
 
 ```bash
-solana-archiver --entrypoint testnet.solana.com:8001 --identity-keypair archiver-keypair.json --storage-keypair storage-keypair.json --ledger archiver-ledger
+solana-archiver --entrypoint devnet.solana.com:8001 --identity-keypair archiver-keypair.json --storage-keypair storage-keypair.json --ledger archiver-ledger
 ```
 
 ## Verify Archiver Setup
@@ -146,7 +146,7 @@ solana-archiver --entrypoint testnet.solana.com:8001 --identity-keypair archiver
 From another console, confirm the IP address and **identity pubkey** of your archiver is visible in the gossip network by running:
 
 ```bash
-solana-gossip spy --entrypoint testnet.solana.com:8001
+solana-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
 Provide the **storage account pubkey** to the `solana storage-account` command to view the recent mining activity from your archiver:

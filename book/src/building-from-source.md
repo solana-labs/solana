@@ -154,7 +154,7 @@ The stream will output a series of JSON objects:
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 
 ```bash
-$ NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint testnet.solana.com:8001 --faucet testnet.solana.com:9900 --duration 60 --tx_count 50
+$ NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint devnet.solana.com:8001 --faucet devnet.solana.com:9900 --duration 60 --tx_count 50
 ```
 
 You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)

@@ -140,9 +140,9 @@ TODO: Documentation update procedure is WIP as we move to gitbook
 
 Document the new recommended version by updating `book/src/running-archiver.md` and `book/src/validator-testnet.md` on the release (beta) branch to point at the `solana-install` for the upcoming release version.
 
-### Update software on testnet.solana.com
+### Update software on devnet.solana.com
 
-The testnet running on testnet.solana.com is set to use a fixed release tag
+The testnet running on devnet.solana.com is set to use a fixed release tag
 which is set in the Buildkite testnet-management pipeline.
 This tag needs to be updated and the testnet restarted after a new release
 tag is created.
@@ -182,4 +182,4 @@ TESTNET_OP=create-and-start
 ### Alert the community
 
 Notify Discord users on #validator-support that a new release for
-testnet.solana.com is available
+devnet.solana.com is available
