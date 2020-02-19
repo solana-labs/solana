@@ -6,11 +6,11 @@ The solana cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for cli commands. For example:
 
 ```bash
-solana config set --url http://testnet.solana.com:8899
+solana config set --url http://devnet.solana.com:8899
 ```
 
 \(You can always override the set configuration by explicitly passing the
-`--url` argument with a command, eg: `solana --url http://beta.testnet.solana.com:8899 balance`\)
+`--url` argument with a command, eg: `solana --url http://beta.devnet.solana.com:8899 balance`\)
 
 ## Confirm The Testnet Is Reachable
 
@@ -33,7 +33,7 @@ Try running following command to join the gossip network and view all the other
 nodes in the cluster:
 
 ```bash
-solana-gossip spy --entrypoint testnet.solana.com:8001
+solana-gossip spy --entrypoint devnet.solana.com:8001
 # Press ^C to exit
 ```
 
@@ -107,7 +107,7 @@ You should see the following output:
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
-* url: http://testnet.solana.com:8899
+* url: http://devnet.solana.com:8899
 * keypair: /home/solana/validator-keypair.json
 ```
 
@@ -155,7 +155,7 @@ Connect to a testnet cluster by running:
 
 ```bash
 solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json \
-    --ledger ~/validator-ledger --rpc-port 8899 --entrypoint testnet.solana.com:8001 \
+    --ledger ~/validator-ledger --rpc-port 8899 --entrypoint devnet.solana.com:8001 \
     --limit-ledger-size
 ```
 
@@ -166,7 +166,7 @@ Confirm your validator connected to the network by opening a new terminal and
 running:
 
 ```bash
-solana-gossip spy --entrypoint testnet.solana.com:8001
+solana-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
 If your validator is connected, its public key and IP address will appear in the list.

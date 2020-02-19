@@ -13,9 +13,7 @@ serve as the entrypoint to the cluster for your validator.
 
 Current testnet entrypoints:
 
-* Stable, testnet.solana.com
-* Beta, beta.testnet.solana.com
-* Edge, edge.testnet.solana.com
+* Developer testnet, devnet.solana.com
 
 Solana may launch special testnets for validator participation; we will provide
 you with a specific entrypoint URL to use.

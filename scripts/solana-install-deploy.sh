@@ -46,10 +46,10 @@ esac
 
 case $URL in
 edge|beta)
-  URL=http://$URL.testnet.solana.com:8899
+  URL=http://$URL.devnet.solana.com:8899
   ;;
 stable)
-  URL=http://testnet.solana.com:8899
+  URL=http://devnet.solana.com:8899
   ;;
 localhost)
   URL=http://localhost:8899
