@@ -18,7 +18,7 @@ const approver2 = new solanaWeb3.Account();
 
 let url;
 url = 'http://localhost:8899';
-//url = 'http://testnet.solana.com:8899';
+//url = 'http://devnet.solana.com:8899';
 const connection = new solanaWeb3.Connection(url, 'recent');
 const getTransactionFee = () => common.getTransactionFee(connection);
 const showBalance = () =>
