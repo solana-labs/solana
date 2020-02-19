@@ -1,5 +1,5 @@
 use chrono::prelude::*;
-use solana_ledger::bank_forks::BankForks;
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore, blockstore_db};
 use solana_metrics::datapoint_debug;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -542,6 +542,24 @@ impl SavedTower {
 
 pub type Result<T> = std::result::Result<T, TowerError>;
 
+pub fn reconcile_blockstore_roots_with_tower(
+    tower: &Tower,
+    blockstore: &Blockstore,
+) -> blockstore_db::Result<()> {
+    if let Some(troot) = tower.root() {
+        let broot = blockstore.last_root();
+        if broot < troot {
+            let new_roots: Vec<_> = blockstore
+                .slot_meta_iterator(broot + 1)?
+                .map(|(slot, _)| slot)
+                .take_while(|slot| *slot <= troot)
+                .collect();
+            return blockstore.set_roots(&new_roots);
+        }
+    }
+    Ok(())
+}
+
 #[derive(Error, Debug)]
 pub enum TowerError {
     #[error("IO Error: {0}")]
@@ -562,7 +580,11 @@ pub mod test {
     use super::*;
     use crate::replay_stage::{ForkProgress, ReplayStage};
     use matches::assert_matches;
-    use solana_ledger::bank_forks::BankForks;
+    use solana_ledger::{
+        bank_forks::BankForks,
+        blockstore::{make_slot_entries, Blockstore},
+        get_tmp_ledger_path,
+    };
     use solana_runtime::{
         bank::Bank,
         genesis_utils::{
@@ -1612,5 +1634,70 @@ pub mod test {
             },
         );
         assert_matches!(loaded, Err(TowerError::IOError(_)))
+    }
+
+    fn build_tree(n: u64) -> Tree<u64> {
+        _build_tree(n - 1, n - 1)
+    }
+    fn _build_tree(n: u64, i: u64) -> Tree<u64> {
+        if i > 0 {
+            tr(n - i) / _build_tree(n, i - 1)
+        } else {
+            tr(n)
+        }
+    }
+
+    #[test]
+    fn test_reconcile_blockstore_roots_with_tower() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let node_keypair = Keypair::new();
+            let vote_keypair = Keypair::new();
+            let stake_keypair = Keypair::new();
+            let node_pubkey = node_keypair.pubkey();
+            let mut keypairs = HashMap::new();
+            keypairs.insert(
+                node_pubkey,
+                ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
+            );
+
+            let (bank_forks, mut progress) = initialize_state(&keypairs);
+            let bank_forks = Arc::new(RwLock::new(bank_forks));
+            let mut tower = Tower::new_with_key(&node_pubkey);
+
+            // Create the tree of banks in a BankForks object
+            let forks = build_tree(42);
+
+            let mut voting_simulator = VoteSimulator::new(&forks);
+            let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
+            let votes: Vec<Slot> = (0..42).collect();
+
+            for slot in &votes {
+                let slot = *slot;
+                let (shreds, _) = make_slot_entries(slot + 1, slot, 1);
+                blockstore.insert_shreds(shreds, None, false).unwrap();
+                assert_eq!(
+                    voting_simulator.simulate_vote(
+                        slot,
+                        &bank_forks,
+                        &mut cluster_votes,
+                        &keypairs,
+                        keypairs.get(&node_pubkey).unwrap(),
+                        &mut progress,
+                        &mut tower,
+                    ),
+                    VoteResult::Ok
+                );
+            }
+            let tower_root = tower.root().unwrap();
+            let set_roots: Vec<_> = (0..(tower_root / 2)).collect();
+            blockstore.set_roots(&set_roots).unwrap();
+            assert!(blockstore.last_root() < tower_root);
+            assert!(reconcile_blockstore_roots_with_tower(&tower, &blockstore).is_ok());
+            assert_eq!(blockstore.last_root(), tower.root().unwrap());
+            assert!(reconcile_blockstore_roots_with_tower(&tower, &blockstore).is_ok());
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
