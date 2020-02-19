@@ -10,7 +10,7 @@ use crate::{
     signers::Signers,
     system_instruction,
 };
-use std::result;
+use std::{error, result};
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
@@ -255,6 +255,62 @@ impl Transaction {
         }
     }
 
+    /// Check keys and keypair lengths, then sign this transaction, returning any signing errors
+    /// encountered
+    pub fn try_sign<T: Signers>(
+        &mut self,
+        keypairs: &T,
+        recent_blockhash: Hash,
+    ) -> result::Result<(), Box<dyn error::Error>> {
+        self.try_partial_sign(keypairs, recent_blockhash)?;
+
+        if !self.is_signed() {
+            Err(SigningError::NotEnoughSigners.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    ///  Sign using some subset of required keys, returning any signing errors encountered. If
+    ///  recent_blockhash is not the same as currently in the transaction, clear any prior
+    ///  signatures and update recent_blockhash
+    pub fn try_partial_sign<T: Signers>(
+        &mut self,
+        keypairs: &T,
+        recent_blockhash: Hash,
+    ) -> result::Result<(), Box<dyn error::Error>> {
+        let positions = self.get_signing_keypair_positions(&keypairs.pubkeys())?;
+        if positions.iter().any(|pos| pos.is_none()) {
+            return Err(SigningError::KeypairPubkeyMismatch.into());
+        }
+        let positions: Vec<usize> = positions.iter().map(|pos| pos.unwrap()).collect();
+        self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash)
+    }
+
+    /// Sign the transaction, returning any signing errors encountered, and place the
+    /// signatures in their associated positions in `signatures` without checking that the
+    /// positions are correct.
+    pub fn try_partial_sign_unchecked<T: Signers>(
+        &mut self,
+        keypairs: &T,
+        positions: Vec<usize>,
+        recent_blockhash: Hash,
+    ) -> result::Result<(), Box<dyn error::Error>> {
+        // if you change the blockhash, you're re-signing...
+        if recent_blockhash != self.message.recent_blockhash {
+            self.message.recent_blockhash = recent_blockhash;
+            self.signatures
+                .iter_mut()
+                .for_each(|signature| *signature = Signature::default());
+        }
+
+        let signatures = keypairs.try_sign_message(&self.message_data())?;
+        for i in 0..positions.len() {
+            self.signatures[positions[i]] = signatures[i];
+        }
+        Ok(())
+    }
+
     /// Verify the transaction
     pub fn verify(&self) -> Result<()> {
         if !self
@@ -326,6 +382,15 @@ impl Transaction {
         }
         true
     }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum SigningError {
+    #[error("keypair-pubkey mismatch")]
+    KeypairPubkeyMismatch,
+
+    #[error("not enough signers")]
+    NotEnoughSigners,
 }
 
 #[cfg(test)]
