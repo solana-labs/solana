@@ -43,7 +43,6 @@ members = [
     "archiver",
     "archiver-lib",
     "archiver-utils",
-    "remote-wallet",
     "runtime",
     "sdk",
     "sdk-c",
@@ -62,6 +61,3 @@ exclude = [
     "programs/move_loader",
     "programs/librapay",
 ]
-
-[profile.release]
-debug = true
