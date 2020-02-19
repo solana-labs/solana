@@ -1,9 +1,12 @@
-use solana_runtime::accounts_db::AccountStorageEntry;
-use solana_runtime::bank::BankSlotDelta;
+use solana_runtime::{accounts_db::AccountStorageEntry, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
-use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, SendError, Sender};
-use std::sync::Arc;
+use std::{
+    path::PathBuf,
+    sync::{
+        mpsc::{Receiver, SendError, Sender},
+        Arc,
+    },
+};
 use tempfile::TempDir;
 
 pub type SnapshotPackageSender = Sender<SnapshotPackage>;

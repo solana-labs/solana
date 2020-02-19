@@ -3,11 +3,13 @@
 //! designed to run with a simulator or over a UDP network connection with messages up to a
 //! packet::PACKET_DATA_SIZE size.
 
-use crate::crds::{Crds, VersionedCrdsValue};
-use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_gossip_pull::{CrdsFilter, CrdsGossipPull};
-use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
-use crate::crds_value::{CrdsValue, CrdsValueLabel};
+use crate::{
+    crds::{Crds, VersionedCrdsValue},
+    crds_gossip_error::CrdsGossipError,
+    crds_gossip_pull::{CrdsFilter, CrdsGossipPull},
+    crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
+    crds_value::{CrdsValue, CrdsValueLabel},
+};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 
