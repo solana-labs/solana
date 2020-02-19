@@ -208,7 +208,7 @@ sanity() {
     (
       set -x
       NO_INSTALL_CHECK=1 \
-        ci/testnet-sanity.sh edge-testnet-solana-com gce -P us-west1-b
+        ci/testnet-sanity.sh edge-devnet-solana-com gce -P us-west1-b
       maybe_deploy_software
     )
     ;;
@@ -216,14 +216,14 @@ sanity() {
     (
       set -x
       NO_INSTALL_CHECK=1 \
-        ci/testnet-sanity.sh beta-testnet-solana-com gce -P us-west1-b
+        ci/testnet-sanity.sh beta-devnet-solana-com gce -P us-west1-b
       maybe_deploy_software --deploy-if-newer
     )
     ;;
   testnet)
     (
       set -x
-      ci/testnet-sanity.sh testnet-solana-com gce -P us-west1-b
+      ci/testnet-sanity.sh devnet-solana-com gce -P us-west1-b
     )
     ;;
   *)
@@ -259,9 +259,9 @@ deploy() {
   testnet-edge)
     (
       set -x
-      ci/testnet-deploy.sh -p edge-testnet-solana-com -C gce -z us-west1-b \
+      ci/testnet-deploy.sh -p edge-devnet-solana-com -C gce -z us-west1-b \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
-        -a edge-testnet-solana-com --letsencrypt edge.devnet.solana.com \
+        -a edge-devnet-solana-com --letsencrypt edge.devnet.solana.com \
         --limit-ledger-size \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
@@ -272,9 +272,9 @@ deploy() {
   testnet-beta)
     (
       set -x
-      ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce -z us-west1-b \
+      ci/testnet-deploy.sh -p beta-devnet-solana-com -C gce -z us-west1-b \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P \
-        -a beta-testnet-solana-com --letsencrypt beta.devnet.solana.com \
+        -a beta-devnet-solana-com --letsencrypt beta.devnet.solana.com \
         --limit-ledger-size \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
@@ -285,9 +285,9 @@ deploy() {
   testnet)
     (
       set -x
-      ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-west1-b \
+      ci/testnet-deploy.sh -p devnet-solana-com -C gce -z us-west1-b \
         -t "$CHANNEL_OR_TAG" -n 0 -c 0 -u -P \
-        -a testnet-solana-com --letsencrypt devnet.solana.com \
+        -a devnet-solana-com --letsencrypt devnet.solana.com \
         --limit-ledger-size \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
