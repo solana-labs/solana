@@ -4,25 +4,14 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, write_keypair, Keypair, Signer},
+    signature::{keypair_from_seed, Keypair, Signer},
     system_instruction::create_address_with_seed,
     system_program,
 };
-use std::fs::remove_dir_all;
-use std::sync::mpsc::channel;
+use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
 
 #[cfg(test)]
 use solana_core::validator::new_validator_for_tests;
-use std::rc::Rc;
-use std::thread::sleep;
-use std::time::Duration;
-
-use tempfile::NamedTempFile;
-
-fn make_tmp_file() -> (String, NamedTempFile) {
-    let tmp_file = NamedTempFile::new().unwrap();
-    (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
-}
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
@@ -45,28 +34,9 @@ fn test_nonce() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_payer = CliConfig::default();
-    config_payer.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
-    let (keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
-    let mut config_nonce = CliConfig::default();
-    config_nonce.keypair = keypair.into();
-    config_nonce.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    full_battery_tests(
-        &rpc_client,
-        &faucet_addr,
-        &mut config_payer,
-        &mut config_nonce,
-        &keypair_file,
-        None,
-        None,
-    );
+    full_battery_tests(&rpc_client, &faucet_addr, json_rpc_url, None, false);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -80,27 +50,14 @@ fn test_nonce_with_seed() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
-
-    let mut config_payer = CliConfig::default();
-    config_payer.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
-    let (keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
-    let mut config_nonce = CliConfig::default();
-    config_nonce.keypair = keypair.into();
-    config_nonce.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    let json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     full_battery_tests(
         &rpc_client,
         &faucet_addr,
-        &mut config_payer,
-        &mut config_nonce,
-        &keypair_file,
+        json_rpc_url,
         Some(String::from("seed")),
-        None,
+        false,
     );
 
     server.close().unwrap();
@@ -115,78 +72,73 @@ fn test_nonce_with_authority() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let mut config_payer = CliConfig::default();
-    config_payer.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    let nonce_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
-    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&nonce_keypair, tmp_file.as_file_mut()).unwrap();
-    let mut config_nonce = CliConfig::default();
-    config_nonce.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    let nonce_authority = Keypair::new();
-    let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
-    write_keypair(&nonce_authority, tmp_file2.as_file_mut()).unwrap();
-
-    full_battery_tests(
-        &rpc_client,
-        &faucet_addr,
-        &mut config_payer,
-        &mut config_nonce,
-        &nonce_keypair_file,
-        None,
-        Some(&authority_keypair_file),
-    );
+    full_battery_tests(&rpc_client, &faucet_addr, json_rpc_url, None, true);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }
 
-fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<Box<dyn Signer>> {
-    keypair_file.map(|akf| read_keypair_file(&akf).unwrap().into())
-}
-
 fn full_battery_tests(
     rpc_client: &RpcClient,
     faucet_addr: &std::net::SocketAddr,
-    config_payer: &mut CliConfig,
-    config_nonce: &mut CliConfig,
-    nonce_keypair_file: &str,
+    json_rpc_url: String,
     seed: Option<String>,
-    authority_keypair_file: Option<&str>,
+    use_nonce_authority: bool,
 ) {
+    let mut config_payer = CliConfig::default();
+    config_payer.json_rpc_url = json_rpc_url.clone();
+    let payer = Keypair::new();
+    config_payer.signers = vec![&payer];
+
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_payer.keypair.pubkey(),
+        &config_payer.signers[0].pubkey(),
         2000,
     )
     .unwrap();
-    check_balance(2000, &rpc_client, &config_payer.keypair.pubkey());
+    check_balance(2000, &rpc_client, &config_payer.signers[0].pubkey());
+
+    let mut config_nonce = CliConfig::default();
+    config_nonce.json_rpc_url = json_rpc_url;
+    let nonce_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    config_nonce.signers = vec![&nonce_keypair];
 
     let nonce_account = if let Some(seed) = seed.as_ref() {
-        create_address_with_seed(&config_nonce.keypair.pubkey(), seed, &system_program::id())
-            .unwrap()
+        create_address_with_seed(
+            &config_nonce.signers[0].pubkey(),
+            seed,
+            &system_program::id(),
+        )
+        .unwrap()
     } else {
-        read_keypair_file(&nonce_keypair_file).unwrap().pubkey()
+        nonce_keypair.pubkey()
+    };
+
+    let nonce_authority = Keypair::new();
+    let optional_authority = if use_nonce_authority {
+        Some(nonce_authority.pubkey())
+    } else {
+        None
     };
 
     // Create nonce account
+    config_payer.signers.push(&nonce_keypair);
     config_payer.command = CliCommand::CreateNonceAccount {
-        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
+        nonce_account: 1,
         seed,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file).map(|k| k.pubkey()),
+        nonce_authority: optional_authority,
         lamports: 1000,
     };
 
     process_command(&config_payer).unwrap();
-    check_balance(1000, &rpc_client, &config_payer.keypair.pubkey());
+    check_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
     check_balance(1000, &rpc_client, &nonce_account);
 
     // Get nonce
+    config_payer.signers.pop();
     config_payer.command = CliCommand::GetNonce(nonce_account);
     let first_nonce_string = process_command(&config_payer).unwrap();
     let first_nonce = first_nonce_string.parse::<Hash>().unwrap();
@@ -198,14 +150,24 @@ fn full_battery_tests(
 
     assert_eq!(first_nonce, second_nonce);
 
+    let mut authorized_signers: Vec<&dyn Signer> = vec![&payer];
+    let index = if use_nonce_authority {
+        authorized_signers.push(&nonce_authority);
+        1
+    } else {
+        0
+    };
+
     // New nonce
+    config_payer.signers = authorized_signers.clone();
     config_payer.command = CliCommand::NewNonce {
         nonce_account,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file),
+        nonce_authority: index,
     };
     process_command(&config_payer).unwrap();
 
     // Get nonce
+    config_payer.signers = vec![&payer];
     config_payer.command = CliCommand::GetNonce(nonce_account);
     let third_nonce_string = process_command(&config_payer).unwrap();
     let third_nonce = third_nonce_string.parse::<Hash>().unwrap();
@@ -214,14 +176,15 @@ fn full_battery_tests(
 
     // Withdraw from nonce account
     let payee_pubkey = Pubkey::new_rand();
+    config_payer.signers = authorized_signers;
     config_payer.command = CliCommand::WithdrawFromNonceAccount {
         nonce_account,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file),
+        nonce_authority: index,
         destination_account_pubkey: payee_pubkey,
         lamports: 100,
     };
     process_command(&config_payer).unwrap();
-    check_balance(1000, &rpc_client, &config_payer.keypair.pubkey());
+    check_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
     check_balance(900, &rpc_client, &nonce_account);
     check_balance(100, &rpc_client, &payee_pubkey);
 
@@ -234,48 +197,37 @@ fn full_battery_tests(
 
     // Set new authority
     let new_authority = Keypair::new();
-    let (new_authority_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&new_authority, tmp_file.as_file_mut()).unwrap();
     config_payer.command = CliCommand::AuthorizeNonceAccount {
         nonce_account,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file),
-        new_authority: read_keypair_file(&new_authority_keypair_file)
-            .unwrap()
-            .pubkey(),
+        nonce_authority: index,
+        new_authority: new_authority.pubkey(),
     };
     process_command(&config_payer).unwrap();
 
     // Old authority fails now
     config_payer.command = CliCommand::NewNonce {
         nonce_account,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file),
+        nonce_authority: index,
     };
     process_command(&config_payer).unwrap_err();
 
     // New authority can advance nonce
+    config_payer.signers = vec![&payer, &new_authority];
     config_payer.command = CliCommand::NewNonce {
         nonce_account,
-        nonce_authority: Some(
-            read_keypair_file(&new_authority_keypair_file)
-                .unwrap()
-                .into(),
-        ),
+        nonce_authority: 1,
     };
     process_command(&config_payer).unwrap();
 
     // New authority can withdraw from nonce account
     config_payer.command = CliCommand::WithdrawFromNonceAccount {
         nonce_account,
-        nonce_authority: Some(
-            read_keypair_file(&new_authority_keypair_file)
-                .unwrap()
-                .into(),
-        ),
+        nonce_authority: 1,
         destination_account_pubkey: payee_pubkey,
         lamports: 100,
     };
     process_command(&config_payer).unwrap();
-    check_balance(1000, &rpc_client, &config_payer.keypair.pubkey());
+    check_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
     check_balance(800, &rpc_client, &nonce_account);
     check_balance(200, &rpc_client, &payee_pubkey);
 }
