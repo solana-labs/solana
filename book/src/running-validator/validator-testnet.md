@@ -5,8 +5,7 @@ that serves as an entrypoint to the cluster.
 
 Current testnet entrypoints:
 
-* Stable: testnet.solana.com
-* Beta: beta.testnet.solana.com
+* Stable: devnet.solana.com
 
 Application developers should target the Stable testnet. Key differences
 between the Stable testnet and what will be mainnet:
@@ -28,13 +27,13 @@ You can submit a JSON-RPC request to see the specific software version of the
 cluster. Use this to specify [the software version to install](validator-software.md).
 
 ```bash
-curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' testnet.solana.com:8899
+curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' devnet.solana.com:8899
 ```
 Example result:
 `{"jsonrpc":"2.0","result":{"solana-core":"0.21.0"},"id":1}`
 
 ## Using a Different Testnet
 
-This guide is written in the context of testnet.solana.com, our most stable
+This guide is written in the context of devnet.solana.com, our most stable
 cluster. To participate in another testnet, modify the commands in the following
-pages, replacing `testnet.solana.com` with your desired testnet.
+pages, replacing `devnet.solana.com` with your desired testnet.
