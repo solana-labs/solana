@@ -126,7 +126,7 @@ Start your own testnet locally, instructions are in the book [Solana: Blockchain
 Remote Testnets
 ---
 
-* `testnet` - public stable testnet accessible via testnet.solana.com. Runs 24/7
+* `testnet` - public stable testnet accessible via devnet.solana.com. Runs 24/7
 
 
 ## Deploy process
