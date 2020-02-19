@@ -5,6 +5,7 @@ use crate::{
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
     commitment::BlockCommitmentCache,
+    consensus::Tower,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
@@ -30,7 +31,7 @@ use solana_sdk::{
 };
 use std::{
     net::UdpSocket,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         atomic::AtomicBool,
         mpsc::{channel, Receiver},
@@ -88,8 +89,7 @@ impl Tvu {
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
-        tower_snapshot_path: &Path,
-        allow_missing_tower_state: bool,
+        tower: Tower,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -175,8 +175,6 @@ impl Tvu {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
-            tower_snapshot_path: tower_snapshot_path.to_path_buf(),
-            allow_missing_tower_state,
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
@@ -186,6 +184,7 @@ impl Tvu {
             cluster_info.clone(),
             ledger_signal_receiver,
             poh_recorder.clone(),
+            tower,
         );
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
@@ -290,6 +289,12 @@ pub mod tests {
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let tower = Tower::new(
+            &target1_keypair.pubkey(),
+            &voting_keypair.pubkey(),
+            &bank_forks,
+            &blockstore_path,
+        );
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),
@@ -320,8 +325,7 @@ pub mod tests {
             0,
             None,
             None,
-            &blockstore_path,
-            false,
+            tower,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

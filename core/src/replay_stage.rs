@@ -3,7 +3,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
-    consensus::{reconcile_blockstore_roots_with_tower, StakeLockout, Tower},
+    consensus::{StakeLockout, Tower},
     poh_recorder::PohRecorder,
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
@@ -32,10 +32,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_vote_program::vote_instruction;
-use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -81,8 +79,6 @@ pub struct ReplayStageConfig {
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
-    pub tower_snapshot_path: PathBuf,
-    pub allow_missing_tower_state: bool,
 }
 
 pub struct ReplayStage {
@@ -172,6 +168,7 @@ impl ReplayStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
+        mut tower: Tower,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
@@ -186,41 +183,10 @@ impl ReplayStage {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
-            tower_snapshot_path,
-            allow_missing_tower_state,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
         trace!("replay stage");
-        let tower = Tower::reload_from_file(&tower_snapshot_path, &my_pubkey, &vote_account);
-
-        let mut tower = match tower {
-            Ok(tower) => tower,
-            Err(e) => {
-                let bank_forks_lock = bank_forks.read().unwrap();
-                if let Some(account) = bank_forks_lock
-                    .get(bank_forks_lock.root())
-                    .expect("Failed to get root bank")
-                    .get_account(&vote_account)
-                {
-                    if let Some(vote_state) = VoteState::from(&account) {
-                        if !vote_state.votes.is_empty() {
-                            if allow_missing_tower_state {
-                                error!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
-                            } else {
-                                panic!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
-                            }
-                        }
-                    }
-                }
-                Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap(), &tower_snapshot_path)
-            }
-        };
-
-        // Tower gets written to before blockstore, so roots may be missing from blocktstore
-        reconcile_blockstore_roots_with_tower(&tower, &blockstore)
-            .expect("failed to reconcile blockstore roots with tower");
-
         // Start the replay stage loop
 
         let (lockouts_sender, commitment_service) =

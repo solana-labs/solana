@@ -4,6 +4,7 @@ use crate::{
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
     commitment::BlockCommitmentCache,
+    consensus::{reconcile_blockstore_roots_with_tower, Tower},
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::PohRecorder,
@@ -43,6 +44,7 @@ use solana_sdk::{
     signature::{Keypair, KeypairUtil},
     timing::timestamp,
 };
+use solana_vote_program::vote_state::VoteState;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
@@ -159,6 +161,10 @@ impl Validator {
         sigverify::init();
         info!("Done.");
 
+        info!("Creating tower");
+        let tower = Tower::reload_from_file(ledger_path, &keypair.pubkey(), vote_account);
+        let maybe_tower = tower.as_ref().ok();
+
         info!("creating bank...");
         let (
             genesis_hash,
@@ -174,7 +180,30 @@ impl Validator {
             ledger_path,
             poh_verify,
             config,
+            maybe_tower,
         );
+
+        let tower = match tower {
+            Ok(tower) => tower,
+            Err(e) => {
+                if let Some(account) = &bank_forks
+                    .get(bank_forks.root())
+                    .expect("Failed to get root bank")
+                    .get_account(vote_account)
+                {
+                    if let Some(vote_state) = VoteState::from(&account) {
+                        if !vote_state.votes.is_empty() {
+                            if allow_missing_tower_state {
+                                error!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
+                            } else {
+                                panic!("Found initialized vote account with votes, but opening saved tower failed with {:?}", e);
+                            }
+                        }
+                    }
+                }
+                Tower::new(&keypair.pubkey(), vote_account, &bank_forks, ledger_path)
+            }
+        };
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
@@ -407,8 +436,7 @@ impl Validator {
             node.info.shred_version,
             transaction_status_sender.clone(),
             rewards_recorder_sender,
-            ledger_path,
-            allow_missing_tower_state,
+            tower,
         );
 
         if config.dev_sigverify_disabled {
@@ -514,6 +542,7 @@ fn new_banks_from_blockstore(
     blockstore_path: &Path,
     poh_verify: bool,
     config: &ValidatorConfig,
+    tower: Option<&Tower>,
 ) -> (
     Hash,
     BankForks,
@@ -544,6 +573,17 @@ fn new_banks_from_blockstore(
 
     let (blockstore, ledger_signal_receiver, completed_slots_receiver) =
         Blockstore::open_with_signal(blockstore_path).expect("Failed to open ledger database");
+
+    if let Some(tower) = tower {
+        // Tower gets written to before blockstore, so roots may be missing from blocktstore
+        reconcile_blockstore_roots_with_tower(tower, &blockstore).unwrap_or_else(|e| {
+            error!(
+                "Failed to sync blockstore roots with restored tower: {:?}",
+                e
+            );
+            process::exit(1);
+        });
+    }
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify,
