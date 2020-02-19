@@ -17,8 +17,9 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
-use solana_vote_program::vote_state::{AuthorizedVoters, VoteState};
+use solana_vote_program::{
+    authorized_voters::AuthorizedVoters, vote_instruction::VoteInstruction, vote_state::VoteState,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -50,7 +51,7 @@ impl VoteTracker {
             epoch_authorized_voters,
             votes: HashMap::new(),
             node_id_to_vote_accounts,
-            epoch_schedule: root_bank.epoch_schedule().clone(),
+            epoch_schedule: *root_bank.epoch_schedule(),
             root: root_bank.slot(),
         }
     }
@@ -69,10 +70,7 @@ impl VoteTracker {
         let epoch = self.epoch_schedule.get_epoch(slot);
         self.epoch_authorized_voters
             .get(pubkey)
-            .map(|authorized_voters| {
-                println!("authorized voters: {:?}", authorized_voters);
-                authorized_voters.get_authorized_voter(epoch)
-            })
+            .map(|authorized_voters| authorized_voters.get_authorized_voter(epoch))
             .unwrap_or(None)
     }
 
@@ -86,7 +84,7 @@ impl VoteTracker {
         let epoch_authorized_voters = bank
             .epoch_vote_accounts(epoch)
             .expect("Epoch vote accounts must exist")
-            .into_iter()
+            .iter()
             .filter_map(|(key, (stake, account))| {
                 let vote_state = VoteState::from(&account);
                 if vote_state.is_none() {
@@ -101,9 +99,7 @@ impl VoteTracker {
                     return None;
                 }
                 let vote_state = vote_state.unwrap();
-                println!("Found vote state");
                 if *stake > 0 {
-                    println!("Found vote state with stake > 0, key: {:?}", key);
                     let mut authorized_voters = vote_state.authorized_voters().clone();
                     authorized_voters.get_and_cache_authorized_voter_for_epoch(epoch);
                     authorized_voters.get_and_cache_authorized_voter_for_epoch(epoch + 1);
@@ -137,13 +133,11 @@ impl VoteTracker {
     // from `V` that belong to `N`
     pub fn diff_vote_accounts(&self, node_ids: &[Pubkey], vote_accounts: &mut HashSet<Pubkey>) {
         for node_id in node_ids {
-            self.node_id_to_vote_accounts
-                .get(node_id)
-                .map(|node_vote_accounts| {
-                    for node_vote_account in node_vote_accounts {
-                        vote_accounts.remove(node_vote_account);
-                    }
-                });
+            if let Some(node_vote_accounts) = self.node_id_to_vote_accounts.get(node_id) {
+                for node_vote_account in node_vote_accounts {
+                    vote_accounts.remove(node_vote_account);
+                }
+            };
         }
     }
 }
@@ -324,11 +318,11 @@ impl ClusterInfoVoteListener {
                     .instructions
                     .first()
                     .and_then(|first_instruction| {
-                        first_instruction.accounts.first().and_then(|offset| {
-                            Some((
+                        first_instruction.accounts.first().map(|offset| {
+                            (
                                 tx.message.account_keys.get(*offset as usize),
                                 limited_deserialize(&first_instruction.data).ok(),
-                            ))
+                            )
                         })
                     })
                     .unwrap_or((None, None))
@@ -468,7 +462,13 @@ mod tests {
         let vote_keypair = Keypair::new();
         let slots: Vec<_> = (0..31).into_iter().collect();
 
-        let vote_tx = new_vote_tx(slots, Hash::default(), &node_keypair, &vote_keypair);
+        let vote_tx = new_vote_tx(
+            slots,
+            Hash::default(),
+            &node_keypair,
+            &vote_keypair,
+            &vote_keypair,
+        );
 
         use bincode::serialized_size;
         info!("max vote size {}", serialized_size(&vote_tx).unwrap());
@@ -481,9 +481,16 @@ mod tests {
     #[test]
     fn vote_contains_authorized_voter() {
         let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
         let authorized_voter = Keypair::new();
 
-        let vote_tx = new_vote_tx(vec![0], Hash::default(), &node_keypair, &authorized_voter);
+        let vote_tx = new_vote_tx(
+            vec![0],
+            Hash::default(),
+            &node_keypair,
+            &vote_keypair,
+            &authorized_voter,
+        );
 
         // Check that the two signing keys pass the check
         assert!(VoteTracker::vote_contains_authorized_voter(
@@ -496,16 +503,33 @@ mod tests {
             authorized_voter.pubkey()
         ));
 
-        // Set the authorized voter == node keypair
-        let vote_tx = new_vote_tx(vec![0], Hash::default(), &node_keypair, &node_keypair);
+        // Non signing key shouldn't pass the check
+        assert!(!VoteTracker::vote_contains_authorized_voter(
+            &vote_tx,
+            vote_keypair.pubkey()
+        ));
 
-        // Check that the node_keypair itself still passes the authorized voter check
+        // Set the authorized voter == vote keypair
+        let vote_tx = new_vote_tx(
+            vec![0],
+            Hash::default(),
+            &node_keypair,
+            &vote_keypair,
+            &vote_keypair,
+        );
+
+        // Check that the node_keypair and vote keypair pass the authorized voter check
         assert!(VoteTracker::vote_contains_authorized_voter(
             &vote_tx,
             node_keypair.pubkey()
         ));
 
-        // The other keypair should not pass
+        assert!(VoteTracker::vote_contains_authorized_voter(
+            &vote_tx,
+            vote_keypair.pubkey()
+        ));
+
+        // The other keypair should not pss the cchecck
         assert!(!VoteTracker::vote_contains_authorized_voter(
             &vote_tx,
             authorized_voter.pubkey()
@@ -537,6 +561,7 @@ mod tests {
                 vote_slots.clone(),
                 Hash::default(),
                 node_keypair,
+                vote_keypair,
                 vote_keypair,
             );
             votes_sender.send(vec![vote_tx]).unwrap();
@@ -578,8 +603,13 @@ mod tests {
                 .map(|keypairs| {
                     let node_keypair = &keypairs.node_keypair;
                     let vote_keypair = &keypairs.vote_keypair;
-                    let vote_tx =
-                        new_vote_tx(vec![i as u64], Hash::default(), node_keypair, vote_keypair);
+                    let vote_tx = new_vote_tx(
+                        vec![i as u64 + 1],
+                        Hash::default(),
+                        node_keypair,
+                        vote_keypair,
+                        vote_keypair,
+                    );
                     vote_tx
                 })
                 .collect();
@@ -591,7 +621,7 @@ mod tests {
         let r_vote_tracker = vote_tracker.read().unwrap();
         let votes = r_vote_tracker.votes();
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
-            let votes_for_slot = votes.get(&(i as u64)).unwrap();
+            let votes_for_slot = votes.get(&(i as u64 + 1)).unwrap();
             for voting_keypairs in keyset {
                 assert!(votes_for_slot.contains(&voting_keypairs.vote_keypair.pubkey()));
             }
@@ -663,28 +693,37 @@ mod tests {
         let validator0_keypairs = &validator_voting_keypairs[0];
         let vote_tracker = Arc::new(RwLock::new(VoteTracker::new(&bank)));
         let vote_tx = vec![new_vote_tx(
-            vec![0],
+            // Must vote > root to be processed
+            vec![bank.slot() + 1],
             Hash::default(),
             &validator0_keypairs.node_keypair,
+            &validator0_keypairs.vote_keypair,
             &validator0_keypairs.vote_keypair,
         )];
 
         {
-            let r_vote_tracker = vote_tracker.read().unwrap();
-            let pubkey_ref = r_vote_tracker
-                .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey())
-                .unwrap();
+            let ref_count = Arc::strong_count(
+                vote_tracker
+                    .read()
+                    .unwrap()
+                    .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey())
+                    .unwrap(),
+            );
 
             // Refcount is 1 because no votes have referenced this pubkey yet
-            assert_eq!(Arc::strong_count(&pubkey_ref), 1);
+            assert_eq!(ref_count, 1);
 
             ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx);
-            let pubkey_ref = r_vote_tracker
-                .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey())
-                .unwrap();
+            let ref_count = Arc::strong_count(
+                vote_tracker
+                    .read()
+                    .unwrap()
+                    .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey())
+                    .unwrap(),
+            );
 
             // This pubkey voted for a slot, so the refcount is now 2
-            assert_eq!(Arc::strong_count(&pubkey_ref), 2);
+            assert_eq!(ref_count, 2);
         }
 
         // Move into the next epoch, a new set of voters is introduced, with some
@@ -705,36 +744,43 @@ mod tests {
             new_epoch_authorized_voters,
             new_node_id_to_vote_accounts,
         );
-        let r_vote_tracker = vote_tracker.read().unwrap();
 
-        assert!(r_vote_tracker
-            .epoch_authorized_voters
-            .get(&new_pubkey)
-            .is_some());
-        assert!(r_vote_tracker
-            .epoch_authorized_voters
-            .get(&old_outdated_pubkey)
-            .is_none());
+        {
+            let r_vote_tracker = vote_tracker.read().unwrap();
+            assert!(r_vote_tracker
+                .epoch_authorized_voters
+                .get(&new_pubkey)
+                .is_some());
+            assert!(r_vote_tracker
+                .epoch_authorized_voters
+                .get(&old_outdated_pubkey)
+                .is_none());
+        }
 
         // Make sure new copies of the same pubkeys aren't constantly being
         // introduced when the same voter is in both the old and new set
-        let pubkey_ref = r_vote_tracker
-            .get_voter_pubkey(&old_refreshed_pubkey)
-            .unwrap();
+        let ref_count = Arc::strong_count(
+            vote_tracker
+                .read()
+                .unwrap()
+                .get_voter_pubkey(&old_refreshed_pubkey)
+                .unwrap(),
+        );
 
         // Ref count remains unchanged from earlier
-        assert_eq!(Arc::strong_count(&pubkey_ref), 2);
+        assert_eq!(ref_count, 2);
     }
 
     fn new_vote_tx(
         slots: Vec<Slot>,
         blockhash: Hash,
         node_keypair: &Keypair,
+        vote_keypair: &Keypair,
         authorized_voter_keypair: &Keypair,
     ) -> Transaction {
         let votes = Vote::new(slots, blockhash);
         let vote_ix = vote_instruction::vote(
-            &node_keypair.pubkey(),
+            &vote_keypair.pubkey(),
             &authorized_voter_keypair.pubkey(),
             votes,
         );
