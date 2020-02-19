@@ -36,6 +36,7 @@ pub struct VoteTracker {
     // Map from node id to the set of associated vote accounts
     node_id_to_vote_accounts: NodeIdToVoteAccounts,
     epoch_schedule: EpochSchedule,
+    root: u64,
 }
 
 impl VoteTracker {
@@ -50,6 +51,7 @@ impl VoteTracker {
             votes: HashMap::new(),
             node_id_to_vote_accounts,
             epoch_schedule: root_bank.epoch_schedule().clone(),
+            root: root_bank.slot(),
         }
     }
 
@@ -191,6 +193,13 @@ impl ClusterInfoVoteListener {
         }
     }
 
+    pub fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
+        }
+        Ok(())
+    }
+
     fn recv_loop(
         exit: Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -259,6 +268,10 @@ impl ClusterInfoVoteListener {
             }
 
             let root_bank = bank_forks.read().unwrap().root_bank().clone();
+            if root_bank.slot() != vote_tracker.read().unwrap().root {
+                Self::process_new_root(&vote_tracker, root_bank.slot());
+            }
+
             let new_leader_schedule_epoch =
                 { root_bank.get_leader_schedule_epoch(root_bank.slot()) };
 
@@ -304,6 +317,7 @@ impl ClusterInfoVoteListener {
         {
             let vote_tracker = vote_tracker.read().unwrap();
             let slot_pubkeys = &vote_tracker.votes;
+            let root = vote_tracker.root;
             for tx in vote_txs {
                 if let (Some(vote_pubkey), Some(vote_instruction)) = tx
                     .message
@@ -356,6 +370,9 @@ impl ClusterInfoVoteListener {
                     // that we determined at leader_schedule_epoch boundaries
                     if let Some(vote_pubkey) = vote_tracker.get_voter_pubkey(&vote_pubkey) {
                         for slot in vote.slots {
+                            if slot <= root {
+                                continue;
+                            }
                             // Don't insert if we already have marked down this pubkey
                             // voting for this slot
                             if let Some(slot_vote_pubkeys) = slot_pubkeys.get(&slot) {
@@ -381,11 +398,10 @@ impl ClusterInfoVoteListener {
         }
     }
 
-    pub fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
-        }
-        Ok(())
+    fn process_new_root(vote_tracker: &RwLock<VoteTracker>, new_root: Slot) {
+        let mut w_vote_tracker = vote_tracker.write().unwrap();
+        w_vote_tracker.root = new_root;
+        w_vote_tracker.votes.retain(|slot, _| *slot >= new_root)
     }
 
     fn process_new_leader_schedule_epoch(
