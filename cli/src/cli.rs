@@ -775,16 +775,6 @@ pub fn return_signers(tx: &Transaction) -> ProcessResult {
     .to_string())
 }
 
-pub fn replace_signatures(tx: &mut Transaction, signers: &[(Pubkey, Signature)]) -> ProcessResult {
-    tx.replace_signatures(signers).map_err(|_| {
-        CliError::BadParameter(
-            "Transaction construction failed, incorrect signature or public key provided"
-                .to_string(),
-        )
-    })?;
-    Ok("".to_string())
-}
-
 pub fn parse_create_address_with_seed(
     matches: &ArgMatches<'_>,
 ) -> Result<CliCommandInfo, CliError> {
