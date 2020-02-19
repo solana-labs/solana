@@ -537,6 +537,138 @@ impl RpcClient {
         Ok(())
     }
 
+    pub fn send_and_confirm_transaction_dynamic_signers(
+        &self,
+        transaction: &mut Transaction,
+        signer_keys: &[&dyn KeypairUtil],
+    ) -> Result<String, ClientError> {
+        let mut send_retries = 20;
+        loop {
+            let mut status_retries = 15;
+            let signature_str = self.send_transaction(transaction)?;
+            let status = loop {
+                let status = self.get_signature_status(&signature_str)?;
+                if status.is_none() {
+                    status_retries -= 1;
+                    if status_retries == 0 {
+                        break status;
+                    }
+                } else {
+                    break status;
+                }
+                if cfg!(not(test)) {
+                    // Retry twice a second
+                    sleep(Duration::from_millis(500));
+                }
+            };
+            send_retries = if let Some(result) = status.clone() {
+                match result {
+                    Ok(_) => return Ok(signature_str),
+                    Err(TransactionError::AccountInUse) => {
+                        // Fetch a new blockhash and re-sign the transaction before sending it again
+                        self.resign_transaction_dynamic_signers(transaction, signer_keys)?;
+                        send_retries - 1
+                    }
+                    Err(_) => 0,
+                }
+            } else {
+                send_retries - 1
+            };
+            if send_retries == 0 {
+                if let Some(err) = status {
+                    return Err(err.unwrap_err().into());
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Transaction {:?} failed: {:?}", signature_str, status),
+                    )
+                    .into());
+                }
+            }
+        }
+    }
+
+    pub fn send_and_confirm_multiple_transactions_dynamic_signers(
+        &self,
+        mut transactions: Vec<Transaction>,
+        signer_keys: &[&dyn KeypairUtil],
+    ) -> Result<(), Box<dyn error::Error>> {
+        let mut send_retries = 5;
+        loop {
+            let mut status_retries = 15;
+
+            // Send all transactions
+            let mut transactions_signatures = vec![];
+            for transaction in transactions {
+                if cfg!(not(test)) {
+                    // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
+                    // when all the write transactions modify the same program account (eg, deploying a
+                    // new program)
+                    sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
+                }
+
+                let signature = self.send_transaction(&transaction).ok();
+                transactions_signatures.push((transaction, signature))
+            }
+
+            // Collect statuses for all the transactions, drop those that are confirmed
+            while status_retries > 0 {
+                status_retries -= 1;
+
+                if cfg!(not(test)) {
+                    // Retry twice a second
+                    sleep(Duration::from_millis(500));
+                }
+
+                transactions_signatures = transactions_signatures
+                    .into_iter()
+                    .filter(|(_transaction, signature)| {
+                        if let Some(signature) = signature {
+                            if let Ok(status) = self.get_signature_status(&signature) {
+                                if status.is_none() {
+                                    return false;
+                                }
+                                return status.unwrap().is_err();
+                            }
+                        }
+                        true
+                    })
+                    .collect();
+
+                if transactions_signatures.is_empty() {
+                    return Ok(());
+                }
+            }
+
+            if send_retries == 0 {
+                return Err(io::Error::new(io::ErrorKind::Other, "Transactions failed").into());
+            }
+            send_retries -= 1;
+
+            // Re-sign any failed transactions with a new blockhash and retry
+            let (blockhash, _fee_calculator) =
+                self.get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
+            transactions = transactions_signatures
+                .into_iter()
+                .map(|(mut transaction, _)| {
+                    transaction.sign_dynamic_signers(signer_keys, blockhash);
+                    transaction
+                })
+                .collect();
+        }
+    }
+
+    pub fn resign_transaction_dynamic_signers(
+        &self,
+        tx: &mut Transaction,
+        signer_keys: &[&dyn KeypairUtil],
+    ) -> Result<(), ClientError> {
+        let (blockhash, _fee_calculator) =
+            self.get_new_blockhash(&tx.message().recent_blockhash)?;
+        tx.sign_dynamic_signers(signer_keys, blockhash);
+        Ok(())
+    }
+
     pub fn retry_get_balance(
         &self,
         pubkey: &Pubkey,
