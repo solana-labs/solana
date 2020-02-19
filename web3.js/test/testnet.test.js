@@ -9,15 +9,15 @@ test('invalid', () => {
 
 test('edge', () => {
   expect(testnetChannelEndpoint('edge')).toEqual(
-    'https://edge.testnet.solana.com:8443',
+    'https://edge.devnet.solana.com:8443',
   );
 
   expect(testnetChannelEndpoint('edge', true)).toEqual(
-    'https://edge.testnet.solana.com:8443',
+    'https://edge.devnet.solana.com:8443',
   );
 
   expect(testnetChannelEndpoint('edge', false)).toEqual(
-    'http://edge.testnet.solana.com:8899',
+    'http://edge.devnet.solana.com:8899',
   );
 });
 
