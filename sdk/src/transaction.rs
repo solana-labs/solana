@@ -9,7 +9,7 @@ use crate::{
     signature::{KeypairUtil, Signature},
     system_instruction,
 };
-use std::result;
+use std::{error, result};
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
@@ -257,10 +257,18 @@ impl Transaction {
 
     /// Check keys and keypair lengths, then sign this transaction, using an assortment of
     /// KeypairUtil trait objects
-    pub fn sign_dynamic_signers(&mut self, keypairs: &[&dyn KeypairUtil], recent_blockhash: Hash) {
-        self.partial_sign_dynamic_signers(keypairs, recent_blockhash);
+    pub fn sign_dynamic_signers(
+        &mut self,
+        keypairs: &[&dyn KeypairUtil],
+        recent_blockhash: Hash,
+    ) -> result::Result<(), Box<dyn error::Error>> {
+        self.partial_sign_dynamic_signers(keypairs, recent_blockhash)?;
 
-        assert_eq!(self.is_signed(), true, "not enough keypairs");
+        if !self.is_signed() {
+            Err(SigningError::NotEnoughKeypairs.into())
+        } else {
+            Ok(())
+        }
     }
 
     ///  Sign using some subset of required keys, which may be an assortment of KeypairUtil trait
@@ -270,14 +278,12 @@ impl Transaction {
         &mut self,
         keypairs: &[&dyn KeypairUtil],
         recent_blockhash: Hash,
-    ) {
-        let positions = self
-            .get_signing_keypair_positions_dynamic_signers(keypairs)
-            .expect("account_keys doesn't contain num_required_signatures keys");
-        let positions: Vec<usize> = positions
-            .iter()
-            .map(|pos| pos.expect("keypair-pubkey mismatch"))
-            .collect();
+    ) -> result::Result<(), Box<dyn error::Error>> {
+        let positions = self.get_signing_keypair_positions_dynamic_signers(keypairs)?;
+        if positions.iter().any(|pos| pos.is_none()) {
+            return Err(SigningError::KeypairPubkeyMismatch.into());
+        }
+        let positions: Vec<usize> = positions.iter().map(|pos| pos.unwrap()).collect();
         self.partial_sign_unchecked_dynamic_signers(keypairs, positions, recent_blockhash)
     }
 
@@ -289,7 +295,7 @@ impl Transaction {
         keypairs: &[&dyn KeypairUtil],
         positions: Vec<usize>,
         recent_blockhash: Hash,
-    ) {
+    ) -> result::Result<(), Box<dyn error::Error>> {
         // if you change the blockhash, you're re-signing...
         if recent_blockhash != self.message.recent_blockhash {
             self.message.recent_blockhash = recent_blockhash;
@@ -299,8 +305,9 @@ impl Transaction {
         }
 
         for i in 0..positions.len() {
-            self.signatures[positions[i]] = keypairs[i].sign_message(&self.message_data())
+            self.signatures[positions[i]] = keypairs[i].try_sign_message(&self.message_data())?;
         }
+        Ok(())
     }
 
     /// Verify the transaction
@@ -381,6 +388,15 @@ impl Transaction {
         }
         true
     }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug)]
+pub enum SigningError {
+    #[error("keypair-pubkey mismatch")]
+    KeypairPubkeyMismatch,
+
+    #[error("not enough keypairs")]
+    NotEnoughKeypairs,
 }
 
 #[cfg(test)]

@@ -350,7 +350,7 @@ pub fn process_set_validator_info(
     // Submit transaction
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign_dynamic_signers(&signers, recent_blockhash);
+    tx.sign_dynamic_signers(&signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),

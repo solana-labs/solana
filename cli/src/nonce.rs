@@ -346,7 +346,7 @@ pub fn process_authorize_nonce_account(
     tx.sign_dynamic_signers(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
-    );
+    )?;
 
     check_account_for_fee(
         rpc_client,
@@ -434,7 +434,7 @@ pub fn process_create_nonce_account(
 
     let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign_dynamic_signers(&signers, recent_blockhash);
+    tx.sign_dynamic_signers(&signers, recent_blockhash)?;
 
     check_account_for_fee(
         rpc_client,
@@ -492,7 +492,7 @@ pub fn process_new_nonce(
     tx.sign_dynamic_signers(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -577,7 +577,7 @@ pub fn process_withdraw_from_nonce_account(
     tx.sign_dynamic_signers(
         &[config.keypair.as_ref(), nonce_authority],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),

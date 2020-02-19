@@ -943,25 +943,22 @@ fn process_deploy(
     );
     let message = Message::new(vec![ix]);
     let mut create_account_tx = Transaction::new_unsigned(message);
-    create_account_tx.sign_dynamic_signers(&[config.keypair.as_ref(), &program_id], blockhash);
+    create_account_tx.sign_dynamic_signers(&[config.keypair.as_ref(), &program_id], blockhash)?;
     messages.push(&create_account_tx.message);
     let signers = [config.keypair.as_ref(), &program_id];
-    let write_transactions: Vec<_> = program_data
-        .chunks(DATA_CHUNK_SIZE)
-        .zip(0..)
-        .map(|(chunk, i)| {
-            let instruction = loader_instruction::write(
-                &program_id.pubkey(),
-                &bpf_loader::id(),
-                (i * DATA_CHUNK_SIZE) as u32,
-                chunk.to_vec(),
-            );
-            let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
-            let mut tx = Transaction::new_unsigned(message);
-            tx.sign_dynamic_signers(&signers, blockhash);
-            tx
-        })
-        .collect();
+    let mut write_transactions = vec![];
+    for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
+        let instruction = loader_instruction::write(
+            &program_id.pubkey(),
+            &bpf_loader::id(),
+            (i * DATA_CHUNK_SIZE) as u32,
+            chunk.to_vec(),
+        );
+        let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign_dynamic_signers(&signers, blockhash)?;
+        write_transactions.push(tx);
+    }
     for transaction in write_transactions.iter() {
         messages.push(&transaction.message);
     }
@@ -969,7 +966,7 @@ fn process_deploy(
     let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
     let mut finalize_tx = Transaction::new_unsigned(message);
-    finalize_tx.sign_dynamic_signers(&signers, blockhash);
+    finalize_tx.sign_dynamic_signers(&signers, blockhash)?;
     messages.push(&finalize_tx.message);
 
     check_account_for_multiple_fees(
@@ -1037,12 +1034,12 @@ fn process_pay(
             let message =
                 Message::new_with_nonce(vec![ix], None, nonce_account, &nonce_authority.pubkey());
             let mut tx = Transaction::new_unsigned(message);
-            tx.sign_dynamic_signers(&[config.keypair.as_ref(), nonce_authority], blockhash);
+            tx.sign_dynamic_signers(&[config.keypair.as_ref(), nonce_authority], blockhash)?;
             tx
         } else {
             let message = Message::new(vec![ix]);
             let mut tx = Transaction::new_unsigned(message);
-            tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash);
+            tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash)?;
             tx
         };
 
@@ -1084,7 +1081,7 @@ fn process_pay(
         );
         let message = Message::new(ixs);
         let mut tx = Transaction::new_unsigned(message);
-        tx.sign_dynamic_signers(&[config.keypair.as_ref(), &contract_state], blockhash);
+        tx.sign_dynamic_signers(&[config.keypair.as_ref(), &contract_state], blockhash)?;
         if sign_only {
             return_signers(&tx)
         } else {
@@ -1129,7 +1126,7 @@ fn process_pay(
         );
         let message = Message::new(ixs);
         let mut tx = Transaction::new_unsigned(message);
-        tx.sign_dynamic_signers(&[config.keypair.as_ref(), &contract_state], blockhash);
+        tx.sign_dynamic_signers(&[config.keypair.as_ref(), &contract_state], blockhash)?;
         if sign_only {
             return_signers(&tx)
         } else {
@@ -1165,7 +1162,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
     );
     let message = Message::new(vec![ix]);
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash);
+    tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -1189,7 +1186,7 @@ fn process_time_elapsed(
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let message = Message::new(vec![ix]);
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash);
+    tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -1240,12 +1237,12 @@ fn process_transfer(
             &nonce_authority.pubkey(),
         );
         let mut tx = Transaction::new_unsigned(message);
-        tx.sign_dynamic_signers(&signers, recent_blockhash);
+        tx.sign_dynamic_signers(&signers, recent_blockhash)?;
         tx
     } else {
         let message = Message::new_with_payer(ixs, Some(&fee_payer.pubkey()));
         let mut tx = Transaction::new_unsigned(message);
-        tx.sign_dynamic_signers(&signers, recent_blockhash);
+        tx.sign_dynamic_signers(&signers, recent_blockhash)?;
         tx
     };
 
@@ -1279,7 +1276,7 @@ fn process_witness(
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let message = Message::new(vec![ix]);
     let mut tx = Transaction::new_unsigned(message);
-    tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash);
+    tx.sign_dynamic_signers(&[config.keypair.as_ref()], blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
