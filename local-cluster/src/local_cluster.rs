@@ -233,13 +233,12 @@ impl LocalCluster {
                 &leader_pubkey,
                 &leader_voting_keypair.pubkey(),
                 &BankForks::new(0, Bank::default()),
+                &leader_ledger_path,
             );
             for vote in votes {
                 tower.record_bank_vote(vote.clone());
             }
-            tower
-                .save_to_file(&leader_ledger_path, &*leader_voting_keypair)
-                .unwrap();
+            tower.save_to_file(&*leader_voting_keypair).unwrap();
         }
 
         let leader_server = Validator::new(
@@ -364,11 +363,12 @@ impl LocalCluster {
                 &validator_pubkey,
                 &voting_keypair.pubkey(),
                 &BankForks::new(0, Bank::default()),
+                &ledger_path,
             );
             for vote in votes {
                 tower.record_bank_vote(vote.clone());
             }
-            tower.save_to_file(&ledger_path, &voting_keypair).unwrap();
+            tower.save_to_file(&voting_keypair).unwrap();
         }
 
         if validator_config.voting_disabled {

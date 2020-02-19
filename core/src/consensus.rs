@@ -16,7 +16,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs::{self, File},
     io::{BufReader, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Instant,
 };
@@ -53,6 +53,8 @@ pub struct Tower {
     lockouts: VoteState,
     last_vote: Vote,
     last_timestamp: BlockTimestamp,
+    #[serde(skip)]
+    pub snapshot_path: PathBuf,
 }
 
 impl Default for Tower {
@@ -64,22 +66,29 @@ impl Default for Tower {
             lockouts: VoteState::default(),
             last_vote: Vote::default(),
             last_timestamp: BlockTimestamp::default(),
+            snapshot_path: PathBuf::default(),
         }
     }
 }
 
 impl Tower {
-    pub fn new(node_pubkey: &Pubkey, vote_account_pubkey: &Pubkey, bank_forks: &BankForks) -> Self {
-        let mut tower = Self::new_with_key(node_pubkey);
+    pub fn new(
+        node_pubkey: &Pubkey,
+        vote_account_pubkey: &Pubkey,
+        bank_forks: &BankForks,
+        snapshot_path: &Path,
+    ) -> Self {
+        let mut tower = Self::new_with_key(node_pubkey, snapshot_path);
 
         tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
 
         tower
     }
 
-    pub fn new_with_key(node_pubkey: &Pubkey) -> Self {
+    pub fn new_with_key(node_pubkey: &Pubkey, snapshot_path: &Path) -> Self {
         Self {
             node_pubkey: *node_pubkey,
+            snapshot_path: snapshot_path.to_path_buf(),
             ..Tower::default()
         }
     }
@@ -474,24 +483,23 @@ impl Tower {
         }
     }
 
-    pub fn save_to_file<T: KeypairUtil>(&self, path: &PathBuf, keypair: &T) -> Result<()> {
+    pub fn save_to_file<T: KeypairUtil>(&self, keypair: &T) -> Result<()> {
         let timer = Instant::now();
         let saveable_tower = SavedTower::new(self, keypair)?;
-        fs::create_dir_all(path)?;
-        let mut snapshot_file = File::create(path.join(TOWER_TEMP_SNAPSHOT_NAME))?;
+        fs::create_dir_all(&self.snapshot_path)?;
+        let tmp_path = self.snapshot_path.join(TOWER_TEMP_SNAPSHOT_NAME);
+        let mut snapshot_file = File::create(&tmp_path)?;
         bincode::serialize_into(&mut snapshot_file, &saveable_tower)?;
         snapshot_file.flush()?;
-        fs::rename(
-            path.join(TOWER_TEMP_SNAPSHOT_NAME),
-            path.join(TOWER_SNAPSHOT_NAME),
-        )?;
+        let snapshot_path = self.snapshot_path.join(TOWER_SNAPSHOT_NAME);
+        fs::rename(&tmp_path, &snapshot_path)?;
         let snapshot_time = timer.elapsed().as_millis() as usize;
         inc_new_counter_info!("tower_snapshot_duration_ms", snapshot_time);
         Ok(())
     }
 
     pub fn reload_from_file(
-        path: &PathBuf,
+        path: &Path,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
     ) -> Result<Self> {
@@ -504,7 +512,8 @@ impl Tower {
             error!("Signature on tower in invalid");
             return Err(TowerError::InvalidSignature);
         }
-        let tower = tower.deserialize()?;
+        let mut tower = tower.deserialize()?;
+        tower.snapshot_path = path.to_path_buf();
         // check that the tower actually belongs to this node
         if &tower.node_pubkey != my_pubkey {
             error!(
@@ -899,7 +908,8 @@ pub mod test {
         let votes = vec![0, 1, 2, 3, 4, 5];
 
         // Simulate the votes
-        let mut tower = Tower::new_with_key(&node_pubkey);
+        let tmp_dir = TempDir::new().unwrap();
+        let mut tower = Tower::new_with_key(&node_pubkey, tmp_dir.path());
 
         let mut cluster_votes = HashMap::new();
         for vote in votes {
@@ -974,7 +984,8 @@ pub mod test {
 
         // Simulate the votes. Should fail on trying to come back to the main fork
         // at 106 exclusively due to threshold failure
-        let mut tower = Tower::new_with_key(&node_pubkey);
+        let tmp_dir = TempDir::new().unwrap();
+        let mut tower = Tower::new_with_key(&node_pubkey, tmp_dir.path());
         for vote in &votes {
             // All these votes should be ok
             assert_eq!(
@@ -1556,19 +1567,15 @@ pub mod test {
         let dir = TempDir::new().unwrap();
         // Use values that will not match the default derived from BankFroks
         let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.snapshot_path = dir.path().to_path_buf();
         let my_keypair = Keypair::new();
         modify_original(&mut tower, &my_keypair.pubkey());
         let vote_keypair = Keypair::new();
 
-        tower
-            .save_to_file(&dir.path().to_path_buf(), &vote_keypair)
-            .unwrap();
+        tower.save_to_file(&vote_keypair).unwrap();
         modify_serialized(&dir.path().to_path_buf());
-        let loaded = Tower::reload_from_file(
-            &dir.path().to_path_buf(),
-            &my_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-        );
+        let loaded =
+            Tower::reload_from_file(&dir.path(), &my_keypair.pubkey(), &vote_keypair.pubkey());
 
         (tower, loaded)
     }
@@ -1664,7 +1671,8 @@ pub mod test {
 
             let (bank_forks, mut progress) = initialize_state(&keypairs);
             let bank_forks = Arc::new(RwLock::new(bank_forks));
-            let mut tower = Tower::new_with_key(&node_pubkey);
+            let tmp_dir = TempDir::new().unwrap();
+            let mut tower = Tower::new_with_key(&node_pubkey, tmp_dir.path());
 
             // Create the tree of banks in a BankForks object
             let forks = build_tree(42);

@@ -213,7 +213,7 @@ impl ReplayStage {
                         }
                     }
                 }
-                Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap())
+                Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap(), &tower_snapshot_path)
             }
         };
 
@@ -370,7 +370,6 @@ impl ReplayStage {
                                 &lockouts_sender,
                                 &snapshot_package_sender,
                                 &latest_root_senders,
-                                &tower_snapshot_path.to_path_buf(),
                             )?;
                         }
                         datapoint_debug!(
@@ -639,7 +638,6 @@ impl ReplayStage {
         lockouts_sender: &Sender<CommitmentAggregationData>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
-        tower_snapshot_path: &PathBuf,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -696,7 +694,7 @@ impl ReplayStage {
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
             vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
             // before publishing the latest vote on the network, snapshot the tower for persistent save
-            if let Err(e) = tower.save_to_file(&tower_snapshot_path, voting_keypair.as_ref()) {
+            if let Err(e) = tower.save_to_file(voting_keypair.as_ref()) {
                 panic!("Unable to backup tower, {:?}", e);
             }
             cluster_info
@@ -1132,6 +1130,7 @@ pub(crate) mod tests {
         iter,
         sync::{Arc, RwLock},
     };
+    use tempfile::TempDir;
     use trees::tr;
 
     struct ForkInfo {
@@ -1165,8 +1164,17 @@ pub(crate) mod tests {
             bank.store_account(&pubkey, &vote_account);
         }
 
-        let mut towers: Vec<Tower> = iter::repeat_with(|| Tower::new_for_tests(8, 0.67))
+        let tmp_dirs: Vec<TempDir> = iter::repeat_with(|| TempDir::new().unwrap())
             .take(validators.len())
+            .collect();
+
+        let mut towers: Vec<Tower> = tmp_dirs
+            .iter()
+            .map(|tmp_dir| {
+                let mut tower = Tower::new_for_tests(8, 0.67);
+                tower.snapshot_path = tmp_dir.path().to_path_buf();
+                tower
+            })
             .collect();
 
         for slot in &neutral_fork.fork {
@@ -1967,7 +1975,8 @@ pub(crate) mod tests {
 
         let (bank_forks, mut progress) = initialize_state(&keypairs);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
-        let mut tower = Tower::new_with_key(&node_pubkey);
+        let dir = TempDir::new().unwrap();
+        let mut tower = Tower::new_with_key(&node_pubkey, &dir.path());
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(3))));
