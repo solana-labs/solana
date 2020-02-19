@@ -17,6 +17,18 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotInfo {
+    pub slot: Slot,
+    pub bank_hash: Hash,
+}
+
+impl SnapshotInfo {
+    pub fn new(slot: Slot, bank_hash: Hash) -> Self {
+        Self { slot, bank_hash }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
     // Generate a new snapshot every this many slots
     pub snapshot_interval_slots: usize,
@@ -28,7 +40,7 @@ pub struct SnapshotConfig {
     pub snapshot_path: PathBuf,
 
     // When loading a snapshot from disk, the slot and bank_hash for the snapshot must match
-    pub expected_snapshot_info: Option<(Slot, Hash)>,
+    pub expected_snapshot_info: Option<SnapshotInfo>,
 }
 
 #[derive(Error, Debug)]

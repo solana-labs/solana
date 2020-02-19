@@ -23,7 +23,7 @@ use solana_core::{
     rpc::JsonRpcConfig,
     validator::{Validator, ValidatorConfig},
 };
-use solana_ledger::bank_forks::SnapshotConfig;
+use solana_ledger::bank_forks::{SnapshotConfig, SnapshotInfo};
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::{
     clock::Slot,
@@ -201,7 +201,8 @@ fn get_rpc_addr(
     identity_keypair: &Arc<Keypair>,
     entrypoint_gossip: &SocketAddr,
     expected_shred_version: Option<u16>,
-) -> (RpcClient, SocketAddr) {
+    snapshot_not_required: bool,
+) -> (RpcClient, SocketAddr, Option<SnapshotInfo>) {
     let mut cluster_info = ClusterInfo::new(
         ClusterInfo::spy_contact_info(&identity_keypair.pubkey()),
         identity_keypair.clone(),
@@ -217,7 +218,7 @@ fn get_rpc_addr(
         &gossip_exit_flag,
     );
 
-    let (rpc_client, rpc_addr) = loop {
+    let (rpc_client, rpc_addr, snapshot_info) = loop {
         info!(
             "Searching for RPC service, shred version={:?}...\n{}",
             expected_shred_version,
@@ -225,51 +226,101 @@ fn get_rpc_addr(
         );
 
         let mut rpc_peers = cluster_info.read().unwrap().all_rpc_peers();
+        match expected_shred_version {
+            Some(expected_shred_version) => {
+                // Filter out rpc peers that don't match the expected shred version
+                rpc_peers = rpc_peers
+                    .into_iter()
+                    .filter(|contact_info| contact_info.shred_version == expected_shred_version)
+                    .collect::<Vec<_>>();
+            }
+            None => {
+                let shred_version_required = !rpc_peers
+                    .iter()
+                    .all(|contact_info| contact_info.shred_version == rpc_peers[0].shred_version);
 
-        let shred_version_required = !rpc_peers
-            .iter()
-            .all(|contact_info| contact_info.shred_version == rpc_peers[0].shred_version);
-
-        if let Some(expected_shred_version) = expected_shred_version {
-            // Filter out rpc peers that don't match the expected shred version
-            rpc_peers = rpc_peers
-                .into_iter()
-                .filter(|contact_info| contact_info.shred_version == expected_shred_version)
-                .collect::<Vec<_>>();
+                if shred_version_required {
+                    eprintln!(
+                        "Multiple shred versions in gossip.  Restart with --expected-shred-version"
+                    );
+                    exit(1);
+                }
+            }
         }
 
-        if !rpc_peers.is_empty() {
-            // Prefer the entrypoint's RPC service if present, otherwise pick a node at random
-            let contact_info = if let Some(contact_info) = rpc_peers
-                .iter()
-                .find(|contact_info| contact_info.gossip == *entrypoint_gossip)
-            {
-                Some(contact_info.clone())
-            } else if shred_version_required && expected_shred_version.is_none() {
-                // Require the user supply a shred version if there are conflicting shred version in
-                // gossip to reduce the chance of human error
-                warn!("Multiple shred versions in gossip.  Restart with --expected-shred-version");
-                None
-            } else {
-                // Pick a node at random
-                Some(rpc_peers[thread_rng().gen_range(0, rpc_peers.len())].clone())
-            };
+        let mut eligible_rpc_peers = vec![];
+        let mut snapshot_info = None;
+        if snapshot_not_required {
+            eligible_rpc_peers = rpc_peers.clone();
+        } else {
+            for rpc_peer in rpc_peers.iter() {
+                if let Some((rpc_peer_snapshot_info, _)) = cluster_info
+                    .read()
+                    .unwrap()
+                    .get_snapshot_info_for_node(&rpc_peer.id, None)
+                {
+                    let rpc_peer_snapshot_info = SnapshotInfo::new(
+                        rpc_peer_snapshot_info.slot,
+                        rpc_peer_snapshot_info.bank_hash,
+                    );
 
-            if let Some(ContactInfo { id, rpc, .. }) = contact_info {
-                info!("Contacting RPC port of node {}: {:?}", id, rpc);
-                let rpc_client = RpcClient::new_socket(rpc);
-                match rpc_client.get_version() {
-                    Ok(rpc_version) => {
-                        info!("RPC node version: {}", rpc_version.solana_core);
-                        break (rpc_client, rpc);
-                    }
-                    Err(err) => {
-                        warn!("Failed to get RPC version: {}", err);
+                    if snapshot_info.is_none() {
+                        snapshot_info = Some(rpc_peer_snapshot_info.clone());
+                    } else if let Some(SnapshotInfo { slot, .. }) = snapshot_info {
+                        if rpc_peer_snapshot_info.slot > slot {
+                            // Found a higher snapshot, remove all rpc peers with a lower snapshot
+                            eligible_rpc_peers.clear();
+                            snapshot_info = Some(rpc_peer_snapshot_info.clone());
+                        }
+                    };
+
+                    if Some(rpc_peer_snapshot_info) == snapshot_info {
+                        eligible_rpc_peers.push(rpc_peer.clone());
                     }
                 }
             }
+
+            if let Some(SnapshotInfo { slot, bank_hash }) = snapshot_info {
+                info!(
+                    "Highest available snapshot: slot={}, bank hash={}",
+                    slot, bank_hash
+                );
+            }
+        }
+
+        if rpc_peers.is_empty() {
+            info!("No RPC services found ");
+        } else if eligible_rpc_peers.is_empty() {
+            info!(
+                "{} RPC service(s) found but none with a snapshot",
+                rpc_peers.len()
+            );
         } else {
-            info!("No RPC service found");
+            info!("{} eligible RPC peers", eligible_rpc_peers.len());
+            // Prefer the entrypoint's RPC service if present, otherwise pick one at random
+            let contact_info = if let Some(contact_info) = eligible_rpc_peers
+                .iter()
+                .find(|contact_info| contact_info.gossip == *entrypoint_gossip)
+            {
+                contact_info
+            } else {
+                &eligible_rpc_peers[thread_rng().gen_range(0, eligible_rpc_peers.len())]
+            };
+
+            info!(
+                "Trying RPC service from node {}: {:?}",
+                contact_info.id, contact_info.rpc
+            );
+            let rpc_client = RpcClient::new_socket(contact_info.rpc);
+            match rpc_client.get_version() {
+                Ok(rpc_version) => {
+                    info!("RPC node version: {}", rpc_version.solana_core);
+                    break (rpc_client, contact_info.rpc, snapshot_info);
+                }
+                Err(err) => {
+                    warn!("Failed to get RPC node's version: {}", err);
+                }
+            }
         }
 
         sleep(Duration::from_secs(1));
@@ -278,7 +329,7 @@ fn get_rpc_addr(
     gossip_exit_flag.store(true, Ordering::Relaxed);
     gossip_service.join().unwrap();
 
-    (rpc_client, rpc_addr)
+    (rpc_client, rpc_addr, snapshot_info)
 }
 
 fn check_vote_account(
@@ -906,12 +957,17 @@ pub fn main() {
         );
 
         if !no_genesis_fetch {
-            let (rpc_client, rpc_addr) = get_rpc_addr(
+            let (rpc_client, rpc_addr, snapshot_info) = get_rpc_addr(
                 &node,
                 &identity_keypair,
                 &cluster_entrypoint.gossip,
                 validator_config.expected_shred_version,
+                no_snapshot_fetch,
             );
+
+            if let Some(snapshot_config) = validator_config.snapshot_config.as_mut() {
+                snapshot_config.expected_snapshot_info = snapshot_info
+            }
 
             download_ledger(&rpc_addr, &ledger_path, no_snapshot_fetch).unwrap_or_else(|err| {
                 error!("Failed to initialize ledger: {}", err);
