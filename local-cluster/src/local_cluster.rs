@@ -163,7 +163,7 @@ impl LocalCluster {
         genesis_config.poh_config = config.poh_config.clone();
 
         match genesis_config.operating_mode {
-            OperatingMode::SoftLaunch => {
+            OperatingMode::Stable | OperatingMode::Preview => {
                 genesis_config.native_instruction_processors =
                     solana_genesis_programs::get_programs(genesis_config.operating_mode, 0)
                         .unwrap()

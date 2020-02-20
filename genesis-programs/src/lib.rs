@@ -32,7 +32,7 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
                 None
             }
         }
-        OperatingMode::SoftLaunch => {
+        OperatingMode::Stable | OperatingMode::Preview => {
             if epoch == 0 {
                 // No inflation at epoch 0
                 Some(Inflation::new_disabled())
@@ -54,7 +54,7 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
         OperatingMode::Development => {
             if epoch == 0 {
                 Some(vec![
-                    // Enable all SoftLaunch programs
+                    // Enable all Stable programs
                     solana_bpf_loader_program!(),
                     solana_config_program!(),
                     solana_stake_program!(),
@@ -71,7 +71,7 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
                 None
             }
         }
-        OperatingMode::SoftLaunch => {
+        OperatingMode::Stable => {
             if epoch == 0 {
                 Some(vec![
                     solana_config_program!(),
@@ -82,11 +82,28 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
             } else if epoch == std::u64::MAX - 1 {
                 // The epoch of std::u64::MAX - 1 is a placeholder and is expected to be reduced in
                 // a future hard fork.
-                Some(vec![solana_storage_program!(), solana_vest_program!()])
+                Some(vec![solana_bpf_loader_program!()])
             } else if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
                 // future hard fork.
-                Some(vec![solana_bpf_loader_program!()])
+                Some(vec![solana_storage_program!(), solana_vest_program!()])
+            } else {
+                None
+            }
+        }
+        OperatingMode::Preview => {
+            if epoch == 0 {
+                Some(vec![
+                    solana_config_program!(),
+                    solana_stake_program!(),
+                    solana_system_program(),
+                    solana_vote_program!(),
+                    solana_bpf_loader_program!(),
+                ])
+            } else if epoch == std::u64::MAX {
+                // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
+                // future hard fork.
+                Some(vec![solana_storage_program!(), solana_vest_program!()])
             } else {
                 None
             }
@@ -146,12 +163,12 @@ mod tests {
     #[test]
     fn test_softlaunch_inflation() {
         assert_eq!(
-            get_inflation(OperatingMode::SoftLaunch, 0).unwrap(),
+            get_inflation(OperatingMode::Stable, 0).unwrap(),
             Inflation::new_disabled()
         );
-        assert_eq!(get_inflation(OperatingMode::SoftLaunch, 1), None);
+        assert_eq!(get_inflation(OperatingMode::Stable, 1), None);
         assert_eq!(
-            get_inflation(OperatingMode::SoftLaunch, std::u64::MAX).unwrap(),
+            get_inflation(OperatingMode::Stable, std::u64::MAX).unwrap(),
             Inflation::default()
         );
     }
@@ -159,7 +176,7 @@ mod tests {
     #[test]
     fn test_softlaunch_programs() {
         assert_eq!(
-            get_programs(OperatingMode::SoftLaunch, 0),
+            get_programs(OperatingMode::Stable, 0),
             Some(vec![
                 solana_config_program!(),
                 solana_stake_program!(),
@@ -167,8 +184,8 @@ mod tests {
                 solana_vote_program!(),
             ])
         );
-        assert_eq!(get_programs(OperatingMode::SoftLaunch, 1), None);
-        assert!(get_programs(OperatingMode::SoftLaunch, std::u64::MAX - 1).is_some());
-        assert!(get_programs(OperatingMode::SoftLaunch, std::u64::MAX).is_some());
+        assert_eq!(get_programs(OperatingMode::Stable, 1), None);
+        assert!(get_programs(OperatingMode::Stable, std::u64::MAX - 1).is_some());
+        assert!(get_programs(OperatingMode::Stable, std::u64::MAX).is_some());
     }
 }
