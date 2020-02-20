@@ -1,5 +1,7 @@
-use crate::pubkey::Pubkey;
-use crate::signature::{KeypairUtil, Signature};
+use crate::{
+    pubkey::Pubkey,
+    signature::{KeypairUtil, Signature},
+};
 
 pub trait Keypairs {
     fn pubkeys(&self) -> Vec<Pubkey>;
@@ -18,27 +20,15 @@ impl<T: KeypairUtil> Keypairs for [&T] {
     }
 }
 
-impl<T: KeypairUtil, U: KeypairUtil> Keypairs for (T, U) {
+impl Keypairs for [Box<dyn KeypairUtil>] {
     fn pubkeys(&self) -> Vec<Pubkey> {
-        vec![self.0.pubkey(), self.1.pubkey()]
+        self.iter().map(|keypair| keypair.pubkey()).collect()
     }
 
     fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
-        vec![self.0.sign_message(message), self.1.sign_message(message)]
-    }
-}
-
-impl<T: KeypairUtil, U: KeypairUtil, V: KeypairUtil> Keypairs for (T, U, V) {
-    fn pubkeys(&self) -> Vec<Pubkey> {
-        vec![self.0.pubkey(), self.1.pubkey(), self.2.pubkey()]
-    }
-
-    fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
-        vec![
-            self.0.sign_message(message),
-            self.1.sign_message(message),
-            self.2.sign_message(message),
-        ]
+        self.iter()
+            .map(|keypair| keypair.sign_message(message))
+            .collect()
     }
 }
 
@@ -109,5 +99,47 @@ impl<T: KeypairUtil> Keypairs for Vec<&T> {
         self.iter()
             .map(|keypair| keypair.sign_message(message))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error;
+
+    struct Foo;
+    impl KeypairUtil for Foo {
+        fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+            Ok(Pubkey::default())
+        }
+        fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+            Ok(Signature::default())
+        }
+    }
+
+    struct Bar;
+    impl KeypairUtil for Bar {
+        fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+            Ok(Pubkey::default())
+        }
+        fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+            Ok(Signature::default())
+        }
+    }
+
+    #[test]
+    fn test_dyn_keypairs_compile() {
+        let xs: Vec<Box<dyn KeypairUtil>> = vec![Box::new(Foo {}), Box::new(Bar {})];
+        assert_eq!(
+            xs.sign_message(b""),
+            vec![Signature::default(), Signature::default()],
+        );
+
+        // Same as above, but less compiler magic.
+        let xs_ref: &[Box<dyn KeypairUtil>] = &xs;
+        assert_eq!(
+            Keypairs::sign_message(xs_ref, b""),
+            vec![Signature::default(), Signature::default()],
+        );
     }
 }
