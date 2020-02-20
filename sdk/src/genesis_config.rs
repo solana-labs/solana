@@ -25,8 +25,9 @@ use std::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum OperatingMode {
-    SoftLaunch,  // Cluster features incrementally enabled over time
-    Development, // All features (including experimental features) available immediately from genesis
+    Stable,      // Stable cluster features
+    Preview,     // Next set of cluster features to be promoted to Stable
+    Development, // All features (including experimental features)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
