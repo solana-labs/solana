@@ -287,7 +287,7 @@ deploy() {
       set -x
       ci/testnet-deploy.sh -p devnet-solana-com -C gce -z us-west1-b \
         -t "$CHANNEL_OR_TAG" -n 0 -c 0 -u -P \
-        -a devnet-solana-com --letsencrypt devnet.solana.com \
+        -a testnet-solana-com --letsencrypt devnet.solana.com \
         --limit-ledger-size \
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
