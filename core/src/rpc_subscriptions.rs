@@ -203,7 +203,7 @@ fn filter_program_results(
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: RpcAccount::encode(account.clone()),
+                account: RpcAccount::encode(account),
             }),
     )
 }
