@@ -58,9 +58,10 @@ pub enum StakeInstruction {
     ///    requires Authorized::staker or Authorized::withdrawer
     ///    signature, depending on which key's being updated
     ///
-    /// Expects 1 Account:
+    /// Expects 2 Accounts:
     ///    0 - StakeAccount to be updated with the Pubkey for
     ///          authorization
+    ///    1 - Clock sysvar Account that carries clock bank epoch
     Authorize(Pubkey, StakeAuthorize),
 
     /// `Delegate` a stake to a particular vote account
