@@ -63,9 +63,23 @@ pub enum CrdsData {
     EpochSlots(EpochSlotIndex, EpochSlots),
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum CompressionType {
+    Uncompressed,
+    GZip,
+    BZip2,
+}
+
+impl Default for CompressionType {
+    fn default() -> Self {
+        Self::Uncompressed
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct EpochIncompleteSlots {
     pub first: Slot,
+    pub compression: CompressionType,
     pub compressed_list: Vec<u8>,
 }
 
