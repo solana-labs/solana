@@ -142,7 +142,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_target_tick_duration =
         timing::duration_as_us(&PohConfig::default().target_tick_duration);
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
-    let default_operating_mode = "softlaunch";
+    let default_operating_mode = "stable";
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -350,12 +350,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("operating_mode")
                 .long("operating-mode")
                 .possible_value("development")
-                .possible_value("softlaunch")
+                .possible_value("preview")
+                .possible_value("stable")
                 .takes_value(true)
                 .default_value(default_operating_mode)
                 .help(
-                    "Configure the cluster for \"development\" mode where all features are available at epoch 0, \
-                    or \"softlaunch\" mode where some features are disabled at epoch 0"
+                    "Selects the features that will be enabled for the cluster"
                 ),
         )
         .get_matches();
@@ -456,10 +456,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Duration::from_micros(default_target_tick_duration)
     };
 
-    let operating_mode = if matches.value_of("operating_mode").unwrap() == "development" {
-        OperatingMode::Development
-    } else {
-        OperatingMode::SoftLaunch
+    let operating_mode = match matches.value_of("operating_mode").unwrap() {
+        "development" => OperatingMode::Development,
+        "stable" => OperatingMode::Stable,
+        "preview" => OperatingMode::Preview,
+        _ => unreachable!(),
     };
 
     match matches.value_of("hashes_per_tick").unwrap() {
@@ -469,7 +470,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
                 poh_config.hashes_per_tick = Some(hashes_per_tick);
             }
-            OperatingMode::SoftLaunch => {
+            OperatingMode::Stable | OperatingMode::Preview => {
                 poh_config.hashes_per_tick =
                     Some(clock::DEFAULT_HASHES_PER_SECOND / clock::DEFAULT_TICKS_PER_SECOND);
             }
@@ -487,7 +488,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     } else {
         match operating_mode {
             OperatingMode::Development => clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
-            OperatingMode::SoftLaunch => clock::DEFAULT_SLOTS_PER_EPOCH,
+            OperatingMode::Stable | OperatingMode::Preview => clock::DEFAULT_SLOTS_PER_EPOCH,
         }
     };
     let epoch_schedule = EpochSchedule::new(slots_per_epoch);

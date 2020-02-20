@@ -552,7 +552,7 @@ fn test_softlaunch_operating_mode() {
     solana_logger::setup();
 
     let config = ClusterConfig {
-        operating_mode: OperatingMode::SoftLaunch,
+        operating_mode: OperatingMode::Stable,
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![ValidatorConfig::default(); 1],
