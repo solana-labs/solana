@@ -504,6 +504,14 @@ impl ClusterInfo {
             .collect()
     }
 
+    pub fn get_snapshot_hash_for_node(&self, pubkey: &Pubkey) -> Option<&Vec<(Slot, Hash)>> {
+        self.gossip
+            .crds
+            .table
+            .get(&CrdsValueLabel::SnapshotHash(*pubkey))
+            .map(|x| &x.value.snapshot_hash().unwrap().hashes)
+    }
+
     pub fn get_epoch_state_for_node(
         &self,
         pubkey: &Pubkey,
