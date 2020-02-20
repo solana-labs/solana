@@ -228,13 +228,7 @@ impl VoteState {
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
         deserialize::<VoteStateVersions>(&input)
-            .map(|versioned| {
-                if let VoteStateVersions::Current(versioned) = versioned.to_current() {
-                    *versioned
-                } else {
-                    panic!("to_current has to return the Current")
-                }
-            })
+            .map(|versioned| versioned.convert_to_current())
             .map_err(|_| InstructionError::InvalidAccountData)
     }
 
@@ -550,7 +544,8 @@ pub fn authorize(
     signers: &HashSet<Pubkey>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
+    let mut vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
     // current authorized signer must say "yay"
     match vote_authorize {
@@ -578,7 +573,8 @@ pub fn update_node(
     signers: &HashSet<Pubkey>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
+    let mut vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
     let authorized_voter = vote_state
         .get_and_update_authorized_voter(clock.epoch)
         .expect("the clock epoch is monotonically increasing, so authorized voter must be known");
@@ -609,7 +605,8 @@ pub fn withdraw(
     to_account: &KeyedAccount,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    let vote_state: VoteState = vote_account.state()?;
+    let vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
@@ -629,7 +626,8 @@ pub fn initialize_account(
     vote_init: &VoteInit,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    let vote_state: VoteState = vote_account.state()?;
+    let vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
     if !vote_state.authorized_voters.is_empty() {
         return Err(InstructionError::AccountAlreadyInitialized);
@@ -647,7 +645,8 @@ pub fn process_vote(
     vote: &Vote,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
+    let mut vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
     if vote_state.authorized_voters.is_empty() {
         return Err(InstructionError::UninitializedAccount);

@@ -14,7 +14,7 @@ use solana_sdk::{
     rent::Rent,
     stake_history::{StakeHistory, StakeHistoryEntry},
 };
-use solana_vote_program::vote_state::VoteState;
+use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
 use std::collections::HashSet;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -595,7 +595,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 let stake = Stake::new(
                     self.lamports()?.saturating_sub(meta.rent_exempt_reserve), // can't stake the rent ;)
                     vote_account.unsigned_key(),
-                    &vote_account.state()?,
+                    &State::<VoteStateVersions>::state(vote_account)?.convert_to_current(),
                     clock.epoch,
                     config,
                 );
@@ -605,7 +605,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 stake.redelegate(
                     vote_account.unsigned_key(),
-                    &vote_account.state()?,
+                    &State::<VoteStateVersions>::state(vote_account)?.convert_to_current(),
                     clock,
                     stake_history,
                     config,
@@ -778,7 +778,8 @@ pub fn redeem_rewards(
     stake_history: Option<&StakeHistory>,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
-        let vote_state = vote_account.state()?;
+        let vote_state: VoteState =
+            StateMut::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
         if let Some((voters_reward, stakers_reward)) =
             stake.redeem_rewards(point_value, &vote_state, stake_history)

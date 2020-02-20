@@ -8,7 +8,7 @@ pub enum VoteStateVersions {
 }
 
 impl VoteStateVersions {
-    pub fn to_current(&self) -> VoteStateVersions {
+    pub fn convert_to_current(self) -> VoteState {
         match self {
             VoteStateVersions::V0_23_5(state) => {
                 let authorized_voters =
@@ -43,9 +43,9 @@ impl VoteStateVersions {
                     /// most recent timestamp submitted with a vote
                     last_timestamp: state.last_timestamp.clone(),
                 };
-                VoteStateVersions::Current(Box::new(current_state))
+                current_state
             }
-            VoteStateVersions::Current(state) => VoteStateVersions::Current(state.clone()),
+            VoteStateVersions::Current(state) => *state,
         }
     }
 }
