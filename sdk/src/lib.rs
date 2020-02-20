@@ -12,7 +12,6 @@ pub mod fee_calculator;
 pub mod hash;
 pub mod inflation;
 pub mod instruction;
-pub mod keypairs;
 pub mod loader_instruction;
 pub mod message;
 pub mod move_loader;
@@ -70,6 +69,8 @@ pub mod bank_hash;
 pub mod client;
 #[cfg(not(feature = "program"))]
 pub mod genesis_config;
+#[cfg(not(feature = "program"))]
+pub mod keypairs;
 #[cfg(not(feature = "program"))]
 pub mod signature;
 #[cfg(not(feature = "program"))]
