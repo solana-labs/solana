@@ -9,7 +9,7 @@ use solana_ledger::{
     bank_forks_utils,
     blockstore::Blockstore,
     blockstore_db::{self, Column, Database},
-    blockstore_processor::{BankForksInfo, BlockstoreProcessorResult, ProcessOptions},
+    blockstore_processor::{BankForksInfo, ProcessOptions},
     rooted_slot_iterator::RootedSlotIterator,
     shred_version::compute_shred_version,
     snapshot_utils,
@@ -529,7 +529,7 @@ fn load_bank_forks(
     ledger_path: &PathBuf,
     genesis_config: &GenesisConfig,
     process_options: ProcessOptions,
-) -> BlockstoreProcessorResult {
+) -> bank_forks_utils::LoadResult {
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
@@ -775,7 +775,7 @@ fn main() {
             };
             let genesis_config = open_genesis_config(&ledger_path);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank_info = &bank_forks_info[0];
                     let bank = bank_forks[bank_info.bank_slot].clone();
 
@@ -849,7 +849,7 @@ fn main() {
                 &open_genesis_config(&ledger_path),
                 process_options,
             ) {
-                Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let dot = graph_forks(
                         &bank_forks,
                         &bank_forks_info,
@@ -889,7 +889,7 @@ fn main() {
             };
             let genesis_config = open_genesis_config(&ledger_path);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, _bank_forks_info, _leader_schedule_cache)) => {
+                Ok((bank_forks, _bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", snapshot_slot);
                         exit(1);
@@ -950,7 +950,7 @@ fn main() {
             };
             let genesis_config = open_genesis_config(&ledger_path);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, bank_forks_info, _leader_schedule_cache)) => {
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = dev_halt_at_slot.unwrap_or_else(|| {
                         if bank_forks_info.len() > 1 {
                             eprintln!("Error: multiple forks present");

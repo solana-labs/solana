@@ -38,7 +38,6 @@ use solana_sdk::{
     clock::{Slot, DEFAULT_SLOTS_PER_TURN},
     genesis_config::GenesisConfig,
     hash::Hash,
-    poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     timing::timestamp,
@@ -159,14 +158,14 @@ impl Validator {
 
         info!("creating bank...");
         let (
-            genesis_hash,
+            genesis_config,
             bank_forks,
             bank_forks_info,
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
-            poh_config,
+            snapshot_hash,
         ) = new_banks_from_blockstore(
             config.expected_genesis_hash,
             ledger_path,
@@ -196,8 +195,10 @@ impl Validator {
         let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         node.info.wallclock = timestamp();
-        node.info.shred_version =
-            compute_shred_version(&genesis_hash, Some(&bank.hard_forks().read().unwrap()));
+        node.info.shred_version = compute_shred_version(
+            &genesis_config.hash(),
+            Some(&bank.hard_forks().read().unwrap()),
+        );
         Self::print_node_info(&node);
 
         if let Some(expected_shred_version) = config.expected_shred_version {
@@ -241,7 +242,7 @@ impl Validator {
                     block_commitment_cache.clone(),
                     blockstore.clone(),
                     cluster_info.clone(),
-                    genesis_hash,
+                    genesis_config.hash(),
                     ledger_path,
                     storage_state.clone(),
                     validator_exit.clone(),
@@ -299,7 +300,7 @@ impl Validator {
             std::thread::park();
         }
 
-        let poh_config = Arc::new(poh_config);
+        let poh_config = Arc::new(genesis_config.poh_config);
         let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -341,6 +342,14 @@ impl Validator {
                 .write()
                 .unwrap()
                 .set_entrypoint(entrypoint_info.clone());
+        }
+
+        // If the node was loaded from a snapshot, advertise it in gossip
+        if let Some(snapshot_hash) = snapshot_hash {
+            cluster_info
+                .write()
+                .unwrap()
+                .push_snapshot_hashes(vec![snapshot_hash]);
         }
 
         wait_for_supermajority(config, &bank, &cluster_info);
@@ -505,20 +514,21 @@ impl Validator {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn new_banks_from_blockstore(
     expected_genesis_hash: Option<Hash>,
     blockstore_path: &Path,
     poh_verify: bool,
     config: &ValidatorConfig,
 ) -> (
-    Hash,
+    GenesisConfig,
     BankForks,
     Vec<BankForksInfo>,
     Blockstore,
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
-    PohConfig,
+    Option<(Slot, Hash)>,
 ) {
     let genesis_config = GenesisConfig::load(blockstore_path).unwrap_or_else(|err| {
         error!("Failed to load genesis from {:?}: {}", blockstore_path, err);
@@ -548,31 +558,32 @@ fn new_banks_from_blockstore(
         ..blockstore_processor::ProcessOptions::default()
     };
 
-    let (mut bank_forks, bank_forks_info, mut leader_schedule_cache) = bank_forks_utils::load(
-        &genesis_config,
-        &blockstore,
-        config.account_paths.clone(),
-        config.snapshot_config.as_ref(),
-        process_options,
-    )
-    .unwrap_or_else(|err| {
-        error!("Failed to load ledger: {:?}", err);
-        std::process::exit(1);
-    });
+    let (mut bank_forks, bank_forks_info, mut leader_schedule_cache, snapshot_hash) =
+        bank_forks_utils::load(
+            &genesis_config,
+            &blockstore,
+            config.account_paths.clone(),
+            config.snapshot_config.as_ref(),
+            process_options,
+        )
+        .unwrap_or_else(|err| {
+            error!("Failed to load ledger: {:?}", err);
+            std::process::exit(1);
+        });
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
 
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
 
     (
-        genesis_hash,
+        genesis_config,
         bank_forks,
         bank_forks_info,
         blockstore,
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
-        genesis_config.poh_config,
+        snapshot_hash,
     )
 }
 
