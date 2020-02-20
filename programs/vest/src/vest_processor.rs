@@ -188,7 +188,7 @@ mod tests {
         instructions.push(date_instruction::store(&date_pubkey, date));
 
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair, &date_keypair], message)
+        bank_client.send_message(&[payer_keypair, date_keypair], message)
     }
 
     fn store_date(
@@ -200,7 +200,7 @@ mod tests {
         let date_pubkey = date_keypair.pubkey();
         let instruction = date_instruction::store(&date_pubkey, date);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[&payer_keypair, &date_keypair], message)
+        bank_client.send_message(&[payer_keypair, date_keypair], message)
     }
 
     fn create_vest_account(
@@ -223,7 +223,7 @@ mod tests {
             lamports,
         );
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair, &contract_keypair], message)
+        bank_client.send_message(&[payer_keypair, contract_keypair], message)
     }
 
     fn send_set_terminator(
@@ -258,7 +258,7 @@ mod tests {
         let instruction =
             vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[&payer_keypair], message)
+        bank_client.send_message(&[payer_keypair], message)
     }
 
     #[test]

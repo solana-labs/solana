@@ -428,7 +428,7 @@ pub unsafe extern "C" fn deserialize_transaction(
 /// # Undefined Behavior
 ///
 /// Causes UB if any of the pointers is `NULL`, or if `keypairs` does not point to a valid array of
-/// `Keypairs` of length `num_keypairs`
+/// `Signers` of length `num_keypairs`
 ///
 /// # Safety
 #[no_mangle]
@@ -453,7 +453,11 @@ pub unsafe extern "C" fn transaction_partial_sign(
     };
     let keypairs_ref: Vec<&KeypairNative> = keypairs.iter().collect();
 
-    let positions = if let Ok(v) = tx_native.get_signing_keypair_positions(&keypairs_ref[..]) {
+    let pubkeys: Vec<_> = keypairs_ref
+        .iter()
+        .map(|keypair| keypair.pubkey())
+        .collect();
+    let positions = if let Ok(v) = tx_native.get_signing_keypair_positions(&pubkeys) {
         v
     } else {
         return 2;
@@ -467,7 +471,7 @@ pub unsafe extern "C" fn transaction_partial_sign(
         return 3;
     };
 
-    tx_native.partial_sign_unchecked(&keypairs_ref[..], positions, *recent_blockhash);
+    tx_native.partial_sign_unchecked(&keypairs_ref, positions, *recent_blockhash);
     *tx = Transaction::from_native(tx_native);
     Box::into_raw(tx);
     0

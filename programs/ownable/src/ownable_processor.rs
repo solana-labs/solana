@@ -94,7 +94,7 @@ mod tests {
             lamports,
         );
         let message = Message::new(instructions);
-        bank_client.send_message(&[&payer_keypair, &account_keypair], message)
+        bank_client.send_message(&[payer_keypair, account_keypair], message)
     }
 
     fn send_set_owner(
@@ -110,7 +110,7 @@ mod tests {
             new_owner_pubkey,
         );
         let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
-        bank_client.send_message(&[&payer_keypair, &old_owner_keypair], message)
+        bank_client.send_message(&[payer_keypair, old_owner_keypair], message)
     }
 
     #[test]

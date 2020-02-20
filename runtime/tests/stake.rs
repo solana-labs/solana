@@ -61,7 +61,7 @@ fn fill_epoch_with_votes(
             Some(&mint_pubkey),
         );
         assert!(bank_client
-            .send_message(&[&mint_keypair, &vote_keypair], message)
+            .send_message(&[mint_keypair, vote_keypair], message)
             .is_ok());
     }
     bank

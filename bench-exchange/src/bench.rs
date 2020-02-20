@@ -701,7 +701,7 @@ fn verify_funding_transfer<T: SyncClient + ?Sized>(
     false
 }
 
-pub fn fund_keys(client: &dyn Client, source: &Keypair, dests: &[Arc<Keypair>], lamports: u64) {
+pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>], lamports: u64) {
     let total = lamports * (dests.len() as u64 + 1);
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Arc<Keypair>> = dests.iter().collect();
@@ -824,7 +824,11 @@ pub fn fund_keys(client: &dyn Client, source: &Keypair, dests: &[Arc<Keypair>], 
     }
 }
 
-pub fn create_token_accounts(client: &dyn Client, signers: &[Arc<Keypair>], accounts: &[Keypair]) {
+pub fn create_token_accounts<T: Client>(
+    client: &T,
+    signers: &[Arc<Keypair>],
+    accounts: &[Keypair],
+) {
     let mut notfunded: Vec<(&Arc<Keypair>, &Keypair)> = signers.iter().zip(accounts).collect();
 
     while !notfunded.is_empty() {
@@ -968,7 +972,12 @@ fn generate_keypairs(num: u64) -> Vec<Keypair> {
     rnd.gen_n_keypairs(num)
 }
 
-pub fn airdrop_lamports(client: &dyn Client, faucet_addr: &SocketAddr, id: &Keypair, amount: u64) {
+pub fn airdrop_lamports<T: Client>(
+    client: &T,
+    faucet_addr: &SocketAddr,
+    id: &Keypair,
+    amount: u64,
+) {
     let balance = client.get_balance_with_commitment(&id.pubkey(), CommitmentConfig::recent());
     let balance = balance.unwrap_or(0);
     if balance >= amount {
