@@ -3,8 +3,9 @@ use solana_client::{
     rpc_client::RpcClient,
 };
 use solana_core::{
-    rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
-    validator::new_validator_for_tests,
+    rpc_pubsub_service::PubSubService,
+    rpc_subscriptions::RpcSubscriptions,
+    validator::{new_validator_for_tests, ValidatorExit},
 };
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::KeypairUtil,
@@ -15,12 +16,19 @@ use std::{
     net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, RwLock,
     },
     thread::sleep,
     time::{Duration, Instant},
 };
 use systemstat::Ipv4Addr;
+
+fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option<ValidatorExit>>> {
+    let mut validator_exit = ValidatorExit::default();
+    let exit_ = exit.clone();
+    validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+    Arc::new(RwLock::new(Some(validator_exit)))
+}
 
 #[test]
 fn test_rpc_client() {
@@ -79,8 +87,9 @@ fn test_slot_subscription() {
         rpc_port::DEFAULT_RPC_PUBSUB_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
+    let validator_exit = create_validator_exit(&exit);
     let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
-    let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
+    let pubsub_service = PubSubService::new(pubsub_addr, subscriptions.clone(), validator_exit);
     std::thread::sleep(Duration::from_millis(400));
 
     let (mut client, receiver) =
@@ -114,7 +123,7 @@ fn test_slot_subscription() {
 
     exit.store(true, Ordering::Relaxed);
     client.shutdown().unwrap();
-    pubsub_service.close().unwrap();
+    pubsub_service.exit();
 
     assert_eq!(errors, [].to_vec());
 }

@@ -1,78 +1,89 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl};
-use crate::rpc_subscriptions::RpcSubscriptions;
+use crate::{
+    rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+    rpc_subscriptions::RpcSubscriptions,
+    validator::ValidatorExit,
+};
 use jsonrpc_pubsub::{PubSubHandler, Session};
-use jsonrpc_ws_server::{RequestContext, ServerBuilder};
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
+use jsonrpc_ws_server::{CloseHandle, RequestContext, ServerBuilder};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 
+#[derive(Default)]
 pub struct PubSubService {
-    thread_hdl: JoinHandle<()>,
+    close_handle: Option<CloseHandle>,
 }
 
 impl PubSubService {
     pub fn new(
-        subscriptions: &Arc<RpcSubscriptions>,
         pubsub_addr: SocketAddr,
-        exit: &Arc<AtomicBool>,
+        subscriptions: Arc<RpcSubscriptions>,
+        validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
-        let exit_ = exit.clone();
-        let thread_hdl = Builder::new()
-            .name("solana-pubsub".to_string())
-            .spawn(move || {
-                let mut io = PubSubHandler::default();
-                io.extend_with(rpc.to_delegate());
+        let rpc = RpcSolPubSubImpl::new(subscriptions);
+        let mut io = PubSubHandler::default();
+        io.extend_with(rpc.to_delegate());
 
-                let server = ServerBuilder::with_meta_extractor(io, |context: &RequestContext| {
-                        info!("New pubsub connection");
-                        let session = Arc::new(Session::new(context.sender()));
-                        session.on_drop(|| {
-                            info!("Pubsub connection dropped");
-                        });
-                        session
-                })
-                .start(&pubsub_addr);
+        // Start pub sub server in new thread
+        let server = ServerBuilder::with_meta_extractor(io, |context: &RequestContext| {
+            info!("New pubsub connection");
+            let session = Arc::new(Session::new(context.sender()));
+            session.on_drop(|| {
+                info!("Pubsub connection dropped");
+            });
+            session
+        })
+        .start(&pubsub_addr);
 
-                if let Err(e) = server {
-                    warn!("Pubsub service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", e, pubsub_addr.port());
-                    return;
+        match server {
+            Ok(server) => {
+                let close_handle = server.close_handle();
+                let close_handle_ = close_handle.clone();
+
+                let mut validator_exit_write = validator_exit.write().unwrap();
+                validator_exit_write
+                    .as_mut()
+                    .unwrap()
+                    .register_exit(Box::new(move || close_handle_.close()));
+
+                Self {
+                    close_handle: Some(close_handle),
                 }
-                while !exit_.load(Ordering::Relaxed) {
-                    sleep(Duration::from_millis(100));
-                }
-                server.unwrap().close();
-            })
-            .unwrap();
-        Self { thread_hdl }
+            }
+            Err(err) => {
+                warn!("Pubsub service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", err, pubsub_addr.port());
+                Self::default()
+            }
+        }
     }
 
-    pub fn close(self) -> thread::Result<()> {
-        self.join()
-    }
-
-    pub fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
+    pub fn exit(mut self) {
+        if let Some(c) = self.close_handle.take() {
+            c.close()
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr};
+    use crate::rpc::tests::create_validator_exit;
+    use std::{
+        net::{IpAddr, Ipv4Addr},
+        sync::atomic::AtomicBool,
+    };
 
     #[test]
     fn test_pubsub_new() {
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
         let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
-        let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
-        let thread = pubsub_service.thread_hdl.thread();
-        assert_eq!(thread.name().unwrap(), "solana-pubsub");
+        let pubsub_service = PubSubService::new(pubsub_addr, subscriptions, validator_exit);
+        pubsub_service.exit();
     }
 }

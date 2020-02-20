@@ -247,9 +247,9 @@ impl Validator {
                     validator_exit.clone(),
                 ),
                 PubSubService::new(
-                    &subscriptions,
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
-                    &exit,
+                    subscriptions.clone(),
+                    validator_exit.clone(),
                 ),
             )
         });
@@ -485,7 +485,7 @@ impl Validator {
         drop(self.poh_recorder);
         if let Some((rpc_service, rpc_pubsub_service)) = self.rpc_service {
             rpc_service.join()?;
-            rpc_pubsub_service.join()?;
+            rpc_pubsub_service.exit();
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service.join()?;
