@@ -1934,7 +1934,12 @@ pub mod tests {
 
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDB, slot: Slot) -> AccountsDB {
         let mut writer = Cursor::new(vec![]);
-        serialize_into(&mut writer, &AccountsDBSerialize::new(&accounts, slot)).unwrap();
+        let snapshot_storages = accounts.get_snapshot_storages(slot);
+        serialize_into(
+            &mut writer,
+            &AccountsDBSerialize::new(&accounts, slot, &snapshot_storages),
+        )
+        .unwrap();
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
@@ -2277,7 +2282,7 @@ pub mod tests {
         accounts_db: &AccountsDB,
         output_dir: P,
     ) -> IOResult<()> {
-        let storage_entries = accounts_db.get_snapshot_storages(Slot::MAX);
+        let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
         for storage in storage_entries.iter().flatten() {
             let storage_path = storage.get_path();
             let output_path = output_dir.as_ref().join(

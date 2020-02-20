@@ -1343,7 +1343,11 @@ mod tests {
         let mut writer = Cursor::new(vec![]);
         serialize_into(
             &mut writer,
-            &AccountsDBSerialize::new(&*accounts.accounts_db, 0),
+            &AccountsDBSerialize::new(
+                &*accounts.accounts_db,
+                0,
+                &accounts.accounts_db.get_snapshot_storages(0),
+            ),
         )
         .unwrap();
 
