@@ -6,11 +6,12 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::Instruction,
+    keypairs::Keypairs,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
     system_instruction,
-    transaction::{self, Keypairs, Transaction},
+    transaction::{self, Transaction},
     transport::{Result, TransportError},
 };
 use std::{

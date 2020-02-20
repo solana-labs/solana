@@ -12,6 +12,7 @@ pub mod fee_calculator;
 pub mod hash;
 pub mod inflation;
 pub mod instruction;
+pub mod keypairs;
 pub mod loader_instruction;
 pub mod message;
 pub mod move_loader;

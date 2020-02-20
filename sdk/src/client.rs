@@ -14,10 +14,11 @@ use crate::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::Instruction,
+    keypairs::Keypairs,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
-    transaction::{self, Keypairs},
+    transaction,
     transport::Result,
 };
 use std::io;

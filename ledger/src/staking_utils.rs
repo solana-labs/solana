@@ -106,13 +106,14 @@ pub(crate) mod tests {
     use solana_sdk::{
         clock::Clock,
         instruction::Instruction,
+        keypairs::Keypairs,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
         sysvar::{
             stake_history::{self, StakeHistory},
             Sysvar,
         },
-        transaction::{Keypairs, Transaction},
+        transaction::Transaction,
     };
     use solana_stake_program::{
         stake_instruction,
