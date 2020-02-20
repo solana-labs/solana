@@ -331,19 +331,10 @@ impl Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-<<<<<<< HEAD
     use crate::hash::hash;
     use crate::instruction::AccountMeta;
-    use crate::signature::Keypair;
+    use crate::signature::{Keypair, KeypairUtil};
     use crate::system_instruction;
-=======
-    use crate::{
-        hash::hash,
-        instruction::AccountMeta,
-        signature::{Keypair, KeypairUtil},
-        system_instruction,
-    };
->>>>>>> e8124324f... Support transaction signing by heterogenous lists of keypairs (#8342)
     use bincode::{deserialize, serialize, serialized_size};
     use std::mem::size_of;
 
