@@ -108,6 +108,7 @@ pub(crate) mod tests {
         instruction::Instruction,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
+        signers::Signers,
         sysvar::{
             stake_history::{self, StakeHistory},
             Sysvar,
@@ -133,18 +134,14 @@ pub(crate) mod tests {
         amount: u64,
     ) {
         let vote_pubkey = vote_account.pubkey();
-        fn process_instructions<T: KeypairUtil>(
-            bank: &Bank,
-            keypairs: &[&T],
-            ixs: Vec<Instruction>,
-        ) {
-            bank.process_transaction(&Transaction::new_signed_with_payer(
+        fn process_instructions<T: Signers>(bank: &Bank, keypairs: &T, ixs: Vec<Instruction>) {
+            let tx = Transaction::new_signed_with_payer(
                 ixs,
-                Some(&keypairs[0].pubkey()),
+                Some(&keypairs.pubkeys()[0]),
                 keypairs,
                 bank.last_blockhash(),
-            ))
-            .unwrap();
+            );
+            bank.process_transaction(&tx).unwrap();
         }
 
         process_instructions(
