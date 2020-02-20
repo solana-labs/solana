@@ -1,3 +1,4 @@
+use crate::cluster_info::ClusterInfo;
 use solana_ledger::{
     snapshot_package::SnapshotPackageReceiver, snapshot_utils::archive_snapshot_package,
 };
@@ -5,7 +6,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::RecvTimeoutError,
-        Arc,
+        Arc, RwLock,
     },
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -15,25 +16,42 @@ pub struct SnapshotPackagerService {
     t_snapshot_packager: JoinHandle<()>,
 }
 
+const MAX_SNAPSHOT_HASHES: usize = 24;
+
 impl SnapshotPackagerService {
-    pub fn new(snapshot_package_receiver: SnapshotPackageReceiver, exit: &Arc<AtomicBool>) -> Self {
+    pub fn new(
+        snapshot_package_receiver: SnapshotPackageReceiver,
+        exit: &Arc<AtomicBool>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+    ) -> Self {
         let exit = exit.clone();
+        let cluster_info = cluster_info.clone();
         let t_snapshot_packager = Builder::new()
             .name("solana-snapshot-packager".to_string())
             .spawn(move || loop {
+                let mut hashes = vec![];
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
 
                 match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
                     Ok(mut snapshot_package) => {
+                        hashes.push((snapshot_package.root, snapshot_package.hash));
                         // Only package the latest
                         while let Ok(new_snapshot_package) = snapshot_package_receiver.try_recv() {
                             snapshot_package = new_snapshot_package;
+                            hashes.push((snapshot_package.root, snapshot_package.hash));
                         }
                         if let Err(err) = archive_snapshot_package(&snapshot_package) {
                             warn!("Failed to create snapshot archive: {}", err);
                         }
+                        while hashes.len() > MAX_SNAPSHOT_HASHES {
+                            hashes.remove(0);
+                        }
+                        cluster_info
+                            .write()
+                            .unwrap()
+                            .push_snapshot_hashes(hashes.clone());
                     }
                     Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => (),
@@ -61,6 +79,7 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry, bank::BankSlotDelta, bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
     };
+    use solana_sdk::hash::Hash;
     use std::{
         fs::{self, remove_dir_all, OpenOptions},
         io::Write,
@@ -139,6 +158,7 @@ mod tests {
             link_snapshots_dir,
             storage_entries.clone(),
             output_tar_path.clone(),
+            Hash::default(),
         );
 
         // Make tarball from packageable snapshot

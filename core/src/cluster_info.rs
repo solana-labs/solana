@@ -21,7 +21,7 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, Vote},
+    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Vote},
     packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
@@ -43,6 +43,7 @@ use solana_net_utils::{
 };
 use solana_perf::packet::{to_packets_with_destination, Packets, PacketsRecycler};
 use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::hash::Hash;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT},
     pubkey::Pubkey,
@@ -436,6 +437,16 @@ impl ClusterInfo {
             .process_push_message(&self.id(), vec![entry], now);
     }
 
+    pub fn push_snapshot_hashes(&mut self, snapshot_hashes: Vec<(Slot, Hash)>) {
+        let now = timestamp();
+        let entry = CrdsValue::new_signed(
+            CrdsData::SnapshotHash(SnapshotHash::new(self.id(), snapshot_hashes, now)),
+            &self.keypair,
+        );
+        self.gossip
+            .process_push_message(&self.id(), vec![entry], now);
+    }
+
     pub fn push_vote(&mut self, tower_index: usize, vote: Transaction) {
         let now = timestamp();
         let vote = Vote::new(&self.id(), vote, now);
@@ -474,6 +485,23 @@ impl ClusterInfo {
         let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
         inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
         (txs, max_ts)
+    }
+
+    pub fn get_snapshot_hash(&self, slot: Slot) -> Vec<(Pubkey, Hash)> {
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.snapshot_hash().map(|v| v))
+            .filter_map(|x| {
+                for (table_slot, hash) in &x.hashes {
+                    if *table_slot == slot {
+                        return Some((x.from, *hash));
+                    }
+                }
+                None
+            })
+            .collect()
     }
 
     pub fn get_epoch_state_for_node(

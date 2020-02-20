@@ -1,5 +1,6 @@
 use solana_runtime::{accounts_db::AccountStorageEntry, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
+use solana_sdk::hash::Hash;
 use std::{
     path::PathBuf,
     sync::{
@@ -20,6 +21,7 @@ pub struct SnapshotPackage {
     pub snapshot_links: TempDir,
     pub storage_entries: Vec<Arc<AccountStorageEntry>>,
     pub tar_output_file: PathBuf,
+    pub hash: Hash,
 }
 
 impl SnapshotPackage {
@@ -29,6 +31,7 @@ impl SnapshotPackage {
         snapshot_links: TempDir,
         storage_entries: Vec<Arc<AccountStorageEntry>>,
         tar_output_file: PathBuf,
+        hash: Hash,
     ) -> Self {
         Self {
             root,
@@ -36,6 +39,7 @@ impl SnapshotPackage {
             snapshot_links,
             storage_entries,
             tar_output_file,
+            hash,
         }
     }
 }
