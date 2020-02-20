@@ -744,7 +744,7 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
-        let tx = Transaction::new_with_compiled_instructions::<Keypair>(
+        let tx = Transaction::new_with_compiled_instructions::<[&Keypair; 0]>(
             &[],
             &[],
             Hash::default(),

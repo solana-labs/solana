@@ -18,6 +18,7 @@ use solana_sdk::{
     packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
+    signers::Signers,
     system_instruction,
     timing::duration_as_ms,
     transaction::{self, Transaction},
@@ -202,9 +203,9 @@ impl ThinClient {
     }
 
     /// Retry sending a signed Transaction to the server for processing
-    pub fn send_and_confirm_transaction(
+    pub fn send_and_confirm_transaction<T: Signers>(
         &self,
-        keypairs: &[&Keypair],
+        keypairs: &T,
         transaction: &mut Transaction,
         tries: usize,
         pending_confirmations: usize,
@@ -351,9 +352,13 @@ impl Client for ThinClient {
 }
 
 impl SyncClient for ThinClient {
-    fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {
+    fn send_message<T: Signers>(
+        &self,
+        keypairs: &T,
+        message: Message,
+    ) -> TransportResult<Signature> {
         let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
-        let mut transaction = Transaction::new(&keypairs, message, blockhash);
+        let mut transaction = Transaction::new(keypairs, message, blockhash);
         let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0)?;
         Ok(signature)
     }
@@ -561,13 +566,13 @@ impl AsyncClient for ThinClient {
             .send_to(&buf[..], &self.tpu_addr())?;
         Ok(transaction.signatures[0])
     }
-    fn async_send_message(
+    fn async_send_message<T: Signers>(
         &self,
-        keypairs: &[&Keypair],
+        keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {
-        let transaction = Transaction::new(&keypairs, message, recent_blockhash);
+        let transaction = Transaction::new(keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
     fn async_send_instruction(

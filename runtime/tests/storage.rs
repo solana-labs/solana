@@ -371,7 +371,7 @@ fn submit_proof(
     );
 
     assert_matches!(
-        bank_client.send_message(&[&mint_keypair, &storage_keypair], message),
+        bank_client.send_message(&[mint_keypair, storage_keypair], message),
         Ok(_)
     );
     ProofStatus::Valid

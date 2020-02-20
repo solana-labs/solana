@@ -9,6 +9,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
+    signers::Signers,
     system_instruction,
     transaction::{self, Transaction},
     transport::{Result, TransportError},
@@ -42,13 +43,13 @@ impl AsyncClient for BankClient {
         Ok(signature)
     }
 
-    fn async_send_message(
+    fn async_send_message<T: Signers>(
         &self,
-        keypairs: &[&Keypair],
+        keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {
-        let transaction = Transaction::new(&keypairs, message, recent_blockhash);
+        let transaction = Transaction::new(keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
 
@@ -77,9 +78,9 @@ impl AsyncClient for BankClient {
 }
 
 impl SyncClient for BankClient {
-    fn send_message(&self, keypairs: &[&Keypair], message: Message) -> Result<Signature> {
+    fn send_message<T: Signers>(&self, keypairs: &T, message: Message) -> Result<Signature> {
         let blockhash = self.bank.last_blockhash();
-        let transaction = Transaction::new(&keypairs, message, blockhash);
+        let transaction = Transaction::new(keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;
         Ok(transaction.signatures.get(0).cloned().unwrap_or_default())
     }
