@@ -6,11 +6,38 @@ use crate::{
     message::Message,
     pubkey::Pubkey,
     short_vec,
-    signature::{KeypairUtil, Signature},
+    signature::{Keypair, KeypairUtil, Signature},
     system_instruction,
 };
 use std::result;
 use thiserror::Error;
+
+pub trait Keypairs {
+    fn pubkeys(&self) -> Vec<Pubkey>;
+    fn sign_message(&self, message: &[u8]) -> Vec<Signature>;
+}
+
+impl<T: KeypairUtil> Keypairs for [&T] {
+    fn pubkeys(&self) -> Vec<Pubkey> {
+        self.iter().map(|keypair| keypair.pubkey()).collect()
+    }
+
+    fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
+        self.iter()
+            .map(|keypair| keypair.sign_message(message))
+            .collect()
+    }
+}
+
+impl<'a, T: AsRef<[&'a Keypair]>> Keypairs for T {
+    fn pubkeys(&self) -> Vec<Pubkey> {
+        self.as_ref().pubkeys()
+    }
+
+    fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
+        self.as_ref().sign_message(message)
+    }
+}
 
 /// Reasons a transaction might be rejected.
 #[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -95,20 +122,20 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
-    pub fn new_signed_with_payer<T: KeypairUtil>(
+    pub fn new_signed_with_payer<T: Keypairs>(
         instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
-        signing_keypairs: &[&T],
+        signing_keypairs: &T,
         recent_blockhash: Hash,
     ) -> Self {
         let message = Message::new_with_payer(instructions, payer);
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
-    pub fn new_signed_with_nonce<T: KeypairUtil>(
+    pub fn new_signed_with_nonce<T: Keypairs>(
         mut instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
-        signing_keypairs: &[&T],
+        signing_keypairs: &T,
         nonce_account_pubkey: &Pubkey,
         nonce_authority_pubkey: &Pubkey,
         nonce_hash: Hash,
@@ -126,8 +153,8 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
-    pub fn new<T: KeypairUtil>(
-        from_keypairs: &[&T],
+    pub fn new<T: Keypairs>(
+        from_keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
     ) -> Transaction {
@@ -136,8 +163,8 @@ impl Transaction {
         tx
     }
 
-    pub fn new_signed_instructions<T: KeypairUtil>(
-        from_keypairs: &[&T],
+    pub fn new_signed_instructions<T: Keypairs>(
+        from_keypairs: &T,
         instructions: Vec<Instruction>,
         recent_blockhash: Hash,
     ) -> Transaction {
@@ -152,21 +179,19 @@ impl Transaction {
     /// * `recent_blockhash` - The PoH hash.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - Instructions that will be executed atomically.
-    pub fn new_with_compiled_instructions<T: KeypairUtil>(
-        from_keypairs: &[&T],
+    pub fn new_with_compiled_instructions<T: Keypairs>(
+        from_keypairs: &T,
         keys: &[Pubkey],
         recent_blockhash: Hash,
         program_ids: Vec<Pubkey>,
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
-        let mut account_keys: Vec<_> = from_keypairs
-            .iter()
-            .map(|keypair| (*keypair).pubkey())
-            .collect();
+        let mut account_keys = from_keypairs.pubkeys();
+        let from_keypairs_len = account_keys.len();
         account_keys.extend_from_slice(keys);
         account_keys.extend(&program_ids);
         let message = Message::new_with_compiled_instructions(
-            from_keypairs.len() as u8,
+            from_keypairs_len as u8,
             0,
             program_ids.len() as u8,
             account_keys,
@@ -214,7 +239,7 @@ impl Transaction {
     }
 
     /// Check keys and keypair lengths, then sign this transaction.
-    pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+    pub fn sign<T: Keypairs>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         self.partial_sign(keypairs, recent_blockhash);
 
         assert_eq!(self.is_signed(), true, "not enough keypairs");
@@ -223,9 +248,9 @@ impl Transaction {
     /// Sign using some subset of required keys
     ///  if recent_blockhash is not the same as currently in the transaction,
     ///  clear any prior signatures and update recent_blockhash
-    pub fn partial_sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+    pub fn partial_sign<T: Keypairs>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         let positions = self
-            .get_signing_keypair_positions(keypairs)
+            .get_signing_keypair_positions(&keypairs.pubkeys())
             .expect("account_keys doesn't contain num_required_signatures keys");
         let positions: Vec<usize> = positions
             .iter()
@@ -236,9 +261,9 @@ impl Transaction {
 
     /// Sign the transaction and place the signatures in their associated positions in `signatures`
     /// without checking that the positions are correct.
-    pub fn partial_sign_unchecked<T: KeypairUtil>(
+    pub fn partial_sign_unchecked<T: Keypairs>(
         &mut self,
-        keypairs: &[&T],
+        keypairs: &T,
         positions: Vec<usize>,
         recent_blockhash: Hash,
     ) {
@@ -250,8 +275,9 @@ impl Transaction {
                 .for_each(|signature| *signature = Signature::default());
         }
 
+        let signatures = keypairs.sign_message(&self.message_data());
         for i in 0..positions.len() {
-            self.signatures[positions[i]] = keypairs[i].sign_message(&self.message_data())
+            self.signatures[positions[i]] = signatures[i];
         }
     }
 
@@ -271,23 +297,16 @@ impl Transaction {
     }
 
     /// Get the positions of the pubkeys in `account_keys` associated with signing keypairs
-    pub fn get_signing_keypair_positions<T: KeypairUtil>(
-        &self,
-        keypairs: &[&T],
-    ) -> Result<Vec<Option<usize>>> {
+    pub fn get_signing_keypair_positions(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<usize>>> {
         if self.message.account_keys.len() < self.message.header.num_required_signatures as usize {
             return Err(TransactionError::InvalidAccountIndex);
         }
         let signed_keys =
             &self.message.account_keys[0..self.message.header.num_required_signatures as usize];
 
-        Ok(keypairs
+        Ok(pubkeys
             .iter()
-            .map(|keypair| {
-                signed_keys
-                    .iter()
-                    .position(|pubkey| pubkey == &keypair.pubkey())
-            })
+            .map(|pubkey| signed_keys.iter().position(|x| x == pubkey))
             .collect())
     }
 
