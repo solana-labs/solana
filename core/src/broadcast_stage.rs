@@ -259,7 +259,7 @@ mod test {
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use std::path::Path;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;

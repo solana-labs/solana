@@ -15,7 +15,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_instruction, system_transaction,
     timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
     transaction::Transaction,

@@ -662,20 +662,24 @@ mod tests {
     use crate::rent_collector::RentCollector;
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
-    use solana_sdk::account::Account;
-    use solana_sdk::epoch_schedule::EpochSchedule;
-    use solana_sdk::fee_calculator::FeeCalculator;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::instruction::CompiledInstruction;
-    use solana_sdk::message::Message;
-    use solana_sdk::nonce_state;
-    use solana_sdk::rent::Rent;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_program;
-    use solana_sdk::transaction::Transaction;
-    use std::io::Cursor;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-    use std::{thread, time};
+    use solana_sdk::{
+        account::Account,
+        epoch_schedule::EpochSchedule,
+        fee_calculator::FeeCalculator,
+        hash::Hash,
+        instruction::CompiledInstruction,
+        message::Message,
+        nonce_state,
+        rent::Rent,
+        signature::{Keypair, Signer},
+        system_program,
+        transaction::Transaction,
+    };
+    use std::{
+        io::Cursor,
+        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+        {thread, time},
+    };
     use tempfile::TempDir;
 
     fn load_accounts_with_fee_and_rent(

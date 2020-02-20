@@ -331,10 +331,12 @@ impl Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hash::hash;
-    use crate::instruction::AccountMeta;
-    use crate::signature::{Keypair, KeypairUtil};
-    use crate::system_instruction;
+    use crate::{
+        hash::hash,
+        instruction::AccountMeta,
+        signature::{Keypair, Signer},
+        system_instruction,
+    };
     use bincode::{deserialize, serialize, serialized_size};
     use std::mem::size_of;
 

@@ -82,10 +82,12 @@ pub fn archiver_accounts(bank: &Bank) -> HashMap<Pubkey, Account> {
 pub(crate) mod tests {
     use super::*;
     use crate::bank_client::BankClient;
-    use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::{
+        client::SyncClient,
+        genesis_config::create_genesis_config,
+        message::Message,
+        signature::{Keypair, Signer},
+    };
     use solana_storage_program::{
         storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE},
         storage_instruction::{self, StorageAccountType},

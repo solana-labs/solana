@@ -12,7 +12,7 @@ use solana_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
 };
-use solana_sdk::{commitment_config::CommitmentConfig, signature::KeypairUtil};
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Signer};
 use std::{net::SocketAddr, path::PathBuf, process::exit, sync::Arc};
 
 fn main() {

@@ -1,6 +1,6 @@
 use crate::{
     pubkey::Pubkey,
-    signature::{KeypairUtil, Signature},
+    signature::{Signature, Signer},
 };
 
 pub trait Signers {
@@ -22,35 +22,35 @@ macro_rules! default_keypairs_impl {
     );
 }
 
-impl<T: KeypairUtil> Signers for [&T] {
+impl<T: Signer> Signers for [&T] {
     default_keypairs_impl!();
 }
 
-impl Signers for [Box<dyn KeypairUtil>] {
+impl Signers for [Box<dyn Signer>] {
     default_keypairs_impl!();
 }
 
-impl<T: KeypairUtil> Signers for [&T; 0] {
+impl<T: Signer> Signers for [&T; 0] {
     default_keypairs_impl!();
 }
 
-impl<T: KeypairUtil> Signers for [&T; 1] {
+impl<T: Signer> Signers for [&T; 1] {
     default_keypairs_impl!();
 }
 
-impl<T: KeypairUtil> Signers for [&T; 2] {
+impl<T: Signer> Signers for [&T; 2] {
     default_keypairs_impl!();
 }
 
-impl<T: KeypairUtil> Signers for [&T; 3] {
+impl<T: Signer> Signers for [&T; 3] {
     default_keypairs_impl!();
 }
 
-impl<T: KeypairUtil> Signers for [&T; 4] {
+impl<T: Signer> Signers for [&T; 4] {
     default_keypairs_impl!();
 }
 
-impl<T: KeypairUtil> Signers for Vec<&T> {
+impl<T: Signer> Signers for Vec<&T> {
     default_keypairs_impl!();
 }
 
@@ -60,7 +60,7 @@ mod tests {
     use std::error;
 
     struct Foo;
-    impl KeypairUtil for Foo {
+    impl Signer for Foo {
         fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
             Ok(Pubkey::default())
         }
@@ -70,7 +70,7 @@ mod tests {
     }
 
     struct Bar;
-    impl KeypairUtil for Bar {
+    impl Signer for Bar {
         fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
             Ok(Pubkey::default())
         }
@@ -81,14 +81,14 @@ mod tests {
 
     #[test]
     fn test_dyn_keypairs_compile() {
-        let xs: Vec<Box<dyn KeypairUtil>> = vec![Box::new(Foo {}), Box::new(Bar {})];
+        let xs: Vec<Box<dyn Signer>> = vec![Box::new(Foo {}), Box::new(Bar {})];
         assert_eq!(
             xs.sign_message(b""),
             vec![Signature::default(), Signature::default()],
         );
 
         // Same as above, but less compiler magic.
-        let xs_ref: &[Box<dyn KeypairUtil>] = &xs;
+        let xs_ref: &[Box<dyn Signer>] = &xs;
         assert_eq!(
             Signers::sign_message(xs_ref, b""),
             vec![Signature::default(), Signature::default()],

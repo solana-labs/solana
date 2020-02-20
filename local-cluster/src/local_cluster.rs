@@ -20,7 +20,7 @@ use solana_sdk::{
     message::Message,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_transaction,
     transaction::Transaction,
 };

@@ -107,7 +107,7 @@ mod test {
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::entry::{create_ticks, Entry};
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::system_transaction;
     use std::path::PathBuf;
     use std::sync::mpsc::channel;

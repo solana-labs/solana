@@ -305,7 +305,7 @@ mod test {
     use crate::contact_info::ContactInfo;
     use bincode::deserialize;
     use solana_perf::test_tx::test_tx;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::timing::timestamp;
 
     #[test]

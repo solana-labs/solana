@@ -9,7 +9,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil},
+    signature::{keypair_from_seed, read_keypair_file, write_keypair, Signer},
 };
 use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;

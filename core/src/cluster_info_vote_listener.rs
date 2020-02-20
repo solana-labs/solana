@@ -84,7 +84,7 @@ impl ClusterInfoVoteListener {
 mod tests {
     use crate::packet;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::transaction::Transaction;
     use solana_vote_program::vote_instruction;
     use solana_vote_program::vote_state::Vote;

@@ -107,7 +107,7 @@ pub(crate) mod tests {
         clock::Clock,
         instruction::Instruction,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         signers::Signers,
         sysvar::{
             stake_history::{self, StakeHistory},

@@ -13,7 +13,7 @@ use solana_sdk::{
     instruction::InstructionError,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_instruction,
 };
 

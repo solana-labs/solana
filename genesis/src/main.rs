@@ -22,7 +22,7 @@ use solana_sdk::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_program, timing,
 };
 use solana_stake_program::stake_state::{self, StakeState};

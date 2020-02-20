@@ -10,7 +10,7 @@ use crate::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_program::{self, solana_system_program},
 };
 use bincode::{deserialize, serialize};
@@ -176,7 +176,7 @@ impl GenesisConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signature::{Keypair, KeypairUtil};
+    use crate::signature::{Keypair, Signer};
     use std::path::PathBuf;
 
     fn make_tmp_path(name: &str) -> PathBuf {
