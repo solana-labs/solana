@@ -13,7 +13,7 @@ use solana_sdk::{
     hash::Hash,
     nonce_state::{Meta, NonceState},
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_instruction::{
         advance_nonce_account, authorize_nonce_account, create_address_with_seed,
         create_nonce_account, create_nonce_account_with_seed, withdraw_nonce_account, NonceError,

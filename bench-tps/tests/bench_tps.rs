@@ -8,7 +8,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 #[cfg(feature = "move")]
 use solana_sdk::move_loader::solana_move_loader_program;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use std::sync::{mpsc::channel, Arc};
 use std::time::Duration;
 

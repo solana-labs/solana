@@ -36,7 +36,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     hash::Hash,
     message::Message,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{Keypair, Signature, Signer},
     timing::timestamp,
     transaction::Transaction,
     transport::TransportError,

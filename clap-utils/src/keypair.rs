@@ -3,8 +3,7 @@ use bip39::{Language, Mnemonic, Seed};
 use clap::values_t;
 use rpassword::prompt_password_stderr;
 use solana_sdk::signature::{
-    keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair,
-    KeypairUtil,
+    keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair_file, Keypair, Signer,
 };
 use std::{
     error,

@@ -481,7 +481,7 @@ pub mod test {
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         transaction::Transaction,
     };
     use solana_vote_program::{vote_instruction, vote_state::Vote};

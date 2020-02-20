@@ -8,7 +8,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{Keypair, Signature, Signer},
     signers::Signers,
     system_instruction,
     transaction::{self, Transaction},

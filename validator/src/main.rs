@@ -29,7 +29,7 @@ use solana_sdk::{
     clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
 };
 use std::{
     fs::{self, File},

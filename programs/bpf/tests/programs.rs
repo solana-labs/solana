@@ -33,7 +33,7 @@ mod bpf {
             client::SyncClient,
             instruction::{AccountMeta, Instruction, InstructionError},
             pubkey::Pubkey,
-            signature::KeypairUtil,
+            signature::Signer,
             transaction::TransactionError,
         };
         use std::{io::Read, sync::Arc};
@@ -225,7 +225,7 @@ mod bpf {
             clock::DEFAULT_SLOTS_PER_EPOCH,
             instruction::{AccountMeta, Instruction, InstructionError},
             pubkey::Pubkey,
-            signature::{Keypair, KeypairUtil},
+            signature::{Keypair, Signer},
             sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
             transaction::TransactionError,
         };

@@ -11,7 +11,7 @@ use solana_core::sigverify::TransactionSigVerifier;
 use solana_core::sigverify_stage::SigVerifyStage;
 use solana_perf::test_tx::test_tx;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::duration_as_ms;
 use std::sync::mpsc::channel;

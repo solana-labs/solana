@@ -181,7 +181,7 @@ mod tests {
     };
     use solana_ledger::get_tmp_ledger_path;
     use solana_runtime::bank::Bank;
-    use solana_sdk::signature::KeypairUtil;
+    use solana_sdk::signature::Signer;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::AtomicBool;
 

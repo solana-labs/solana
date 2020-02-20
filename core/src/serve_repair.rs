@@ -14,7 +14,7 @@ use solana_metrics::{datapoint_debug, inc_new_counter_debug};
 use solana_perf::packet::{Packets, PacketsRecycler};
 use solana_sdk::{
     clock::Slot,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     timing::duration_as_ms,
 };
 use std::{

@@ -79,7 +79,7 @@ mod tests {
         instruction::InstructionError,
         nonce_state::{with_test_keyed_account, Meta, NonceAccount},
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_instruction,
         sysvar::{recent_blockhashes::create_test_recent_blockhashes, rent::Rent},
     };

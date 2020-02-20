@@ -15,7 +15,7 @@ use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     genesis_config::create_genesis_config,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
 };
 use std::{
     fs::remove_dir_all,

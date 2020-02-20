@@ -35,7 +35,7 @@ use solana_sdk::{
     hash::Hash,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{Keypair, Signature, Signer},
     timing::timestamp,
     transaction::Transaction,
 };

@@ -232,7 +232,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::transaction::TransactionError;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {

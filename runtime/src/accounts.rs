@@ -681,7 +681,7 @@ mod tests {
         message::Message,
         nonce_state,
         rent::Rent,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_program,
         transaction::Transaction,
     };

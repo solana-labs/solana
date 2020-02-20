@@ -362,7 +362,7 @@ mod test {
     use solana_sdk::{
         clock::Slot,
         genesis_config::GenesisConfig,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
     };
     use std::sync::{Arc, RwLock};
     use std::time::Duration;

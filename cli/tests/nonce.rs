@@ -6,7 +6,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, KeypairUtil},
+    signature::{read_keypair_file, write_keypair, Keypair, Signer},
     system_instruction::create_address_with_seed,
     system_program,
 };

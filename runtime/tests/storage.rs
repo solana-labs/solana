@@ -13,7 +13,7 @@ use solana_sdk::{
     hash::{hash, Hash},
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{Keypair, Signature, Signer},
     system_instruction,
     sysvar::{
         rewards::{self, Rewards},

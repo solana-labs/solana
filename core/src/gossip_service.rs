@@ -8,7 +8,7 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
 use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use std::net::{SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
