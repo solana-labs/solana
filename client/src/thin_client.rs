@@ -14,7 +14,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::Instruction,
-    keypairs::Keypairs,
+    signers::Signers,
     message::Message,
     packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
@@ -203,7 +203,7 @@ impl ThinClient {
     }
 
     /// Retry sending a signed Transaction to the server for processing
-    pub fn send_and_confirm_transaction<T: Keypairs>(
+    pub fn send_and_confirm_transaction<T: Signers>(
         &self,
         keypairs: &T,
         transaction: &mut Transaction,
@@ -352,7 +352,7 @@ impl Client for ThinClient {
 }
 
 impl SyncClient for ThinClient {
-    fn send_message<T: Keypairs>(
+    fn send_message<T: Signers>(
         &self,
         keypairs: &T,
         message: Message,
@@ -566,7 +566,7 @@ impl AsyncClient for ThinClient {
             .send_to(&buf[..], &self.tpu_addr())?;
         Ok(transaction.signatures[0])
     }
-    fn async_send_message<T: Keypairs>(
+    fn async_send_message<T: Signers>(
         &self,
         keypairs: &T,
         message: Message,

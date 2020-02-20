@@ -70,9 +70,9 @@ pub mod client;
 #[cfg(not(feature = "program"))]
 pub mod genesis_config;
 #[cfg(not(feature = "program"))]
-pub mod keypairs;
-#[cfg(not(feature = "program"))]
 pub mod signature;
+#[cfg(not(feature = "program"))]
+pub mod signers;
 #[cfg(not(feature = "program"))]
 pub mod system_transaction;
 #[cfg(not(feature = "program"))]

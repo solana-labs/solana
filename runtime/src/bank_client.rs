@@ -6,7 +6,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::Instruction,
-    keypairs::Keypairs,
+    signers::Signers,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, KeypairUtil, Signature},
@@ -43,7 +43,7 @@ impl AsyncClient for BankClient {
         Ok(signature)
     }
 
-    fn async_send_message<T: Keypairs>(
+    fn async_send_message<T: Signers>(
         &self,
         keypairs: &T,
         message: Message,
@@ -78,7 +78,7 @@ impl AsyncClient for BankClient {
 }
 
 impl SyncClient for BankClient {
-    fn send_message<T: Keypairs>(&self, keypairs: &T, message: Message) -> Result<Signature> {
+    fn send_message<T: Signers>(&self, keypairs: &T, message: Message) -> Result<Signature> {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;

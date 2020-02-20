@@ -3,7 +3,7 @@
 use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keypairs::Keypairs,
+    signers::Signers,
     message::Message,
     pubkey::Pubkey,
     short_vec,
@@ -96,7 +96,7 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
-    pub fn new_signed_with_payer<T: Keypairs>(
+    pub fn new_signed_with_payer<T: Signers>(
         instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
         signing_keypairs: &T,
@@ -106,7 +106,7 @@ impl Transaction {
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
-    pub fn new_signed_with_nonce<T: Keypairs>(
+    pub fn new_signed_with_nonce<T: Signers>(
         mut instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
         signing_keypairs: &T,
@@ -127,7 +127,7 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
-    pub fn new<T: Keypairs>(
+    pub fn new<T: Signers>(
         from_keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
@@ -137,7 +137,7 @@ impl Transaction {
         tx
     }
 
-    pub fn new_signed_instructions<T: Keypairs>(
+    pub fn new_signed_instructions<T: Signers>(
         from_keypairs: &T,
         instructions: Vec<Instruction>,
         recent_blockhash: Hash,
@@ -153,7 +153,7 @@ impl Transaction {
     /// * `recent_blockhash` - The PoH hash.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - Instructions that will be executed atomically.
-    pub fn new_with_compiled_instructions<T: Keypairs>(
+    pub fn new_with_compiled_instructions<T: Signers>(
         from_keypairs: &T,
         keys: &[Pubkey],
         recent_blockhash: Hash,
@@ -213,7 +213,7 @@ impl Transaction {
     }
 
     /// Check keys and keypair lengths, then sign this transaction.
-    pub fn sign<T: Keypairs>(&mut self, keypairs: &T, recent_blockhash: Hash) {
+    pub fn sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         self.partial_sign(keypairs, recent_blockhash);
 
         assert_eq!(self.is_signed(), true, "not enough keypairs");
@@ -222,7 +222,7 @@ impl Transaction {
     /// Sign using some subset of required keys
     ///  if recent_blockhash is not the same as currently in the transaction,
     ///  clear any prior signatures and update recent_blockhash
-    pub fn partial_sign<T: Keypairs>(&mut self, keypairs: &T, recent_blockhash: Hash) {
+    pub fn partial_sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         let positions = self
             .get_signing_keypair_positions(&keypairs.pubkeys())
             .expect("account_keys doesn't contain num_required_signatures keys");
@@ -235,7 +235,7 @@ impl Transaction {
 
     /// Sign the transaction and place the signatures in their associated positions in `signatures`
     /// without checking that the positions are correct.
-    pub fn partial_sign_unchecked<T: Keypairs>(
+    pub fn partial_sign_unchecked<T: Signers>(
         &mut self,
         keypairs: &T,
         positions: Vec<usize>,

@@ -428,7 +428,7 @@ pub unsafe extern "C" fn deserialize_transaction(
 /// # Undefined Behavior
 ///
 /// Causes UB if any of the pointers is `NULL`, or if `keypairs` does not point to a valid array of
-/// `Keypairs` of length `num_keypairs`
+/// `Signers` of length `num_keypairs`
 ///
 /// # Safety
 #[no_mangle]

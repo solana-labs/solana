@@ -21,7 +21,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
-    keypairs::Keypairs,
+    signers::Signers,
     pubkey::Pubkey,
     signature::Signature,
     transaction::{self, Transaction, TransactionError},
@@ -406,7 +406,7 @@ impl RpcClient {
         })
     }
 
-    pub fn send_and_confirm_transaction<T: Keypairs>(
+    pub fn send_and_confirm_transaction<T: Signers>(
         &self,
         transaction: &mut Transaction,
         signer_keys: &T,
@@ -457,7 +457,7 @@ impl RpcClient {
         }
     }
 
-    pub fn send_and_confirm_transactions<T: Keypairs>(
+    pub fn send_and_confirm_transactions<T: Signers>(
         &self,
         mut transactions: Vec<Transaction>,
         signer_keys: &T,
@@ -527,7 +527,7 @@ impl RpcClient {
         }
     }
 
-    pub fn resign_transaction<T: Keypairs>(
+    pub fn resign_transaction<T: Signers>(
         &self,
         tx: &mut Transaction,
         signer_keys: &T,

@@ -106,7 +106,7 @@ pub(crate) mod tests {
     use solana_sdk::{
         clock::Clock,
         instruction::Instruction,
-        keypairs::Keypairs,
+        signers::Signers,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
         sysvar::{
@@ -134,7 +134,7 @@ pub(crate) mod tests {
         amount: u64,
     ) {
         let vote_pubkey = vote_account.pubkey();
-        fn process_instructions<T: Keypairs>(bank: &Bank, keypairs: &T, ixs: Vec<Instruction>) {
+        fn process_instructions<T: Signers>(bank: &Bank, keypairs: &T, ixs: Vec<Instruction>) {
             let tx = Transaction::new_signed_with_payer(
                 ixs,
                 Some(&keypairs.pubkeys()[0]),
