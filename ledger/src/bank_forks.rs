@@ -251,8 +251,9 @@ impl BankForks {
             .cloned()
             .expect("root must exist in BankForks");
 
+        let storages: Vec<_> = bank.get_snapshot_storages();
         let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-        snapshot_utils::add_snapshot(&config.snapshot_path, &bank)?;
+        snapshot_utils::add_snapshot(&config.snapshot_path, &bank, &storages)?;
         add_snapshot_time.stop();
         inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
@@ -269,6 +270,7 @@ impl BankForks {
             tar_output_file,
             &config.snapshot_path,
             slots_to_snapshot,
+            storages,
         )?;
 
         // Send the package to the packaging thread

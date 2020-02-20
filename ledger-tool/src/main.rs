@@ -903,7 +903,8 @@ fn main() {
                         exit(1);
                     });
 
-                    snapshot_utils::add_snapshot(&temp_dir, &bank)
+                    let storages: Vec<_> = bank.get_snapshot_storages();
+                    snapshot_utils::add_snapshot(&temp_dir, &bank, &storages)
                         .and_then(|slot_snapshot_paths| {
                             snapshot_utils::package_snapshot(
                                 &bank,
@@ -911,6 +912,7 @@ fn main() {
                                 snapshot_utils::get_snapshot_archive_path(output_directory),
                                 &temp_dir,
                                 &bank.src.roots(),
+                                storages,
                             )
                         })
                         .and_then(|package| {
