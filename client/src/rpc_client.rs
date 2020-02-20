@@ -21,9 +21,9 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     inflation::Inflation,
-    signers::Signers,
     pubkey::Pubkey,
     signature::Signature,
+    signers::Signers,
     transaction::{self, Transaction, TransactionError},
 };
 use std::{

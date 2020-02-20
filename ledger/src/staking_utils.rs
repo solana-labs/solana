@@ -106,9 +106,9 @@ pub(crate) mod tests {
     use solana_sdk::{
         clock::Clock,
         instruction::Instruction,
-        signers::Signers,
         pubkey::Pubkey,
         signature::{Keypair, KeypairUtil},
+        signers::Signers,
         sysvar::{
             stake_history::{self, StakeHistory},
             Sysvar,
