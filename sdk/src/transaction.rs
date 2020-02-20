@@ -334,7 +334,7 @@ mod tests {
     use crate::{
         hash::hash,
         instruction::AccountMeta,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_instruction,
     };
     use bincode::{deserialize, serialize, serialized_size};

@@ -9,7 +9,7 @@ use solana_ledger::shred::{
 };
 use solana_perf::test_tx;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use std::sync::Arc;
 use test::Bencher;
 

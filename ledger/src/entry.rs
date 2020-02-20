@@ -457,7 +457,7 @@ mod tests {
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_transaction,
         transaction::Transaction,
     };

@@ -23,7 +23,7 @@ mod tests {
         clock::Slot,
         hash::hashv,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_transaction,
     };
     use std::sync::RwLock;

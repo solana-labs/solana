@@ -18,7 +18,7 @@ use solana_perf::{
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use std::sync::Arc;
 use std::{collections::HashMap, mem::size_of};
 
@@ -447,7 +447,7 @@ pub mod tests {
     use super::*;
     use crate::shred::SIZE_OF_DATA_SHRED_PAYLOAD;
     use crate::shred::{Shred, Shredder};
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     #[test]
     fn test_sigverify_shred_cpu() {
         solana_logger::setup();

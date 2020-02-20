@@ -128,7 +128,7 @@ impl FromStr for Signature {
     }
 }
 
-pub trait KeypairUtil {
+pub trait Signer {
     fn pubkey(&self) -> Pubkey {
         self.try_pubkey().unwrap_or_default()
     }
@@ -139,7 +139,7 @@ pub trait KeypairUtil {
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>>;
 }
 
-impl KeypairUtil for Keypair {
+impl Signer for Keypair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
         Pubkey::new(self.0.public.as_ref())
@@ -160,7 +160,7 @@ impl KeypairUtil for Keypair {
 
 impl<T> PartialEq<T> for Keypair
 where
-    T: KeypairUtil,
+    T: Signer,
 {
     fn eq(&self, other: &T) -> bool {
         self.pubkey() == other.pubkey()
@@ -189,7 +189,7 @@ enum PresignerError {
     VerificationFailure,
 }
 
-impl KeypairUtil for Presigner {
+impl Signer for Presigner {
     fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
         Ok(self.pubkey)
     }
@@ -205,7 +205,7 @@ impl KeypairUtil for Presigner {
 
 impl<T> PartialEq<T> for Presigner
 where
-    T: KeypairUtil,
+    T: Signer,
 {
     fn eq(&self, other: &T) -> bool {
         self.pubkey() == other.pubkey()
@@ -427,7 +427,7 @@ mod tests {
         let data = [1u8];
         let sig = keypair.sign_message(&data);
 
-        // KeypairUtil
+        // Signer
         assert_eq!(keypair.try_pubkey().unwrap(), pubkey);
         assert_eq!(keypair.pubkey(), pubkey);
         assert_eq!(keypair.try_sign_message(&data).unwrap(), sig);
@@ -445,7 +445,7 @@ mod tests {
         let data = [1u8];
         let sig = keypair.sign_message(&data);
 
-        // KeypairUtil
+        // Signer
         let presigner = Presigner::new(&pubkey, &sig);
         assert_eq!(presigner.try_pubkey().unwrap(), pubkey);
         assert_eq!(presigner.pubkey(), pubkey);

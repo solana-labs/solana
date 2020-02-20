@@ -84,7 +84,7 @@ pub(crate) mod tests {
         client::SyncClient,
         genesis_config::create_genesis_config,
         message::Message,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
     };
     use solana_storage_program::{
         storage_contract::{StorageAccount, STORAGE_ACCOUNT_SPACE},

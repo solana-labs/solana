@@ -180,7 +180,7 @@ mod test {
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::system_transaction;
     use std::collections::HashSet;
     use std::path::PathBuf;

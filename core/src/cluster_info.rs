@@ -1891,7 +1891,7 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use rayon::prelude::*;
     use solana_perf::test_tx::test_tx;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::{Arc, RwLock};

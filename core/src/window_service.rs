@@ -494,7 +494,7 @@ mod test {
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
     };
     use std::{
         net::UdpSocket,

@@ -27,7 +27,7 @@ use solana_sdk::{
     clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     timing::{self, duration_as_ms},
     transaction::Transaction,
 };
@@ -1082,7 +1082,7 @@ pub(crate) mod tests {
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
         rent::Rent,
-        signature::{Keypair, KeypairUtil, Signature},
+        signature::{Keypair, Signature, Signer},
         system_transaction,
         transaction::TransactionError,
     };

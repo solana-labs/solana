@@ -493,7 +493,7 @@ mod test {
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::system_instruction;
     use std::mem;
 

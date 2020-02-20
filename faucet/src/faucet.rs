@@ -15,7 +15,7 @@ use solana_sdk::{
     message::Message,
     packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_instruction,
     transaction::Transaction,
 };

@@ -7,7 +7,7 @@ use solana_core::{
     validator::new_validator_for_tests,
 };
 use solana_sdk::{
-    commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::KeypairUtil,
+    commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::Signer,
     system_transaction,
 };
 use std::{

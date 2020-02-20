@@ -8,7 +8,7 @@ use solana_sdk::{
     instruction::CompiledInstruction as CompiledInstructionNative,
     message::{Message as MessageNative, MessageHeader as MessageHeaderNative},
     pubkey::Pubkey,
-    signature::{Keypair as KeypairNative, KeypairUtil, Signature as SignatureNative},
+    signature::{Keypair as KeypairNative, Signature as SignatureNative, Signer},
     transaction::Transaction as TransactionNative,
 };
 use std::{
@@ -501,7 +501,7 @@ mod tests {
     use bincode::serialize;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
-    use solana_sdk::signature::{Keypair as KeypairNative, KeypairUtil};
+    use solana_sdk::signature::{Keypair as KeypairNative, Signer};
     use solana_sdk::system_transaction;
 
     #[test]

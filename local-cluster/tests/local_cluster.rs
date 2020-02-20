@@ -23,7 +23,7 @@ use solana_sdk::{
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_config::OperatingMode,
     poh_config::PohConfig,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{

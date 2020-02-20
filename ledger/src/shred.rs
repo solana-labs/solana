@@ -18,7 +18,7 @@ use solana_sdk::{
     hash::Hash,
     packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{Keypair, Signature, Signer},
 };
 use std::mem::size_of;
 use std::{sync::Arc, time::Instant};

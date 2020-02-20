@@ -19,7 +19,7 @@ use solana_sdk::{
     pubkey::write_pubkey_file,
     signature::{
         keypair_from_seed, read_keypair, read_keypair_file, write_keypair, write_keypair_file,
-        Keypair, KeypairUtil,
+        Keypair, Signer,
     },
 };
 use std::{
@@ -54,7 +54,7 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
 fn get_keypair_from_matches(
     matches: &ArgMatches,
     config: Config,
-) -> Result<Box<dyn KeypairUtil>, Box<dyn error::Error>> {
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     let mut path = dirs::home_dir().expect("home directory");
     let path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()

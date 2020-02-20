@@ -21,7 +21,7 @@ use solana_sdk::{
     epoch_schedule::Epoch,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_transaction,
 };
 use std::{

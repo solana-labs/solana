@@ -16,7 +16,7 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{
     account_utils::StateMut,
     pubkey::Pubkey,
-    signature::KeypairUtil,
+    signature::Signer,
     system_instruction::{create_address_with_seed, SystemError},
     sysvar::{
         stake_history::{self, StakeHistory},
@@ -1499,7 +1499,7 @@ mod tests {
     use solana_sdk::{
         fee_calculator::FeeCalculator,
         hash::Hash,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair, KeypairUtil},
+        signature::{keypair_from_seed, read_keypair_file, write_keypair, Signer},
     };
     use tempfile::NamedTempFile;
 

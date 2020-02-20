@@ -36,7 +36,7 @@ use solana_sdk::{
     native_token::lamports_to_sol,
     program_utils::DecodeError,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, Keypair, KeypairUtil, Signature},
+    signature::{keypair_from_seed, Keypair, Signature, Signer},
     system_instruction::{self, create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
     system_transaction,
     transaction::{Transaction, TransactionError},
@@ -1974,7 +1974,7 @@ impl FaucetKeypair {
     }
 }
 
-impl KeypairUtil for FaucetKeypair {
+impl Signer for FaucetKeypair {
     /// Return the public key of the keypair used to sign votes
     fn pubkey(&self) -> Pubkey {
         self.transaction.message().account_keys[0]

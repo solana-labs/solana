@@ -2455,7 +2455,7 @@ pub mod tests {
 
     #[test]
     fn test_bad_bank_hash() {
-        use solana_sdk::signature::{Keypair, KeypairUtil};
+        use solana_sdk::signature::{Keypair, Signer};
         let db = AccountsDB::new(Vec::new());
 
         let some_slot: Slot = 0;

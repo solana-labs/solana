@@ -9,7 +9,7 @@ use solana_sdk::{
     account::Account,
     pubkey::Pubkey,
     signature::Keypair,
-    signature::KeypairUtil,
+    signature::Signer,
     system_instruction::{create_address_with_seed, SystemError},
     transaction::Transaction,
 };

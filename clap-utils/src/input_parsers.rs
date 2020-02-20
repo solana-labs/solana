@@ -6,7 +6,7 @@ use solana_sdk::{
     clock::UnixTimestamp,
     native_token::sol_to_lamports,
     pubkey::Pubkey,
-    signature::{read_keypair_file, Keypair, KeypairUtil, Signature},
+    signature::{read_keypair_file, Keypair, Signature, Signer},
 };
 use std::str::FromStr;
 

@@ -5,7 +5,7 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_instruction,
 };
 

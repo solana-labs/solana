@@ -40,7 +40,7 @@ use solana_sdk::{
     hash::Hash,
     poh_config::PohConfig,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     timing::timestamp,
 };
 use std::{

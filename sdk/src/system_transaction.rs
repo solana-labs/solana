@@ -3,7 +3,7 @@
 use crate::{
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_instruction,
     transaction::Transaction,
 };

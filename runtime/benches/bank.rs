@@ -12,7 +12,7 @@ use solana_sdk::{
     genesis_config::create_genesis_config,
     instruction::InstructionError,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     transaction::Transaction,
 };
 use std::{sync::Arc, thread::sleep, time::Duration};
