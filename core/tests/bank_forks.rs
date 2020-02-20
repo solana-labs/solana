@@ -217,7 +217,7 @@ mod tests {
         let saved_slot = 4;
         let saved_tar = snapshot_config
             .snapshot_package_output_path
-            .join(saved_slot.to_string());
+            .join(format!("{}.tar.bz2", saved_slot.to_string()));
         for forks in 0..MAX_CACHE_ENTRIES + 2 {
             let bank = Bank::new_from_parent(
                 &bank_forks[forks as u64],
@@ -249,7 +249,7 @@ mod tests {
                     &package_sender,
                     snapshot_config
                         .snapshot_package_output_path
-                        .join(slot.to_string()),
+                        .join(format!("{}.tar.bz2", slot.to_string())),
                 )
                 .unwrap();
 
@@ -261,8 +261,8 @@ mod tests {
                     .filter_map(|entry| {
                         let e = entry.unwrap();
                         let file_path = e.path();
-                        let file_name = file_path.file_name().unwrap();
-                        file_name
+                        let file_stem = file_path.file_stem().unwrap();
+                        file_stem
                             .to_str()
                             .map(|s| s.parse::<u64>().ok().map(|_| file_path.clone()))
                             .unwrap_or(None)
