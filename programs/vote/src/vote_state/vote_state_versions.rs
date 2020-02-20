@@ -1,11 +1,9 @@
-extern crate solana_vote_program_0_23_5;
-
 use super::*;
-use solana_vote_program_0_23_5::vote_state::VoteState as VoteState_0_23_5;
+use crate::vote_state::vote_state_0_23_5::VoteState0_23_5;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum VoteStateVersions {
-    V0_23_5(Box<VoteState_0_23_5>),
+    V0_23_5(Box<VoteState0_23_5>),
     Current(Box<VoteState>),
 }
 
@@ -13,34 +11,20 @@ impl VoteStateVersions {
     pub fn to_current(&self) -> VoteStateVersions {
         match self {
             VoteStateVersions::V0_23_5(state) => {
-                let authorized_voter = Pubkey::new(state.authorized_withdrawer.as_ref());
                 let authorized_voters =
-                    AuthorizedVoters::new(state.authorized_voter_epoch, authorized_voter);
-                let last_timestamp = BlockTimestamp {
-                    slot: state.last_timestamp.slot,
-                    timestamp: state.last_timestamp.timestamp,
-                };
-                let votes: VecDeque<_> = state
-                    .votes
-                    .iter()
-                    .map(|lockout| {
-                        let mut current_lockout = Lockout::new(lockout.slot);
-                        current_lockout.confirmation_count = lockout.confirmation_count;
-                        current_lockout
-                    })
-                    .collect();
+                    AuthorizedVoters::new(state.authorized_voter_epoch, state.authorized_voter);
 
                 let current_state = VoteState {
-                    node_pubkey: Pubkey::new(state.node_pubkey.as_ref()),
+                    node_pubkey: state.node_pubkey,
 
                     /// the signer for withdrawals
-                    authorized_withdrawer: Pubkey::new(state.authorized_withdrawer.as_ref()),
+                    authorized_withdrawer: state.authorized_withdrawer,
 
                     /// percentage (0-100) that represents what part of a rewards
                     ///  payout should be given to this VoteAccount
                     commission: state.commission,
 
-                    votes,
+                    votes: state.votes.clone(),
 
                     root_slot: state.root_slot,
 
@@ -54,10 +38,10 @@ impl VoteStateVersions {
 
                     /// history of how many credits earned by the end of each epoch
                     ///  each tuple is (Epoch, credits, prev_credits)
-                    epoch_credits: state.epoch_credits().clone(),
+                    epoch_credits: state.epoch_credits.clone(),
 
                     /// most recent timestamp submitted with a vote
-                    last_timestamp,
+                    last_timestamp: state.last_timestamp.clone(),
                 };
                 VoteStateVersions::Current(Box::new(current_state))
             }
