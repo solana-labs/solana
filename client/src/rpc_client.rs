@@ -22,8 +22,8 @@ use solana_sdk::{
     hash::Hash,
     inflation::Inflation,
     pubkey::Pubkey,
-    signature::{KeypairUtil, Signature},
-    transaction::{self, Transaction, TransactionError},
+    signature::Signature,
+    transaction::{self, Keypairs, Transaction, TransactionError},
 };
 use std::{
     error, io,
@@ -405,10 +405,10 @@ impl RpcClient {
         })
     }
 
-    pub fn send_and_confirm_transaction<T: KeypairUtil>(
+    pub fn send_and_confirm_transaction<T: Keypairs>(
         &self,
         transaction: &mut Transaction,
-        signer_keys: &[&T],
+        signer_keys: &T,
     ) -> Result<String, ClientError> {
         let mut send_retries = 20;
         loop {
@@ -456,10 +456,10 @@ impl RpcClient {
         }
     }
 
-    pub fn send_and_confirm_transactions<T: KeypairUtil>(
+    pub fn send_and_confirm_transactions<T: Keypairs>(
         &self,
         mut transactions: Vec<Transaction>,
-        signer_keys: &[&T],
+        signer_keys: &T,
     ) -> Result<(), Box<dyn error::Error>> {
         let mut send_retries = 5;
         loop {
@@ -526,10 +526,10 @@ impl RpcClient {
         }
     }
 
-    pub fn resign_transaction<T: KeypairUtil>(
+    pub fn resign_transaction<T: Keypairs>(
         &self,
         tx: &mut Transaction,
-        signer_keys: &[&T],
+        signer_keys: &T,
     ) -> Result<(), ClientError> {
         let (blockhash, _fee_calculator) =
             self.get_new_blockhash(&tx.message().recent_blockhash)?;
