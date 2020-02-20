@@ -344,8 +344,29 @@ impl Validator {
                 .set_entrypoint(entrypoint_info.clone());
         }
 
-        // If the node was loaded from a snapshot, advertise it in gossip
         if let Some(snapshot_hash) = snapshot_hash {
+            if let Some(ref trusted_validators) =
+                config.snapshot_config.as_ref().unwrap().trusted_validators
+            {
+                let trusted = cluster_info
+                    .read()
+                    .unwrap()
+                    .get_snapshot_hash(snapshot_hash.0)
+                    .iter()
+                    .any(|(pubkey, hash)| {
+                        trusted_validators.contains(pubkey) && snapshot_hash.1 == *hash
+                    });
+
+                if !trusted {
+                    error!(
+                        "The snapshot hash for slot {} is not published by your trusted validators: {:?}",
+                        snapshot_hash.0, trusted_validators
+                    );
+                    process::exit(1);
+                }
+            }
+
+            // If the node was loaded from a snapshot, advertise it in gossip
             cluster_info
                 .write()
                 .unwrap()
