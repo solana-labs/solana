@@ -17,6 +17,7 @@ use solana_sdk::{
     system_instruction,
     sysvar::{self, clock::Clock, slot_hashes::SlotHashes, Sysvar},
 };
+use std::collections::HashSet;
 use thiserror::Error;
 
 /// Reasons the stake might have had an error
@@ -187,7 +188,7 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    let signers = get_signers(keyed_accounts);
+    let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
 
     let keyed_accounts = &mut keyed_accounts.iter();
     let me = &mut next_keyed_account(keyed_accounts)?;
