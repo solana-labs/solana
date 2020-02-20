@@ -2,10 +2,13 @@ use crate::{
     pubkey::Pubkey,
     signature::{Signature, Signer},
 };
+use std::error;
 
 pub trait Signers {
     fn pubkeys(&self) -> Vec<Pubkey>;
+    fn try_pubkeys(&self) -> Result<Vec<Pubkey>, Box<dyn error::Error>>;
     fn sign_message(&self, message: &[u8]) -> Vec<Signature>;
+    fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, Box<dyn error::Error>>;
 }
 
 macro_rules! default_keypairs_impl {
@@ -14,10 +17,26 @@ macro_rules! default_keypairs_impl {
                 self.iter().map(|keypair| keypair.pubkey()).collect()
             }
 
+            fn try_pubkeys(&self) -> Result<Vec<Pubkey>, Box<dyn error::Error>> {
+                let mut pubkeys = Vec::new();
+                for keypair in self.iter() {
+                    pubkeys.push(keypair.try_pubkey()?);
+                }
+                Ok(pubkeys)
+            }
+
             fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
                 self.iter()
                     .map(|keypair| keypair.sign_message(message))
                     .collect()
+            }
+
+            fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, Box<dyn error::Error>> {
+                let mut signatures = Vec::new();
+                for keypair in self.iter() {
+                    signatures.push(keypair.try_sign_message(message)?);
+                }
+                Ok(signatures)
             }
     );
 }
