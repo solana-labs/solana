@@ -25,34 +25,10 @@ pub fn load(
         fs::create_dir_all(&snapshot_config.snapshot_path)
             .expect("Couldn't create snapshot directory");
 
-        let mut tar = snapshot_utils::get_snapshot_archive_path(
+        let tar = snapshot_utils::get_snapshot_archive_path(
             &snapshot_config.snapshot_package_output_path,
         );
-        let fallback_tar = snapshot_utils::get_fallback_snapshot_archive_path(
-            &snapshot_config.snapshot_package_output_path,
-        );
-        let mut snapshot_exists = true;
-
-        if tar.exists() && fallback_tar.exists() {
-            panic!(
-                "two ambiguous variants of snapshots are available: {:?}, {:?}",
-                tar, fallback_tar
-            );
-        }
-        if !tar.exists() {
-            if fallback_tar.exists() {
-                warn!("using snapshot file ({:?}) as a fallback, because the desired one({:?}) is missing", fallback_tar, tar);
-                tar = fallback_tar;
-            } else {
-                info!(
-                    "Snapshot packages don't exist: {:?}, {:?}",
-                    &tar, &fallback_tar
-                );
-                snapshot_exists = false;
-            }
-        }
-
-        if snapshot_exists {
+        if tar.exists() {
             info!("Loading snapshot package: {:?}", tar);
             // Fail hard here if snapshot fails to load, don't silently continue
 
@@ -74,6 +50,8 @@ pub fn load(
                 &process_options,
                 &VerifyRecyclers::default(),
             );
+        } else {
+            info!("Snapshot package does not exist: {:?}", tar);
         }
     } else {
         info!("Snapshots disabled");
