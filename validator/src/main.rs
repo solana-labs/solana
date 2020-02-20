@@ -8,7 +8,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
-    input_validators::{is_keypair, is_pubkey_or_keypair},
+    input_validators::{is_keypair, is_pubkey, is_pubkey_or_keypair},
     keypair::{
         self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
@@ -196,11 +196,12 @@ fn download_tar_bz2(
     Ok(())
 }
 
-fn get_rpc_addr(
+fn get_rpc_node(
     node: &Node,
     identity_keypair: &Arc<Keypair>,
     entrypoint_gossip: &SocketAddr,
     expected_shred_version: Option<u16>,
+    allowed_rpc_nodes: Option<&Vec<Pubkey>>,
     snapshot_not_required: bool,
 ) -> (RpcClient, SocketAddr, Option<SnapshotInfo>) {
     let mut cluster_info = ClusterInfo::new(
@@ -217,6 +218,10 @@ fn get_rpc_addr(
         node.sockets.gossip.try_clone().unwrap(),
         &gossip_exit_flag,
     );
+
+    if let Some(allowed_rpc_nodes) = allowed_rpc_nodes {
+        info!("Allowed RPC nodes: {:?}", allowed_rpc_nodes);
+    }
 
     let (rpc_client, rpc_addr, snapshot_info) = loop {
         info!(
@@ -246,6 +251,13 @@ fn get_rpc_addr(
                     exit(1);
                 }
             }
+        }
+
+        if let Some(allowed_rpc_nodes) = allowed_rpc_nodes {
+            rpc_peers = rpc_peers
+                .into_iter()
+                .filter(|contact_info| allowed_rpc_nodes.contains(&contact_info.id))
+                .collect::<Vec<_>>();
         }
 
         let mut eligible_rpc_peers = vec![];
@@ -687,6 +699,17 @@ pub fn main() {
                 .takes_value(true)
                 .help("Add a hard fork at this slot"),
         )
+        .arg(
+            Arg::with_name("allowed_rpc_nodes")
+                .long("allowed-rpc-node")
+                .validator(is_pubkey)
+                .value_name("PUBKEY")
+                .multiple(true)
+                .takes_value(true)
+                .requires("entrypoint")
+                .help("Only use this node's RPC service to fetch the genenis config and/or a ledger snapshot. \
+                       May be specified multiple times. If unspecified any available node will be used"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(
@@ -727,6 +750,13 @@ pub fn main() {
         eprintln!("Unable to access ledger path: {:?}", err);
         exit(1);
     });
+
+    let allowed_rpc_nodes: Option<Vec<_>> = if matches.is_present("allowed_rpc_nodes") {
+        let allowed_rpc_nodes = values_t_or_exit!(matches, "allowed_rpc_nodes", Pubkey);
+        Some(allowed_rpc_nodes.into_iter().collect())
+    } else {
+        None
+    };
 
     let mut validator_config = ValidatorConfig {
         blockstream_unix_socket: matches
@@ -957,11 +987,12 @@ pub fn main() {
         );
 
         if !no_genesis_fetch {
-            let (rpc_client, rpc_addr, snapshot_info) = get_rpc_addr(
+            let (rpc_client, rpc_addr, snapshot_info) = get_rpc_node(
                 &node,
                 &identity_keypair,
                 &cluster_entrypoint.gossip,
                 validator_config.expected_shred_version,
+                allowed_rpc_nodes.as_ref(),
                 no_snapshot_fetch,
             );
 
