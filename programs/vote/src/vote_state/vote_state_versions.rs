@@ -14,7 +14,7 @@ impl VoteStateVersions {
                 let authorized_voters =
                     AuthorizedVoters::new(state.authorized_voter_epoch, state.authorized_voter);
 
-                let current_state = VoteState {
+                VoteState {
                     node_pubkey: state.node_pubkey,
 
                     /// the signer for withdrawals
@@ -42,8 +42,7 @@ impl VoteStateVersions {
 
                     /// most recent timestamp submitted with a vote
                     last_timestamp: state.last_timestamp.clone(),
-                };
-                current_state
+                }
             }
             VoteStateVersions::Current(state) => *state,
         }

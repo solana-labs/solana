@@ -18,7 +18,7 @@ use solana_stake_program::{
 };
 use solana_vote_program::{
     vote_instruction,
-    vote_state::{Vote, VoteInit, VoteState},
+    vote_state::{Vote, VoteInit, VoteState, VoteStateVersions},
 };
 use std::sync::Arc;
 
@@ -254,7 +254,9 @@ fn test_stake_account_lifetime() {
 
     // Test that votes and credits are there
     let account = bank.get_account(&vote_pubkey).expect("account not found");
-    let vote_state: VoteState = account.state().expect("couldn't unpack account data");
+    let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&account)
+        .expect("couldn't unpack account data")
+        .convert_to_current();
 
     // 1 less vote, as the first vote should have cleared the lockout
     assert_eq!(vote_state.votes.len(), 31);

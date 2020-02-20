@@ -1,4 +1,3 @@
-#![allow(clippy::implicit_hasher)]
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use crate::authorized_voters::AuthorizedVoters;
@@ -788,7 +787,8 @@ mod tests {
             &vote.clone(),
             &signers,
         )?;
-        vote_account.borrow().state()
+        StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .map(|versioned| versioned.convert_to_current())
     }
 
     /// exercises all the keyed accounts stuff
@@ -826,7 +826,9 @@ mod tests {
     fn test_voter_registration() {
         let (vote_pubkey, vote_account) = create_test_account();
 
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert_eq!(vote_state.authorized_voters.len(), 1);
         assert_eq!(
             *vote_state.authorized_voters.first().unwrap().1,
@@ -896,7 +898,9 @@ mod tests {
             &Clock::default(),
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert!(vote_state.node_pubkey != node_pubkey);
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
@@ -908,7 +912,9 @@ mod tests {
             &Clock::default(),
         );
         assert_eq!(res, Ok(()));
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert_eq!(vote_state.node_pubkey, node_pubkey);
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
@@ -917,7 +923,9 @@ mod tests {
         clock.epoch += 10;
         let res = update_node(&keyed_accounts[0], &node_pubkey, &signers, &clock);
         assert_eq!(res, Ok(()));
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert_eq!(vote_state.node_pubkey, node_pubkey);
     }
 
@@ -1121,7 +1129,10 @@ mod tests {
     fn test_vote_lockout() {
         let (_vote_pubkey, vote_account) = create_test_account();
 
-        let mut vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let mut vote_state: VoteState =
+            StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+                .unwrap()
+                .convert_to_current();
 
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
             vote_state.process_slot_vote_unchecked((INITIAL_LOCKOUT as usize * i) as u64);
