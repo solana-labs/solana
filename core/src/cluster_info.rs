@@ -12,6 +12,7 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
+use crate::crds_value::CompressionType::*;
 use crate::crds_value::EpochIncompleteSlots;
 use crate::packet::limited_deserialize;
 use crate::streamer::{PacketReceiver, PacketSender};
@@ -79,6 +80,7 @@ const MAX_PROTOCOL_HEADER_SIZE: u64 = 214;
 const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 
 const NUM_BITS_PER_BYTE: u64 = 8;
+const MIN_SIZE_TO_COMPRESS_GZIP: u64 = 64;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -342,44 +344,75 @@ impl ClusterInfo {
                 let bit_index = offset_from_first_slot % NUM_BITS_PER_BYTE;
                 uncompressed[index as usize] |= 1 << bit_index;
             });
-            if let Ok(compressed) = uncompressed
-                .iter()
-                .cloned()
-                .encode(&mut GZipEncoder::new(), Action::Finish)
-                .collect::<std::result::Result<Vec<u8>, _>>()
-            {
+            if num_uncompressed_bytes >= MIN_SIZE_TO_COMPRESS_GZIP {
+                if let Ok(compressed) = uncompressed
+                    .iter()
+                    .cloned()
+                    .encode(&mut GZipEncoder::new(), Action::Finish)
+                    .collect::<std::result::Result<Vec<u8>, _>>()
+                {
+                    return EpochIncompleteSlots {
+                        first: *first_slot,
+                        compression: GZip,
+                        compressed_list: compressed,
+                    };
+                }
+            } else {
                 return EpochIncompleteSlots {
                     first: *first_slot,
-                    compressed_list: compressed,
+                    compression: Uncompressed,
+                    compressed_list: uncompressed,
                 };
             }
         }
         EpochIncompleteSlots::default()
     }
 
-    pub fn decompress_incomplete_slots(slots: &EpochIncompleteSlots) -> BTreeSet<Slot> {
+    fn bitmap_to_slot_list(first: Slot, bitmap: &[u8]) -> BTreeSet<Slot> {
         let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
-
-        if let Ok(decompressed) = slots
-            .compressed_list
-            .iter()
-            .cloned()
-            .decode(&mut GZipDecoder::new())
-            .collect::<std::result::Result<Vec<u8>, _>>()
-        {
-            decompressed.iter().enumerate().for_each(|(i, val)| {
-                if *val != 0 {
-                    (0..8).for_each(|bit_index| {
-                        if (1 << bit_index & *val) != 0 {
-                            let slot = slots.first + i as u64 * NUM_BITS_PER_BYTE + bit_index;
-                            old_incomplete_slots.insert(slot as u64);
-                        }
-                    })
-                }
-            })
-        }
-
+        bitmap.iter().enumerate().for_each(|(i, val)| {
+            if *val != 0 {
+                (0..8).for_each(|bit_index| {
+                    if (1 << bit_index & *val) != 0 {
+                        let slot = first + i as u64 * NUM_BITS_PER_BYTE + bit_index as u64;
+                        old_incomplete_slots.insert(slot);
+                    }
+                })
+            }
+        });
         old_incomplete_slots
+    }
+
+    pub fn decompress_incomplete_slots(slots: &EpochIncompleteSlots) -> BTreeSet<Slot> {
+        match slots.compression {
+            Uncompressed => Self::bitmap_to_slot_list(slots.first, &slots.compressed_list),
+            GZip => {
+                if let Ok(decompressed) = slots
+                    .compressed_list
+                    .iter()
+                    .cloned()
+                    .decode(&mut GZipDecoder::new())
+                    .collect::<std::result::Result<Vec<u8>, _>>()
+                {
+                    Self::bitmap_to_slot_list(slots.first, &decompressed)
+                } else {
+                    BTreeSet::new()
+                }
+            }
+            BZip2 => {
+                if let Ok(decompressed) = slots
+                    .compressed_list
+                    .iter()
+                    .cloned()
+                    .decode(&mut BZip2Decoder::new())
+                    .collect::<std::result::Result<Vec<u8>, _>>()
+                {
+                    Self::bitmap_to_slot_list(slots.first, &decompressed)
+                } else {
+                    BTreeSet::new()
+                }
+            }
+        }
     }
 
     pub fn push_epoch_slots(
@@ -2519,6 +2552,12 @@ mod tests {
         assert_eq!(incomplete_slots, decompressed);
 
         incomplete_slots.insert(80);
+        let compressed = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
+        assert_eq!(80, compressed.first);
+        let decompressed = ClusterInfo::decompress_incomplete_slots(&compressed);
+        assert_eq!(incomplete_slots, decompressed);
+
+        incomplete_slots.insert(10000);
         let compressed = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
         assert_eq!(80, compressed.first);
         let decompressed = ClusterInfo::decompress_incomplete_slots(&compressed);
