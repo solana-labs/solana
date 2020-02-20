@@ -153,7 +153,8 @@ impl Tvu {
             if snapshot_config.is_some() {
                 // Start a snapshot packaging service
                 let (sender, receiver) = channel();
-                let snapshot_packager_service = SnapshotPackagerService::new(receiver, exit);
+                let snapshot_packager_service =
+                    SnapshotPackagerService::new(receiver, exit, &cluster_info.clone());
                 (Some(snapshot_packager_service), Some(sender))
             } else {
                 (None, None)

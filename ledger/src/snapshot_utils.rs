@@ -108,6 +108,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_hard_links_dir,
         account_storage_entries,
         snapshot_package_output_file.as_ref().to_path_buf(),
+        bank.hash(),
     );
 
     Ok(package)
