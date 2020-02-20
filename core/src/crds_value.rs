@@ -15,6 +15,8 @@ use std::{
 pub type VoteIndex = u8;
 pub const MAX_VOTES: VoteIndex = 32;
 
+pub type EpochSlotIndex = u8;
+
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CrdsValue {
@@ -58,7 +60,13 @@ impl Signable for CrdsValue {
 pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
-    EpochSlots(EpochSlots),
+    EpochSlots(EpochSlotIndex, EpochSlots),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct EpochIncompleteSlots {
+    pub first: Slot,
+    pub compressed_list: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -67,8 +75,7 @@ pub struct EpochSlots {
     pub root: Slot,
     pub lowest: Slot,
     pub slots: BTreeSet<Slot>,
-    pub first_missing: Slot,
-    pub stash: Vec<u8>,
+    pub stash: Vec<EpochIncompleteSlots>,
     pub wallclock: u64,
 }
 
@@ -78,8 +85,7 @@ impl EpochSlots {
         root: Slot,
         lowest: Slot,
         slots: BTreeSet<Slot>,
-        first_missing: Slot,
-        stash: Vec<u8>,
+        stash: Vec<EpochIncompleteSlots>,
         wallclock: u64,
     ) -> Self {
         Self {
@@ -87,7 +93,6 @@ impl EpochSlots {
             root,
             lowest,
             slots,
-            first_missing,
             stash,
             wallclock,
         }
@@ -160,21 +165,21 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
-            CrdsData::EpochSlots(vote) => vote.wallclock,
+            CrdsData::EpochSlots(_, vote) => vote.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
-            CrdsData::EpochSlots(slots) => slots.from,
+            CrdsData::EpochSlots(_, slots) => slots.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
         match &self.data {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
-            CrdsData::EpochSlots(_) => CrdsValueLabel::EpochSlots(self.pubkey()),
+            CrdsData::EpochSlots(_, _) => CrdsValueLabel::EpochSlots(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -199,7 +204,7 @@ impl CrdsValue {
 
     pub fn epoch_slots(&self) -> Option<&EpochSlots> {
         match &self.data {
-            CrdsData::EpochSlots(slots) => Some(slots),
+            CrdsData::EpochSlots(_, slots) => Some(slots),
             _ => None,
         }
     }
@@ -283,15 +288,10 @@ mod test {
         let key = v.clone().vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(0, key));
 
-        let v = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots::new(
-            Pubkey::default(),
+        let v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
-            0,
-            BTreeSet::new(),
-            0,
-            vec![],
-            0,
-        )));
+            EpochSlots::new(Pubkey::default(), 0, 0, BTreeSet::new(), vec![], 0),
+        ));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::EpochSlots(key));
@@ -312,15 +312,10 @@ mod test {
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
         let btreeset: BTreeSet<Slot> = vec![1, 2, 3, 6, 8].into_iter().collect();
-        v = CrdsValue::new_unsigned(CrdsData::EpochSlots(EpochSlots::new(
-            keypair.pubkey(),
+        v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
-            0,
-            btreeset,
-            0,
-            vec![],
-            timestamp(),
-        )));
+            EpochSlots::new(keypair.pubkey(), 0, 0, btreeset, vec![], timestamp()),
+        ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
 
