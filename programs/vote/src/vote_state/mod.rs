@@ -213,7 +213,7 @@ impl VoteState {
         vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
         vote_state.root_slot = Some(std::u64::MAX);
         vote_state.epoch_credits = vec![(0, 0, 0); MAX_EPOCH_CREDITS_HISTORY];
-        serialized_size(&vote_state).unwrap() as usize
+        serialized_size(&VoteStateVersions::Current(Box::new(vote_state))).unwrap() as usize
     }
 
     // utility function, used by Stakes, tests
