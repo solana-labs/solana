@@ -94,6 +94,91 @@ For full usage details run:
 ```bash
 solana-keygen pubkey --help
 ```
+
+## Verifying the Keypair
+
+A keypair can be verified by following a variation on the
+[offline signing](../offline-signing/README.md) procedure with a dummy transaction.
+
+### Create and Sign a Dummy Transaction
+
+Use offline signing to acquire the signature of a dummy transaction that can
+be verified in the next step. A 0 Lamport [transfer](../cli/usage.md#solana-transfer)
+is used to prevent inadvertent loss of funds. Additionally, an improbable _blockhash_
+value is specified, as well as using the address of the _system program_ for the `TO`
+argument, to ensure the transaction would be rejected by the _cluster_ should
+it be submitted in error.
+
+Command
+
+```text
+solana transfer 11111111111111111111111111111111 0 --sign-only \
+    --ask-seed-phrase keypair --blockhash 11111111111111111111111111111111
+```
+
+Prompt for seed phrase
+
+```text
+[keypair] seed phrase:
+[keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
+Recovered pubkey `AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi`. Continue? (y/n): y
+```
+
+Output
+
+```text
+Blockhash: 11111111111111111111111111111111
+Signers (Pubkey=Signature):
+  AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA
+
+{"blockhash":"11111111111111111111111111111111","signers":["AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA"]}
+```
+
+### Verify the Signature
+
+Using the _Signers_ output from the [previous step](#create-and-sign-a-dummy-transaction)
+to reconstruct the transaction, this time specifying the _pubkey_ and _signature_
+as in the submission step of [offline signing](../offline-signing/README.md). That is, the `--from` and
+`--fee-payer` are explicitly set to the _pubkey_ rather than being taken from
+the keypair (which is not queried this time).
+
+Command
+
+```text
+solana transfer 11111111111111111111111111111111 0 --sign-only --from AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi \
+--signer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA \
+--blockhash 11111111111111111111111111111111 --fee-payer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi
+```
+
+Output
+
+```text
+Blockhash: 11111111111111111111111111111111
+Signers (Pubkey=Signature):
+  AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA
+
+{"blockhash":"11111111111111111111111111111111","signers":["AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA"]}
+```
+
+### An Example of Failure
+
+To simulate an error the [verification step](#verify-the-signature) is repeated,
+but with a corrupted _signature_ (the last letter is changed from "A" to "B").
+
+Command
+
+```text
+solana transfer 11111111111111111111111111111111 0 --sign-only --from AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi \
+--signer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWB \
+--blockhash 11111111111111111111111111111111 --fee-payer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi
+```
+
+Output (Error)
+
+```text
+Error: BadParameter("Transaction construction failed, incorrect signature or public key provided")
+```
+
 ## Checking Account Balance
 
 All that is needed to check an account balance is the public key of an account.
