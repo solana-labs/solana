@@ -4219,7 +4219,6 @@ mod tests {
 
     #[test]
     fn test_bank_update_sysvar_account() {
-        use solana_sdk::bank_hash::BankHash;
         use sysvar::clock::Clock;
 
         let dummy_clock_id = Pubkey::new_rand();
@@ -4239,7 +4238,6 @@ mod tests {
             .create_account(1)
         });
         let current_account = bank1.get_account(&dummy_clock_id).unwrap();
-        let removed_bank_hash = BankHash::from_hash(&current_account.hash);
         assert_eq!(
             expected_previous_slot,
             Clock::from_account(&current_account).unwrap().slot
@@ -4247,7 +4245,6 @@ mod tests {
 
         // Updating should increment the clock's slot
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
-        let mut expected_bank_hash = bank2.rc.accounts.bank_hash_at(bank2.slot);
         bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
             let slot = Clock::from_account(optional_account.as_ref().unwrap())
                 .unwrap()
@@ -4261,16 +4258,10 @@ mod tests {
             .create_account(1)
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
-        let added_bank_hash = BankHash::from_hash(&current_account.hash);
-        expected_bank_hash.xor(removed_bank_hash);
-        expected_bank_hash.xor(added_bank_hash);
+        //let added_bank_hash = BankHash::from_hash(&current_account.hash);
         assert_eq!(
             expected_next_slot,
             Clock::from_account(&current_account).unwrap().slot
-        );
-        assert_eq!(
-            expected_bank_hash,
-            bank2.rc.accounts.bank_hash_at(bank2.slot)
         );
 
         // Updating again should give bank1's sysvar to the closure not bank2's.
@@ -4291,10 +4282,6 @@ mod tests {
         assert_eq!(
             expected_next_slot,
             Clock::from_account(&current_account).unwrap().slot
-        );
-        assert_eq!(
-            expected_bank_hash,
-            bank2.rc.accounts.bank_hash_at(bank2.slot)
         );
     }
 

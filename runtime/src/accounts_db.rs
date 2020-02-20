@@ -38,7 +38,6 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::Account,
-    bank_hash::BankHash,
     clock::{Epoch, Slot},
     hash::{Hash, Hasher},
     pubkey::Pubkey,
@@ -118,6 +117,22 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
         }
 
         Ok(AccountStorage(map))
+    }
+}
+
+trait Versioned {
+    fn version(&self) -> u64;
+}
+
+impl Versioned for (u64, Hash) {
+    fn version(&self) -> u64 {
+        self.0
+    }
+}
+
+impl Versioned for (u64, AccountInfo) {
+    fn version(&self) -> u64 {
+        self.0
     }
 }
 
@@ -396,7 +411,7 @@ impl BankHashStats {
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BankHashInfo {
-    pub hash: BankHash,
+    pub hash: Hash,
     pub snapshot_hash: Hash,
     pub stats: BankHashStats,
 }
@@ -776,9 +791,6 @@ impl AccountsDB {
 
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let hash_info = bank_hashes
-            .get(&parent_slot)
-            .expect("accounts_db::set_hash::no parent slot");
         if bank_hashes.get(&slot).is_some() {
             error!(
                 "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
@@ -787,9 +799,8 @@ impl AccountsDB {
             return;
         }
 
-        let hash = hash_info.hash;
         let new_hash_info = BankHashInfo {
-            hash,
+            hash: Hash::default(),
             snapshot_hash: Hash::default(),
             stats: BankHashStats::default(),
         };
@@ -1045,6 +1056,32 @@ impl AccountsDB {
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
 
+    fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
+        let mut sort = Measure::start("sort");
+        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        sort.stop();
+        let mut hash_time = Measure::start("hash");
+        let hashes: Vec<_> = hashes.chunks(16).collect();
+        let hashes: Vec<_> = hashes
+            .par_iter()
+            .map(|k| {
+                let mut hasher = Hasher::default();
+                for v in k.iter() {
+                    hasher.hash(v.1.as_ref());
+                }
+                hasher.result()
+            })
+            .collect();
+        let mut hasher = Hasher::default();
+        for hash in &hashes {
+            hasher.hash(hash.as_ref());
+        }
+        hash_time.stop();
+        info!("{} {}", sort, hash_time);
+
+        hasher.result()
+    }
+
     fn calculate_accounts_hash(
         &self,
         ancestors: &HashMap<Slot, usize>,
@@ -1056,7 +1093,7 @@ impl AccountsDB {
         let storage = self.storage.read().unwrap();
         let keys: Vec<_> = accounts_index.account_maps.keys().collect();
         let mismatch_found = AtomicBool::new(false);
-        let mut hashes: Vec<_> = keys
+        let hashes: Vec<_> = keys
             .par_iter()
             .filter_map(|pubkey| {
                 if let Some((list, index)) = accounts_index.get(pubkey, ancestors) {
@@ -1080,7 +1117,7 @@ impl AccountsDB {
                                     }
                                 }
 
-                                Some((*pubkey, *account.hash))
+                                Some((**pubkey, *account.hash))
                             })
                     } else {
                         None
@@ -1095,29 +1132,9 @@ impl AccountsDB {
         }
 
         scan.stop();
-        let mut sort = Measure::start("sort");
-        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
-        sort.stop();
-        let mut hash_time = Measure::start("hash");
-        let hashes: Vec<_> = hashes.chunks(16).collect();
-        let hashes: Vec<_> = hashes
-            .par_iter()
-            .map(|k| {
-                let mut hasher = Hasher::default();
-                for v in k.iter() {
-                    hasher.hash(v.1.as_ref());
-                }
-                hasher.result()
-            })
-            .collect();
-        let mut hasher = Hasher::default();
-        for hash in &hashes {
-            hasher.hash(hash.as_ref());
-        }
-        hash_time.stop();
-        debug!("{} {} {}", scan, sort, hash_time);
+        debug!("{}", scan);
 
-        Ok(hasher.result())
+        Ok(Self::accumulate_account_hashes(hashes))
     }
 
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
@@ -1159,14 +1176,35 @@ impl AccountsDB {
         }
     }
 
-    pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash, stats: &BankHashStats) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let bank_hash = bank_hashes
-            .entry(slot_id)
-            .or_insert_with(BankHashInfo::default);
-        bank_hash.hash.xor(hash);
-
-        bank_hash.stats.merge(stats);
+    pub fn get_accounts_delta_hash(&self, slot_id: Slot) -> Hash {
+        let mut scan = Measure::start("scan");
+        let mut accumulator: Vec<HashMap<Pubkey, (u64, Hash)>> = self.scan_account_storage(
+            slot_id,
+            |stored_account: &StoredAccount,
+             _store_id: AppendVecId,
+             accum: &mut HashMap<Pubkey, (u64, Hash)>| {
+                accum.insert(
+                    stored_account.meta.pubkey,
+                    (stored_account.meta.write_version, *stored_account.hash),
+                );
+            },
+        );
+        scan.stop();
+        let mut merge = Measure::start("merge");
+        let mut account_maps = accumulator.pop().unwrap();
+        while let Some(maps) = accumulator.pop() {
+            AccountsDB::merge(&mut account_maps, &maps);
+        }
+        merge.stop();
+        let mut accumulate = Measure::start("accumulate");
+        let hashes: Vec<_> = account_maps
+            .into_iter()
+            .map(|(pubkey, (_, hash))| (pubkey, hash))
+            .collect();
+        let ret = Self::accumulate_account_hashes(hashes);
+        accumulate.stop();
+        info!("{} {} {}", scan, merge, accumulate);
+        ret
     }
 
     fn update_index(
@@ -1250,34 +1288,21 @@ impl AccountsDB {
     }
 
     fn hash_accounts(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) -> Vec<Hash> {
-        let mut hash_state = BankHash::default();
-        let mut had_account = false;
         let mut stats = BankHashStats::default();
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                let hash = BankHash::from_hash(&account.hash);
                 stats.update(account);
-                let new_hash = Self::hash_account(slot_id, account, pubkey);
-                let new_bank_hash = BankHash::from_hash(&new_hash);
-                debug!(
-                    "hash_accounts: key: {} xor {} current: {}",
-                    pubkey, hash, hash_state
-                );
-                if !had_account {
-                    hash_state = hash;
-                    had_account = true;
-                } else {
-                    hash_state.xor(hash);
-                }
-                hash_state.xor(new_bank_hash);
-                new_hash
+                Self::hash_account(slot_id, account, pubkey)
             })
             .collect();
 
-        if had_account {
-            self.xor_in_hash_state(slot_id, hash_state, &stats);
-        }
+        let mut bank_hashes = self.bank_hashes.write().unwrap();
+        let slot_info = bank_hashes
+            .entry(slot_id)
+            .or_insert_with(BankHashInfo::default);
+        slot_info.stats.merge(&stats);
+
         hashes
     }
 
@@ -1317,17 +1342,17 @@ impl AccountsDB {
             .collect()
     }
 
-    fn merge(
-        dest: &mut HashMap<Pubkey, (u64, AccountInfo)>,
-        source: &HashMap<Pubkey, (u64, AccountInfo)>,
-    ) {
-        for (key, (source_version, source_info)) in source.iter() {
-            if let Some((dest_version, _)) = dest.get(key) {
-                if dest_version > source_version {
+    fn merge<X>(dest: &mut HashMap<Pubkey, X>, source: &HashMap<Pubkey, X>)
+    where
+        X: Versioned + Clone,
+    {
+        for (key, source_item) in source.iter() {
+            if let Some(dest_item) = dest.get(key) {
+                if dest_item.version() > source_item.version() {
                     continue;
                 }
             }
-            dest.insert(*key, (*source_version, source_info.clone()));
+            dest.insert(*key, source_item.clone());
         }
     }
 
@@ -2504,7 +2529,7 @@ pub mod tests {
             Err(MissingBankHash)
         );
 
-        let some_bank_hash = BankHash::from_hash(&Hash::new(&[0xca; HASH_BYTES]));
+        let some_bank_hash = Hash::new(&[0xca; HASH_BYTES]);
         let bank_hash_info = BankHashInfo {
             hash: some_bank_hash,
             snapshot_hash: Hash::new(&[0xca; HASH_BYTES]),

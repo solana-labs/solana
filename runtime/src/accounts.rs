@@ -15,7 +15,6 @@ use log::*;
 use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
-    bank_hash::BankHash,
     clock::Slot,
     hash::Hash,
     native_loader,
@@ -510,16 +509,19 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_at(&self, slot_id: Slot) -> BankHash {
+    pub fn bank_hash_at(&self, slot_id: Slot) -> Hash {
         self.bank_hash_info_at(slot_id).hash
     }
 
     pub fn bank_hash_info_at(&self, slot_id: Slot) -> BankHashInfo {
+        let delta_hash = self.accounts_db.get_accounts_delta_hash(slot_id);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
-        bank_hashes
+        let mut hash_info = bank_hashes
             .get(&slot_id)
             .expect("No bank hash was found for this bank, that should not be possible")
-            .clone()
+            .clone();
+        hash_info.hash = delta_hash;
+        hash_info
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
