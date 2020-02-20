@@ -446,14 +446,14 @@ mod tests {
         let mut vote_state1 = VoteState::from(&vote_account1).unwrap();
         vote_state1.process_slot_vote_unchecked(3);
         vote_state1.process_slot_vote_unchecked(5);
-        let versioned = VoteStateVersions::Current(vote_state1);
+        let versioned = VoteStateVersions::Current(Box::new(vote_state1));
         VoteState::to(&versioned, &mut vote_account1).unwrap();
         bank.store_account(&pk1, &vote_account1);
 
         let mut vote_state2 = VoteState::from(&vote_account2).unwrap();
         vote_state2.process_slot_vote_unchecked(9);
         vote_state2.process_slot_vote_unchecked(10);
-        let versioned = VoteStateVersions::Current(vote_state2);
+        let versioned = VoteStateVersions::Current(Box::new(vote_state2));
         VoteState::to(&versioned, &mut vote_account2).unwrap();
         bank.store_account(&pk2, &vote_account2);
 

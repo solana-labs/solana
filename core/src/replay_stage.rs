@@ -1122,7 +1122,7 @@ pub(crate) mod tests {
             let mut vote_account = bank.get_account(&pubkey).unwrap();
             let mut vote_state = VoteState::from(&vote_account).unwrap();
             vote_state.process_slot_vote_unchecked(slot);
-            let versioned = VoteStateVersions::Current(vote_state);
+            let versioned = VoteStateVersions::Current(Box::new(vote_state));
             VoteState::to(&versioned, &mut vote_account).unwrap();
             bank.store_account(&pubkey, &vote_account);
         }
@@ -1707,7 +1707,7 @@ pub(crate) mod tests {
             let mut leader_vote_account = bank.get_account(&pubkey).unwrap();
             let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
             vote_state.process_slot_vote_unchecked(bank.slot());
-            let versioned = VoteStateVersions::Current(vote_state);
+            let versioned = VoteStateVersions::Current(Box::new(vote_state));
             VoteState::to(&versioned, &mut leader_vote_account).unwrap();
             bank.store_account(&pubkey, &leader_vote_account);
         }

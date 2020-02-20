@@ -17,6 +17,7 @@ use solana_sdk::{
     slot_hashes::SlotHash,
     sysvar::clock::Clock,
 };
+use std::boxed::Box;
 use std::collections::{HashSet, VecDeque};
 
 pub mod vote_state_versions;
@@ -227,8 +228,8 @@ impl VoteState {
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
         deserialize::<VoteStateVersions>(&input)
             .map(|versioned| {
-                if let VoteStateVersions::Current(vote_state) = versioned.to_current() {
-                    vote_state
+                if let VoteStateVersions::Current(versioned) = versioned.to_current() {
+                    *versioned
                 } else {
                     panic!("to_current has to return the Current")
                 }
@@ -566,7 +567,7 @@ pub fn authorize(
         }
     }
 
-    vote_account.set_state(&VoteStateVersions::Current(vote_state))
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
 /// Update the node_pubkey, requires signature of the authorized voter
@@ -586,7 +587,7 @@ pub fn update_node(
 
     vote_state.node_pubkey = *node_pubkey;
 
-    vote_account.set_state(&VoteStateVersions::Current(vote_state))
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
 fn verify_authorized_signer(
@@ -633,9 +634,9 @@ pub fn initialize_account(
         return Err(InstructionError::AccountAlreadyInitialized);
     }
 
-    vote_account.set_state(&VoteStateVersions::Current(VoteState::new(
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(VoteState::new(
         vote_init, clock,
-    )))
+    ))))
 }
 
 pub fn process_vote(
@@ -664,7 +665,7 @@ pub fn process_vote(
             .ok_or_else(|| VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
-    vote_account.set_state(&VoteStateVersions::Current(vote_state))
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
 // utility function, used by Bank, tests
@@ -686,7 +687,7 @@ pub fn create_account(
         &Clock::default(),
     );
 
-    let versioned = VoteStateVersions::Current(vote_state);
+    let versioned = VoteStateVersions::Current(Box::new(vote_state));
     VoteState::to(&versioned, &mut vote_account).unwrap();
 
     vote_account
@@ -812,11 +813,11 @@ mod tests {
         vote_state
             .votes
             .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
-        let versioned = VoteStateVersions::Current(vote_state);
+        let versioned = VoteStateVersions::Current(Box::new(vote_state));
         assert!(VoteState::serialize(&versioned, &mut buffer[0..4]).is_err());
         VoteState::serialize(&versioned, &mut buffer).unwrap();
         assert_eq!(
-            VoteStateVersions::Current(VoteState::deserialize(&buffer).unwrap()),
+            VoteStateVersions::Current(Box::new(VoteState::deserialize(&buffer).unwrap())),
             versioned
         );
     }

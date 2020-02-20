@@ -3064,12 +3064,12 @@ mod tests {
             vote_state
                 .as_mut()
                 .map(|v| v.process_slot_vote_unchecked(i as u64));
-            let versioned = VoteStateVersions::Current(vote_state.take().unwrap());
+            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
             bank.store_account(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
-                    vote_state = Some(v);
+                    vote_state = Some(*v);
                 }
                 _ => panic!("Has to be of type Current"),
             };

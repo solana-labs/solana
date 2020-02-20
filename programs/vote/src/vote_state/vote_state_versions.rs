@@ -5,12 +5,12 @@ use solana_vote_program_0_23_5::vote_state::VoteState as VoteState_0_23_5;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum VoteStateVersions {
-    V0_23_5(VoteState_0_23_5),
-    Current(VoteState),
+    V0_23_5(Box<VoteState_0_23_5>),
+    Current(Box<VoteState>),
 }
 
 impl VoteStateVersions {
-    pub fn to_current(self) -> VoteStateVersions {
+    pub fn to_current(&self) -> VoteStateVersions {
         match self {
             VoteStateVersions::V0_23_5(state) => {
                 let authorized_voter = Pubkey::new(state.authorized_withdrawer.as_ref());
@@ -59,9 +59,9 @@ impl VoteStateVersions {
                     /// most recent timestamp submitted with a vote
                     last_timestamp,
                 };
-                VoteStateVersions::Current(current_state)
+                VoteStateVersions::Current(Box::new(current_state))
             }
-            VoteStateVersions::Current(state) => VoteStateVersions::Current(state),
+            VoteStateVersions::Current(state) => VoteStateVersions::Current(state.clone()),
         }
     }
 }
