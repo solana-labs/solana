@@ -37,6 +37,8 @@ impl PubSubService {
                         });
                         session
                 })
+                .max_connections(1000) // Arbitrary, default of 100 is too low
+                .max_payload(5 * 1024) // Arbitrary, default of 5MB is too high
                 .start(&pubsub_addr);
 
                 if let Err(e) = server {
