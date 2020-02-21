@@ -10,6 +10,7 @@ use solana_runtime::bank::{
 use solana_sdk::clock::Slot;
 use std::{
     cmp::Ordering,
+    env,
     fs::{self, File},
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -173,10 +174,17 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
         f.write_all(&snapshot_version.into_bytes())?;
     }
 
+    let archive_compress_options = if is_snapshot_compression_disabled() {
+        ""
+    } else {
+        "j"
+    };
+    let archive_options = format!("{}cfhS", archive_compress_options);
+
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join("new_state.tar.bz2");
     let args = vec![
-        "jcfhS",
+        archive_options.as_str(),
         archive_path.to_str().unwrap(),
         "-C",
         staging_dir.path().to_str().unwrap(),
@@ -480,6 +488,14 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     Ok(bank)
 }
 
+fn is_snapshot_compression_disabled() -> bool {
+    if let Ok(flag) = env::var("SOLANA_DISABLE_SNAPSHOT_COMPRESSION") {
+        !(flag == "0" || flag == "false")
+    } else {
+        false
+    }
+}
+
 pub fn get_snapshot_archive_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
     snapshot_output_dir.as_ref().join("snapshot.tar.bz2")
 }
@@ -489,10 +505,21 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     unpack_dir: Q,
 ) -> Result<()> {
     let mut measure = Measure::start("snapshot untar");
-    let tar_bz2 = File::open(snapshot_tar)?;
+    let tar_bz2 = File::open(&snapshot_tar)?;
     let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut archive = Archive::new(tar);
-    archive.unpack(&unpack_dir)?;
+    if !is_snapshot_compression_disabled() {
+        archive.unpack(&unpack_dir)?;
+    } else if let Err(e) = archive.unpack(&unpack_dir) {
+        warn!(
+            "Trying to unpack as uncompressed tar because an error occured: {:?}",
+            e
+        );
+        let tar_bz2 = File::open(snapshot_tar)?;
+        let tar = BufReader::new(tar_bz2);
+        let mut archive = Archive::new(tar);
+        archive.unpack(&unpack_dir)?;
+    }
     measure.stop();
     info!("{}", measure);
     Ok(())
