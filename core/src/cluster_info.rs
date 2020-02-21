@@ -515,19 +515,21 @@ impl ClusterInfo {
             .map(|x| &x.value.snapshot_hash().unwrap().hashes)
     }
 
-    pub fn get_epoch_slots_since(&self, since: Option<u64>) -> (Vec<EpochSlots>, u64) {
-        let vals = self
+    pub fn get_epoch_slots_since(&self, since: Option<u64>) -> (Vec<EpochSlots>, Option<u64>) {
+        let vals: Vec<_> = self
             .gossip
             .crds
-            .values
+            .table
+            .values()
             .filter(|x| {
                 since
                     .map(|since| x.insert_timestamp > since)
                     .unwrap_or(true)
             })
-            .filter_map(|x| (x.value.epoch_slots().unwrap(), x.insert_timestamp));
-        let max = vals.map(|x| x.1).maximum().unwrap_or(since);
-        let vec = vals.map(|x| x.0).collect();
+            .filter_map(|x| Some((x.value.epoch_slots()?, x.insert_timestamp)))
+            .collect();
+        let max = vals.iter().map(|x| x.1).max().or(since);
+        let vec = vals.into_iter().map(|x| x.0).cloned().collect();
         (vec, max)
     }
 
@@ -676,24 +678,6 @@ impl ClusterInfo {
                     && ContactInfo::is_valid_address(&x.tvu_forwards)
             })
             .cloned()
-            .collect()
-    }
-
-    /// all tvu peers with valid gossip addrs that likely have the slot being requested
-    pub fn repair_peers(&self, slot: Slot) -> Vec<ContactInfo> {
-        let me = self.my_data();
-        ClusterInfo::tvu_peers(self)
-            .into_iter()
-            .filter(|x| {
-                x.id != me.id
-                    && x.shred_version == me.shred_version
-                    && ContactInfo::is_valid_address(&x.serve_repair)
-                    && {
-                        self.get_epoch_state_for_node(&x.id, None)
-                            .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
-                            .unwrap_or_else(|| /* fallback to legacy behavior */ true)
-                    }
-            })
             .collect()
     }
 
@@ -2271,6 +2255,35 @@ mod tests {
     }
 
     #[test]
+    fn test_push_epoch_slots() {
+        let keys = Keypair::new();
+        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        assert!(slots.is_empty());
+        assert!(since.is_none());
+        cluster_info.push_epoch_slots(
+            cluster_info.id(),
+            0,
+            0,
+            BTreeSet::default(),
+            &BTreeSet::default(),
+        );
+
+        let (slots, since) = cluster_info.get_epoch_slots_since(Some(std::u64::MAX));
+        assert!(slots.is_empty());
+        assert_eq!(since, Some(std::u64::MAX));
+
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        assert_eq!(slots.len(), 1);
+        assert!(since.is_some());
+
+        let (slots, since2) = cluster_info.get_epoch_slots_since(since.clone());
+        assert!(slots.is_empty());
+        assert_eq!(since2, since);
+    }
+
+    #[test]
     fn test_add_entrypoint() {
         let node_keypair = Arc::new(Keypair::new());
         let mut cluster_info = ClusterInfo::new(
@@ -2500,41 +2513,6 @@ mod tests {
         let pulls = cluster_info.new_pull_requests(&stakes);
         assert_eq!(1, pulls.len() as u64);
         assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
-    }
-
-    #[test]
-    fn test_repair_peers() {
-        let node_keypair = Arc::new(Keypair::new());
-        let mut cluster_info = ClusterInfo::new(
-            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
-            node_keypair,
-        );
-        for i in 0..10 {
-            let mut peer_root = 5;
-            let mut peer_lowest = 0;
-            if i >= 5 {
-                // make these invalid for the upcoming repair request
-                peer_root = 15;
-                peer_lowest = 10;
-            }
-            let other_node_pubkey = Pubkey::new_rand();
-            let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
-            cluster_info.insert_info(other_node.clone());
-            let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-                0,
-                EpochSlots::new(
-                    other_node_pubkey,
-                    peer_root,
-                    peer_lowest,
-                    BTreeSet::new(),
-                    vec![],
-                    timestamp(),
-                ),
-            ));
-            let _ = cluster_info.gossip.crds.insert(value, timestamp());
-        }
-        // only half the visible peers should be eligible to serve this repair
-        assert_eq!(cluster_info.repair_peers(5).len(), 5);
     }
 
     #[test]

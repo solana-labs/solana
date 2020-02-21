@@ -2,6 +2,7 @@
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 use crate::{
     cluster_info::ClusterInfo,
+    cluster_slots::ClusterSlots,
     result::Result,
     serve_repair::{RepairType, ServeRepair},
 };
@@ -9,11 +10,15 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
 };
-use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
+use solana_sdk::{
+    clock::{Slot, DEFAULT_SLOTS_PER_EPOCH},
+    epoch_schedule::EpochSchedule,
+    pubkey::Pubkey,
+};
+
 use std::{
     collections::BTreeSet,
-    net::UdpSocket,
+    net::{SocketAddr, UdpSocket},
     ops::Bound::{Included, Unbounded},
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -37,6 +42,14 @@ pub enum RepairStrategy {
         epoch_schedule: EpochSchedule,
     },
 }
+impl RepairStrategy {
+    pub fn bank_forks(&self) -> Option<&Arc<RwLock<BankForks>>> {
+        match self {
+            RepairStrategy::RepairRange(_) => None,
+            RepairStrategy::RepairAll { ref bank_forks, .. } => Some(bank_forks),
+        }
+    }
+}
 
 pub struct RepairSlotRange {
     pub start: Slot,
@@ -54,47 +67,6 @@ impl Default for RepairSlotRange {
 
 pub struct RepairService {
     t_repair: JoinHandle<()>,
-}
-
-#[derive(Default)]
-pub struct ClusterSlots {
-    cluster_slots: HashMap<Slot, HashSet<Pubkey>>,
-    since: u64,
-}
-
-impl ClusterSlots {
-    fn update(&mut self, root: Slot, cluster_info: &RwLock<ClusterInfo>) {
-        let (epoch_slots_list, since) = cluster_info
-            .read()
-            .unwrap()
-            .get_epoch_slots_since(self.since);
-        self.since = since;
-        for epoch_slots in epoch_slots_list {
-            for slot in epoch_slots.slots {
-                if slot < root {
-                    continue;
-                }
-                self.cluster_slots
-                    .entry(slot)
-                    .or_insert_default()
-                    .insert(epoch_slots.from);
-            }
-        }
-        self.cluster_slots.retain(|x| x.0 > root);
-    }
-    fn generate_repairs_for_missing_slots(
-        &self,
-        root: Slot,
-        epoch_slots: &BTreeSet<Slot>,
-        old_incomplete_slots: BTreeSet<Slot>,
-    ) -> Vec<RepairType> {
-        self.cluster_slots
-            .keys()
-            .filter(|x| x < root)
-            .filter(|x| !(epoch_slots.contains(x) || old_incomplete_slots.contains(x)))
-            .map(|h| RepairType::Orphan(*h))
-            .collect()
-    }
 }
 
 impl RepairService {
@@ -166,6 +138,7 @@ impl RepairService {
 
                     RepairStrategy::RepairAll {
                         ref completed_slots_receiver,
+                        ref bank_forks,
                         ..
                     } => {
                         let new_root = blockstore.last_root();
@@ -179,20 +152,28 @@ impl RepairService {
                             &cluster_info,
                             completed_slots_receiver,
                         );
-                        cluster_slots.update(&cluster_info);
-                        let repairs = cluster_slots
-                            .generate_repairs_for_missing_slots(epoch_slots, old_incomplete_slots);
+                        cluster_slots.update(new_root, &cluster_info, &bank_forks);
+                        let repairs = cluster_slots.generate_repairs_for_missing_slots(
+                            new_root,
+                            &epoch_slots,
+                            &old_incomplete_slots,
+                        );
                         Self::generate_repairs(repairs, blockstore, new_root, MAX_REPAIR_LENGTH)
                     }
                 }
             };
 
             if let Ok(repairs) = repairs {
-                let reqs: Vec<_> = repairs
+                let reqs: Vec<((SocketAddr, Vec<u8>), RepairType)> = repairs
                     .into_iter()
                     .filter_map(|repair_request| {
+                        let peers: Vec<(Pubkey, u64)> = cluster_slots
+                            .lookup(repair_request.slot())?
+                            .iter()
+                            .map(|(x, y)| (*x, *y))
+                            .collect();
                         serve_repair
-                            .repair_request(&repair_request)
+                            .repair_request(&peers, &repair_request)
                             .map(|result| (result, repair_request))
                             .ok()
                     })
@@ -478,7 +459,7 @@ mod test {
             shreds.extend(shreds2);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, 2).unwrap(),
+                RepairService::generate_repairs(vec![], &blockstore, 0, 2).unwrap(),
                 vec![RepairType::HighestShred(0, 0), RepairType::Orphan(2)]
             );
         }
@@ -500,7 +481,7 @@ mod test {
 
             // Check that repair tries to patch the empty slot
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, 2).unwrap(),
+                RepairService::generate_repairs(vec![], &blockstore, 0, 2).unwrap(),
                 vec![RepairType::HighestShred(0, 0)]
             );
         }
@@ -546,12 +527,13 @@ mod test {
                 .collect();
 
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, std::usize::MAX).unwrap(),
+                RepairService::generate_repairs(vec![], &blockstore, 0, std::usize::MAX).unwrap(),
                 expected
             );
 
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, expected.len() - 2).unwrap()[..],
+                RepairService::generate_repairs(vec![], &blockstore, 0, expected.len() - 2)
+                    .unwrap()[..],
                 expected[0..expected.len() - 2]
             );
         }
@@ -580,7 +562,7 @@ mod test {
                 vec![RepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, std::usize::MAX).unwrap(),
+                RepairService::generate_repairs(vec![], &blockstore, 0, std::usize::MAX).unwrap(),
                 expected
             );
         }

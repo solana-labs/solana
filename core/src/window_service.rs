@@ -259,11 +259,7 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-        let bank_forks = match repair_strategy {
-            RepairStrategy::RepairRange(_) => None,
-            RepairStrategy::RepairAll { ref bank_forks, .. } => Some(bank_forks.clone()),
-        };
-
+        let bank_forks = repair_strategy.bank_forks().cloned();
         let repair_service = RepairService::new(
             blockstore.clone(),
             exit.clone(),
@@ -426,9 +422,7 @@ impl WindowService {
                             shred_filter(
                                 &id,
                                 shred,
-                                bank_forks
-                                    .as_ref()
-                                    .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
+                                bank_forks.as_ref().map(|bank_forks| bank_forks.read().unwrap().working_bank()),
                                 last_root,
                             )
                         },

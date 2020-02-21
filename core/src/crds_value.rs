@@ -102,7 +102,7 @@ impl SnapshotHash {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct EpochSlots {
     pub from: Pubkey,
     pub root: Slot,

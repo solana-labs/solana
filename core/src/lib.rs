@@ -15,6 +15,7 @@ pub mod contact_info;
 pub mod blockstream;
 pub mod blockstream_service;
 pub mod cluster_info;
+pub mod cluster_slots;
 pub mod consensus;
 pub mod crds;
 pub mod crds_gossip;
