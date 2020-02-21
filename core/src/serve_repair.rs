@@ -290,7 +290,7 @@ impl ServeRepair {
     pub fn map_repair_request(&self, repair_request: &RepairType) -> Result<Vec<u8>> {
         match repair_request {
             RepairType::Shred(slot, shred_index) => {
-                datapoint_info!(
+                datapoint_debug!(
                     "serve_repair-repair",
                     ("repair-slot", *slot, i64),
                     ("repair-ix", *shred_index, i64)
