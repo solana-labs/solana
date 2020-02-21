@@ -72,7 +72,5 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 60000, 0);
     let ancestors = vec![(0, 0)].into_iter().collect();
-    bencher.iter(|| {
-        accounts.verify_bank_hash(0, &ancestors);
-    });
+    bencher.iter(|| assert!(accounts.verify_bank_hash(0, &ancestors)));
 }

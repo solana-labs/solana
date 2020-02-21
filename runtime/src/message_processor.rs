@@ -1,5 +1,4 @@
-use crate::native_loader;
-use crate::system_instruction_processor;
+use crate::{native_loader, system_instruction_processor};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
@@ -20,7 +19,8 @@ use libloading::os::windows::*;
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
-pub struct PreInstructionAccount {
+#[derive(Clone, Debug, PartialEq)]
+pub struct PreAccount {
     pub is_writable: bool,
     pub lamports: u64,
     pub data_len: usize,
@@ -29,13 +29,13 @@ pub struct PreInstructionAccount {
     pub executable: bool,
     pub rent_epoch: Epoch,
 }
-impl PreInstructionAccount {
-    pub fn new(account: &Account, is_writable: bool, copy_data: bool) -> Self {
+impl PreAccount {
+    pub fn new(account: &Account, is_writable: bool, program_id: &Pubkey) -> Self {
         Self {
             is_writable,
             lamports: account.lamports,
             data_len: account.data.len(),
-            data: if copy_data {
+            data: if Self::should_verify_data(&account.owner, program_id, is_writable) {
                 Some(account.data.clone())
             } else {
                 None
@@ -45,86 +45,92 @@ impl PreInstructionAccount {
             rent_epoch: account.rent_epoch,
         }
     }
-}
-pub fn need_account_data_checked(program_id: &Pubkey, owner: &Pubkey, is_writable: bool) -> bool {
-    // For accounts not assigned to the program, the data may not change.
-    program_id != owner
-    // Read-only account data may not change.
-    || !is_writable
-}
-pub fn verify_account_changes(
-    program_id: &Pubkey,
-    pre: &PreInstructionAccount,
-    post: &Account,
-) -> Result<(), InstructionError> {
-    // Verify the transaction
 
-    // Only the owner of the account may change owner and
-    //   only if the account is writable and
-    //   only if the data is zero-initialized or empty
-    if pre.owner != post.owner
-        && (!pre.is_writable // line coverage used to get branch coverage
-            || *program_id != pre.owner // line coverage used to get branch coverage
-            || !is_zeroed(&post.data))
-    {
-        return Err(InstructionError::ModifiedProgramId);
+    fn should_verify_data(owner: &Pubkey, program_id: &Pubkey, is_writable: bool) -> bool {
+        // For accounts not assigned to the program, the data may not change.
+        program_id != owner
+        // Read-only account data may not change.
+        || !is_writable
     }
 
-    // An account not assigned to the program cannot have its balance decrease.
-    if *program_id != pre.owner // line coverage used to get branch coverage
-        && pre.lamports > post.lamports
-    {
-        return Err(InstructionError::ExternalAccountLamportSpend);
-    }
+    pub fn verify(&self, program_id: &Pubkey, post: &Account) -> Result<(), InstructionError> {
+        // Verify the transaction
 
-    // The balance of read-only accounts may not change.
-    if !pre.is_writable // line coverage used to get branch coverage
-        && pre.lamports != post.lamports
-    {
-        return Err(InstructionError::ReadonlyLamportChange);
-    }
+        // Only the owner of the account may change owner and
+        //   only if the account is writable and
+        //   only if the data is zero-initialized or empty
+        if self.owner != post.owner
+            && (!self.is_writable // line coverage used to get branch coverage
+            || *program_id != self.owner // line coverage used to get branch coverage
+            || !Self::is_zeroed(&post.data))
+        {
+            return Err(InstructionError::ModifiedProgramId);
+        }
 
-    // Only the system program can change the size of the data
-    //  and only if the system program owns the account
-    if pre.data_len != post.data.len()
-        && (!system_program::check_id(program_id) // line coverage used to get branch coverage
-            || !system_program::check_id(&pre.owner))
-    {
-        return Err(InstructionError::AccountDataSizeChanged);
-    }
+        // An account not assigned to the program cannot have its balance decrease.
+        if *program_id != self.owner // line coverage used to get branch coverage
+        && self.lamports > post.lamports
+        {
+            return Err(InstructionError::ExternalAccountLamportSpend);
+        }
 
-    if need_account_data_checked(&pre.owner, program_id, pre.is_writable) {
-        match &pre.data {
-            Some(data) if *data == post.data => (),
-            _ => {
-                if !pre.is_writable {
-                    return Err(InstructionError::ReadonlyDataModified);
-                } else {
-                    return Err(InstructionError::ExternalAccountDataModified);
+        // The balance of read-only accounts may not change.
+        if !self.is_writable // line coverage used to get branch coverage
+        && self.lamports != post.lamports
+        {
+            return Err(InstructionError::ReadonlyLamportChange);
+        }
+
+        // Only the system program can change the size of the data
+        //  and only if the system program owns the account
+        if self.data_len != post.data.len()
+            && (!system_program::check_id(program_id) // line coverage used to get branch coverage
+            || !system_program::check_id(&self.owner))
+        {
+            return Err(InstructionError::AccountDataSizeChanged);
+        }
+
+        if Self::should_verify_data(&self.owner, program_id, self.is_writable) {
+            match &self.data {
+                Some(data) if *data == post.data => (),
+                _ => {
+                    if !self.is_writable {
+                        return Err(InstructionError::ReadonlyDataModified);
+                    } else {
+                        return Err(InstructionError::ExternalAccountDataModified);
+                    }
                 }
             }
         }
+
+        // executable is one-way (false->true) and only the account owner may set it.
+        if self.executable != post.executable
+            && (!self.is_writable // line coverage used to get branch coverage
+            || self.executable // line coverage used to get branch coverage
+            || *program_id != self.owner)
+        {
+            return Err(InstructionError::ExecutableModified);
+        }
+
+        // No one modifies r    ent_epoch (yet).
+        if self.rent_epoch != post.rent_epoch {
+            return Err(InstructionError::RentEpochModified);
+        }
+
+        Ok(())
     }
 
-    // executable is one-way (false->true) and only the account owner may set it.
-    if pre.executable != post.executable
-        && (!pre.is_writable // line coverage used to get branch coverage
-            || pre.executable // line coverage used to get branch coverage
-            || *program_id != pre.owner)
-    {
-        return Err(InstructionError::ExecutableModified);
-    }
+    pub fn is_zeroed(buf: &[u8]) -> bool {
+        const ZEROS_LEN: usize = 1024;
+        static ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
+        let mut chunks = buf.chunks_exact(ZEROS_LEN);
 
-    // No one modifies rent_epoch (yet).
-    if pre.rent_epoch != post.rent_epoch {
-        return Err(InstructionError::RentEpochModified);
+        chunks.all(|chunk| chunk == &ZEROS[..])
+            && chunks.remainder() == &ZEROS[..chunks.remainder().len()]
     }
-
-    Ok(())
 }
 
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
-
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<entrypoint_native::Entrypoint>>>;
 
 #[derive(Serialize, Deserialize)]
@@ -232,21 +238,40 @@ impl MessageProcessor {
         Ok(())
     }
 
-    pub fn sum_account_lamports(accounts: &[Rc<RefCell<Account>>]) -> u128 {
-        // Note: This is an O(n^2) algorithm,
-        // but performed on a very small slice and requires no heap allocations
-        accounts
-            .iter()
-            .enumerate()
-            .map(|(i, a)| {
-                for account in accounts.iter().skip(i + 1) {
-                    if Rc::ptr_eq(a, account) {
-                        return 0; // don't double count duplicates
-                    }
+    pub fn verify(
+        program_id: &Pubkey,
+        pre_accounts: &[PreAccount],
+        executable_accounts: &[(Pubkey, RefCell<Account>)],
+        program_accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        // Verify all accounts have zero outstanding refs
+        Self::verify_account_references(executable_accounts, program_accounts)?;
+
+        // Verify the per-account instruction results
+        let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
+        'root: for (i, (pre_account, account)) in
+            pre_accounts.iter().zip(program_accounts).enumerate()
+        {
+            // Note: This is an O(n^2) algorithm,
+            // but performed on a very small slice and requires no heap allocations
+            for account_after in program_accounts.iter().skip(i + 1) {
+                if Rc::ptr_eq(account, account_after) {
+                    continue 'root; // don't verify duplicates
                 }
-                u128::from(a.borrow().lamports)
-            })
-            .sum()
+            }
+            let account = account
+                .try_borrow()
+                .map_err(|_| InstructionError::AccountBorrowFailed)?;
+            pre_account.verify(&program_id, &account)?;
+            pre_sum += u128::from(pre_account.lamports);
+            post_sum += u128::from(account.lamports);
+        }
+
+        // Verify that the total sum of all the lamports did not change
+        if pre_sum != post_sum {
+            return Err(InstructionError::UnbalancedInstruction);
+        }
+        Ok(())
     }
 
     /// Execute an instruction
@@ -269,32 +294,20 @@ impl MessageProcessor {
             .map(|(i, account)| {
                 let is_writable = message.is_writable(instruction.accounts[i] as usize);
                 let account = account.borrow();
-                PreInstructionAccount::new(
-                    &account,
-                    is_writable,
-                    need_account_data_checked(&account.owner, program_id, is_writable),
-                )
+                PreAccount::new(&account, is_writable, program_id)
             })
             .collect();
-        // Sum total lamports before instruction processing
-        let pre_total = Self::sum_account_lamports(program_accounts);
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
 
-        // Verify all accounts have zero outstanding refs
-        Self::verify_account_references(executable_accounts, program_accounts)?;
-        // Verify the instruction
-        for (pre_account, post_account) in pre_accounts.iter().zip(program_accounts.iter()) {
-            let post_account = post_account
-                .try_borrow()
-                .map_err(|_| InstructionError::AccountBorrowFailed)?;
-            verify_account_changes(&program_id, pre_account, &post_account)?;
-        }
-        // Verify total sum of all the lamports did not change
-        let post_total = Self::sum_account_lamports(program_accounts);
-        if pre_total != post_total {
-            return Err(InstructionError::UnbalancedInstruction);
-        }
+        // Verify the instruction results
+        Self::verify(
+            &program_id,
+            &pre_accounts,
+            executable_accounts,
+            program_accounts,
+        )?;
+
         Ok(())
     }
 
@@ -329,15 +342,6 @@ impl MessageProcessor {
     }
 }
 
-pub const ZEROS_LEN: usize = 1024;
-static ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
-pub fn is_zeroed(buf: &[u8]) -> bool {
-    let mut chunks = buf.chunks_exact(ZEROS_LEN);
-
-    chunks.all(|chunk| chunk == &ZEROS[..])
-        && chunks.remainder() == &ZEROS[..chunks.remainder().len()]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,23 +353,24 @@ mod tests {
 
     #[test]
     fn test_is_zeroed() {
+        const ZEROS_LEN: usize = 1024;
         let mut buf = [0; ZEROS_LEN];
-        assert_eq!(is_zeroed(&buf), true);
+        assert_eq!(PreAccount::is_zeroed(&buf), true);
         buf[0] = 1;
-        assert_eq!(is_zeroed(&buf), false);
+        assert_eq!(PreAccount::is_zeroed(&buf), false);
 
         let mut buf = [0; ZEROS_LEN - 1];
-        assert_eq!(is_zeroed(&buf), true);
+        assert_eq!(PreAccount::is_zeroed(&buf), true);
         buf[0] = 1;
-        assert_eq!(is_zeroed(&buf), false);
+        assert_eq!(PreAccount::is_zeroed(&buf), false);
 
         let mut buf = [0; ZEROS_LEN + 1];
-        assert_eq!(is_zeroed(&buf), true);
+        assert_eq!(PreAccount::is_zeroed(&buf), true);
         buf[0] = 1;
-        assert_eq!(is_zeroed(&buf), false);
+        assert_eq!(PreAccount::is_zeroed(&buf), false);
 
         let buf = vec![];
-        assert_eq!(is_zeroed(&buf), true);
+        assert_eq!(PreAccount::is_zeroed(&buf), true);
     }
 
     #[test]
@@ -395,51 +400,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sum_account_lamports() {
-        let owner_pubkey = Pubkey::new_rand();
-        let account1 = Rc::new(RefCell::new(Account::new(1, 1, &owner_pubkey)));
-        let account2 = Rc::new(RefCell::new(Account::new(2, 1, &owner_pubkey)));
-        let account3 = Rc::new(RefCell::new(Account::new(3, 1, &owner_pubkey)));
-
-        assert_eq!(0, MessageProcessor::sum_account_lamports(&vec![]));
-        assert_eq!(
-            6,
-            MessageProcessor::sum_account_lamports(&vec![
-                account1.clone(),
-                account2.clone(),
-                account3.clone()
-            ])
-        );
-        assert_eq!(
-            3,
-            MessageProcessor::sum_account_lamports(&vec![
-                account1.clone(),
-                account2.clone(),
-                account1.clone()
-            ])
-        );
-        assert_eq!(
-            1,
-            MessageProcessor::sum_account_lamports(&vec![
-                account1.clone(),
-                account1.clone(),
-                account1.clone()
-            ])
-        );
-        assert_eq!(
-            6,
-            MessageProcessor::sum_account_lamports(&vec![
-                account1.clone(),
-                account2.clone(),
-                account3.clone(),
-                account1.clone(),
-                account2.clone(),
-                account3.clone(),
-            ])
-        );
-    }
-
-    #[test]
     fn test_verify_account_changes_owner() {
         fn change_owner(
             ix: &Pubkey,
@@ -447,15 +407,8 @@ mod tests {
             post: &Pubkey,
             is_writable: bool,
         ) -> Result<(), InstructionError> {
-            verify_account_changes(
-                &ix,
-                &PreInstructionAccount::new(
-                    &Account::new(0, 0, pre),
-                    is_writable,
-                    need_account_data_checked(pre, ix, is_writable),
-                ),
-                &Account::new(0, 0, post),
-            )
+            PreAccount::new(&Account::new(0, 0, pre), is_writable, ix)
+                .verify(ix, &Account::new(0, 0, post))
         }
 
         let system_program_id = system_program::id();
@@ -505,27 +458,27 @@ mod tests {
         );
 
         assert_eq!(
-            verify_account_changes(
+            PreAccount::new(
+                &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
+                true,
                 &mallory_program_id,
-                &PreInstructionAccount::new(
-                    &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
-                    true,
-                    need_account_data_checked(&mallory_program_id, &mallory_program_id, true),
-                ),
-                &Account::new_data(0, &[0], &alice_program_id,).unwrap(),
+            )
+            .verify(
+                &mallory_program_id,
+                &Account::new_data(0, &[0], &alice_program_id).unwrap(),
             ),
             Ok(()),
             "mallory should be able to change the account owner, if she leaves clear data"
         );
         assert_eq!(
-            verify_account_changes(
+            PreAccount::new(
+                &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
+                true,
                 &mallory_program_id,
-                &PreInstructionAccount::new(
-                    &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
-                    true,
-                    need_account_data_checked(&mallory_program_id, &mallory_program_id, true),
-                ),
-                &Account::new_data(0, &[42], &alice_program_id,).unwrap(),
+            )
+            .verify(
+                &mallory_program_id,
+                &Account::new_data(0, &[42], &alice_program_id).unwrap(),
             ),
             Err(InstructionError::ModifiedProgramId),
             "mallory should not be able to inject data into the alice program"
@@ -540,14 +493,14 @@ mod tests {
                                  pre_executable: bool,
                                  post_executable: bool|
          -> Result<(), InstructionError> {
-            let pre = PreInstructionAccount::new(
+            let pre = PreAccount::new(
                 &Account {
                     owner,
                     executable: pre_executable,
                     ..Account::default()
                 },
                 is_writable,
-                need_account_data_checked(&owner, &program_id, is_writable),
+                &program_id,
             );
 
             let post = Account {
@@ -555,7 +508,7 @@ mod tests {
                 executable: post_executable,
                 ..Account::default()
             };
-            verify_account_changes(&program_id, &pre, &post)
+            pre.verify(&program_id, &post)
         };
 
         let mallory_program_id = Pubkey::new_rand();
@@ -591,14 +544,14 @@ mod tests {
     #[test]
     fn test_verify_account_changes_data_len() {
         assert_eq!(
-            verify_account_changes(
+            PreAccount::new(
+                &Account::new_data(0, &[0], &system_program::id()).unwrap(),
+                true,
+                &system_program::id()
+            )
+            .verify(
                 &system_program::id(),
-                &PreInstructionAccount::new(
-                    &Account::new_data(0, &[0], &system_program::id()).unwrap(),
-                    true,
-                    need_account_data_checked(&system_program::id(), &system_program::id(), true),
-                ),
-                &Account::new_data(0, &[0, 0], &system_program::id()).unwrap(),
+                &Account::new_data(0, &[0, 0], &system_program::id()).unwrap()
             ),
             Ok(()),
             "system program should be able to change the data len"
@@ -606,13 +559,12 @@ mod tests {
         let alice_program_id = Pubkey::new_rand();
 
         assert_eq!(
-            verify_account_changes(
-                &system_program::id(),
-                &PreInstructionAccount::new(
+                PreAccount::new(
                     &Account::new_data(0, &[0], &alice_program_id).unwrap(),
                     true,
-                    need_account_data_checked(&alice_program_id, &system_program::id(), true),
-                ),
+                    &system_program::id(),
+                ).verify(
+                &system_program::id(),
                 &Account::new_data(0, &[0, 0], &alice_program_id).unwrap(),
             ),
             Err(InstructionError::AccountDataSizeChanged),
@@ -626,13 +578,13 @@ mod tests {
 
         let change_data =
             |program_id: &Pubkey, is_writable: bool| -> Result<(), InstructionError> {
-                let pre = PreInstructionAccount::new(
+                let pre = PreAccount::new(
                     &Account::new_data(0, &[0], &alice_program_id).unwrap(),
                     is_writable,
-                    need_account_data_checked(&alice_program_id, &program_id, is_writable),
+                    &program_id,
                 );
                 let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
-                verify_account_changes(&program_id, &pre, &post)
+                pre.verify(&program_id, &post)
             };
 
         let mallory_program_id = Pubkey::new_rand();
@@ -658,22 +610,22 @@ mod tests {
     #[test]
     fn test_verify_account_changes_rent_epoch() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new(0, 0, &alice_program_id),
             false,
-            need_account_data_checked(&alice_program_id, &system_program::id(), false),
+            &system_program::id(),
         );
         let mut post = Account::new(0, 0, &alice_program_id);
 
         assert_eq!(
-            verify_account_changes(&system_program::id(), &pre, &post),
+            pre.verify(&system_program::id(), &post),
             Ok(()),
             "nothing changed!"
         );
 
         post.rent_epoch += 1;
         assert_eq!(
-            verify_account_changes(&system_program::id(), &pre, &post),
+            pre.verify(&system_program::id(), &post),
             Err(InstructionError::RentEpochModified),
             "no one touches rent_epoch"
         );
@@ -683,16 +635,16 @@ mod tests {
     fn test_verify_account_changes_deduct_lamports_and_reassign_account() {
         let alice_program_id = Pubkey::new_rand();
         let bob_program_id = Pubkey::new_rand();
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new_data(42, &[42], &alice_program_id).unwrap(),
             true,
-            need_account_data_checked(&alice_program_id, &alice_program_id, true),
+            &alice_program_id,
         );
         let post = Account::new_data(1, &[0], &bob_program_id).unwrap();
 
         // positive test of this capability
         assert_eq!(
-            verify_account_changes(&alice_program_id, &pre, &post),
+            pre.verify(&alice_program_id, &post),
             Ok(()),
             "alice should be able to deduct lamports and give the account to bob if the data is zeroed",
         );
@@ -701,51 +653,51 @@ mod tests {
     #[test]
     fn test_verify_account_changes_lamports() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new(42, 0, &alice_program_id),
             false,
-            need_account_data_checked(&alice_program_id, &system_program::id(), false),
+            &system_program::id(),
         );
         let post = Account::new(0, 0, &alice_program_id);
 
         assert_eq!(
-            verify_account_changes(&system_program::id(), &pre, &post),
+            pre.verify(&system_program::id(), &post),
             Err(InstructionError::ExternalAccountLamportSpend),
             "debit should fail, even if system program"
         );
 
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new(42, 0, &alice_program_id),
             false,
-            need_account_data_checked(&alice_program_id, &alice_program_id, false),
+            &alice_program_id,
         );
 
         assert_eq!(
-            verify_account_changes(&alice_program_id, &pre, &post,),
+            pre.verify(&alice_program_id, &post,),
             Err(InstructionError::ReadonlyLamportChange),
             "debit should fail, even if owning program"
         );
 
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new(42, 0, &alice_program_id),
             true,
-            need_account_data_checked(&alice_program_id, &system_program::id(), true),
+            &system_program::id(),
         );
         let post = Account::new(0, 0, &system_program::id());
         assert_eq!(
-            verify_account_changes(&system_program::id(), &pre, &post),
+            pre.verify(&system_program::id(), &post),
             Err(InstructionError::ModifiedProgramId),
             "system program can't debit the account unless it was the pre.owner"
         );
 
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new(42, 0, &system_program::id()),
             true,
-            need_account_data_checked(&system_program::id(), &system_program::id(), true),
+            &system_program::id(),
         );
         let post = Account::new(0, 0, &alice_program_id);
         assert_eq!(
-            verify_account_changes(&system_program::id(), &pre, &post),
+            pre.verify(&system_program::id(), &post),
             Ok(()),
             "system can spend (and change owner)"
         );
@@ -754,34 +706,34 @@ mod tests {
     #[test]
     fn test_verify_account_changes_data_size_changed() {
         let alice_program_id = Pubkey::new_rand();
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new_data(42, &[0], &alice_program_id).unwrap(),
             true,
-            need_account_data_checked(&alice_program_id, &system_program::id(), true),
+            &system_program::id(),
         );
         let post = Account::new_data(42, &[0, 0], &alice_program_id).unwrap();
         assert_eq!(
-            verify_account_changes(&system_program::id(), &pre, &post),
+            pre.verify(&system_program::id(), &post),
             Err(InstructionError::AccountDataSizeChanged),
             "system program should not be able to change another program's account data size"
         );
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new_data(42, &[0], &alice_program_id).unwrap(),
             true,
-            need_account_data_checked(&alice_program_id, &alice_program_id, true),
+            &alice_program_id,
         );
         assert_eq!(
-            verify_account_changes(&alice_program_id, &pre, &post),
+            pre.verify(&alice_program_id, &post),
             Err(InstructionError::AccountDataSizeChanged),
             "non-system programs cannot change their data size"
         );
-        let pre = PreInstructionAccount::new(
+        let pre = PreAccount::new(
             &Account::new_data(42, &[0], &system_program::id()).unwrap(),
             true,
-            need_account_data_checked(&system_program::id(), &system_program::id(), true),
+            &system_program::id(),
         );
         assert_eq!(
-            verify_account_changes(&system_program::id(), &pre, &post),
+            pre.verify(&system_program::id(), &post),
             Ok(()),
             "system program should be able to change acount data size"
         );
