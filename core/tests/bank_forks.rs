@@ -131,6 +131,7 @@ mod tests {
         }
         // Generate a snapshot package for last bank
         let last_bank = bank_forks.get(last_slot).unwrap();
+        let storages: Vec<_> = last_bank.get_snapshot_storages();
         let slot_snapshot_paths =
             snapshot_utils::get_snapshot_paths(&snapshot_config.snapshot_path);
         let snapshot_package = snapshot_utils::package_snapshot(
@@ -143,6 +144,7 @@ mod tests {
             ),
             &snapshot_config.snapshot_path,
             &last_bank.src.roots(),
+            storages,
         )
         .unwrap();
 
@@ -202,7 +204,8 @@ mod tests {
 
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
-        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0).unwrap();
+        let storages: Vec<_> = bank0.get_snapshot_storages();
+        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &storages).unwrap();
 
         // Set up snapshotting channels
         let (sender, receiver) = channel();
