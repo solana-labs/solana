@@ -7,7 +7,7 @@ use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_client::rpc_client::get_rpc_request_str;
 use solana_core::rpc_pubsub::gen_client::Client as PubsubClient;
-use solana_core::validator::{new_validator_for_tests, new_validator_for_tests_with_genesis_hash};
+use solana_core::validator::TestValidator;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_transaction;
@@ -26,7 +26,13 @@ use tokio::runtime::Runtime;
 fn test_rpc_send_tx() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
     let client = reqwest::blocking::Client::new();
@@ -111,7 +117,12 @@ fn test_rpc_send_tx() {
 fn test_rpc_invalid_requests() {
     solana_logger::setup();
 
-    let (server, leader_data, _alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
     // test invalid get_balance request
@@ -182,14 +193,20 @@ fn test_rpc_invalid_requests() {
 fn test_rpc_subscriptions() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path, blockhash) =
-        new_validator_for_tests_with_genesis_hash();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        genesis_hash,
+        ..
+    } = TestValidator::run();
 
     // Create transaction signatures to subscribe to
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let mut signature_set: HashSet<String> = (0..1000)
         .map(|_| {
-            let tx = system_transaction::transfer(&alice, &Pubkey::new_rand(), 1, blockhash);
+            let tx = system_transaction::transfer(&alice, &Pubkey::new_rand(), 1, genesis_hash);
             transactions_socket
                 .send_to(&bincode::serialize(&tx).unwrap(), leader_data.tpu)
                 .unwrap();

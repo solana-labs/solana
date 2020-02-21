@@ -4,6 +4,7 @@ use solana_cli::{
     offline::{parse_sign_only_reply_string, BlockhashQuery},
 };
 use solana_client::rpc_client::RpcClient;
+use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
@@ -13,9 +14,6 @@ use solana_sdk::{
     signature::{keypair_from_seed, Keypair, Signer},
 };
 use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
-
-#[cfg(test)]
-use solana_core::validator::new_validator_for_tests_ex;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
@@ -32,7 +30,16 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 
 #[test]
 fn test_transfer() {
-    let (server, leader_data, mint_keypair, ledger_path, _) = new_validator_for_tests_ex(1, 42_000);
+    let TestValidator {
+        server,
+        leader_data,
+        alice: mint_keypair,
+        ledger_path,
+        ..
+    } = TestValidator::run_with_options(TestValidatorOptions {
+        fees: 1,
+        bootstrap_validator_lamports: 42_000,
+    });
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);

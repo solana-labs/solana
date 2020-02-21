@@ -4,7 +4,7 @@ use solana_client::{
 };
 use solana_core::{
     rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
-    validator::new_validator_for_tests,
+    validator::TestValidator,
 };
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::Signer,
@@ -26,7 +26,13 @@ use systemstat::Ipv4Addr;
 fn test_rpc_client() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
     let client = RpcClient::new_socket(leader_data.rpc);
