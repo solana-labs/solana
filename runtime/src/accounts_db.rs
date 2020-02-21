@@ -134,7 +134,7 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
         for storage_entries in self.account_storage_entries {
-            map.serialize_entry(&storage_entries.first().unwrap().slot_id, &storage_entries)?;
+            map.serialize_entry(&storage_entries.first().unwrap().slot_id, storage_entries)?;
             count += storage_entries.len();
         }
         serialize_account_storage_timer.stop();
