@@ -82,7 +82,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         // Broadcast data
         let all_shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
         cluster_info
-            .read()
+            .write()
             .unwrap()
             .broadcast_shreds(sock, all_shred_bufs, &all_seeds, stakes)?;
         Ok(())
