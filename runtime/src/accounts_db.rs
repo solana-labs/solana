@@ -2304,7 +2304,7 @@ pub mod tests {
     fn test_accounts_purge_chained_purge_after_snapshot_restore() {
         solana_logger::setup();
         test_with_chained_zero_lamport_accounts(|accounts, current_slot| {
-            let mut accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+            accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             purge_zero_lamport_accounts(&accounts, current_slot);
             accounts
         });
