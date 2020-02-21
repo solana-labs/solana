@@ -1241,7 +1241,7 @@ impl AccountsDB {
             .0
             .iter()
             .filter(|(slot, storage)| {
-                **slot <= snapshot_slot && accounts_index.is_root(**slot) && !storage.is_empty()
+                **slot <= snapshot_slot && !storage.is_empty() && accounts_index.is_root(**slot)
             })
             .map(|(_, slot_store)| slot_store.values().cloned().collect())
             .collect()
@@ -2488,5 +2488,69 @@ pub mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_empty() {
+        let db = AccountsDB::new(Vec::new());
+        assert!(db.get_snapshot_storages(0).is_empty());
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_only_older_than_or_equal_to_snapshot_slot() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let before_slot = 0;
+        let base_slot = before_slot + 1;
+        let after_slot = base_slot + 1;
+
+        db.add_root(base_slot);
+        db.store(base_slot, &[(&key, &account)]);
+        assert!(db.get_snapshot_storages(before_slot).is_empty());
+
+        assert_eq!(1, db.get_snapshot_storages(base_slot).len());
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_only_non_empty() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let base_slot = 0;
+        let after_slot = base_slot + 1;
+
+        db.store(base_slot, &[(&key, &account)]);
+        db.storage
+            .write()
+            .unwrap()
+            .0
+            .get_mut(&base_slot)
+            .unwrap()
+            .clear();
+        db.add_root(base_slot);
+        assert!(db.get_snapshot_storages(after_slot).is_empty());
+
+        db.store(base_slot, &[(&key, &account)]);
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_only_roots() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let base_slot = 0;
+        let after_slot = base_slot + 1;
+
+        db.store(base_slot, &[(&key, &account)]);
+        assert!(db.get_snapshot_storages(after_slot).is_empty());
+
+        db.add_root(base_slot);
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
     }
 }
