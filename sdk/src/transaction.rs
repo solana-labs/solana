@@ -379,7 +379,7 @@ mod tests {
     use crate::{
         hash::hash,
         instruction::AccountMeta,
-        signature::{Keypair, Signer},
+        signature::{Keypair, Presigner, Signer},
         system_instruction,
     };
     use bincode::{deserialize, serialize, serialized_size};
@@ -670,5 +670,53 @@ mod tests {
             CompiledInstruction::new(2, &0, vec![0, 1, 0, 1])
         );
         assert!(tx.is_signed());
+    }
+
+    #[test]
+    fn test_try_sign_dyn_keypairs() {
+        let program_id = Pubkey::default();
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let presigner_keypair = Keypair::new();
+        let presigner_pubkey = presigner_keypair.pubkey();
+
+        let ix = Instruction::new(
+            program_id,
+            &0,
+            vec![
+                AccountMeta::new(pubkey, true),
+                AccountMeta::new(presigner_pubkey, true),
+            ],
+        );
+        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+
+        let presigner_sig = presigner_keypair.sign_message(&tx.message_data());
+        let presigner = Presigner::new(&presigner_pubkey, &presigner_sig);
+
+        let signers: Vec<&dyn Signer> = vec![&keypair, &presigner];
+
+        let res = tx.try_sign(&signers, Hash::default());
+        assert_eq!(res, Ok(()));
+        assert_eq!(tx.signatures[0], keypair.sign_message(&tx.message_data()));
+        assert_eq!(tx.signatures[1], presigner_sig);
+
+        // Wrong key should error, not panic
+        let another_pubkey = Pubkey::new_rand();
+        let ix = Instruction::new(
+            program_id,
+            &0,
+            vec![
+                AccountMeta::new(another_pubkey, true),
+                AccountMeta::new(presigner_pubkey, true),
+            ],
+        );
+        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+
+        let res = tx.try_sign(&signers, Hash::default());
+        assert!(res.is_err());
+        assert_eq!(
+            tx.signatures,
+            vec![Signature::default(), Signature::default()]
+        );
     }
 }

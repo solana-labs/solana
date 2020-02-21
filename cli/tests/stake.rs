@@ -1,3 +1,4 @@
+use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     offline::{parse_sign_only_reply_string, BlockhashQuery},
@@ -20,6 +21,7 @@ use std::sync::mpsc::channel;
 use solana_core::validator::{
     new_validator_for_tests, new_validator_for_tests_ex, new_validator_for_tests_with_vote_pubkey,
 };
+use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -77,14 +79,13 @@ fn test_stake_delegation_force() {
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -100,7 +101,6 @@ fn test_stake_delegation_force() {
         stake_authority: None,
         force: false,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -115,7 +115,6 @@ fn test_stake_delegation_force() {
         stake_authority: None,
         force: true,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -139,12 +138,13 @@ fn test_seed_stake_delegation_and_deactivation() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
+    let validator_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (validator_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&validator_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_validator = CliConfig::default();
+    config_validator.keypair = validator_keypair.into();
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    let (validator_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_validator.keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut config_stake = CliConfig::default();
     config_stake.json_rpc_url =
@@ -169,14 +169,13 @@ fn test_seed_stake_delegation_and_deactivation() {
     // Create stake account with a seed, uses the validator config as the base,
     //   which is nice ;)
     config_validator.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&validator_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&validator_keypair_file).unwrap().into()),
         seed: Some("hi there".to_string()),
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -192,7 +191,6 @@ fn test_seed_stake_delegation_and_deactivation() {
         stake_authority: None,
         force: false,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -205,7 +203,6 @@ fn test_seed_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_address,
         stake_authority: None,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -233,11 +230,13 @@ fn test_stake_delegation_and_deactivation() {
     config_validator.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_stake = CliConfig::default();
+    config_stake.keypair = stake_keypair.into();
     config_stake.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_stake.keypair, tmp_file.as_file_mut()).unwrap();
 
     request_and_confirm_airdrop(
         &rpc_client,
@@ -250,14 +249,13 @@ fn test_stake_delegation_and_deactivation() {
 
     // Create stake account
     config_validator.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -273,7 +271,6 @@ fn test_stake_delegation_and_deactivation() {
         stake_authority: None,
         force: false,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -286,7 +283,6 @@ fn test_stake_delegation_and_deactivation() {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         stake_authority: None,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -318,11 +314,13 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_stake = CliConfig::default();
+    config_stake.keypair = stake_keypair.into();
     config_stake.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (stake_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_stake.keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut config_offline = CliConfig::default();
     config_offline.json_rpc_url = String::default();
@@ -350,14 +348,13 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     // Create stake account
     config_validator.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: Some(config_offline.keypair.pubkey().into()),
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -374,7 +371,6 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_authority: None,
         force: false,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
@@ -382,17 +378,18 @@ fn test_offline_stake_delegation_and_deactivation() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner =
+        presigner_from_pubkey_sigs(&config_offline.keypair.pubkey(), &signers).unwrap();
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         vote_account_pubkey: vote_pubkey,
-        stake_authority: Some(config_offline.keypair.pubkey().into()),
+        stake_authority: Some(offline_presigner.clone().into()),
         force: false,
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: Some(config_offline.keypair.pubkey().into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config_payer).unwrap();
 
@@ -402,7 +399,6 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_account_pubkey: config_stake.keypair.pubkey(),
         stake_authority: None,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
@@ -410,15 +406,16 @@ fn test_offline_stake_delegation_and_deactivation() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner =
+        presigner_from_pubkey_sigs(&config_offline.keypair.pubkey(), &signers).unwrap();
     config_payer.command = CliCommand::DeactivateStake {
         stake_account_pubkey: config_stake.keypair.pubkey(),
-        stake_authority: Some(config_offline.keypair.pubkey().into()),
+        stake_authority: Some(offline_presigner.clone().into()),
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: Some(config_offline.keypair.pubkey().into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config_payer).unwrap();
 
@@ -438,7 +435,11 @@ fn test_nonced_stake_delegation_and_deactivation() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
+    let config_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (config_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&config_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config = CliConfig::default();
+    config.keypair = config_keypair.into();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let minimum_nonce_balance = rpc_client
@@ -453,14 +454,13 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -474,7 +474,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
         nonce_authority: Some(config.keypair.pubkey()),
         lamports: minimum_nonce_balance,
@@ -496,7 +496,6 @@ fn test_nonced_stake_delegation_and_deactivation() {
         stake_authority: None,
         force: false,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
@@ -513,15 +512,13 @@ fn test_nonced_stake_delegation_and_deactivation() {
     };
 
     // Deactivate stake
-    let config_keypair = Keypair::from_bytes(&config.keypair.to_bytes()).unwrap();
     config.command = CliCommand::DeactivateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: None,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
-        nonce_authority: Some(config_keypair.into()),
+        nonce_authority: Some(read_keypair_file(&config_keypair_file).unwrap().into()),
         fee_payer: None,
     };
     process_command(&config).unwrap();
@@ -547,8 +544,13 @@ fn test_stake_authorize() {
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
         .unwrap();
 
+    let offline_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (offline_authority_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&offline_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_offline = CliConfig::default();
+    config_offline.keypair = offline_keypair.into();
     config_offline.json_rpc_url = String::default();
+    let offline_authority_pubkey = config_offline.keypair.pubkey();
     config_offline.command = CliCommand::ClusterVersion;
     // Verfiy that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
@@ -567,14 +569,13 @@ fn test_stake_authorize() {
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -594,7 +595,6 @@ fn test_stake_authorize() {
         stake_authorize: StakeAuthorize::Staker,
         authority: None,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -610,16 +610,12 @@ fn test_stake_authorize() {
     assert_eq!(current_authority, online_authority_pubkey);
 
     // Assign new offline stake authority
-    let offline_authority_pubkey = config_offline.keypair.pubkey();
-    let (offline_authority_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: offline_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
         authority: Some(read_keypair_file(&online_authority_file).unwrap().into()),
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -646,7 +642,6 @@ fn test_stake_authorize() {
         stake_authorize: StakeAuthorize::Staker,
         authority: Some(read_keypair_file(&offline_authority_file).unwrap().into()),
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
@@ -654,17 +649,18 @@ fn test_stake_authorize() {
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
+    let offline_presigner =
+        presigner_from_pubkey_sigs(&offline_authority_pubkey, &signers).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: nonced_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
-        authority: Some(offline_authority_pubkey.into()),
+        authority: Some(offline_presigner.clone().into()),
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: Some(offline_authority_pubkey.into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -683,7 +679,7 @@ fn test_stake_authorize() {
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
         nonce_authority: Some(config_offline.keypair.pubkey()),
         lamports: minimum_nonce_balance,
@@ -709,7 +705,6 @@ fn test_stake_authorize() {
         stake_authorize: StakeAuthorize::Staker,
         authority: Some(read_keypair_file(&nonced_authority_file).unwrap().into()),
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: None,
@@ -718,17 +713,20 @@ fn test_stake_authorize() {
     let sign_reply = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
     assert_eq!(blockhash, nonce_hash);
+    let offline_presigner =
+        presigner_from_pubkey_sigs(&offline_authority_pubkey, &signers).unwrap();
+    let nonced_authority_presigner =
+        presigner_from_pubkey_sigs(&nonced_authority_pubkey, &signers).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: online_authority_pubkey,
         stake_authorize: StakeAuthorize::Staker,
-        authority: Some(nonced_authority_pubkey.into()),
+        authority: Some(nonced_authority_presigner.clone().into()),
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account.pubkey()),
-        nonce_authority: Some(offline_authority_pubkey.into()),
-        fee_payer: Some(offline_authority_pubkey.into()),
+        nonce_authority: Some(offline_presigner.clone().into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -766,17 +764,17 @@ fn test_stake_authorize_with_fee_payer() {
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let payer_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (payer_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&payer_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_payer = CliConfig::default();
+    config_payer.keypair = payer_keypair.into();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     let payer_pubkey = config_payer.keypair.pubkey();
-    let (payer_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_payer.keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut config_offline = CliConfig::default();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     // Verify we're offline
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
@@ -797,14 +795,13 @@ fn test_stake_authorize_with_fee_payer() {
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -826,7 +823,6 @@ fn test_stake_authorize_with_fee_payer() {
         stake_authorize: StakeAuthorize::Staker,
         authority: None,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -855,7 +851,6 @@ fn test_stake_authorize_with_fee_payer() {
         stake_authorize: StakeAuthorize::Staker,
         authority: None,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
         nonce_authority: None,
@@ -863,17 +858,17 @@ fn test_stake_authorize_with_fee_payer() {
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
+    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorized_pubkey: payer_pubkey,
         stake_authorize: StakeAuthorize::Staker,
-        authority: Some(offline_pubkey.into()),
+        authority: Some(offline_presigner.clone().into()),
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
         nonce_authority: None,
-        fee_payer: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config).unwrap();
     // `config`'s balance again has not changed
@@ -911,8 +906,6 @@ fn test_stake_split() {
     let mut config_offline = CliConfig::default();
     config_offline.json_rpc_url = String::default();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     // Verify we're offline
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
@@ -933,14 +926,13 @@ fn test_stake_split() {
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: Some(offline_pubkey),
         withdrawer: Some(offline_pubkey),
         lockup: Lockup::default(),
         lamports: 10 * minimum_stake_balance,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -963,7 +955,7 @@ fn test_stake_split() {
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
         nonce_authority: Some(offline_pubkey),
         lamports: minimum_nonce_balance,
@@ -988,29 +980,28 @@ fn test_stake_split() {
         stake_account_pubkey: stake_account_pubkey,
         stake_authority: None,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account_pubkey),
         nonce_authority: None,
-        split_stake_account: read_keypair_file(&split_keypair_file).unwrap().into(),
+        split_stake_account: Rc::new(read_keypair_file(&split_keypair_file).unwrap().into()),
         seed: None,
         lamports: 2 * minimum_stake_balance,
         fee_payer: None,
     };
     let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
     config.command = CliCommand::SplitStake {
         stake_account_pubkey: stake_account_pubkey,
-        stake_authority: Some(offline_pubkey.into()),
+        stake_authority: Some(offline_presigner.clone().into()),
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account_pubkey),
-        nonce_authority: Some(offline_pubkey.into()),
-        split_stake_account: read_keypair_file(&split_keypair_file).unwrap().into(),
+        nonce_authority: Some(offline_presigner.clone().into()),
+        split_stake_account: Rc::new(read_keypair_file(&split_keypair_file).unwrap().into()),
         seed: None,
         lamports: 2 * minimum_stake_balance,
-        fee_payer: Some(offline_pubkey.into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config).unwrap();
     check_balance(
@@ -1045,8 +1036,6 @@ fn test_stake_set_lockup() {
     let mut config_offline = CliConfig::default();
     config_offline.json_rpc_url = String::default();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (_offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     // Verify we're offline
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
@@ -1072,14 +1061,13 @@ fn test_stake_set_lockup() {
     lockup.custodian = config.keypair.pubkey();
 
     config.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: Some(offline_pubkey),
         withdrawer: Some(offline_pubkey),
         lockup,
         lamports: 10 * minimum_stake_balance,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
         nonce_authority: None,
@@ -1104,7 +1092,6 @@ fn test_stake_set_lockup() {
         lockup,
         custodian: None,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -1136,7 +1123,6 @@ fn test_stake_set_lockup() {
         lockup,
         custodian: None,
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -1154,7 +1140,6 @@ fn test_stake_set_lockup() {
         lockup,
         custodian: Some(read_keypair_file(&online_custodian_file).unwrap().into()),
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -1181,7 +1166,6 @@ fn test_stake_set_lockup() {
         lockup,
         custodian: Some(online_custodian.into()),
         sign_only: false,
-        signers: None,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: None,
@@ -1198,7 +1182,7 @@ fn test_stake_set_lockup() {
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
         nonce_authority: Some(offline_pubkey),
         lamports: minimum_nonce_balance,
@@ -1225,7 +1209,6 @@ fn test_stake_set_lockup() {
         lockup,
         custodian: None,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account_pubkey),
         nonce_authority: None,
@@ -1233,16 +1216,16 @@ fn test_stake_set_lockup() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
-        custodian: Some(offline_pubkey.into()),
+        custodian: Some(offline_presigner.clone().into()),
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account_pubkey),
-        nonce_authority: Some(offline_pubkey.into()),
-        fee_payer: Some(offline_pubkey.into()),
+        nonce_authority: Some(offline_presigner.clone().into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1269,14 +1252,12 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config = CliConfig::default();
-    config.keypair = keypair_from_seed(&[1u8; 32]).unwrap();
+    config.keypair = keypair_from_seed(&[1u8; 32]).unwrap().into();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_offline = CliConfig::default();
-    config_offline.keypair = keypair_from_seed(&[2u8; 32]).unwrap();
+    config_offline.keypair = keypair_from_seed(&[2u8; 32]).unwrap().into();
     let offline_pubkey = config_offline.keypair.pubkey();
-    let (offline_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_offline.keypair, tmp_file.as_file_mut()).unwrap();
     config_offline.json_rpc_url = String::default();
     config_offline.command = CliCommand::ClusterVersion;
     // Verfiy that we cannot reach the cluster
@@ -1304,7 +1285,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
         nonce_authority: Some(offline_pubkey),
         lamports: minimum_nonce_balance,
@@ -1325,14 +1306,13 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let (stake_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
     config_offline.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
         seed: None,
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: None,
@@ -1341,20 +1321,22 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
     config.command = CliCommand::CreateStakeAccount {
-        stake_account: stake_pubkey.into(),
+        stake_account: presigner_from_pubkey_sigs(&stake_pubkey, &signers)
+            .map(|p| Rc::new(p.into()))
+            .unwrap(),
         seed: None,
-        staker: Some(offline_pubkey.into()),
+        staker: Some(offline_pubkey),
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_pubkey),
-        nonce_authority: Some(offline_pubkey.into()),
-        fee_payer: Some(offline_pubkey.into()),
-        from: Some(offline_pubkey.into()),
+        nonce_authority: Some(offline_presigner.clone().into()),
+        fee_payer: Some(offline_presigner.clone().into()),
+        from: Some(offline_presigner.clone().into()),
     };
     process_command(&config).unwrap();
     check_balance(50_000, &rpc_client, &stake_pubkey);
@@ -1376,7 +1358,6 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         lamports: 42,
         withdraw_authority: None,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: None,
@@ -1384,36 +1365,35 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
     config.command = CliCommand::WithdrawStake {
         stake_account_pubkey: stake_pubkey,
         destination_account_pubkey: recipient_pubkey,
         lamports: 42,
-        withdraw_authority: Some(offline_pubkey.into()),
+        withdraw_authority: Some(offline_presigner.clone().into()),
         sign_only: false,
-        signers: Some(signers),
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_pubkey),
-        nonce_authority: Some(offline_pubkey.into()),
-        fee_payer: Some(offline_pubkey.into()),
+        nonce_authority: Some(offline_presigner.clone().into()),
+        fee_payer: Some(offline_presigner.clone().into()),
     };
     process_command(&config).unwrap();
     check_balance(42, &rpc_client, &recipient_pubkey);
 
     // Test that offline derived addresses fail
     config_offline.command = CliCommand::CreateStakeAccount {
-        stake_account: read_keypair_file(&stake_keypair_file).unwrap().into(),
+        stake_account: Rc::new(Box::new(read_keypair_file(&stake_keypair_file).unwrap())),
         seed: Some("fail".to_string()),
         staker: None,
         withdrawer: None,
         lockup: Lockup::default(),
         lamports: 50_000,
         sign_only: true,
-        signers: None,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_pubkey),
-        nonce_authority: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
-        fee_payer: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
-        from: Some(read_keypair_file(&offline_keypair_file).unwrap().into()),
+        nonce_authority: None,
+        fee_payer: None,
+        from: None,
     };
     process_command(&config_offline).unwrap_err();
 

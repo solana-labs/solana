@@ -191,19 +191,20 @@ pub fn process_create_storage_account(
     );
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let mut tx = Transaction::new_signed_instructions(
-        &[&config.keypair, &storage_account],
-        ixs,
+    let message = Message::new(ixs);
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(
+        &[config.keypair.as_ref(), storage_account],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair, &storage_account]);
+    let result = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref(), storage_account]);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -217,10 +218,10 @@ pub fn process_claim_storage_reward(
 
     let instruction =
         storage_instruction::claim_reward(node_account_pubkey, storage_account_pubkey);
-    let signers = [&config.keypair];
+    let signers = [config.keypair.as_ref()];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
-
-    let mut tx = Transaction::new(&signers, message, recent_blockhash);
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(&signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),

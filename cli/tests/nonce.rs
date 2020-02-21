@@ -1,12 +1,10 @@
-use solana_cli::cli::{
-    process_command, request_and_confirm_airdrop, CliCommand, CliConfig, SigningAuthority,
-};
+use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, Signer},
+    signature::{keypair_from_seed, read_keypair_file, write_keypair, Keypair, Signer},
     system_instruction::create_address_with_seed,
     system_program,
 };
@@ -15,6 +13,7 @@ use std::sync::mpsc::channel;
 
 #[cfg(test)]
 use solana_core::validator::new_validator_for_tests;
+use std::rc::Rc;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -51,11 +50,13 @@ fn test_nonce() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_nonce = CliConfig::default();
+    config_nonce.keypair = keypair.into();
     config_nonce.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_nonce.keypair, tmp_file.as_file_mut()).unwrap();
 
     full_battery_tests(
         &rpc_client,
@@ -84,11 +85,13 @@ fn test_nonce_with_seed() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_nonce = CliConfig::default();
+    config_nonce.keypair = keypair.into();
     config_nonce.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_nonce.keypair, tmp_file.as_file_mut()).unwrap();
 
     full_battery_tests(
         &rpc_client,
@@ -117,11 +120,12 @@ fn test_nonce_with_authority() {
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
+    let nonce_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
+    write_keypair(&nonce_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config_nonce = CliConfig::default();
     config_nonce.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&config_nonce.keypair, tmp_file.as_file_mut()).unwrap();
 
     let nonce_authority = Keypair::new();
     let (authority_keypair_file, mut tmp_file2) = make_tmp_file();
@@ -141,7 +145,7 @@ fn test_nonce_with_authority() {
     remove_dir_all(ledger_path).unwrap();
 }
 
-fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<SigningAuthority> {
+fn read_keypair_from_option(keypair_file: &Option<&str>) -> Option<Box<dyn Signer>> {
     keypair_file.map(|akf| read_keypair_file(&akf).unwrap().into())
 }
 
@@ -167,15 +171,14 @@ fn full_battery_tests(
         create_address_with_seed(&config_nonce.keypair.pubkey(), seed, &system_program::id())
             .unwrap()
     } else {
-        config_nonce.keypair.pubkey()
+        read_keypair_file(&nonce_keypair_file).unwrap().pubkey()
     };
 
     // Create nonce account
     config_payer.command = CliCommand::CreateNonceAccount {
-        nonce_account: read_keypair_file(&nonce_keypair_file).unwrap().into(),
+        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed,
-        nonce_authority: read_keypair_from_option(&authority_keypair_file)
-            .map(|na: SigningAuthority| na.pubkey()),
+        nonce_authority: read_keypair_from_option(&authority_keypair_file).map(|k| k.pubkey()),
         lamports: 1000,
     };
 

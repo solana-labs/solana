@@ -48,6 +48,34 @@ impl Signers for [Box<dyn Signer>] {
     default_keypairs_impl!();
 }
 
+impl Signers for Vec<&dyn Signer> {
+    default_keypairs_impl!();
+}
+
+impl Signers for [&dyn Signer] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [&dyn Signer; 0] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [&dyn Signer; 1] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [&dyn Signer; 2] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [&dyn Signer; 3] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [&dyn Signer; 4] {
+    default_keypairs_impl!();
+}
+
 impl<T: Signer> Signers for [&T; 0] {
     default_keypairs_impl!();
 }
@@ -106,6 +134,24 @@ mod tests {
 
         // Same as above, but less compiler magic.
         let xs_ref: &[Box<dyn Signer>] = &xs;
+        assert_eq!(
+            Signers::sign_message(xs_ref, b""),
+            vec![Signature::default(), Signature::default()],
+        );
+    }
+
+    #[test]
+    fn test_dyn_keypairs_by_ref_compile() {
+        let foo = Foo {};
+        let bar = Bar {};
+        let xs: Vec<&dyn Signer> = vec![&foo, &bar];
+        assert_eq!(
+            xs.sign_message(b""),
+            vec![Signature::default(), Signature::default()],
+        );
+
+        // Same as above, but less compiler magic.
+        let xs_ref: &[&dyn Signer] = &xs;
         assert_eq!(
             Signers::sign_message(xs_ref, b""),
             vec![Signature::default(), Signature::default()],
