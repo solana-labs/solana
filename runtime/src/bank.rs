@@ -1898,7 +1898,13 @@ impl Bank {
     pub fn verify_snapshot_bank(&self) -> bool {
         self.purge_zero_lamport_accounts();
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
-        self.verify_bank_hash() && self.verify_hash()
+        self.verify_bank_hash()
+            && self.verify_hash()
+            && self
+                .rc
+                .accounts
+                .accounts_db
+                .check_index_storage_consistency()
     }
 
     /// Return the number of hashes per tick

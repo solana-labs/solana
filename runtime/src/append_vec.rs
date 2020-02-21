@@ -103,6 +103,7 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
+        trace!("ryoqun: dropping AppendVec: {:?}", &self.path);
         let _ignored = remove_file(&self.path);
     }
 }
