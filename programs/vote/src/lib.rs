@@ -1,6 +1,9 @@
 pub mod vote_instruction;
 pub mod vote_state;
 
+#[macro_use]
+extern crate solana_metrics;
+
 use crate::vote_instruction::process_instruction;
 
 solana_sdk::declare_program!(
