@@ -10,7 +10,7 @@ use crate::sigverify;
 use crate::streamer::{self, PacketReceiver, StreamerError};
 use crossbeam_channel::{SendError, Sender as CrossbeamSender};
 use solana_measure::measure::Measure;
-use solana_metrics::datapoint_debug;
+use solana_metrics::datapoint_info;
 use solana_perf::perf_libs;
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -104,7 +104,7 @@ impl SigVerifyStage {
             (len as f32 / verify_batch_time.as_s())
         );
 
-        datapoint_debug!(
+        datapoint_info!(
             "sigverify_stage-total_verify_time",
             ("num_batches", batch_len, i64),
             ("num_packets", len, i64),

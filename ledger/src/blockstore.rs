@@ -484,7 +484,7 @@ impl Blockstore {
         // 3a. Enough number of shreds = (#data + #coding shreds) > erasure.num_data
         for (&(slot, set_index), erasure_meta) in erasure_metas.iter() {
             let submit_metrics = |attempted: bool, status: String, recovered: usize| {
-                datapoint_debug!(
+                datapoint_info!(
                     "blockstore-erasure",
                     ("slot", slot as i64, i64),
                     ("start_index", set_index as i64, i64),

@@ -290,7 +290,7 @@ impl ServeRepair {
     pub fn map_repair_request(&self, repair_request: &RepairType) -> Result<Vec<u8>> {
         match repair_request {
             RepairType::Shred(slot, shred_index) => {
-                datapoint_debug!(
+                datapoint_info!(
                     "serve_repair-repair",
                     ("repair-slot", *slot, i64),
                     ("repair-ix", *shred_index, i64)
@@ -298,7 +298,7 @@ impl ServeRepair {
                 Ok(self.window_index_request_bytes(*slot, *shred_index)?)
             }
             RepairType::HighestShred(slot, shred_index) => {
-                datapoint_debug!(
+                datapoint_info!(
                     "serve_repair-repair_highest",
                     ("repair-highest-slot", *slot, i64),
                     ("repair-highest-ix", *shred_index, i64)
@@ -306,7 +306,7 @@ impl ServeRepair {
                 Ok(self.window_highest_index_request_bytes(*slot, *shred_index)?)
             }
             RepairType::Orphan(slot) => {
-                datapoint_debug!("serve_repair-repair_orphan", ("repair-orphan", *slot, i64));
+                datapoint_info!("serve_repair-repair_orphan", ("repair-orphan", *slot, i64));
                 Ok(self.orphan_bytes(*slot)?)
             }
         }

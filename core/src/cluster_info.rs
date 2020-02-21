@@ -926,7 +926,7 @@ impl ClusterInfo {
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
         let broadcast_len = peers_and_stakes.len();
         if broadcast_len == 0 {
-            datapoint_debug!(
+            datapoint_info!(
                 "cluster_info-num_nodes",
                 ("live_count", 1, i64),
                 ("broadcast_count", 1, i64)
@@ -960,7 +960,7 @@ impl ClusterInfo {
                 num_live_peers += 1;
             }
         });
-        datapoint_debug!(
+        datapoint_info!(
             "cluster_info-num_nodes",
             ("live_count", num_live_peers, i64),
             ("broadcast_count", broadcast_len + 1, i64)
