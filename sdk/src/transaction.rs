@@ -6,11 +6,11 @@ use crate::{
     message::Message,
     pubkey::Pubkey,
     short_vec,
-    signature::Signature,
+    signature::{Signature, SignerError},
     signers::Signers,
     system_instruction,
 };
-use std::{error, result};
+use std::result;
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
@@ -261,11 +261,11 @@ impl Transaction {
         &mut self,
         keypairs: &T,
         recent_blockhash: Hash,
-    ) -> result::Result<(), Box<dyn error::Error>> {
+    ) -> result::Result<(), SignerError> {
         self.try_partial_sign(keypairs, recent_blockhash)?;
 
         if !self.is_signed() {
-            Err(SigningError::NotEnoughSigners.into())
+            Err(SignerError::NotEnoughSigners)
         } else {
             Ok(())
         }
@@ -278,10 +278,10 @@ impl Transaction {
         &mut self,
         keypairs: &T,
         recent_blockhash: Hash,
-    ) -> result::Result<(), Box<dyn error::Error>> {
+    ) -> result::Result<(), SignerError> {
         let positions = self.get_signing_keypair_positions(&keypairs.pubkeys())?;
         if positions.iter().any(|pos| pos.is_none()) {
-            return Err(SigningError::KeypairPubkeyMismatch.into());
+            return Err(SignerError::KeypairPubkeyMismatch);
         }
         let positions: Vec<usize> = positions.iter().map(|pos| pos.unwrap()).collect();
         self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash)
@@ -295,7 +295,7 @@ impl Transaction {
         keypairs: &T,
         positions: Vec<usize>,
         recent_blockhash: Hash,
-    ) -> result::Result<(), Box<dyn error::Error>> {
+    ) -> result::Result<(), SignerError> {
         // if you change the blockhash, you're re-signing...
         if recent_blockhash != self.message.recent_blockhash {
             self.message.recent_blockhash = recent_blockhash;
@@ -382,15 +382,6 @@ impl Transaction {
         }
         true
     }
-}
-
-#[derive(Error, Serialize, Deserialize, Debug)]
-pub enum SigningError {
-    #[error("keypair-pubkey mismatch")]
-    KeypairPubkeyMismatch,
-
-    #[error("not enough signers")]
-    NotEnoughSigners,
 }
 
 #[cfg(test)]

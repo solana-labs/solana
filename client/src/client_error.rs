@@ -1,5 +1,5 @@
 use crate::rpc_request;
-use solana_sdk::transaction::TransactionError;
+use solana_sdk::{signature::SignerError, transaction::TransactionError};
 use std::{fmt, io};
 use thiserror::Error;
 
@@ -9,7 +9,7 @@ pub enum ClientError {
     Reqwest(#[from] reqwest::Error),
     RpcError(#[from] rpc_request::RpcError),
     SerdeJson(#[from] serde_json::error::Error),
-    SigningError(String),
+    SigningError(#[from] SignerError),
     TransactionError(#[from] TransactionError),
 }
 
