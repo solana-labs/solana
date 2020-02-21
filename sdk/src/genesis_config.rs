@@ -25,8 +25,8 @@ use std::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum OperatingMode {
-    Stable,      // Stable cluster features
     Preview,     // Next set of cluster features to be promoted to Stable
+    Stable,      // Stable cluster features
     Development, // All features (including experimental features)
 }
 
