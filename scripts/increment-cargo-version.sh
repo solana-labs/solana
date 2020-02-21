@@ -69,9 +69,12 @@ patch)
   ;;
 major)
   MAJOR=$((MAJOR+ 1))
+  MINOR=0
+  PATCH=0
   ;;
 minor)
   MINOR=$((MINOR+ 1))
+  PATCH=0
   ;;
 dropspecial)
   ;;

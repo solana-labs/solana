@@ -1,6 +1,6 @@
 [package]
 name = "solana-vote-program"
-version = "0.24.0"
+version = "1.0.0"
 description = "Solana Vote program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,9 +15,9 @@ num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.104"
 serde_derive = "1.0.103"
-solana-logger = { path = "../../logger", version = "0.24.0" }
-solana-metrics = { path = "../../metrics", version = "0.24.0" }
-solana-sdk = { path = "../../sdk", version = "0.24.0" }
+solana-logger = { path = "../../logger", version = "1.0.0" }
+solana-metrics = { path = "../../metrics", version = "1.0.0" }
+solana-sdk = { path = "../../sdk", version = "1.0.0" }
 thiserror = "1.0"
 
 [lib]

@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-net-shaper"
 description = "The solana cluster network shaping tool"
-version = "0.24.0"
+version = "1.0.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -13,8 +13,8 @@ publish = false
 clap = "2.33.0"
 serde = "1.0.104"
 serde_json = "1.0.46"
-solana-clap-utils = { path = "../clap-utils", version = "0.24.0" }
-solana-logger = { path = "../logger", version = "0.24.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.0.0" }
+solana-logger = { path = "../logger", version = "1.0.0" }
 rand = "0.6.5"
 
 [[bin]]
