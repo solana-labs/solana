@@ -73,7 +73,7 @@ trees = "0.2.1"
 matches = "0.1.6"
 reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls"] }
 serial_test = "0.3.2"
-serial_test_derive = "0.3.1"
+serial_test_derive = "0.4.0"
 systemstat = "0.1.5"
 
 [[bench]]
