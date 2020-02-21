@@ -517,13 +517,11 @@ impl RpcClient {
             // Re-sign any failed transactions with a new blockhash and retry
             let (blockhash, _fee_calculator) =
                 self.get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
-            transactions = transactions_signatures
-                .into_iter()
-                .map(|(mut transaction, _)| {
-                    transaction.sign(signer_keys, blockhash);
-                    transaction
-                })
-                .collect();
+            transactions = vec![];
+            for (mut transaction, _) in transactions_signatures.into_iter() {
+                transaction.try_sign(signer_keys, blockhash)?;
+                transactions.push(transaction);
+            }
         }
     }
 
@@ -534,7 +532,7 @@ impl RpcClient {
     ) -> Result<(), ClientError> {
         let (blockhash, _fee_calculator) =
             self.get_new_blockhash(&tx.message().recent_blockhash)?;
-        tx.sign(signer_keys, blockhash);
+        tx.try_sign(signer_keys, blockhash)?;
         Ok(())
     }
 

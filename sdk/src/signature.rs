@@ -1,6 +1,6 @@
 //! The `signature` module provides functionality for public, and private keys.
 
-use crate::pubkey::Pubkey;
+use crate::{pubkey::Pubkey, transaction::TransactionError};
 use bs58;
 use ed25519_dalek;
 use generic_array::{typenum::U64, GenericArray};
@@ -135,11 +135,11 @@ pub trait Signer {
     fn pubkey(&self) -> Pubkey {
         self.try_pubkey().unwrap_or_default()
     }
-    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>>;
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError>;
     fn sign_message(&self, message: &[u8]) -> Signature {
         self.try_sign_message(message).unwrap_or_default()
     }
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>>;
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
 }
 
 impl Signer for Keypair {
@@ -148,7 +148,7 @@ impl Signer for Keypair {
         Pubkey::new(self.0.public.as_ref())
     }
 
-    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         Ok(self.pubkey())
     }
 
@@ -156,7 +156,7 @@ impl Signer for Keypair {
         Signature::new(&self.0.sign(message).to_bytes())
     }
 
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
         Ok(self.sign_message(message))
     }
 }
@@ -168,6 +168,41 @@ where
     fn eq(&self, other: &T) -> bool {
         self.pubkey() == other.pubkey()
     }
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum SignerError {
+    #[error("keypair-pubkey mismatch")]
+    KeypairPubkeyMismatch,
+
+    #[error("not enough signers")]
+    NotEnoughSigners,
+
+    #[error("transaction error")]
+    TransactionError(#[from] TransactionError),
+
+    #[error("custom error: {0}")]
+    CustomError(String),
+
+    // Presigner-specific Errors
+    #[error("presigner error")]
+    PresignerError(#[from] PresignerError),
+
+    // Remote Keypair-specific Errors
+    #[error("connection error: {0}")]
+    ConnectionError(String),
+
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
+
+    #[error("no device found")]
+    NoDeviceFound,
+
+    #[error("device protocol error: {0}")]
+    Protocol(String),
+
+    #[error("operation has been cancelled")]
+    UserCancel,
 }
 
 #[derive(Debug, Default)]
@@ -187,17 +222,17 @@ impl Presigner {
 }
 
 #[derive(Debug, Error, PartialEq)]
-enum PresignerError {
+pub enum PresignerError {
     #[error("pre-generated signature cannot verify data")]
     VerificationFailure,
 }
 
 impl Signer for Presigner {
-    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         Ok(self.pubkey)
     }
 
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
         if self.signature.verify(self.pubkey.as_ref(), message) {
             Ok(self.signature)
         } else {

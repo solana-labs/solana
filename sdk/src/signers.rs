@@ -1,11 +1,13 @@
 use crate::{
     pubkey::Pubkey,
-    signature::{Signature, Signer},
+    signature::{Signature, Signer, SignerError},
 };
 
 pub trait Signers {
     fn pubkeys(&self) -> Vec<Pubkey>;
+    fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError>;
     fn sign_message(&self, message: &[u8]) -> Vec<Signature>;
+    fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError>;
 }
 
 macro_rules! default_keypairs_impl {
@@ -14,10 +16,26 @@ macro_rules! default_keypairs_impl {
                 self.iter().map(|keypair| keypair.pubkey()).collect()
             }
 
+            fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError> {
+                let mut pubkeys = Vec::new();
+                for keypair in self.iter() {
+                    pubkeys.push(keypair.try_pubkey()?);
+                }
+                Ok(pubkeys)
+            }
+
             fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
                 self.iter()
                     .map(|keypair| keypair.sign_message(message))
                     .collect()
+            }
+
+            fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError> {
+                let mut signatures = Vec::new();
+                for keypair in self.iter() {
+                    signatures.push(keypair.try_sign_message(message)?);
+                }
+                Ok(signatures)
             }
     );
 }
@@ -57,24 +75,23 @@ impl<T: Signer> Signers for Vec<&T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::error;
 
     struct Foo;
     impl Signer for Foo {
-        fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+        fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
             Ok(Pubkey::default())
         }
-        fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+        fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
             Ok(Signature::default())
         }
     }
 
     struct Bar;
     impl Signer for Bar {
-        fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+        fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
             Ok(Pubkey::default())
         }
-        fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+        fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
             Ok(Signature::default())
         }
     }
