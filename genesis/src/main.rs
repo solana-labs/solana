@@ -212,7 +212,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("bootstrap-stake-authorized-pubkey")
                 .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
                 .takes_value(true)
-                .help("Path to file containing the pubkey authorized to manage the bootstrap validator's stake [default: --bootstrap-validator-pubkey]"),
+                .help(
+                    "Path to file containing the pubkey authorized to manage the bootstrap \
+                     validator's stake [default: --bootstrap-validator-pubkey]",
+                ),
         )
         .arg(
             Arg::with_name("bootstrap_storage_pubkey_file")
@@ -297,7 +300,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .default_value(default_target_signatures_per_slot)
                 .help(
-                    "Used to estimate the desired processing capacity of the cluster.
+                    "Used to estimate the desired processing capacity of the cluster. \
                     When the latest slot processes fewer/greater signatures than this \
                     value, the lamports-per-signature fee will decrease/increase for \
                     the next slot. A value of 0 disables signature-based fee adjustments",
@@ -337,6 +340,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("SLOTS")
                 .takes_value(true)
                 .help("The number of slots in an epoch"),
+        )
+        .arg(
+            Arg::with_name("enable_warmup_epochs")
+                .long("enable-warmup-epochs")
+                .help(
+                    "When enabled epochs start short and will grow. \
+                     Useful for warming up stake quickly during development"
+                ),
         )
         .arg(
             Arg::with_name("primordial_accounts_file")
@@ -491,7 +502,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             OperatingMode::Stable | OperatingMode::Preview => clock::DEFAULT_SLOTS_PER_EPOCH,
         }
     };
-    let epoch_schedule = EpochSchedule::new(slots_per_epoch);
+    let epoch_schedule = EpochSchedule::custom(
+        slots_per_epoch,
+        slots_per_epoch,
+        matches.is_present("enable_warmup_epochs"),
+    );
 
     let native_instruction_processors =
         solana_genesis_programs::get_programs(operating_mode, 0).unwrap();
@@ -550,16 +565,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
          Shred version: {}\n\
          Hashes per tick: {:?}\n\
          Slots per epoch: {}\n\
+         Warmup epochs: {}abled\n
          {:?}\n\
          {:?}\n\
          Capitalization: {} SOL in {} accounts\n\
          ",
         Utc.timestamp(genesis_config.creation_time, 0).to_rfc3339(),
-        operating_mode,
+        genesis_config.operating_mode,
         genesis_config.hash(),
         compute_shred_version(&genesis_config.hash(), None),
         genesis_config.poh_config.hashes_per_tick,
-        slots_per_epoch,
+        genesis_config.epoch_schedule.slots_per_epoch,
+        if genesis_config.epoch_schedule.warmup {
+            "en"
+        } else {
+            "dis"
+        },
         genesis_config.rent,
         genesis_config.fee_calculator,
         lamports_to_sol(
