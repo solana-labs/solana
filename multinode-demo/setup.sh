@@ -27,6 +27,7 @@ $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/
 $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/storage-keypair.json
 
 args=("$@")
+default_arg --enable-warmup-epochs
 default_arg --bootstrap-validator-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-validator/identity-keypair.json
 default_arg --bootstrap-vote-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-keypair.json
 default_arg --bootstrap-stake-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-keypair.json
