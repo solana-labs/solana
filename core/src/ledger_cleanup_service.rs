@@ -12,11 +12,11 @@ use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
 // This is chosen to allow enough time for
-// - To try and keep the RocksDB size under 128GB at 50k tps (100 slots take ~2GB).
+// - To try and keep the RocksDB size under 512GB at 50k tps (100 slots take ~2GB).
 // - A validator to download a snapshot from a peer and boot from it
 // - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally
 //   to catch back up to where it was when it stopped
-pub const DEFAULT_MAX_LEDGER_SLOTS: u64 = 6400;
+pub const DEFAULT_MAX_LEDGER_SLOTS: u64 = 270_000;
 // Remove a fixed number of slots at a time, it's more efficient than doing it one-by-one
 pub const DEFAULT_PURGE_BATCH_SIZE: u64 = 256;
 
