@@ -625,10 +625,13 @@ pub fn initialize_account(
     vote_init: &VoteInit,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    let vote_state: VoteState =
-        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
-
-    if !vote_state.authorized_voters.is_empty() {
+    if !vote_account
+        .try_account_ref()
+        .unwrap()
+        .data
+        .iter()
+        .all(|x| *x == 0)
+    {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
 
