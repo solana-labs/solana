@@ -215,7 +215,7 @@ pub struct RpcSubscriptions {
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
     notification_sender: Arc<Mutex<Sender<NotificationEntry>>>,
     t_cleanup: Option<JoinHandle<()>>,
-    runtime: Option<Runtime>,
+    notifier_runtime: Option<Runtime>,
     exit: Arc<AtomicBool>,
 }
 
@@ -252,13 +252,13 @@ impl RpcSubscriptions {
         let signature_subscriptions_clone = signature_subscriptions.clone();
         let slot_subscriptions_clone = slot_subscriptions.clone();
 
-        let runtime = RuntimeBuilder::new()
+        let notifier_runtime = RuntimeBuilder::new()
             .core_threads(1)
             .name_prefix("solana-rpc-notifier-")
             .build()
             .unwrap();
 
-        let notifier = RpcNotifier(runtime.executor());
+        let notifier = RpcNotifier(notifier_runtime.executor());
         let t_cleanup = Builder::new()
             .name("solana-rpc-notifications".to_string())
             .spawn(move || {
@@ -280,7 +280,7 @@ impl RpcSubscriptions {
             signature_subscriptions,
             slot_subscriptions,
             notification_sender,
-            runtime: Some(runtime),
+            notifier_runtime: Some(notifier_runtime),
             t_cleanup: Some(t_cleanup),
             exit: exit.clone(),
         }
@@ -511,7 +511,7 @@ impl RpcSubscriptions {
     }
 
     fn shutdown(&mut self) -> std::thread::Result<()> {
-        if let Some(runtime) = self.runtime.take() {
+        if let Some(runtime) = self.notifier_runtime.take() {
             info!("RPC Notifier runtime - shutting down");
             let _ = runtime.shutdown_now().wait();
             info!("RPC Notifier runtime - shut down");
