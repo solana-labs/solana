@@ -643,21 +643,32 @@ fn wait_for_supermajority(
 }
 
 pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
-    let (node, contact_info, mint_keypair, ledger_path, _vote_pubkey) =
-        new_validator_for_tests_with_vote_pubkey();
+    use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
+    let (node, contact_info, mint_keypair, ledger_path, _hash, _vote_pubkey) =
+        new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS);
     (node, contact_info, mint_keypair, ledger_path)
+}
+
+pub fn new_validator_for_tests_with_genesis_hash(
+) -> (Validator, ContactInfo, Keypair, PathBuf, Hash) {
+    use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
+    let (node, contact_info, mint_keypair, ledger_path, hash, _vote_pubkey) =
+        new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS);
+    (node, contact_info, mint_keypair, ledger_path, hash)
 }
 
 pub fn new_validator_for_tests_with_vote_pubkey(
 ) -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
     use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
-    new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS)
+    let (node, contact_info, mint_keypair, ledger_path, _hash, vote_pubkey) =
+        new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS);
+    (node, contact_info, mint_keypair, ledger_path, vote_pubkey)
 }
 
 pub fn new_validator_for_tests_ex(
     fees: u64,
     bootstrap_validator_lamports: u64,
-) -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
+) -> (Validator, ContactInfo, Keypair, PathBuf, Hash, Pubkey) {
     use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
     use solana_sdk::fee_calculator::FeeCalculator;
 
@@ -683,7 +694,7 @@ pub fn new_validator_for_tests_ex(
     genesis_config.rent.exemption_threshold = 1.0;
     genesis_config.fee_calculator = FeeCalculator::new(fees, 0);
 
-    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+    let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
     let leader_voting_keypair = Arc::new(voting_keypair);
     let storage_keypair = Arc::new(Keypair::new());
@@ -708,6 +719,7 @@ pub fn new_validator_for_tests_ex(
         contact_info,
         mint_keypair,
         ledger_path,
+        blockhash,
         leader_voting_keypair.pubkey(),
     )
 }

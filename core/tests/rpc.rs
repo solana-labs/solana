@@ -1,15 +1,26 @@
 use bincode::serialize;
+use jsonrpc_core::futures::future::{self, Future};
+use jsonrpc_core::futures::stream::Stream;
+use jsonrpc_core_client::transports::ws;
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_client::rpc_client::get_rpc_request_str;
-use solana_core::validator::new_validator_for_tests;
+use solana_core::rpc_pubsub::gen_client::Client as PubsubClient;
+use solana_core::validator::{new_validator_for_tests, new_validator_for_tests_with_genesis_hash};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_transaction;
+use solana_sdk::transaction;
+use std::collections::HashSet;
 use std::fs::remove_dir_all;
+use std::net::UdpSocket;
+use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
+use std::time::SystemTime;
+use tokio::runtime::Runtime;
 
 #[test]
 fn test_rpc_send_tx() {
@@ -163,6 +174,80 @@ fn test_rpc_invalid_requests() {
     let the_value = &json["result"]["value"];
     assert!(the_value.is_null());
 
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+#[ignore]
+fn test_rpc_subscriptions() {
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path, blockhash) =
+        new_validator_for_tests_with_genesis_hash();
+
+    // Create transaction signatures to subscribe to
+    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let mut signature_set: HashSet<String> = (0..1000)
+        .map(|_| {
+            let tx = system_transaction::transfer(&alice, &Pubkey::new_rand(), 1, blockhash);
+            transactions_socket
+                .send_to(&bincode::serialize(&tx).unwrap(), leader_data.tpu)
+                .unwrap();
+            tx.signatures[0].to_string()
+        })
+        .collect();
+
+    // Create the pub sub runtime
+    let mut rt = Runtime::new().unwrap();
+    let rpc_pubsub_url = format!("ws://{}/", leader_data.rpc_pubsub);
+    let (sender, receiver) = channel::<(String, transaction::Result<()>)>();
+    let sender = Arc::new(Mutex::new(sender));
+
+    rt.spawn({
+        let connect = ws::try_connect::<PubsubClient>(&rpc_pubsub_url).unwrap();
+        let signature_set = signature_set.clone();
+        connect
+            .and_then(move |client| {
+                for sig in signature_set {
+                    let sender = sender.clone();
+                    tokio::spawn(
+                        client
+                            .signature_subscribe(sig.clone(), None)
+                            .and_then(move |sig_stream| {
+                                sig_stream.for_each(move |result| {
+                                    sender.lock().unwrap().send((sig.clone(), result)).unwrap();
+                                    future::ok(())
+                                })
+                            })
+                            .map_err(|err| {
+                                eprintln!("sig sub err: {:#?}", err);
+                            }),
+                    );
+                }
+                future::ok(())
+            })
+            .map_err(|_| ())
+    });
+
+    // Wait for all signature subscriptions
+    let now = SystemTime::now();
+    let timeout = Duration::from_secs(5);
+    while !signature_set.is_empty() {
+        assert!(now.elapsed().unwrap() < timeout);
+        match receiver.recv_timeout(Duration::from_millis(500)) {
+            Ok((sig, result)) => {
+                assert!(result.is_ok());
+                assert!(signature_set.remove(&sig));
+            }
+            Err(_err) => {
+                eprintln!("unexpected receive timeout");
+                assert!(false)
+            }
+        }
+    }
+
+    rt.shutdown_now().wait().unwrap();
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }

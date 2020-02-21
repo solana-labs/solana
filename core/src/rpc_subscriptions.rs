@@ -26,7 +26,7 @@ const RECEIVE_DELAY_MILLIS: u64 = 100;
 
 pub type Confirmations = usize;
 
-#[derive(Serialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct SlotInfo {
     pub slot: Slot,
     pub parent: Slot,
