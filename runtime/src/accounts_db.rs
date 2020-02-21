@@ -1056,30 +1056,50 @@ impl AccountsDB {
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
     }
 
+    pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
+        let hashes: Vec<_> = hashes.into_iter().map(|(_pubkey, hash)| hash).collect();
+        let mut hashes: Vec<_> = hashes.chunks(fanout).map(|x| x.to_vec()).collect();
+        while hashes.len() > 1 {
+            let mut time = Measure::start("time");
+            let new_hashes: Vec<Hash> = hashes
+                .par_iter()
+                .map(|h| {
+                    let mut hasher = Hasher::default();
+                    for v in h.iter() {
+                        hasher.hash(v.as_ref());
+                    }
+                    hasher.result()
+                })
+                .collect();
+            time.stop();
+            debug!("hashing {} {}", hashes.len(), time);
+            hashes = new_hashes.chunks(fanout).map(|x| x.to_vec()).collect();
+        }
+        let mut hasher = Hasher::default();
+        hashes
+            .into_iter()
+            .flatten()
+            .map(|hash| hash)
+            .for_each(|hash| {
+                hasher.hash(hash.as_ref());
+            });
+        hasher.result()
+    }
+
     fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
         let mut sort = Measure::start("sort");
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
         sort.stop();
         let mut hash_time = Measure::start("hash");
-        let hashes: Vec<_> = hashes.chunks(16).collect();
-        let hashes: Vec<_> = hashes
-            .par_iter()
-            .map(|k| {
-                let mut hasher = Hasher::default();
-                for v in k.iter() {
-                    hasher.hash(v.1.as_ref());
-                }
-                hasher.result()
-            })
-            .collect();
-        let mut hasher = Hasher::default();
-        for hash in &hashes {
-            hasher.hash(hash.as_ref());
-        }
-        hash_time.stop();
-        info!("{} {}", sort, hash_time);
 
-        hasher.result()
+        let fanout = 16;
+
+        let res = Self::compute_merkle_root(hashes, fanout);
+
+        hash_time.stop();
+        debug!("{} {}", sort, hash_time);
+
+        res
     }
 
     fn calculate_accounts_hash(
@@ -1111,7 +1131,6 @@ impl AccountsDB {
                                     if hash != *account.hash {
                                         mismatch_found.store(true, Ordering::Relaxed);
                                     }
-                                    debug!("xoring..{} key: {}", hash, pubkey);
                                     if mismatch_found.load(Ordering::Relaxed) {
                                         return None;
                                     }
