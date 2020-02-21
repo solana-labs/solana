@@ -536,11 +536,11 @@ impl VoteState {
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
 /// but will implicitly withdraw authorization from the previously authorized
 /// key
-pub fn authorize(
+pub fn authorize<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState =
@@ -566,10 +566,10 @@ pub fn authorize(
 }
 
 /// Update the node_pubkey, requires signature of the authorized voter
-pub fn update_node(
+pub fn update_node<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     node_pubkey: &Pubkey,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState =
@@ -586,9 +586,9 @@ pub fn update_node(
     vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
-fn verify_authorized_signer(
+fn verify_authorized_signer<S: std::hash::BuildHasher>(
     authorized: &Pubkey,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     if signers.contains(authorized) {
         Ok(())
@@ -598,11 +598,11 @@ fn verify_authorized_signer(
 }
 
 /// Withdraw funds from the vote account
-pub fn withdraw(
+pub fn withdraw<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     lamports: u64,
     to_account: &KeyedAccount,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
@@ -640,12 +640,12 @@ pub fn initialize_account(
     ))))
 }
 
-pub fn process_vote(
+pub fn process_vote<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
     vote: &Vote,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
@@ -779,7 +779,7 @@ mod tests {
         epoch: Epoch,
     ) -> Result<VoteState, InstructionError> {
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         process_vote(
             &keyed_accounts[0],
             slot_hashes,
@@ -893,7 +893,7 @@ mod tests {
         let node_pubkey = Pubkey::new_rand();
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = update_node(
             &keyed_accounts[0],
             &node_pubkey,
@@ -907,7 +907,7 @@ mod tests {
         assert!(vote_state.node_pubkey != node_pubkey);
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = update_node(
             &keyed_accounts[0],
             &node_pubkey,
@@ -921,7 +921,7 @@ mod tests {
         assert_eq!(vote_state.node_pubkey, node_pubkey);
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let mut clock = Clock::default();
         clock.epoch += 10;
         let res = update_node(&keyed_accounts[0], &node_pubkey, &signers, &clock);
@@ -939,7 +939,7 @@ mod tests {
 
         // unsigned
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
@@ -955,7 +955,7 @@ mod tests {
 
         // signed
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
@@ -971,7 +971,7 @@ mod tests {
 
         // another voter, unsigned
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let authorized_voter_pubkey = Pubkey::new_rand();
         let res = authorize(
             &keyed_accounts[0],
@@ -987,7 +987,7 @@ mod tests {
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_voter_pubkey,
@@ -1002,7 +1002,7 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // Already set an authorized voter earlier for leader_schedule_epoch == 2
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_voter_pubkey,
@@ -1022,7 +1022,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_voter_pubkey,
@@ -1041,7 +1041,7 @@ mod tests {
         // authorize another withdrawer
         // another voter
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
         let res = authorize(
             &keyed_accounts[0],
@@ -1062,7 +1062,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_withdrawer_pubkey,
@@ -1078,7 +1078,7 @@ mod tests {
 
         // not signed by authorized voter
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let vote = Vote::new(vec![2], Hash::default());
         let res = process_vote(
             &keyed_accounts[0],
@@ -1099,7 +1099,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let vote = Vote::new(vec![2], Hash::default());
         let res = process_vote(
             &keyed_accounts[0],
@@ -1445,7 +1445,7 @@ mod tests {
 
         // unsigned request
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = withdraw(
             &keyed_accounts[0],
             0,
@@ -1460,7 +1460,7 @@ mod tests {
 
         // insufficient funds
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = withdraw(
             &keyed_accounts[0],
             101,
@@ -1477,7 +1477,7 @@ mod tests {
         let to_account = RefCell::new(Account::default());
         let lamports = vote_account.borrow().lamports;
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = withdraw(
             &keyed_accounts[0],
             lamports,
@@ -1494,7 +1494,7 @@ mod tests {
         // authorize authorized_withdrawer
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_withdrawer_pubkey,
@@ -1510,7 +1510,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let keyed_accounts = &mut keyed_accounts.iter();
         let vote_keyed_account = next_keyed_account(keyed_accounts).unwrap();
         let withdrawer_keyed_account = next_keyed_account(keyed_accounts).unwrap();
