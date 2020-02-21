@@ -269,7 +269,11 @@ impl ServeRepair {
         Ok(out)
     }
 
-    pub fn repair_request(&self, repair_request: &RepairType) -> Result<(SocketAddr, Vec<u8>)> {
+    pub fn repair_request(
+        &self,
+        cluster_slots: &ClusterSlots,
+        repair_request: &RepairType,
+    ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let valid: Vec<_> = self

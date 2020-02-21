@@ -56,6 +56,47 @@ pub struct RepairService {
     t_repair: JoinHandle<()>,
 }
 
+#[derive(Default)]
+pub struct ClusterSlots {
+    cluster_slots: HashMap<Slot, HashSet<Pubkey>>,
+    since: u64,
+}
+
+impl ClusterSlots {
+    fn update(&mut self, root: Slot, cluster_info: &RwLock<ClusterInfo>) {
+        let (epoch_slots_list, since) = cluster_info
+            .read()
+            .unwrap()
+            .get_epoch_slots_since(self.since);
+        self.since = since;
+        for epoch_slots in epoch_slots_list {
+            for slot in epoch_slots.slots {
+                if slot < root {
+                    continue;
+                }
+                self.cluster_slots
+                    .entry(slot)
+                    .or_insert_default()
+                    .insert(epoch_slots.from);
+            }
+        }
+        self.cluster_slots.retain(|x| x.0 > root);
+    }
+    fn generate_repairs_for_missing_slots(
+        &self,
+        root: Slot,
+        epoch_slots: &BTreeSet<Slot>,
+        old_incomplete_slots: BTreeSet<Slot>,
+    ) -> Vec<RepairType> {
+        self.cluster_slots
+            .keys()
+            .filter(|x| x < root)
+            .filter(|x| !(epoch_slots.contains(x) || old_incomplete_slots.contains(x)))
+            .map(|h| RepairType::Orphan(*h))
+            .collect()
+    }
+}
+
 impl RepairService {
     pub fn new(
         blockstore: Arc<Blockstore>,
@@ -88,6 +129,7 @@ impl RepairService {
         repair_strategy: RepairStrategy,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
+        let mut cluster_slots = ClusterSlots::default();
         let mut epoch_slots: BTreeSet<Slot> = BTreeSet::new();
         let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
@@ -137,7 +179,10 @@ impl RepairService {
                             &cluster_info,
                             completed_slots_receiver,
                         );
-                        Self::generate_repairs(blockstore, new_root, MAX_REPAIR_LENGTH)
+                        cluster_slots.update(&cluster_info);
+                        let repairs = cluster_slots
+                            .generate_repairs_for_missing_slots(epoch_slots, old_incomplete_slots);
+                        Self::generate_repairs(repairs, blockstore, new_root, MAX_REPAIR_LENGTH)
                     }
                 }
             };
@@ -198,12 +243,12 @@ impl RepairService {
     }
 
     fn generate_repairs(
+        mut repairs: Vec<RepairType>,
         blockstore: &Blockstore,
         root: Slot,
         max_repairs: usize,
     ) -> Result<Vec<RepairType>> {
         // Slot height and shred indexes for shreds we want to repair
-        let mut repairs: Vec<RepairType> = vec![];
         Self::generate_repairs_for_fork(blockstore, &mut repairs, max_repairs, root);
 
         // TODO: Incorporate gossip to determine priorities for repair?
