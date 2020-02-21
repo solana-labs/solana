@@ -1866,8 +1866,6 @@ impl Bank {
             .verify_bank_hash(self.slot(), &self.ancestors)
     }
 
-<<<<<<< HEAD
-=======
     pub fn get_snapshot_storages(&self) -> SnapshotStorages {
         self.rc
             .get_snapshot_storages(self.slot())
@@ -1875,26 +1873,6 @@ impl Bank {
             .collect()
     }
 
-    #[must_use]
-    fn verify_hash(&self) -> bool {
-        assert!(self.is_frozen());
-        let calculated_hash = self.hash_internal_state();
-        let expected_hash = self.hash();
-
-        if calculated_hash == expected_hash {
-            true
-        } else {
-            warn!(
-                "verify failed: slot: {}, {} (calculated) != {} (expected)",
-                self.slot(),
-                calculated_hash,
-                expected_hash
-            );
-            false
-        }
-    }
-
->>>>>>> d238371b0... Correct missing entry handling to avoid bad warns (#8339)
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
