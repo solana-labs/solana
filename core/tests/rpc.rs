@@ -179,7 +179,6 @@ fn test_rpc_invalid_requests() {
 }
 
 #[test]
-#[ignore]
 fn test_rpc_subscriptions() {
     solana_logger::setup();
 
