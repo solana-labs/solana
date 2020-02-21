@@ -15,12 +15,18 @@ use solana_ledger::{
     shred_version::compute_shred_version,
     snapshot_utils,
 };
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::Slot, genesis_config::GenesisConfig, instruction_processor_utils::limited_deserialize,
     native_token::lamports_to_sol, pubkey::Pubkey,
 };
-use solana_vote_program::vote_state::VoteState;
+use solana_vote_program::{
+    self,
+    vote_state::{VoteState, VoteStateVersions},
+};
+
 use std::{
+    boxed::Box,
     collections::{BTreeMap, HashMap, HashSet},
     ffi::OsStr,
     fs::{self, File},
@@ -525,6 +531,21 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     }
 }
 
+fn load_bank_from_snapshot(arg_matches: &ArgMatches, ledger_path: &PathBuf) -> Bank {
+    let snapshot_config = SnapshotConfig {
+        snapshot_interval_slots: 0, // Value doesn't matter
+        snapshot_package_output_path: ledger_path.clone(),
+        snapshot_path: ledger_path.clone().join("snapshot"),
+    };
+    let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        account_paths.split(',').map(PathBuf::from).collect()
+    } else {
+        vec![ledger_path.join("accounts")]
+    };
+
+    bank_forks_utils::load_bank_from_archive(account_paths, &snapshot_config)
+}
+
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     ledger_path: &PathBuf,
@@ -693,6 +714,27 @@ fn main() {
             .arg(
                 Arg::with_name("output_directory")
                     .index(2)
+                    .value_name("DIR")
+                    .takes_value(true)
+                    .help("Output directory for the snapshot"),
+            )
+        ).subcommand(
+            SubCommand::with_name("verify-snapshot")
+            .about("Convert accounts in snapshot")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
+        ).subcommand(
+            SubCommand::with_name("convert-accounts")
+            .about("Convert accounts in snapshot")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
+            .arg(
+                Arg::with_name("output_directory")
+                    .index(1)
                     .value_name("DIR")
                     .takes_value(true)
                     .help("Output directory for the snapshot"),
@@ -946,6 +988,108 @@ fn main() {
                     exit(1);
                 }
             }
+        }
+        ("verify-snapshot", Some(arg_matches)) => {
+            load_bank_from_snapshot(arg_matches, &ledger_path);
+        }
+        ("convert-accounts", Some(arg_matches)) => {
+            let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
+            let mut root_bank = load_bank_from_snapshot(arg_matches, &ledger_path);
+            // Convert root_bank.EpochStakes
+            for (_, stakes) in root_bank.epoch_stakes.iter_mut() {
+                for (pubkey, (_, vote_account)) in stakes.vote_accounts.iter_mut() {
+                    VoteStateVersions::convert_from_raw(vote_account, &pubkey);
+                }
+            }
+
+            for (pubkey, (_, vote_account)) in
+                root_bank.stakes.write().unwrap().vote_accounts.iter_mut()
+            {
+                VoteStateVersions::convert_from_raw(vote_account, &pubkey);
+            }
+
+            let index: Vec<_> = {
+                let index = root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .accounts_index
+                    .read()
+                    .unwrap();
+
+                // Write out the new accounts
+                let total: usize = index
+                    .account_maps
+                    .values()
+                    .map(|slot_list| slot_list.read().unwrap().len())
+                    .sum();
+
+                println!("Converting {} accounts", total);
+                index
+                    .account_maps
+                    .iter()
+                    .map(|(pubkey, slot_list)| (*pubkey, slot_list.read().unwrap().clone()))
+                    .collect()
+            };
+
+            for (pubkey, slot_list) in index.iter() {
+                for (slot, _) in slot_list.iter() {
+                    let ancestors = vec![(*slot, 1)].into_iter().collect();
+                    let res = root_bank.rc.accounts.load_slow(&ancestors, pubkey);
+
+                    if let Some((mut account, _)) = res {
+                        if account.owner == solana_vote_program::id() {
+                            VoteStateVersions::convert_from_raw(&mut account, pubkey);
+                            root_bank.rc.accounts.store_slow(*slot, pubkey, &account);
+                            (*slot, pubkey, &account);
+                        }
+                    }
+                }
+            }
+
+            // Update the bank hash
+            println!("Updating bank hash");
+            root_bank.rc.accounts.accounts_db.update_accounts_hash(
+                root_bank.slot(),
+                &[(root_bank.slot(), root_bank.slot() as usize)]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            );
+
+            root_bank.recompute_hash();
+
+            let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
+                eprintln!("Unable to create temporary directory: {}", err);
+                exit(1);
+            });
+
+            let storages: Vec<_> = root_bank.get_snapshot_storages();
+            snapshot_utils::add_snapshot(&temp_dir, &root_bank, &storages)
+                .and_then(|slot_snapshot_paths| {
+                    snapshot_utils::package_snapshot(
+                        &root_bank,
+                        &slot_snapshot_paths,
+                        &temp_dir,
+                        &root_bank.src.roots(),
+                        output_directory,
+                        storages,
+                    )
+                })
+                .and_then(|package| {
+                    snapshot_utils::archive_snapshot_package(&package).map(|ok| {
+                        println!(
+                            "Successfully created snapshot for slot {}: {:?}",
+                            root_bank.slot(),
+                            package.tar_output_file
+                        );
+                        ok
+                    })
+                })
+                .unwrap_or_else(|err| {
+                    eprintln!("Unable to create snapshot archive: {}", err);
+                    exit(1);
+                });
         }
         ("print-accounts", Some(arg_matches)) => {
             let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();

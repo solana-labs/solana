@@ -598,16 +598,8 @@ where
         &root_paths.snapshot_file_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-            let mut bank: Bank = match snapshot_version {
-                SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
-                _ => {
-                    return Err(get_io_error(&format!(
-                        "unsupported snapshot version: {}",
-                        snapshot_version
-                    )));
-                }
-            };
-            info!("Rebuilding accounts...");
+            let mut bank: Bank = deserialize_from_snapshot(stream.by_ref())?;
+            println!("Rebuilding accounts...");
             bank.set_bank_rc(
                 bank::BankRc::new(account_paths.to_vec(), 0, bank.slot()),
                 bank::StatusCacheRc::default(),

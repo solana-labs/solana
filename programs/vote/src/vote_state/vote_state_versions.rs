@@ -1,5 +1,6 @@
 use super::*;
 use crate::vote_state::vote_state_0_23_5::VoteState0_23_5;
+use solana_sdk::account_utils::StateMut;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum VoteStateVersions {
@@ -46,6 +47,22 @@ impl VoteStateVersions {
             }
             VoteStateVersions::Current(state) => *state,
         }
+    }
+
+    pub fn convert_from_raw(account: &mut Account, pubkey: &Pubkey) {
+        let vote_state: VoteState0_23_5 = account.state().unwrap_or_else(|e| {
+            panic!(
+                "Couldn't deserialize vote account {}, error: {:?}",
+                pubkey, e
+            )
+        });
+
+        let current_vote_state =
+            VoteStateVersions::V0_23_5(Box::new(vote_state)).convert_to_current();
+        VoteState::to(
+            &VoteStateVersions::Current(Box::new(current_vote_state)),
+            account,
+        );
     }
 
     pub fn is_uninitialized(&self) -> bool {

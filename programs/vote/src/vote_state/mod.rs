@@ -20,7 +20,7 @@ use solana_sdk::{
 use std::boxed::Box;
 use std::collections::{HashSet, VecDeque};
 
-mod vote_state_0_23_5;
+pub mod vote_state_0_23_5;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 

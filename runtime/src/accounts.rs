@@ -317,14 +317,21 @@ impl Accounts {
         ancestors: &HashMap<Slot, usize>,
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
-        let (account, slot) = self
-            .accounts_db
-            .load_slow(ancestors, pubkey)
-            .unwrap_or((Account::default(), self.slot));
+        let res = self.accounts_db.load_slow(ancestors, pubkey);
+
+        if res.is_none() {
+            panic!("Could not find pubkey");
+        }
+
+        let (account, slot) = res.unwrap_or((Account::default(), self.slot));
 
         if account.lamports > 0 {
             Some((account, slot))
         } else {
+            println!(
+                "0 lamports account owner: {}, {}",
+                account.owner, account.lamports
+            );
             None
         }
     }

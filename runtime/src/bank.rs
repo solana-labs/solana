@@ -76,7 +76,7 @@ type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 #[derive(Default)]
 pub struct BankRc {
     /// where all the Accounts are stored
-    accounts: Arc<Accounts>,
+    pub accounts: Arc<Accounts>,
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
@@ -317,14 +317,14 @@ pub struct Bank {
     inflation: Arc<RwLock<Inflation>>,
 
     /// cache of vote_account and stake_account state for this fork
-    stakes: RwLock<Stakes>,
+    pub stakes: RwLock<Stakes>,
 
     /// cache of validator and archiver storage accounts for this fork
     storage_accounts: RwLock<StorageAccounts>,
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
-    epoch_stakes: HashMap<Epoch, Stakes>,
+    pub epoch_stakes: HashMap<Epoch, Stakes>,
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
@@ -764,6 +764,11 @@ impl Bank {
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
         }
+    }
+
+    pub fn recompute_hash(&self) {
+        let mut hash = self.hash.write().unwrap();
+        *hash = self.hash_internal_state();
     }
 
     pub fn epoch_schedule(&self) -> &EpochSchedule {
