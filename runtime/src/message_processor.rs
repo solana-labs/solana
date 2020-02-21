@@ -19,7 +19,6 @@ use libloading::os::windows::*;
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
-#[derive(Clone, Debug, PartialEq)]
 pub struct PreAccount {
     pub is_writable: bool,
     pub lamports: u64,
@@ -54,8 +53,6 @@ impl PreAccount {
     }
 
     pub fn verify(&self, program_id: &Pubkey, post: &Account) -> Result<(), InstructionError> {
-        // Verify the transaction
-
         // Only the owner of the account may change owner and
         //   only if the account is writable and
         //   only if the data is zero-initialized or empty
@@ -221,6 +218,35 @@ impl MessageProcessor {
         )
     }
 
+    /// Record the initial state of the accounts so that it can be compared
+    // after the instruction is processed
+    pub fn create_pre_accounts(
+        // program_id: &Pubkey,
+        message: &Message,
+        instruction: &CompiledInstruction,
+        program_accounts: &[Rc<RefCell<Account>>],
+    ) -> Vec<Option<PreAccount>> {
+        let program_id = instruction.program_id(&message.account_keys);
+
+        // Copy only what we need to verify after instruction processing
+        let mut pre_accounts = Vec::with_capacity(program_accounts.len());
+        'root: for (i, account) in program_accounts.iter().enumerate() {
+            // Note: This is an O(n^2) algorithm,
+            // but performed on a very small slice and requires no heap allocations
+            for account_after in program_accounts.iter().skip(i + 1) {
+                if Rc::ptr_eq(account, account_after) {
+                    pre_accounts.push(None);
+                    continue 'root; // don't verify duplicates
+                }
+            }
+            let is_writable = message.is_writable(instruction.accounts[i] as usize);
+            let account = account.borrow();
+            pre_accounts.push(Some(PreAccount::new(&account, is_writable, program_id)))
+        }
+        pre_accounts
+    }
+
+    /// Verify there are no outstanding borrows
     pub fn verify_account_references(
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         program_accounts: &[Rc<RefCell<Account>>],
@@ -238,33 +264,30 @@ impl MessageProcessor {
         Ok(())
     }
 
+    /// Verify the results of an instruction
     pub fn verify(
-        program_id: &Pubkey,
-        pre_accounts: &[PreAccount],
+        message: &Message,
+        instruction: &CompiledInstruction,
+        pre_accounts: &[Option<PreAccount>],
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         program_accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
+        let program_id = instruction.program_id(&message.account_keys);
+
         // Verify all accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts, program_accounts)?;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        'root: for (i, (pre_account, account)) in
-            pre_accounts.iter().zip(program_accounts).enumerate()
-        {
-            // Note: This is an O(n^2) algorithm,
-            // but performed on a very small slice and requires no heap allocations
-            for account_after in program_accounts.iter().skip(i + 1) {
-                if Rc::ptr_eq(account, account_after) {
-                    continue 'root; // don't verify duplicates
-                }
+        for (pre_account, account) in pre_accounts.iter().zip(program_accounts) {
+            if let Some(pre_account) = pre_account {
+                let account = account
+                    .try_borrow()
+                    .map_err(|_| InstructionError::AccountBorrowFailed)?;
+                pre_account.verify(&program_id, &account)?;
+                pre_sum += u128::from(pre_account.lamports);
+                post_sum += u128::from(account.lamports);
             }
-            let account = account
-                .try_borrow()
-                .map_err(|_| InstructionError::AccountBorrowFailed)?;
-            pre_account.verify(&program_id, &account)?;
-            pre_sum += u128::from(pre_account.lamports);
-            post_sum += u128::from(account.lamports);
         }
 
         // Verify that the total sum of all the lamports did not change
@@ -286,28 +309,15 @@ impl MessageProcessor {
         program_accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         assert_eq!(instruction.accounts.len(), program_accounts.len());
-        let program_id = instruction.program_id(&message.account_keys);
-        // Copy only what we need to verify after instruction processing
-        let pre_accounts: Vec<_> = program_accounts
-            .iter()
-            .enumerate()
-            .map(|(i, account)| {
-                let is_writable = message.is_writable(instruction.accounts[i] as usize);
-                let account = account.borrow();
-                PreAccount::new(&account, is_writable, program_id)
-            })
-            .collect();
-
+        let pre_accounts = Self::create_pre_accounts(message, instruction, program_accounts);
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
-
-        // Verify the instruction results
         Self::verify(
-            &program_id,
+            message,
+            instruction,
             &pre_accounts,
             executable_accounts,
             program_accounts,
         )?;
-
         Ok(())
     }
 
