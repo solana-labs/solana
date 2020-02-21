@@ -10,7 +10,7 @@ use std::collections::HashMap;
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Stakes {
     /// vote accounts
-    vote_accounts: HashMap<Pubkey, (u64, Account)>,
+    pub vote_accounts: HashMap<Pubkey, (u64, Account)>,
 
     /// stake_delegations
     stake_delegations: HashMap<Pubkey, Delegation>,

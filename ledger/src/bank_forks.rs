@@ -122,6 +122,10 @@ impl BankForks {
         self.banks.get(&bank_slot)
     }
 
+    pub fn remove(&mut self, bank_slot: Slot) -> Arc<Bank> {
+        self.banks.remove(&bank_slot).unwrap()
+    }
+
     pub fn new_from_banks(initial_forks: &[Arc<Bank>], rooted_path: Vec<Slot>) -> Self {
         let mut banks = HashMap::new();
         let working_bank = initial_forks[0].clone();

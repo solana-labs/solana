@@ -76,7 +76,7 @@ type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 #[derive(Default)]
 pub struct BankRc {
     /// where all the Accounts are stored
-    accounts: Arc<Accounts>,
+    pub accounts: Arc<Accounts>,
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
@@ -324,7 +324,7 @@ pub struct Bank {
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
-    epoch_stakes: HashMap<Epoch, Stakes>,
+    pub epoch_stakes: HashMap<Epoch, Stakes>,
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
@@ -1675,6 +1675,21 @@ impl Bank {
                 .write()
                 .unwrap()
                 .store(pubkey, account);
+        }
+    }
+
+    pub fn store_account_convert(&self, slot: u64, pubkey: &Pubkey, account: &Account) {
+        self.rc.accounts.store_slow(slot, pubkey, account);
+
+        if slot == self.slot() {
+            if Stakes::is_stake(account) {
+                self.stakes.write().unwrap().store(pubkey, account);
+            } else if storage_utils::is_storage(account) {
+                self.storage_accounts
+                    .write()
+                    .unwrap()
+                    .store(pubkey, account);
+            }
         }
     }
 
