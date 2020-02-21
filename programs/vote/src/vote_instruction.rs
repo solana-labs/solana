@@ -8,7 +8,7 @@ use crate::{
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
-use solana_metrics::datapoint_debug;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
@@ -209,7 +209,7 @@ pub fn process_instruction(
             vote_state::update_node(me, &node_pubkey, &signers)
         }
         VoteInstruction::Vote(vote) => {
-            datapoint_debug!("vote-native", ("count", 1, i64));
+            inc_new_counter_info!("vote-native", 1);
             vote_state::process_vote(
                 me,
                 &SlotHashes::from_keyed_account(next_keyed_account(keyed_accounts)?)?,

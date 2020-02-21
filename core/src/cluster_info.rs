@@ -44,6 +44,7 @@ use solana_net_utils::{
 use solana_perf::packet::{to_packets_with_destination, Packets, PacketsRecycler};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
+use solana_sdk::timing::duration_as_s;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT},
     pubkey::Pubkey,
@@ -98,6 +99,7 @@ pub struct ClusterInfo {
     pub(crate) keypair: Arc<Keypair>,
     /// The network entrypoint
     entrypoint: Option<ContactInfo>,
+    last_datapoint_submit: Instant,
 }
 
 #[derive(Default, Clone)]
@@ -197,6 +199,7 @@ impl ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair,
             entrypoint: None,
+            last_datapoint_submit: Instant::now(),
         };
         let id = contact_info.id;
         me.gossip.set_self(&id);
@@ -917,7 +920,7 @@ impl ClusterInfo {
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
     pub fn broadcast_shreds(
-        &self,
+        &mut self,
         s: &UdpSocket,
         shreds: Vec<Vec<u8>>,
         seeds: &[[u8; 32]],
@@ -926,11 +929,14 @@ impl ClusterInfo {
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
         let broadcast_len = peers_and_stakes.len();
         if broadcast_len == 0 {
-            datapoint_debug!(
-                "cluster_info-num_nodes",
-                ("live_count", 1, i64),
-                ("broadcast_count", 1, i64)
-            );
+            if duration_as_s(&Instant::now().duration_since(self.last_datapoint_submit)) >= 1.0 {
+                datapoint_info!(
+                    "cluster_info-num_nodes",
+                    ("live_count", 1, i64),
+                    ("broadcast_count", 1, i64)
+                );
+                self.last_datapoint_submit = Instant::now();
+            }
             return Ok(());
         }
         let mut packets: Vec<_> = shreds
@@ -960,11 +966,14 @@ impl ClusterInfo {
                 num_live_peers += 1;
             }
         });
-        datapoint_debug!(
-            "cluster_info-num_nodes",
-            ("live_count", num_live_peers, i64),
-            ("broadcast_count", broadcast_len + 1, i64)
-        );
+        if duration_as_s(&Instant::now().duration_since(self.last_datapoint_submit)) >= 1.0 {
+            datapoint_info!(
+                "cluster_info-num_nodes",
+                ("live_count", num_live_peers, i64),
+                ("broadcast_count", broadcast_len + 1, i64)
+            );
+            self.last_datapoint_submit = Instant::now();
+        }
         Ok(())
     }
 

@@ -446,7 +446,7 @@ impl Bank {
             rewards: None,
         };
 
-        datapoint_debug!(
+        datapoint_info!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
             ("block_height", new.block_height, i64)
