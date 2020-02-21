@@ -12,8 +12,6 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::crds_value::CompressionType::*;
-use crate::crds_value::EpochIncompleteSlots;
 use crate::packet::limited_deserialize;
 use crate::streamer::{PacketReceiver, PacketSender};
 use crate::{
@@ -21,14 +19,14 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Vote},
+    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotIndex, SnapshotHash, Vote},
+    epoch_slots::EpochSlots,
     packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
     weighted_shuffle::{weighted_best, weighted_shuffle},
 };
 use bincode::{serialize, serialized_size};
-use compression::prelude::*;
 use core::cmp;
 use itertools::Itertools;
 use rayon::iter::IntoParallelIterator;
@@ -55,7 +53,7 @@ use solana_sdk::{
 use std::{
     borrow::Cow,
     cmp::min,
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     sync::atomic::{AtomicBool, Ordering},
@@ -71,18 +69,16 @@ pub const DATA_PLANE_FANOUT: usize = 200;
 /// milliseconds we sleep for between gossip requests
 pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// The maximum size of a bloom filter
-pub const MAX_BLOOM_SIZE: usize = 1018;
+pub const MAX_BLOOM_SIZE: usize = MAX_CRDS_OBJECT_SIZE;
+pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
 /// The maximum size of a protocol payload
-const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
+pub const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
 /// The largest protocol header size
 const MAX_PROTOCOL_HEADER_SIZE: u64 = 214;
 /// A hard limit on incoming gossip messages
 /// Chosen to be able to handle 1Gbps of pure gossip traffic
 /// 128MB/PACKET_DATA_SIZE
 const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
-
-const NUM_BITS_PER_BYTE: u64 = 8;
-const MIN_SIZE_TO_COMPRESS_GZIP: u64 = 64;
 
 /// Keep the number of snapshot hashes a node publishes under MAX_PROTOCOL_PAYLOAD_SIZE
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
@@ -254,6 +250,16 @@ impl ClusterInfo {
         self.lookup(&self.id()).cloned().unwrap()
     }
 
+    pub fn lookup_epoch_slots(&self, ix: EpochSlotIndex) -> EpochSlots {
+        let entry = CrdsValueLabel::EpochSlots(ix, self.id());
+        self.gossip
+            .crds
+            .lookup(&entry)
+            .and_then(CrdsValue::epoch_slots)
+            .cloned()
+            .unwrap_or_else(|| EpochSlots::new(self.id(), timestamp()))
+    }
+
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
@@ -328,119 +334,42 @@ impl ClusterInfo {
         )
     }
 
-    pub fn compress_incomplete_slots(incomplete_slots: &BTreeSet<Slot>) -> EpochIncompleteSlots {
-        if !incomplete_slots.is_empty() {
-            let first_slot = incomplete_slots
-                .iter()
-                .next()
-                .expect("expected to find at least one slot");
-            let last_slot = incomplete_slots
-                .iter()
-                .next_back()
-                .expect("expected to find last slot");
-            let num_uncompressed_bits = last_slot.saturating_sub(*first_slot) + 1;
-            let num_uncompressed_bytes = if num_uncompressed_bits % NUM_BITS_PER_BYTE > 0 {
-                1
+    pub fn push_epoch_slots(&mut self, update: &[Slot]) {
+        let mut num = 0;
+        let mut current_slots: Vec<_> = (0..crds_value::MAX_EPOCH_SLOTS)
+            .filter_map(|ix| {
+                Some((
+                    self.gossip
+                        .crds
+                        .lookup(&CrdsValueLabel::Vote(ix, self.id()))
+                        .and_then(CrdsValue::epoch_slots)
+                        .map(|x| x.wallclock)?,
+                    ix,
+                ))
+            })
+            .collect();
+        current_slots.sort();
+        let mut reset = false;
+        let mut epoch_slot_index = current_slots.last().map(|(_, x)| *x).unwrap_or(0);
+        while num < update.len() {
+            let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
+            let now = timestamp();
+            let mut slots = if !reset {
+                self.lookup_epoch_slots(ix)
             } else {
-                0
-            } + num_uncompressed_bits / NUM_BITS_PER_BYTE;
-            let mut uncompressed = vec![0u8; num_uncompressed_bytes as usize];
-            incomplete_slots.iter().for_each(|slot| {
-                let offset_from_first_slot = slot.saturating_sub(*first_slot);
-                let index = offset_from_first_slot / NUM_BITS_PER_BYTE;
-                let bit_index = offset_from_first_slot % NUM_BITS_PER_BYTE;
-                uncompressed[index as usize] |= 1 << bit_index;
-            });
-            if num_uncompressed_bytes >= MIN_SIZE_TO_COMPRESS_GZIP {
-                if let Ok(compressed) = uncompressed
-                    .iter()
-                    .cloned()
-                    .encode(&mut GZipEncoder::new(), Action::Finish)
-                    .collect::<std::result::Result<Vec<u8>, _>>()
-                {
-                    return EpochIncompleteSlots {
-                        first: *first_slot,
-                        compression: GZip,
-                        compressed_list: compressed,
-                    };
-                }
-            } else {
-                return EpochIncompleteSlots {
-                    first: *first_slot,
-                    compression: Uncompressed,
-                    compressed_list: uncompressed,
-                };
-            }
-        }
-        EpochIncompleteSlots::default()
-    }
-
-    fn bitmap_to_slot_list(first: Slot, bitmap: &[u8]) -> BTreeSet<Slot> {
-        let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
-        bitmap.iter().enumerate().for_each(|(i, val)| {
-            if *val != 0 {
-                (0..8).for_each(|bit_index| {
-                    if (1 << bit_index & *val) != 0 {
-                        let slot = first + i as u64 * NUM_BITS_PER_BYTE + bit_index as u64;
-                        old_incomplete_slots.insert(slot);
-                    }
-                })
-            }
-        });
-        old_incomplete_slots
-    }
-
-    pub fn decompress_incomplete_slots(slots: &EpochIncompleteSlots) -> BTreeSet<Slot> {
-        match slots.compression {
-            Uncompressed => Self::bitmap_to_slot_list(slots.first, &slots.compressed_list),
-            GZip => {
-                if let Ok(decompressed) = slots
-                    .compressed_list
-                    .iter()
-                    .cloned()
-                    .decode(&mut GZipDecoder::new())
-                    .collect::<std::result::Result<Vec<u8>, _>>()
-                {
-                    Self::bitmap_to_slot_list(slots.first, &decompressed)
-                } else {
-                    BTreeSet::new()
-                }
-            }
-            BZip2 => {
-                if let Ok(decompressed) = slots
-                    .compressed_list
-                    .iter()
-                    .cloned()
-                    .decode(&mut BZip2Decoder::new())
-                    .collect::<std::result::Result<Vec<u8>, _>>()
-                {
-                    Self::bitmap_to_slot_list(slots.first, &decompressed)
-                } else {
-                    BTreeSet::new()
+                EpochSlots::new(self.id(), now)
+            };
+            if let Ok(n) = slots.fill(&update[num..], now) {
+                let entry = CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.keypair);
+                self.gossip
+                    .process_push_message(&self.id(), vec![entry], now);
+                num += n;
+                if num < update.len() {
+                    epoch_slot_index += 1;
+                    reset = true;
                 }
             }
         }
-    }
-
-    pub fn push_epoch_slots(
-        &mut self,
-        id: Pubkey,
-        root: Slot,
-        min: Slot,
-        slots: BTreeSet<Slot>,
-        incomplete_slots: &BTreeSet<Slot>,
-    ) {
-        let compressed = Self::compress_incomplete_slots(incomplete_slots);
-        let now = timestamp();
-        let entry = CrdsValue::new_signed(
-            CrdsData::EpochSlots(
-                0,
-                EpochSlots::new(id, root, min, slots, vec![compressed], now),
-            ),
-            &self.keypair,
-        );
-        self.gossip
-            .process_push_message(&self.id(), vec![entry], now);
     }
 
     pub fn push_snapshot_hashes(&mut self, snapshot_hashes: Vec<(Slot, Hash)>) {
@@ -526,21 +455,22 @@ impl ClusterInfo {
             .map(|x| &x.value.snapshot_hash().unwrap().hashes)
     }
 
-    pub fn get_epoch_state_for_node(
-        &self,
-        pubkey: &Pubkey,
-        since: Option<u64>,
-    ) -> Option<(&EpochSlots, u64)> {
-        self.gossip
+    pub fn get_epoch_slots_since(&self, since: Option<u64>) -> (Vec<EpochSlots>, Option<u64>) {
+        let vals: Vec<_> = self
+            .gossip
             .crds
             .table
-            .get(&CrdsValueLabel::EpochSlots(*pubkey))
+            .values()
             .filter(|x| {
                 since
                     .map(|since| x.insert_timestamp > since)
                     .unwrap_or(true)
             })
-            .map(|x| (x.value.epoch_slots().unwrap(), x.insert_timestamp))
+            .filter_map(|x| Some((x.value.epoch_slots()?, x.insert_timestamp)))
+            .collect();
+        let max = vals.iter().map(|x| x.1).max().or(since);
+        let vec = vals.into_iter().map(|x| x.0).cloned().collect();
+        (vec, max)
     }
 
     pub fn get_contact_info_for_node(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
@@ -671,24 +601,6 @@ impl ClusterInfo {
                     && ContactInfo::is_valid_address(&x.tvu_forwards)
             })
             .cloned()
-            .collect()
-    }
-
-    /// all tvu peers with valid gossip addrs that likely have the slot being requested
-    pub fn repair_peers(&self, slot: Slot) -> Vec<ContactInfo> {
-        let me = self.my_data();
-        ClusterInfo::tvu_peers(self)
-            .into_iter()
-            .filter(|x| {
-                x.id != me.id
-                    && x.shred_version == me.shred_version
-                    && ContactInfo::is_valid_address(&x.serve_repair)
-                    && {
-                        self.get_epoch_state_for_node(&x.id, None)
-                            .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
-                            .unwrap_or_else(|| /* fallback to legacy behavior */ true)
-                    }
-            })
             .collect()
     }
 
@@ -1093,9 +1005,9 @@ impl ClusterInfo {
                         payload_size = msg_size;
                     }
                 } else {
-                    debug!(
-                        "dropping message larger than the maximum payload size {:?}",
-                        msg
+                    warn!(
+                        "dropping message larger than the maximum payload size {:?} {} {} {}",
+                        msg, msg_size, payload_size, max_payload_size,
                     );
                 }
                 continue;
@@ -1929,6 +1841,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::crds_value::CrdsValueLabel;
+    use crate::epoch_slots;
     use rayon::prelude::*;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
@@ -2281,6 +2194,29 @@ mod tests {
     }
 
     #[test]
+    fn test_push_epoch_slots() {
+        let keys = Keypair::new();
+        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        assert!(slots.is_empty());
+        assert!(since.is_none());
+        cluster_info.push_epoch_slots(&[0]);
+
+        let (slots, since) = cluster_info.get_epoch_slots_since(Some(std::u64::MAX));
+        assert!(slots.is_empty());
+        assert_eq!(since, Some(std::u64::MAX));
+
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        assert_eq!(slots.len(), 1);
+        assert!(since.is_some());
+
+        let (slots, since2) = cluster_info.get_epoch_slots_since(since.clone());
+        assert!(slots.is_empty());
+        assert_eq!(since2, since);
+    }
+
+    #[test]
     fn test_add_entrypoint() {
         let node_keypair = Arc::new(Keypair::new());
         let mut cluster_info = ClusterInfo::new(
@@ -2333,18 +2269,11 @@ mod tests {
 
     #[test]
     fn test_split_messages_large() {
-        let mut btree_slots = BTreeSet::new();
-        for i in 0..128 {
-            btree_slots.insert(i);
-        }
         let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
             EpochSlots {
                 from: Pubkey::default(),
-                root: 0,
-                lowest: 0,
-                slots: btree_slots,
-                stash: vec![],
+                slots: vec![epoch_slots::CompressedSlots::default(); 1024],
                 wallclock: 0,
             },
         ));
@@ -2360,19 +2289,12 @@ mod tests {
         let desired_size = MAX_PROTOCOL_PAYLOAD_SIZE - vec_size;
         let mut value = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
-            EpochSlots {
-                from: Pubkey::default(),
-                root: 0,
-                lowest: 0,
-                slots: BTreeSet::new(),
-                stash: vec![],
-                wallclock: 0,
-            },
+            EpochSlots::new(Pubkey::default(), 0),
         ));
 
         let mut i = 0;
         while value.size() <= desired_size {
-            let slots = (0..i).collect::<BTreeSet<_>>();
+            let slots: Vec<_> = (0..i).collect();
             if slots.len() > 200 {
                 panic!(
                     "impossible to match size: last {:?} vs desired {:?}",
@@ -2380,17 +2302,9 @@ mod tests {
                     desired_size
                 );
             }
-            value.data = CrdsData::EpochSlots(
-                0,
-                EpochSlots {
-                    from: Pubkey::default(),
-                    root: 0,
-                    lowest: 0,
-                    slots,
-                    stash: vec![],
-                    wallclock: 0,
-                },
-            );
+            let mut epoch_slots = EpochSlots::new(Pubkey::default(), 0);
+            epoch_slots.slots = vec![epoch_slots::CompressedSlots::default(); i];
+            value.data = CrdsData::EpochSlots(0, epoch_slots);
             i += 1;
         }
         let split = ClusterInfo::split_gossip_messages(vec![value.clone()]);
@@ -2513,43 +2427,9 @@ mod tests {
     }
 
     #[test]
-    fn test_repair_peers() {
-        let node_keypair = Arc::new(Keypair::new());
-        let mut cluster_info = ClusterInfo::new(
-            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
-            node_keypair,
-        );
-        for i in 0..10 {
-            let mut peer_root = 5;
-            let mut peer_lowest = 0;
-            if i >= 5 {
-                // make these invalid for the upcoming repair request
-                peer_root = 15;
-                peer_lowest = 10;
-            }
-            let other_node_pubkey = Pubkey::new_rand();
-            let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
-            cluster_info.insert_info(other_node.clone());
-            let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-                0,
-                EpochSlots::new(
-                    other_node_pubkey,
-                    peer_root,
-                    peer_lowest,
-                    BTreeSet::new(),
-                    vec![],
-                    timestamp(),
-                ),
-            ));
-            let _ = cluster_info.gossip.crds.insert(value, timestamp());
-        }
-        // only half the visible peers should be eligible to serve this repair
-        assert_eq!(cluster_info.repair_peers(5).len(), 5);
-    }
-
-    #[test]
     fn test_max_bloom_size() {
-        assert_eq!(MAX_BLOOM_SIZE, max_bloom_size());
+        //const should be no greater then the computed size
+        assert!(MAX_BLOOM_SIZE <= max_bloom_size());
     }
 
     #[test]
@@ -2599,39 +2479,5 @@ mod tests {
         let protocol_size =
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
         PACKET_DATA_SIZE - (protocol_size - filter_size)
-    }
-
-    #[test]
-    fn test_compress_incomplete_slots() {
-        let mut incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
-
-        assert_eq!(
-            EpochIncompleteSlots::default(),
-            ClusterInfo::compress_incomplete_slots(&incomplete_slots)
-        );
-
-        incomplete_slots.insert(100);
-        let compressed = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
-        assert_eq!(100, compressed.first);
-        let decompressed = ClusterInfo::decompress_incomplete_slots(&compressed);
-        assert_eq!(incomplete_slots, decompressed);
-
-        incomplete_slots.insert(104);
-        let compressed = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
-        assert_eq!(100, compressed.first);
-        let decompressed = ClusterInfo::decompress_incomplete_slots(&compressed);
-        assert_eq!(incomplete_slots, decompressed);
-
-        incomplete_slots.insert(80);
-        let compressed = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
-        assert_eq!(80, compressed.first);
-        let decompressed = ClusterInfo::decompress_incomplete_slots(&compressed);
-        assert_eq!(incomplete_slots, decompressed);
-
-        incomplete_slots.insert(10000);
-        let compressed = ClusterInfo::compress_incomplete_slots(&incomplete_slots);
-        assert_eq!(80, compressed.first);
-        let decompressed = ClusterInfo::decompress_incomplete_slots(&compressed);
-        assert_eq!(incomplete_slots, decompressed);
     }
 }

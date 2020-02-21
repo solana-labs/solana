@@ -5,20 +5,22 @@ use crate::{
     contact_info::ContactInfo,
     packet::Packet,
     result::{Error, Result},
+    weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
-use rand::{thread_rng, Rng};
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug};
 use solana_perf::packet::{Packets, PacketsRecycler};
 use solana_sdk::{
     clock::Slot,
+    pubkey::Pubkey,
     signature::{Keypair, Signer},
     timing::duration_as_ms,
 };
 use std::{
     net::SocketAddr,
+    rc::Rc,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
     thread::{Builder, JoinHandle},
@@ -28,7 +30,7 @@ use std::{
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
 pub enum RepairType {
     Orphan(Slot),
     HighestShred(Slot, u64),
@@ -121,6 +123,10 @@ impl ServeRepair {
         let (res, label) = {
             match &request {
                 RepairProtocol::WindowIndex(from, slot, shred_index) => {
+                    debug!(
+                        "{}:REPAIR_REQUEST: RECV window:{} {} {}",
+                        my_id, from.id, slot, shred_index
+                    );
                     inc_new_counter_debug!("serve_repair-request-window-index", 1);
                     (
                         Self::run_window_request(
@@ -136,10 +142,12 @@ impl ServeRepair {
                     )
                 }
 
-                RepairProtocol::HighestWindowIndex(_, slot, highest_index) => {
+                RepairProtocol::HighestWindowIndex(from, slot, highest_index) => {
                     inc_new_counter_debug!("serve_repair-request-highest-window-index", 1);
                     (
                         Self::run_highest_window_request(
+                            &my_id,
+                            &from.id,
                             recycler,
                             &from_addr,
                             blockstore,
@@ -150,9 +158,11 @@ impl ServeRepair {
                     )
                 }
                 RepairProtocol::Orphan(_, slot) => {
+                    debug!("{}:CLUSTER_SLOTS ORPHAN slot request {}", my_id, slot);
                     inc_new_counter_debug!("serve_repair-request-orphan", 1);
                     (
                         Self::run_orphan(
+                            &my_id,
                             recycler,
                             &from_addr,
                             blockstore,
@@ -269,21 +279,25 @@ impl ServeRepair {
         Ok(out)
     }
 
-    pub fn repair_request(&self, repair_request: &RepairType) -> Result<(SocketAddr, Vec<u8>)> {
+    pub fn repair_request(
+        &self,
+        peers: &[(Rc<Pubkey>, u64)],
+        repair_request: &RepairType,
+    ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
-        let valid: Vec<_> = self
+        let peers_and_stakes: Vec<_> = peers.iter().enumerate().map(|(i, x)| (x.1, i)).collect();
+        let peer_ix = weighted_best(&peers_and_stakes, Pubkey::new_rand().to_bytes());
+        let peer_pubkey: Option<&(Rc<Pubkey>, u64)> = peers.get(peer_ix);
+        let peer_pubkey = peer_pubkey.ok_or(ClusterInfoError::NoPeers)?;
+        let addr = self
             .cluster_info
             .read()
             .unwrap()
-            .repair_peers(repair_request.slot());
-        if valid.is_empty() {
-            return Err(ClusterInfoError::NoPeers.into());
-        }
-        let n = thread_rng().gen::<usize>() % valid.len();
-        let addr = valid[n].serve_repair; // send the request to the peer's serve_repair port
+            .lookup(&peer_pubkey.0)
+            .map(|p| p.serve_repair)
+            .ok_or(ClusterInfoError::NoPeers)?;
         let out = self.map_repair_request(repair_request)?;
-
         Ok((addr, out))
     }
 
@@ -306,6 +320,7 @@ impl ServeRepair {
                 Ok(self.window_highest_index_request_bytes(*slot, *shred_index)?)
             }
             RepairType::Orphan(slot) => {
+                debug!("{}: REPAIR_ORPHAN {}", self.my_info.id, *slot);
                 datapoint_info!("serve_repair-repair_orphan", ("repair-orphan", *slot, i64));
                 Ok(self.orphan_bytes(*slot)?)
             }
@@ -348,6 +363,8 @@ impl ServeRepair {
     }
 
     fn run_highest_window_request(
+        self_id: &Pubkey,
+        from_id: &Pubkey,
         recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
@@ -357,11 +374,19 @@ impl ServeRepair {
         let blockstore = blockstore?;
         // Try to find the requested index in one of the slots
         let meta = blockstore.meta(slot).ok()??;
+        debug!(
+            "{}:CLUSTER_SLOTS request for {} {}/{}",
+            self_id, slot, meta.received, highest_index
+        );
         if meta.received > highest_index {
             // meta.received must be at least 1 by this point
             let packet =
                 Self::get_data_shred_as_packet(blockstore, slot, meta.received - 1, from_addr)
                     .ok()??;
+            debug!(
+                "{}:CLUSTER_SLOTS sending packet for {} {}/{} to:{}",
+                self_id, slot, meta.received, highest_index, from_id
+            );
             return Some(Packets::new_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
@@ -372,12 +397,14 @@ impl ServeRepair {
     }
 
     fn run_orphan(
+        self_id: &Pubkey,
         recycler: &PacketsRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         mut slot: Slot,
         max_responses: usize,
     ) -> Option<Packets> {
+        let start_slot = slot;
         let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
@@ -398,8 +425,15 @@ impl ServeRepair {
             }
         }
         if res.is_empty() {
+            info!("{}:CLUSTER_SLOTS: ORPHAN EMPTY {}", self_id, start_slot);
             return None;
         }
+        debug!(
+            "{}:CLUSTER_SLOTS ORPHAN slot responses {} {}",
+            self_id,
+            slot,
+            res.packets.len()
+        );
         Some(res)
     }
 
@@ -443,6 +477,8 @@ mod tests {
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
             let rv = ServeRepair::run_highest_window_request(
+                &Pubkey::default(),
+                &Pubkey::default(),
                 &recycler,
                 &socketaddr_any!(),
                 Some(&blockstore),
@@ -460,6 +496,8 @@ mod tests {
             );
 
             let rv = ServeRepair::run_highest_window_request(
+                &Pubkey::default(),
+                &Pubkey::default(),
                 &recycler,
                 &socketaddr_any!(),
                 Some(&blockstore),
@@ -478,6 +516,8 @@ mod tests {
             assert_eq!(rv[0].slot(), 2);
 
             let rv = ServeRepair::run_highest_window_request(
+                &Pubkey::default(),
+                &Pubkey::default(),
                 &recycler,
                 &socketaddr_any!(),
                 Some(&blockstore),
@@ -566,7 +606,7 @@ mod tests {
         let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(me)));
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let rv = serve_repair.repair_request(&RepairType::Shred(0, 0));
+        let rv = serve_repair.repair_request(&[], &RepairType::Shred(0, 0));
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
@@ -586,13 +626,15 @@ mod tests {
             shred_version: 0,
         };
         cluster_info.write().unwrap().insert_info(nxt.clone());
+        let peers = [(Rc::new(nxt.id.clone()), 1)];
         let rv = serve_repair
-            .repair_request(&RepairType::Shred(0, 0))
+            .repair_request(&peers, &RepairType::Shred(0, 0))
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
         assert_eq!(rv.0, nxt.serve_repair);
 
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
+        let nxt1 = nxt;
         let nxt = ContactInfo {
             id: Pubkey::new_rand(),
             gossip: socketaddr!([127, 0, 0, 1], 1234),
@@ -608,13 +650,14 @@ mod tests {
             wallclock: 0,
             shred_version: 0,
         };
-        cluster_info.write().unwrap().insert_info(nxt);
+        cluster_info.write().unwrap().insert_info(nxt.clone());
         let mut one = false;
         let mut two = false;
+        let peers = [(Rc::new(nxt1.id.clone()), 1), (Rc::new(nxt.id.clone()), 1)];
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
             let rv = serve_repair
-                .repair_request(&RepairType::Shred(0, 0))
+                .repair_request(&peers, &RepairType::Shred(0, 0))
                 .unwrap();
             if rv.0 == serve_repair_addr {
                 one = true;
@@ -633,8 +676,14 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let rv =
-                ServeRepair::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 2, 0);
+            let rv = ServeRepair::run_orphan(
+                &Pubkey::default(),
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                2,
+                0,
+            );
             assert!(rv.is_none());
 
             // Create slots 1, 2, 3 with 5 shreds apiece
@@ -645,19 +694,31 @@ mod tests {
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
-            let rv =
-                ServeRepair::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 4, 5);
+            let rv = ServeRepair::run_orphan(
+                &Pubkey::default(),
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                4,
+                5,
+            );
             assert!(rv.is_none());
 
             // For slot 3, we should return the highest shreds from slots 3, 2, 1 respectively
             // for this request
-            let rv: Vec<_> =
-                ServeRepair::run_orphan(&recycler, &socketaddr_any!(), Some(&blockstore), 3, 5)
-                    .expect("run_orphan packets")
-                    .packets
-                    .iter()
-                    .map(|b| b.clone())
-                    .collect();
+            let rv: Vec<_> = ServeRepair::run_orphan(
+                &Pubkey::default(),
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                3,
+                5,
+            )
+            .expect("run_orphan packets")
+            .packets
+            .iter()
+            .map(|b| b.clone())
+            .collect();
             let expected: Vec<_> = (1..=3)
                 .rev()
                 .map(|slot| {

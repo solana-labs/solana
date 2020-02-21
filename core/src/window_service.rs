@@ -144,15 +144,27 @@ where
     let timer = Duration::from_millis(200);
     let mut packets = verified_receiver.recv_timeout(timer)?;
     let mut total_packets: usize = packets.iter().map(|p| p.packets.len()).sum();
+    let mut repairs: usize = 0;
 
     while let Ok(mut more_packets) = verified_receiver.try_recv() {
         let count: usize = more_packets.iter().map(|p| p.packets.len()).sum();
         total_packets += count;
+        let count: usize = more_packets
+            .iter()
+            .map(|p| {
+                let c: usize = p.packets.iter().map(|x| x.meta.repair as usize).sum();
+                c
+            })
+            .sum();
+        repairs += count;
         packets.append(&mut more_packets)
     }
 
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
+    if repairs > 0 {
+        debug!("{}: WINDOW_SERVICE: repairs: {}", my_pubkey, repairs);
+    }
 
     let last_root = blockstore.last_root();
     let shreds: Vec<_> = thread_pool.install(|| {
@@ -179,12 +191,29 @@ where
                                 }
                                 packet.meta.slot = shred.slot();
                                 packet.meta.seed = shred.seed();
+                                if packet.meta.repair {
+                                    debug!(
+                                        "{}: WINDOW_SERVICE ACCEPT repair shred {}",
+                                        my_pubkey,
+                                        shred.slot()
+                                    );
+                                }
                                 Some(shred)
                             } else {
+                                if packet.meta.repair {
+                                    debug!(
+                                        "{}: WINDOW_SERVICE discard repair shred {}",
+                                        my_pubkey,
+                                        shred.slot()
+                                    );
+                                }
                                 packet.meta.discard = true;
                                 None
                             }
                         } else {
+                            if packet.meta.repair {
+                                debug!("{}: WINDOW_SERVICE discard repair packet", my_pubkey);
+                            }
                             packet.meta.discard = true;
                             None
                         }
@@ -259,11 +288,7 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-        let bank_forks = match repair_strategy {
-            RepairStrategy::RepairRange(_) => None,
-            RepairStrategy::RepairAll { ref bank_forks, .. } => Some(bank_forks.clone()),
-        };
-
+        let bank_forks = repair_strategy.bank_forks().cloned();
         let repair_service = RepairService::new(
             blockstore.clone(),
             exit.clone(),
@@ -426,9 +451,7 @@ impl WindowService {
                             shred_filter(
                                 &id,
                                 shred,
-                                bank_forks
-                                    .as_ref()
-                                    .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
+                                bank_forks.as_ref().map(|bank_forks| bank_forks.read().unwrap().working_bank()),
                                 last_root,
                             )
                         },
