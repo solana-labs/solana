@@ -294,9 +294,9 @@ pub fn is_valid_hid_device(usage_page: u16, interface_number: i32) -> bool {
 }
 
 /// Helper to initialize hidapi and RemoteWalletManager
-pub fn initialize_wallet_manager() -> Arc<RemoteWalletManager> {
-    let hidapi = Arc::new(Mutex::new(hidapi::HidApi::new().unwrap()));
-    RemoteWalletManager::new(hidapi)
+pub fn initialize_wallet_manager() -> Result<Arc<RemoteWalletManager>, RemoteWalletError> {
+    let hidapi = Arc::new(Mutex::new(hidapi::HidApi::new()?));
+    Ok(RemoteWalletManager::new(hidapi))
 }
 
 #[cfg(test)]

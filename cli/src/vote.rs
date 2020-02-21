@@ -7,6 +7,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     account::Account,
+    message::Message,
     pubkey::Pubkey,
     signature::Keypair,
     signature::Signer,
@@ -311,12 +312,14 @@ pub fn process_create_vote_account(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let signers = if vote_account_pubkey != config.keypair.pubkey() {
-        vec![&config.keypair, vote_account] // both must sign if `from` and `to` differ
+        vec![config.keypair.as_ref(), vote_account] // both must sign if `from` and `to` differ
     } else {
-        vec![&config.keypair] // when stake_account == config.keypair and there's a seed, we only need one signature
+        vec![config.keypair.as_ref()] // when stake_account == config.keypair and there's a seed, we only need one signature
     };
 
-    let mut tx = Transaction::new_signed_instructions(&signers, ixs, recent_blockhash);
+    let message = Message::new(ixs);
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(&signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
@@ -346,19 +349,16 @@ pub fn process_vote_authorize(
         vote_authorize,           // vote or withdraw
     )];
 
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair],
-        recent_blockhash,
-    );
+    let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(&[config.keypair.as_ref()], recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref()]);
     log_instruction_custom_error::<VoteError>(result)
 }
 
@@ -380,19 +380,19 @@ pub fn process_vote_update_validator(
         new_identity_pubkey,
     )];
 
-    let mut tx = Transaction::new_signed_with_payer(
-        ixs,
-        Some(&config.keypair.pubkey()),
-        &[&config.keypair, authorized_voter],
+    let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(
+        &[config.keypair.as_ref(), authorized_voter],
         recent_blockhash,
-    );
+    )?;
     check_account_for_fee(
         rpc_client,
         &config.keypair.pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref()]);
     log_instruction_custom_error::<VoteError>(result)
 }
 

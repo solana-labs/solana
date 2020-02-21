@@ -139,6 +139,18 @@ pub trait Signer {
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
 }
 
+impl PartialEq for dyn Signer {
+    fn eq(&self, other: &dyn Signer) -> bool {
+        self.pubkey() == other.pubkey()
+    }
+}
+
+impl std::fmt::Debug for dyn Signer {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "Signer: {:?}", self.pubkey())
+    }
+}
+
 impl Signer for Keypair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
@@ -164,6 +176,15 @@ where
 {
     fn eq(&self, other: &T) -> bool {
         self.pubkey() == other.pubkey()
+    }
+}
+
+impl<T> From<T> for Box<dyn Signer>
+where
+    T: Signer + 'static,
+{
+    fn from(keypair_util: T) -> Self {
+        Box::new(keypair_util)
     }
 }
 
@@ -202,15 +223,14 @@ pub enum SignerError {
     UserCancel,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Presigner {
     pubkey: Pubkey,
     signature: Signature,
 }
 
 impl Presigner {
-    #[allow(dead_code)]
-    fn new(pubkey: &Pubkey, signature: &Signature) -> Self {
+    pub fn new(pubkey: &Pubkey, signature: &Signature) -> Self {
         Self {
             pubkey: *pubkey,
             signature: *signature,

@@ -251,10 +251,10 @@ Refer to the following page for a comprehensive guide on running a validator:
 Solana CLI tooling supports secure keypair input for stake delegation. To do so,
 first create a stake account with some SOL. Use the special `ASK` keyword to
 trigger a seed phrase input prompt for the stake account and use
-`--ask-seed-phrase keypair` to securely input the funding keypair.
+`--keypair ASK` to securely input the funding keypair.
 
 ```bash
-solana create-stake-account ASK 1 --ask-seed-phrase keypair
+solana create-stake-account ASK 1 --keypair ASK
 
 [stake_account] seed phrase: 🔒
 [stake_account] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
@@ -262,11 +262,11 @@ solana create-stake-account ASK 1 --ask-seed-phrase keypair
 [keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
 ```
 
-Then, to delegate that stake to a validator, use `--ask-seed-phrase keypair` to
+Then, to delegate that stake to a validator, use `--keypair ASK` to
 securely input the funding keypair.
 
 ```bash
-solana delegate-stake --ask-seed-phrase keypair <STAKE_ACCOUNT_PUBKEY> <VOTE_ACCOUNT_PUBKEY>
+solana delegate-stake --keypair ASK <STAKE_ACCOUNT_PUBKEY> <VOTE_ACCOUNT_PUBKEY>
 
 [keypair] seed phrase: 🔒
 [keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:

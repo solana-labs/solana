@@ -1,4 +1,6 @@
-use crate::keypair::{keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG};
+use crate::keypair::{
+    keypair_from_seed_phrase, keypair_util_from_path, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+};
 use chrono::DateTime;
 use clap::ArgMatches;
 use solana_remote_wallet::remote_wallet::DerivationPath;
@@ -91,6 +93,18 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
             })
             .collect()
     })
+}
+
+// Return a signer from matches at `name`
+pub fn signer_of(
+    name: &str,
+    matches: &ArgMatches<'_>,
+) -> Result<Option<Box<dyn Signer>>, Box<dyn std::error::Error>> {
+    if let Some(location) = matches.value_of(name) {
+        keypair_util_from_path(matches, location, name).map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {

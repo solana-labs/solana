@@ -2,7 +2,6 @@ use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
 use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::signature::Signer;
 use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 

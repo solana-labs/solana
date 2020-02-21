@@ -3,29 +3,11 @@ use serde_json::Value;
 use solana_clap_utils::{
     input_parsers::value_of,
     input_validators::{is_hash, is_pubkey_sig},
-    ArgConstant,
+    offline::{BLOCKHASH_ARG, SIGNER_ARG, SIGN_ONLY_ARG},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey, signature::Signature};
 use std::str::FromStr;
-
-pub const BLOCKHASH_ARG: ArgConstant<'static> = ArgConstant {
-    name: "blockhash",
-    long: "blockhash",
-    help: "Use the supplied blockhash",
-};
-
-pub const SIGN_ONLY_ARG: ArgConstant<'static> = ArgConstant {
-    name: "sign_only",
-    long: "sign-only",
-    help: "Sign the transaction offline",
-};
-
-pub const SIGNER_ARG: ArgConstant<'static> = ArgConstant {
-    name: "signer",
-    long: "signer",
-    help: "Provide a public-key/signature pair for the transaction",
-};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BlockhashQuery {

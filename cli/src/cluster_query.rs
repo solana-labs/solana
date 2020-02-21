@@ -20,9 +20,11 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     epoch_schedule::Epoch,
     hash::Hash,
+    message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_transaction,
+    system_instruction,
+    transaction::Transaction,
 };
 use std::{
     collections::{HashMap, VecDeque},
@@ -743,8 +745,10 @@ pub fn process_ping(
         let (recent_blockhash, fee_calculator) = rpc_client.get_new_blockhash(&last_blockhash)?;
         last_blockhash = recent_blockhash;
 
-        let transaction =
-            system_transaction::transfer(&config.keypair, &to, lamports, recent_blockhash);
+        let ix = system_instruction::transfer(&config.keypair.pubkey(), &to, lamports);
+        let message = Message::new(vec![ix]);
+        let mut transaction = Transaction::new_unsigned(message);
+        transaction.try_sign(&[config.keypair.as_ref()], recent_blockhash)?;
         check_account_for_fee(
             rpc_client,
             &config.keypair.pubkey(),
