@@ -249,8 +249,10 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instruction::AccountMeta;
-    use crate::signature::{Keypair, KeypairUtil};
+    use crate::{
+        instruction::AccountMeta,
+        signature::{Keypair, Signer},
+    };
 
     #[test]
     fn test_message_unique_program_ids() {

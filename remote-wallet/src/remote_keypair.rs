@@ -6,7 +6,7 @@ use crate::{
 };
 use solana_sdk::{
     pubkey::Pubkey,
-    signature::{KeypairUtil, Signature},
+    signature::{Signature, Signer},
 };
 use std::error;
 
@@ -24,7 +24,7 @@ impl RemoteKeypair {
     }
 }
 
-impl KeypairUtil for RemoteKeypair {
+impl Signer for RemoteKeypair {
     fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
         match &self.wallet_type {
             RemoteWalletType::Ledger(wallet) => wallet

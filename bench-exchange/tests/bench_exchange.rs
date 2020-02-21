@@ -10,7 +10,7 @@ use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
 use solana_sdk::genesis_config::create_genesis_config;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use std::process::exit;
 use std::sync::mpsc::channel;
 use std::time::Duration;

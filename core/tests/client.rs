@@ -1,12 +1,13 @@
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
-use solana_sdk::commitment_config::CommitmentConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::KeypairUtil;
-use solana_sdk::system_transaction;
-use std::fs::remove_dir_all;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use solana_sdk::{
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signer, system_transaction,
+};
+use std::{
+    fs::remove_dir_all,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 #[test]
 fn test_rpc_client() {

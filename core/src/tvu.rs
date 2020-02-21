@@ -26,7 +26,7 @@ use solana_ledger::{
 };
 use solana_sdk::{
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
 };
 use std::{
     net::UdpSocket,

@@ -506,7 +506,7 @@ pub(crate) mod tests {
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_program;
     use solana_sdk::{
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_transaction,
     };
     use tokio::prelude::{Async, Stream};

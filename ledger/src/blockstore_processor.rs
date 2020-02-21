@@ -866,7 +866,7 @@ pub mod tests {
         hash::Hash,
         instruction::InstructionError,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_transaction,
         transaction::{Transaction, TransactionError},
     };

@@ -5,7 +5,7 @@ pub mod order_book;
 use crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_exchange, Config};
 use log::*;
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
-use solana_sdk::signature::KeypairUtil;
+use solana_sdk::signature::Signer;
 
 fn main() {
     solana_logger::setup();

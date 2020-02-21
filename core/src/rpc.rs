@@ -1121,7 +1121,7 @@ pub mod tests {
         hash::{hash, Hash},
         instruction::InstructionError,
         rpc_port,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_transaction,
         transaction::TransactionError,
     };

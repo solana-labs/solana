@@ -6,7 +6,7 @@ use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::gossip_service::GossipService;
 
 use solana_core::packet::Packet;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -288,7 +288,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_program, system_transaction,
         transaction::{self, Transaction},
     };

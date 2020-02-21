@@ -108,7 +108,7 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
         account::{create_keyed_is_signer_accounts, Account},
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_instruction::SystemInstruction,
     };
     use std::cell::RefCell;

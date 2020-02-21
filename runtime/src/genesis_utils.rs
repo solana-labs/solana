@@ -4,7 +4,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     pubkey::Pubkey,
     rent::Rent,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_program::{self, solana_system_program},
 };
 use solana_stake_program::stake_state;

@@ -20,7 +20,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil, Signature},
+    signature::{Keypair, Signature, Signer},
     transaction::Transaction,
 };
 use solana_storage_program::{
@@ -649,7 +649,7 @@ mod tests {
     use rayon::prelude::*;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hasher;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use std::cmp::{max, min};
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc::channel;

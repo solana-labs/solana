@@ -19,7 +19,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     transaction::Transaction,
 };
 use std::error;

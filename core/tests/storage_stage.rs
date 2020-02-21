@@ -15,7 +15,7 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::transaction::Transaction;
     use solana_storage_program::storage_instruction;
     use solana_storage_program::storage_instruction::StorageAccountType;

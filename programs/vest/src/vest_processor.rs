@@ -153,7 +153,7 @@ mod tests {
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::hash;
     use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::signature::{Keypair, Signature, Signer};
     use solana_sdk::transaction::TransactionError;
     use solana_sdk::transport::Result;
     use std::sync::Arc;

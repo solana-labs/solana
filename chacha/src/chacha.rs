@@ -81,7 +81,7 @@ mod tests {
     use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::system_transaction;
     use std::fs::remove_file;
     use std::fs::File;

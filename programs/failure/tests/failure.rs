@@ -5,7 +5,7 @@ use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_config::create_genesis_config;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::KeypairUtil;
+use solana_sdk::signature::Signer;
 use solana_sdk::transaction::TransactionError;
 
 #[test]

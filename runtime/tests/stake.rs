@@ -8,7 +8,7 @@ use solana_sdk::{
     client::SyncClient,
     message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, KeypairUtil},
+    signature::{Keypair, Signer},
     system_instruction::create_address_with_seed,
     sysvar::{self, stake_history::StakeHistory, Sysvar},
 };

@@ -13,7 +13,7 @@ use solana_sdk::{
     hash::{Hash, Hasher},
     message::Message,
     pubkey::Pubkey,
-    signature::{read_keypair_file, Keypair, KeypairUtil, Signable},
+    signature::{read_keypair_file, Keypair, Signable, Signer},
     transaction::Transaction,
 };
 use std::{

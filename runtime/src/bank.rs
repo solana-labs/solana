@@ -2106,7 +2106,6 @@ mod tests {
     };
     use bincode::{serialize_into, serialized_size};
     use solana_sdk::instruction::AccountMeta;
-    use solana_sdk::system_program::solana_system_program;
     use solana_sdk::{
         account::KeyedAccount,
         account_utils::StateMut,
@@ -2118,8 +2117,9 @@ mod tests {
         nonce_state,
         poh_config::PohConfig,
         rent::Rent,
-        signature::{Keypair, KeypairUtil},
-        system_instruction, system_program,
+        signature::{Keypair, Signer},
+        system_instruction,
+        system_program::{self, solana_system_program},
         sysvar::{fees::Fees, rewards::Rewards},
         timing::duration_as_s,
     };

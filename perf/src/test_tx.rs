@@ -1,6 +1,6 @@
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::CompiledInstruction;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction;

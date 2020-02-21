@@ -1029,7 +1029,7 @@ mod tests {
     use solana_runtime::bank::HashAgeKind;
     use solana_sdk::{
         instruction::InstructionError,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         system_transaction,
         transaction::TransactionError,
     };
