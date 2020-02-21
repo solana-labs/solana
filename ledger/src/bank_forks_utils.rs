@@ -1,13 +1,40 @@
 use crate::{
-    bank_forks::SnapshotConfig,
+    bank_forks::{BankForks, SnapshotConfig},
     blockstore::Blockstore,
-    blockstore_processor::{self, BlockstoreProcessorResult, ProcessOptions},
+    blockstore_processor::{
+        self, BankForksInfo, BlockstoreProcessorError, BlockstoreProcessorResult, ProcessOptions,
+    },
     entry::VerifyRecyclers,
+    leader_schedule_cache::LeaderScheduleCache,
     snapshot_utils,
 };
 use log::*;
-use solana_sdk::genesis_config::GenesisConfig;
-use std::{fs, path::PathBuf, sync::Arc};
+use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
+use std::{fs, path::PathBuf, result, sync::Arc};
+
+pub type LoadResult = result::Result<
+    (
+        BankForks,
+        Vec<BankForksInfo>,
+        LeaderScheduleCache,
+        Option<(Slot, Hash)>,
+    ),
+    BlockstoreProcessorError,
+>;
+
+fn to_loadresult(
+    brp: BlockstoreProcessorResult,
+    snapshot_hash: Option<(Slot, Hash)>,
+) -> LoadResult {
+    brp.map(|(bank_forks, bank_forks_info, leader_schedule_cache)| {
+        (
+            bank_forks,
+            bank_forks_info,
+            leader_schedule_cache,
+            snapshot_hash,
+        )
+    })
+}
 
 pub fn load(
     genesis_config: &GenesisConfig,
@@ -15,7 +42,7 @@ pub fn load(
     account_paths: Vec<PathBuf>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
-) -> BlockstoreProcessorResult {
+) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
             "Initializing snapshot path: {:?}",
@@ -43,12 +70,16 @@ pub fn load(
             )
             .expect("Load from snapshot failed");
 
-            return blockstore_processor::process_blockstore_from_root(
-                genesis_config,
-                blockstore,
-                Arc::new(deserialized_bank),
-                &process_options,
-                &VerifyRecyclers::default(),
+            let snapshot_hash = (deserialized_bank.slot(), deserialized_bank.hash());
+            return to_loadresult(
+                blockstore_processor::process_blockstore_from_root(
+                    genesis_config,
+                    blockstore,
+                    Arc::new(deserialized_bank),
+                    &process_options,
+                    &VerifyRecyclers::default(),
+                ),
+                Some(snapshot_hash),
             );
         } else {
             info!("Snapshot package does not exist: {:?}", tar);
@@ -58,10 +89,13 @@ pub fn load(
     }
 
     info!("Processing ledger from genesis");
-    blockstore_processor::process_blockstore(
-        &genesis_config,
-        &blockstore,
-        account_paths,
-        process_options,
+    to_loadresult(
+        blockstore_processor::process_blockstore(
+            &genesis_config,
+            &blockstore,
+            account_paths,
+            process_options,
+        ),
+        None,
     )
 }
