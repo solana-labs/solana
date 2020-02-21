@@ -98,8 +98,10 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
                     solana_stake_program!(),
                     solana_system_program(),
                     solana_vote_program!(),
-                    solana_bpf_loader_program!(),
                 ])
+            } else if epoch == 17 {
+                // Enable BPF effective epoch 17 for TdS
+                Some(vec![solana_bpf_loader_program!()])
             } else if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
                 // future hard fork.
