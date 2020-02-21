@@ -87,6 +87,8 @@ pub struct AccountInfo {
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
+pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
+pub type SnapshotStorages = Vec<SnapshotStorage>;
 
 // Each slot has a set of storage entries.
 type SlotStores = HashMap<usize, Arc<AccountStorageEntry>>;
@@ -119,17 +121,8 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
     }
 }
 
-pub struct AccountStorageSerialize<'a> {
-    account_storage: &'a AccountStorage,
-    slot: Slot,
-}
-impl<'a> AccountStorageSerialize<'a> {
-    pub fn new(account_storage: &'a AccountStorage, slot: Slot) -> Self {
-        Self {
-            account_storage,
-            slot,
-        }
-    }
+struct AccountStorageSerialize<'a> {
+    account_storage_entries: &'a [SnapshotStorage],
 }
 
 impl<'a> Serialize for AccountStorageSerialize<'a> {
@@ -137,21 +130,12 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
     where
         S: Serializer,
     {
-        let mut len: usize = 0;
-        for slot_id in self.account_storage.0.keys() {
-            if *slot_id <= self.slot {
-                len += 1;
-            }
-        }
-        let mut map = serializer.serialize_map(Some(len))?;
+        let mut map = serializer.serialize_map(Some(self.account_storage_entries.len()))?;
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        for (slot_id, slot_storage) in &self.account_storage.0 {
-            if *slot_id <= self.slot {
-                let storage_entries: Vec<_> = slot_storage.values().collect();
-                map.serialize_entry(&slot_id, &storage_entries)?;
-                count += slot_storage.len();
-            }
+        for storage_entries in self.account_storage_entries {
+            map.serialize_entry(&storage_entries.first().unwrap().slot_id, storage_entries)?;
+            count += storage_entries.len();
         }
         serialize_account_storage_timer.stop();
         datapoint_info!(
@@ -327,27 +311,37 @@ pub fn get_temp_accounts_paths(count: u32) -> IOResult<(Vec<TempDir>, Vec<PathBu
     Ok((temp_dirs, paths))
 }
 
-pub struct AccountsDBSerialize<'a> {
+pub struct AccountsDBSerialize<'a, 'b> {
     accounts_db: &'a AccountsDB,
     slot: Slot,
+    account_storage_entries: &'b [SnapshotStorage],
 }
 
-impl<'a> AccountsDBSerialize<'a> {
-    pub fn new(accounts_db: &'a AccountsDB, slot: Slot) -> Self {
-        Self { accounts_db, slot }
+impl<'a, 'b> AccountsDBSerialize<'a, 'b> {
+    pub fn new(
+        accounts_db: &'a AccountsDB,
+        slot: Slot,
+        account_storage_entries: &'b [SnapshotStorage],
+    ) -> Self {
+        Self {
+            accounts_db,
+            slot,
+            account_storage_entries,
+        }
     }
 }
 
-impl<'a> Serialize for AccountsDBSerialize<'a> {
+impl<'a, 'b> Serialize for AccountsDBSerialize<'a, 'b> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let storage = self.accounts_db.storage.read().unwrap();
         let mut wr = Cursor::new(vec![]);
         let version: u64 = self.accounts_db.write_version.load(Ordering::Relaxed) as u64;
-        let account_storage_serialize = AccountStorageSerialize::new(&*storage, self.slot);
+        let account_storage_serialize = AccountStorageSerialize {
+            account_storage_entries: self.account_storage_entries,
+        };
         serialize_into(&mut wr, &account_storage_serialize).map_err(Error::custom)?;
         serialize_into(&mut wr, &version).map_err(Error::custom)?;
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
@@ -1240,14 +1234,16 @@ impl AccountsDB {
         self.accounts_index.write().unwrap().add_root(slot)
     }
 
-    pub fn get_rooted_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
+    pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorages {
         let accounts_index = self.accounts_index.read().unwrap();
         let r_storage = self.storage.read().unwrap();
         r_storage
             .0
-            .values()
-            .flat_map(|slot_store| slot_store.values().cloned())
-            .filter(|store| accounts_index.is_root(store.slot_id))
+            .iter()
+            .filter(|(slot, storage)| {
+                **slot <= snapshot_slot && !storage.is_empty() && accounts_index.is_root(**slot)
+            })
+            .map(|(_, slot_store)| slot_store.values().cloned().collect())
             .collect()
     }
 
@@ -1938,7 +1934,12 @@ pub mod tests {
 
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDB, slot: Slot) -> AccountsDB {
         let mut writer = Cursor::new(vec![]);
-        serialize_into(&mut writer, &AccountsDBSerialize::new(&accounts, slot)).unwrap();
+        let snapshot_storages = accounts.get_snapshot_storages(slot);
+        serialize_into(
+            &mut writer,
+            &AccountsDBSerialize::new(&accounts, slot, &snapshot_storages),
+        )
+        .unwrap();
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
@@ -2281,8 +2282,8 @@ pub mod tests {
         accounts_db: &AccountsDB,
         output_dir: P,
     ) -> IOResult<()> {
-        let storage_entries = accounts_db.get_rooted_storage_entries();
-        for storage in storage_entries {
+        let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
+        for storage in storage_entries.iter().flatten() {
             let storage_path = storage.get_path();
             let output_path = output_dir.as_ref().join(
                 storage_path
@@ -2487,5 +2488,69 @@ pub mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_empty() {
+        let db = AccountsDB::new(Vec::new());
+        assert!(db.get_snapshot_storages(0).is_empty());
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_only_older_than_or_equal_to_snapshot_slot() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let before_slot = 0;
+        let base_slot = before_slot + 1;
+        let after_slot = base_slot + 1;
+
+        db.add_root(base_slot);
+        db.store(base_slot, &[(&key, &account)]);
+        assert!(db.get_snapshot_storages(before_slot).is_empty());
+
+        assert_eq!(1, db.get_snapshot_storages(base_slot).len());
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_only_non_empty() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let base_slot = 0;
+        let after_slot = base_slot + 1;
+
+        db.store(base_slot, &[(&key, &account)]);
+        db.storage
+            .write()
+            .unwrap()
+            .0
+            .get_mut(&base_slot)
+            .unwrap()
+            .clear();
+        db.add_root(base_slot);
+        assert!(db.get_snapshot_storages(after_slot).is_empty());
+
+        db.store(base_slot, &[(&key, &account)]);
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+    }
+
+    #[test]
+    fn test_get_snapshot_storages_only_roots() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let base_slot = 0;
+        let after_slot = base_slot + 1;
+
+        db.store(base_slot, &[(&key, &account)]);
+        assert!(db.get_snapshot_storages(after_slot).is_empty());
+
+        db.add_root(base_slot);
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
     }
 }

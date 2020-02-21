@@ -4,8 +4,12 @@ use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_runtime::bank::{
-    self, deserialize_from_snapshot, Bank, BankSlotDelta, MAX_SNAPSHOT_DATA_FILE_SIZE,
+use solana_runtime::{
+    accounts_db::{SnapshotStorage, SnapshotStorages},
+    bank::{
+        self, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+    },
 };
 use solana_sdk::clock::Slot;
 use std::{
@@ -78,23 +82,16 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_file: P,
     snapshot_path: Q,
     slots_to_snapshot: &[Slot],
+    snapshot_storages: SnapshotStorages,
 ) -> Result<SnapshotPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
-
-    // Get a reference to all the relevant AccountStorageEntries
-    let account_storage_entries: Vec<_> = bank
-        .rc
-        .get_rooted_storage_entries()
-        .into_iter()
-        .filter(|x| x.slot_id() <= bank.slot())
-        .collect();
 
     // Create a snapshot package
     info!(
         "Snapshot for bank: {} has {} account storage entries",
         bank.slot(),
-        account_storage_entries.len()
+        snapshot_storages.len()
     );
 
     // Any errors from this point on will cause the above SnapshotPackage to drop, clearing
@@ -105,7 +102,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         bank.slot(),
         bank.src.slot_deltas(slots_to_snapshot),
         snapshot_hard_links_dir,
-        account_storage_entries,
+        snapshot_storages,
         snapshot_package_output_file.as_ref().to_path_buf(),
         bank.hash(),
     );
@@ -147,7 +144,7 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     )?;
 
     // Add the AppendVecs into the compressible list
-    for storage in &snapshot_package.storage_entries {
+    for storage in snapshot_package.storages.iter().flatten() {
         storage.flush()?;
         let storage_path = storage.get_path();
         let output_path = staging_accounts_dir.join(
@@ -321,7 +318,11 @@ where
     Ok(ret)
 }
 
-pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<SlotSnapshotPaths> {
+pub fn add_snapshot<P: AsRef<Path>>(
+    snapshot_path: P,
+    bank: &Bank,
+    snapshot_storages: &[SnapshotStorage],
+) -> Result<SlotSnapshotPaths> {
     bank.purge_zero_lamport_accounts();
     let slot = bank.slot();
     // snapshot_path/slot
@@ -341,7 +342,13 @@ pub fn add_snapshot<P: AsRef<Path>>(snapshot_path: P, bank: &Bank) -> Result<Slo
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             serialize_into(stream.by_ref(), &*bank)?;
-            serialize_into(stream.by_ref(), &bank.rc)?;
+            serialize_into(
+                stream.by_ref(),
+                &BankRcSerialize {
+                    bank_rc: &bank.rc,
+                    snapshot_storages,
+                },
+            )?;
             Ok(())
         },
     )?;

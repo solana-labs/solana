@@ -156,7 +156,7 @@ mod tests {
             5,
             vec![],
             link_snapshots_dir,
-            storage_entries.clone(),
+            vec![storage_entries],
             output_tar_path.clone(),
             Hash::default(),
         );

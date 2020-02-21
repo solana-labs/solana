@@ -4,7 +4,9 @@
 //! already been signed and verified.
 use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
-    accounts_db::{AccountStorageEntry, AccountsDBSerialize, AppendVecId, ErrorCounters},
+    accounts_db::{
+        AccountsDBSerialize, AppendVecId, ErrorCounters, SnapshotStorage, SnapshotStorages,
+    },
     blockhash_queue::BlockhashQueue,
     hard_forks::HardForks,
     message_processor::{MessageProcessor, ProcessInstruction},
@@ -111,8 +113,8 @@ impl BankRc {
         Ok(())
     }
 
-    pub fn get_rooted_storage_entries(&self) -> Vec<Arc<AccountStorageEntry>> {
-        self.accounts.accounts_db.get_rooted_storage_entries()
+    pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorages {
+        self.accounts.accounts_db.get_snapshot_storages(slot)
     }
 
     fn get_io_error(error: &str) -> IOError {
@@ -121,15 +123,23 @@ impl BankRc {
     }
 }
 
-impl Serialize for BankRc {
+pub struct BankRcSerialize<'a, 'b> {
+    pub bank_rc: &'a BankRc,
+    pub snapshot_storages: &'b [SnapshotStorage],
+}
+
+impl<'a, 'b> Serialize for BankRcSerialize<'a, 'b> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
         let mut wr = Cursor::new(Vec::new());
-        let accounts_db_serialize =
-            AccountsDBSerialize::new(&*self.accounts.accounts_db, self.slot);
+        let accounts_db_serialize = AccountsDBSerialize::new(
+            &*self.bank_rc.accounts.accounts_db,
+            self.bank_rc.slot,
+            self.snapshot_storages,
+        );
         serialize_into(&mut wr, &accounts_db_serialize).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
@@ -1855,6 +1865,13 @@ impl Bank {
         self.rc
             .accounts
             .verify_bank_hash(self.slot(), &self.ancestors)
+    }
+
+    pub fn get_snapshot_storages(&self) -> SnapshotStorages {
+        self.rc
+            .get_snapshot_storages(self.slot())
+            .into_iter()
+            .collect()
     }
 
     #[must_use]
@@ -4691,11 +4708,16 @@ mod tests {
 
         bank2.squash();
 
-        let len = serialized_size(&bank2).unwrap() + serialized_size(&bank2.rc).unwrap();
+        let snapshot_storages = bank2.get_snapshot_storages();
+        let rc_serialize = BankRcSerialize {
+            bank_rc: &bank2.rc,
+            snapshot_storages: &snapshot_storages,
+        };
+        let len = serialized_size(&bank2).unwrap() + serialized_size(&rc_serialize).unwrap();
         let mut buf = vec![0u8; len as usize];
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &bank2).unwrap();
-        serialize_into(&mut writer, &bank2.rc).unwrap();
+        serialize_into(&mut writer, &rc_serialize).unwrap();
 
         let mut rdr = Cursor::new(&buf[..]);
         let mut dbank: Bank = deserialize_from_snapshot(&mut rdr).unwrap();
