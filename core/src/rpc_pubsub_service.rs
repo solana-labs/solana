@@ -38,7 +38,7 @@ impl PubSubService {
                         session
                 })
                 .max_connections(1000) // Arbitrary, default of 100 is too low
-                .max_payload(5 * 1024) // Arbitrary, default of 5MB is too high
+                .max_payload(10 * 1024 * 1024 + 1024) // max account size (10MB) + extra (1K)
                 .start(&pubsub_addr);
 
                 if let Err(e) = server {
