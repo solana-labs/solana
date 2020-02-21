@@ -214,23 +214,18 @@ impl Transaction {
 
     /// Check keys and keypair lengths, then sign this transaction.
     pub fn sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
-        self.partial_sign(keypairs, recent_blockhash);
-
-        assert_eq!(self.is_signed(), true, "not enough keypairs");
+        if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
+            panic!("Transaction::sign failed with error {:?}", e);
+        }
     }
 
     /// Sign using some subset of required keys
     ///  if recent_blockhash is not the same as currently in the transaction,
     ///  clear any prior signatures and update recent_blockhash
     pub fn partial_sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
-        let positions = self
-            .get_signing_keypair_positions(&keypairs.pubkeys())
-            .expect("account_keys doesn't contain num_required_signatures keys");
-        let positions: Vec<usize> = positions
-            .iter()
-            .map(|pos| pos.expect("keypair-pubkey mismatch"))
-            .collect();
-        self.partial_sign_unchecked(keypairs, positions, recent_blockhash)
+        if let Err(e) = self.try_partial_sign(keypairs, recent_blockhash) {
+            panic!("Transaction::partial_sign failed with error {:?}", e);
+        }
     }
 
     /// Sign the transaction and place the signatures in their associated positions in `signatures`
@@ -241,17 +236,11 @@ impl Transaction {
         positions: Vec<usize>,
         recent_blockhash: Hash,
     ) {
-        // if you change the blockhash, you're re-signing...
-        if recent_blockhash != self.message.recent_blockhash {
-            self.message.recent_blockhash = recent_blockhash;
-            self.signatures
-                .iter_mut()
-                .for_each(|signature| *signature = Signature::default());
-        }
-
-        let signatures = keypairs.sign_message(&self.message_data());
-        for i in 0..positions.len() {
-            self.signatures[positions[i]] = signatures[i];
+        if let Err(e) = self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash) {
+            panic!(
+                "Transaction::partial_sign_unchecked failed with error {:?}",
+                e
+            );
         }
     }
 
