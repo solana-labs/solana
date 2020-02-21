@@ -4,21 +4,12 @@ use crate::{
 };
 use solana_sdk::{genesis_config::GenesisConfig, native_token::LAMPORTS_PER_SOL};
 
-// 30 month schedule is 1/5th every 6 months for 30 months
-const UNLOCKS_BY_FIFTHS_FOR_30_MONTHS: UnlockInfo = UnlockInfo {
-    cliff_fraction: 0.2,
-    cliff_years: 0.5,
-    unlocks: 4,
-    unlock_years: 0.5,
-    custodian: "6LnFgiECFQKUcxNYDvUBMxgjeGQzzy4kgxGhantoxfUe",
-};
-
-// 60 month schedule is 1/10th every 6 months for 60 months
-const UNLOCKS_BY_TENTHS_FOR_60_MONTHS: UnlockInfo = UnlockInfo {
-    cliff_fraction: 0.1,
-    cliff_years: 0.5,
-    unlocks: 9,
-    unlock_years: 0.5,
+// 9 month schedule is 100% after 9 months
+const UNLOCKS_ALL_AT_9_MONTHS: UnlockInfo = UnlockInfo {
+    cliff_fraction: 1.0,
+    cliff_years: 0.75,
+    unlocks: 0,
+    unlock_years: 0.0,
     custodian: "6LnFgiECFQKUcxNYDvUBMxgjeGQzzy4kgxGhantoxfUe",
 };
 
@@ -204,17 +195,17 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
     issued_lamports += add_stakes(
         genesis_config,
         &BATCH_FOUR_STAKER_INFOS,
-        &UNLOCKS_BY_FIFTHS_FOR_30_MONTHS,
+        &UNLOCKS_ALL_AT_9_MONTHS,
         1_000_000 * LAMPORTS_PER_SOL,
     ) + add_stakes(
         genesis_config,
         &FOUNDATION_STAKER_INFOS,
-        &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
+        &UNLOCKS_ALL_DAY_ZERO,
         1_000_000 * LAMPORTS_PER_SOL,
     ) + add_stakes(
         genesis_config,
         &GRANTS_STAKER_INFOS,
-        &UNLOCKS_BY_TENTHS_FOR_60_MONTHS,
+        &UNLOCKS_ALL_DAY_ZERO,
         1_000_000 * LAMPORTS_PER_SOL,
     ) + add_stakes(
         genesis_config,
