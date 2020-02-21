@@ -1,7 +1,10 @@
 use crate::ledger::{is_valid_ledger, LedgerWallet};
 use log::*;
 use parking_lot::{Mutex, RwLock};
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{Signature, SignerError},
+};
 use std::{
     fmt,
     str::FromStr,
@@ -45,6 +48,23 @@ pub enum RemoteWalletError {
 
     #[error("operation has been cancelled")]
     UserCancel,
+}
+
+impl From<RemoteWalletError> for SignerError {
+    fn from(err: RemoteWalletError) -> SignerError {
+        match err {
+            RemoteWalletError::Hid(hid_error) => {
+                SignerError::ConnectionError(hid_error.to_string())
+            }
+            RemoteWalletError::DeviceTypeMismatch => SignerError::ConnectionError(err.to_string()),
+            RemoteWalletError::InvalidDevice => SignerError::ConnectionError(err.to_string()),
+            RemoteWalletError::InvalidInput(input) => SignerError::InvalidInput(input),
+            RemoteWalletError::NoDeviceFound => SignerError::NoDeviceFound,
+            RemoteWalletError::Protocol(e) => SignerError::Protocol(e.to_string()),
+            RemoteWalletError::UserCancel => SignerError::UserCancel,
+            _ => SignerError::CustomError(err.to_string()),
+        }
+    }
 }
 
 /// Collection of conntected RemoteWallets

@@ -6,9 +6,8 @@ use crate::{
 };
 use solana_sdk::{
     pubkey::Pubkey,
-    signature::{Signature, Signer},
+    signature::{Signature, Signer, SignerError},
 };
-use std::error;
 
 pub struct RemoteKeypair {
     pub wallet_type: RemoteWalletType,
@@ -25,7 +24,7 @@ impl RemoteKeypair {
 }
 
 impl Signer for RemoteKeypair {
-    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         match &self.wallet_type {
             RemoteWalletType::Ledger(wallet) => wallet
                 .get_pubkey(&self.derivation_path)
@@ -33,7 +32,7 @@ impl Signer for RemoteKeypair {
         }
     }
 
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
         match &self.wallet_type {
             RemoteWalletType::Ledger(wallet) => wallet
                 .sign_message(&self.derivation_path, message)
