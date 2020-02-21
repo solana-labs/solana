@@ -36,7 +36,7 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, Keypair, Signature, Signer},
+    signature::{keypair_from_seed, Keypair, Signature, Signer, SignerError},
     system_instruction::{self, create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
     system_transaction,
     transaction::{Transaction, TransactionError},
@@ -1975,7 +1975,7 @@ impl Signer for FaucetKeypair {
         self.transaction.message().account_keys[0]
     }
 
-    fn try_pubkey(&self) -> Result<Pubkey, Box<dyn error::Error>> {
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         Ok(self.pubkey())
     }
 
@@ -1983,7 +1983,7 @@ impl Signer for FaucetKeypair {
         self.transaction.signatures[0]
     }
 
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, Box<dyn error::Error>> {
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
         Ok(self.sign_message(message))
     }
 }

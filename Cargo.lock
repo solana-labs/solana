@@ -3752,6 +3752,7 @@ dependencies = [
  "solana-logger 0.23.6",
  "solana-net-utils 0.23.6",
  "solana-sdk 0.23.6",
+ "thiserror 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
