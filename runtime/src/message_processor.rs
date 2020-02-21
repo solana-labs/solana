@@ -248,7 +248,7 @@ impl MessageProcessor {
         Self::verify_account_references(executable_accounts, program_accounts)?;
 
         // Verify the per-account instruction results
-        let (mut pre_sum, mut post_sum) = (0, 0);
+        let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         'root: for (i, (pre_account, account)) in
             pre_accounts.iter().zip(program_accounts).enumerate()
         {
@@ -263,8 +263,8 @@ impl MessageProcessor {
                 .try_borrow()
                 .map_err(|_| InstructionError::AccountBorrowFailed)?;
             pre_account.verify(&program_id, &account)?;
-            pre_sum += pre_account.lamports;
-            post_sum += account.lamports;
+            pre_sum += u128::from(pre_account.lamports);
+            post_sum += u128::from(account.lamports);
         }
 
         // Verify that the total sum of all the lamports did not change
