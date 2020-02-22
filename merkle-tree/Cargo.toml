@@ -10,6 +10,7 @@ edition = "2018"
 
 [dependencies]
 solana-sdk = { path = "../sdk", version = "1.1.0" }
+fast-math = "0.1"
 
 [dev-dependencies]
 hex = "0.4.0"

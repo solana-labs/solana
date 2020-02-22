@@ -75,13 +75,27 @@ impl MerkleTree {
         }
     }
 
-    fn calculate_vec_capacity(mut leaf_count: usize) -> usize {
-        let mut capacity = 0;
-        while leaf_count > 0 {
-            capacity += leaf_count;
-            leaf_count = MerkleTree::next_level_len(leaf_count);
+    fn calculate_vec_capacity(leaf_count: usize) -> usize {
+        // the most nodes consuming case is when n-1 is full balanced binary tree
+        // then n will cause the previous tree add a left only path to the root
+        // this cause the total nodes number increased by tree height, we use this
+        // condition as the max nodes consuming case.
+        // n is current leaf nodes number
+        // asuming n-1 is a full balanced binary tree, n-1 tree nodes number will be
+        // 2(n-1) - 1, n tree height is closed to log2(n) + 1
+        // so the max nodes number is 2(n-1) - 1 + log2(n) + 1, finally we can use
+        // 2n + log2(n+1) as a safe capacity value.
+        // test results:
+        // 8192 leaf nodes(full balanced):
+        // computed cap is 16398, actually using is 16383
+        // 8193 leaf nodes:(full balanced plus 1 leaf):
+        // computed cap is 16400, actually using is 16398
+        // about performance: current used fast_math log2 code is constant algo time
+        if leaf_count > 0 {
+            fast_math::log2_raw(leaf_count as f32) as usize + 2 * leaf_count + 1
+        } else {
+            0
         }
-        capacity
     }
 
     pub fn new<T: AsRef<[u8]>>(items: &[T]) -> Self {
@@ -245,6 +259,44 @@ mod tests {
     #[test]
     fn test_proof_entry_instantiation_rsib_set() {
         ProofEntry::new(&Hash::default(), None, Some(&Hash::default()));
+    }
+
+    #[test]
+    fn test_nodes_capacity_compute() {
+        let iteration_count = |mut leaf_count: usize| -> usize {
+            let mut capacity = 0;
+            while leaf_count > 0 {
+                capacity += leaf_count;
+                leaf_count = MerkleTree::next_level_len(leaf_count);
+            }
+            capacity
+        };
+
+        // test max 64k leaf nodes compute
+        for leaf_count in 0..65536 {
+            let math_count = MerkleTree::calculate_vec_capacity(leaf_count);
+            let iter_count = iteration_count(leaf_count);
+            assert!(math_count >= iter_count);
+        }
+    }
+
+    #[test]
+    fn test_node_capacity_constant_time() {
+        use std::time::Instant;
+
+        // trigger function invoking optimize once
+        MerkleTree::calculate_vec_capacity(2);
+
+        // record time spending
+        let mut time_record = Instant::now();
+        MerkleTree::calculate_vec_capacity(4);
+        let small_leaf_count_duration = time_record.elapsed();
+
+        time_record = Instant::now();
+        MerkleTree::calculate_vec_capacity(65536);
+        let large_leaf_count_duration = time_record.elapsed();
+        // large leafs should not bring time inceasing
+        assert!(large_leaf_count_duration < 2 * small_leaf_count_duration);
     }
 
     #[test]
