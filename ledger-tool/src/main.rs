@@ -699,6 +699,20 @@ fn main() {
                     .help("Output directory for the snapshot"),
             )
         ).subcommand(
+            SubCommand::with_name("convert-accounts")
+            .about("Convert accounts in snapshot")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
+            .arg(
+                Arg::with_name("output_directory")
+                    .index(1)
+                    .value_name("DIR")
+                    .takes_value(true)
+                    .help("Output directory for the snapshot"),
+            )
+        ).subcommand(
             SubCommand::with_name("print-accounts")
             .about("Print account contents after processing in the ledger")
             .arg(&no_snapshot_arg)
@@ -976,6 +990,7 @@ fn main() {
                         .unwrap();
 
                     // Write out the new accounts
+                    println!("Converting accounts");
                     for (pubkey, slot_list) in index.account_maps.iter() {
                         for (slot, _) in slot_list.read().unwrap().iter() {
                             let ancestors = vec![(*slot, 1)].into_iter().collect();
@@ -995,6 +1010,7 @@ fn main() {
                     }
 
                     // Update the bank hash
+                    println!("Updating bank hash");
                     root_bank
                         .rc
                         .accounts
