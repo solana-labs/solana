@@ -1089,8 +1089,8 @@ impl AccountsDB {
         }
     }
 
-    pub fn recompute_bank_hash(&self, slot: Slot) -> Result<BankHash, BankHashVerificationError> {
-        use BankHashVerificationError::*;
+    pub fn recompute_bank_hash(&self, slot: Slot) -> Result<BankHash, BankHashVerificatonError> {
+        use BankHashVerificatonError::*;
 
         let ancestors = vec![(slot, 1)].into_iter().collect();
         let (hashes, mismatch_found) = self.scan_accounts(

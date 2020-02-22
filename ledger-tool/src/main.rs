@@ -14,6 +14,7 @@ use solana_ledger::{
     shred_version::compute_shred_version,
     snapshot_utils,
 };
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol,
     program_utils::limited_deserialize, pubkey::Pubkey,
@@ -32,7 +33,6 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::Arc,
 };
 
 #[derive(PartialEq)]
@@ -530,6 +530,21 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     }
 }
 
+fn load_bank_from_snapshot(arg_matches: &ArgMatches, ledger_path: &PathBuf) -> Bank {
+    let snapshot_config = SnapshotConfig {
+        snapshot_interval_slots: 0, // Value doesn't matter
+        snapshot_package_output_path: ledger_path.clone(),
+        snapshot_path: ledger_path.clone().join("snapshot"),
+    };
+    let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        account_paths.split(',').map(PathBuf::from).collect()
+    } else {
+        vec![ledger_path.join("accounts")]
+    };
+
+    bank_forks_utils::load_bank_from_archive(account_paths, &snapshot_config)
+}
+
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     ledger_path: &PathBuf,
@@ -965,106 +980,89 @@ fn main() {
         ("convert-accounts", Some(arg_matches)) => {
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
             let genesis_config = open_genesis_config(&ledger_path);
-            match load_bank_forks(
-                arg_matches,
-                &ledger_path,
-                &genesis_config,
-                ProcessOptions::default(),
-            ) {
-                Ok((mut bank_forks, _bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
-                    let mut root_bank = Arc::try_unwrap(bank_forks.remove(bank_forks.root()))
-                        .unwrap_or_else(|_| panic!("More than one reference"));
-                    // Convert root_bank.EpochStakes
-                    for (_, stakes) in root_bank.epoch_stakes.iter_mut() {
-                        for (pubkey, (_, vote_account)) in stakes.vote_accounts.iter_mut() {
-                            VoteStateVersions::convert_from_raw(vote_account, &pubkey);
-                        }
-                    }
-
-                    let index = root_bank
-                        .rc
-                        .accounts
-                        .accounts_db
-                        .accounts_index
-                        .read()
-                        .unwrap();
-
-                    // Write out the new accounts
-                    println!("Converting accounts");
-                    for (pubkey, slot_list) in index.account_maps.iter() {
-                        for (slot, _) in slot_list.read().unwrap().iter() {
-                            let ancestors = vec![(*slot, 1)].into_iter().collect();
-                            let mut account = root_bank
-                                .rc
-                                .accounts
-                                .load_slow(&ancestors, pubkey)
-                                .map(|(acc, _slot)| acc)
-                                .unwrap_or_else(|| {
-                                    panic!("Couldn't get account for pubkey {}", pubkey)
-                                });
-                            if account.owner == solana_vote_program::id() {
-                                VoteStateVersions::convert_from_raw(&mut account, pubkey);
-                                root_bank.store_account_convert(*slot, pubkey, &account);
-                            }
-                        }
-                    }
-
-                    // Update the bank hash
-                    println!("Updating bank hash");
-                    root_bank
-                        .rc
-                        .accounts
-                        .accounts_db
-                        .recompute_bank_hash(root_bank.slot())
-                        .expect("Failed to recompute bank hash");
-
-                    root_bank.recompute_hash();
-
-                    let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
-                        eprintln!("Unable to create temporary directory: {}", err);
-                        exit(1);
-                    });
-
-                    let storages: Vec<_> = root_bank.get_snapshot_storages();
-                    snapshot_utils::add_snapshot(&temp_dir, &root_bank, &storages)
-                        .and_then(|slot_snapshot_paths| {
-                            snapshot_utils::package_snapshot(
-                                &root_bank,
-                                &slot_snapshot_paths,
-                                snapshot_utils::get_snapshot_archive_path(output_directory),
-                                &temp_dir,
-                                &root_bank.src.roots(),
-                                storages,
-                            )
-                        })
-                        .and_then(|package| {
-                            snapshot_utils::archive_snapshot_package(&package).map(|ok| {
-                                println!(
-                                    "Successfully created snapshot for slot {}: {:?}",
-                                    root_bank.slot(),
-                                    package.tar_output_file
-                                );
-                                println!(
-                                    "Shred version: {}",
-                                    compute_shred_version(
-                                        &genesis_config.hash(),
-                                        Some(&root_bank.hard_forks().read().unwrap())
-                                    )
-                                );
-                                ok
-                            })
-                        })
-                        .unwrap_or_else(|err| {
-                            eprintln!("Unable to create snapshot archive: {}", err);
-                            exit(1);
-                        });
-                }
-
-                Err(err) => {
-                    eprintln!("Failed to load ledger: {:?}", err);
-                    exit(1);
+            let mut root_bank = load_bank_from_snapshot(arg_matches, &ledger_path);
+            // Convert root_bank.EpochStakes
+            for (_, stakes) in root_bank.epoch_stakes.iter_mut() {
+                for (pubkey, (_, vote_account)) in stakes.vote_accounts.iter_mut() {
+                    VoteStateVersions::convert_from_raw(vote_account, &pubkey);
                 }
             }
+
+            let index = root_bank
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .read()
+                .unwrap();
+
+            // Write out the new accounts
+            println!("Converting accounts");
+            for (pubkey, slot_list) in index.account_maps.iter() {
+                for (slot, _) in slot_list.read().unwrap().iter() {
+                    let ancestors = vec![(*slot, 1)].into_iter().collect();
+                    let mut account = root_bank
+                        .rc
+                        .accounts
+                        .load_slow(&ancestors, pubkey)
+                        .map(|(acc, _slot)| acc)
+                        .unwrap_or_else(|| panic!("Couldn't get account for pubkey {}", pubkey));
+                    if account.owner == solana_vote_program::id() {
+                        VoteStateVersions::convert_from_raw(&mut account, pubkey);
+                        root_bank.store_account_convert(*slot, pubkey, &account);
+                    }
+                }
+            }
+
+            // Update the bank hash
+            println!("Updating bank hash");
+            root_bank
+                .rc
+                .accounts
+                .accounts_db
+                .recompute_bank_hash(root_bank.slot())
+                .expect("Failed to recompute bank hash");
+
+            root_bank.recompute_hash();
+
+            let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
+                eprintln!("Unable to create temporary directory: {}", err);
+                exit(1);
+            });
+
+            let storages: Vec<_> = root_bank.get_snapshot_storages();
+            snapshot_utils::add_snapshot(&temp_dir, &root_bank, &storages)
+                .and_then(|slot_snapshot_paths| {
+                    snapshot_utils::package_snapshot(
+                        &root_bank,
+                        &slot_snapshot_paths,
+                        snapshot_utils::get_snapshot_archive_path(output_directory),
+                        &temp_dir,
+                        &root_bank.src.roots(),
+                        storages,
+                    )
+                })
+                .and_then(|package| {
+                    snapshot_utils::archive_snapshot_package(&package).map(|ok| {
+                        println!(
+                            "Successfully created snapshot for slot {}: {:?}",
+                            root_bank.slot(),
+                            package.tar_output_file
+                        );
+                        println!(
+                            "Shred version: {}",
+                            compute_shred_version(
+                                &genesis_config.hash(),
+                                Some(&root_bank.hard_forks().read().unwrap())
+                            )
+                        );
+                        ok
+                    })
+                })
+                .unwrap_or_else(|err| {
+                    eprintln!("Unable to create snapshot archive: {}", err);
+                    exit(1);
+                });
         }
         ("print-accounts", Some(arg_matches)) => {
             let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();

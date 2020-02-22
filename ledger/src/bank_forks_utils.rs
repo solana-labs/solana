@@ -9,6 +9,7 @@ use crate::{
     snapshot_utils,
 };
 use log::*;
+use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, result, sync::Arc};
 
@@ -34,6 +35,15 @@ fn to_loadresult(
             snapshot_hash,
         )
     })
+}
+
+pub fn load_bank_from_archive(
+    account_paths: Vec<PathBuf>,
+    snapshot_config: &SnapshotConfig,
+) -> Bank {
+    let tar =
+        snapshot_utils::get_snapshot_archive_path(&snapshot_config.snapshot_package_output_path);
+    snapshot_utils::bank_from_archive(&account_paths, &snapshot_config.snapshot_path, &tar).unwrap()
 }
 
 pub fn load(
