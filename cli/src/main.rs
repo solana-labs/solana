@@ -114,7 +114,7 @@ pub fn parse_args<'a>(
             command,
             json_rpc_url,
             signers: vec![],
-            keypair_path: Some(default_signer_path), // TODO: this isn't correct when default signer not used
+            keypair_path: default_signer_path,
             derivation_path: derivation_of(matches, "derivation_path"),
             rpc_client: None,
             verbose: matches.is_present("verbose"),

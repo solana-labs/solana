@@ -434,7 +434,7 @@ pub struct CliConfig<'a> {
     pub command: CliCommand,
     pub json_rpc_url: String,
     pub signers: Vec<&'a dyn Signer>,
-    pub keypair_path: Option<String>,
+    pub keypair_path: String,
     pub derivation_path: Option<DerivationPath>,
     pub rpc_client: Option<RpcClient>,
     pub verbose: bool,
@@ -471,7 +471,7 @@ impl Default for CliConfig<'_> {
             },
             json_rpc_url: Self::default_json_rpc_url(),
             signers: Vec::new(),
-            keypair_path: Some(Self::default_keypair_path()),
+            keypair_path: Self::default_keypair_path(),
             derivation_path: None,
             rpc_client: None,
             verbose: false,
@@ -1416,11 +1416,9 @@ fn process_witness(
 pub fn process_command(config: &CliConfig) -> ProcessResult {
     if config.verbose {
         println_name_value("RPC URL:", &config.json_rpc_url);
-        if let Some(keypair_path) = &config.keypair_path {
-            println_name_value("Keypair Path:", keypair_path);
-            if keypair_path.starts_with("usb://") {
-                println_name_value("Pubkey:", &format!("{:?}", config.pubkey()?));
-            }
+        println_name_value("Default Signer Path:", &config.keypair_path);
+        if config.keypair_path.starts_with("usb://") {
+            println_name_value("Pubkey:", &format!("{:?}", config.pubkey()?));
         }
     }
 
