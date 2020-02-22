@@ -50,9 +50,12 @@ impl VoteStateVersions {
     }
 
     pub fn convert_from_raw(account: &mut Account, pubkey: &Pubkey) {
-        let vote_state: VoteState0_23_5 = account
-            .state()
-            .unwrap_or_else(|e| panic!("Couldn't deserialize vote account {}, error: {:?}", pubkey, e));
+        let vote_state: VoteState0_23_5 = account.state().unwrap_or_else(|e| {
+            panic!(
+                "Couldn't deserialize vote account {}, error: {:?}",
+                pubkey, e
+            )
+        });
 
         let current_vote_state =
             VoteStateVersions::V0_23_5(Box::new(vote_state)).convert_to_current();

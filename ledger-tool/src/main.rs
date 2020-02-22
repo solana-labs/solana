@@ -975,6 +975,7 @@ fn main() {
                         .read()
                         .unwrap();
 
+                    // Write out the new accounts
                     for (pubkey, slot_list) in index.account_maps.iter() {
                         for (slot, _) in slot_list.read().unwrap().iter() {
                             let ancestors = vec![(*slot, 1)].into_iter().collect();
@@ -992,6 +993,16 @@ fn main() {
                             }
                         }
                     }
+
+                    // Update the bank hash
+                    root_bank
+                        .rc
+                        .accounts
+                        .accounts_db
+                        .recompute_bank_hash(root_bank.slot())
+                        .expect("Failed to recompute bank hash");
+
+                    root_bank.recompute_hash();
 
                     let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
                         eprintln!("Unable to create temporary directory: {}", err);

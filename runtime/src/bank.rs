@@ -766,6 +766,11 @@ impl Bank {
         }
     }
 
+    pub fn recompute_hash(&self) {
+        let mut hash = self.hash.write().unwrap();
+        *hash = self.hash_internal_state();
+    }
+
     pub fn epoch_schedule(&self) -> &EpochSchedule {
         &self.epoch_schedule
     }

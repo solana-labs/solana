@@ -1089,6 +1089,48 @@ impl AccountsDB {
         }
     }
 
+    pub fn recompute_bank_hash(&self, slot: Slot) -> Result<BankHash, BankHashVerificationError> {
+        use BankHashVerificationError::*;
+
+        let ancestors = vec![(slot, 1)].into_iter().collect();
+        let (hashes, mismatch_found) = self.scan_accounts(
+            &ancestors,
+            |(collector, mismatch_found): &mut (Vec<BankHash>, bool),
+             option: Option<(&Pubkey, Account, Slot)>| {
+                if let Some((pubkey, account, slot)) = option {
+                    let hash = Self::hash_account(slot, &account, pubkey);
+                    if hash != account.hash {
+                        *mismatch_found = true;
+                    }
+                    if *mismatch_found {
+                        return;
+                    }
+                    let hash = BankHash::from_hash(&hash);
+                    debug!("xoring..{} key: {}", hash, pubkey);
+                    collector.push(hash);
+                }
+            },
+        );
+        if mismatch_found {
+            return Err(MismatchedAccountHash);
+        }
+        let mut calculated_hash = BankHash::default();
+        for hash in hashes {
+            calculated_hash.xor(hash);
+        }
+        let mut bank_hashes = self.bank_hashes.write().unwrap();
+        if let Some(found_hash_info) = bank_hashes.get_mut(&slot) {
+            println!(
+                "old bank hash for slot {}: {}, new hash {}",
+                slot, found_hash_info.hash, calculated_hash
+            );
+            found_hash_info.hash = calculated_hash;
+            Ok(calculated_hash)
+        } else {
+            Err(MissingBankHash)
+        }
+    }
+
     pub fn xor_in_hash_state(&self, slot_id: Slot, hash: BankHash, stats: &BankHashStats) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let bank_hash = bank_hashes
