@@ -107,7 +107,7 @@ pub fn parse_args<'a>(
     };
 
     let CliCommandInfo { command, signers } =
-        parse_command(&matches, &default_signer_path, &wallet_manager)?;
+        parse_command(&matches, &default_signer_path, wallet_manager.as_ref())?;
 
     Ok((
         CliConfig {

@@ -99,7 +99,7 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
 pub fn signer_of(
     name: &str,
     matches: &ArgMatches<'_>,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<Option<Box<dyn Signer>>, Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
         signer_from_path(matches, location, name, wallet_manager).map(Some)

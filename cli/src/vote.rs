@@ -180,7 +180,7 @@ impl VoteSubCommands for App<'_, '_> {
 pub fn parse_vote_create_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account = keypair_of(matches, "vote_account").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
@@ -212,7 +212,7 @@ pub fn parse_vote_create_account(
 pub fn parse_vote_authorize(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
     vote_authorize: VoteAuthorize,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
@@ -239,7 +239,7 @@ pub fn parse_vote_authorize(
 pub fn parse_vote_update_validator(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let new_identity_pubkey = pubkey_of(matches, "new_identity_pubkey").unwrap();
@@ -527,7 +527,7 @@ mod tests {
             &pubkey2_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize_voter, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize_voter, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::VoteAuthorize {
                     vote_account_pubkey: pubkey,
@@ -553,7 +553,7 @@ mod tests {
             "10",
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_vote_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -580,7 +580,7 @@ mod tests {
             &node_pubkey_string,
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account2, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_vote_account2, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -611,7 +611,7 @@ mod tests {
             &authed.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account3, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_vote_account3, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -640,7 +640,7 @@ mod tests {
             &authed.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account4, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_vote_account4, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -664,7 +664,7 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_update_validator, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_update_validator, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::VoteUpdateValidator {
                     vote_account_pubkey: pubkey,

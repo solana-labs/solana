@@ -64,7 +64,7 @@ pub fn signer_from_path(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     match parse_keypair_path(path) {
         KeypairUrl::Ask => {

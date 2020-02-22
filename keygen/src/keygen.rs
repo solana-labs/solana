@@ -61,7 +61,7 @@ fn get_keypair_from_matches(
         path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
-    signer_from_path(matches, path, "pubkey recovery", &wallet_manager)
+    signer_from_path(matches, path, "pubkey recovery", wallet_manager.as_ref())
 }
 
 fn output_keypair(

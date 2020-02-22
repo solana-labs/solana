@@ -221,7 +221,7 @@ impl NonceSubCommands for App<'_, '_> {
 pub fn parse_authorize_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let new_authority = pubkey_of(matches, "new_authority").unwrap();
@@ -248,7 +248,7 @@ pub fn parse_authorize_nonce_account(
 pub fn parse_nonce_create_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = signer_of("nonce_account_keypair", matches, wallet_manager)?.unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
@@ -286,7 +286,7 @@ pub fn parse_get_nonce(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
 pub fn parse_new_nonce(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
@@ -324,7 +324,7 @@ pub fn parse_show_nonce_account(matches: &ArgMatches<'_>) -> Result<CliCommandIn
 pub fn parse_withdraw_from_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
@@ -658,7 +658,7 @@ mod tests {
             &Pubkey::default().to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_authorize_nonce_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize_nonce_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: nonce_account_pubkey,
@@ -679,7 +679,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize_nonce_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize_nonce_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
@@ -701,7 +701,7 @@ mod tests {
             "50",
         ]);
         assert_eq!(
-            parse_command(&test_create_nonce_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_nonce_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
                     nonce_account: 1,
@@ -726,7 +726,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_nonce_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_nonce_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateNonceAccount {
                     nonce_account: 1,
@@ -748,7 +748,7 @@ mod tests {
             &nonce_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_get_nonce, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_get_nonce, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetNonce(nonce_account_keypair.pubkey()),
                 signers: vec![],
@@ -762,7 +762,7 @@ mod tests {
                 .get_matches_from(vec!["test", "new-nonce", &keypair_file]);
         let nonce_account = read_keypair_file(&keypair_file).unwrap();
         assert_eq!(
-            parse_command(&test_new_nonce, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_new_nonce, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
@@ -782,7 +782,7 @@ mod tests {
         ]);
         let nonce_account = read_keypair_file(&keypair_file).unwrap();
         assert_eq!(
-            parse_command(&test_new_nonce, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_new_nonce, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
@@ -802,7 +802,7 @@ mod tests {
             &nonce_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_show_nonce_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_show_nonce_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ShowNonceAccount {
                     nonce_account_pubkey: nonce_account_keypair.pubkey(),
@@ -824,7 +824,7 @@ mod tests {
             parse_command(
                 &test_withdraw_from_nonce_account,
                 &default_keypair_file,
-                &None
+                None
             )
             .unwrap(),
             CliCommandInfo {
@@ -849,7 +849,7 @@ mod tests {
             parse_command(
                 &test_withdraw_from_nonce_account,
                 &default_keypair_file,
-                &None
+                None
             )
             .unwrap(),
             CliCommandInfo {
@@ -877,7 +877,7 @@ mod tests {
             parse_command(
                 &test_withdraw_from_nonce_account,
                 &default_keypair_file,
-                &None
+                None
             )
             .unwrap(),
             CliCommandInfo {

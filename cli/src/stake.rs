@@ -415,7 +415,7 @@ impl StakeSubCommands for App<'_, '_> {
 pub fn parse_stake_create_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
@@ -465,7 +465,7 @@ pub fn parse_stake_create_account(
 pub fn parse_stake_delegate_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
@@ -503,7 +503,7 @@ pub fn parse_stake_delegate_stake(
 pub fn parse_stake_authorize(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
     stake_authorize: StakeAuthorize,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
@@ -545,7 +545,7 @@ pub fn parse_stake_authorize(
 pub fn parse_split_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let split_stake_account = signer_of("split_stake_account", matches, wallet_manager)?.unwrap();
@@ -591,7 +591,7 @@ pub fn parse_split_stake(
 pub fn parse_stake_deactivate_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
@@ -625,7 +625,7 @@ pub fn parse_stake_deactivate_stake(
 pub fn parse_stake_withdraw_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
@@ -663,7 +663,7 @@ pub fn parse_stake_withdraw_stake(
 pub fn parse_stake_set_lockup(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
@@ -1473,7 +1473,7 @@ mod tests {
             &stake_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1499,7 +1499,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1531,7 +1531,7 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1565,7 +1565,7 @@ mod tests {
             &pubkey.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1609,7 +1609,7 @@ mod tests {
             &pubkey2.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1639,7 +1639,7 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1674,7 +1674,7 @@ mod tests {
             &nonce_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1708,7 +1708,7 @@ mod tests {
             &fee_payer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1743,7 +1743,7 @@ mod tests {
             &signer,
         ]);
         assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
@@ -1811,7 +1811,7 @@ mod tests {
             "43",
         ]);
         assert_eq!(
-            parse_command(&test_create_stake_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_stake_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
                     stake_account: 1,
@@ -1852,7 +1852,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_create_stake_account2, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_stake_account2, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
                     stake_account: 1,
@@ -1905,7 +1905,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_create_stake_account2, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_create_stake_account2, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStakeAccount {
                     stake_account: 1,
@@ -1938,7 +1938,7 @@ mod tests {
             &vote_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -1967,7 +1967,7 @@ mod tests {
             &stake_authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -1998,7 +1998,7 @@ mod tests {
             &vote_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -2027,7 +2027,7 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -2054,7 +2054,7 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -2088,7 +2088,7 @@ mod tests {
             &key1.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -2131,7 +2131,7 @@ mod tests {
             &key2.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -2165,7 +2165,7 @@ mod tests {
             &fee_payer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_delegate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_delegate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DelegateStake {
                     stake_account_pubkey,
@@ -2195,7 +2195,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_withdraw_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_withdraw_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
@@ -2224,7 +2224,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_withdraw_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_withdraw_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
@@ -2268,7 +2268,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            parse_command(&test_withdraw_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_withdraw_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
@@ -2297,7 +2297,7 @@ mod tests {
             &stake_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
@@ -2321,7 +2321,7 @@ mod tests {
             &stake_authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
@@ -2352,7 +2352,7 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
@@ -2376,7 +2376,7 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
@@ -2407,7 +2407,7 @@ mod tests {
             &key1.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
@@ -2447,7 +2447,7 @@ mod tests {
             &key2.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
@@ -2475,7 +2475,7 @@ mod tests {
             &fee_payer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deactivate_stake, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::DeactivateStake {
                     stake_account_pubkey,
@@ -2509,7 +2509,7 @@ mod tests {
             "50",
         ]);
         assert_eq!(
-            parse_command(&test_split_stake_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_split_stake_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::SplitStake {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
@@ -2570,7 +2570,7 @@ mod tests {
             &stake_signer,
         ]);
         assert_eq!(
-            parse_command(&test_split_stake_account, &default_keypair_file, &None).unwrap(),
+            parse_command(&test_split_stake_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::SplitStake {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
