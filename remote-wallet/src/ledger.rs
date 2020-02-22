@@ -10,6 +10,10 @@ use std::{cmp::min, fmt, sync::Arc};
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
 const APDU_PAYLOAD_HEADER_LEN: usize = 8;
+const P1_CONFIRM: u8 = 0x01;
+const P2_EXTEND: u8 = 0x01;
+const P2_MORE: u8 = 0x02;
+const MAX_CHUNK_SIZE: usize = 300;
 
 const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
 
@@ -291,18 +295,52 @@ impl RemoteWallet for LedgerWallet {
                 "Message to sign is too long".to_string(),
             ));
         }
+
+        // Check to see if this data needs to be split up and
+        // sent in chunks.
+        let max_size = MAX_CHUNK_SIZE - payload.len();
+        let empty = vec![];
+        let (data, remaining_data) = if data.len() > max_size {
+            data.split_at(max_size)
+        } else {
+            (data, empty.as_ref())
+        };
+
+        // Pack the first chunk
         for byte in (data.len() as u16).to_be_bytes().iter() {
             payload.push(*byte);
         }
         payload.extend_from_slice(data);
         trace!("Serialized payload length {:?}", payload.len());
 
-        let result = self.send_apdu(
-            commands::SIGN_MESSAGE,
-            1, // In the naive implementation, default request is for requred device confirmation
-            0,
-            &payload,
-        )?;
+        let p2 = if remaining_data.is_empty() {
+            0
+        } else {
+            P2_MORE
+        };
+
+        let p1 = P1_CONFIRM;
+        let mut result = self.send_apdu(commands::SIGN_MESSAGE, p1, p2, &payload)?;
+
+        // Pack and send the remaining chunks
+        if !remaining_data.is_empty() {
+            let mut chunks: Vec<_> = remaining_data
+                .chunks(MAX_CHUNK_SIZE)
+                .map(|data| {
+                    let mut payload = (data.len() as u16).to_be_bytes().to_vec();
+                    payload.extend_from_slice(data);
+                    let p2 = P2_EXTEND | P2_MORE;
+                    (p2, payload)
+                })
+                .collect();
+
+            // Clear the P2_MORE bit on the last item.
+            chunks.last_mut().unwrap().0 &= !P2_MORE;
+
+            for (p2, payload) in chunks {
+                result = self.send_apdu(commands::SIGN_MESSAGE, p1, p2, &payload)?;
+            }
+        }
 
         if result.len() != 64 {
             return Err(RemoteWalletError::Protocol(
