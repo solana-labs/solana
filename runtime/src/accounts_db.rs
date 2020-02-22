@@ -446,6 +446,12 @@ pub struct AccountsDB {
     min_num_stores: usize,
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
+
+    /// Zero lamport account store count
+    zla_count: AtomicUsize,
+
+    /// Zero lamport account count at last purge
+    last_purge_zla_count: AtomicUsize,
 }
 
 impl Default for AccountsDB {
@@ -468,6 +474,8 @@ impl Default for AccountsDB {
                 .unwrap(),
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
+            zla_count: AtomicUsize::new(0),
+            last_purge_zla_count: AtomicUsize::new(0),
         }
     }
 }
@@ -634,6 +642,18 @@ impl AccountsDB {
     // can be purged because there are no live append vecs in the ancestors
     pub fn purge_zero_lamport_accounts(&self, ancestors: &HashMap<u64, usize>) {
         self.report_store_stats();
+
+        let last_zla_count = self.last_purge_zla_count.load(Ordering::Relaxed);
+        let zla_count = self.zla_count.load(Ordering::Relaxed);
+        let prev_zla_count = self.last_purge_zla_count.compare_and_swap(
+            last_zla_count,
+            zla_count,
+            Ordering::Relaxed,
+        );
+        if zla_count == prev_zla_count {
+            return;
+        }
+
         let mut purges = HashMap::new();
         let accounts_index = self.accounts_index.read().unwrap();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
@@ -1308,13 +1328,18 @@ impl AccountsDB {
 
     fn hash_accounts(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) -> Vec<Hash> {
         let mut stats = BankHashStats::default();
+        let mut zla_count = 0;
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
                 stats.update(account);
+                if account.lamports == 0 {
+                    zla_count += 1;
+                }
                 Self::hash_account(slot_id, account, pubkey)
             })
             .collect();
+        self.zla_count.fetch_add(zla_count, Ordering::Relaxed);
 
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let slot_info = bank_hashes
