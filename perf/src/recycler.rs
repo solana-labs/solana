@@ -9,6 +9,7 @@ struct RecyclerStats {
     freed: AtomicUsize,
     reuse: AtomicUsize,
     max_gc: AtomicUsize,
+    overcapacity_count: AtomicUsize,
 }
 
 #[derive(Clone, Default)]
@@ -105,11 +106,23 @@ impl<T: Default + Reset + Sized> Recycler<T> {
 
 impl<T: Default + Reset> RecyclerX<T> {
     pub fn recycle(&self, x: T) {
-        let len = {
+        let (len, capacity) = {
             let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
             gc.push(x);
-            gc.len()
+            (gc.len(), gc.capacity())
         };
+        if capacity > len * 2 {
+            let count = self
+                .stats
+                .overcapacity_count
+                .fetch_add(1, Ordering::Relaxed);
+            if count > 1000 {
+                self.gc.lock().expect("recycler lock").shrink_to_fit();
+                self.stats.overcapacity_count.store(0, Ordering::Relaxed);
+            }
+        } else {
+            self.stats.overcapacity_count.store(0, Ordering::Relaxed);
+        }
 
         let max_gc = self.stats.max_gc.load(Ordering::Relaxed);
         if len > max_gc {
