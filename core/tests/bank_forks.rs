@@ -55,6 +55,7 @@ mod tests {
             snapshot_interval_slots,
             snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
             snapshot_path: PathBuf::from(snapshot_dir.path()),
+            trusted_validators: None,
         };
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         SnapshotTestConfig {

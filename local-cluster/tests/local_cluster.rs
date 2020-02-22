@@ -676,13 +676,14 @@ fn test_snapshot_restart_tower() {
 #[test]
 #[serial]
 fn test_snapshots_blockstore_floor() {
+    solana_logger::setup();
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
     let num_account_paths = 4;
 
     let leader_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
-    let validator_snapshot_test_config =
+    let mut validator_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
     let snapshot_package_output_path = &leader_snapshot_test_config
@@ -721,6 +722,17 @@ fn test_snapshots_blockstore_floor() {
 
     // Start up a new node from a snapshot
     let validator_stake = 5;
+
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let mut trusted_validators = HashSet::new();
+    trusted_validators.insert(cluster_nodes[0].id);
+    if let Some(ref mut config) = validator_snapshot_test_config
+        .validator_config
+        .snapshot_config
+    {
+        config.trusted_validators = Some(trusted_validators);
+    }
+
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
         validator_stake,
@@ -1000,6 +1012,7 @@ fn setup_snapshot_validator_config(
         snapshot_interval_slots,
         snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
         snapshot_path: PathBuf::from(snapshot_dir.path()),
+        trusted_validators: None,
     };
 
     // Create the account paths
