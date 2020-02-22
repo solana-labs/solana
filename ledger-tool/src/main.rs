@@ -988,27 +988,45 @@ fn main() {
                 }
             }
 
-            let index = root_bank
-                .rc
-                .accounts
-                .accounts_db
-                .accounts_index
-                .read()
-                .unwrap();
+            let index: Vec<_> = {
+                let index = root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .accounts_index
+                    .read()
+                    .unwrap();
 
-            // Write out the new accounts
-            println!("Converting accounts");
-            for (pubkey, slot_list) in index.account_maps.iter() {
-                for (slot, _) in slot_list.read().unwrap().iter() {
+                // Write out the new accounts
+                let total: usize = index
+                    .account_maps
+                    .values()
+                    .map(|slot_list| slot_list.read().unwrap().len())
+                    .sum();
+
+                println!("Converting {} accounts", total);
+                index
+                    .account_maps
+                    .iter()
+                    .map(|(pubkey, slot_list)| (*pubkey, slot_list.read().unwrap().clone()))
+                    .collect()
+            };
+
+            for (pubkey, slot_list) in index.iter() {
+                println!("Converting: {}", pubkey);
+                for (slot, _) in slot_list.iter() {
                     let ancestors = vec![(*slot, 1)].into_iter().collect();
+                    println!("loading");
                     let mut account = root_bank
                         .rc
                         .accounts
                         .load_slow(&ancestors, pubkey)
                         .map(|(acc, _slot)| acc)
                         .unwrap_or_else(|| panic!("Couldn't get account for pubkey {}", pubkey));
+                    println!("loading2");
                     if account.owner == solana_vote_program::id() {
                         VoteStateVersions::convert_from_raw(&mut account, pubkey);
+                        println!("loading3");
                         root_bank.store_account_convert(*slot, pubkey, &account);
                     }
                 }
