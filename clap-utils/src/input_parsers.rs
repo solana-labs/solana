@@ -3,14 +3,14 @@ use crate::keypair::{
 };
 use chrono::DateTime;
 use clap::ArgMatches;
-use solana_remote_wallet::remote_wallet::DerivationPath;
+use solana_remote_wallet::remote_wallet::{DerivationPath, RemoteWalletManager};
 use solana_sdk::{
     clock::UnixTimestamp,
     native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signature, Signer},
 };
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
@@ -99,9 +99,10 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
 pub fn signer_of(
     name: &str,
     matches: &ArgMatches<'_>,
+    wallet_manager: &Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<Box<dyn Signer>>, Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
-        signer_from_path(matches, location, name).map(Some)
+        signer_from_path(matches, location, name, wallet_manager).map(Some)
     } else {
         Ok(None)
     }

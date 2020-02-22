@@ -1,16 +1,16 @@
 use crate::cli::{
-    build_balance_message, check_account_for_fee, check_unique_pubkeys,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    build_balance_message, check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
+    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, CliSignerInfo,
+    ProcessResult,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
     message::Message,
     pubkey::Pubkey,
-    signature::Keypair,
-    signature::Signer,
     system_instruction::{create_address_with_seed, SystemError},
     transaction::Transaction,
 };
@@ -18,6 +18,7 @@ use solana_vote_program::{
     vote_instruction::{self, VoteError},
     vote_state::{VoteAuthorize, VoteInit, VoteState},
 };
+use std::sync::Arc;
 
 pub trait VoteSubCommands {
     fn vote_subcommands(self) -> Self;
@@ -176,7 +177,11 @@ impl VoteSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_vote_create_account(
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
     let vote_account = keypair_of(matches, "vote_account").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let identity_pubkey = pubkey_of(matches, "identity_pubkey").unwrap();
@@ -184,25 +189,42 @@ pub fn parse_vote_create_account(matches: &ArgMatches<'_>) -> Result<CliCommandI
     let authorized_voter = pubkey_of(matches, "authorized_voter");
     let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer");
 
+    let payer_provided = None;
+    let CliSignerInfo { signers, .. } = generate_unique_signers(
+        vec![payer_provided, Some(Box::new(vote_account))],
+        matches,
+        default_signer_path,
+        wallet_manager,
+    )?;
+
     Ok(CliCommandInfo {
         command: CliCommand::CreateVoteAccount {
-            vote_account: vote_account.into(),
             seed,
             node_pubkey: identity_pubkey,
             authorized_voter,
             authorized_withdrawer,
             commission,
         },
-        require_keypair: true,
+        signers,
     })
 }
 
 pub fn parse_vote_authorize(
     matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: &Option<Arc<RemoteWalletManager>>,
     vote_authorize: VoteAuthorize,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let new_authorized_pubkey = pubkey_of(matches, "new_authorized_pubkey").unwrap();
+
+    let authorized_voter_provided = None;
+    let CliSignerInfo { signers, .. } = generate_unique_signers(
+        vec![authorized_voter_provided],
+        matches,
+        default_signer_path,
+        wallet_manager,
+    )?;
 
     Ok(CliCommandInfo {
         command: CliCommand::VoteAuthorize {
@@ -210,22 +232,33 @@ pub fn parse_vote_authorize(
             new_authorized_pubkey,
             vote_authorize,
         },
-        require_keypair: true,
+        signers,
     })
 }
 
-pub fn parse_vote_update_validator(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_vote_update_validator(
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let new_identity_pubkey = pubkey_of(matches, "new_identity_pubkey").unwrap();
     let authorized_voter = keypair_of(matches, "authorized_voter").unwrap();
+
+    let payer_provided = None;
+    let CliSignerInfo { signers, .. } = generate_unique_signers(
+        vec![payer_provided, Some(Box::new(authorized_voter))],
+        matches,
+        default_signer_path,
+        wallet_manager,
+    )?;
 
     Ok(CliCommandInfo {
         command: CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_pubkey,
-            authorized_voter: authorized_voter.into(),
         },
-        require_keypair: true,
+        signers,
     })
 }
 
@@ -239,20 +272,20 @@ pub fn parse_vote_get_account_command(
             pubkey: vote_account_pubkey,
             use_lamports_unit,
         },
-        require_keypair: false,
+        signers: vec![],
     })
 }
 
 pub fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    vote_account: &Keypair,
     seed: &Option<String>,
     identity_pubkey: &Pubkey,
     authorized_voter: &Option<Pubkey>,
     authorized_withdrawer: &Option<Pubkey>,
     commission: u8,
 ) -> ProcessResult {
+    let vote_account = config.signers[1];
     let vote_account_pubkey = vote_account.pubkey();
     let vote_account_address = if let Some(seed) = seed {
         create_address_with_seed(&vote_account_pubkey, &seed, &solana_vote_program::id())?
@@ -260,7 +293,7 @@ pub fn process_create_vote_account(
         vote_account_pubkey
     };
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "cli keypair".to_string()),
+        (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (&vote_account_address, "vote_account".to_string()),
     )?;
 
@@ -294,16 +327,16 @@ pub fn process_create_vote_account(
 
     let ixs = if let Some(seed) = seed {
         vote_instruction::create_account_with_seed(
-            &config.keypair.pubkey(), // from
-            &vote_account_address,    // to
-            &vote_account_pubkey,     // base
-            seed,                     // seed
+            &config.signers[0].pubkey(), // from
+            &vote_account_address,       // to
+            &vote_account_pubkey,        // base
+            seed,                        // seed
             &vote_init,
             required_balance,
         )
     } else {
         vote_instruction::create_account(
-            &config.keypair.pubkey(),
+            &config.signers[0].pubkey(),
             &vote_account_pubkey,
             &vote_init,
             required_balance,
@@ -311,22 +344,16 @@ pub fn process_create_vote_account(
     };
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let signers = if vote_account_pubkey != config.keypair.pubkey() {
-        vec![config.keypair.as_ref(), vote_account] // both must sign if `from` and `to` differ
-    } else {
-        vec![config.keypair.as_ref()] // when stake_account == config.keypair and there's a seed, we only need one signature
-    };
-
     let message = Message::new(ixs);
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &signers);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -343,22 +370,22 @@ pub fn process_vote_authorize(
     )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize(
-        vote_account_pubkey,      // vote account to update
-        &config.keypair.pubkey(), // current authorized voter
-        new_authorized_pubkey,    // new vote signer/withdrawer
-        vote_authorize,           // vote or withdraw
+        vote_account_pubkey,         // vote account to update
+        &config.signers[0].pubkey(), // current authorized voter
+        new_authorized_pubkey,       // new vote signer/withdrawer
+        vote_authorize,              // vote or withdraw
     )];
 
-    let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
+    let message = Message::new_with_payer(ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&[config.keypair.as_ref()], recent_blockhash)?;
+    tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref()]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.signers[0]]);
     log_instruction_custom_error::<VoteError>(result)
 }
 
@@ -367,8 +394,8 @@ pub fn process_vote_update_validator(
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     new_identity_pubkey: &Pubkey,
-    authorized_voter: &Keypair,
 ) -> ProcessResult {
+    let authorized_voter = config.signers[1];
     check_unique_pubkeys(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (new_identity_pubkey, "new_identity_pubkey".to_string()),
@@ -380,19 +407,16 @@ pub fn process_vote_update_validator(
         new_identity_pubkey,
     )];
 
-    let message = Message::new_with_payer(ixs, Some(&config.keypair.pubkey()));
+    let message = Message::new_with_payer(ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(
-        &[config.keypair.as_ref(), authorized_voter],
-        recent_blockhash,
-    )?;
+    tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref()]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
     log_instruction_custom_error::<VoteError>(result)
 }
 
@@ -474,7 +498,7 @@ pub fn process_show_vote_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -506,7 +530,7 @@ mod tests {
                     new_authorized_pubkey: pubkey2,
                     vote_authorize: VoteAuthorize::Voter
                 },
-                require_keypair: true
+                require_default_keypair: true
             }
         );
 
@@ -535,7 +559,7 @@ mod tests {
                     authorized_withdrawer: None,
                     commission: 10,
                 },
-                require_keypair: true
+                require_default_keypair: true
             }
         );
 
@@ -560,7 +584,7 @@ mod tests {
                     authorized_withdrawer: None,
                     commission: 100,
                 },
-                require_keypair: true
+                require_default_keypair: true
             }
         );
 
@@ -589,7 +613,7 @@ mod tests {
                     authorized_withdrawer: None,
                     commission: 100
                 },
-                require_keypair: true
+                require_default_keypair: true
             }
         );
 
@@ -616,7 +640,7 @@ mod tests {
                     authorized_withdrawer: Some(authed),
                     commission: 100
                 },
-                require_keypair: true
+                require_default_keypair: true
             }
         );
 
@@ -637,7 +661,7 @@ mod tests {
                         .unwrap()
                         .into(),
                 },
-                require_keypair: true
+                require_default_keypair: true
             }
         );
     }

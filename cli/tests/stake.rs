@@ -57,8 +57,13 @@ fn test_stake_delegation_force() {
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        100_000,
+    )
+    .unwrap();
 
     // Create vote account
     let vote_keypair = Keypair::new();
@@ -67,7 +72,7 @@ fn test_stake_delegation_force() {
     config.command = CliCommand::CreateVoteAccount {
         vote_account: read_keypair_file(&vote_keypair_file).unwrap().into(),
         seed: None,
-        node_pubkey: config.keypair.pubkey(),
+        node_pubkey: config.signers[0].pubkey(),
         authorized_voter: None,
         authorized_withdrawer: None,
         commission: 0,
@@ -439,15 +444,20 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let (config_keypair_file, mut tmp_file) = make_tmp_file();
     write_keypair(&config_keypair, tmp_file.as_file_mut()).unwrap();
     let mut config = CliConfig::default();
-    config.keypair = config_keypair.into();
+    config.signers[0] = config_keypair.into();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        100_000,
+    )
+    .unwrap();
 
     // Create stake account
     let stake_keypair = Keypair::new();
@@ -476,7 +486,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     config.command = CliCommand::CreateNonceAccount {
         nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
-        nonce_authority: Some(config.keypair.pubkey()),
+        nonce_authority: Some(config.signers[0].pubkey()),
         lamports: minimum_nonce_balance,
     };
     process_command(&config).unwrap();
@@ -541,8 +551,13 @@ fn test_stake_authorize() {
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        100_000,
+    )
+    .unwrap();
 
     let offline_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let (offline_authority_file, mut tmp_file) = make_tmp_file();
@@ -779,9 +794,14 @@ fn test_stake_authorize_with_fee_payer() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 100_000)
-        .unwrap();
-    check_balance(100_000, &rpc_client, &config.keypair.pubkey());
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        100_000,
+    )
+    .unwrap();
+    check_balance(100_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &payer_pubkey, 100_000).unwrap();
     check_balance(100_000, &rpc_client, &payer_pubkey);
@@ -813,7 +833,7 @@ fn test_stake_authorize_with_fee_payer() {
     check_balance(
         50_000 - SIG_FEE - SIG_FEE,
         &rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
     );
 
     // Assign authority with separate fee payer
@@ -833,7 +853,7 @@ fn test_stake_authorize_with_fee_payer() {
     check_balance(
         50_000 - SIG_FEE - SIG_FEE,
         &rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
     );
     // `config_payer` however has paid `config`'s authority sig
     // and `config_payer`'s fee sig
@@ -875,7 +895,7 @@ fn test_stake_authorize_with_fee_payer() {
     check_balance(
         50_000 - SIG_FEE - SIG_FEE,
         &rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
     );
     // `config_offline` however has paid 1 sig due to being both authority
     // and fee payer
@@ -910,9 +930,14 @@ fn test_stake_split() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 500_000)
-        .unwrap();
-    check_balance(500_000, &rpc_client, &config.keypair.pubkey());
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        500_000,
+    )
+    .unwrap();
+    check_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
     check_balance(100_000, &rpc_client, &offline_pubkey);
@@ -1040,9 +1065,14 @@ fn test_stake_set_lockup() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 500_000)
-        .unwrap();
-    check_balance(500_000, &rpc_client, &config.keypair.pubkey());
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        500_000,
+    )
+    .unwrap();
+    check_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
     check_balance(100_000, &rpc_client, &offline_pubkey);
@@ -1058,7 +1088,7 @@ fn test_stake_set_lockup() {
     write_keypair(&stake_keypair, tmp_file.as_file_mut()).unwrap();
 
     let mut lockup = Lockup::default();
-    lockup.custodian = config.keypair.pubkey();
+    lockup.custodian = config.signers[0].pubkey();
 
     config.command = CliCommand::CreateStakeAccount {
         stake_account: Rc::new(read_keypair_file(&stake_keypair_file).unwrap().into()),
@@ -1104,7 +1134,7 @@ fn test_stake_set_lockup() {
         StakeState::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
-    lockup.custodian = config.keypair.pubkey(); // Default new_custodian is config.keypair
+    lockup.custodian = config.signers[0].pubkey(); // Default new_custodian is config.signers[0]
     assert_eq!(current_lockup, lockup);
 
     // Set custodian to another pubkey
@@ -1252,7 +1282,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config = CliConfig::default();
-    config.keypair = keypair_from_seed(&[1u8; 32]).unwrap().into();
+    config.signers[0] = keypair_from_seed(&[1u8; 32]).unwrap().into();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_offline = CliConfig::default();
@@ -1263,9 +1293,14 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     // Verfiy that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &config.keypair.pubkey(), 200_000)
-        .unwrap();
-    check_balance(200_000, &rpc_client, &config.keypair.pubkey());
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        200_000,
+    )
+    .unwrap();
+    check_balance(200_000, &rpc_client, &config.signers[0].pubkey());
 
     request_and_confirm_airdrop(
         &rpc_client,

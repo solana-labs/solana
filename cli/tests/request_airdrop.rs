@@ -27,7 +27,7 @@ fn test_cli_request_airdrop() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let balance = rpc_client
-        .retry_get_balance(&bob_config.keypair.pubkey(), 1)
+        .retry_get_balance(&bob_config.signers[0].pubkey(), 1)
         .unwrap()
         .unwrap();
     assert_eq!(balance, 50);

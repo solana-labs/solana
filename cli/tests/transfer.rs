@@ -53,7 +53,7 @@ fn test_transfer() {
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    let sender_pubkey = config.keypair.pubkey();
+    let sender_pubkey = config.signers[0].pubkey();
     let recipient_pubkey = Pubkey::new(&[1u8; 32]);
     println!("sender: {:?}", sender_pubkey);
     println!("recipient: {:?}", recipient_pubkey);

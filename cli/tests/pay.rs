@@ -347,14 +347,14 @@ fn test_nonced_pay_tx() {
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         50 + minimum_nonce_balance,
     )
     .unwrap();
     check_balance(
         50 + minimum_nonce_balance,
         &rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
     );
 
     // Create nonce account
@@ -364,12 +364,12 @@ fn test_nonced_pay_tx() {
     config.command = CliCommand::CreateNonceAccount {
         nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
         seed: None,
-        nonce_authority: Some(config.keypair.pubkey()),
+        nonce_authority: Some(config.signers[0].pubkey()),
         lamports: minimum_nonce_balance,
     };
     process_command(&config).unwrap();
 
-    check_balance(50, &rpc_client, &config.keypair.pubkey());
+    check_balance(50, &rpc_client, &config.signers[0].pubkey());
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
@@ -390,7 +390,7 @@ fn test_nonced_pay_tx() {
     });
     process_command(&config).expect("failed to process pay command");
 
-    check_balance(40, &rpc_client, &config.keypair.pubkey());
+    check_balance(40, &rpc_client, &config.signers[0].pubkey());
     check_balance(10, &rpc_client, &bob_pubkey);
 
     // Verify that nonce has been used

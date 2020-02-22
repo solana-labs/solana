@@ -1,7 +1,8 @@
 use crate::{
     ledger::get_ledger_from_info,
     remote_wallet::{
-        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletType,
+        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+        RemoteWalletType,
     },
 };
 use solana_sdk::{
@@ -44,13 +45,14 @@ impl Signer for RemoteKeypair {
 pub fn generate_remote_keypair(
     path: String,
     explicit_derivation_path: Option<DerivationPath>,
+    wallet_manager: &RemoteWalletManager,
 ) -> Result<RemoteKeypair, RemoteWalletError> {
     let (remote_wallet_info, mut derivation_path) = RemoteWalletInfo::parse_path(path)?;
     if let Some(derivation) = explicit_derivation_path {
         derivation_path = derivation;
     }
     if remote_wallet_info.manufacturer == "ledger" {
-        let ledger = get_ledger_from_info(remote_wallet_info)?;
+        let ledger = get_ledger_from_info(remote_wallet_info, wallet_manager)?;
         Ok(RemoteKeypair {
             wallet_type: RemoteWalletType::Ledger(ledger),
             derivation_path,
