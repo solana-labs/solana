@@ -565,7 +565,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
          Shred version: {}\n\
          Hashes per tick: {:?}\n\
          Slots per epoch: {}\n\
-         Warmup epochs: {}abled\n
+         Warmup epochs: {}abled\n\
          {:?}\n\
          {:?}\n\
          Capitalization: {} SOL in {} accounts\n\
