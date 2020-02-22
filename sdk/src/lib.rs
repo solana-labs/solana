@@ -64,8 +64,6 @@ pub mod program_error;
 
 // Modules not usable by on-chain programs
 #[cfg(not(feature = "program"))]
-pub mod bank_hash;
-#[cfg(not(feature = "program"))]
 pub mod client;
 #[cfg(not(feature = "program"))]
 pub mod genesis_config;

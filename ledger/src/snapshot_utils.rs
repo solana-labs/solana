@@ -104,7 +104,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_hard_links_dir,
         snapshot_storages,
         snapshot_package_output_file.as_ref().to_path_buf(),
-        bank.hash(),
+        bank.get_accounts_hash(),
     );
 
     Ok(package)
@@ -324,6 +324,7 @@ pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_storages: &[SnapshotStorage],
 ) -> Result<SlotSnapshotPaths> {
     bank.purge_zero_lamport_accounts();
+    bank.update_accounts_hash();
     let slot = bank.slot();
     // snapshot_path/slot
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
