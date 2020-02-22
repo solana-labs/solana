@@ -1,6 +1,6 @@
 [package]
 name = "solana-sdk-macro"
-version = "1.0.0"
+version = "1.1.0"
 description = "Solana SDK Macro"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
