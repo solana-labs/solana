@@ -2408,8 +2408,8 @@ mod tests {
         assert_eq!(indexes, vec![0, 0]);
 
         // Signers with the same pubkey are not distinct
-        let keypair0 = Keypair::new();
-        let keypair1 = keypair_from_seed(&[1u8; 32]).unwrap();
+        let keypair0 = keypair_from_seed(&[2u8; 32]).unwrap();
+        let keypair1 = keypair_from_seed(&[3u8; 32]).unwrap();
         let message = vec![0, 1, 2, 3];
         let presigner0 = Presigner::new(&keypair0.pubkey(), &keypair0.sign_message(&message));
         let presigner1 = Presigner::new(&keypair1.pubkey(), &keypair1.sign_message(&message));
