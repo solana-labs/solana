@@ -1019,22 +1019,16 @@ fn main() {
             };
 
             for (pubkey, slot_list) in index.iter() {
-                println!("Converting: {}", pubkey);
                 for (slot, _) in slot_list.iter() {
                     let ancestors = vec![(*slot, 1)].into_iter().collect();
-                    println!("loading");
-                    let mut account = root_bank
-                        .rc
-                        .accounts
-                        .load_slow(&ancestors, pubkey)
-                        .map(|(acc, _slot)| acc)
-                        .unwrap_or_else(|| panic!("Couldn't get account for pubkey {}", pubkey));
-                    println!("loading2");
-                    if account.owner == solana_vote_program::id() {
-                        VoteStateVersions::convert_from_raw(&mut account, pubkey);
-                        println!("loading3");
-                        root_bank.rc.accounts.store_slow(*slot, pubkey, &account);
-                        (*slot, pubkey, &account);
+                    let res = root_bank.rc.accounts.load_slow(&ancestors, pubkey);
+
+                    if let Some((mut account, _)) = res {
+                        if account.owner == solana_vote_program::id() {
+                            VoteStateVersions::convert_from_raw(&mut account, pubkey);
+                            root_bank.rc.accounts.store_slow(*slot, pubkey, &account);
+                            (*slot, pubkey, &account);
+                        }
                     }
                 }
             }
