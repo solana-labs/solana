@@ -1,6 +1,6 @@
 use crate::cli::{
     check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, CliCommand,
-    CliCommandInfo, CliConfig, CliError, ProcessResult,
+    CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_from_path};
@@ -108,6 +108,7 @@ pub fn parse_storage_create_archiver_account(
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
+            storage_account: 1,
             account_type: StorageAccountType::Archiver,
         },
         signers: vec![
@@ -127,6 +128,7 @@ pub fn parse_storage_create_validator_account(
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
+            storage_account: 1,
             account_type: StorageAccountType::Validator,
         },
         signers: vec![
@@ -170,10 +172,11 @@ pub fn parse_storage_get_account_command(
 pub fn process_create_storage_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
+    storage_account: SignerIndex,
     account_owner: &Pubkey,
     account_type: StorageAccountType,
 ) -> ProcessResult {
-    let storage_account = config.signers[1];
+    let storage_account = config.signers[storage_account];
     let storage_account_pubkey = storage_account.pubkey();
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
@@ -312,6 +315,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
+                    storage_account: 1,
                     account_type: StorageAccountType::Archiver,
                 },
                 signers: vec![
@@ -343,6 +347,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
+                    storage_account: 1,
                     account_type: StorageAccountType::Validator,
                 },
                 signers: vec![

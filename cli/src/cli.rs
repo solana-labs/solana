@@ -321,6 +321,7 @@ pub enum CliCommand {
     // Storage Commands
     CreateStorageAccount {
         account_owner: Pubkey,
+        storage_account: SignerIndex,
         account_type: StorageAccountType,
     },
     ClaimStorageReward {
@@ -1737,8 +1738,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create storage account
         CliCommand::CreateStorageAccount {
             account_owner,
+            storage_account,
             account_type,
-        } => process_create_storage_account(&rpc_client, config, &account_owner, *account_type),
+        } => process_create_storage_account(
+            &rpc_client,
+            config,
+            *storage_account,
+            &account_owner,
+            *account_type,
+        ),
         CliCommand::ClaimStorageReward {
             node_account_pubkey,
             storage_account_pubkey,
