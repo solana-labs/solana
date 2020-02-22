@@ -15,14 +15,15 @@ use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
-    input_parsers::*, input_validators::*, offline::SIGN_ONLY_ARG, ArgConstant,
+    input_parsers::*, input_validators::*, keypair::signer_from_path, offline::SIGN_ONLY_ARG,
+    ArgConstant,
 };
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
 use solana_faucet::faucet_mock::request_airdrop_transaction;
-use solana_remote_wallet::remote_wallet::DerivationPath;
+use solana_remote_wallet::remote_wallet::{DerivationPath, RemoteWalletManager};
 use solana_sdk::{
     bpf_loader,
     clock::{Epoch, Slot},
@@ -46,11 +47,52 @@ use std::{
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
-    rc::Rc,
+    sync::Arc,
     thread::sleep,
     time::Duration,
     {error, fmt},
 };
+
+pub type CliSigners = Vec<Box<dyn Signer>>;
+pub type SignerIndex = usize;
+pub struct CliSignerInfo {
+    pub signers: CliSigners,
+    pub indexes: Vec<SignerIndex>,
+}
+
+pub fn generate_unique_signers(
+    bulk_signers: Vec<Option<Box<dyn Signer>>>,
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: &Option<Arc<RemoteWalletManager>>,
+) -> Result<CliSignerInfo, Box<dyn error::Error>> {
+    let mut unique_signers = vec![];
+    let mut indexes = vec![];
+
+    // Determine if the default signer is needed
+    if bulk_signers.iter().any(|signer| signer.is_none()) {
+        let default_signer =
+            signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?;
+        unique_signers.push(default_signer);
+    }
+
+    for signer in bulk_signers.into_iter() {
+        if let Some(signer) = signer {
+            if let Some(index) = unique_signers.iter().position(|s| s == &signer) {
+                indexes.push(index);
+            } else {
+                unique_signers.push(signer);
+                indexes.push(unique_signers.len() - 1);
+            }
+        } else {
+            indexes.push(0);
+        };
+    }
+    Ok(CliSignerInfo {
+        signers: unique_signers,
+        indexes,
+    })
+}
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
