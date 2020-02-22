@@ -251,7 +251,7 @@ fn test_rpc_subscriptions() {
     let timeout = Duration::from_secs(5);
     while !signature_set.is_empty() {
         assert!(now.elapsed().unwrap() < timeout);
-        match receiver.recv_timeout(Duration::from_millis(500)) {
+        match receiver.recv_timeout(Duration::from_secs(1)) {
             Ok((sig, result)) => {
                 assert!(result.is_ok());
                 assert!(signature_set.remove(&sig));
