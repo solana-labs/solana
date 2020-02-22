@@ -988,6 +988,12 @@ fn main() {
                 }
             }
 
+            for (pubkey, (_, vote_account)) in
+                root_bank.stakes.write().unwrap().vote_accounts.iter_mut()
+            {
+                VoteStateVersions::convert_from_raw(vote_account, &pubkey);
+            }
+
             let index: Vec<_> = {
                 let index = root_bank
                     .rc
@@ -1027,7 +1033,8 @@ fn main() {
                     if account.owner == solana_vote_program::id() {
                         VoteStateVersions::convert_from_raw(&mut account, pubkey);
                         println!("loading3");
-                        root_bank.store_account_convert(*slot, pubkey, &account);
+                        root_bank.rc.accounts.store_slow(*slot, pubkey, &account);
+                        (*slot, pubkey, &account);
                     }
                 }
             }

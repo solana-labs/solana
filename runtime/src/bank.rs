@@ -317,7 +317,7 @@ pub struct Bank {
     inflation: Arc<RwLock<Inflation>>,
 
     /// cache of vote_account and stake_account state for this fork
-    stakes: RwLock<Stakes>,
+    pub stakes: RwLock<Stakes>,
 
     /// cache of validator and archiver storage accounts for this fork
     storage_accounts: RwLock<StorageAccounts>,
@@ -1680,21 +1680,6 @@ impl Bank {
                 .write()
                 .unwrap()
                 .store(pubkey, account);
-        }
-    }
-
-    pub fn store_account_convert(&self, slot: u64, pubkey: &Pubkey, account: &Account) {
-        self.rc.accounts.store_slow(slot, pubkey, account);
-
-        if slot == self.slot() {
-            if Stakes::is_stake(account) {
-                self.stakes.write().unwrap().store(pubkey, account);
-            } else if storage_utils::is_storage(account) {
-                self.storage_accounts
-                    .write()
-                    .unwrap()
-                    .store(pubkey, account);
-            }
         }
     }
 
