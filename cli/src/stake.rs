@@ -672,16 +672,6 @@ pub fn process_create_stake_account(
     fee_payer: Option<&dyn Signer>,
     from: Option<&dyn Signer>,
 ) -> ProcessResult {
-    // Offline derived address creation currently is not possible
-    // https://github.com/solana-labs/solana/pull/8252
-    if seed.is_some() && sign_only {
-        return Err(CliError::BadParameter(
-            "Offline stake account creation with derived addresses are not yet supported"
-                .to_string(),
-        )
-        .into());
-    }
-
     let stake_account_address = if let Some(seed) = seed {
         create_address_with_seed(&stake_account.pubkey(), &seed, &solana_stake_program::id())?
     } else {
