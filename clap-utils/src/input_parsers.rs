@@ -1,5 +1,5 @@
 use crate::keypair::{
-    keypair_from_seed_phrase, keypair_util_from_path, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+    keypair_from_seed_phrase, signer_from_path, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use chrono::DateTime;
 use clap::ArgMatches;
@@ -101,7 +101,7 @@ pub fn signer_of(
     matches: &ArgMatches<'_>,
 ) -> Result<Option<Box<dyn Signer>>, Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
-        keypair_util_from_path(matches, location, name).map(Some)
+        signer_from_path(matches, location, name).map(Some)
     } else {
         Ok(None)
     }

@@ -56,7 +56,7 @@ pub fn presigner_from_pubkey_sigs(
     })
 }
 
-pub fn keypair_util_from_path(
+pub fn signer_from_path(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,

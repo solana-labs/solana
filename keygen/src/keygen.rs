@@ -8,7 +8,7 @@ use num_cpus;
 use solana_clap_utils::{
     input_validators::is_derivation,
     keypair::{
-        keypair_from_seed_phrase, keypair_util_from_path, prompt_passphrase,
+        keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
@@ -59,7 +59,7 @@ fn get_keypair_from_matches(
         path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
-    keypair_util_from_path(matches, path, "pubkey recovery")
+    signer_from_path(matches, path, "pubkey recovery")
 }
 
 fn output_keypair(
