@@ -714,6 +714,13 @@ fn main() {
                     .help("Output directory for the snapshot"),
             )
         ).subcommand(
+            SubCommand::with_name("verify-snapshot")
+            .about("Convert accounts in snapshot")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
+        ).subcommand(
             SubCommand::with_name("convert-accounts")
             .about("Convert accounts in snapshot")
             .arg(&no_snapshot_arg)
@@ -976,6 +983,9 @@ fn main() {
                     exit(1);
                 }
             }
+        }
+        ("verify-snapshot", Some(arg_matches)) => {
+            load_bank_from_snapshot(arg_matches, &ledger_path);
         }
         ("convert-accounts", Some(arg_matches)) => {
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
