@@ -8,7 +8,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
-    input_validators::{is_keypair, is_pubkey_or_keypair},
+    input_validators::{is_keypair, is_pubkey, is_pubkey_or_keypair},
     keypair::{
         self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
@@ -32,6 +32,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use std::{
+    collections::HashSet,
     fs::{self, File},
     io::{self, Read},
     net::{SocketAddr, TcpListener},
@@ -201,6 +202,7 @@ fn get_rpc_addr(
     identity_keypair: &Arc<Keypair>,
     entrypoint_gossip: &SocketAddr,
     expected_shred_version: Option<u16>,
+    trusted_validators: Option<&HashSet<Pubkey>>,
     snapshot_not_required: bool,
 ) -> (RpcClient, SocketAddr) {
     let mut cluster_info = ClusterInfo::new(
@@ -247,6 +249,22 @@ fn get_rpc_addr(
             }
         }
 
+        let trusted_slots = if let Some(trusted_validators) = trusted_validators {
+            let trusted_slots = HashSet::new();
+            for trusted_validator in trusted_validators {
+                if let Some(slot_hash) = cluster_info
+                    .read()
+                    .unwrap()
+                    .get_snapshot_hash_for_node(trusted_validator)
+                {
+                    trusted_slots.union(&slot_hash.iter().collect());
+                }
+            }
+            Some(trusted_slots)
+        } else {
+            None
+        };
+
         if rpc_peers.is_empty() {
             info!("No RPC services found ");
         } else {
@@ -262,9 +280,16 @@ fn get_rpc_addr(
                         .unwrap()
                         .get_snapshot_hash_for_node(&rpc_peer.id)
                     {
-                        let highest_snapshot_slot_for_node = snapshot_hash
-                            .iter()
-                            .fold(0, |a, (slot, _hash)| a.max(*slot));
+                        let highest_snapshot_slot_for_node =
+                            snapshot_hash.iter().fold(0, |highest_slot, snapshot_hash| {
+                                if let Some(ref trusted_slots) = trusted_slots {
+                                    if !trusted_slots.contains(snapshot_hash) {
+                                        // Ignore all untrusted slots
+                                        return highest_slot;
+                                    }
+                                }
+                                highest_slot.max(snapshot_hash.0)
+                            });
 
                         if highest_snapshot_slot_for_node > highest_snapshot_slot {
                             // Found a higher snapshot, remove all rpc peers with a lower snapshot
@@ -682,6 +707,16 @@ pub fn main() {
                 .takes_value(true)
                 .help("Add a hard fork at this slot"),
         )
+        .arg(
+            Arg::with_name("trusted_validators")
+                .long("trusted-validator")
+                .validator(is_pubkey)
+                .value_name("PUBKEY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A snapshot hash must be published in gossip by this validator to be accepted. \
+                       May be specified multiple times. If unspecified any snapshot hash will be accepted"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(
@@ -722,6 +757,13 @@ pub fn main() {
         eprintln!("Unable to access ledger path: {:?}", err);
         exit(1);
     });
+
+    let trusted_validators = if matches.is_present("trusted_validators") {
+        let trusted_validators = values_t_or_exit!(matches, "trusted_validators", Pubkey);
+        Some(trusted_validators.into_iter().collect())
+    } else {
+        None
+    };
 
     let mut validator_config = ValidatorConfig {
         blockstream_unix_socket: matches
@@ -794,6 +836,7 @@ pub fn main() {
         },
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
+        trusted_validators,
     });
 
     if matches.is_present("limit_ledger_size") {
@@ -956,6 +999,12 @@ pub fn main() {
                 &identity_keypair,
                 &cluster_entrypoint.gossip,
                 validator_config.expected_shred_version,
+                validator_config
+                    .snapshot_config
+                    .as_ref()
+                    .unwrap()
+                    .trusted_validators
+                    .as_ref(),
                 no_snapshot_fetch,
             );
 

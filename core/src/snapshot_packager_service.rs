@@ -28,33 +28,37 @@ impl SnapshotPackagerService {
         let cluster_info = cluster_info.clone();
         let t_snapshot_packager = Builder::new()
             .name("solana-snapshot-packager".to_string())
-            .spawn(move || loop {
+            .spawn(move || {
                 let mut hashes = vec![];
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
-                    Ok(mut snapshot_package) => {
-                        hashes.push((snapshot_package.root, snapshot_package.hash));
-                        // Only package the latest
-                        while let Ok(new_snapshot_package) = snapshot_package_receiver.try_recv() {
-                            snapshot_package = new_snapshot_package;
-                            hashes.push((snapshot_package.root, snapshot_package.hash));
-                        }
-                        if let Err(err) = archive_snapshot_package(&snapshot_package) {
-                            warn!("Failed to create snapshot archive: {}", err);
-                        }
-                        while hashes.len() > MAX_SNAPSHOT_HASHES {
-                            hashes.remove(0);
-                        }
-                        cluster_info
-                            .write()
-                            .unwrap()
-                            .push_snapshot_hashes(hashes.clone());
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
                     }
-                    Err(RecvTimeoutError::Disconnected) => break,
-                    Err(RecvTimeoutError::Timeout) => (),
+
+                    match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
+                        Ok(mut snapshot_package) => {
+                            hashes.push((snapshot_package.root, snapshot_package.hash));
+                            // Only package the latest
+                            while let Ok(new_snapshot_package) =
+                                snapshot_package_receiver.try_recv()
+                            {
+                                snapshot_package = new_snapshot_package;
+                                hashes.push((snapshot_package.root, snapshot_package.hash));
+                            }
+                            if let Err(err) = archive_snapshot_package(&snapshot_package) {
+                                warn!("Failed to create snapshot archive: {}", err);
+                            }
+                            while hashes.len() > MAX_SNAPSHOT_HASHES {
+                                hashes.remove(0);
+                            }
+                            cluster_info
+                                .write()
+                                .unwrap()
+                                .push_snapshot_hashes(hashes.clone());
+                        }
+                        Err(RecvTimeoutError::Disconnected) => break,
+                        Err(RecvTimeoutError::Timeout) => (),
+                    }
                 }
             })
             .unwrap();
