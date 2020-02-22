@@ -1,6 +1,6 @@
 [package]
 name = "solana-ledger"
-version = "1.0.0"
+version = "1.1.0"
 description = "Solana ledger"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -26,19 +26,19 @@ rayon = "1.2.0"
 reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
 serde = "1.0.104"
 serde_bytes = "0.11.3"
-solana-client = { path = "../client", version = "1.0.0" }
-solana-genesis-programs = { path = "../genesis-programs", version = "1.0.0" }
-solana-logger = { path = "../logger", version = "1.0.0" }
-solana-measure = { path = "../measure", version = "1.0.0" }
-solana-merkle-tree = { path = "../merkle-tree", version = "1.0.0" }
-solana-metrics = { path = "../metrics", version = "1.0.0" }
-solana-perf = { path = "../perf", version = "1.0.0" }
+solana-client = { path = "../client", version = "1.1.0" }
+solana-genesis-programs = { path = "../genesis-programs", version = "1.1.0" }
+solana-logger = { path = "../logger", version = "1.1.0" }
+solana-measure = { path = "../measure", version = "1.1.0" }
+solana-merkle-tree = { path = "../merkle-tree", version = "1.1.0" }
+solana-metrics = { path = "../metrics", version = "1.1.0" }
+solana-perf = { path = "../perf", version = "1.1.0" }
 ed25519-dalek = "1.0.0-pre.1"
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.0.0" }
-solana-runtime = { path = "../runtime", version = "1.0.0" }
-solana-sdk = { path = "../sdk", version = "1.0.0" }
-solana-stake-program = { path = "../programs/stake", version = "1.0.0" }
-solana-vote-program = { path = "../programs/vote", version = "1.0.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.1.0" }
+solana-runtime = { path = "../runtime", version = "1.1.0" }
+solana-sdk = { path = "../sdk", version = "1.1.0" }
+solana-stake-program = { path = "../programs/stake", version = "1.1.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.1.0" }
 sys-info = "0.5.9"
 symlink = "0.1.0"
 tar = "0.4.26"
@@ -56,7 +56,7 @@ features = ["lz4"]
 [dev-dependencies]
 assert_matches = "1.3.0"
 matches = "0.1.6"
-solana-budget-program = { path = "../programs/budget", version = "1.0.0" }
+solana-budget-program = { path = "../programs/budget", version = "1.1.0" }
 
 [lib]
 crate-type = ["lib"]
