@@ -2,7 +2,7 @@ use crate::{
     cli::{
         build_balance_message, check_account_for_fee, check_unique_pubkeys, fee_payer_arg,
         generate_unique_signers, log_instruction_custom_error, nonce_authority_arg, return_signers,
-        CliCommand, CliCommandInfo, CliConfig, CliError, CliSignerInfo, ProcessResult, SignerIndex,
+        signer_pubkey, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex,
         FEE_PAYER_ARG,
     },
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
@@ -428,12 +428,16 @@ pub fn parse_stake_create_account(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
     let fee_payer = signer_of(FEE_PAYER_ARG.name, matches, wallet_manager)?;
+    let fee_payer_pubkey = signer_pubkey(&fee_payer);
     let from = signer_of("from", matches, wallet_manager)?;
-    let stake_account = signer_of("stake_account", matches, wallet_manager)?.unwrap();
+    let from_pubkey = signer_pubkey(&from);
+    let stake_account = signer_of("stake_account", matches, wallet_manager)?;
+    let stake_account_pubkey = signer_pubkey(&stake_account);
 
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
-        vec![nonce_authority, fee_payer, from, Some(stake_account)],
+    let signer_info = generate_unique_signers(
+        vec![nonce_authority, fee_payer, from, stake_account],
         matches,
         default_signer_path,
         wallet_manager,
@@ -441,7 +445,7 @@ pub fn parse_stake_create_account(
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
-            stake_account: indexes[3],
+            stake_account: signer_info.index_of(stake_account_pubkey).unwrap(),
             seed,
             staker,
             withdrawer,
@@ -454,11 +458,11 @@ pub fn parse_stake_create_account(
             sign_only,
             blockhash_query,
             nonce_account,
-            nonce_authority: indexes[0],
-            fee_payer: indexes[1],
-            from: indexes[2],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            from: signer_info.index_of(from_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -474,10 +478,13 @@ pub fn parse_stake_delegate_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority = signer_of(STAKE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let stake_authority_pubkey = signer_pubkey(&stake_authority);
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
     let fee_payer = signer_of(FEE_PAYER_ARG.name, matches, wallet_manager)?;
+    let fee_payer_pubkey = signer_pubkey(&fee_payer);
 
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![stake_authority, nonce_authority, fee_payer],
         matches,
         default_signer_path,
@@ -488,15 +495,15 @@ pub fn parse_stake_delegate_stake(
         command: CliCommand::DelegateStake {
             stake_account_pubkey,
             vote_account_pubkey,
-            stake_authority: indexes[0],
+            stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             force,
             sign_only,
             blockhash_query,
             nonce_account,
-            nonce_authority: indexes[1],
-            fee_payer: indexes[2],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -514,12 +521,15 @@ pub fn parse_stake_authorize(
     };
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let authority = signer_of(authority_flag, matches, wallet_manager)?;
+    let authority_pubkey = signer_pubkey(&authority);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
     let fee_payer = signer_of(FEE_PAYER_ARG.name, matches, wallet_manager)?;
+    let fee_payer_pubkey = signer_pubkey(&fee_payer);
 
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![authority, nonce_authority, fee_payer],
         matches,
         default_signer_path,
@@ -531,14 +541,14 @@ pub fn parse_stake_authorize(
             stake_account_pubkey,
             new_authorized_pubkey,
             stake_authorize,
-            authority: indexes[0],
+            authority: signer_info.index_of(authority_pubkey).unwrap(),
             sign_only,
             blockhash_query,
             nonce_account,
-            nonce_authority: indexes[1],
-            fee_payer: indexes[2],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -548,7 +558,8 @@ pub fn parse_split_stake(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let split_stake_account = signer_of("split_stake_account", matches, wallet_manager)?.unwrap();
+    let split_stake_account = signer_of("split_stake_account", matches, wallet_manager)?;
+    let split_stake_account_pubkey = signer_pubkey(&split_stake_account);
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
 
@@ -556,15 +567,18 @@ pub fn parse_split_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority = signer_of(STAKE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let stake_authority_pubkey = signer_pubkey(&stake_authority);
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
     let fee_payer = signer_of(FEE_PAYER_ARG.name, matches, wallet_manager)?;
+    let fee_payer_pubkey = signer_pubkey(&fee_payer);
 
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![
             stake_authority,
             nonce_authority,
             fee_payer,
-            Some(split_stake_account),
+            split_stake_account,
         ],
         matches,
         default_signer_path,
@@ -574,17 +588,17 @@ pub fn parse_split_stake(
     Ok(CliCommandInfo {
         command: CliCommand::SplitStake {
             stake_account_pubkey,
-            stake_authority: indexes[0],
+            stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
             blockhash_query,
             nonce_account,
-            nonce_authority: indexes[1],
-            split_stake_account: indexes[3],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            split_stake_account: signer_info.index_of(split_stake_account_pubkey).unwrap(),
             seed,
             lamports,
-            fee_payer: indexes[2],
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -598,10 +612,13 @@ pub fn parse_stake_deactivate_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let stake_authority = signer_of(STAKE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let stake_authority_pubkey = signer_pubkey(&stake_authority);
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
     let fee_payer = signer_of(FEE_PAYER_ARG.name, matches, wallet_manager)?;
+    let fee_payer_pubkey = signer_pubkey(&fee_payer);
 
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![stake_authority, nonce_authority, fee_payer],
         matches,
         default_signer_path,
@@ -611,14 +628,14 @@ pub fn parse_stake_deactivate_stake(
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
             stake_account_pubkey,
-            stake_authority: indexes[0],
+            stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
             blockhash_query,
             nonce_account,
-            nonce_authority: indexes[1],
-            fee_payer: indexes[2],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -634,10 +651,13 @@ pub fn parse_stake_withdraw_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
     let withdraw_authority = signer_of(WITHDRAW_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let withdraw_authority_pubkey = signer_pubkey(&withdraw_authority);
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
     let fee_payer = signer_of(FEE_PAYER_ARG.name, matches, wallet_manager)?;
+    let fee_payer_pubkey = signer_pubkey(&fee_payer);
 
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![withdraw_authority, nonce_authority, fee_payer],
         matches,
         default_signer_path,
@@ -649,14 +669,14 @@ pub fn parse_stake_withdraw_stake(
             stake_account_pubkey,
             destination_account_pubkey,
             lamports,
-            withdraw_authority: indexes[0],
+            withdraw_authority: signer_info.index_of(withdraw_authority_pubkey).unwrap(),
             sign_only,
             blockhash_query,
             nonce_account,
-            nonce_authority: indexes[1],
-            fee_payer: indexes[2],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -675,10 +695,13 @@ pub fn parse_stake_set_lockup(
     let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
 
     let custodian = signer_of("custodian", matches, wallet_manager)?;
+    let custodian_pubkey = signer_pubkey(&custodian);
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
     let fee_payer = signer_of(FEE_PAYER_ARG.name, matches, wallet_manager)?;
+    let fee_payer_pubkey = signer_pubkey(&fee_payer);
 
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![custodian, nonce_authority, fee_payer],
         matches,
         default_signer_path,
@@ -693,14 +716,14 @@ pub fn parse_stake_set_lockup(
                 epoch,
                 unix_timestamp,
             },
-            custodian: indexes[0],
+            custodian: signer_info.index_of(custodian_pubkey).unwrap(),
             sign_only,
             blockhash_query,
             nonce_account,
-            nonce_authority: indexes[1],
-            fee_payer: indexes[2],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 

@@ -55,19 +55,29 @@ use std::{
 
 pub type CliSigners = Vec<Box<dyn Signer>>;
 pub type SignerIndex = usize;
-pub struct CliSignerInfo {
+pub(crate) struct CliSignerInfo {
     pub signers: CliSigners,
-    pub indexes: Vec<SignerIndex>,
 }
 
-pub fn generate_unique_signers(
+impl CliSignerInfo {
+    pub(crate) fn index_of(&self, pubkey: Option<Pubkey>) -> Option<usize> {
+        if let Some(pubkey) = pubkey {
+            self.signers
+                .iter()
+                .position(|signer| signer.pubkey() == pubkey)
+        } else {
+            Some(0)
+        }
+    }
+}
+
+pub(crate) fn generate_unique_signers(
     bulk_signers: Vec<Option<Box<dyn Signer>>>,
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
     let mut unique_signers = vec![];
-    let mut indexes = vec![];
 
     // Determine if the default signer is needed
     if bulk_signers.iter().any(|signer| signer.is_none()) {
@@ -78,20 +88,18 @@ pub fn generate_unique_signers(
 
     for signer in bulk_signers.into_iter() {
         if let Some(signer) = signer {
-            if let Some(index) = unique_signers.iter().position(|s| s == &signer) {
-                indexes.push(index);
-            } else {
+            if !unique_signers.iter().any(|s| s == &signer) {
                 unique_signers.push(signer);
-                indexes.push(unique_signers.len() - 1);
             }
-        } else {
-            indexes.push(0);
-        };
+        }
     }
     Ok(CliSignerInfo {
         signers: unique_signers,
-        indexes,
     })
+}
+
+pub(crate) fn signer_pubkey(signer: &Option<Box<dyn Signer>>) -> Option<Pubkey> {
+    signer.as_ref().map(|signer| signer.pubkey())
 }
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
@@ -730,9 +738,10 @@ pub fn parse_command(
             let blockhash_query = BlockhashQuery::new_from_matches(&matches);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
             let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches, wallet_manager)?;
+            let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
 
             let payer_provided = None;
-            let CliSignerInfo { signers, indexes } = generate_unique_signers(
+            let signer_info = generate_unique_signers(
                 vec![payer_provided, nonce_authority],
                 matches,
                 default_signer_path,
@@ -750,9 +759,9 @@ pub fn parse_command(
                     sign_only,
                     blockhash_query,
                     nonce_account,
-                    nonce_authority: indexes[1],
+                    nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
                 }),
-                signers,
+                signers: signer_info.signers,
             })
         }
         ("account", Some(matches)) => {
@@ -809,10 +818,13 @@ pub fn parse_command(
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
             let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
             let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches, wallet_manager)?;
+            let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
             let fee_payer = signer_of(FEE_PAYER_ARG.name, &matches, wallet_manager)?;
+            let fee_payer_pubkey = signer_pubkey(&fee_payer);
             let from = signer_of("from", &matches, wallet_manager)?;
+            let from_pubkey = signer_pubkey(&from);
 
-            let CliSignerInfo { signers, indexes } = generate_unique_signers(
+            let signer_info = generate_unique_signers(
                 vec![nonce_authority, fee_payer, from],
                 matches,
                 default_signer_path,
@@ -826,11 +838,11 @@ pub fn parse_command(
                     sign_only,
                     blockhash_query,
                     nonce_account,
-                    nonce_authority: indexes[0],
-                    fee_payer: indexes[1],
-                    from: indexes[2],
+                    nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+                    fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+                    from: signer_info.index_of(from_pubkey).unwrap(),
                 },
-                signers,
+                signers: signer_info.signers,
             })
         }
         //
@@ -2388,49 +2400,61 @@ mod tests {
         let default_keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
 
-        let CliSignerInfo { signers, indexes } =
+        let signer_info =
             generate_unique_signers(vec![], &matches, &default_keypair_file, None).unwrap();
-        assert_eq!(signers.len(), 0);
-        assert_eq!(indexes.len(), 0);
+        assert_eq!(signer_info.signers.len(), 0);
 
-        let CliSignerInfo { signers, indexes } =
+        let signer_info =
             generate_unique_signers(vec![None, None], &matches, &default_keypair_file, None)
                 .unwrap();
-        assert_eq!(signers.len(), 1);
-        assert_eq!(indexes, vec![0, 0]);
+        assert_eq!(signer_info.signers.len(), 1);
+        assert_eq!(signer_info.index_of(None), Some(0));
+        assert_eq!(signer_info.index_of(Some(Pubkey::new_rand())), None);
 
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
+        let keypair0_pubkey = keypair0.pubkey();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
+        let keypair0_clone_pubkey = keypair0.pubkey();
         let signers = vec![None, Some(keypair0.into()), Some(keypair0_clone.into())];
-        let CliSignerInfo { signers, indexes } =
+        let signer_info =
             generate_unique_signers(signers, &matches, &default_keypair_file, None).unwrap();
-        assert_eq!(signers.len(), 2);
-        assert_eq!(indexes, vec![0, 1, 1]);
+        assert_eq!(signer_info.signers.len(), 2);
+        assert_eq!(signer_info.index_of(None), Some(0));
+        assert_eq!(signer_info.index_of(Some(keypair0_pubkey)), Some(1));
+        assert_eq!(signer_info.index_of(Some(keypair0_clone_pubkey)), Some(1));
 
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
+        let keypair0_pubkey = keypair0.pubkey();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
         let signers = vec![Some(keypair0.into()), Some(keypair0_clone.into())];
-        let CliSignerInfo { signers, indexes } =
+        let signer_info =
             generate_unique_signers(signers, &matches, &default_keypair_file, None).unwrap();
-        assert_eq!(signers.len(), 1);
-        assert_eq!(indexes, vec![0, 0]);
+        assert_eq!(signer_info.signers.len(), 1);
+        assert_eq!(signer_info.index_of(Some(keypair0_pubkey)), Some(0));
 
         // Signers with the same pubkey are not distinct
         let keypair0 = keypair_from_seed(&[2u8; 32]).unwrap();
+        let keypair0_pubkey = keypair0.pubkey();
         let keypair1 = keypair_from_seed(&[3u8; 32]).unwrap();
+        let keypair1_pubkey = keypair1.pubkey();
         let message = vec![0, 1, 2, 3];
         let presigner0 = Presigner::new(&keypair0.pubkey(), &keypair0.sign_message(&message));
+        let presigner0_pubkey = presigner0.pubkey();
         let presigner1 = Presigner::new(&keypair1.pubkey(), &keypair1.sign_message(&message));
+        let presigner1_pubkey = presigner1.pubkey();
         let signers = vec![
             Some(keypair0.into()),
             Some(presigner0.into()),
             Some(presigner1.into()),
             Some(keypair1.into()),
         ];
-        let CliSignerInfo { signers, indexes } =
+        let signer_info =
             generate_unique_signers(signers, &matches, &default_keypair_file, None).unwrap();
-        assert_eq!(signers.len(), 2);
-        assert_eq!(indexes, vec![0, 0, 1, 1]);
+        assert_eq!(signer_info.signers.len(), 2);
+        assert_eq!(signer_info.index_of(Some(keypair0_pubkey)), Some(0));
+        assert_eq!(signer_info.index_of(Some(keypair1_pubkey)), Some(1));
+        assert_eq!(signer_info.index_of(Some(presigner0_pubkey)), Some(0));
+        assert_eq!(signer_info.index_of(Some(presigner1_pubkey)), Some(1));
     }
 
     #[test]

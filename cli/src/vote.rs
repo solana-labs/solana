@@ -190,7 +190,7 @@ pub fn parse_vote_create_account(
     let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer");
 
     let payer_provided = None;
-    let CliSignerInfo { signers, .. } = generate_unique_signers(
+    let CliSignerInfo { signers } = generate_unique_signers(
         vec![payer_provided, Some(Box::new(vote_account))],
         matches,
         default_signer_path,
@@ -219,7 +219,7 @@ pub fn parse_vote_authorize(
     let new_authorized_pubkey = pubkey_of(matches, "new_authorized_pubkey").unwrap();
 
     let authorized_voter_provided = None;
-    let CliSignerInfo { signers, .. } = generate_unique_signers(
+    let CliSignerInfo { signers } = generate_unique_signers(
         vec![authorized_voter_provided],
         matches,
         default_signer_path,
@@ -246,7 +246,7 @@ pub fn parse_vote_update_validator(
     let authorized_voter = keypair_of(matches, "authorized_voter").unwrap();
 
     let payer_provided = None;
-    let CliSignerInfo { signers, .. } = generate_unique_signers(
+    let CliSignerInfo { signers } = generate_unique_signers(
         vec![payer_provided, Some(Box::new(authorized_voter))],
         matches,
         default_signer_path,

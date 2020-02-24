@@ -1,6 +1,6 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, CliSignerInfo,
+    log_instruction_custom_error, signer_pubkey, CliCommand, CliCommandInfo, CliConfig, CliError,
     ProcessResult, SignerIndex,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
@@ -226,9 +226,10 @@ pub fn parse_authorize_nonce_account(
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let new_authority = pubkey_of(matches, "new_authority").unwrap();
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
 
     let payer_provided = None;
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![payer_provided, nonce_authority],
         matches,
         default_signer_path,
@@ -238,10 +239,10 @@ pub fn parse_authorize_nonce_account(
     Ok(CliCommandInfo {
         command: CliCommand::AuthorizeNonceAccount {
             nonce_account,
-            nonce_authority: indexes[1],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             new_authority,
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -250,14 +251,15 @@ pub fn parse_nonce_create_account(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let nonce_account = signer_of("nonce_account_keypair", matches, wallet_manager)?.unwrap();
+    let nonce_account = signer_of("nonce_account_keypair", matches, wallet_manager)?;
+    let nonce_account_pubkey = signer_pubkey(&nonce_account);
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let nonce_authority = pubkey_of(matches, NONCE_AUTHORITY_ARG.name);
 
     let payer_provided = None;
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
-        vec![payer_provided, Some(nonce_account)],
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, nonce_account],
         matches,
         default_signer_path,
         wallet_manager,
@@ -265,12 +267,12 @@ pub fn parse_nonce_create_account(
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateNonceAccount {
-            nonce_account: indexes[1],
+            nonce_account: signer_info.index_of(nonce_account_pubkey).unwrap(),
             seed,
             nonce_authority,
             lamports,
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -290,9 +292,10 @@ pub fn parse_new_nonce(
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
 
     let payer_provided = None;
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![payer_provided, nonce_authority],
         matches,
         default_signer_path,
@@ -302,9 +305,9 @@ pub fn parse_new_nonce(
     Ok(CliCommandInfo {
         command: CliCommand::NewNonce {
             nonce_account,
-            nonce_authority: indexes[1],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -330,9 +333,10 @@ pub fn parse_withdraw_from_nonce_account(
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
+    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
 
     let payer_provided = None;
-    let CliSignerInfo { signers, indexes } = generate_unique_signers(
+    let signer_info = generate_unique_signers(
         vec![payer_provided, nonce_authority],
         matches,
         default_signer_path,
@@ -342,11 +346,11 @@ pub fn parse_withdraw_from_nonce_account(
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawFromNonceAccount {
             nonce_account,
-            nonce_authority: indexes[1],
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             destination_account_pubkey,
             lamports,
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
