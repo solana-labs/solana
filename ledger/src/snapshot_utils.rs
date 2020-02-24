@@ -3,6 +3,7 @@ use bincode::serialize_into;
 use bzip2::bufread::BzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
+use regex::Regex;
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::{SnapshotStorage, SnapshotStorages},
@@ -11,7 +12,7 @@ use solana_runtime::{
         MAX_SNAPSHOT_DATA_FILE_SIZE,
     },
 };
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     cmp::Ordering,
     env,
@@ -204,6 +205,13 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     // can fetch this newly packaged snapshot
     let metadata = fs::metadata(&archive_path)?;
     fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
+
+    // Keep around at most two snapshot archives
+    let archives = get_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
+    for old_archive in archives.into_iter().skip(2) {
+        fs::remove_file(old_archive.0)
+            .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
+    }
 
     timer.stop();
     info!(
@@ -497,8 +505,59 @@ fn is_snapshot_compression_disabled() -> bool {
     }
 }
 
-pub fn get_snapshot_archive_path<P: AsRef<Path>>(snapshot_output_dir: P) -> PathBuf {
-    snapshot_output_dir.as_ref().join("snapshot.tar.bz2")
+pub fn get_snapshot_archive_path<P: AsRef<Path>>(
+    snapshot_output_dir: P,
+    snapshot_hash: &(Slot, Hash),
+) -> PathBuf {
+    snapshot_output_dir.as_ref().join(format!(
+        "snapshot-{}-{}.tar.bz2",
+        snapshot_hash.0, snapshot_hash.1
+    ))
+}
+
+fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash)> {
+    let snapshot_filename_regex = Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.tar\.bz2$").unwrap();
+
+    if let Some(captures) = snapshot_filename_regex.captures(archive_filename) {
+        let slot_str = captures.get(1).unwrap().as_str();
+        let hash_str = captures.get(2).unwrap().as_str();
+
+        if let (Ok(slot), Ok(hash)) = (slot_str.parse::<Slot>(), hash_str.parse::<Hash>()) {
+            return Some((slot, hash));
+        }
+    }
+    None
+}
+
+fn get_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P) -> Vec<(PathBuf, (Slot, Hash))> {
+    let files = fs::read_dir(&snapshot_output_dir)
+        .unwrap_or_else(|err| panic!("Unable to read snapshot directory: {}", err));
+
+    let mut archives: Vec<_> = files
+        .filter_map(|entry| {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(snapshot_hash) =
+                        snapshot_hash_of(path.file_name().unwrap().to_str().unwrap())
+                    {
+                        return Some((path, snapshot_hash));
+                    }
+                }
+            }
+            None
+        })
+        .collect();
+
+    archives.sort_by(|a, b| (b.1).0.cmp(&(a.1).0)); // reverse sort by slot
+    archives
+}
+
+pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
+    snapshot_output_dir: P,
+) -> Option<PathBuf> {
+    let archives = get_snapshot_archives(snapshot_output_dir);
+    archives.into_iter().next().map(|archive| archive.0)
 }
 
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
@@ -732,5 +791,14 @@ mod tests {
             |stream| Ok(deserialize_from::<_, u32>(stream)?),
         );
         assert_matches!(result, Err(SnapshotError::IO(ref message)) if message.to_string().starts_with("invalid snapshot data file"));
+    }
+
+    #[test]
+    fn test_snapshot_hash_of() {
+        assert_eq!(
+            snapshot_hash_of(&format!("snapshot-42-{}.tar.bz2", Hash::default())),
+            Some((42, Hash::default()))
+        );
+        assert!(snapshot_hash_of("invalid").is_none());
     }
 }
