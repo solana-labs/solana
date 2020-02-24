@@ -67,6 +67,7 @@ pub fn load(
                 &account_paths,
                 &snapshot_config.snapshot_path,
                 &tar,
+                false,
             )
             .expect("Load from snapshot failed");
 

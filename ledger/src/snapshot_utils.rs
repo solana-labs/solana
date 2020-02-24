@@ -167,7 +167,6 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     {
         let snapshot_version = format!("{}\n", env!("CARGO_PKG_VERSION"));
         let mut f = std::fs::File::create(staging_version_file)?;
-        //f.write_all(&snapshot_version.to_string().into_bytes())?;
         f.write_all(&snapshot_version.into_bytes())?;
     }
 
@@ -418,26 +417,13 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
 
 pub fn bank_slot_from_archive<P: AsRef<Path>>(snapshot_tar: P) -> Result<Slot> {
     let tempdir = tempfile::TempDir::new()?;
-    untar_snapshot_in(&snapshot_tar, &tempdir)?;
     let unpacked_snapshots_dir = tempdir.path().join(TAR_SNAPSHOTS_DIR);
     let local_account_paths = vec![tempdir.path().join("account_dummy")];
-    let unpacked_accounts_dir = tempdir.path().join(TAR_ACCOUNTS_DIR);
-    let snapshot_paths = get_snapshot_paths(&unpacked_snapshots_dir);
-    let last_root_paths = snapshot_paths
-        .last()
-        .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
-    let bank = deserialize_snapshot_data_file(
-        &last_root_paths.snapshot_file_path,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
-        |stream| {
-            let bank: Bank = deserialize_from_snapshot(stream.by_ref())?;
-            bank.rc.accounts_from_stream(
-                stream.by_ref(),
-                &local_account_paths,
-                &unpacked_accounts_dir,
-            )?;
-            Ok(bank)
-        },
+    let bank = bank_from_archive(
+        &local_account_paths,
+        &unpacked_snapshots_dir,
+        snapshot_tar,
+        true,
     )?;
     Ok(bank.slot())
 }
@@ -446,6 +432,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: &[PathBuf],
     snapshot_path: &PathBuf,
     snapshot_tar: P,
+    skip_move: bool,
 ) -> Result<Bank> {
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -479,19 +466,21 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     measure.stop();
     info!("{}", measure);
 
-    // Move the unpacked snapshots into `snapshot_path`
-    let dir_files = fs::read_dir(&unpacked_snapshots_dir).unwrap_or_else(|err| {
-        panic!(
-            "Invalid snapshot path {:?}: {}",
-            unpacked_snapshots_dir, err
-        )
-    });
-    let paths: Vec<PathBuf> = dir_files
-        .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .collect();
-    let mut copy_options = CopyOptions::new();
-    copy_options.overwrite = true;
-    fs_extra::move_items(&paths, &snapshot_path, &copy_options)?;
+    if !skip_move {
+        // Move the unpacked snapshots into `snapshot_path`
+        let dir_files = fs::read_dir(&unpacked_snapshots_dir).unwrap_or_else(|err| {
+            panic!(
+                "Invalid snapshot path {:?}: {}",
+                unpacked_snapshots_dir, err
+            )
+        });
+        let paths: Vec<PathBuf> = dir_files
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .collect();
+        let mut copy_options = CopyOptions::new();
+        copy_options.overwrite = true;
+        fs_extra::move_items(&paths, &snapshot_path, &copy_options)?;
+    }
 
     Ok(bank)
 }
