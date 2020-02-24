@@ -11,12 +11,16 @@ use solana_ledger::{
     blockstore_db::{self, Column, Database},
     blockstore_processor::{BankForksInfo, ProcessOptions},
     rooted_slot_iterator::RootedSlotIterator,
-    shred_version::compute_shred_version,
     snapshot_utils,
 };
 use solana_sdk::{
+<<<<<<< HEAD
     clock::Slot, genesis_config::GenesisConfig, instruction_processor_utils::limited_deserialize,
     native_token::lamports_to_sol, pubkey::Pubkey,
+=======
+    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol,
+    program_utils::limited_deserialize, pubkey::Pubkey, shred_version::compute_shred_version,
+>>>>>>> 73063544b... Move shred_version module to sdk/
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
