@@ -1,23 +1,18 @@
 //! A command-line executable for generating the chain's genesis config.
 
-use chrono::{TimeZone, Utc};
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::{
     input_parsers::{pubkey_of, unix_timestamp_from_rfc3339_datetime},
     input_validators::{is_rfc3339_datetime, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
-use solana_ledger::{
-    blockstore::create_new_ledger, poh::compute_hashes_per_tick,
-    shred_version::compute_shred_version,
-};
+use solana_ledger::{blockstore::create_new_ledger, poh::compute_hashes_per_tick};
 use solana_sdk::{
     account::Account,
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     genesis_config::{GenesisConfig, OperatingMode},
-    native_token::lamports_to_sol,
     native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -557,47 +552,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     create_new_ledger(&ledger_path, &genesis_config)?;
 
-    println!(
-        "\
-         Creation time: {}\n\
-         Operating mode: {:?}\n\
-         Genesis hash: {}\n\
-         Shred version: {}\n\
-         Hashes per tick: {:?}\n\
-         Slots per epoch: {}\n\
-         Warmup epochs: {}abled\n\
-         {:?}\n\
-         {:?}\n\
-         Capitalization: {} SOL in {} accounts\n\
-         ",
-        Utc.timestamp(genesis_config.creation_time, 0).to_rfc3339(),
-        genesis_config.operating_mode,
-        genesis_config.hash(),
-        compute_shred_version(&genesis_config.hash(), None),
-        genesis_config.poh_config.hashes_per_tick,
-        genesis_config.epoch_schedule.slots_per_epoch,
-        if genesis_config.epoch_schedule.warmup {
-            "en"
-        } else {
-            "dis"
-        },
-        genesis_config.rent,
-        genesis_config.fee_calculator,
-        lamports_to_sol(
-            genesis_config
-                .accounts
-                .iter()
-                .map(|(pubkey, account)| {
-                    if account.lamports == 0 {
-                        panic!("{:?}", (pubkey, account));
-                    }
-                    account.lamports
-                })
-                .sum::<u64>()
-        ),
-        genesis_config.accounts.len(),
-    );
-
+    println!("{}", genesis_config);
     Ok(())
 }
 
