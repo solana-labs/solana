@@ -233,7 +233,7 @@ pub fn parse_validator_info_command(
 ) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     // Prepare validator info
-    let validator_info = parse_args(&matches);
+    let validator_info = parse_args(matches);
     Ok(CliCommandInfo {
         command: CliCommand::SetValidatorInfo {
             validator_info,

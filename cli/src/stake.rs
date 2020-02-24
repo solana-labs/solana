@@ -417,15 +417,15 @@ pub fn parse_stake_create_account(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let seed = matches.value_of("seed").map(|s| s.to_string());
-    let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
-    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
+    let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
+    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
     let staker = pubkey_of(matches, STAKE_AUTHORITY_ARG.name);
     let withdrawer = pubkey_of(matches, WITHDRAW_AUTHORITY_ARG.name);
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
@@ -473,7 +473,7 @@ pub fn parse_stake_delegate_stake(
     let force = matches.is_present("force");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -518,7 +518,7 @@ pub fn parse_stake_authorize(
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let (authority, authority_pubkey) = signer_of(matches, authority_flag, wallet_manager)?;
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
@@ -559,7 +559,7 @@ pub fn parse_split_stake(
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -603,7 +603,7 @@ pub fn parse_stake_deactivate_stake(
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -641,7 +641,7 @@ pub fn parse_stake_withdraw_stake(
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (withdraw_authority, withdraw_authority_pubkey) =
         signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -677,13 +677,13 @@ pub fn parse_stake_set_lockup(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let epoch = value_of(&matches, "lockup_epoch").unwrap_or(0);
-    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(&matches, "lockup_date").unwrap_or(0);
+    let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
+    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
     let new_custodian = pubkey_of(matches, "new_custodian").unwrap_or_default();
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
 
     let (custodian, custodian_pubkey) = signer_of(matches, "custodian", wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
