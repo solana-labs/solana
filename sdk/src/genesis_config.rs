@@ -7,16 +7,20 @@ use crate::{
     fee_calculator::FeeCalculator,
     hash::{hash, Hash},
     inflation::Inflation,
+    native_token::lamports_to_sol,
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
+    shred_version::compute_shred_version,
     signature::{Keypair, Signer},
     system_program::{self, solana_system_program},
 };
 use bincode::{deserialize, serialize};
+use chrono::{TimeZone, Utc};
 use memmap::Mmap;
 use std::{
     collections::BTreeMap,
+    fmt,
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
@@ -170,6 +174,51 @@ impl GenesisConfig {
 
     pub fn add_rewards_pool(&mut self, pubkey: Pubkey, account: Account) {
         self.rewards_pools.insert(pubkey, account);
+    }
+}
+
+impl fmt::Display for GenesisConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "\
+         Creation time: {}\n\
+         Operating mode: {:?}\n\
+         Genesis hash: {}\n\
+         Shred version: {}\n\
+         Hashes per tick: {:?}\n\
+         Slots per epoch: {}\n\
+         Warmup epochs: {}abled\n\
+         {:?}\n\
+         {:?}\n\
+         Capitalization: {} SOL in {} accounts\n\
+         ",
+            Utc.timestamp(self.creation_time, 0).to_rfc3339(),
+            self.operating_mode,
+            self.hash(),
+            compute_shred_version(&self.hash(), None),
+            self.poh_config.hashes_per_tick,
+            self.epoch_schedule.slots_per_epoch,
+            if self.epoch_schedule.warmup {
+                "en"
+            } else {
+                "dis"
+            },
+            self.rent,
+            self.fee_calculator,
+            lamports_to_sol(
+                self.accounts
+                    .iter()
+                    .map(|(pubkey, account)| {
+                        if account.lamports == 0 {
+                            panic!("{:?}", (pubkey, account));
+                        }
+                        account.lamports
+                    })
+                    .sum::<u64>()
+            ),
+            self.accounts.len(),
+        )
     }
 }
 
