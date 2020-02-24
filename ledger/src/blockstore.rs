@@ -2264,7 +2264,7 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
     let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
     let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
     let last_hash = entries.last().unwrap().hash;
-    let version = Shred::version_from_hash(&last_hash);
+    let version = solana_sdk::shred_version::version_from_hash(&last_hash);
 
     let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, version)
         .expect("Failed to create entry shredder");

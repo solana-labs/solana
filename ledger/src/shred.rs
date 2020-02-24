@@ -392,22 +392,6 @@ impl Shred {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
     }
-
-    pub fn version_from_hash(hash: &Hash) -> u16 {
-        let hash = hash.as_ref();
-        let mut accum = [0u8; 2];
-        hash.chunks(2).for_each(|seed| {
-            accum
-                .iter_mut()
-                .zip(seed)
-                .for_each(|(accum, seed)| *accum ^= *seed)
-        });
-        // convert accum into a u16
-        let version = ((accum[0] as u16) << 8) | accum[1] as u16;
-
-        // ensure version is never zero, to avoid looking like an uninitialized version
-        version.saturating_add(1)
-    }
 }
 
 #[derive(Debug)]
@@ -919,8 +903,7 @@ pub mod tests {
     use super::*;
     use bincode::serialized_size;
     use matches::assert_matches;
-    use solana_sdk::hash::hash;
-    use solana_sdk::system_transaction;
+    use solana_sdk::{hash::hash, shred_version, system_transaction};
     use std::collections::HashSet;
     use std::convert::TryInto;
 
@@ -1451,7 +1434,7 @@ pub mod tests {
     fn test_shred_version() {
         let keypair = Arc::new(Keypair::new());
         let hash = hash(Hash::default().as_ref());
-        let version = Shred::version_from_hash(&hash);
+        let version = shred_version::version_from_hash(&hash);
         assert_ne!(version, 0);
         let shredder =
             Shredder::new(0, 0, 1.0, keypair, 0, version).expect("Failed in creating shredder");
@@ -1481,19 +1464,19 @@ pub mod tests {
             0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a,
             0xa5, 0xa5, 0x5a, 0x5a,
         ];
-        let version = Shred::version_from_hash(&Hash::new(&hash));
+        let version = shred_version::version_from_hash(&Hash::new(&hash));
         assert_eq!(version, 1);
         let hash = [
             0xa5u8, 0xa5, 0x5a, 0x5a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        let version = Shred::version_from_hash(&Hash::new(&hash));
+        let version = shred_version::version_from_hash(&Hash::new(&hash));
         assert_eq!(version, 0xffff);
         let hash = [
             0xa5u8, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        let version = Shred::version_from_hash(&Hash::new(&hash));
+        let version = shred_version::version_from_hash(&Hash::new(&hash));
         assert_eq!(version, 0x5a5b);
     }
 
@@ -1501,7 +1484,7 @@ pub mod tests {
     fn test_shred_fec_set_index() {
         let keypair = Arc::new(Keypair::new());
         let hash = hash(Hash::default().as_ref());
-        let version = Shred::version_from_hash(&hash);
+        let version = shred_version::version_from_hash(&hash);
         assert_ne!(version, 0);
         let shredder =
             Shredder::new(0, 0, 0.5, keypair, 0, version).expect("Failed in creating shredder");
@@ -1539,7 +1522,7 @@ pub mod tests {
     fn test_max_coding_shreds() {
         let keypair = Arc::new(Keypair::new());
         let hash = hash(Hash::default().as_ref());
-        let version = Shred::version_from_hash(&hash);
+        let version = shred_version::version_from_hash(&hash);
         assert_ne!(version, 0);
         let shredder =
             Shredder::new(0, 0, 1.0, keypair, 0, version).expect("Failed in creating shredder");

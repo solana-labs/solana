@@ -30,7 +30,6 @@ use solana_ledger::{
     create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
-    shred_version::compute_shred_version,
 };
 use solana_metrics::datapoint_info;
 use solana_runtime::bank::Bank;
@@ -39,6 +38,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
+    shred_version::compute_shred_version,
     signature::{Keypair, Signer},
     timing::timestamp,
 };

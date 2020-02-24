@@ -68,6 +68,10 @@ pub mod client;
 #[cfg(not(feature = "program"))]
 pub mod genesis_config;
 #[cfg(not(feature = "program"))]
+pub mod hard_forks;
+#[cfg(not(feature = "program"))]
+pub mod shred_version;
+#[cfg(not(feature = "program"))]
 pub mod signature;
 #[cfg(not(feature = "program"))]
 pub mod signers;
