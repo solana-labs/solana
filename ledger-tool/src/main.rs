@@ -604,7 +604,7 @@ fn main() {
             .arg(&starting_slot_arg)
         )
         .subcommand(
-            SubCommand::with_name("print-slot")
+            SubCommand::with_name("slot")
             .about("Print the contents of one or more slots")
             .arg(
                 Arg::with_name("slots")
@@ -697,7 +697,7 @@ fn main() {
                     .help("Output directory for the snapshot"),
             )
         ).subcommand(
-            SubCommand::with_name("print-accounts")
+            SubCommand::with_name("accounts")
             .about("Print account contents after processing in the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
@@ -800,7 +800,7 @@ fn main() {
                 }
             }
         }
-        ("print-slot", Some(arg_matches)) => {
+        ("slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             for slot in slots {
                 println!("Slot {}", slot);
@@ -949,7 +949,7 @@ fn main() {
                 }
             }
         }
-        ("print-accounts", Some(arg_matches)) => {
+        ("accounts", Some(arg_matches)) => {
             let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
             let process_options = ProcessOptions {
                 dev_halt_at_slot,
