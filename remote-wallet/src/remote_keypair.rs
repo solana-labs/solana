@@ -13,24 +13,29 @@ use solana_sdk::{
 pub struct RemoteKeypair {
     pub wallet_type: RemoteWalletType,
     pub derivation_path: DerivationPath,
+    pub pubkey: Pubkey,
 }
 
 impl RemoteKeypair {
-    pub fn new(wallet_type: RemoteWalletType, derivation_path: DerivationPath) -> Self {
-        Self {
+    pub fn new(
+        wallet_type: RemoteWalletType,
+        derivation_path: DerivationPath,
+    ) -> Result<Self, RemoteWalletError> {
+        let pubkey = match &wallet_type {
+            RemoteWalletType::Ledger(wallet) => wallet.get_pubkey(&derivation_path)?,
+        };
+
+        Ok(Self {
             wallet_type,
             derivation_path,
-        }
+            pubkey,
+        })
     }
 }
 
 impl Signer for RemoteKeypair {
     fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
-        match &self.wallet_type {
-            RemoteWalletType::Ledger(wallet) => wallet
-                .get_pubkey(&self.derivation_path)
-                .map_err(|e| e.into()),
-        }
+        Ok(self.pubkey)
     }
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
@@ -53,10 +58,10 @@ pub fn generate_remote_keypair(
     }
     if remote_wallet_info.manufacturer == "ledger" {
         let ledger = get_ledger_from_info(remote_wallet_info, wallet_manager)?;
-        Ok(RemoteKeypair {
-            wallet_type: RemoteWalletType::Ledger(ledger),
+        Ok(RemoteKeypair::new(
+            RemoteWalletType::Ledger(ledger),
             derivation_path,
-        })
+        )?)
     } else {
         Err(RemoteWalletError::DeviceTypeMismatch)
     }
