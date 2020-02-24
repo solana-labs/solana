@@ -1,7 +1,7 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-    log_instruction_custom_error, signer_pubkey, CliCommand, CliCommandInfo, CliConfig, CliError,
-    ProcessResult, SignerIndex,
+    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    SignerIndex,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
@@ -225,8 +225,8 @@ pub fn parse_authorize_nonce_account(
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let new_authority = pubkey_of(matches, "new_authority").unwrap();
-    let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
-    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
+    let (nonce_authority, nonce_authority_pubkey) =
+        signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
     let signer_info = generate_unique_signers(
@@ -251,8 +251,8 @@ pub fn parse_nonce_create_account(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let nonce_account = signer_of("nonce_account_keypair", matches, wallet_manager)?;
-    let nonce_account_pubkey = signer_pubkey(&nonce_account);
+    let (nonce_account, nonce_account_pubkey) =
+        signer_of(matches, "nonce_account_keypair", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let nonce_authority = pubkey_of(matches, NONCE_AUTHORITY_ARG.name);
@@ -291,8 +291,8 @@ pub fn parse_new_nonce(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
-    let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
-    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
+    let (nonce_authority, nonce_authority_pubkey) =
+        signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
     let signer_info = generate_unique_signers(
@@ -332,8 +332,8 @@ pub fn parse_withdraw_from_nonce_account(
     let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
     let lamports = lamports_of_sol(matches, "amount").unwrap();
-    let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, matches, wallet_manager)?;
-    let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
+    let (nonce_authority, nonce_authority_pubkey) =
+        signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
     let signer_info = generate_unique_signers(

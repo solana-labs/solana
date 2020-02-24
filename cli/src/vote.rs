@@ -182,7 +182,7 @@ pub fn parse_vote_create_account(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let vote_account = keypair_of(matches, "vote_account").unwrap();
+    let (vote_account, _) = signer_of(matches, "vote_account", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let identity_pubkey = pubkey_of(matches, "identity_pubkey").unwrap();
     let commission = value_t_or_exit!(matches, "commission", u8);
@@ -191,7 +191,7 @@ pub fn parse_vote_create_account(
 
     let payer_provided = None;
     let CliSignerInfo { signers } = generate_unique_signers(
-        vec![payer_provided, Some(Box::new(vote_account))],
+        vec![payer_provided, vote_account],
         matches,
         default_signer_path,
         wallet_manager,
@@ -243,11 +243,11 @@ pub fn parse_vote_update_validator(
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let new_identity_pubkey = pubkey_of(matches, "new_identity_pubkey").unwrap();
-    let authorized_voter = keypair_of(matches, "authorized_voter").unwrap();
+    let (authorized_voter, _) = signer_of(matches, "authorized_voter", wallet_manager)?;
 
     let payer_provided = None;
     let CliSignerInfo { signers } = generate_unique_signers(
-        vec![payer_provided, Some(Box::new(authorized_voter))],
+        vec![payer_provided, authorized_voter],
         matches,
         default_signer_path,
         wallet_manager,

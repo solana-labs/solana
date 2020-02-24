@@ -96,15 +96,18 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
 }
 
 // Return a signer from matches at `name`
+#[allow(clippy::type_complexity)]
 pub fn signer_of(
-    name: &str,
     matches: &ArgMatches<'_>,
+    name: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
-) -> Result<Option<Box<dyn Signer>>, Box<dyn std::error::Error>> {
+) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
     if let Some(location) = matches.value_of(name) {
-        signer_from_path(matches, location, name, wallet_manager).map(Some)
+        let signer = signer_from_path(matches, location, name, wallet_manager)?;
+        let signer_pubkey = signer.pubkey();
+        Ok((Some(signer), Some(signer_pubkey)))
     } else {
-        Ok(None)
+        Ok((None, None))
     }
 }
 

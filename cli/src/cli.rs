@@ -98,10 +98,6 @@ pub(crate) fn generate_unique_signers(
     })
 }
 
-pub(crate) fn signer_pubkey(signer: &Option<Box<dyn Signer>>) -> Option<Pubkey> {
-    signer.as_ref().map(|signer| signer.pubkey())
-}
-
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
 pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
@@ -655,7 +651,7 @@ pub fn parse_command(
             } else {
                 None
             };
-            let pubkey = pubkey_of(&matches, "to");
+            let pubkey = pubkey_of(matches, "to");
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -678,7 +674,7 @@ pub fn parse_command(
             })
         }
         ("balance", Some(matches)) => {
-            let pubkey = pubkey_of(&matches, "pubkey");
+            let pubkey = pubkey_of(matches, "pubkey");
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -719,7 +715,7 @@ pub fn parse_command(
         },
         ("pay", Some(matches)) => {
             let lamports = lamports_of_sol(matches, "amount").unwrap();
-            let to = pubkey_of(&matches, "to").unwrap();
+            let to = pubkey_of(matches, "to").unwrap();
             let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
                 let date_string = if !matches.value_of("timestamp").unwrap().contains('Z') {
@@ -731,14 +727,14 @@ pub fn parse_command(
             } else {
                 None
             };
-            let timestamp_pubkey = value_of(&matches, "timestamp_pubkey");
-            let witnesses = values_of(&matches, "witness");
+            let timestamp_pubkey = value_of(matches, "timestamp_pubkey");
+            let witnesses = values_of(matches, "witness");
             let cancelable = matches.is_present("cancelable");
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-            let blockhash_query = BlockhashQuery::new_from_matches(&matches);
-            let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-            let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches, wallet_manager)?;
-            let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
+            let blockhash_query = BlockhashQuery::new_from_matches(matches);
+            let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+            let (nonce_authority, nonce_authority_pubkey) =
+                signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
             let payer_provided = None;
             let signer_info = generate_unique_signers(
@@ -778,8 +774,8 @@ pub fn parse_command(
             })
         }
         ("send-signature", Some(matches)) => {
-            let to = value_of(&matches, "to").unwrap();
-            let process_id = value_of(&matches, "process_id").unwrap();
+            let to = value_of(matches, "to").unwrap();
+            let process_id = value_of(matches, "process_id").unwrap();
 
             let default_signer =
                 signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?;
@@ -790,8 +786,8 @@ pub fn parse_command(
             })
         }
         ("send-timestamp", Some(matches)) => {
-            let to = value_of(&matches, "to").unwrap();
-            let process_id = value_of(&matches, "process_id").unwrap();
+            let to = value_of(matches, "to").unwrap();
+            let process_id = value_of(matches, "process_id").unwrap();
             let dt = if matches.is_present("datetime") {
                 // Parse input for serde_json
                 let date_string = if !matches.value_of("datetime").unwrap().contains('Z') {
@@ -813,16 +809,15 @@ pub fn parse_command(
         }
         ("transfer", Some(matches)) => {
             let lamports = lamports_of_sol(matches, "amount").unwrap();
-            let to = pubkey_of(&matches, "to").unwrap();
+            let to = pubkey_of(matches, "to").unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
-            let nonce_account = pubkey_of(&matches, NONCE_ARG.name);
-            let nonce_authority = signer_of(NONCE_AUTHORITY_ARG.name, &matches, wallet_manager)?;
-            let nonce_authority_pubkey = signer_pubkey(&nonce_authority);
-            let fee_payer = signer_of(FEE_PAYER_ARG.name, &matches, wallet_manager)?;
-            let fee_payer_pubkey = signer_pubkey(&fee_payer);
-            let from = signer_of("from", &matches, wallet_manager)?;
-            let from_pubkey = signer_pubkey(&from);
+            let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+            let (nonce_authority, nonce_authority_pubkey) =
+                signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
+            let (fee_payer, fee_payer_pubkey) =
+                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+            let (from, from_pubkey) = signer_of(matches, "from", wallet_manager)?;
 
             let signer_info = generate_unique_signers(
                 vec![nonce_authority, fee_payer, from],
