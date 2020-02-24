@@ -9,6 +9,7 @@ use jsonrpc_http_server::{
     hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
     RequestMiddlewareAction, ServerBuilder,
 };
+use regex::Regex;
 use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_sdk::hash::Hash;
 use std::{
@@ -28,13 +29,17 @@ pub struct JsonRpcService {
     close_handle: Option<CloseHandle>,
 }
 
-#[derive(Default)]
 struct RpcRequestMiddleware {
     ledger_path: PathBuf,
+    snapshot_archive_path_regex: Regex,
 }
 impl RpcRequestMiddleware {
     pub fn new(ledger_path: PathBuf) -> Self {
-        Self { ledger_path }
+        Self {
+            ledger_path,
+            snapshot_archive_path_regex: Regex::new(r"/snapshot-\d+-[[:alnum:]]+\.tar\.bz2$")
+                .unwrap(),
+        }
     }
 
     fn not_found() -> hyper::Response<hyper::Body> {
@@ -51,9 +56,17 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
+    fn is_get_path(&self, path: &str) -> bool {
+        match path {
+            "/snapshot.tar.bz2" | "/genesis.tar.bz2" => true,
+            _ => self.snapshot_archive_path_regex.is_match(path),
+        }
+    }
+
     fn get(&self, filename: &str) -> RequestMiddlewareAction {
-        info!("get {}", filename);
-        let filename = self.ledger_path.join(filename);
+        assert!(filename.starts_with('/'));
+        assert!(filename.len() > 1);
+        let filename = self.ledger_path.join(filename.split_at(1).1);
         RequestMiddlewareAction::Respond {
             should_validate_hosts: true,
             response: Box::new(
@@ -64,7 +77,10 @@ impl RpcRequestMiddleware {
                             .and_then(|item| Ok(hyper::Response::new(item.1.into())))
                             .or_else(|_| Ok(RpcRequestMiddleware::internal_server_error()))
                     })
-                    .or_else(|_| Ok(RpcRequestMiddleware::not_found())),
+                    .or_else(|err| {
+                        info!("get failed: {:?}", err);
+                        Ok(RpcRequestMiddleware::not_found())
+                    }),
             ),
         }
     }
@@ -73,13 +89,14 @@ impl RpcRequestMiddleware {
 impl RequestMiddleware for RpcRequestMiddleware {
     fn on_request(&self, request: hyper::Request<hyper::Body>) -> RequestMiddlewareAction {
         trace!("request uri: {}", request.uri());
-        match request.uri().path() {
-            "/snapshot.tar.bz2" => self.get("snapshot.tar.bz2"),
-            "/genesis.tar.bz2" => self.get("genesis.tar.bz2"),
-            _ => RequestMiddlewareAction::Proceed {
+
+        if self.is_get_path(request.uri().path()) {
+            self.get(request.uri().path())
+        } else {
+            RequestMiddlewareAction::Proceed {
                 should_continue_on_invalid_cors: false,
                 request,
-            },
+            }
         }
     }
 }
@@ -233,5 +250,23 @@ mod tests {
         );
         rpc_service.exit();
         rpc_service.join().unwrap();
+    }
+
+    #[test]
+    fn test_is_get_path() {
+        let rrm = RpcRequestMiddleware::new(PathBuf::from("/"));
+
+        assert!(rrm.is_get_path("/genesis.tar.bz2"));
+        assert!(!rrm.is_get_path("genesis.tar.bz2"));
+
+        assert!(rrm.is_get_path("/snapshot.tar.bz2"));
+        assert!(!rrm.is_get_path("snapshot.tar.bz2"));
+
+        assert!(rrm.is_get_path("/snapshot-123-immahash123.tar.bz2"));
+        assert!(!rrm.is_get_path("/snapshot-notaslotnumber-immahash123.tar.bz2"));
+
+        assert!(!rrm.is_get_path("/"));
+        assert!(!rrm.is_get_path(".."));
+        assert!(!rrm.is_get_path("🎣"));
     }
 }
