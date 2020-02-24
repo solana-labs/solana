@@ -67,12 +67,18 @@ mod tests {
         }
     }
 
-    fn restore_from_snapshot(old_bank_forks: &BankForks, account_paths: Vec<PathBuf>) {
+    fn restore_from_snapshot(
+        old_bank_forks: &BankForks,
+        old_last_slot: Slot,
+        account_paths: Vec<PathBuf>,
+    ) {
         let (snapshot_path, snapshot_package_output_path) = old_bank_forks
             .snapshot_config
             .as_ref()
             .map(|c| (&c.snapshot_path, &c.snapshot_package_output_path))
             .unwrap();
+
+        let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let deserialized_bank = snapshot_utils::bank_from_archive(
             &account_paths,
@@ -81,7 +87,10 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .snapshot_path,
-            snapshot_utils::get_snapshot_archive_path(snapshot_package_output_path),
+            snapshot_utils::get_snapshot_archive_path(
+                snapshot_package_output_path,
+                &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
+            ),
         )
         .unwrap();
 
@@ -139,18 +148,20 @@ mod tests {
             slot_snapshot_paths
                 .last()
                 .expect("no snapshots found in path"),
-            snapshot_utils::get_snapshot_archive_path(
-                &snapshot_config.snapshot_package_output_path,
-            ),
             &snapshot_config.snapshot_path,
             &last_bank.src.roots(),
+            &snapshot_config.snapshot_package_output_path,
             storages,
         )
         .unwrap();
 
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
-        restore_from_snapshot(bank_forks, vec![accounts_dir.path().to_path_buf()]);
+        restore_from_snapshot(
+            bank_forks,
+            last_slot,
+            vec![accounts_dir.path().to_path_buf()],
+        );
     }
 
     #[test]
@@ -221,9 +232,8 @@ mod tests {
         let saved_snapshots_dir = TempDir::new().unwrap();
         let saved_accounts_dir = TempDir::new().unwrap();
         let saved_slot = 4;
-        let saved_tar = snapshot_config
-            .snapshot_package_output_path
-            .join(saved_slot.to_string());
+        let mut saved_archive_path = None;
+
         for forks in 0..MAX_CACHE_ENTRIES + 2 {
             let bank = Bank::new_from_parent(
                 &bank_forks[forks as u64],
@@ -235,6 +245,7 @@ mod tests {
             let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
+            let accounts_hash = bank.update_accounts_hash();
             bank_forks.insert(bank);
 
             let package_sender = {
@@ -249,14 +260,7 @@ mod tests {
             };
 
             bank_forks
-                .generate_snapshot(
-                    slot,
-                    &vec![],
-                    &package_sender,
-                    snapshot_config
-                        .snapshot_package_output_path
-                        .join(slot.to_string()),
-                )
+                .generate_snapshot(slot, &vec![], &package_sender)
                 .unwrap();
 
             if slot == saved_slot as u64 {
@@ -282,6 +286,11 @@ mod tests {
                     &options,
                 )
                 .unwrap();
+
+                saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
+                    &snapshot_config.snapshot_package_output_path,
+                    &(slot, accounts_hash),
+                ));
             }
         }
 
@@ -319,7 +328,7 @@ mod tests {
             .join()
             .expect("SnapshotPackagerService exited with error");
 
-        // Check the tar we cached the state for earlier was generated correctly
+        // Check the archive we cached the state for earlier was generated correctly
 
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
@@ -338,7 +347,7 @@ mod tests {
         .unwrap();
 
         snapshot_utils::verify_snapshot_archive(
-            saved_tar,
+            saved_archive_path.unwrap(),
             saved_snapshots_dir.path(),
             saved_accounts_dir
                 .path()
