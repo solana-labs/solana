@@ -52,40 +52,44 @@ pub fn load(
         fs::create_dir_all(&snapshot_config.snapshot_path)
             .expect("Couldn't create snapshot directory");
 
-        let tar = snapshot_utils::get_snapshot_archive_path(
+        match snapshot_utils::get_highest_snapshot_archive_path(
             &snapshot_config.snapshot_package_output_path,
-        );
-        if tar.exists() {
-            info!("Loading snapshot package: {:?}", tar);
-            // Fail hard here if snapshot fails to load, don't silently continue
+        ) {
+            Some(tar) => {
+                if tar.exists() {
+                    info!("Loading snapshot package: {:?}", tar);
+                    // Fail hard here if snapshot fails to load, don't silently continue
 
-            if account_paths.is_empty() {
-                panic!("Account paths not present when booting from snapshot")
+                    if account_paths.is_empty() {
+                        panic!("Account paths not present when booting from snapshot")
+                    }
+
+                    let deserialized_bank = snapshot_utils::bank_from_archive(
+                        &account_paths,
+                        &snapshot_config.snapshot_path,
+                        &tar,
+                    )
+                    .expect("Load from snapshot failed");
+
+                    let snapshot_hash = (
+                        deserialized_bank.slot(),
+                        deserialized_bank.get_accounts_hash(),
+                    );
+                    return to_loadresult(
+                        blockstore_processor::process_blockstore_from_root(
+                            genesis_config,
+                            blockstore,
+                            Arc::new(deserialized_bank),
+                            &process_options,
+                            &VerifyRecyclers::default(),
+                        ),
+                        Some(snapshot_hash),
+                    );
+                } else {
+                    info!("Snapshot package does not exist: {:?}", tar);
+                }
             }
-
-            let deserialized_bank = snapshot_utils::bank_from_archive(
-                &account_paths,
-                &snapshot_config.snapshot_path,
-                &tar,
-            )
-            .expect("Load from snapshot failed");
-
-            let snapshot_hash = (
-                deserialized_bank.slot(),
-                deserialized_bank.get_accounts_hash(),
-            );
-            return to_loadresult(
-                blockstore_processor::process_blockstore_from_root(
-                    genesis_config,
-                    blockstore,
-                    Arc::new(deserialized_bank),
-                    &process_options,
-                    &VerifyRecyclers::default(),
-                ),
-                Some(snapshot_hash),
-            );
-        } else {
-            info!("Snapshot package does not exist: {:?}", tar);
+            None => info!("No snapshot package available"),
         }
     } else {
         info!("Snapshots disabled");

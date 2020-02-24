@@ -80,7 +80,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-fn download_file(url: &str, destination_file: &Path, not_found_ok: bool) -> Result<(), String> {
+fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
     if destination_file.is_file() {
         return Err(format!("{:?} already exists", destination_file));
     }
@@ -96,15 +96,9 @@ fn download_file(url: &str, destination_file: &Path, not_found_ok: bool) -> Resu
     let client = reqwest::blocking::Client::new();
     let response = client.get(url).send().map_err(|err| err.to_string())?;
 
-    if response.status() == reqwest::StatusCode::NOT_FOUND && not_found_ok {
-        progress_bar.finish_and_clear();
-        info!("Archive not found at {}", url);
-        return Ok(());
-    }
-
     let response = response
         .error_for_status()
-        .map_err(|err| format!("Unable to get: {:?}", err))?;
+        .map_err(|err| format!("Unable to download {}: {}", url, err))?;
     let download_size = {
         response
             .headers()
@@ -460,7 +454,6 @@ fn download_genesis(
         download_file(
             &format!("http://{}/{}", rpc_addr, "genesis.tar.bz2"),
             &tmp_genesis_package,
-            false,
         )?;
         extract_archive(&tmp_genesis_package, &ledger_path)?;
 
@@ -496,28 +489,22 @@ fn download_genesis(
 fn download_snapshot(
     rpc_addr: &SocketAddr,
     ledger_path: &Path,
-    snapshot_hash: Option<(Slot, Hash)>,
+    snapshot_hash: (Slot, Hash),
 ) -> Result<(), String> {
-    if snapshot_hash.is_none() {
-        return Ok(());
-    }
-
-    let snapshot_package = solana_ledger::snapshot_utils::get_snapshot_archive_path(ledger_path);
+    let snapshot_package =
+        solana_ledger::snapshot_utils::get_snapshot_archive_path(ledger_path, &snapshot_hash);
     if snapshot_package.exists() {
-        fs::remove_file(&snapshot_package)
-            .map_err(|err| format!("error removing {:?}: {}", snapshot_package, err))?;
+        Ok(())
+    } else {
+        download_file(
+            &format!(
+                "http://{}/{}",
+                rpc_addr,
+                snapshot_package.file_name().unwrap().to_str().unwrap()
+            ),
+            &snapshot_package,
+        )
     }
-    download_file(
-        &format!(
-            "http://{}/{}",
-            rpc_addr,
-            snapshot_package.file_name().unwrap().to_str().unwrap()
-        ),
-        &snapshot_package,
-        true,
-    )?;
-
-    Ok(())
 }
 
 // This function is duplicated in ledger-tool/src/main.rs...
@@ -1144,7 +1131,13 @@ pub fn main() {
                     }
                     Ok(())
                 })
-                .and_then(|_| download_snapshot(&rpc_contact_info.rpc, &ledger_path, snapshot_hash))
+                .and_then(|_| {
+                    if let Some(snapshot_hash) = snapshot_hash {
+                        download_snapshot(&rpc_contact_info.rpc, &ledger_path, snapshot_hash)
+                    } else {
+                        Ok(())
+                    }
+                })
                 .and_then(|_| {
                     if !validator_config.voting_disabled && !no_check_vote_account {
                         check_vote_account(
