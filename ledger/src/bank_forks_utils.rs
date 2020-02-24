@@ -70,7 +70,10 @@ pub fn load(
             )
             .expect("Load from snapshot failed");
 
-            let snapshot_hash = (deserialized_bank.slot(), deserialized_bank.hash());
+            let snapshot_hash = (
+                deserialized_bank.slot(),
+                deserialized_bank.get_accounts_hash(),
+            );
             return to_loadresult(
                 blockstore_processor::process_blockstore_from_root(
                     genesis_config,
