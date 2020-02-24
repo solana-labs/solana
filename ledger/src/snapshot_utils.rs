@@ -520,7 +520,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
         archive.unpack(&unpack_dir)?;
     } else if let Err(e) = archive.unpack(&unpack_dir) {
         warn!(
-            "Trying to unpack as uncompressed tar because an error occured: {:?}",
+            "Trying to unpack as uncompressed tar because an error occurred: {:?}",
             e
         );
         let tar_bz2 = File::open(snapshot_tar)?;
