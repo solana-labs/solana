@@ -15,6 +15,7 @@ program = []
 default = [
     "assert_matches",
     "byteorder",
+    "chrono",
     "memmap",
     "rand",
     "rand_chacha",
@@ -30,7 +31,7 @@ bincode = "1.2.1"
 bs58 = "0.3.0"
 bv = { version = "0.11.0", features = ["serde"] }
 byteorder = { version = "1.3.2", optional = true }
-chrono = "0.4"
+chrono = { version = "0.4", optional = true }
 generic-array = { version = "0.13.2", default-features = false, features = ["serde", "more_lengths"] }
 hex = "0.4.0"
 hmac = "0.7.0"
