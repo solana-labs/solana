@@ -617,6 +617,10 @@ fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("genesis")
+            .about("Prints the ledger's genesis config")
+        )
+        .subcommand(
             SubCommand::with_name("genesis-hash")
             .about("Prints the ledger's genesis hash")
         )
@@ -762,6 +766,9 @@ fn main() {
                 starting_slot,
                 LedgerOutputMethod::Print,
             );
+        }
+        ("genesis", Some(_arg_matches)) => {
+            println!("{}", open_genesis_config(&ledger_path));
         }
         ("genesis-hash", Some(_arg_matches)) => {
             println!("{}", open_genesis_config(&ledger_path).hash());
