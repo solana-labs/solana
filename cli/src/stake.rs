@@ -433,12 +433,12 @@ pub fn parse_stake_create_account(
     let (stake_account, stake_account_pubkey) =
         signer_of(matches, "stake_account", wallet_manager)?;
 
-    let signer_info = generate_unique_signers(
-        vec![nonce_authority, fee_payer, from, stake_account],
-        matches,
-        default_signer_path,
-        wallet_manager,
-    )?;
+    let mut bulk_signers = vec![fee_payer, from, stake_account];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
@@ -480,12 +480,12 @@ pub fn parse_stake_delegate_stake(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let signer_info = generate_unique_signers(
-        vec![stake_authority, nonce_authority, fee_payer],
-        matches,
-        default_signer_path,
-        wallet_manager,
-    )?;
+    let mut bulk_signers = vec![stake_authority, fee_payer];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DelegateStake {
@@ -523,12 +523,12 @@ pub fn parse_stake_authorize(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let signer_info = generate_unique_signers(
-        vec![authority, nonce_authority, fee_payer],
-        matches,
-        default_signer_path,
-        wallet_manager,
-    )?;
+    let mut bulk_signers = vec![authority, fee_payer];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeAuthorize {
@@ -566,17 +566,12 @@ pub fn parse_split_stake(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let signer_info = generate_unique_signers(
-        vec![
-            stake_authority,
-            nonce_authority,
-            fee_payer,
-            split_stake_account,
-        ],
-        matches,
-        default_signer_path,
-        wallet_manager,
-    )?;
+    let mut bulk_signers = vec![stake_authority, fee_payer, split_stake_account];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::SplitStake {
@@ -610,12 +605,12 @@ pub fn parse_stake_deactivate_stake(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let signer_info = generate_unique_signers(
-        vec![stake_authority, nonce_authority, fee_payer],
-        matches,
-        default_signer_path,
-        wallet_manager,
-    )?;
+    let mut bulk_signers = vec![stake_authority, fee_payer];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
@@ -648,12 +643,12 @@ pub fn parse_stake_withdraw_stake(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let signer_info = generate_unique_signers(
-        vec![withdraw_authority, nonce_authority, fee_payer],
-        matches,
-        default_signer_path,
-        wallet_manager,
-    )?;
+    let mut bulk_signers = vec![withdraw_authority, fee_payer];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawStake {
@@ -690,12 +685,12 @@ pub fn parse_stake_set_lockup(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let signer_info = generate_unique_signers(
-        vec![custodian, nonce_authority, fee_payer],
-        matches,
-        default_signer_path,
-        wallet_manager,
-    )?;
+    let mut bulk_signers = vec![custodian, fee_payer];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeSetLockup {
@@ -1631,13 +1626,13 @@ mod tests {
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: 1,
-                    fee_payer: 2,
+                    nonce_authority: 2,
+                    fee_payer: 1,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&pubkey2, &sig2).into(),
                     Presigner::new(&pubkey, &sig).into(),
+                    Presigner::new(&pubkey2, &sig2).into(),
                 ],
             }
         );
@@ -2153,13 +2148,13 @@ mod tests {
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: 1,
-                    fee_payer: 2,
+                    nonce_authority: 2,
+                    fee_payer: 1,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&key1, &sig1).into(),
                     Presigner::new(&key2, &sig2).into(),
-                    Presigner::new(&key1, &sig1).into()
                 ],
             }
         );
@@ -2467,13 +2462,13 @@ mod tests {
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: Some(nonce_account),
-                    nonce_authority: 1,
-                    fee_payer: 2,
+                    nonce_authority: 2,
+                    fee_payer: 1,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key2, &sig2).into(),
                     Presigner::new(&key1, &sig1).into(),
+                    Presigner::new(&key2, &sig2).into(),
                 ],
             }
         );

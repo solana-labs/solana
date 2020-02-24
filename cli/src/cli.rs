@@ -737,8 +737,12 @@ pub fn parse_command(
                 signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
             let payer_provided = None;
+            let mut bulk_signers = vec![payer_provided];
+            if nonce_account.is_some() {
+                bulk_signers.push(nonce_authority);
+            }
             let signer_info = generate_unique_signers(
-                vec![payer_provided, nonce_authority],
+                bulk_signers,
                 matches,
                 default_signer_path,
                 wallet_manager,
@@ -819,8 +823,13 @@ pub fn parse_command(
                 signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
             let (from, from_pubkey) = signer_of(matches, "from", wallet_manager)?;
 
+            let mut bulk_signers = vec![fee_payer, from];
+            if nonce_account.is_some() {
+                bulk_signers.push(nonce_authority);
+            }
+
             let signer_info = generate_unique_signers(
-                vec![nonce_authority, fee_payer, from],
+                bulk_signers,
                 matches,
                 default_signer_path,
                 wallet_manager,
@@ -3449,17 +3458,14 @@ mod tests {
                 command: CliCommand::Transfer {
                     lamports: 42_000_000_000,
                     to: to_pubkey,
-                    from: 1,
+                    from: 0,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
-                    fee_payer: 1,
+                    fee_payer: 0,
                 },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&from_pubkey, &from_sig).into()
-                ],
+                signers: vec![Presigner::new(&from_pubkey, &from_sig).into()],
             }
         );
 
