@@ -167,12 +167,7 @@ impl Validator {
             completed_slots_receiver,
             leader_schedule_cache,
             snapshot_hash,
-        ) = new_banks_from_blockstore(
-            config.expected_genesis_hash,
-            ledger_path,
-            poh_verify,
-            config,
-        );
+        ) = new_banks_from_blockstore(config, ledger_path, poh_verify);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
@@ -545,10 +540,9 @@ impl Validator {
 
 #[allow(clippy::type_complexity)]
 fn new_banks_from_blockstore(
-    expected_genesis_hash: Option<Hash>,
+    config: &ValidatorConfig,
     blockstore_path: &Path,
     poh_verify: bool,
-    config: &ValidatorConfig,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -574,7 +568,7 @@ fn new_banks_from_blockstore(
     let genesis_hash = genesis_config.hash();
     info!("genesis hash: {}", genesis_hash);
 
-    if let Some(expected_genesis_hash) = expected_genesis_hash {
+    if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
             error!("genesis hash mismatch: expected {}", expected_genesis_hash);
             error!(
