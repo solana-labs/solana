@@ -250,14 +250,16 @@ fn get_rpc_addr(
         }
 
         let trusted_slots = if let Some(trusted_validators) = trusted_validators {
-            let trusted_slots = HashSet::new();
+            let mut trusted_slots = HashSet::new();
             for trusted_validator in trusted_validators {
-                if let Some(slot_hash) = cluster_info
+                if let Some(snapshot_hashes) = cluster_info
                     .read()
                     .unwrap()
                     .get_snapshot_hash_for_node(trusted_validator)
                 {
-                    trusted_slots.union(&slot_hash.iter().collect());
+                    for snapshot_hash in snapshot_hashes {
+                        trusted_slots.insert(*snapshot_hash);
+                    }
                 }
             }
             Some(trusted_slots)
@@ -291,14 +293,16 @@ fn get_rpc_addr(
                                 highest_slot.max(snapshot_hash.0)
                             });
 
-                        if highest_snapshot_slot_for_node > highest_snapshot_slot {
-                            // Found a higher snapshot, remove all rpc peers with a lower snapshot
-                            eligible_rpc_peers.clear();
-                            highest_snapshot_slot = highest_snapshot_slot_for_node;
-                        }
+                        if highest_snapshot_slot_for_node > 0 {
+                            if highest_snapshot_slot_for_node > highest_snapshot_slot {
+                                // Found a higher snapshot, remove all rpc peers with a lower snapshot
+                                eligible_rpc_peers.clear();
+                                highest_snapshot_slot = highest_snapshot_slot_for_node;
+                            }
 
-                        if highest_snapshot_slot_for_node == highest_snapshot_slot {
-                            eligible_rpc_peers.push(rpc_peer.clone());
+                            if highest_snapshot_slot_for_node == highest_snapshot_slot {
+                                eligible_rpc_peers.push(rpc_peer.clone());
+                            }
                         }
                     }
                 }
