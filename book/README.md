@@ -1,9 +1,13 @@
-Building the Solana book
+Building the Solana Docs
 ---
 
 Install the book's dependencies, build, and test the book:
 
 ```bash
+$ brew install coreutils
+$ cargo install svgbob_cli
+$ brew install mscgen
+$ brew install mdbook
 $ ./build.sh
 ```
 
