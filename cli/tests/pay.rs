@@ -12,22 +12,12 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{read_keypair_file, write_keypair, Keypair, Signer},
+    signature::{Keypair, Signer},
 };
-use std::fs::remove_dir_all;
-use std::sync::mpsc::channel;
+use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
 
 #[cfg(test)]
 use solana_core::validator::new_validator_for_tests;
-use std::rc::Rc;
-use std::thread::sleep;
-use std::time::Duration;
-use tempfile::NamedTempFile;
-
-fn make_tmp_file() -> (String, NamedTempFile) {
-    let tmp_file = NamedTempFile::new().unwrap();
-    (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
-}
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
@@ -52,32 +42,36 @@ fn test_cli_timestamp_tx() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let default_signer0 = Keypair::new();
+    let default_signer1 = Keypair::new();
 
     let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_payer.signers = vec![&default_signer0];
 
     let mut config_witness = CliConfig::default();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
+    config_witness.signers = vec![&default_signer1];
 
     assert_ne!(
-        config_payer.keypair.pubkey(),
-        config_witness.keypair.pubkey()
+        config_payer.signers[0].pubkey(),
+        config_witness.signers[0].pubkey()
     );
 
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_payer.keypair.pubkey(),
+        &config_payer.signers[0].pubkey(),
         50,
     )
     .unwrap();
-    check_balance(50, &rpc_client, &config_payer.keypair.pubkey());
+    check_balance(50, &rpc_client, &config_payer.signers[0].pubkey());
 
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_witness.keypair.pubkey(),
+        &config_witness.signers[0].pubkey(),
         1,
     )
     .unwrap();
@@ -89,7 +83,7 @@ fn test_cli_timestamp_tx() {
         lamports: 10,
         to: bob_pubkey,
         timestamp: Some(dt),
-        timestamp_pubkey: Some(config_witness.keypair.pubkey()),
+        timestamp_pubkey: Some(config_witness.signers[0].pubkey()),
         ..PayCommand::default()
     });
     let sig_response = process_command(&config_payer);
@@ -101,7 +95,7 @@ fn test_cli_timestamp_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
+    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
     check_balance(10, &rpc_client, &process_id); // contract balance
     check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
@@ -109,7 +103,7 @@ fn test_cli_timestamp_tx() {
     config_witness.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
     process_command(&config_witness).unwrap();
 
-    check_balance(40, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
+    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
     check_balance(0, &rpc_client, &process_id); // contract balance
     check_balance(10, &rpc_client, &bob_pubkey); // recipient balance
 
@@ -127,30 +121,34 @@ fn test_cli_witness_tx() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let default_signer0 = Keypair::new();
+    let default_signer1 = Keypair::new();
 
     let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_payer.signers = vec![&default_signer0];
 
     let mut config_witness = CliConfig::default();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
+    config_witness.signers = vec![&default_signer1];
 
     assert_ne!(
-        config_payer.keypair.pubkey(),
-        config_witness.keypair.pubkey()
+        config_payer.signers[0].pubkey(),
+        config_witness.signers[0].pubkey()
     );
 
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_payer.keypair.pubkey(),
+        &config_payer.signers[0].pubkey(),
         50,
     )
     .unwrap();
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_witness.keypair.pubkey(),
+        &config_witness.signers[0].pubkey(),
         1,
     )
     .unwrap();
@@ -159,7 +157,7 @@ fn test_cli_witness_tx() {
     config_payer.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        witnesses: Some(vec![config_witness.keypair.pubkey()]),
+        witnesses: Some(vec![config_witness.signers[0].pubkey()]),
         ..PayCommand::default()
     });
     let sig_response = process_command(&config_payer);
@@ -171,7 +169,7 @@ fn test_cli_witness_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
+    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
     check_balance(10, &rpc_client, &process_id); // contract balance
     check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
@@ -179,7 +177,7 @@ fn test_cli_witness_tx() {
     config_witness.command = CliCommand::Witness(bob_pubkey, process_id);
     process_command(&config_witness).unwrap();
 
-    check_balance(40, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
+    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
     check_balance(0, &rpc_client, &process_id); // contract balance
     check_balance(10, &rpc_client, &bob_pubkey); // recipient balance
 
@@ -197,23 +195,27 @@ fn test_cli_cancel_tx() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let default_signer0 = Keypair::new();
+    let default_signer1 = Keypair::new();
 
     let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_payer.signers = vec![&default_signer0];
 
     let mut config_witness = CliConfig::default();
     config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
+    config_witness.signers = vec![&default_signer1];
 
     assert_ne!(
-        config_payer.keypair.pubkey(),
-        config_witness.keypair.pubkey()
+        config_payer.signers[0].pubkey(),
+        config_witness.signers[0].pubkey()
     );
 
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_payer.keypair.pubkey(),
+        &config_payer.signers[0].pubkey(),
         50,
     )
     .unwrap();
@@ -222,7 +224,7 @@ fn test_cli_cancel_tx() {
     config_payer.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        witnesses: Some(vec![config_witness.keypair.pubkey()]),
+        witnesses: Some(vec![config_witness.signers[0].pubkey()]),
         cancelable: true,
         ..PayCommand::default()
     });
@@ -235,7 +237,7 @@ fn test_cli_cancel_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
+    check_balance(40, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
     check_balance(10, &rpc_client, &process_id); // contract balance
     check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
@@ -243,7 +245,7 @@ fn test_cli_cancel_tx() {
     config_payer.command = CliCommand::Cancel(process_id);
     process_command(&config_payer).unwrap();
 
-    check_balance(50, &rpc_client, &config_payer.keypair.pubkey()); // config_payer balance
+    check_balance(50, &rpc_client, &config_payer.signers[0].pubkey()); // config_payer balance
     check_balance(0, &rpc_client, &process_id); // contract balance
     check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
@@ -261,22 +263,26 @@ fn test_offline_pay_tx() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let default_signer = Keypair::new();
+    let default_offline_signer = Keypair::new();
 
     let mut config_offline = CliConfig::default();
     config_offline.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_offline.signers = vec![&default_offline_signer];
     let mut config_online = CliConfig::default();
     config_online.json_rpc_url =
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_online.signers = vec![&default_signer];
     assert_ne!(
-        config_offline.keypair.pubkey(),
-        config_online.keypair.pubkey()
+        config_offline.signers[0].pubkey(),
+        config_online.signers[0].pubkey()
     );
 
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_offline.keypair.pubkey(),
+        &config_offline.signers[0].pubkey(),
         50,
     )
     .unwrap();
@@ -284,12 +290,12 @@ fn test_offline_pay_tx() {
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config_online.keypair.pubkey(),
+        &config_online.signers[0].pubkey(),
         50,
     )
     .unwrap();
-    check_balance(50, &rpc_client, &config_offline.keypair.pubkey());
-    check_balance(50, &rpc_client, &config_online.keypair.pubkey());
+    check_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
+    check_balance(50, &rpc_client, &config_online.signers[0].pubkey());
 
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::Pay(PayCommand {
@@ -301,15 +307,15 @@ fn test_offline_pay_tx() {
     });
     let sig_response = process_command(&config_offline).unwrap();
 
-    check_balance(50, &rpc_client, &config_offline.keypair.pubkey());
-    check_balance(50, &rpc_client, &config_online.keypair.pubkey());
+    check_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
+    check_balance(50, &rpc_client, &config_online.signers[0].pubkey());
     check_balance(0, &rpc_client, &bob_pubkey);
 
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
     let offline_presigner =
-        presigner_from_pubkey_sigs(&config_offline.keypair.pubkey(), &signers).unwrap();
-    let online_pubkey = config_online.keypair.pubkey();
-    config_online.keypair = offline_presigner.into();
+        presigner_from_pubkey_sigs(&config_offline.signers[0].pubkey(), &signers).unwrap();
+    let online_pubkey = config_online.signers[0].pubkey();
+    config_online.signers = vec![&offline_presigner];
     config_online.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
@@ -318,7 +324,7 @@ fn test_offline_pay_tx() {
     });
     process_command(&config_online).unwrap();
 
-    check_balance(40, &rpc_client, &config_offline.keypair.pubkey());
+    check_balance(40, &rpc_client, &config_offline.signers[0].pubkey());
     check_balance(50, &rpc_client, &online_pubkey);
     check_balance(10, &rpc_client, &bob_pubkey);
 
@@ -336,9 +342,11 @@ fn test_nonced_pay_tx() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let default_signer = Keypair::new();
 
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.signers = vec![&default_signer];
 
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
@@ -347,29 +355,28 @@ fn test_nonced_pay_tx() {
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         50 + minimum_nonce_balance,
     )
     .unwrap();
     check_balance(
         50 + minimum_nonce_balance,
         &rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
     );
 
     // Create nonce account
     let nonce_account = Keypair::new();
-    let (nonce_keypair_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: Rc::new(read_keypair_file(&nonce_keypair_file).unwrap().into()),
+        nonce_account: 1,
         seed: None,
-        nonce_authority: Some(config.keypair.pubkey()),
+        nonce_authority: Some(config.signers[0].pubkey()),
         lamports: minimum_nonce_balance,
     };
+    config.signers.push(&nonce_account);
     process_command(&config).unwrap();
 
-    check_balance(50, &rpc_client, &config.keypair.pubkey());
+    check_balance(50, &rpc_client, &config.signers[0].pubkey());
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
@@ -381,6 +388,7 @@ fn test_nonced_pay_tx() {
     };
 
     let bob_pubkey = Pubkey::new_rand();
+    config.signers = vec![&default_signer];
     config.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
@@ -390,7 +398,7 @@ fn test_nonced_pay_tx() {
     });
     process_command(&config).expect("failed to process pay command");
 
-    check_balance(40, &rpc_client, &config.keypair.pubkey());
+    check_balance(40, &rpc_client, &config.signers[0].pubkey());
     check_balance(10, &rpc_client, &bob_pubkey);
 
     // Verify that nonce has been used

@@ -6,7 +6,10 @@ use crate::{
 use bip39::{Language, Mnemonic, Seed};
 use clap::{values_t, ArgMatches, Error, ErrorKind};
 use rpassword::prompt_password_stderr;
-use solana_remote_wallet::remote_keypair::generate_remote_keypair;
+use solana_remote_wallet::{
+    remote_keypair::generate_remote_keypair,
+    remote_wallet::{RemoteWalletError, RemoteWalletManager},
+};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{
@@ -19,6 +22,7 @@ use std::{
     io::{stdin, stdout, Write},
     process::exit,
     str::FromStr,
+    sync::Arc,
 };
 
 pub enum KeypairUrl {
@@ -56,10 +60,11 @@ pub fn presigner_from_pubkey_sigs(
     })
 }
 
-pub fn keypair_util_from_path(
+pub fn signer_from_path(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     match parse_keypair_path(path) {
         KeypairUrl::Ask => {
@@ -75,10 +80,17 @@ pub fn keypair_util_from_path(
             let mut stdin = std::io::stdin();
             Ok(Box::new(read_keypair(&mut stdin)?))
         }
-        KeypairUrl::Usb(path) => Ok(Box::new(generate_remote_keypair(
-            path,
-            derivation_of(matches, "derivation_path"),
-        )?)),
+        KeypairUrl::Usb(path) => {
+            if let Some(wallet_manager) = wallet_manager {
+                Ok(Box::new(generate_remote_keypair(
+                    path,
+                    derivation_of(matches, "derivation_path"),
+                    wallet_manager,
+                )?))
+            } else {
+                Err(RemoteWalletError::NoDeviceFound.into())
+            }
+        }
         KeypairUrl::Pubkey(pubkey) => {
             let presigner = pubkeys_sigs_of(matches, SIGNER_ARG.name)
                 .as_ref()
