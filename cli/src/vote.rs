@@ -457,7 +457,7 @@ pub fn process_show_vote_account(
         build_balance_message(vote_account.lamports, use_lamports_unit, true)
     );
     println!("Validator Identity: {}", vote_state.node_pubkey);
-    println!("Authorized Voter: {}", vote_state.authorized_voter);
+    println!("Authorized Voter: {:?}", vote_state.authorized_voters());
     println!(
         "Authorized Withdrawer: {}",
         vote_state.authorized_withdrawer

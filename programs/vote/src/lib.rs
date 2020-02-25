@@ -1,3 +1,4 @@
+pub mod authorized_voters;
 pub mod vote_instruction;
 pub mod vote_state;
 
