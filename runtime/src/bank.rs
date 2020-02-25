@@ -751,7 +751,7 @@ impl Bank {
         let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
 
         if collector_fees != 0 {
-            let (unburned, burned) = self.fee_rate_governor.burn(collector_fees);
+            let (unburned, burned) = self.fee_calculator.burn(collector_fees);
             // burn a portion of fees
             self.deposit(&self.collector_id, unburned);
             self.capitalization.fetch_sub(burned, Ordering::Relaxed);
@@ -3463,9 +3463,9 @@ mod tests {
         } = create_genesis_config_with_leader(mint, &leader, 3);
         genesis_config.fee_rate_governor.lamports_per_signature = 4; // something divisible by 2
 
-        let expected_fee_paid = genesis_config.fee_rate_governor.lamports_per_signature;
-        let (expected_fee_collected, expected_fee_burned) =
-            genesis_config.fee_rate_governor.burn(expected_fee_paid);
+        let fee_calculator = genesis_config.fee_rate_governor.create_fee_calculator();
+        let expected_fee_paid = fee_calculator.lamports_per_signature;
+        let (expected_fee_collected, expected_fee_burned) = fee_calculator.burn(expected_fee_paid);
 
         let mut bank = Bank::new(&genesis_config);
 
@@ -3611,7 +3611,7 @@ mod tests {
             bank.get_balance(&leader),
             initial_balance
                 + bank
-                    .fee_rate_governor
+                    .fee_calculator
                     .burn(bank.fee_calculator.lamports_per_signature * 2)
                     .0
         );

@@ -1804,6 +1804,7 @@ pub mod tests {
                 "blockhash": blockhash.to_string(),
                 "feeCalculator": {
                     "lamportsPerSignature": 0,
+                    "burnPercent": DEFAULT_BURN_PERCENT,
                 }
             }},
             "id": 1
