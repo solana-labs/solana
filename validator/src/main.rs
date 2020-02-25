@@ -376,56 +376,6 @@ fn get_rpc_node(
     (rpc_contact_info, rpc_client, selected_snapshot_hash)
 }
 
-fn check_vote_account(
-    rpc_client: &RpcClient,
-    vote_pubkey: &Pubkey,
-    voting_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-) -> Result<(), String> {
-    let found_vote_account = rpc_client
-        .get_account(vote_pubkey)
-        .map_err(|err| format!("Failed to get vote account: {}", err.to_string()))?;
-
-    if found_vote_account.owner != solana_vote_program::id() {
-        return Err(format!(
-            "not a vote account (owned by {}): {}",
-            found_vote_account.owner, vote_pubkey
-        ));
-    }
-
-    let found_node_account = rpc_client
-        .get_account(node_pubkey)
-        .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?;
-
-    let found_vote_account = solana_vote_program::vote_state::VoteState::from(&found_vote_account);
-    if let Some(found_vote_account) = found_vote_account {
-        if found_vote_account.authorized_voter != *voting_pubkey {
-            return Err(format!(
-                "account's authorized voter ({}) does not match to the given voting keypair ({}).",
-                found_vote_account.authorized_voter, voting_pubkey
-            ));
-        }
-        if found_vote_account.node_pubkey != *node_pubkey {
-            return Err(format!(
-                "account's node pubkey ({}) does not match to the given identity keypair ({}).",
-                found_vote_account.node_pubkey, node_pubkey
-            ));
-        }
-    } else {
-        return Err(format!("invalid vote account data: {}", vote_pubkey));
-    }
-
-    // Maybe we can calculate minimum voting fee; rather than 1 lamport
-    if found_node_account.lamports <= 1 {
-        return Err(format!(
-            "unfunded identity account ({}): only {} lamports (needs more fund to vote)",
-            node_pubkey, found_node_account.lamports
-        ));
-    }
-
-    Ok(())
-}
-
 fn download_ledger(
     rpc_addr: &SocketAddr,
     ledger_path: &Path,
@@ -568,6 +518,13 @@ pub fn main() {
                 .long("no-voting")
                 .takes_value(false)
                 .help("Launch node without voting"),
+        )
+        .arg(
+            Arg::with_name("no_check_vote_account")
+                .long("no-check-vote-account")
+                .takes_value(false)
+                .conflicts_with("no_voting")
+                .help("Continue if the validator's vote account does not exist"),
         )
         .arg(
             Arg::with_name("dev_no_sigverify")
@@ -811,6 +768,7 @@ pub fn main() {
             .ok()
             .map(|rpc_port| (rpc_port, rpc_port + 1)),
         voting_disabled: matches.is_present("no_voting"),
+        check_vote_account: !matches.is_present("no_check_vote_account"),
         wait_for_supermajority: !matches.is_present("no_wait_for_supermajority"),
         ..ValidatorConfig::default()
     };
@@ -1047,19 +1005,6 @@ pub fn main() {
                 }
             }
             validator_config.expected_genesis_hash = Some(genesis_hash);
-
-            if !validator_config.voting_disabled {
-                check_vote_account(
-                    &rpc_client,
-                    &vote_account,
-                    &voting_keypair.pubkey(),
-                    &identity_keypair.pubkey(),
-                )
-                .unwrap_or_else(|err| {
-                    error!("Failed to check vote account: {}", err);
-                    exit(1);
-                });
-            }
 
             download_ledger(&rpc_contact_info.rpc, &ledger_path, snapshot_hash).unwrap_or_else(
                 |err| {
