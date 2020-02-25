@@ -5,6 +5,7 @@ use crate::{
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
     commitment::BlockCommitmentCache,
+    generate_accounts_hash_service::GenerateAccountsHashService,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
@@ -48,6 +49,7 @@ pub struct Tvu {
     ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
     snapshot_packager_service: Option<SnapshotPackagerService>,
+    generate_accounts_hash_service: GenerateAccountsHashService,
 }
 
 pub struct Sockets {
@@ -161,6 +163,10 @@ impl Tvu {
             }
         };
 
+        let (full_accounts_hash_sender, full_accounts_hash_receiver) = channel();
+        let generate_accounts_hash_service =
+            GenerateAccountsHashService::new(full_accounts_hash_receiver, &bank_forks, exit);
+
         let replay_stage_config = ReplayStageConfig {
             my_pubkey: keypair.pubkey(),
             vote_account: *vote_account,
@@ -168,7 +174,7 @@ impl Tvu {
             exit: exit.clone(),
             subscriptions: subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
-            slot_full_senders: vec![blockstream_slot_sender],
+            slot_full_senders: vec![blockstream_slot_sender, full_accounts_hash_sender],
             latest_root_senders: vec![ledger_cleanup_slot_sender],
             snapshot_package_sender,
             block_commitment_cache,
@@ -226,6 +232,7 @@ impl Tvu {
             ledger_cleanup_service,
             storage_stage,
             snapshot_packager_service,
+            generate_accounts_hash_service,
         }
     }
 
@@ -244,6 +251,7 @@ impl Tvu {
         if let Some(s) = self.snapshot_packager_service {
             s.join()?;
         }
+        self.generate_accounts_hash_service.join()?;
         Ok(())
     }
 }

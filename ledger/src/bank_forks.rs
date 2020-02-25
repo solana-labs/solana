@@ -185,8 +185,14 @@ impl BankForks {
         // of banks since the last snapshot
         if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
             let config = self.snapshot_config.as_ref().unwrap();
-            info!("setting snapshot root: {}", root);
-            if root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot {
+            info!(
+                "setting snapshot root: {} block_height: {}",
+                root,
+                root_bank.block_height()
+            );
+            if root_bank.is_snapshotable()
+                && root - self.last_snapshot_slot >= config.snapshot_interval_slots as Slot
+            {
                 let mut snapshot_time = Measure::start("total-snapshot-ms");
                 let r = self.generate_snapshot(
                     root,

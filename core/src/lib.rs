@@ -24,6 +24,7 @@ pub mod crds_gossip_push;
 pub mod crds_value;
 pub mod fetch_stage;
 pub mod gen_keys;
+pub mod generate_accounts_hash_service;
 pub mod genesis_utils;
 pub mod gossip_service;
 pub mod ledger_cleanup_service;

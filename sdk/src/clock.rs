@@ -55,6 +55,8 @@ pub const MAX_TRANSACTION_FORWARDING_DELAY_GPU: usize = 2;
 /// More delay is expected if CUDA is not enabled (as signature verification takes longer)
 pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 
+pub const DEFAULT_ACCOUNTS_HASH_EPOCH: u64 = 200;
+
 /// Converts a slot to a storage segment. Does not indicate that a segment is complete.
 pub fn get_segment_from_slot(rooted_slot: Slot, slots_per_segment: u64) -> Segment {
     (rooted_slot + (slots_per_segment - 1)) / slots_per_segment

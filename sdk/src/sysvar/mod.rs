@@ -8,6 +8,7 @@ use crate::{
     pubkey::Pubkey,
 };
 
+pub mod accounts_epoch_hash;
 pub mod clock;
 pub mod epoch_schedule;
 pub mod fees;

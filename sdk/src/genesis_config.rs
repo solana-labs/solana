@@ -2,7 +2,10 @@
 
 use crate::{
     account::Account,
-    clock::{UnixTimestamp, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},
+    clock::{
+        UnixTimestamp, DEFAULT_ACCOUNTS_HASH_EPOCH, DEFAULT_SLOTS_PER_SEGMENT,
+        DEFAULT_TICKS_PER_SLOT,
+    },
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeCalculator,
     hash::{hash, Hash},
@@ -58,6 +61,8 @@ pub struct GenesisConfig {
     pub epoch_schedule: EpochSchedule,
     /// network runlevel
     pub operating_mode: OperatingMode,
+    /// Length of accounts hash epoch
+    pub accounts_hash_epoch: u64,
 }
 
 // useful for basic tests
@@ -93,6 +98,7 @@ impl Default for GenesisConfig {
             rent: Rent::default(),
             epoch_schedule: EpochSchedule::default(),
             operating_mode: OperatingMode::Development,
+            accounts_hash_epoch: DEFAULT_ACCOUNTS_HASH_EPOCH,
         }
     }
 }

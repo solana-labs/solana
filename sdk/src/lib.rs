@@ -3,6 +3,7 @@ extern crate self as solana_sdk;
 
 pub mod account;
 pub mod account_utils;
+pub mod accounts_epoch_hash;
 pub mod bpf_loader;
 pub mod clock;
 pub mod commitment_config;

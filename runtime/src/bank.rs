@@ -347,6 +347,8 @@ pub struct Bank {
     /// Rewards that were paid out immediately after this bank was created
     #[serde(skip)]
     pub rewards: Option<Vec<(Pubkey, i64)>>,
+
+    accounts_hash_epoch: u64,
 }
 
 impl Default for BlockhashQueue {
@@ -444,6 +446,7 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
+            accounts_hash_epoch: parent.accounts_hash_epoch,
         };
 
         datapoint_info!(
@@ -473,7 +476,16 @@ impl Bank {
         new.update_clock();
         new.update_fees();
         new.update_recent_blockhashes();
+        new.update_accounts_epoch_hash();
         new
+    }
+
+    pub fn is_snapshotable(&self) -> bool {
+        info!(
+            "block_height: {} hash_epoch: {}",
+            self.block_height, self.accounts_hash_epoch
+        );
+        (self.block_height % self.accounts_hash_epoch) == 0
     }
 
     pub fn collector_id(&self) -> &Pubkey {
@@ -535,6 +547,36 @@ impl Bank {
         }
 
         self.store_account(pubkey, &new_account);
+    }
+
+    fn update_accounts_epoch_hash(&self) {
+        let height = if self.block_height() > self.accounts_hash_epoch {
+            ((self.block_height() - self.accounts_hash_epoch) / self.accounts_hash_epoch)
+                * self.accounts_hash_epoch
+        } else {
+            0
+        };
+        let mut accounts_epoch_slot = 0;
+        for parent in self.parents() {
+            if parent.block_height() == height {
+                accounts_epoch_slot = parent.slot();
+            }
+        }
+        let accounts_epoch_hash = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_accounts_hash(accounts_epoch_slot);
+        debug!(
+            "updating hash to {} from slot: {}",
+            accounts_epoch_hash, accounts_epoch_slot
+        );
+        self.update_sysvar_account(&sysvar::accounts_epoch_hash::id(), |_| {
+            sysvar::accounts_epoch_hash::AccountsEpochHash {
+                hash: accounts_epoch_hash,
+            }
+            .create_account(1)
+        });
     }
 
     fn update_clock(&self) {
@@ -871,6 +913,8 @@ impl Bank {
         for (name, program_id) in &genesis_config.native_instruction_processors {
             self.register_native_instruction_processor(name, program_id);
         }
+
+        self.accounts_hash_epoch = genesis_config.accounts_hash_epoch;
     }
 
     pub fn register_native_instruction_processor(&self, name: &str, program_id: &Pubkey) {
@@ -1898,6 +1942,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
+        assert!(self.is_frozen());
         self.rc
             .accounts
             .accounts_db
@@ -3152,6 +3197,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
 
+        bank.freeze();
         let hash = bank.update_accounts_hash();
         bank.purge_zero_lamport_accounts();
         assert_eq!(bank.update_accounts_hash(), hash);
@@ -3916,11 +3962,9 @@ mod tests {
 
         // Checkpointing should always result in a new state
         let bank2 = new_from_parent(&Arc::new(bank1));
+        bank2.freeze();
         assert_ne!(bank0.hash_internal_state(), bank2.hash_internal_state());
 
-        let pubkey2 = Pubkey::new_rand();
-        info!("transfer 2 {}", pubkey2);
-        bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
         assert!(bank2.verify_bank_hash());
     }
@@ -3939,6 +3983,7 @@ mod tests {
         let bank0 = Arc::new(bank0);
         // Checkpointing should result in a new state while freezing the parent
         let bank2 = Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 1);
+        bank2.freeze();
         assert_ne!(bank0_state, bank2.hash_internal_state());
         // Checkpointing should modify the checkpoint's state when freezed
         assert_ne!(bank0_state, bank0.hash_internal_state());
@@ -3950,12 +3995,10 @@ mod tests {
         let bank3 = Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
         assert!(bank2.verify_bank_hash());
+        bank3.freeze();
         bank3.update_accounts_hash();
         assert!(bank3.verify_bank_hash());
 
-        let pubkey2 = Pubkey::new_rand();
-        info!("transfer 2 {}", pubkey2);
-        bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
         assert!(bank2.verify_bank_hash());
         assert!(bank3.verify_bank_hash());

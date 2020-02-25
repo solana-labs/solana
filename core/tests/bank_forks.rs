@@ -7,6 +7,7 @@ mod tests {
     use itertools::Itertools;
     use solana_core::cluster_info::ClusterInfo;
     use solana_core::contact_info::ContactInfo;
+    use solana_core::generate_accounts_hash_service::GenerateAccountsHashService;
     use solana_core::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_packager_service::SnapshotPackagerService,
@@ -43,7 +44,8 @@ mod tests {
         let accounts_dir = TempDir::new().unwrap();
         let snapshot_dir = TempDir::new().unwrap();
         let snapshot_output_path = TempDir::new().unwrap();
-        let genesis_config_info = create_genesis_config(10_000);
+        let mut genesis_config_info = create_genesis_config(10_000);
+        genesis_config_info.genesis_config.accounts_hash_epoch = snapshot_interval_slots as u64;
         let bank0 = Bank::new_with_paths(
             &genesis_config_info.genesis_config,
             vec![accounts_dir.path().to_path_buf()],
@@ -131,6 +133,8 @@ mod tests {
             let mut bank = Bank::new_from_parent(&bank_forks[slot], &Pubkey::default(), slot + 1);
             f(&mut bank, &mint_keypair);
             let bank = bank_forks.insert(bank);
+            bank.freeze();
+            GenerateAccountsHashService::process_bank(&bank);
             // Set root to make sure we don't end up with too many account storage entries
             // and to allow snapshotting of bank and the purging logic on status_cache to
             // kick in
@@ -216,6 +220,7 @@ mod tests {
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
         let storages: Vec<_> = bank0.get_snapshot_storages();
+        bank0.update_accounts_hash();
         snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &storages).unwrap();
 
         // Set up snapshotting channels
@@ -245,8 +250,8 @@ mod tests {
             let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
+            let bank = bank_forks.insert(bank);
             let accounts_hash = bank.update_accounts_hash();
-            bank_forks.insert(bank);
 
             let package_sender = {
                 if slot == saved_slot as u64 {
@@ -396,6 +401,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_status_cache_snapshot_n() {
+        solana_logger::setup();
         // create banks upto slot (MAX_CACHE_ENTRIES * 2) + 1 while transferring 1 lamport into 2 different accounts each time
         // this is done to ensure the AccountStorageEntries keep getting cleaned up as the root moves
         // ahead. Also tests the status_cache purge and status cache snapshotting.
