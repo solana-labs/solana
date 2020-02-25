@@ -3,7 +3,7 @@ use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate
 use solana_bench_tps::cli;
 use solana_core::gossip_service::{discover_cluster, get_client, get_multi_client};
 use solana_genesis::Base64Account;
-use solana_sdk::fee_calculator::FeeCalculator;
+use solana_sdk::fee_calculator::FeeRateGovernor;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::system_program;
 use std::{collections::HashMap, fs::File, io::prelude::*, path::Path, process::exit, sync::Arc};
@@ -41,7 +41,7 @@ fn main() {
         let (keypairs, _) = generate_keypairs(&id, keypair_count as u64);
         let num_accounts = keypairs.len() as u64;
         let max_fee =
-            FeeCalculator::new(*target_lamports_per_signature, 0).max_lamports_per_signature;
+            FeeRateGovernor::new(*target_lamports_per_signature, 0).max_lamports_per_signature;
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
             + num_lamports_per_account;

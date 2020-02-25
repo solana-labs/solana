@@ -168,15 +168,15 @@ mod tests {
     use crate::{pubkey::Pubkey, system_instruction};
 
     #[test]
-    fn test_fee_calculator_burn() {
-        let mut fee_calculator = FeeCalculator::default();
-        assert_eq!(fee_calculator.burn(2), (1, 1));
+    fn test_fee_rate_governor_burn() {
+        let mut fee_rate_governor = FeeRateGovernor::default();
+        assert_eq!(fee_rate_governor.burn(2), (1, 1));
 
-        fee_calculator.burn_percent = 0;
-        assert_eq!(fee_calculator.burn(2), (2, 0));
+        fee_rate_governor.burn_percent = 0;
+        assert_eq!(fee_rate_governor.burn(2), (2, 0));
 
-        fee_calculator.burn_percent = 100;
-        assert_eq!(fee_calculator.burn(2), (0, 2));
+        fee_rate_governor.burn_percent = 100;
+        assert_eq!(fee_rate_governor.burn(2), (0, 2));
     }
 
     #[test]
@@ -186,27 +186,27 @@ mod tests {
         assert_eq!(FeeCalculator::default().calculate_fee(&message), 0);
 
         // No signature, no fee.
-        assert_eq!(FeeCalculator::new(1, 0).calculate_fee(&message), 0);
+        assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 0);
 
         // One signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message = Message::new(vec![ix0]);
-        assert_eq!(FeeCalculator::new(2, 0).calculate_fee(&message), 2);
+        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 2);
 
         // Two signatures, double the fee.
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
         let message = Message::new(vec![ix0, ix1]);
-        assert_eq!(FeeCalculator::new(2, 0).calculate_fee(&message), 4);
+        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 4);
     }
 
     #[test]
-    fn test_fee_calculator_derived_default() {
+    fn test_fee_rate_governor_derived_default() {
         solana_logger::setup();
 
-        let f0 = FeeCalculator::default();
+        let f0 = FeeRateGovernor::default();
         assert_eq!(
             f0.target_signatures_per_slot,
             DEFAULT_TARGET_SIGNATURES_PER_SLOT
@@ -217,7 +217,7 @@ mod tests {
         );
         assert_eq!(f0.lamports_per_signature, 0);
 
-        let f1 = FeeCalculator::new_derived(&f0, DEFAULT_TARGET_SIGNATURES_PER_SLOT);
+        let f1 = FeeRateGovernor::new_derived(&f0, DEFAULT_TARGET_SIGNATURES_PER_SLOT);
         assert_eq!(
             f1.target_signatures_per_slot,
             DEFAULT_TARGET_SIGNATURES_PER_SLOT
@@ -233,20 +233,20 @@ mod tests {
     }
 
     #[test]
-    fn test_fee_calculator_derived_adjust() {
+    fn test_fee_rate_governor_derived_adjust() {
         solana_logger::setup();
 
-        let mut f = FeeCalculator::default();
+        let mut f = FeeRateGovernor::default();
         f.target_lamports_per_signature = 100;
         f.target_signatures_per_slot = 100;
-        f = FeeCalculator::new_derived(&f, 0);
+        f = FeeRateGovernor::new_derived(&f, 0);
 
         // Ramp fees up
         let mut count = 0;
         loop {
             let last_lamports_per_signature = f.lamports_per_signature;
 
-            f = FeeCalculator::new_derived(&f, std::usize::MAX);
+            f = FeeRateGovernor::new_derived(&f, std::usize::MAX);
             info!("[up] f.lamports_per_signature={}", f.lamports_per_signature);
 
             // some maximum target reached
@@ -262,7 +262,7 @@ mod tests {
         let mut count = 0;
         loop {
             let last_lamports_per_signature = f.lamports_per_signature;
-            f = FeeCalculator::new_derived(&f, 0);
+            f = FeeRateGovernor::new_derived(&f, 0);
 
             info!(
                 "[down] f.lamports_per_signature={}",
@@ -282,7 +282,7 @@ mod tests {
         // Arrive at target rate
         let mut count = 0;
         while f.lamports_per_signature != f.target_lamports_per_signature {
-            f = FeeCalculator::new_derived(&f, f.target_signatures_per_slot);
+            f = FeeRateGovernor::new_derived(&f, f.target_signatures_per_slot);
             info!(
                 "[target] f.lamports_per_signature={}",
                 f.lamports_per_signature

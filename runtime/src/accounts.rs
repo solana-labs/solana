@@ -853,7 +853,7 @@ mod tests {
             instructions,
         );
 
-        let fee_calculator = FeeCalculator::new(10, 0);
+        let fee_calculator = FeeCalculator::new(10);
         assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
 
         let loaded_accounts =
@@ -918,7 +918,7 @@ mod tests {
         let min_balance = rent_collector
             .rent
             .minimum_balance(nonce_state::NonceState::size());
-        let fee_calculator = FeeCalculator::new(min_balance, 0);
+        let fee_calculator = FeeCalculator::new(min_balance);
         let nonce = Keypair::new();
         let mut accounts = vec![(
             nonce.pubkey(),

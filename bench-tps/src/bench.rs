@@ -1134,7 +1134,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::fee_calculator::FeeCalculator;
+    use solana_sdk::fee_calculator::FeeRateGovernor;
     use solana_sdk::genesis_config::create_genesis_config;
 
     #[test]
@@ -1181,8 +1181,8 @@ mod tests {
     #[test]
     fn test_bench_tps_fund_keys_with_fees() {
         let (mut genesis_config, id) = create_genesis_config(10_000);
-        let fee_calculator = FeeCalculator::new(11, 0);
-        genesis_config.fee_calculator = fee_calculator;
+        let fee_rate_governor = FeeRateGovernor::new(11, 0);
+        genesis_config.fee_rate_governor = fee_rate_governor;
         let bank = Bank::new(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;

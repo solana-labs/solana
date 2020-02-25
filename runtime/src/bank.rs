@@ -35,7 +35,7 @@ use solana_sdk::{
     account::Account,
     clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     epoch_schedule::EpochSchedule,
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::GenesisConfig,
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
@@ -302,6 +302,9 @@ pub struct Bank {
     /// Latest transaction fees for transactions processed by this bank
     fee_calculator: FeeCalculator,
 
+    /// Track cluster signature throughput and adjust fee rate
+    fee_rate_governor: FeeRateGovernor,
+
     /// Rent that have been collected
     #[serde(serialize_with = "serialize_atomicu64")]
     #[serde(deserialize_with = "deserialize_atomicu64")]
@@ -401,6 +404,11 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
+        let fee_rate_governor = FeeRateGovernor::new_derived(
+            &parent.fee_rate_governor,
+            parent.signature_count() as usize,
+        );
+
         let mut new = Bank {
             rc,
             src,
@@ -420,10 +428,8 @@ impl Bank {
             rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
-            fee_calculator: FeeCalculator::new_derived(
-                &parent.fee_calculator,
-                parent.signature_count() as usize,
-            ),
+            fee_calculator: fee_rate_governor.create_fee_calculator(),
+            fee_rate_governor,
             capitalization: AtomicU64::new(parent.capitalization()),
             inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
@@ -745,7 +751,7 @@ impl Bank {
         let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
 
         if collector_fees != 0 {
-            let (unburned, burned) = self.fee_calculator.burn(collector_fees);
+            let (unburned, burned) = self.fee_rate_governor.burn(collector_fees);
             // burn a portion of fees
             self.deposit(&self.collector_id, unburned);
             self.capitalization.fetch_sub(burned, Ordering::Relaxed);
@@ -811,7 +817,8 @@ impl Bank {
 
     fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
         // Bootstrap validator collects fees until `new_from_parent` is called.
-        self.fee_calculator = genesis_config.fee_calculator.clone();
+        self.fee_rate_governor = genesis_config.fee_rate_governor.clone();
+        self.fee_calculator = self.fee_rate_governor.create_fee_calculator();
         self.update_fees();
 
         for (pubkey, account) in genesis_config.accounts.iter() {
@@ -903,6 +910,10 @@ impl Bank {
     pub fn get_fee_calculator(&self, hash: &Hash) -> Option<FeeCalculator> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         blockhash_queue.get_fee_calculator(hash).cloned()
+    }
+
+    pub fn get_fee_rate_governor(&self) -> &FeeRateGovernor {
+        &self.fee_rate_governor
     }
 
     pub fn confirmed_last_blockhash(&self) -> (Hash, FeeCalculator) {
@@ -3290,7 +3301,7 @@ mod tests {
     #[test]
     fn test_detect_failed_duplicate_transactions() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(2);
-        genesis_config.fee_calculator.lamports_per_signature = 1;
+        genesis_config.fee_rate_governor.lamports_per_signature = 1;
         let bank = Bank::new(&genesis_config);
 
         let dest = Keypair::new();
@@ -3450,11 +3461,11 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(mint, &leader, 3);
-        genesis_config.fee_calculator.lamports_per_signature = 4; // something divisible by 2
+        genesis_config.fee_rate_governor.lamports_per_signature = 4; // something divisible by 2
 
-        let expected_fee_paid = genesis_config.fee_calculator.lamports_per_signature;
+        let expected_fee_paid = genesis_config.fee_rate_governor.lamports_per_signature;
         let (expected_fee_collected, expected_fee_burned) =
-            genesis_config.fee_calculator.burn(expected_fee_paid);
+            genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
         let mut bank = Bank::new(&genesis_config);
 
@@ -3521,8 +3532,10 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(1_000_000, &leader, 3);
-        genesis_config.fee_calculator.target_lamports_per_signature = 1000;
-        genesis_config.fee_calculator.target_signatures_per_slot = 1;
+        genesis_config
+            .fee_rate_governor
+            .target_lamports_per_signature = 1000;
+        genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
 
         let mut bank = Bank::new(&genesis_config);
         goto_end_of_slot(&mut bank);
@@ -3571,7 +3584,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(100, &leader, 3);
-        genesis_config.fee_calculator.lamports_per_signature = 2;
+        genesis_config.fee_rate_governor.lamports_per_signature = 2;
         let bank = Bank::new(&genesis_config);
 
         let key = Keypair::new();
@@ -3598,7 +3611,7 @@ mod tests {
             bank.get_balance(&leader),
             initial_balance
                 + bank
-                    .fee_calculator
+                    .fee_rate_governor
                     .burn(bank.fee_calculator.lamports_per_signature * 2)
                     .0
         );
@@ -4548,15 +4561,17 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_inherit_fee_calculator() {
+    fn test_bank_inherit_fee_rate_governor() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
-        genesis_config.fee_calculator.target_lamports_per_signature = 123;
+        genesis_config
+            .fee_rate_governor
+            .target_lamports_per_signature = 123;
 
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let bank1 = Arc::new(new_from_parent(&bank0));
         assert_eq!(
-            bank0.fee_calculator.target_lamports_per_signature / 2,
-            bank1.fee_calculator.lamports_per_signature
+            bank0.fee_rate_governor.target_lamports_per_signature / 2,
+            bank1.fee_rate_governor.lamports_per_signature
         );
     }
 
@@ -4659,7 +4674,7 @@ mod tests {
     #[test]
     fn test_bank_fees_account() {
         let (mut genesis_config, _) = create_genesis_config(500);
-        genesis_config.fee_calculator.lamports_per_signature = 12345;
+        genesis_config.fee_rate_governor.lamports_per_signature = 12345;
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
@@ -5443,8 +5458,8 @@ mod tests {
     #[test]
     fn test_pre_post_transaction_balances() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
-        let fee_calculator = FeeCalculator::new(1, 0);
-        genesis_config.fee_calculator = fee_calculator;
+        let fee_rate_governor = FeeRateGovernor::new(1, 0);
+        genesis_config.fee_rate_governor = fee_rate_governor;
         let parent = Arc::new(Bank::new(&genesis_config));
         let bank0 = Arc::new(new_from_parent(&parent));
 

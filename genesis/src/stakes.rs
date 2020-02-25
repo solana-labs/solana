@@ -25,7 +25,7 @@ pub struct StakerInfo {
 //  lamports to cover TX fees (delegation) for one year,
 //  and we support one delegation per epoch
 fn calculate_staker_fees(genesis_config: &GenesisConfig, years: f64) -> u64 {
-    genesis_config.fee_calculator.max_lamports_per_signature
+    genesis_config.fee_rate_governor.max_lamports_per_signature
         * genesis_config.epoch_schedule.get_epoch(years_as_slots(
             years,
             &genesis_config.poh_config.target_tick_duration,
