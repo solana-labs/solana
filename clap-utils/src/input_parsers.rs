@@ -119,7 +119,7 @@ pub fn derivation_of(matches: &ArgMatches<'_>, name: &str) -> Option<DerivationP
     matches.value_of(name).map(|derivation_str| {
         let derivation_str = derivation_str.replace("'", "");
         let mut parts = derivation_str.split('/');
-        let account = parts.next().unwrap().parse::<u16>().unwrap();
+        let account = parts.next().map(|account| account.parse::<u16>().unwrap());
         let change = parts.next().map(|change| change.parse::<u16>().unwrap());
         DerivationPath { account, change }
     })
@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(
             derivation_of(&matches, "single"),
             Some(DerivationPath {
-                account: 2,
+                account: Some(2),
                 change: Some(3)
             })
         );
@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(
             derivation_of(&matches, "single"),
             Some(DerivationPath {
-                account: 2,
+                account: Some(2),
                 change: None
             })
         );
@@ -330,7 +330,7 @@ mod tests {
         assert_eq!(
             derivation_of(&matches, "single"),
             Some(DerivationPath {
-                account: 2,
+                account: Some(2),
                 change: Some(3)
             })
         );
