@@ -299,6 +299,17 @@ pub fn initialize_wallet_manager() -> Result<Arc<RemoteWalletManager>, RemoteWal
     Ok(RemoteWalletManager::new(hidapi))
 }
 
+pub fn maybe_wallet_manager() -> Result<Option<Arc<RemoteWalletManager>>, RemoteWalletError> {
+    let wallet_manager = initialize_wallet_manager()?;
+    let device_count = wallet_manager.update_devices()?;
+    if device_count > 0 {
+        Ok(Some(wallet_manager))
+    } else {
+        drop(wallet_manager);
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
