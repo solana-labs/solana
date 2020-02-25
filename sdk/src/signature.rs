@@ -183,8 +183,8 @@ impl<T> From<T> for Box<dyn Signer>
 where
     T: Signer + 'static,
 {
-    fn from(keypair_util: T) -> Self {
-        Box::new(keypair_util)
+    fn from(signer: T) -> Self {
+        Box::new(signer)
     }
 }
 

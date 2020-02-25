@@ -3,7 +3,7 @@ use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::new_validator_for_tests;
 use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::{bpf_loader, pubkey::Pubkey};
+use solana_sdk::{bpf_loader, pubkey::Pubkey, signature::Keypair};
 use std::{
     fs::{remove_dir_all, File},
     io::Read,
@@ -38,6 +38,7 @@ fn test_cli_deploy_program() {
         .unwrap();
 
     let mut config = CliConfig::default();
+    let keypair = Keypair::new();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.command = CliCommand::Airdrop {
         faucet_host: None,
@@ -45,6 +46,7 @@ fn test_cli_deploy_program() {
         pubkey: None,
         lamports: minimum_balance_for_rent_exemption + 1, // min balance for rent exemption + leftover for tx processing
     };
+    config.signers = vec![&keypair];
     process_command(&config).unwrap();
 
     config.command = CliCommand::Deploy(pathbuf.to_str().unwrap().to_string());

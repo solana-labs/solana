@@ -10,22 +10,12 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     nonce_state::NonceState,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, write_keypair, Signer},
+    signature::{keypair_from_seed, Keypair, Signer},
 };
-use std::fs::remove_dir_all;
-use std::sync::mpsc::channel;
+use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
 
 #[cfg(test)]
 use solana_core::validator::new_validator_for_tests_ex;
-use std::rc::Rc;
-use std::thread::sleep;
-use std::time::Duration;
-use tempfile::NamedTempFile;
-
-fn make_tmp_file() -> (String, NamedTempFile) {
-    let tmp_file = NamedTempFile::new().unwrap();
-    (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
-}
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
@@ -50,13 +40,15 @@ fn test_transfer() {
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
+    let default_signer = Keypair::new();
+    let default_offline_signer = Keypair::new();
+
     let mut config = CliConfig::default();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.signers = vec![&default_signer];
 
-    let sender_pubkey = config.keypair.pubkey();
+    let sender_pubkey = config.signers[0].pubkey();
     let recipient_pubkey = Pubkey::new(&[1u8; 32]);
-    println!("sender: {:?}", sender_pubkey);
-    println!("recipient: {:?}", recipient_pubkey);
 
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &sender_pubkey, 50_000).unwrap();
     check_balance(50_000, &rpc_client, &sender_pubkey);
@@ -66,12 +58,12 @@ fn test_transfer() {
     config.command = CliCommand::Transfer {
         lamports: 10,
         to: recipient_pubkey,
-        from: None,
+        from: 0,
         sign_only: false,
         blockhash_query: BlockhashQuery::All,
         nonce_account: None,
-        nonce_authority: None,
-        fee_payer: None,
+        nonce_authority: 0,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
     check_balance(49_989, &rpc_client, &sender_pubkey);
@@ -79,12 +71,12 @@ fn test_transfer() {
 
     let mut offline = CliConfig::default();
     offline.json_rpc_url = String::default();
+    offline.signers = vec![&default_offline_signer];
     // Verify we cannot contact the cluster
     offline.command = CliCommand::ClusterVersion;
     process_command(&offline).unwrap_err();
 
-    let offline_pubkey = offline.keypair.pubkey();
-    println!("offline: {:?}", offline_pubkey);
+    let offline_pubkey = offline.signers[0].pubkey();
     request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 50).unwrap();
     check_balance(50, &rpc_client, &offline_pubkey);
 
@@ -93,25 +85,26 @@ fn test_transfer() {
     offline.command = CliCommand::Transfer {
         lamports: 10,
         to: recipient_pubkey,
-        from: None,
+        from: 0,
         sign_only: true,
         blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
         nonce_account: None,
-        nonce_authority: None,
-        fee_payer: None,
+        nonce_authority: 0,
+        fee_payer: 0,
     };
     let sign_only_reply = process_command(&offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_only_reply);
     let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
         lamports: 10,
         to: recipient_pubkey,
-        from: Some(offline_presigner.clone().into()),
+        from: 0,
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: None,
-        nonce_authority: None,
-        fee_payer: Some(offline_presigner.clone().into()),
+        nonce_authority: 0,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
     check_balance(39, &rpc_client, &offline_pubkey);
@@ -119,13 +112,12 @@ fn test_transfer() {
 
     // Create nonce account
     let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap();
-    let (nonce_account_file, mut tmp_file) = make_tmp_file();
-    write_keypair(&nonce_account, tmp_file.as_file_mut()).unwrap();
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
+    config.signers = vec![&default_signer, &nonce_account];
     config.command = CliCommand::CreateNonceAccount {
-        nonce_account: Rc::new(read_keypair_file(&nonce_account_file).unwrap().into()),
+        nonce_account: 1,
         seed: None,
         nonce_authority: None,
         lamports: minimum_nonce_balance,
@@ -142,15 +134,16 @@ fn test_transfer() {
     };
 
     // Nonced transfer
+    config.signers = vec![&default_signer];
     config.command = CliCommand::Transfer {
         lamports: 10,
         to: recipient_pubkey,
-        from: None,
+        from: 0,
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
-        nonce_authority: None,
-        fee_payer: None,
+        nonce_authority: 0,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
     check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
@@ -164,9 +157,10 @@ fn test_transfer() {
     assert_ne!(nonce_hash, new_nonce_hash);
 
     // Assign nonce authority to offline
+    config.signers = vec![&default_signer];
     config.command = CliCommand::AuthorizeNonceAccount {
         nonce_account: nonce_account.pubkey(),
-        nonce_authority: None,
+        nonce_authority: 0,
         new_authority: offline_pubkey,
     };
     process_command(&config).unwrap();
@@ -181,28 +175,30 @@ fn test_transfer() {
     };
 
     // Offline, nonced transfer
+    offline.signers = vec![&default_offline_signer];
     offline.command = CliCommand::Transfer {
         lamports: 10,
         to: recipient_pubkey,
-        from: None,
+        from: 0,
         sign_only: true,
         blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
         nonce_account: Some(nonce_account.pubkey()),
-        nonce_authority: None,
-        fee_payer: None,
+        nonce_authority: 0,
+        fee_payer: 0,
     };
     let sign_only_reply = process_command(&offline).unwrap();
     let (blockhash, signers) = parse_sign_only_reply_string(&sign_only_reply);
     let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
         lamports: 10,
         to: recipient_pubkey,
-        from: Some(offline_presigner.clone().into()),
+        from: 0,
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
         nonce_account: Some(nonce_account.pubkey()),
-        nonce_authority: Some(offline_presigner.clone().into()),
-        fee_payer: Some(offline_presigner.clone().into()),
+        nonce_authority: 0,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
     check_balance(28, &rpc_client, &offline_pubkey);

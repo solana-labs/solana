@@ -8,11 +8,12 @@ use num_cpus;
 use solana_clap_utils::{
     input_validators::is_derivation,
     keypair::{
-        keypair_from_seed_phrase, keypair_util_from_path, prompt_passphrase,
+        keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
 use solana_cli_config::config::{Config, CONFIG_FILE};
+use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
 use solana_sdk::{
     pubkey::write_pubkey_file,
     signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
@@ -49,6 +50,7 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
 fn get_keypair_from_matches(
     matches: &ArgMatches,
     config: Config,
+    wallet_manager: Option<Arc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     let mut path = dirs::home_dir().expect("home directory");
     let path = if matches.is_present("keypair") {
@@ -59,7 +61,7 @@ fn get_keypair_from_matches(
         path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
-    keypair_util_from_path(matches, path, "pubkey recovery")
+    signer_from_path(matches, path, "pubkey recovery", wallet_manager.as_ref())
 }
 
 fn output_keypair(
@@ -380,9 +382,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Config::default()
     };
 
+    let wallet_manager = maybe_wallet_manager()?;
+
     match matches.subcommand() {
         ("pubkey", Some(matches)) => {
-            let pubkey = get_keypair_from_matches(matches, config)?.try_pubkey()?;
+            let pubkey = get_keypair_from_matches(matches, config, wallet_manager)?.try_pubkey()?;
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
@@ -559,7 +563,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("verify", Some(matches)) => {
-            let keypair = get_keypair_from_matches(matches, config)?;
+            let keypair = get_keypair_from_matches(matches, config, wallet_manager)?;
             let test_data = b"test";
             let signature = keypair.try_sign_message(test_data)?;
             let pubkey_bs58 = matches.value_of("pubkey").unwrap();
