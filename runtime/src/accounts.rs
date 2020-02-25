@@ -85,9 +85,14 @@ impl Accounts {
         stream: &mut BufReader<R>,
         local_paths: &[PathBuf],
         append_vecs_path: P,
+        should_deserialize_bank_hash: bool,
     ) -> std::result::Result<(), IOError> {
-        self.accounts_db
-            .accounts_from_stream(stream, local_paths, append_vecs_path)
+        self.accounts_db.accounts_from_stream(
+            stream,
+            local_paths,
+            append_vecs_path,
+            should_deserialize_bank_hash,
+        )
     }
 
     /// Return true if the slice has any duplicate elements

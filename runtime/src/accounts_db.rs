@@ -525,6 +525,7 @@ impl AccountsDB {
         mut stream: &mut BufReader<R>,
         local_account_paths: &[PathBuf],
         append_vecs_path: P,
+        should_deserialize_bank_hash: bool,
     ) -> Result<(), IOError> {
         let _len: usize =
             deserialize_from(&mut stream).map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
@@ -593,9 +594,11 @@ impl AccountsDB {
         let version: u64 = deserialize_from(&mut stream)
             .map_err(|_| AccountsDB::get_io_error("write version deserialize error"))?;
 
-        let (slot, bank_hash): (Slot, BankHashInfo) = deserialize_from(&mut stream)
-            .map_err(|_| AccountsDB::get_io_error("bank hashes deserialize error"))?;
-        self.bank_hashes.write().unwrap().insert(slot, bank_hash);
+        if should_deserialize_bank_hash {
+            let (slot, bank_hash): (Slot, BankHashInfo) = deserialize_from(&mut stream)
+                .map_err(|_| AccountsDB::get_io_error("bank hashes deserialize error"))?;
+            self.bank_hashes.write().unwrap().insert(slot, bank_hash);
+        }
 
         // Process deserialized data, set necessary fields in self
         *self.paths.write().unwrap() = local_account_paths.to_vec();
@@ -1223,8 +1226,9 @@ impl AccountsDB {
     pub fn update_accounts_hash(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> Hash {
         let hash = self.calculate_accounts_hash(ancestors, false).unwrap();
         let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
+        let mut bank_hash_info = bank_hashes.entry(slot).or_default();
         bank_hash_info.snapshot_hash = hash;
+        println!("hash for slot: {}, {}", slot, hash);
         hash
     }
 
@@ -1242,7 +1246,7 @@ impl AccountsDB {
             if calculated_hash == found_hash_info.snapshot_hash {
                 Ok(())
             } else {
-                warn!(
+                println!(
                     "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
                     slot, calculated_hash, found_hash_info.snapshot_hash
                 );

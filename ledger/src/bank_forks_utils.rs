@@ -40,13 +40,21 @@ fn to_loadresult(
 pub fn load_bank_from_archive(
     account_paths: Vec<PathBuf>,
     snapshot_config: &SnapshotConfig,
+    should_verify: bool,
+    should_deserialize_bank_hash: bool,
 ) -> Bank {
     let tar = snapshot_utils::get_highest_snapshot_archive_path(
         &snapshot_config.snapshot_package_output_path,
     )
     .unwrap();
-    snapshot_utils::bank_from_archive(&account_paths, &snapshot_config.snapshot_path, &tar.0)
-        .unwrap()
+    snapshot_utils::bank_from_archive(
+        &account_paths,
+        &snapshot_config.snapshot_path,
+        &tar.0,
+        should_verify,
+        should_deserialize_bank_hash,
+    )
+    .unwrap()
 }
 
 pub fn load(
@@ -81,6 +89,8 @@ pub fn load(
                     &account_paths,
                     &snapshot_config.snapshot_path,
                     &archive_filename,
+                    false,
+                    true,
                 )
                 .expect("Load from snapshot failed");
 

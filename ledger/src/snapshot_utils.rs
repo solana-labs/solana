@@ -319,7 +319,7 @@ where
 
     let ret = deserializer(&mut data_file_stream)?;
 
-    let consumed_size = data_file_stream.seek(SeekFrom::Current(0))?;
+    /*let consumed_size = data_file_stream.seek(SeekFrom::Current(0))?;
 
     if file_size != consumed_size {
         let error_message = format!(
@@ -327,7 +327,7 @@ where
             data_file_path, file_size, consumed_size
         );
         return Err(get_io_error(&error_message));
-    }
+    }*/
 
     Ok(ret)
 }
@@ -434,6 +434,8 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: &[PathBuf],
     snapshot_path: &PathBuf,
     snapshot_tar: P,
+    should_verify: bool,
+    should_deserialize_bank_hash: bool,
 ) -> Result<Bank> {
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -459,11 +461,14 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         account_paths,
         &unpacked_snapshots_dir,
         unpacked_accounts_dir,
+        should_deserialize_bank_hash,
     )?;
 
     bank.work_around_dead_slots_cleaning_bug(true);
-    if !bank.verify_snapshot_bank() {
-        panic!("Snapshot bank for slot {} failed to verify", bank.slot());
+    if should_verify {
+        if !bank.verify_snapshot_bank() {
+            panic!("Snapshot bank for slot {} failed to verify", bank.slot());
+        }
     }
     bank.work_around_dead_slots_cleaning_bug(false);
     measure.stop();
@@ -579,6 +584,7 @@ fn rebuild_bank_from_snapshots<P>(
     account_paths: &[PathBuf],
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
+    should_deserialize_bank_hash: bool,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
@@ -604,8 +610,12 @@ where
                 bank::BankRc::new(account_paths.to_vec(), 0, bank.slot()),
                 bank::StatusCacheRc::default(),
             );
-            bank.rc
-                .accounts_from_stream(stream.by_ref(), account_paths, &append_vecs_path)?;
+            bank.rc.accounts_from_stream(
+                stream.by_ref(),
+                account_paths,
+                &append_vecs_path,
+                should_deserialize_bank_hash,
+            )?;
             Ok(bank)
         },
     )?;

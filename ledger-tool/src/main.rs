@@ -531,7 +531,12 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     }
 }
 
-fn load_bank_from_snapshot(arg_matches: &ArgMatches, ledger_path: &PathBuf) -> Bank {
+fn load_bank_from_snapshot(
+    arg_matches: &ArgMatches,
+    ledger_path: &PathBuf,
+    should_verify: bool,
+    should_deserialize_bank_hash: bool,
+) -> Bank {
     let snapshot_config = SnapshotConfig {
         snapshot_interval_slots: 0, // Value doesn't matter
         snapshot_package_output_path: ledger_path.clone(),
@@ -543,7 +548,12 @@ fn load_bank_from_snapshot(arg_matches: &ArgMatches, ledger_path: &PathBuf) -> B
         vec![ledger_path.join("accounts")]
     };
 
-    bank_forks_utils::load_bank_from_archive(account_paths, &snapshot_config)
+    bank_forks_utils::load_bank_from_archive(
+        account_paths,
+        &snapshot_config,
+        should_verify,
+        should_deserialize_bank_hash,
+    )
 }
 
 fn load_bank_forks(
@@ -990,11 +1000,11 @@ fn main() {
             }
         }
         ("verify-snapshot", Some(arg_matches)) => {
-            load_bank_from_snapshot(arg_matches, &ledger_path);
+            load_bank_from_snapshot(arg_matches, &ledger_path, true, true);
         }
         ("convert-accounts", Some(arg_matches)) => {
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
-            let mut root_bank = load_bank_from_snapshot(arg_matches, &ledger_path);
+            let mut root_bank = load_bank_from_snapshot(arg_matches, &ledger_path, false, false);
             // Convert root_bank.EpochStakes
             for (_, stakes) in root_bank.epoch_stakes.iter_mut() {
                 for (pubkey, (_, vote_account)) in stakes.vote_accounts.iter_mut() {
