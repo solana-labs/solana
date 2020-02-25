@@ -45,11 +45,11 @@ use solana_sdk::{
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
-    process,
+    process, result,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
-    thread::{sleep, Result},
+    thread,
     time::Duration,
 };
 
@@ -184,6 +184,19 @@ impl Validator {
             if !hard_forks.is_empty() {
                 info!("Hard forks: {:?}", hard_forks);
             }
+        }
+
+        if !config.voting_disabled {
+            check_vote_account(
+                &bank,
+                &vote_account,
+                &voting_keypair.pubkey(),
+                &keypair.pubkey(),
+            )
+            .unwrap_or_else(|err| {
+                error!("Failed to check vote account: {}", err);
+                process::exit(1);
+            });
         }
 
         let bank_forks = Arc::new(RwLock::new(bank_forks));
@@ -361,7 +374,7 @@ impl Validator {
                     if trusted {
                         break;
                     }
-                    sleep(Duration::from_secs(1));
+                    thread::sleep(Duration::from_secs(1));
                 }
 
                 if !trusted {
@@ -487,7 +500,7 @@ impl Validator {
         }
     }
 
-    pub fn close(mut self) -> Result<()> {
+    pub fn close(mut self) -> thread::Result<()> {
         self.exit();
         self.join()
     }
@@ -517,7 +530,7 @@ impl Validator {
         );
     }
 
-    pub fn join(self) -> Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.poh_service.join()?;
         drop(self.poh_recorder);
         if let Some((rpc_service, rpc_pubsub_service)) = self.rpc_service {
@@ -615,6 +628,56 @@ fn new_banks_from_blockstore(
     )
 }
 
+fn check_vote_account(
+    bank: &Arc<Bank>,
+    vote_pubkey: &Pubkey,
+    voting_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
+) -> result::Result<(), String> {
+    let found_vote_account = bank
+        .get_account(vote_pubkey)
+        .ok_or_else(|| format!("Vote account does not exist: {}", vote_pubkey))?;
+
+    if found_vote_account.owner != solana_vote_program::id() {
+        return Err(format!(
+            "not a vote account (owned by {}): {}",
+            found_vote_account.owner, vote_pubkey
+        ));
+    }
+
+    let found_node_account = bank
+        .get_account(node_pubkey)
+        .ok_or_else(|| format!("Identity account does not exist: {}", node_pubkey))?;
+
+    let found_vote_account = solana_vote_program::vote_state::VoteState::from(&found_vote_account);
+    if let Some(found_vote_account) = found_vote_account {
+        if found_vote_account.authorized_voter != *voting_pubkey {
+            return Err(format!(
+                "account's authorized voter ({}) does not match to the given voting keypair ({}).",
+                found_vote_account.authorized_voter, voting_pubkey
+            ));
+        }
+        if found_vote_account.node_pubkey != *node_pubkey {
+            return Err(format!(
+                "account's node pubkey ({}) does not match to the given identity keypair ({}).",
+                found_vote_account.node_pubkey, node_pubkey
+            ));
+        }
+    } else {
+        return Err(format!("invalid vote account data: {}", vote_pubkey));
+    }
+
+    // Maybe we can calculate minimum voting fee; rather than 1 lamport
+    if found_node_account.lamports <= 1 {
+        return Err(format!(
+            "unfunded identity account ({}): only {} lamports (needs more fund to vote)",
+            node_pubkey, found_node_account.lamports
+        ));
+    }
+
+    Ok(())
+}
+
 fn wait_for_supermajority(
     config: &ValidatorConfig,
     bank: &Arc<Bank>,
@@ -635,7 +698,7 @@ fn wait_for_supermajority(
         if gossip_stake_percent > 75 {
             break;
         }
-        sleep(Duration::new(1, 0));
+        thread::sleep(Duration::new(1, 0));
     }
 }
 
