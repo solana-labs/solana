@@ -3,7 +3,7 @@ use solana_sdk::{
     account::Account,
     client::{AsyncClient, Client, SyncClient},
     commitment_config::CommitmentConfig,
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
     message::Message,
@@ -135,6 +135,17 @@ impl SyncClient for BankClient {
         _commitment_config: CommitmentConfig,
     ) -> Result<(Hash, FeeCalculator)> {
         Ok(self.bank.last_blockhash_with_fee_calculator())
+    }
+
+    fn get_recent_fee_rate_governor(&self) -> Result<FeeRateGovernor> {
+        Ok(self.bank.get_fee_rate_governor().clone())
+    }
+
+    fn get_recent_fee_rate_governor_with_commitment(
+        &self,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<FeeRateGovernor> {
+        self.get_recent_fee_rate_governor()
     }
 
     fn get_signature_status(
