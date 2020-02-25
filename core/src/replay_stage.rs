@@ -534,13 +534,17 @@ impl ReplayStage {
                 "new fork:{} parent:{} (leader) root:{}",
                 poh_slot, parent_slot, root_slot
             );
-            subscriptions.notify_slot(poh_slot, parent_slot, root_slot);
-            let tpu_bank = bank_forks
-                .write()
-                .unwrap()
-                .insert(Bank::new_from_parent(&parent, my_pubkey, poh_slot));
 
-            Self::record_rewards(&tpu_bank, &rewards_recorder_sender);
+            let tpu_bank = Self::new_bank_from_parent_with_notify(
+                &parent,
+                poh_slot,
+                root_slot,
+                my_pubkey,
+                &rewards_recorder_sender,
+                subscriptions,
+            );
+
+            let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
             poh_recorder.lock().unwrap().set_bank(&tpu_bank);
         } else {
             error!("{} No next leader found", my_pubkey);
@@ -1019,10 +1023,14 @@ impl ReplayStage {
                     parent_slot,
                     forks.root()
                 );
-                subscriptions.notify_slot(child_slot, parent_slot, forks.root());
-
-                let child_bank = Bank::new_from_parent(&parent_bank, &leader, child_slot);
-                Self::record_rewards(&child_bank, &rewards_recorder_sender);
+                let child_bank = Self::new_bank_from_parent_with_notify(
+                    &parent_bank,
+                    child_slot,
+                    forks.root(),
+                    &leader,
+                    &rewards_recorder_sender,
+                    subscriptions,
+                );
                 new_banks.insert(child_slot, child_bank);
             }
         }
@@ -1032,6 +1040,21 @@ impl ReplayStage {
         for (_, bank) in new_banks {
             forks.insert(bank);
         }
+    }
+
+    fn new_bank_from_parent_with_notify(
+        parent: &Arc<Bank>,
+        slot: u64,
+        root_slot: u64,
+        leader: &Pubkey,
+        rewards_recorder_sender: &Option<RewardsRecorderSender>,
+        subscriptions: &Arc<RpcSubscriptions>,
+    ) -> Bank {
+        subscriptions.notify_slot(slot, parent.slot(), root_slot);
+
+        let child_bank = Bank::new_from_parent(parent, leader, slot);
+        Self::record_rewards(&child_bank, &rewards_recorder_sender);
+        child_bank
     }
 
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
