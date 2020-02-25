@@ -11,9 +11,11 @@ use serde_json::{Map, Value};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
+    keypair::signer_from_path,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
     commitment_config::CommitmentConfig,
@@ -22,7 +24,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use std::error;
+use std::{error, sync::Arc};
 use titlecase::titlecase;
 
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
@@ -224,17 +226,26 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_validator_info_command(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_validator_info_command(
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     // Prepare validator info
-    let validator_info = parse_args(&matches);
+    let validator_info = parse_args(matches);
     Ok(CliCommandInfo {
         command: CliCommand::SetValidatorInfo {
             validator_info,
             force_keybase: matches.is_present("force"),
             info_pubkey,
         },
-        require_keypair: true,
+        signers: vec![signer_from_path(
+            matches,
+            default_signer_path,
+            "keypair",
+            wallet_manager,
+        )?],
     })
 }
 
@@ -244,7 +255,7 @@ pub fn parse_get_validator_info_command(
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     Ok(CliCommandInfo {
         command: CliCommand::GetValidatorInfo(info_pubkey),
-        require_keypair: false,
+        signers: vec![],
     })
 }
 
@@ -257,7 +268,7 @@ pub fn process_set_validator_info(
 ) -> ProcessResult {
     // Validate keybase username
     if let Some(string) = validator_info.get("keybaseUsername") {
-        let result = verify_keybase(&config.keypair.pubkey(), &string);
+        let result = verify_keybase(&config.signers[0].pubkey(), &string);
         if result.is_err() {
             if force_keybase {
                 println!("--force supplied, ignoring: {:?}", result);
@@ -282,7 +293,7 @@ pub fn process_set_validator_info(
         })
         .find(|(pubkey, account)| {
             let (validator_pubkey, _) = parse_validator_info(&pubkey, &account).unwrap();
-            validator_pubkey == config.keypair.pubkey()
+            validator_pubkey == config.signers[0].pubkey()
         });
 
     // Create validator-info keypair to use if info_pubkey not provided or does not exist
@@ -300,7 +311,7 @@ pub fn process_set_validator_info(
         .poll_get_balance_with_commitment(&info_pubkey, CommitmentConfig::default())
         .unwrap_or(0);
 
-    let keys = vec![(id(), false), (config.keypair.pubkey(), true)];
+    let keys = vec![(id(), false), (config.signers[0].pubkey(), true)];
     let (message, signers): (Message, Vec<&dyn Signer>) = if balance == 0 {
         if info_pubkey != info_keypair.pubkey() {
             println!(
@@ -311,12 +322,12 @@ pub fn process_set_validator_info(
         }
         println!(
             "Publishing info for Validator {:?}",
-            config.keypair.pubkey()
+            config.signers[0].pubkey()
         );
         let lamports = rpc_client
             .get_minimum_balance_for_rent_exemption(ValidatorInfo::max_space() as usize)?;
         let mut instructions = config_instruction::create_account::<ValidatorInfo>(
-            &config.keypair.pubkey(),
+            &config.signers[0].pubkey(),
             &info_keypair.pubkey(),
             lamports,
             keys.clone(),
@@ -327,13 +338,13 @@ pub fn process_set_validator_info(
             keys,
             &validator_info,
         )]);
-        let signers = vec![config.keypair.as_ref(), &info_keypair];
+        let signers = vec![config.signers[0], &info_keypair];
         let message = Message::new(instructions);
         (message, signers)
     } else {
         println!(
             "Updating Validator {:?} info at: {:?}",
-            config.keypair.pubkey(),
+            config.signers[0].pubkey(),
             info_pubkey
         );
         let instructions = vec![config_instruction::store(
@@ -342,8 +353,8 @@ pub fn process_set_validator_info(
             keys,
             &validator_info,
         )];
-        let message = Message::new_with_payer(instructions, Some(&config.keypair.pubkey()));
-        let signers = vec![config.keypair.as_ref()];
+        let message = Message::new_with_payer(instructions, Some(&config.signers[0].pubkey()));
+        let signers = vec![config.signers[0]];
         (message, signers)
     };
 
@@ -353,7 +364,7 @@ pub fn process_set_validator_info(
     tx.try_sign(&signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
     )?;

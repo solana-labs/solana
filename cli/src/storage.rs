@@ -1,16 +1,17 @@
 use crate::cli::{
     check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, CliCommand,
-    CliCommandInfo, CliConfig, CliError, ProcessResult,
+    CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{input_parsers::*, input_validators::*};
+use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_from_path};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::signature::Keypair;
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    account_utils::StateMut, message::Message, pubkey::Pubkey, signature::Signer,
-    system_instruction::SystemError, transaction::Transaction,
+    account_utils::StateMut, message::Message, pubkey::Pubkey, system_instruction::SystemError,
+    transaction::Transaction,
 };
 use solana_storage_program::storage_instruction::{self, StorageAccountType};
+use std::sync::Arc;
 
 pub trait StorageSubCommands {
     fn storage_subcommands(self) -> Self;
@@ -99,35 +100,49 @@ impl StorageSubCommands for App<'_, '_> {
 
 pub fn parse_storage_create_archiver_account(
     matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
     let storage_account = keypair_of(matches, "storage_account").unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account: storage_account.into(),
+            storage_account: 1,
             account_type: StorageAccountType::Archiver,
         },
-        require_keypair: true,
+        signers: vec![
+            signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?,
+            storage_account.into(),
+        ],
     })
 }
 
 pub fn parse_storage_create_validator_account(
     matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
     let storage_account = keypair_of(matches, "storage_account").unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account: storage_account.into(),
+            storage_account: 1,
             account_type: StorageAccountType::Validator,
         },
-        require_keypair: true,
+        signers: vec![
+            signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?,
+            storage_account.into(),
+        ],
     })
 }
 
-pub fn parse_storage_claim_reward(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_storage_claim_reward(
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
     let node_account_pubkey = pubkey_of(matches, "node_account_pubkey").unwrap();
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
     Ok(CliCommandInfo {
@@ -135,7 +150,12 @@ pub fn parse_storage_claim_reward(matches: &ArgMatches<'_>) -> Result<CliCommand
             node_account_pubkey,
             storage_account_pubkey,
         },
-        require_keypair: true,
+        signers: vec![signer_from_path(
+            matches,
+            default_signer_path,
+            "keypair",
+            wallet_manager,
+        )?],
     })
 }
 
@@ -145,20 +165,21 @@ pub fn parse_storage_get_account_command(
     let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::ShowStorageAccount(storage_account_pubkey),
-        require_keypair: false,
+        signers: vec![],
     })
 }
 
 pub fn process_create_storage_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
+    storage_account: SignerIndex,
     account_owner: &Pubkey,
-    storage_account: &Keypair,
     account_type: StorageAccountType,
 ) -> ProcessResult {
+    let storage_account = config.signers[storage_account];
     let storage_account_pubkey = storage_account.pubkey();
     check_unique_pubkeys(
-        (&config.keypair.pubkey(), "cli keypair".to_string()),
+        (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (
             &storage_account_pubkey,
             "storage_account_pubkey".to_string(),
@@ -183,7 +204,7 @@ pub fn process_create_storage_account(
         .max(1);
 
     let ixs = storage_instruction::create_storage_account(
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         &account_owner,
         &storage_account_pubkey,
         required_balance,
@@ -193,18 +214,14 @@ pub fn process_create_storage_account(
 
     let message = Message::new(ixs);
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(
-        &[config.keypair.as_ref(), storage_account],
-        recent_blockhash,
-    )?;
+    tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client
-        .send_and_confirm_transaction(&mut tx, &[config.keypair.as_ref(), storage_account]);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -218,13 +235,13 @@ pub fn process_claim_storage_reward(
 
     let instruction =
         storage_instruction::claim_reward(node_account_pubkey, storage_account_pubkey);
-    let signers = [config.keypair.as_ref()];
+    let signers = [config.signers[0]];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
-        &config.keypair.pubkey(),
+        &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
     )?;
@@ -260,7 +277,7 @@ pub fn process_show_storage_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::signature::write_keypair;
+    use solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -274,6 +291,10 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let pubkey_string = pubkey.to_string();
 
+        let default_keypair = Keypair::new();
+        let (default_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
+
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let storage_account_keypair = Keypair::new();
         write_keypair(&storage_account_keypair, tmp_file.as_file_mut()).unwrap();
@@ -285,14 +306,22 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_archiver_storage_account).unwrap(),
+            parse_command(
+                &test_create_archiver_storage_account,
+                &default_keypair_file,
+                None
+            )
+            .unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account: storage_account_keypair.into(),
+                    storage_account: 1,
                     account_type: StorageAccountType::Archiver,
                 },
-                require_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    storage_account_keypair.into()
+                ],
             }
         );
 
@@ -309,14 +338,22 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_validator_storage_account).unwrap(),
+            parse_command(
+                &test_create_validator_storage_account,
+                &default_keypair_file,
+                None
+            )
+            .unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateStorageAccount {
                     account_owner: pubkey,
-                    storage_account: storage_account_keypair.into(),
+                    storage_account: 1,
                     account_type: StorageAccountType::Validator,
                 },
-                require_keypair: true
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    storage_account_keypair.into()
+                ],
             }
         );
 
@@ -327,13 +364,13 @@ mod tests {
             &storage_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_claim_storage_reward).unwrap(),
+            parse_command(&test_claim_storage_reward, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ClaimStorageReward {
                     node_account_pubkey: pubkey,
                     storage_account_pubkey,
                 },
-                require_keypair: true
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
         );
     }

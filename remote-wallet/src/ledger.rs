@@ -1,5 +1,5 @@
 use crate::remote_wallet::{
-    initialize_wallet_manager, DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo,
+    DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
 };
 use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
@@ -378,9 +378,8 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
 /// Choose a Ledger wallet based on matching info fields
 pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
+    wallet_manager: &RemoteWalletManager,
 ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
-    let wallet_manager = initialize_wallet_manager()?;
-    let _device_count = wallet_manager.update_devices()?;
     let devices = wallet_manager.list_devices();
     let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = devices
         .iter()

@@ -1,6 +1,5 @@
 use crate::keypair::{parse_keypair_path, KeypairUrl, ASK_KEYWORD};
 use chrono::DateTime;
-use solana_remote_wallet::remote_keypair::generate_remote_keypair;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
@@ -53,9 +52,6 @@ pub fn is_pubkey_or_keypair_or_ask_keyword(string: String) -> Result<(), String>
 
 pub fn is_valid_signer(string: String) -> Result<(), String> {
     match parse_keypair_path(&string) {
-        KeypairUrl::Usb(path) => generate_remote_keypair(path, None)
-            .map(|_| ())
-            .map_err(|err| format!("{:?}", err)),
         KeypairUrl::Filepath(path) => is_keypair(path),
         _ => Ok(()),
     }
