@@ -262,7 +262,17 @@ impl RemoteWalletInfo {
                                 _key_path
                             )));
                         }
+                    } else {
+                        return Err(RemoteWalletError::InvalidDerivationPath(format!(
+                            "invalid query string `{}={}`, only `key` supported",
+                            pair.0, pair.1
+                        )));
                     }
+                }
+                if query_pairs.next().is_some() {
+                    return Err(RemoteWalletError::InvalidDerivationPath(
+                        "invalid query string, extra fields not supported".to_string(),
+                    ));
                 }
             }
         }
@@ -449,38 +459,6 @@ mod tests {
             }
         );
 
-        // Other query strings get ignored
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path("usb://ledger/?key=1/2&test=other".to_string()).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            pubkey: Pubkey::default(),
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: Some(1),
-                change: Some(2),
-            }
-        );
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path("usb://ledger/?test=other".to_string()).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "".to_string(),
-            manufacturer: "ledger".to_string(),
-            serial: "".to_string(),
-            pubkey: Pubkey::default(),
-        }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath {
-                account: None,
-                change: None,
-            }
-        );
-
         // Failure cases
         assert!(
             RemoteWalletInfo::parse_path("usb://ledger/nano-s/bad-pubkey?key=1/2".to_string())
@@ -490,6 +468,12 @@ mod tests {
         assert!(RemoteWalletInfo::parse_path("usb:/ledger?key=1/2".to_string()).is_err());
         assert!(RemoteWalletInfo::parse_path("ledger?key=1/2".to_string()).is_err());
         assert!(RemoteWalletInfo::parse_path("usb://ledger?key=1/2/3".to_string()).is_err());
+        // Other query strings cause an error
+        assert!(
+            RemoteWalletInfo::parse_path("usb://ledger/?key=1/2&test=other".to_string()).is_err()
+        );
+        assert!(RemoteWalletInfo::parse_path("usb://ledger/?Key=1/2".to_string()).is_err());
+        assert!(RemoteWalletInfo::parse_path("usb://ledger/?test=other".to_string()).is_err());
     }
 
     #[test]
