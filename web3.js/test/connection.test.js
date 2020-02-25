@@ -342,12 +342,12 @@ test('get epoch schedule', async () => {
     'leaderScheduleSlotOffset',
     'slotsPerEpoch',
   ]) {
+    expect(epochSchedule).toHaveProperty('warmup');
     expect(epochSchedule).toHaveProperty(key);
-    expect(epochSchedule[key]).toBeGreaterThan(0);
+    if (epochSchedule.warmup) {
+      expect(epochSchedule[key]).toBeGreaterThan(0);
+    }
   }
-
-  expect(epochSchedule).toHaveProperty('warmup');
-  expect(epochSchedule.warmup).toBeTruthy();
 });
 
 test('get slot', async () => {
