@@ -638,6 +638,8 @@ impl AccountsDB {
         false
     }
 
+    // Reclaim older states of rooted non-zero lamports accounts as a general
+    // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
     fn compact_before_purge_zero_lamport_accounts(
         &self,
         purges: &HashMap<Pubkey, Vec<(Slot, AccountInfo)>>,
