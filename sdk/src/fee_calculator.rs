@@ -8,6 +8,34 @@ pub struct FeeCalculator {
     // The current cost of a signature  This amount may increase/decrease over time based on
     // cluster processing load.
     pub lamports_per_signature: u64,
+}
+
+impl Default for FeeCalculator {
+    fn default() -> Self {
+        Self {
+            lamports_per_signature: 0,
+        }
+    }
+}
+
+impl FeeCalculator {
+    pub fn new(lamports_per_signature: u64) -> Self {
+        Self {
+            lamports_per_signature,
+        }
+    }
+
+    pub fn calculate_fee(&self, message: &Message) -> u64 {
+        self.lamports_per_signature * u64::from(message.header.num_required_signatures)
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeRateGovernor {
+    // The current cost of a signature  This amount may increase/decrease over time based on
+    // cluster processing load.
+    pub lamports_per_signature: u64,
 
     // The target cost of a signature when the cluster is operating around target_signatures_per_slot
     // signatures
@@ -32,9 +60,9 @@ pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
 // Percentage of tx fees to burn
 pub const DEFAULT_BURN_PERCENT: u8 = 50;
 
-impl Default for FeeCalculator {
+impl Default for FeeRateGovernor {
     fn default() -> Self {
-        FeeCalculator {
+        Self {
             lamports_per_signature: 0,
             target_lamports_per_signature: DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE,
             target_signatures_per_slot: DEFAULT_TARGET_SIGNATURES_PER_SLOT,
@@ -45,23 +73,23 @@ impl Default for FeeCalculator {
     }
 }
 
-impl FeeCalculator {
+impl FeeRateGovernor {
     pub fn new(target_lamports_per_signature: u64, target_signatures_per_slot: usize) -> Self {
-        let base_fee_calculator = Self {
+        let base_fee_rate_governor = Self {
             target_lamports_per_signature,
             lamports_per_signature: target_lamports_per_signature,
             target_signatures_per_slot,
-            ..FeeCalculator::default()
+            ..FeeRateGovernor::default()
         };
 
-        Self::new_derived(&base_fee_calculator, 0)
+        Self::new_derived(&base_fee_rate_governor, 0)
     }
 
     pub fn new_derived(
-        base_fee_calculator: &FeeCalculator,
+        base_fee_rate_governor: &FeeRateGovernor,
         latest_signatures_per_slot: usize,
     ) -> Self {
-        let mut me = base_fee_calculator.clone();
+        let mut me = base_fee_rate_governor.clone();
 
         if me.target_signatures_per_slot > 0 {
             // lamports_per_signature can range from 50% to 1000% of
@@ -85,7 +113,7 @@ impl FeeCalculator {
             );
 
             let gap = desired_lamports_per_signature as i64
-                - base_fee_calculator.lamports_per_signature as i64;
+                - base_fee_rate_governor.lamports_per_signature as i64;
 
             if gap == 0 {
                 me.lamports_per_signature = desired_lamports_per_signature;
@@ -104,11 +132,12 @@ impl FeeCalculator {
                 me.lamports_per_signature =
                     me.max_lamports_per_signature
                         .min(me.min_lamports_per_signature.max(
-                            (base_fee_calculator.lamports_per_signature as i64 + gap_adjust) as u64,
+                            (base_fee_rate_governor.lamports_per_signature as i64 + gap_adjust)
+                                as u64,
                         ));
             }
         } else {
-            me.lamports_per_signature = base_fee_calculator.target_lamports_per_signature;
+            me.lamports_per_signature = base_fee_rate_governor.target_lamports_per_signature;
             me.min_lamports_per_signature = me.target_lamports_per_signature;
             me.max_lamports_per_signature = me.target_lamports_per_signature;
         }
@@ -119,14 +148,17 @@ impl FeeCalculator {
         me
     }
 
-    pub fn calculate_fee(&self, message: &Message) -> u64 {
-        self.lamports_per_signature * u64::from(message.header.num_required_signatures)
-    }
-
     /// calculate unburned fee from a fee total, returns (unburned, burned)
     pub fn burn(&self, fees: u64) -> (u64, u64) {
         let burned = fees * u64::from(self.burn_percent) / 100;
         (fees - burned, burned)
+    }
+
+    /// create a FeeCalculator based on current cluster signature throughput
+    pub fn create_fee_calculator(&self) -> FeeCalculator {
+        FeeCalculator {
+            lamports_per_signature: self.lamports_per_signature,
+        }
     }
 }
 
