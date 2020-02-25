@@ -39,7 +39,7 @@ pub fn parse_keypair_path(path: &str) -> KeypairUrl {
     } else if path == ASK_KEYWORD {
         KeypairUrl::Ask
     } else if path.starts_with("usb://") {
-        KeypairUrl::Usb(path.split_at(6).1.to_string())
+        KeypairUrl::Usb(path.to_string())
     } else if let Ok(pubkey) = Pubkey::from_str(path) {
         KeypairUrl::Pubkey(pubkey)
     } else {
