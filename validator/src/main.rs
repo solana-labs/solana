@@ -570,6 +570,14 @@ pub fn main() {
                 .help("Launch node without voting"),
         )
         .arg(
+            Arg::with_name("no_check_vote_account")
+                .long("no-check-vote-account")
+                .takes_value(false)
+                .conflicts_with("no_voting")
+                .requires("entrypoint")
+                .help("Skip the RPC vote account sanity check")
+        )
+        .arg(
             Arg::with_name("dev_no_sigverify")
                 .long("dev-no-sigverify")
                 .takes_value(false)
@@ -773,6 +781,7 @@ pub fn main() {
     let cuda = matches.is_present("cuda");
     let no_genesis_fetch = matches.is_present("no_genesis_fetch");
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
+    let no_check_vote_account = matches.is_present("no_check_vote_account");
     let private_rpc = matches.is_present("private_rpc");
 
     // Canonicalize ledger path to avoid issues with symlink creation
@@ -1048,7 +1057,7 @@ pub fn main() {
             }
             validator_config.expected_genesis_hash = Some(genesis_hash);
 
-            if !validator_config.voting_disabled {
+            if !validator_config.voting_disabled && !no_check_vote_account {
                 check_vote_account(
                     &rpc_client,
                     &vote_account,
