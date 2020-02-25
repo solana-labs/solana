@@ -193,6 +193,10 @@ impl LedgerWallet {
         match status {
             // These need to be aligned with solana Ledger app error codes, and clippy allowance removed
             0x6700 => Err(RemoteWalletError::Protocol("Incorrect length")),
+            0x6802 => Err(RemoteWalletError::Protocol("Invalid parameter")),
+            0x6803 => Err(RemoteWalletError::Protocol(
+                "Overflow: message longer than MAX_MESSAGE_LENGTH",
+            )),
             0x6982 => Err(RemoteWalletError::Protocol(
                 "Security status not satisfied (Canceled by user)",
             )),
@@ -361,16 +365,20 @@ pub fn is_valid_ledger(vendor_id: u16, product_id: u16) -> bool {
 fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
     let byte = if derivation_path.change.is_some() {
         4
-    } else {
+    } else if derivation_path.account.is_some() {
         3
+    } else {
+        2
     };
     let mut concat_derivation = vec![byte];
     concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
-    concat_derivation.extend_from_slice(&[0x80, 0]);
-    concat_derivation.extend_from_slice(&derivation_path.account.to_be_bytes());
-    if let Some(change) = derivation_path.change {
+    if let Some(account) = derivation_path.account {
         concat_derivation.extend_from_slice(&[0x80, 0]);
-        concat_derivation.extend_from_slice(&change.to_be_bytes());
+        concat_derivation.extend_from_slice(&account.to_be_bytes());
+        if let Some(change) = derivation_path.change {
+            concat_derivation.extend_from_slice(&[0x80, 0]);
+            concat_derivation.extend_from_slice(&change.to_be_bytes());
+        }
     }
     concat_derivation
 }

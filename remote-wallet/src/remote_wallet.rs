@@ -240,12 +240,12 @@ impl RemoteWalletInfo {
                         coin
                     )));
                 }
-                if let Some(account) = parts.next() {
-                    derivation_path.account = account.replace("'", "").parse::<u16>().unwrap();
-                    derivation_path.change = parts
-                        .next()
-                        .and_then(|change| change.replace("'", "").parse::<u16>().ok());
-                }
+                derivation_path.account = parts
+                    .next()
+                    .and_then(|account| account.replace("'", "").parse::<u16>().ok());
+                derivation_path.change = parts
+                    .next()
+                    .and_then(|change| change.replace("'", "").parse::<u16>().ok());
             } else {
                 return Err(RemoteWalletError::InvalidDerivationPath(
                     "Derivation path too short, missing coin number".to_string(),
@@ -273,18 +273,23 @@ impl RemoteWalletInfo {
 
 #[derive(Default, PartialEq, Clone)]
 pub struct DerivationPath {
-    pub account: u16,
+    pub account: Option<u16>,
     pub change: Option<u16>,
 }
 
 impl fmt::Debug for DerivationPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let account = if let Some(account) = self.account {
+            format!("/{:?}'", account)
+        } else {
+            "".to_string()
+        };
         let change = if let Some(change) = self.change {
             format!("/{:?}'", change)
         } else {
             "".to_string()
         };
-        write!(f, "m/44'/501'/{:?}'{}", self.account, change)
+        write!(f, "m/44'/501'{}{}", account, change)
     }
 }
 
@@ -328,7 +333,7 @@ mod tests {
         assert_eq!(
             derivation_path,
             DerivationPath {
-                account: 1,
+                account: Some(1),
                 change: Some(2),
             }
         );
@@ -344,7 +349,7 @@ mod tests {
         assert_eq!(
             derivation_path,
             DerivationPath {
-                account: 1,
+                account: Some(1),
                 change: Some(2),
             }
         );
