@@ -193,6 +193,10 @@ impl LedgerWallet {
         match status {
             // These need to be aligned with solana Ledger app error codes, and clippy allowance removed
             0x6700 => Err(RemoteWalletError::Protocol("Incorrect length")),
+            0x6802 => Err(RemoteWalletError::Protocol("Invalid parameter")),
+            0x6803 => Err(RemoteWalletError::Protocol(
+                "Overflow: message longer than MAX_MESSAGE_LENGTH",
+            )),
             0x6982 => Err(RemoteWalletError::Protocol(
                 "Security status not satisfied (Canceled by user)",
             )),
