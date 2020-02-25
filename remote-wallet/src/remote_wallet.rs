@@ -245,6 +245,7 @@ impl RemoteWalletInfo {
                 if let Some(mut pair) = query_pairs.next() {
                     if pair.0 == "key" {
                         let key_path = pair.1.to_mut();
+                        let _key_path = key_path.clone();
                         if key_path.ends_with('/') {
                             key_path.pop();
                         }
@@ -255,6 +256,12 @@ impl RemoteWalletInfo {
                         derivation_path.change = parts
                             .next()
                             .and_then(|change| change.replace("'", "").parse::<u32>().ok());
+                        if parts.next().is_some() {
+                            return Err(RemoteWalletError::InvalidDerivationPath(format!(
+                                "key path `{}` too deep, only <account>/<change> supported",
+                                _key_path
+                            )));
+                        }
                     }
                 }
             }
@@ -482,6 +489,7 @@ mod tests {
         assert!(RemoteWalletInfo::parse_path("usb://?key=1/2".to_string()).is_err());
         assert!(RemoteWalletInfo::parse_path("usb:/ledger?key=1/2".to_string()).is_err());
         assert!(RemoteWalletInfo::parse_path("ledger?key=1/2".to_string()).is_err());
+        assert!(RemoteWalletInfo::parse_path("usb://ledger?key=1/2/3".to_string()).is_err());
     }
 
     #[test]
