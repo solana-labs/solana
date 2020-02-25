@@ -280,7 +280,7 @@ impl AccountStorageEntry {
 
     fn remove_account(&self) -> usize {
         let mut count_and_status = self.count_and_status.write().unwrap();
-        let (count, mut status) = *count_and_status;
+        let (mut count, mut status) = *count_and_status;
 
         if count == 1 && status == AccountStorageStatus::Full {
             // this case arises when we remove the last account from the
@@ -298,12 +298,18 @@ impl AccountStorageEntry {
             status = AccountStorageStatus::Available;
         }
 
-        if count > 0 {
-            *count_and_status = (count - 1, status);
-        } else {
-            warn!("count value 0 for slot {}", self.slot_id);
-        }
-        count_and_status.0
+        // Some code path is removing accounts too many; this may result in an
+        // unintended reveal of old state for unrelated accounts.
+        assert!(
+            count > 0,
+            "double remove of account in slot: {}/store: {}!!",
+            self.slot_id,
+            self.id
+        );
+
+        count -= 1;
+        *count_and_status = (count, status);
+        count
     }
 
     pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> IOResult<()> {
@@ -2704,5 +2710,18 @@ pub mod tests {
 
         db.add_root(base_slot);
         assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+    }
+
+    #[test]
+    #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
+    fn test_storage_remove_account_double_remove() {
+        let accounts = AccountsDB::new(Vec::new());
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new(1, 0, &Account::default().owner);
+        accounts.store(0, &[(&pubkey, &account)]);
+        let storage = accounts.storage.read().unwrap();
+        let storage_entry = storage.0[&0].values().next().unwrap();
+        storage_entry.remove_account();
+        storage_entry.remove_account();
     }
 }
