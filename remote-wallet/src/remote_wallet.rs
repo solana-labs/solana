@@ -242,10 +242,10 @@ impl RemoteWalletInfo {
                 }
                 derivation_path.account = parts
                     .next()
-                    .and_then(|account| account.replace("'", "").parse::<u16>().ok());
+                    .and_then(|account| account.replace("'", "").parse::<u32>().ok());
                 derivation_path.change = parts
                     .next()
-                    .and_then(|change| change.replace("'", "").parse::<u16>().ok());
+                    .and_then(|change| change.replace("'", "").parse::<u32>().ok());
             } else {
                 return Err(RemoteWalletError::InvalidDerivationPath(
                     "Derivation path too short, missing coin number".to_string(),
@@ -273,8 +273,8 @@ impl RemoteWalletInfo {
 
 #[derive(Default, PartialEq, Clone)]
 pub struct DerivationPath {
-    pub account: Option<u16>,
-    pub change: Option<u16>,
+    pub account: Option<u32>,
+    pub change: Option<u32>,
 }
 
 impl fmt::Debug for DerivationPath {
