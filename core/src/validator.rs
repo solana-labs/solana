@@ -44,6 +44,7 @@ use solana_sdk::{
     timing::timestamp,
 };
 use std::{
+    collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     process,
@@ -73,6 +74,7 @@ pub struct ValidatorConfig {
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: bool,
     pub new_hard_forks: Option<Vec<Slot>>,
+    pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
 }
 
 impl Default for ValidatorConfig {
@@ -95,6 +97,7 @@ impl Default for ValidatorConfig {
             fixed_leader_schedule: None,
             wait_for_supermajority: false,
             new_hard_forks: None,
+            trusted_validators: None,
         }
     }
 }
@@ -341,9 +344,7 @@ impl Validator {
         }
 
         if let Some(snapshot_hash) = snapshot_hash {
-            if let Some(ref trusted_validators) =
-                config.snapshot_config.as_ref().unwrap().trusted_validators
-            {
+            if let Some(ref trusted_validators) = config.trusted_validators {
                 let mut trusted = false;
                 for _ in 0..10 {
                     trusted = cluster_info
