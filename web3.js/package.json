@@ -37,7 +37,7 @@
     "/src"
   ],
   "scripts": {
-    "bpf-sdk:install": "bin/bpf-sdk-install.sh",
+    "bpf-sdk:install": "bin/bpf-sdk-install.sh .",
     "bpf-sdk:remove-symlinks": "find bpf-sdk -type l -print -exec cp {} {}.tmp \\; -exec mv {}.tmp {} \\;",
     "build": "cross-env NODE_ENV=production rollup -c",
     "build:fixtures": "./test/fixtures/noop-c/build.sh; ./test/fixtures/noop-rust/build.sh",

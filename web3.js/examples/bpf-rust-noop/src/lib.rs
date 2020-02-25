@@ -4,8 +4,7 @@
 
 extern crate solana_sdk;
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, info, log::*, program_error::ProgramError,
-    pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, log::*, pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
@@ -24,8 +23,8 @@ entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    ix_data: &[u8],
-) -> Result<(), ProgramError> {
+    instruction_data: &[u8],
+) -> ProgramResult {
     info!("Program identifier:");
     program_id.log();
 
@@ -33,7 +32,7 @@ fn process_instruction(
     // the no-op program, no account keys or input data are expected but real
     // programs will have specific requirements so they can do their work.
     info!("Account keys and instruction input data:");
-    sol_log_params(accounts, ix_data);
+    sol_log_params(accounts, instruction_data);
 
     {
         // Test - use std methods, unwrap
