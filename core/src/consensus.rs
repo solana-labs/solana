@@ -483,7 +483,10 @@ pub mod test {
         signature::{Keypair, Signer},
         transaction::Transaction,
     };
-    use solana_vote_program::{vote_instruction, vote_state::Vote};
+    use solana_vote_program::{
+        vote_instruction,
+        vote_state::{Vote, VoteStateVersions},
+    };
     use std::collections::{HashMap, VecDeque};
     use std::sync::RwLock;
     use std::{thread::sleep, time::Duration};
@@ -706,9 +709,11 @@ pub mod test {
             for slot in *votes {
                 vote_state.process_slot_vote_unchecked(*slot);
             }
-            vote_state
-                .serialize(&mut account.data)
-                .expect("serialize state");
+            VoteState::serialize(
+                &VoteStateVersions::Current(Box::new(vote_state)),
+                &mut account.data,
+            )
+            .expect("serialize state");
             stakes.push((Pubkey::new_rand(), (*lamports, account)));
         }
         stakes

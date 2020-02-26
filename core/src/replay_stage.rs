@@ -1099,7 +1099,7 @@ pub(crate) mod tests {
         transaction::TransactionError,
     };
     use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state::{self, Vote, VoteState};
+    use solana_vote_program::vote_state::{self, Vote, VoteState, VoteStateVersions};
     use std::{
         fs::remove_dir_all,
         iter,
@@ -1134,7 +1134,8 @@ pub(crate) mod tests {
             let mut vote_account = bank.get_account(&pubkey).unwrap();
             let mut vote_state = VoteState::from(&vote_account).unwrap();
             vote_state.process_slot_vote_unchecked(slot);
-            vote_state.to(&mut vote_account).unwrap();
+            let versioned = VoteStateVersions::Current(Box::new(vote_state));
+            VoteState::to(&versioned, &mut vote_account).unwrap();
             bank.store_account(&pubkey, &vote_account);
         }
 
@@ -1718,7 +1719,8 @@ pub(crate) mod tests {
             let mut leader_vote_account = bank.get_account(&pubkey).unwrap();
             let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
             vote_state.process_slot_vote_unchecked(bank.slot());
-            vote_state.to(&mut leader_vote_account).unwrap();
+            let versioned = VoteStateVersions::Current(Box::new(vote_state));
+            VoteState::to(&versioned, &mut leader_vote_account).unwrap();
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
