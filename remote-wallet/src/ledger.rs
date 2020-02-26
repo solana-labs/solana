@@ -43,7 +43,7 @@ const HID_PREFIX_ZERO: usize = 0;
 
 mod commands {
     #[allow(dead_code)]
-    pub const GET_APP_CONFIGURATION: u8 = 0x06;
+    pub const GET_APP_CONFIGURATION: u8 = 0x01;
     pub const GET_PUBKEY: u8 = 0x02;
     pub const SIGN_MESSAGE: u8 = 0x03;
 }
@@ -76,7 +76,7 @@ impl LedgerWallet {
     //		* APDU_INS				(1 byte)
     //		* APDU_P1				(1 byte)
     //		* APDU_P2				(1 byte)
-    //		* APDU_LENGTH				(1 byte)
+    //		* APDU_LENGTH				(2 bytes)
     //		* APDU_Payload				(Variable)
     //
     fn write(&self, command: u8, p1: u8, p2: u8, data: &[u8]) -> Result<(), RemoteWalletError> {
@@ -141,11 +141,6 @@ impl LedgerWallet {
     //		* Payload				(Optional)
     //
     // Payload
-    //		* APDU Total Length			(2 bytes big endian)
-    //		* APDU_CLA				(1 byte)
-    //		* APDU_INS				(1 byte)
-    //		* APDU_P1				(1 byte)
-    //		* APDU_P2				(1 byte)
     //		* APDU_LENGTH				(1 byte)
     //		* APDU_Payload				(Variable)
     //
