@@ -1,6 +1,6 @@
 # Stake Delegation and Rewards
 
-Stakers are rewarded for helping to validate the ledger. They do this by delegating their stake to validator nodes. Those validators do the legwork of replaying the ledger and send votes to a per-node vote account to which stakers can delegate their stakes. The rest of the cluster uses those stake-weighted votes to select a block when forks arise. Both the validator and staker need some economic incentive to play their part. The validator needs to be compensated for its hardware and the staker needs to be compensated for the risk of getting its stake slashed. The economics are covered in [staking rewards](../implemented-proposals/staking-rewards.md). This chapter, on the other hand, describes the underlying mechanics of its implementation.
+Stakers are rewarded for helping to validate the ledger. They do this by delegating their stake to validator nodes. Those validators do the legwork of replaying the ledger and send votes to a per-node vote account to which stakers can delegate their stakes. The rest of the cluster uses those stake-weighted votes to select a block when forks arise. Both the validator and staker need some economic incentive to play their part. The validator needs to be compensated for its hardware and the staker needs to be compensated for the risk of getting its stake slashed. The economics are covered in [staking rewards](../implemented-proposals/staking-rewards.md). This section, on the other hand, describes the underlying mechanics of its implementation.
 
 ## Basic Design
 

@@ -1,6 +1,6 @@
 //! Fork Selection Simulation
 //!
-//! Description of the algorithm can be found in [book/src/fork-selection.md](book/src/fork-selection.md).
+//! Description of the algorithm can be found in [docs/src/fork-selection.md](docs/src/fork-selection.md).
 //!
 //! A test library function exists for configuring networks.
 //! ```

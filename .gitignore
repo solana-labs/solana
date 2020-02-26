@@ -1,6 +1,6 @@
-/book/html/
-/book/src/tests.ok
-/book/src/.gitbook/assets/*.svg
+/docs/html/
+/docs/src/tests.ok
+/docs/src/.gitbook/assets/*.svg
 /farf/
 /solana-release/
 /solana-release.tar.bz2
