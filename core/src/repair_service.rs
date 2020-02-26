@@ -317,7 +317,7 @@ impl RepairService {
         );
     }
 
-    // Update the gossiped structure used for the "Repairmen" repair protocol. See book
+    // Update the gossiped structure used for the "Repairmen" repair protocol. See docs
     // for details.
     fn update_epoch_slots(
         id: Pubkey,

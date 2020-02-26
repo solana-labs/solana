@@ -4,9 +4,9 @@
 
 Solana is an open source project implementing a new, high-performance, permissionless blockchain. Solana is also the name of a company headquartered in San Francisco that maintains the open source project.
 
-## About this Book
+## Documentation Overview
 
-This book describes the Solana open source project, a blockchain built from the ground up for scale. The book covers why Solana is useful, how to use it, how it works, and why it will continue to work long after the company Solana closes its doors. The goal of the Solana architecture is to demonstrate there exists a set of software algorithms that when used in combination to implement a blockchain, removes software as a performance bottleneck, allowing transaction throughput to scale proportionally with network bandwidth. The architecture goes on to satisfy all three desirable properties of a proper blockchain: it is scalable, secure and decentralized.
+The Solana docs describe the Solana open source project, a blockchain built from the ground up for scale. They cover why Solana is useful, how to use it, how it works, and why it will continue to work long after the company Solana closes its doors. The goal of the Solana architecture is to demonstrate there exists a set of software algorithms that when used in combination to implement a blockchain, removes software as a performance bottleneck, allowing transaction throughput to scale proportionally with network bandwidth. The architecture goes on to satisfy all three desirable properties of a proper blockchain: it is scalable, secure and decentralized.
 
 The architecture describes a theoretical upper bound of 710 thousand transactions per second \(tps\) on a standard gigabit network and 28.4 million tps on 40 gigabit. Furthermore, the architecture supports safe, concurrent execution of programs authored in general purpose programming languages such as C or Rust.
 

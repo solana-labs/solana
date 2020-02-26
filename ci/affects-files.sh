@@ -9,7 +9,7 @@
 #     ./affects-files.sh ^snap/  -- anything under the snap/ subdirectory
 #     ./affects-files.sh snap/   -- also matches foo/snap/
 # Any pattern starting with the ! character will be negated:
-#     ./affects-files.sh !^book/  -- anything *not* under the book/ subdirectory
+#     ./affects-files.sh !^docs/  -- anything *not* under the docs/ subdirectory
 #
 set -e
 cd "$(dirname "$0")"/..

@@ -1,6 +1,6 @@
 # Terminology
 
-The following terms are used throughout this book.
+The following terms are used throughout the documentation.
 
 ## account
 

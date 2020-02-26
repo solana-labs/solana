@@ -1,6 +1,6 @@
 # Anatomy of a Transaction
 
-This chapter documents the binary format of a transaction.
+This section documents the binary format of a transaction.
 
 ## Transaction Format
 

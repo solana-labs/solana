@@ -23,12 +23,12 @@ It's possible for a centralized database to process 710,000 transactions per sec
 
 Furthermore, and much to our surprise, it can be implemented using a mechanism that has existed in Bitcoin since day one. The Bitcoin feature is called nLocktime and it can be used to postdate transactions using block height instead of a timestamp. As a Bitcoin client, you'd use block height instead of a timestamp if you don't trust the network. Block height turns out to be an instance of what's being called a Verifiable Delay Function in cryptography circles. It's a cryptographically secure way to say time has passed. In Solana, we use a far more granular verifiable delay function, a SHA 256 hash chain, to checkpoint the ledger and coordinate consensus. With it, we implement Optimistic Concurrency Control and are now well en route towards that theoretical limit of 710,000 transactions per second.
 
-Architecture
+Documentation
 ===
 
-Before you jump into the code, review the online book [Solana: Blockchain Rebuilt for Scale](https://docs.solana.com/book/).
+Before you jump into the code, review the documentation [Solana: Blockchain Rebuilt for Scale](https://docs.solana.com).
 
-(The _latest_ development version of the online book is also [available here](https://docs.solana.com/book/v/master/).)
+(The _latest_ development version of the docs is [available here](https://docs.solana.com/v/master).)
 
 Release Binaries
 ===
@@ -121,7 +121,7 @@ $ cargo test
 Local Testnet
 ---
 
-Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/book/building-from-source).
+Start your own testnet locally, instructions are in the online docs [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/building-from-source).
 
 Remote Testnets
 ---
