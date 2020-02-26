@@ -225,14 +225,7 @@ impl ReplayStage {
                         &subscriptions,
                         rewards_recorder_sender.clone(),
                     );
-                    datapoint_debug!(
-                        "replay_stage-memory",
-                        (
-                            "generate_new_bank_forks",
-                            (allocated.get() - start) as i64,
-                            i64
-                        ),
-                    );
+                    Self::report_memory(&allocated, "generate_new_bank_forks", start);
 
                     let mut tpu_has_bank = poh_recorder.lock().unwrap().has_bank();
 
@@ -246,10 +239,7 @@ impl ReplayStage {
                         transaction_status_sender.clone(),
                         &verify_recyclers,
                     );
-                    datapoint_debug!(
-                        "replay_stage-memory",
-                        ("replay_active_banks", (allocated.get() - start) as i64, i64),
-                    );
+                    Self::report_memory(&allocated, "replay_active_banks", start);
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     loop {
@@ -288,10 +278,7 @@ impl ReplayStage {
                         }
 
                         let vote_bank = Self::select_fork(&frozen_banks, &tower, &mut progress);
-                        datapoint_debug!(
-                            "replay_stage-memory",
-                            ("select_fork", (allocated.get() - start) as i64, i64),
-                        );
+                        Self::report_memory(&allocated, "select_fork", start);
                         if vote_bank.is_none() {
                             break;
                         }
@@ -339,10 +326,7 @@ impl ReplayStage {
                                 &latest_root_senders,
                             )?;
                         }
-                        datapoint_debug!(
-                            "replay_stage-memory",
-                            ("votable_bank", (allocated.get() - start) as i64, i64),
-                        );
+                        Self::report_memory(&allocated, "votable_bank", start);
                         let start = allocated.get();
                         if last_reset != bank.last_blockhash() {
                             Self::reset_poh_recorder(
@@ -383,10 +367,7 @@ impl ReplayStage {
                         } else {
                             done = true;
                         }
-                        datapoint_debug!(
-                            "replay_stage-memory",
-                            ("reset_bank", (allocated.get() - start) as i64, i64),
-                        );
+                        Self::report_memory(&allocated, "reset_bank", start);
                         if done {
                             break;
                         }
@@ -412,10 +393,7 @@ impl ReplayStage {
                             );
                         }
                     }
-                    datapoint_debug!(
-                        "replay_stage-memory",
-                        ("start_leader", (allocated.get() - start) as i64, i64),
-                    );
+                    Self::report_memory(&allocated, "start_leader", start);
                     datapoint_debug!(
                         "replay_stage",
                         ("duration", duration_as_ms(&now.elapsed()) as i64, i64)
@@ -442,6 +420,17 @@ impl ReplayStage {
             },
             root_bank_receiver,
         )
+    }
+
+    fn report_memory(
+        allocated: &solana_measure::thread_mem_usage::Allocatedp,
+        name: &'static str,
+        start: u64,
+    ) {
+        datapoint_debug!(
+            "replay_stage-memory",
+            (name, (allocated.get() - start) as i64, i64),
+        );
     }
 
     fn log_leader_change(
