@@ -1,7 +1,7 @@
 Building the Solana book
 ---
 
-Install the book's dependencies, build, and test the book:
+Install dependencies, build, and test the docs:
 
 ```bash
 $ ./build.sh
@@ -19,7 +19,7 @@ Render markdown as HTML:
 $ make build
 ```
 
-Render and view the book:
+Render and view the docs:
 
 ```bash
 $ make open

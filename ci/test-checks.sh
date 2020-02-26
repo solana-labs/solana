@@ -25,7 +25,7 @@ _ cargo +"$rust_stable" audit --version
 _ cargo +"$rust_stable" audit --ignore RUSTSEC-2020-0002
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
-_ book/build.sh
+_ docs/build.sh
 _ ci/check-ssh-keys.sh
 
 {

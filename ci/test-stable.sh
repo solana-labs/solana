@@ -13,12 +13,12 @@ annotate() {
 # Run the appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
 
-# Skip if only the book has been modified
+# Skip if only the docs have been modified
 ci/affects-files.sh \
-  \!^book/ \
+  \!^docs/ \
 || {
   annotate --style info \
-    "Skipped $testName as only book files were modified"
+    "Skipped $testName as only docs/ files were modified"
   exit 0
 }
 

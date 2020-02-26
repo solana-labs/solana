@@ -60,5 +60,5 @@ Header Store - A data structure for storing and referencing ranges of block head
 Client Request - Transaction from the client to the SPV Program to trigger creation of a Proof Request.
 Sub-account - A Solana account owned by another contract account, without its own private key.
 
-For more information on the Inter-chain SPV system, see the book section at:
-https://docs.solana.com/book/v/master/proposals/interchain-transaction-verification
+For more information on the Inter-chain SPV system, see the docs section at:
+https://docs.solana.com/proposals/interchain-transaction-verification

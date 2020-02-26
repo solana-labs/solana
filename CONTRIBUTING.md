@@ -224,21 +224,20 @@ Inventing new terms is allowed, but should only be done when the term is widely
 used and understood. Avoid introducing new 3-letter terms, which can be
 confused with 3-letter acronyms.
 
-[Terms currently in use](book/src/terminology.md)
+[Terms currently in use](docs/src/terminology.md)
 
 
 ## Design Proposals
 
-Solana's architecture is described by a book generated from markdown files in
-the `book/src/` directory, maintained by an *editor* (currently @garious). To
-add a design proposal, you'll need to at least propose a change the content
-under the [Accepted Design
-Proposals](https://docs.solana.com/book/v/master/proposals) chapter.  Here's
-the full process:
+Solana's architecture is described by docs generated from markdown files in
+the `docs/src/` directory, maintained by an *editor* (currently @garious). To
+add a design proposal, you'll need to include it in the
+[Accepted Design Proposals](https://docs.solana.com/proposals)
+section of the Solana docs.  Here's the full process:
 
 1. Propose a design by creating a PR that adds a markdown document to the
-   directory `book/src/` and references it from the [table of
-   contents](book/src/SUMMARY.md). Add any relevant *maintainers* to the PR
+   `docs/src/proposals` directory and references it from the [table of
+   contents](docs/src/SUMMARY.md). Add any relevant *maintainers* to the PR
    review.
 2. The PR being merged indicates your proposed change was accepted and that the
    maintainers support your plan of attack.

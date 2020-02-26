@@ -1,6 +1,6 @@
 # Drones
 
-This chapter defines an off-chain service called a _drone_, which acts as custodian of a user's private key. In its simplest form, it can be used to create _airdrop_ transactions, a token transfer from the drone's account to a client's account.
+This section defines an off-chain service called a _drone_, which acts as custodian of a user's private key. In its simplest form, it can be used to create _airdrop_ transactions, a token transfer from the drone's account to a client's account.
 
 ## Signing Service
 

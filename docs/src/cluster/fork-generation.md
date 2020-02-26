@@ -1,6 +1,6 @@
 # Fork Generation
 
-The chapter describes how forks naturally occur as a consequence of [leader rotation](leader-rotation.md).
+This section describes how forks naturally occur as a consequence of [leader rotation](leader-rotation.md).
 
 ## Overview
 
