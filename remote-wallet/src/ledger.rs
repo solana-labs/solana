@@ -261,7 +261,7 @@ impl RemoteWallet for LedgerWallet {
             .serial_number
             .clone()
             .unwrap_or_else(|| "Unknown".to_owned());
-        self.get_pubkey(&DerivationPath::default())
+        self.get_pubkey(&DerivationPath::default(), false)
             .map(|pubkey| RemoteWalletInfo {
                 model,
                 manufacturer,
@@ -270,12 +270,16 @@ impl RemoteWallet for LedgerWallet {
             })
     }
 
-    fn get_pubkey(&self, derivation_path: &DerivationPath) -> Result<Pubkey, RemoteWalletError> {
+    fn get_pubkey(
+        &self,
+        derivation_path: &DerivationPath,
+        confirm_key: bool,
+    ) -> Result<Pubkey, RemoteWalletError> {
         let derivation_path = extend_and_serialize(derivation_path);
 
         let key = self.send_apdu(
             commands::GET_PUBKEY,
-            0, // In the naive implementation, default request is for no device confirmation
+            if confirm_key { 1 } else { 0 },
             0,
             &derivation_path,
         )?;
