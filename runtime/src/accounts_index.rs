@@ -121,7 +121,7 @@ impl<T: Clone> AccountsIndex<T> {
 
             slot_vec.push((slot, account_info));
             // do lazy cleanup
-            self.cleanup_root_entries(&mut slot_vec, reclaims);
+            self.purge_older_root_entries(&mut slot_vec, reclaims);
 
             None
         } else {
@@ -129,7 +129,7 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
-    fn cleanup_root_entries(&self, slot_vec: &mut Vec<(Slot, T)>, reclaims: &mut Vec<(Slot, T)>) {
+    fn purge_older_root_entries(&self, slot_vec: &mut Vec<(Slot, T)>, reclaims: &mut Vec<(Slot, T)>) {
         let roots = &self.roots;
 
         let max_root = Self::get_max_root(roots, &slot_vec);
@@ -143,10 +143,10 @@ impl<T: Clone> AccountsIndex<T> {
         slot_vec.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
     }
 
-    pub fn eager_cleanup(&self, pubkey: &Pubkey, reclaims: &mut Vec<(Slot, T)>) {
+    pub fn cleanup_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut Vec<(Slot, T)>) {
         if let Some(lock) = self.account_maps.get(pubkey) {
             let mut slot_vec = lock.write().unwrap();
-            self.cleanup_root_entries(&mut slot_vec, reclaims);
+            self.purge_older_root_entries(&mut slot_vec, reclaims);
         }
     }
 

@@ -665,7 +665,7 @@ impl AccountsDB {
         let mut reclaims = Vec::new();
         for pubkey in all_pubkeys {
             if !purges.contains_key(&pubkey) {
-                accounts_index.eager_cleanup(&pubkey, &mut reclaims);
+                accounts_index.cleanup_rooted_entries(&pubkey, &mut reclaims);
             }
         }
         accounts_index.not_compacted_roots.clear();
