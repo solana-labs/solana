@@ -1,5 +1,6 @@
 use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
+use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
@@ -9,9 +10,6 @@ use solana_sdk::{
     system_program,
 };
 use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
-
-#[cfg(test)]
-use solana_core::validator::new_validator_for_tests;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
@@ -28,7 +26,13 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 
 #[test]
 fn test_nonce() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -44,7 +48,13 @@ fn test_nonce() {
 
 #[test]
 fn test_nonce_with_seed() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -66,7 +76,13 @@ fn test_nonce_with_seed() {
 
 #[test]
 fn test_nonce_with_authority() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();

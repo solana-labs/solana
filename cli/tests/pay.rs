@@ -6,6 +6,7 @@ use solana_cli::{
     offline::{parse_sign_only_reply_string, BlockhashQuery},
 };
 use solana_client::rpc_client::RpcClient;
+use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
@@ -15,9 +16,6 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
-
-#[cfg(test)]
-use solana_core::validator::new_validator_for_tests;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     (0..5).for_each(|tries| {
@@ -34,7 +32,13 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 
 #[test]
 fn test_cli_timestamp_tx() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
@@ -113,7 +117,13 @@ fn test_cli_timestamp_tx() {
 
 #[test]
 fn test_cli_witness_tx() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
@@ -187,7 +197,13 @@ fn test_cli_witness_tx() {
 
 #[test]
 fn test_cli_cancel_tx() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
@@ -255,7 +271,13 @@ fn test_cli_cancel_tx() {
 
 #[test]
 fn test_offline_pay_tx() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
@@ -336,7 +358,13 @@ fn test_offline_pay_tx() {
 fn test_nonced_pay_tx() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();

@@ -642,74 +642,94 @@ fn wait_for_supermajority(
     }
 }
 
-pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, PathBuf) {
-    let (node, contact_info, mint_keypair, ledger_path, _vote_pubkey) =
-        new_validator_for_tests_with_vote_pubkey();
-    (node, contact_info, mint_keypair, ledger_path)
+pub struct TestValidator {
+    pub server: Validator,
+    pub leader_data: ContactInfo,
+    pub alice: Keypair,
+    pub ledger_path: PathBuf,
+    pub genesis_hash: Hash,
+    pub vote_pubkey: Pubkey,
 }
 
-pub fn new_validator_for_tests_with_vote_pubkey(
-) -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
-    use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
-    new_validator_for_tests_ex(0, BOOTSTRAP_VALIDATOR_LAMPORTS)
+pub struct TestValidatorOptions {
+    pub fees: u64,
+    pub bootstrap_validator_lamports: u64,
 }
 
-pub fn new_validator_for_tests_ex(
-    fees: u64,
-    bootstrap_validator_lamports: u64,
-) -> (Validator, ContactInfo, Keypair, PathBuf, Pubkey) {
-    use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
-    use solana_sdk::fee_calculator::FeeCalculator;
+impl Default for TestValidatorOptions {
+    fn default() -> Self {
+        use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
+        TestValidatorOptions {
+            fees: 0,
+            bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
+        }
+    }
+}
 
-    let node_keypair = Arc::new(Keypair::new());
-    let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
-    let contact_info = node.info.clone();
+impl TestValidator {
+    pub fn run() -> Self {
+        Self::run_with_options(TestValidatorOptions::default())
+    }
 
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        voting_keypair,
-    } = create_genesis_config_with_leader_ex(
-        1_000_000,
-        &contact_info.id,
-        42,
-        bootstrap_validator_lamports,
-    );
-    genesis_config
-        .native_instruction_processors
-        .push(solana_budget_program!());
+    pub fn run_with_options(options: TestValidatorOptions) -> Self {
+        use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
+        use solana_sdk::fee_calculator::FeeCalculator;
 
-    genesis_config.rent.lamports_per_byte_year = 1;
-    genesis_config.rent.exemption_threshold = 1.0;
-    genesis_config.fee_calculator = FeeCalculator::new(fees, 0);
+        let TestValidatorOptions {
+            fees,
+            bootstrap_validator_lamports,
+        } = options;
+        let node_keypair = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
+        let contact_info = node.info.clone();
 
-    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            voting_keypair,
+        } = create_genesis_config_with_leader_ex(
+            1_000_000,
+            &contact_info.id,
+            42,
+            bootstrap_validator_lamports,
+        );
+        genesis_config
+            .native_instruction_processors
+            .push(solana_budget_program!());
 
-    let leader_voting_keypair = Arc::new(voting_keypair);
-    let storage_keypair = Arc::new(Keypair::new());
-    let config = ValidatorConfig {
-        rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
-        ..ValidatorConfig::default()
-    };
-    let node = Validator::new(
-        node,
-        &node_keypair,
-        &ledger_path,
-        &leader_voting_keypair.pubkey(),
-        &leader_voting_keypair,
-        &storage_keypair,
-        None,
-        true,
-        &config,
-    );
-    discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
-    (
-        node,
-        contact_info,
-        mint_keypair,
-        ledger_path,
-        leader_voting_keypair.pubkey(),
-    )
+        genesis_config.rent.lamports_per_byte_year = 1;
+        genesis_config.rent.exemption_threshold = 1.0;
+        genesis_config.fee_calculator = FeeCalculator::new(fees, 0);
+
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+
+        let leader_voting_keypair = Arc::new(voting_keypair);
+        let storage_keypair = Arc::new(Keypair::new());
+        let config = ValidatorConfig {
+            rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
+            ..ValidatorConfig::default()
+        };
+        let node = Validator::new(
+            node,
+            &node_keypair,
+            &ledger_path,
+            &leader_voting_keypair.pubkey(),
+            &leader_voting_keypair,
+            &storage_keypair,
+            None,
+            true,
+            &config,
+        );
+        discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
+        TestValidator {
+            server: node,
+            leader_data: contact_info,
+            alice: mint_keypair,
+            ledger_path,
+            genesis_hash: blockhash,
+            vote_pubkey: leader_voting_keypair.pubkey(),
+        }
+    }
 }
 
 fn report_target_features() {

@@ -1,7 +1,7 @@
 use serde_json::Value;
 use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
-use solana_core::validator::new_validator_for_tests;
+use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{bpf_loader, pubkey::Pubkey, signature::Keypair};
 use std::{
@@ -22,7 +22,13 @@ fn test_cli_deploy_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
 
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);

@@ -17,14 +17,16 @@ use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
+    iter,
     sync::{Arc, Mutex, RwLock},
 };
+use tokio::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
 
 pub type Confirmations = usize;
 
-#[derive(Serialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct SlotInfo {
     pub slot: Slot,
     pub parent: Slot,
@@ -103,19 +105,20 @@ where
     found
 }
 
-fn check_confirmations_and_notify<K, S, F, N, X>(
+fn check_confirmations_and_notify<K, S, B, F, X>(
     subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
     hashmap_key: &K,
     current_slot: Slot,
     bank_forks: &Arc<RwLock<BankForks>>,
-    bank_method: F,
-    notify: N,
+    bank_method: B,
+    filter_results: F,
+    notifier: &RpcNotifier,
 ) -> HashSet<SubscriptionId>
 where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
-    F: Fn(&Bank, &K) -> X,
-    N: Fn(X, &Sink<S>, u64) -> bool,
+    B: Fn(&Bank, &K) -> X,
+    F: Fn(X, u64) -> Box<dyn Iterator<Item = S>>,
     X: Clone + Serialize,
 {
     let current_ancestors = bank_forks
@@ -149,8 +152,9 @@ where
                     .get(desired_slot[0])
                     .unwrap()
                     .clone();
-                let result = bank_method(&desired_bank, hashmap_key);
-                if notify(result, &sink, root) {
+                let results = bank_method(&desired_bank, hashmap_key);
+                for result in filter_results(results, root) {
+                    notifier.notify(result, sink);
                     notified_set.insert(bank_sub_id.clone());
                 }
             }
@@ -159,41 +163,49 @@ where
     notified_set
 }
 
-fn notify_account(result: Option<(Account, Slot)>, sink: &Sink<RpcAccount>, root: Slot) -> bool {
+struct RpcNotifier(TaskExecutor);
+
+impl RpcNotifier {
+    fn notify<T>(&self, value: T, sink: &Sink<T>)
+    where
+        T: serde::Serialize,
+    {
+        self.0
+            .spawn(sink.notify(Ok(value)).map(|_| ()).map_err(|_| ()));
+    }
+}
+
+fn filter_account_result(
+    result: Option<(Account, Slot)>,
+    root: Slot,
+) -> Box<dyn Iterator<Item = RpcAccount>> {
     if let Some((account, fork)) = result {
         if fork >= root {
-            sink.notify(Ok(RpcAccount::encode(account))).wait().unwrap();
-            return true;
+            return Box::new(iter::once(RpcAccount::encode(account)));
         }
     }
-    false
+    Box::new(iter::empty())
 }
 
-fn notify_signature<S>(result: Option<S>, sink: &Sink<S>, _root: Slot) -> bool
+fn filter_signature_result<S>(result: Option<S>, _root: Slot) -> Box<dyn Iterator<Item = S>>
 where
-    S: Clone + Serialize,
+    S: 'static + Clone + Serialize,
 {
-    if let Some(result) = result {
-        sink.notify(Ok(result)).wait().unwrap();
-        return true;
-    }
-    false
+    Box::new(result.into_iter())
 }
 
-fn notify_program(
+fn filter_program_results(
     accounts: Vec<(Pubkey, Account)>,
-    sink: &Sink<RpcKeyedAccount>,
     _root: Slot,
-) -> bool {
-    for (pubkey, account) in accounts.iter() {
-        sink.notify(Ok(RpcKeyedAccount {
-            pubkey: pubkey.to_string(),
-            account: RpcAccount::encode(account.clone()),
-        }))
-        .wait()
-        .unwrap();
-    }
-    !accounts.is_empty()
+) -> Box<dyn Iterator<Item = RpcKeyedAccount>> {
+    Box::new(
+        accounts
+            .into_iter()
+            .map(|(pubkey, account)| RpcKeyedAccount {
+                pubkey: pubkey.to_string(),
+                account: RpcAccount::encode(account),
+            }),
+    )
 }
 
 pub struct RpcSubscriptions {
@@ -203,6 +215,7 @@ pub struct RpcSubscriptions {
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
     notification_sender: Arc<Mutex<Sender<NotificationEntry>>>,
     t_cleanup: Option<JoinHandle<()>>,
+    notifier_runtime: Option<Runtime>,
     exit: Arc<AtomicBool>,
 }
 
@@ -239,11 +252,19 @@ impl RpcSubscriptions {
         let signature_subscriptions_clone = signature_subscriptions.clone();
         let slot_subscriptions_clone = slot_subscriptions.clone();
 
+        let notifier_runtime = RuntimeBuilder::new()
+            .core_threads(1)
+            .name_prefix("solana-rpc-notifier-")
+            .build()
+            .unwrap();
+
+        let notifier = RpcNotifier(notifier_runtime.executor());
         let t_cleanup = Builder::new()
             .name("solana-rpc-notifications".to_string())
             .spawn(move || {
                 Self::process_notifications(
                     exit_clone,
+                    notifier,
                     notification_receiver,
                     account_subscriptions_clone,
                     program_subscriptions_clone,
@@ -259,6 +280,7 @@ impl RpcSubscriptions {
             signature_subscriptions,
             slot_subscriptions,
             notification_sender,
+            notifier_runtime: Some(notifier_runtime),
             t_cleanup: Some(t_cleanup),
             exit: exit.clone(),
         }
@@ -269,6 +291,7 @@ impl RpcSubscriptions {
         current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
         account_subscriptions: Arc<RpcAccountSubscriptions>,
+        notifier: &RpcNotifier,
     ) {
         let subscriptions = account_subscriptions.read().unwrap();
         check_confirmations_and_notify(
@@ -277,7 +300,8 @@ impl RpcSubscriptions {
             current_slot,
             bank_forks,
             Bank::get_account_modified_since_parent,
-            notify_account,
+            filter_account_result,
+            notifier,
         );
     }
 
@@ -286,6 +310,7 @@ impl RpcSubscriptions {
         current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
         program_subscriptions: Arc<RpcProgramSubscriptions>,
+        notifier: &RpcNotifier,
     ) {
         let subscriptions = program_subscriptions.read().unwrap();
         check_confirmations_and_notify(
@@ -294,7 +319,8 @@ impl RpcSubscriptions {
             current_slot,
             bank_forks,
             Bank::get_program_accounts_modified_since_parent,
-            notify_program,
+            filter_program_results,
+            notifier,
         );
     }
 
@@ -303,6 +329,7 @@ impl RpcSubscriptions {
         current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
         signature_subscriptions: Arc<RpcSignatureSubscriptions>,
+        notifier: &RpcNotifier,
     ) {
         let mut subscriptions = signature_subscriptions.write().unwrap();
         let notified_ids = check_confirmations_and_notify(
@@ -311,7 +338,8 @@ impl RpcSubscriptions {
             current_slot,
             bank_forks,
             Bank::get_signature_status,
-            notify_signature,
+            filter_signature_result,
+            notifier,
         );
         if let Some(subscription_ids) = subscriptions.get_mut(signature) {
             subscription_ids.retain(|k, _| !notified_ids.contains(k));
@@ -408,6 +436,7 @@ impl RpcSubscriptions {
 
     fn process_notifications(
         exit: Arc<AtomicBool>,
+        notifier: RpcNotifier,
         notification_receiver: Receiver<NotificationEntry>,
         account_subscriptions: Arc<RpcAccountSubscriptions>,
         program_subscriptions: Arc<RpcProgramSubscriptions>,
@@ -423,7 +452,7 @@ impl RpcSubscriptions {
                     NotificationEntry::Slot(slot_info) => {
                         let subscriptions = slot_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
-                            sink.notify(Ok(slot_info)).wait().unwrap();
+                            notifier.notify(slot_info, sink);
                         }
                     }
                     NotificationEntry::Bank((current_slot, bank_forks)) => {
@@ -437,6 +466,7 @@ impl RpcSubscriptions {
                                 current_slot,
                                 &bank_forks,
                                 account_subscriptions.clone(),
+                                &notifier,
                             );
                         }
 
@@ -450,6 +480,7 @@ impl RpcSubscriptions {
                                 current_slot,
                                 &bank_forks,
                                 program_subscriptions.clone(),
+                                &notifier,
                             );
                         }
 
@@ -463,6 +494,7 @@ impl RpcSubscriptions {
                                 current_slot,
                                 &bank_forks,
                                 signature_subscriptions.clone(),
+                                &notifier,
                             );
                         }
                     }
@@ -479,6 +511,12 @@ impl RpcSubscriptions {
     }
 
     fn shutdown(&mut self) -> std::thread::Result<()> {
+        if let Some(runtime) = self.notifier_runtime.take() {
+            info!("RPC Notifier runtime - shutting down");
+            let _ = runtime.shutdown_now().wait();
+            info!("RPC Notifier runtime - shut down");
+        }
+
         if self.t_cleanup.is_some() {
             info!("RPC Notification thread - shutting down");
             self.exit.store(true, Ordering::Relaxed);
