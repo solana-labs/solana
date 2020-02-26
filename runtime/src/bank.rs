@@ -3301,7 +3301,7 @@ mod tests {
     #[test]
     fn test_detect_failed_duplicate_transactions() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(2);
-        genesis_config.fee_rate_governor.lamports_per_signature = 1;
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(1, 0);
         let bank = Bank::new(&genesis_config);
 
         let dest = Keypair::new();
@@ -3461,9 +3461,9 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(mint, &leader, 3);
-        genesis_config.fee_rate_governor.lamports_per_signature = 4; // something divisible by 2
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(4, 0); // something divisible by 2
 
-        let expected_fee_paid = genesis_config.fee_rate_governor.lamports_per_signature;
+        let expected_fee_paid = genesis_config.fee_rate_governor.create_fee_calculator().lamports_per_signature;
         let (expected_fee_collected, expected_fee_burned) =
             genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
@@ -3584,7 +3584,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(100, &leader, 3);
-        genesis_config.fee_rate_governor.lamports_per_signature = 2;
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(2, 0);
         let bank = Bank::new(&genesis_config);
 
         let key = Keypair::new();
@@ -4571,7 +4571,7 @@ mod tests {
         let bank1 = Arc::new(new_from_parent(&bank0));
         assert_eq!(
             bank0.fee_rate_governor.target_lamports_per_signature / 2,
-            bank1.fee_rate_governor.lamports_per_signature
+            bank1.fee_rate_governor.create_fee_calculator().lamports_per_signature
         );
     }
 
@@ -4674,7 +4674,7 @@ mod tests {
     #[test]
     fn test_bank_fees_account() {
         let (mut genesis_config, _) = create_genesis_config(500);
-        genesis_config.fee_rate_governor.lamports_per_signature = 12345;
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(12345, 0);
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
