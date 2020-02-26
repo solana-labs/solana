@@ -19,7 +19,7 @@ lazy_static = { version = "1.4.0", features = ["spin", "spin_no_std"] }
 libc = { version = "0.2.62", features = ["extra_traits"] }
 rand_chacha = { version = "0.1.1" }
 regex-syntax = { version = "0.6.12" }
-reqwest = { version = "0.9.20", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = { version = "1.0.100", features = ["rc"] }
 ed25519-dalek = { version = "=1.0.0-pre.1", features = ["serde"] }
 syn_0_15 = { package = "syn", version = "0.15.42", features = ["extra-traits", "fold", "full"] }
