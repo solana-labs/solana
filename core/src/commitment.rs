@@ -233,7 +233,7 @@ mod tests {
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::pubkey::Pubkey;
     use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state;
+    use solana_vote_program::vote_state::{self, VoteStateVersions};
 
     #[test]
     fn test_block_commitment() {
@@ -446,13 +446,15 @@ mod tests {
         let mut vote_state1 = VoteState::from(&vote_account1).unwrap();
         vote_state1.process_slot_vote_unchecked(3);
         vote_state1.process_slot_vote_unchecked(5);
-        vote_state1.to(&mut vote_account1).unwrap();
+        let versioned = VoteStateVersions::Current(Box::new(vote_state1));
+        VoteState::to(&versioned, &mut vote_account1).unwrap();
         bank.store_account(&pk1, &vote_account1);
 
         let mut vote_state2 = VoteState::from(&vote_account2).unwrap();
         vote_state2.process_slot_vote_unchecked(9);
         vote_state2.process_slot_vote_unchecked(10);
-        vote_state2.to(&mut vote_account2).unwrap();
+        let versioned = VoteStateVersions::Current(Box::new(vote_state2));
+        VoteState::to(&versioned, &mut vote_account2).unwrap();
         bank.store_account(&pk2, &vote_account2);
 
         let commitment = AggregateCommitmentService::aggregate_commitment(&ancestors, &bank);
