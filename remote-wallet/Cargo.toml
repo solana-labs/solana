@@ -17,6 +17,7 @@ parking_lot = "0.10"
 semver = "0.9"
 solana-sdk = { path = "../sdk", version = "1.1.0" }
 thiserror = "1.0"
+url = "2.1.1"
 
 [features]
 default = ["linux-static-hidraw"]

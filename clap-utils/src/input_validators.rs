@@ -142,7 +142,7 @@ pub fn is_derivation(value: String) -> Result<(), String> {
     let mut parts = value.split('/');
     let account = parts.next().unwrap();
     account
-        .parse::<u16>()
+        .parse::<u32>()
         .map_err(|e| {
             format!(
                 "Unable to parse derivation, provided: {}, err: {:?}",
@@ -151,7 +151,7 @@ pub fn is_derivation(value: String) -> Result<(), String> {
         })
         .and_then(|_| {
             if let Some(change) = parts.next() {
-                change.parse::<u16>().map_err(|e| {
+                change.parse::<u32>().map_err(|e| {
                     format!(
                         "Unable to parse derivation, provided: {}, err: {:?}",
                         change, e
@@ -172,11 +172,12 @@ mod tests {
     fn test_is_derivation() {
         assert_eq!(is_derivation("2".to_string()), Ok(()));
         assert_eq!(is_derivation("0".to_string()), Ok(()));
+        assert_eq!(is_derivation("65537".to_string()), Ok(()));
         assert_eq!(is_derivation("0/2".to_string()), Ok(()));
         assert_eq!(is_derivation("0'/2'".to_string()), Ok(()));
         assert!(is_derivation("a".to_string()).is_err());
-        assert!(is_derivation("65537".to_string()).is_err());
+        assert!(is_derivation("4294967296".to_string()).is_err());
         assert!(is_derivation("a/b".to_string()).is_err());
-        assert!(is_derivation("0/65537".to_string()).is_err());
+        assert!(is_derivation("0/4294967296".to_string()).is_err());
     }
 }
