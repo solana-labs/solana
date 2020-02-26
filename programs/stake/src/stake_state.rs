@@ -340,10 +340,18 @@ impl Authorized {
         new_authorized: &Pubkey,
         stake_authorize: StakeAuthorize,
     ) -> Result<(), InstructionError> {
-        self.check(signers, stake_authorize)?;
         match stake_authorize {
-            StakeAuthorize::Staker => self.staker = *new_authorized,
-            StakeAuthorize::Withdrawer => self.withdrawer = *new_authorized,
+            StakeAuthorize::Staker => {
+                // Allow either the staker or the withdrawer to change the staker key
+                if !signers.contains(&self.staker) && !signers.contains(&self.withdrawer) {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                self.staker = *new_authorized
+            }
+            StakeAuthorize::Withdrawer => {
+                self.check(signers, stake_authorize)?;
+                self.withdrawer = *new_authorized
+            }
         }
         Ok(())
     }
@@ -2269,6 +2277,83 @@ mod tests {
                 &clock,
                 &StakeHistory::default(),
                 &signers2,
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_authorize_override() {
+        let withdrawer_pubkey = Pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(Meta::auto(&withdrawer_pubkey)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
+        let stake_keyed_account = KeyedAccount::new(&withdrawer_pubkey, true, &stake_account);
+
+        // Authorize a staker pubkey and move the withdrawer key into cold storage.
+        let stake_pubkey = Pubkey::new_rand();
+        let signers = vec![withdrawer_pubkey].into_iter().collect();
+        assert_eq!(
+            stake_keyed_account.authorize(
+                &stake_pubkey,
+                StakeAuthorize::Staker,
+                &signers,
+                &Clock::default()
+            ),
+            Ok(())
+        );
+
+        // Attack! The stake key (a hot key) is stolen and used to authorize a new staker.
+        let mallory_pubkey = Pubkey::new_rand();
+        let signers = vec![stake_pubkey].into_iter().collect();
+        assert_eq!(
+            stake_keyed_account.authorize(
+                &mallory_pubkey,
+                StakeAuthorize::Staker,
+                &signers,
+                &Clock::default()
+            ),
+            Ok(())
+        );
+
+        // Verify the original staker no longer has access.
+        let new_stake_pubkey = Pubkey::new_rand();
+        assert_eq!(
+            stake_keyed_account.authorize(
+                &new_stake_pubkey,
+                StakeAuthorize::Staker,
+                &signers,
+                &Clock::default()
+            ),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+
+        // Verify the withdrawer (pulled from cold storage) can save the day.
+        let signers = vec![withdrawer_pubkey].into_iter().collect();
+        assert_eq!(
+            stake_keyed_account.authorize(
+                &new_stake_pubkey,
+                StakeAuthorize::Withdrawer,
+                &signers,
+                &Clock::default()
+            ),
+            Ok(())
+        );
+
+        // Attack! Verify the staker cannot be used to authorize a withdraw.
+        let signers = vec![new_stake_pubkey].into_iter().collect();
+        assert_eq!(
+            stake_keyed_account.authorize(
+                &mallory_pubkey,
+                StakeAuthorize::Withdrawer,
+                &signers,
+                &Clock::default()
             ),
             Ok(())
         );
