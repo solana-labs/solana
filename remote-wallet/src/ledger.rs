@@ -7,6 +7,8 @@ use semver::Version as FirmwareVersion;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::{cmp::min, fmt, sync::Arc};
 
+const HARDENED_BIT: u32 = 1 << 31;
+
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
 const APDU_PAYLOAD_HEADER_LEN: usize = 8;
@@ -373,11 +375,11 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
     let mut concat_derivation = vec![byte];
     concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
     if let Some(account) = derivation_path.account {
-        concat_derivation.extend_from_slice(&[0x80, 0]);
-        concat_derivation.extend_from_slice(&account.to_be_bytes());
+        let hardened_account = account | HARDENED_BIT;
+        concat_derivation.extend_from_slice(&hardened_account.to_be_bytes());
         if let Some(change) = derivation_path.change {
-            concat_derivation.extend_from_slice(&[0x80, 0]);
-            concat_derivation.extend_from_slice(&change.to_be_bytes());
+            let hardened_change = change | HARDENED_BIT;
+            concat_derivation.extend_from_slice(&hardened_change.to_be_bytes());
         }
     }
     concat_derivation
