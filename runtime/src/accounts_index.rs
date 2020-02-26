@@ -12,7 +12,7 @@ pub struct AccountsIndex<T> {
     pub account_maps: HashMap<Pubkey, RwLock<SlotList<T>>>,
 
     pub roots: HashSet<Slot>,
-    pub not_compacted_roots: HashSet<Slot>,
+    pub uncleaned_roots: HashSet<Slot>,
 }
 
 impl<T: Clone> AccountsIndex<T> {
@@ -120,7 +120,7 @@ impl<T: Clone> AccountsIndex<T> {
             slot_vec.retain(|(f, _)| *f != slot);
 
             slot_vec.push((slot, account_info));
-            // do lazy cleanup
+            // do lazy cleaclean
             self.purge_older_root_entries(&mut slot_vec, reclaims);
 
             None
@@ -129,7 +129,11 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
-    fn purge_older_root_entries(&self, slot_vec: &mut Vec<(Slot, T)>, reclaims: &mut Vec<(Slot, T)>) {
+    fn purge_older_root_entries(
+        &self,
+        slot_vec: &mut Vec<(Slot, T)>,
+        reclaims: &mut Vec<(Slot, T)>,
+    ) {
         let roots = &self.roots;
 
         let max_root = Self::get_max_root(roots, &slot_vec);
@@ -143,7 +147,7 @@ impl<T: Clone> AccountsIndex<T> {
         slot_vec.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
     }
 
-    pub fn cleanup_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut Vec<(Slot, T)>) {
+    pub fn clean_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut Vec<(Slot, T)>) {
         if let Some(lock) = self.account_maps.get(pubkey) {
             let mut slot_vec = lock.write().unwrap();
             self.purge_older_root_entries(&mut slot_vec, reclaims);
@@ -168,13 +172,13 @@ impl<T: Clone> AccountsIndex<T> {
 
     pub fn add_root(&mut self, slot: Slot) {
         self.roots.insert(slot);
-        self.not_compacted_roots.insert(slot);
+        self.uncleaned_roots.insert(slot);
     }
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
-    pub fn cleanup_dead_slot(&mut self, slot: Slot) {
+    pub fn clean_dead_slot(&mut self, slot: Slot) {
         self.roots.remove(&slot);
-        self.not_compacted_roots.remove(&slot);
+        self.uncleaned_roots.remove(&slot);
     }
 }
 
@@ -274,34 +278,34 @@ mod tests {
     }
 
     #[test]
-    fn test_cleanup_first() {
+    fn test_clean_first() {
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(0);
         index.add_root(1);
-        index.cleanup_dead_slot(0);
+        index.clean_dead_slot(0);
         assert!(index.is_root(1));
         assert!(!index.is_root(0));
     }
 
     #[test]
-    fn test_cleanup_last() {
+    fn test_clean_last() {
         //this behavior might be undefined, clean up should only occur on older slots
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(0);
         index.add_root(1);
-        index.cleanup_dead_slot(1);
+        index.clean_dead_slot(1);
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
     }
 
     #[test]
-    fn test_cleanup_first_not_compacted_slot() {
+    fn test_clean_and_unclean_slot() {
         let mut index = AccountsIndex::<bool>::default();
-        assert_eq!(0, index.not_compacted_roots.len());
+        assert_eq!(0, index.uncleaned_roots.len());
         index.add_root(1);
-        assert_eq!(1, index.not_compacted_roots.len());
-        index.cleanup_dead_slot(1);
-        assert_eq!(0, index.not_compacted_roots.len());
+        assert_eq!(1, index.uncleaned_roots.len());
+        index.clean_dead_slot(1);
+        assert_eq!(0, index.uncleaned_roots.len());
     }
 
     #[test]
