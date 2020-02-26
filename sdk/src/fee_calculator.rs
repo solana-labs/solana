@@ -8,16 +8,12 @@ pub struct FeeCalculator {
     // The current cost of a signature  This amount may increase/decrease over time based on
     // cluster processing load.
     pub lamports_per_signature: u64,
-
-    // What portion of collected fees are to be destroyed, as a fraction of std::u8::MAX
-    pub burn_percent: u8,
 }
 
 impl Default for FeeCalculator {
     fn default() -> Self {
         Self {
             lamports_per_signature: 0,
-            burn_percent: DEFAULT_BURN_PERCENT,
         }
     }
 }
@@ -26,18 +22,11 @@ impl FeeCalculator {
     pub fn new(lamports_per_signature: u64) -> Self {
         Self {
             lamports_per_signature,
-            ..FeeCalculator::default()
         }
     }
 
     pub fn calculate_fee(&self, message: &Message) -> u64 {
         self.lamports_per_signature * u64::from(message.header.num_required_signatures)
-    }
-
-    /// calculate unburned fee from a fee total, returns (unburned, burned)
-    pub fn burn(&self, fees: u64) -> (u64, u64) {
-        let burned = fees * u64::from(self.burn_percent) / 100;
-        (fees - burned, burned)
     }
 }
 
@@ -159,11 +148,16 @@ impl FeeRateGovernor {
         me
     }
 
+    /// calculate unburned fee from a fee total, returns (unburned, burned)
+    pub fn burn(&self, fees: u64) -> (u64, u64) {
+        let burned = fees * u64::from(self.burn_percent) / 100;
+        (fees - burned, burned)
+    }
+
     /// create a FeeCalculator based on current cluster signature throughput
     pub fn create_fee_calculator(&self) -> FeeCalculator {
         FeeCalculator {
             lamports_per_signature: self.lamports_per_signature,
-            burn_percent: self.burn_percent,
         }
     }
 }
@@ -174,15 +168,15 @@ mod tests {
     use crate::{pubkey::Pubkey, system_instruction};
 
     #[test]
-    fn test_fee_calculator_burn() {
-        let mut fee_calculator = FeeCalculator::default();
-        assert_eq!(fee_calculator.burn(2), (1, 1));
+    fn test_fee_rate_governor_burn() {
+        let mut fee_rate_governor = FeeRateGovernor::default();
+        assert_eq!(fee_rate_governor.burn(2), (1, 1));
 
-        fee_calculator.burn_percent = 0;
-        assert_eq!(fee_calculator.burn(2), (2, 0));
+        fee_rate_governor.burn_percent = 0;
+        assert_eq!(fee_rate_governor.burn(2), (2, 0));
 
-        fee_calculator.burn_percent = 100;
-        assert_eq!(fee_calculator.burn(2), (0, 2));
+        fee_rate_governor.burn_percent = 100;
+        assert_eq!(fee_rate_governor.burn(2), (0, 2));
     }
 
     #[test]
