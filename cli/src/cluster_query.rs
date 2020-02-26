@@ -855,11 +855,15 @@ pub fn process_ping(
 
 pub fn process_live_slots(url: &str) -> ProcessResult {
     let exit = Arc::new(AtomicBool::new(false));
-    let exit_clone = exit.clone();
 
+    // Disable Ctrl+C handler as sometimes the PubsubClient shutdown can stall.  Also it doesn't
+    // really matter that the shutdown is clean because the process is terminating.
+    /*
+    let exit_clone = exit.clone();
     ctrlc::set_handler(move || {
         exit_clone.store(true, Ordering::Relaxed);
     })?;
+    */
 
     let mut current: Option<SlotInfoMessage> = None;
     let mut message = "".to_string();
@@ -869,6 +873,9 @@ pub fn process_live_slots(url: &str) -> ProcessResult {
     let (mut client, receiver) = PubsubClient::slot_subscribe(url)?;
     slot_progress.set_message("Connected.");
 
+    let mut last_root = std::u64::MAX;
+    let mut last_root_update = Instant::now();
+    let mut slots_per_second = std::f64::NAN;
     loop {
         if exit.load(Ordering::Relaxed) {
             eprintln!("{}", message);
@@ -878,7 +885,27 @@ pub fn process_live_slots(url: &str) -> ProcessResult {
 
         match receiver.recv() {
             Ok(new_info) => {
-                message = format!("{:?}", new_info).to_owned();
+                if last_root == std::u64::MAX {
+                    last_root = new_info.root;
+                    last_root_update = Instant::now();
+                }
+                if last_root_update.elapsed().as_secs() >= 5 {
+                    let root = new_info.root;
+                    slots_per_second =
+                        (root - last_root) as f64 / last_root_update.elapsed().as_secs() as f64;
+                    last_root_update = Instant::now();
+                    last_root = root;
+                }
+
+                message = if slots_per_second.is_nan() {
+                    format!("{:?}", new_info)
+                } else {
+                    format!(
+                        "{:?} | root slot advancing at {:.2} slots/second",
+                        new_info, slots_per_second
+                    )
+                }
+                .to_owned();
                 slot_progress.set_message(&message);
 
                 if let Some(previous) = current {
