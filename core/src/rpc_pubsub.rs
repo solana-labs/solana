@@ -12,7 +12,7 @@ use std::sync::{atomic, Arc};
 //   https://github.com/paritytech/jsonrpc/blob/2d38e6424d8461cdf72e78425ce67d51af9c6586/derive/src/lib.rs#L204
 // Once https://github.com/paritytech/jsonrpc/issues/418 is resolved, try to remove this clippy allow
 #[allow(clippy::needless_return)]
-#[rpc(server)]
+#[rpc]
 pub trait RpcSolPubSub {
     type Metadata;
 

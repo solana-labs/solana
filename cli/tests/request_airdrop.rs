@@ -1,13 +1,19 @@
 use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
-use solana_core::validator::new_validator_for_tests;
+use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::signature::Keypair;
 use std::{fs::remove_dir_all, sync::mpsc::channel};
 
 #[test]
 fn test_cli_request_airdrop() {
-    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
