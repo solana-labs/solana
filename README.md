@@ -28,7 +28,7 @@ Documentation
 
 Before you jump into the code, review the documentation [Solana: Blockchain Rebuilt for Scale](https://docs.solana.com).
 
-(The _latest_ development version of the docs is [available here](https://docs.solana.com/main/v/master).)
+(The _latest_ development version of the docs is [available here](https://docs.solana.com/v/master).)
 
 Release Binaries
 ===
@@ -121,7 +121,7 @@ $ cargo test
 Local Testnet
 ---
 
-Start your own testnet locally, instructions are in the online docs [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/main/building-from-source).
+Start your own testnet locally, instructions are in the online docs [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/building-from-source).
 
 Remote Testnets
 ---
