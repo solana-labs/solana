@@ -2,7 +2,7 @@
 
 The Ledger Nano S hardware wallet offers secure storage of your Solana private
 keys. The Solana ledger app enables derivation of essentially infinite keys, and
-secure signing of messages.
+secure transaction signing.
 
 ## Before You Begin
 
@@ -24,29 +24,52 @@ secure signing of messages.
 1. Plug your Ledger device into your computer's USB port
 2. Enter your pin and start the Solana app on the Ledger device
 3. On your computer, run:
+
 ```
 solana address --keypair usb://ledger
 ```
-This confirms your Ledger device is connected properly and in the correct state to interact with the Solana CLI.
 
-### Ledger Device Paths
+This confirms your Ledger device is connected properly and in the correct state to interact with the Solana CLI. The command returns your Ledger's unique *wallet key*. When you have multiple
+Nano S devices connected to the same computer, you can use your wallet key to specify
+which Ledger you want to use. Run the same command again, but this time, with its fully
+qualified URL:
 
-Solana uses a standardized path to identify remote wallets and desired key. This
-path looks like:
 ```
-usb://ledger/nano-s/<WALLET_BASE_KEY>?key=<DERIVATION>
+solana address --keypair usb://ledger/nano-s/<WALLET_KEY>
 ```
 
-**Something about how only "usb://ledger" is necessary for a single attached Ledger**
+Confirm it prints the same key as when you entered just `usb://ledger`.
 
-Your Ledger's limitless keys are indexed as per [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki).
-Solana keys reside at derivation path `44'/501'`, and Solana supports two levels
-of key path.
+### Ledger Device URLs
 
-Add a desired key derivation to a remote-wallet path using the query string
-`?key=<DERIVATION>`, with derivation formatted as `<ACCOUNT>/<CHANGE>`.
+Solana defines a format for the URL protocol "usb://" to uniquely locate any Solana key on
+any remote wallet connected to your computer.
+
+The URL has the form, where square brackets denote optional fields:
+
+```
+usb://ledger[/<LEDGER_TYPE>[/<WALLET_KEY>]][?key=<DERIVATION_PATH>]
+```
+
+`LEDGER_TYPE` is optional and defaults to the value "nano-s". If the value is provided,
+it must be "nano-s" without quotes, the only supported Ledger device at this time.
+
+`WALLET_KEY` is used to disambiguate multiple Nano S devices. Every Ledger has
+a unique master key and from that key derives a separate unique key per app.
+
+`DERVIATION_PATH` is used to navigate to Solana keys within your Ledger wallet.
+The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
+are postive integers.
+
+All derivation paths implicitly include the prefix `44'/501'`, which indicates
+the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+and that any dervied keys are Solana keys (Coin type 501).  The single quote
+indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
+derivations are hardened and therefore adding the quote is optional and
+unnecessary.
 
 For example, a complete Ledger device path might be:
+
 ```
 usb://ledger/nano-s/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
@@ -55,13 +78,15 @@ usb://ledger/nano-s/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 
 If you want to you a Ledger key as the default signer for CLI commands, use the
 [CLI configuration settings](../cli/usage.md#solana-config):
+
 ```
-solana config set --keypair <LEDGER PATH>
+solana config set --keypair <LEDGER_URL>
 ```
 
 For example:
+
 ```
-solana config set --keypair usb://ledger?key=1/2
+solana config set --keypair usb://ledger?key=0
 ```
 
 ### Check Account Balance
@@ -70,11 +95,37 @@ solana config set --keypair usb://ledger?key=1/2
 solana balance --keypair usb://ledger?key=12345
 ```
 
-### Send SOL via Ledger Device
+Or with the default signer:
+
 ```
-solana transfer <RECIPIENT> <AMOUNT> --from <LEDGER PATH>
+solana balance
+```
+
+### Send SOL via Ledger Device
+
+```
+solana transfer <RECIPIENT> <AMOUNT> --from <LEDGER_URL>
+```
+
+Or with the default signer:
+
+```
+solana transfer <RECIPIENT> <AMOUNT>
 ```
 
 ### Delegate Stake with Ledger Device
 
+```
+solana delegate-stake <STAKE_ACCOUNT> <VOTER_ID> --keypair <LEDGER_URL>
+```
+
+Or with the default signer:
+
+```
+solana delegate-stake <STAKE_ACCOUNT> <VOTER_ID>
+```
+
 ## Support
+
+Email maintainers@solana.com.
+
