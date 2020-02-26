@@ -40,7 +40,7 @@ if [[ ! -r criterion-$machine-$version.md ]]; then
   (
     filename=criterion-$version-$machine-x86_64.tar.bz2
 
-    set -e
+    set -ex
     rm -rf criterion*
     mkdir criterion
     cd criterion
@@ -65,7 +65,7 @@ if [[ ! -f llvm-native-$machine-$version.md ]]; then
   (
     filename=solana-llvm-$machine.tar.bz2
 
-    set -e
+    set -ex
     rm -rf llvm-native*
     rm -rf xargo
     mkdir -p llvm-native
@@ -91,7 +91,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
   (
     filename=solana-rust-bpf-$machine.tar.bz2
 
-    set -e
+    set -ex
     rm -rf rust-bpf
     rm -rf rust-bpf-$machine-*
     rm -rf xargo
@@ -104,6 +104,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
     rm -rf $filename
     popd
 
+    set -ex
     ./rust-bpf/bin/rustc --print sysroot
 
     set +e
@@ -124,7 +125,7 @@ fi
 version=v0.12
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
-    set -e
+    set -ex
     rm -rf rust-bpf-sysroot*
     rm -rf xargo
     cmd="git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git"
