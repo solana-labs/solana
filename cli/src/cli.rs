@@ -620,7 +620,7 @@ pub fn parse_command(
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         // Wallet Commands
-        ("address", Some(_matches)) => Ok(CliCommandInfo {
+        ("address", Some(matches)) => Ok(CliCommandInfo {
             command: CliCommand::Address,
             signers: vec![signer_from_path(
                 matches,
@@ -2064,7 +2064,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .about(about)
         .version(version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(SubCommand::with_name("address").about("Get your public key"))
+        .subcommand(
+            SubCommand::with_name("address")
+                .about("Get your public key")
+                .arg(
+                    Arg::with_name("confirm_key")
+                        .long("confirm-key")
+                        .takes_value(false)
+                        .help("Confirm key on device; only relevant if using remote wallet"),
+                ),
+        )
         .cluster_query_subcommands()
         .nonce_subcommands()
         .stake_subcommands()
