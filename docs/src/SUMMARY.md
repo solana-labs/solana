@@ -3,6 +3,8 @@
 * [Introduction](introduction.md)
 * [Using Solana from the Command-line](cli/README.md)
   * [Command-line Usage](cli/usage.md)
+  * [Remote Wallet](remote-wallet/README.md)
+    * [Ledger Hardware Wallet](remote-wallet/ledger.md)
   * [Paper Wallet](paper-wallet/README.md)
     * [Installation](paper-wallet/installation.md)
     * [Paper Wallet Usage](paper-wallet/usage.md)
