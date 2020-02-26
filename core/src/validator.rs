@@ -680,7 +680,7 @@ impl TestValidator {
 
     pub fn run_with_options(options: TestValidatorOptions) -> Self {
         use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
-        use solana_sdk::fee_calculator::FeeCalculator;
+        use solana_sdk::fee_calculator::FeeRateGovernor;
 
         let TestValidatorOptions {
             fees,
@@ -706,7 +706,7 @@ impl TestValidator {
 
         genesis_config.rent.lamports_per_byte_year = 1;
         genesis_config.rent.exemption_threshold = 1.0;
-        genesis_config.fee_calculator = FeeCalculator::new(fees, 0);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
 
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
