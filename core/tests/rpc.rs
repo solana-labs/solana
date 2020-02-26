@@ -1,25 +1,25 @@
 use bincode::serialize;
-use jsonrpc_core::futures::future::{self, Future};
-use jsonrpc_core::futures::stream::Stream;
+use jsonrpc_core::futures::{
+    future::{self, Future},
+    stream::Stream,
+};
 use jsonrpc_core_client::transports::ws;
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_client::rpc_client::get_rpc_request_str;
-use solana_core::rpc_pubsub::gen_client::Client as PubsubClient;
-use solana_core::validator::TestValidator;
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_transaction;
-use solana_sdk::transaction;
-use std::collections::HashSet;
-use std::fs::remove_dir_all;
-use std::net::UdpSocket;
-use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::Duration;
-use std::time::SystemTime;
+use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
+use solana_sdk::{hash::Hash, pubkey::Pubkey, system_transaction, transaction};
+use std::{
+    collections::HashSet,
+    fs::remove_dir_all,
+    net::UdpSocket,
+    sync::mpsc::channel,
+    sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
+    time::SystemTime,
+};
 use tokio::runtime::Runtime;
 
 #[test]
