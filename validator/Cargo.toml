@@ -16,7 +16,7 @@ console = "0.9.2"
 log = "0.4.8"
 indicatif = "0.14.0"
 rand = "0.6.5"
-reqwest = { version = "0.10.1", default-features = false, features = ["blocking"] }
+reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0.46"
 solana-clap-utils = { path = "../clap-utils", version = "1.1.0" }
 solana-client = { path = "../client", version = "1.1.0" }
