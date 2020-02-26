@@ -120,7 +120,7 @@ impl<T: Clone> AccountsIndex<T> {
             slot_vec.retain(|(f, _)| *f != slot);
 
             slot_vec.push((slot, account_info));
-            // do lazy cleaclean
+            // now, do lazy clean
             self.purge_older_root_entries(&mut slot_vec, reclaims);
 
             None
