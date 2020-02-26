@@ -485,7 +485,7 @@ mod test {
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairUtil},
+        signature::{Keypair, Signer},
         transaction::Transaction,
     };
     use solana_stake_program::stake_state;
