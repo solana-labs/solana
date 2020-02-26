@@ -36,8 +36,8 @@ fn process_instruction(
     info!("Fees identifier:");
     sysvar::fees::id().log();
     let fees = Fees::from_account_info(&accounts[3]).expect("fees");
-    let burn = fees.fee_calculator.burn(42);
-    assert_eq!(burn, (21, 21));
+    let fee_calculator = fees.fee_calculator;
+    assert_eq!(fee_calculator.lamports_per_signature, 0);
 
     // Rewards
     info!("Rewards identifier:");
