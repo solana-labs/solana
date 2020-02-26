@@ -277,7 +277,7 @@ impl ReplayStage {
                             }
                         }
 
-                        let vote_bank = Self::select_fork(&frozen_banks, &tower, &mut progress);
+                        let vote_bank = Self::select_fork(&frozen_banks, &tower, &progress);
                         Self::report_memory(&allocated, "select_fork", start);
                         if vote_bank.is_none() {
                             break;
@@ -842,7 +842,7 @@ impl ReplayStage {
     pub(crate) fn select_fork(
         frozen_banks: &[Arc<Bank>],
         tower: &Tower,
-        progress: &mut HashMap<u64, ForkProgress>,
+        progress: &HashMap<u64, ForkProgress>,
     ) -> Option<Arc<Bank>> {
         let tower_start = Instant::now();
         let num_frozen_banks = frozen_banks.len();
@@ -1068,7 +1068,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::{
         commitment::BlockCommitment,
-        consensus::test::{initialize_state, VoteResult, VoteSimulator},
+        consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         replay_stage::ReplayStage,
@@ -1312,7 +1312,7 @@ pub(crate) mod tests {
                     &mut fork_progresses[i],
                 );
                 let response =
-                    ReplayStage::select_fork(&frozen_banks, &towers[i], &mut fork_progresses[i]);
+                    ReplayStage::select_fork(&frozen_banks, &towers[i], &fork_progresses[i]);
 
                 if response.is_none() {
                     None
@@ -1952,8 +1952,8 @@ pub(crate) mod tests {
         let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
         let votes: Vec<Slot> = vec![0, 2];
         for vote in &votes {
-            assert_eq!(
-                voting_simulator.simulate_vote(
+            assert!(voting_simulator
+                .simulate_vote(
                     *vote,
                     &bank_forks,
                     &mut cluster_votes,
@@ -1961,9 +1961,8 @@ pub(crate) mod tests {
                     keypairs.get(&node_pubkey).unwrap(),
                     &mut progress,
                     &mut tower,
-                ),
-                VoteResult::Ok
-            );
+                )
+                .is_empty());
         }
 
         let mut frozen_banks: Vec<_> = bank_forks
