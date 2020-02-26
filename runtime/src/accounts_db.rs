@@ -664,7 +664,7 @@ impl AccountsDB {
         }
         let mut reclaims = Vec::new();
         for pubkey in all_pubkeys {
-            if purges.get(&pubkey).is_none() {
+            if !purges.contains_key(&pubkey) {
                 accounts_index.eager_cleanup(&pubkey, &mut reclaims);
             }
         }
