@@ -28,8 +28,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use thiserror::Error;
 
-const GRACE_TICKS_FACTOR: u64 = 2;
-const MAX_GRACE_SLOTS: u64 = 2;
+pub const GRACE_TICKS_FACTOR: u64 = 2;
+pub const MAX_GRACE_SLOTS: u64 = 2;
 
 #[derive(Error, Debug, Clone)]
 pub enum PohRecorderError {
@@ -85,6 +85,7 @@ impl PohRecorder {
                 bank.slot(),
                 &bank,
                 Some(&self.blockstore),
+                GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
             );
             assert_eq!(self.ticks_per_slot, bank.ticks_per_slot());
             let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
