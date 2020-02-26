@@ -182,17 +182,17 @@ impl fmt::Display for GenesisConfig {
         write!(
             f,
             "\
-         Creation time: {}\n\
-         Operating mode: {:?}\n\
-         Genesis hash: {}\n\
-         Shred version: {}\n\
-         Hashes per tick: {:?}\n\
-         Slots per epoch: {}\n\
-         Warmup epochs: {}abled\n\
-         {:?}\n\
-         {:?}\n\
-         Capitalization: {} SOL in {} accounts\n\
-         ",
+             Creation time: {}\n\
+             Operating mode: {:?}\n\
+             Genesis hash: {}\n\
+             Shred version: {}\n\
+             Hashes per tick: {:?}\n\
+             Slots per epoch: {}\n\
+             Warmup epochs: {}abled\n\
+             {:?}\n\
+             {:?}\n\
+             Capitalization: {} SOL in {} accounts\n\
+             ",
             Utc.timestamp(self.creation_time, 0).to_rfc3339(),
             self.operating_mode,
             self.hash(),
