@@ -306,7 +306,7 @@ pub fn get_system_account_kind(account: &Account) -> Option<SystemAccountKind> {
     if system_program::check_id(&account.owner) {
         if account.data.is_empty() {
             Some(SystemAccountKind::System)
-        } else if let Ok(nonce::State::Initialized(_, _)) = account.state() {
+        } else if let Ok(nonce::State::Initialized(_)) = account.state() {
             Some(SystemAccountKind::Nonce)
         } else {
             None
@@ -733,10 +733,10 @@ mod tests {
         let nonce = Pubkey::new_rand();
         let nonce_account = Account::new_ref_data(
             42,
-            &nonce::State::Initialized(
-                nonce::state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
+            &nonce::State::Initialized(nonce::state::Data {
+                authority: Pubkey::default(),
+                blockhash: Hash::default(),
+            }),
             &system_program::id(),
         )
         .unwrap();
@@ -875,7 +875,10 @@ mod tests {
         let from = Pubkey::new_rand();
         let from_account = Account::new_ref_data(
             100,
-            &nonce::State::Initialized(nonce::state::Meta::new(&from), Hash::default()),
+            &nonce::State::Initialized(nonce::state::Data {
+                authority: from,
+                blockhash: Hash::default(),
+            }),
             &system_program::id(),
         )
         .unwrap();
@@ -1368,10 +1371,10 @@ mod tests {
     fn test_get_system_account_kind_nonce_ok() {
         let nonce_account = Account::new_data(
             42,
-            &nonce::State::Initialized(
-                nonce::state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
+            &nonce::State::Initialized(nonce::state::Data {
+                authority: Pubkey::default(),
+                blockhash: Hash::default(),
+            }),
             &system_program::id(),
         )
         .unwrap();
@@ -1399,10 +1402,10 @@ mod tests {
     fn test_get_system_account_kind_nonsystem_owner_with_nonce_data_fail() {
         let nonce_account = Account::new_data(
             42,
-            &nonce::State::Initialized(
-                nonce::state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
+            &nonce::State::Initialized(nonce::state::Data {
+                authority: Pubkey::default(),
+                blockhash: Hash::default(),
+            }),
             &Pubkey::new_rand(),
         )
         .unwrap();
