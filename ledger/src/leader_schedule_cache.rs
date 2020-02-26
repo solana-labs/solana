@@ -106,6 +106,7 @@ impl LeaderScheduleCache {
         mut current_slot: Slot,
         bank: &Bank,
         blockstore: Option<&Blockstore>,
+        max_range: u64,
     ) -> Option<(Slot, Slot)> {
         let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
         let mut first_slot = None;
@@ -141,9 +142,14 @@ impl LeaderScheduleCache {
                         }
                     }
 
-                    if first_slot.is_none() {
+                    if let Some(first_slot) = first_slot {
+                        if current_slot - first_slot + 1 >= max_range {
+                            return Some((first_slot, current_slot));
+                        }
+                    } else {
                         first_slot = Some(current_slot);
                     }
+
                     last_slot = current_slot;
                 } else if first_slot.is_some() {
                     return Some((first_slot.unwrap(), last_slot));

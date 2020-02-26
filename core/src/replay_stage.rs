@@ -4,7 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
     consensus::{StakeLockout, Tower},
-    poh_recorder::PohRecorder,
+    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -683,6 +683,7 @@ impl ReplayStage {
             bank.slot(),
             &bank,
             Some(blockstore),
+            GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
         );
         poh_recorder
             .lock()
