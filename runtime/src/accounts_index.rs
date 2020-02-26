@@ -174,6 +174,7 @@ impl<T: Clone> AccountsIndex<T> {
     /// Accounts no longer reference this slot.
     pub fn cleanup_dead_slot(&mut self, slot: Slot) {
         self.roots.remove(&slot);
+        self.not_compacted_roots.remove(&slot);
     }
 }
 
@@ -291,6 +292,16 @@ mod tests {
         index.cleanup_dead_slot(1);
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
+    }
+
+    #[test]
+    fn test_cleanup_first_not_compacted_slot() {
+        let mut index = AccountsIndex::<bool>::default();
+        assert_eq!(0, index.not_compacted_roots.len());
+        index.add_root(1);
+        assert_eq!(1, index.not_compacted_roots.len());
+        index.cleanup_dead_slot(1);
+        assert_eq!(0, index.not_compacted_roots.len());
     }
 
     #[test]
