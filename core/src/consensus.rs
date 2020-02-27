@@ -481,7 +481,6 @@ impl Tower {
 pub mod test {
     use super::*;
     use crate::replay_stage::{ForkProgress, HeaviestForkFailures, ReplayStage};
-    use bio::data_structures::interval_tree::IntervalTree;
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
         bank::Bank,
@@ -624,17 +623,17 @@ pub mod test {
             info!("lockouts: {:?}", fork_progress.fork_stats.stake_lockouts);
             let mut failures = vec![];
             if fork_progress.fork_stats.is_locked_out {
-                failures.push(VoteFailures::LockedOut(vote_slot));
+                failures.push(HeaviestForkFailures::LockedOut(vote_slot));
             }
             if !fork_progress.fork_stats.vote_threshold {
-                failures.push(VoteFailures::FailedThreshold(vote_slot));
+                failures.push(HeaviestForkFailures::FailedThreshold(vote_slot));
             }
             if !failures.is_empty() {
                 return failures;
             }
             let vote = tower.new_vote_from_bank(&bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
-                ReplayStage::handle_new_root(new_root, bank_forks, progress, &None);
+                ReplayStage::handle_new_root(new_root, bank_forks, progress, &None, &mut 0);
             }
 
             // Mark the vote for this bank under this node's pubkey so it will be
