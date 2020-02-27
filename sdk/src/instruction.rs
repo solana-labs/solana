@@ -86,14 +86,14 @@ pub enum InstructionError {
     /// the runtime cannot determine which changes to pick or how to merge them if both are modified
     DuplicateAccountOutOfSync,
 
-    /// The return value from the program was invalid.  Valid errors are either a defined builtin
-    /// error value or a user-defined error in the lower 32 bits.
-    InvalidError,
-
     /// Allows on-chain programs to implement program-specific error types and see them returned
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
     CustomError(u32),
+
+    /// The return value from the program was invalid.  Valid errors are either a defined builtin
+    /// error value or a user-defined error in the lower 32 bits.
+    InvalidError,
 }
 
 impl InstructionError {
