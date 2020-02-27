@@ -659,11 +659,14 @@ impl AccountsDB {
                 }
             }
         }
-        let reclaim_vecs = all_pubkeys.into_par_iter().map(|pubkey| {
-            let accounts_index = self.accounts_index.read().unwrap();
+        let all_pubkeys: Vec<_> = all_pubkeys.into_iter().collect();
+        let reclaim_vecs = all_pubkeys.par_chunks(4096).map(|pubkeys: &[Pubkey]| {
             let mut reclaims = Vec::new();
-            if !purges.contains_key(&pubkey) {
-                accounts_index.clean_rooted_entries(&pubkey, &mut reclaims);
+            let accounts_index = self.accounts_index.read().unwrap();
+            for pubkey in pubkeys {
+                if !purges.contains_key(&pubkey) {
+                    accounts_index.clean_rooted_entries(&pubkey, &mut reclaims);
+                }
             }
             reclaims
         });
