@@ -10,7 +10,7 @@ use solana_sdk::{clock::Slot, timing};
 use std::{
     collections::{HashMap, HashSet},
     ops::Index,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::Instant,
 };
@@ -192,10 +192,6 @@ impl BankForks {
                     root,
                     &root_bank.src.roots(),
                     snapshot_package_sender.as_ref().unwrap(),
-                    snapshot_utils::get_snapshot_archive_path(
-                        &config.snapshot_package_output_path,
-                        &(root_bank.slot(), root_bank.hash()),
-                    ),
                 );
                 if r.is_err() {
                     warn!("Error generating snapshot for bank: {}, err: {:?}", root, r);
@@ -239,12 +235,11 @@ impl BankForks {
         }
     }
 
-    pub fn generate_snapshot<P: AsRef<Path>>(
+    pub fn generate_snapshot(
         &self,
         root: Slot,
         slots_to_snapshot: &[Slot],
         snapshot_package_sender: &SnapshotPackageSender,
-        tar_output_file: P,
     ) -> Result<()> {
         let config = self.snapshot_config.as_ref().unwrap();
 
@@ -270,9 +265,9 @@ impl BankForks {
         let package = snapshot_utils::package_snapshot(
             &bank,
             latest_slot_snapshot_paths,
-            tar_output_file,
             &config.snapshot_path,
             slots_to_snapshot,
+            &config.snapshot_package_output_path,
             storages,
         )?;
 
