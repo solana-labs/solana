@@ -5,7 +5,7 @@ intended to be both dev and CD friendly.
 
 ### User Account Prerequisites
 
-GCP and AWS are supported.
+GCP, AWS, colo are supported.
 
 #### GCP
 First authenticate with
@@ -32,9 +32,10 @@ NOTE: This example uses GCE.  If you are using AWS EC2, replace `./gce.sh` with
 ```bash
 $ cd net/
 $ ./gce.sh create -n 5 -c 1     #<-- Create a GCE testnet with 5 additional nodes (beyond the bootstrap node) and 1 client (billing starts here)
-$ ./init-metrics.sh $(whoami)   #<-- Configure a metrics database for the testnet
-$ ./net.sh start                #<-- Deploy the network from the local workspace and start all clients with bench-tps
-$ ./ssh.sh                      #<-- Details on how to ssh into any testnet node to access logs/etc
+$ ./init-metrics.sh $(whoami)   #<-- Recreate a metrics database for the testnet and configure credentials
+$ ./net.sh start                #<-- Deploy the network from the local workspace and start processes on all nodes including bench-tps on the client node
+$ ./ssh.sh                      #<-- Show a help to ssh into any testnet node to access logs/etc
+$ ./net.sh stop                 #<-- Stop running processes on all nodes
 $ ./gce.sh delete               #<-- Dispose of the network (billing stops here)
 ```
 
