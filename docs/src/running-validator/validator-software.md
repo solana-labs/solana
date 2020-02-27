@@ -1,14 +1,14 @@
 # Installing the Validator Software
 
 Install the Solana release
-[v0.23.1](https://github.com/solana-labs/solana/releases/tag/v0.23.1) on your
+[v1.0.0](https://github.com/solana-labs/solana/releases/tag/v1.0.0) on your
 machine by running:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.23.1/install/solana-install-init.sh | sh -s - 0.23.1
+curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh | sh -s - 1.0.0
 ```
 
-If you are connecting to a different testnet, you can replace `0.23.1` with the
+If you are connecting to a different testnet, you can replace `1.0.0` with the
 release tag matching the software version of your desired testnet, or replace it
 with the named channel `stable`, `beta`, or `edge`.
 
@@ -16,11 +16,11 @@ The following output indicates a successful update:
 
 ```text
 looking for latest release
-downloading v0.23.1 installer
+downloading v1.0.0 installer
 Configuration: /home/solana/.config/solana/install/config.yml
 Active release directory: /home/solana/.local/share/solana/install/active_release
-* Release version: 0.23.1
-* Release URL: https://github.com/solana-labs/solana/releases/download/v0.23.1/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+* Release version: 1.0.0
+* Release URL: https://github.com/solana-labs/solana/releases/download/v1.0.0/solana-release-x86_64-unknown-linux-gnu.tar.bz2
 Update successful
 ```
 
