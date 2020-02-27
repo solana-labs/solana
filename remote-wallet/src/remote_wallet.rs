@@ -47,7 +47,7 @@ pub enum RemoteWalletError {
     #[error("pubkey not found for given address")]
     PubkeyNotFound,
 
-    #[error("operation has been cancelled")]
+    #[error("remote wallet operation rejected by the user")]
     UserCancel,
 }
 
@@ -62,7 +62,9 @@ impl From<RemoteWalletError> for SignerError {
             RemoteWalletError::InvalidInput(input) => SignerError::InvalidInput(input),
             RemoteWalletError::NoDeviceFound => SignerError::NoDeviceFound,
             RemoteWalletError::Protocol(e) => SignerError::Protocol(e.to_string()),
-            RemoteWalletError::UserCancel => SignerError::UserCancel,
+            RemoteWalletError::UserCancel => {
+                SignerError::UserCancel("remote wallet operation rejected by the user".to_string())
+            }
             _ => SignerError::CustomError(err.to_string()),
         }
     }
