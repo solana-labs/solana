@@ -642,7 +642,7 @@ impl AccountsDB {
     // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
     fn clean_old_rooted_accounts(&self, purges: &HashMap<Pubkey, Vec<(Slot, AccountInfo)>>) {
         let accounts_index = self.accounts_index.read().unwrap();
-        let mut all_pubkeys: HashSet<Pubkey> = HashSet::<Pubkey>::default();
+        let mut all_pubkeys: HashSet<Pubkey> = HashSet::new();
         for root in accounts_index.uncleaned_roots.iter() {
             let pubkey_sets: Vec<HashSet<Pubkey>> = self.scan_account_storage(
                 *root,
@@ -2024,6 +2024,15 @@ pub mod tests {
         //now old state is cleaned up
         assert_eq!(accounts.store_count_for_slot(0), 0);
         assert_eq!(accounts.store_count_for_slot(1), 1);
+        assert_eq!(
+            accounts
+                .accounts_index
+                .read()
+                .unwrap()
+                .uncleaned_roots
+                .len(),
+            0
+        );
     }
 
     #[test]
