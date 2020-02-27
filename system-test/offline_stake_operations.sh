@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2086
+# shellcheck disable=SC2068
+# shellcheck disable=SC2206
+# shellcheck disable=SC2162
+
 set -e
 
 if [[ -n "$1" ]]; then
