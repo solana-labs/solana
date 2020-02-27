@@ -106,6 +106,7 @@ impl LeaderScheduleCache {
         mut current_slot: Slot,
         bank: &Bank,
         blockstore: Option<&Blockstore>,
+        max_slot_range: u64,
     ) -> Option<(Slot, Slot)> {
         let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
         let mut first_slot = None;
@@ -141,9 +142,14 @@ impl LeaderScheduleCache {
                         }
                     }
 
-                    if first_slot.is_none() {
+                    if let Some(first_slot) = first_slot {
+                        if current_slot - first_slot + 1 >= max_slot_range {
+                            return Some((first_slot, current_slot));
+                        }
+                    } else {
                         first_slot = Some(current_slot);
                     }
+
                     last_slot = current_slot;
                 } else if first_slot.is_some() {
                     return Some((first_slot.unwrap(), last_slot));
@@ -261,6 +267,7 @@ mod tests {
         staking_utils::tests::setup_vote_and_stake_accounts,
     };
     use solana_runtime::bank::Bank;
+    use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
     use solana_sdk::epoch_schedule::{
         EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
         MINIMUM_SLOTS_PER_EPOCH,
@@ -392,11 +399,11 @@ mod tests {
             pubkey
         );
         assert_eq!(
-            cache.next_leader_slot(&pubkey, 0, &bank, None),
+            cache.next_leader_slot(&pubkey, 0, &bank, None, std::u64::MAX),
             Some((1, 863999))
         );
         assert_eq!(
-            cache.next_leader_slot(&pubkey, 1, &bank, None),
+            cache.next_leader_slot(&pubkey, 1, &bank, None, std::u64::MAX),
             Some((2, 863999))
         );
         assert_eq!(
@@ -404,7 +411,8 @@ mod tests {
                 &pubkey,
                 2 * genesis_config.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
                 &bank,
-                None
+                None,
+                std::u64::MAX
             ),
             None
         );
@@ -414,7 +422,8 @@ mod tests {
                 &Pubkey::new_rand(), // not in leader_schedule
                 0,
                 &bank,
-                None
+                None,
+                std::u64::MAX
             ),
             None
         );
@@ -447,7 +456,7 @@ mod tests {
             // Check that the next leader slot after 0 is slot 1
             assert_eq!(
                 cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore))
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
                     .unwrap()
                     .0,
                 1
@@ -459,7 +468,7 @@ mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
                 cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore))
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
                     .unwrap()
                     .0,
                 1
@@ -472,7 +481,7 @@ mod tests {
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
                 cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore))
+                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
                     .unwrap()
                     .0,
                 3
@@ -484,7 +493,8 @@ mod tests {
                     &pubkey,
                     2 * genesis_config.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
                     &bank,
-                    Some(&blockstore)
+                    Some(&blockstore),
+                    std::u64::MAX
                 ),
                 None
             );
@@ -494,7 +504,8 @@ mod tests {
                     &Pubkey::new_rand(), // not in leader_schedule
                     0,
                     &bank,
-                    Some(&blockstore)
+                    Some(&blockstore),
+                    std::u64::MAX
                 ),
                 None
             );
@@ -550,17 +561,29 @@ mod tests {
 
         // If the max root isn't set, we'll get None
         assert!(cache
-            .next_leader_slot(&node_pubkey, 0, &bank, None)
+            .next_leader_slot(&node_pubkey, 0, &bank, None, std::u64::MAX)
             .is_none());
 
         cache.set_root(&bank);
-        assert_eq!(
-            cache
-                .next_leader_slot(&node_pubkey, 0, &bank, None)
-                .unwrap()
-                .0,
-            expected_slot
-        );
+        let res = cache
+            .next_leader_slot(&node_pubkey, 0, &bank, None, std::u64::MAX)
+            .unwrap();
+
+        assert_eq!(res.0, expected_slot);
+        assert!(res.1 >= expected_slot + NUM_CONSECUTIVE_LEADER_SLOTS - 1);
+
+        let res = cache
+            .next_leader_slot(
+                &node_pubkey,
+                0,
+                &bank,
+                None,
+                NUM_CONSECUTIVE_LEADER_SLOTS - 1,
+            )
+            .unwrap();
+
+        assert_eq!(res.0, expected_slot);
+        assert_eq!(res.1, expected_slot + NUM_CONSECUTIVE_LEADER_SLOTS - 2);
     }
 
     #[test]
