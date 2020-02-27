@@ -1,14 +1,16 @@
-use crate::keypair::{keypair_from_seed_phrase, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG};
+use crate::keypair::{
+    keypair_from_seed_phrase, signer_from_path, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+};
 use chrono::DateTime;
 use clap::ArgMatches;
-use solana_remote_wallet::remote_wallet::DerivationPath;
+use solana_remote_wallet::remote_wallet::{DerivationPath, RemoteWalletManager};
 use solana_sdk::{
     clock::UnixTimestamp,
     native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signature, Signer},
 };
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 // Return parsed values from matches at `name`
 pub fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
@@ -93,6 +95,22 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
     })
 }
 
+// Return a signer from matches at `name`
+#[allow(clippy::type_complexity)]
+pub fn signer_of(
+    matches: &ArgMatches<'_>,
+    name: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
+    if let Some(location) = matches.value_of(name) {
+        let signer = signer_from_path(matches, location, name, wallet_manager)?;
+        let signer_pubkey = signer.pubkey();
+        Ok((Some(signer), Some(signer_pubkey)))
+    } else {
+        Ok((None, None))
+    }
+}
+
 pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
 }
@@ -101,8 +119,8 @@ pub fn derivation_of(matches: &ArgMatches<'_>, name: &str) -> Option<DerivationP
     matches.value_of(name).map(|derivation_str| {
         let derivation_str = derivation_str.replace("'", "");
         let mut parts = derivation_str.split('/');
-        let account = parts.next().unwrap().parse::<u16>().unwrap();
-        let change = parts.next().map(|change| change.parse::<u16>().unwrap());
+        let account = parts.next().map(|account| account.parse::<u32>().unwrap());
+        let change = parts.next().map(|change| change.parse::<u32>().unwrap());
         DerivationPath { account, change }
     })
 }
@@ -290,7 +308,7 @@ mod tests {
         assert_eq!(
             derivation_of(&matches, "single"),
             Some(DerivationPath {
-                account: 2,
+                account: Some(2),
                 change: Some(3)
             })
         );
@@ -301,7 +319,7 @@ mod tests {
         assert_eq!(
             derivation_of(&matches, "single"),
             Some(DerivationPath {
-                account: 2,
+                account: Some(2),
                 change: None
             })
         );
@@ -312,7 +330,7 @@ mod tests {
         assert_eq!(
             derivation_of(&matches, "single"),
             Some(DerivationPath {
-                account: 2,
+                account: Some(2),
                 change: Some(3)
             })
         );

@@ -4,19 +4,15 @@ use console::style;
 use solana_clap_utils::{
     input_parsers::derivation_of,
     input_validators::{is_derivation, is_url},
-    keypair::{
-        self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
-    },
+    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_cli::{
-    cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliError},
+    cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::config::{Config, CONFIG_FILE};
-use solana_sdk::signature::read_keypair_file;
-
-use std::error;
+use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
+use std::{error, sync::Arc};
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
@@ -84,7 +80,10 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
     Ok(parse_args)
 }
 
-pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::Error>> {
+pub fn parse_args<'a>(
+    matches: &ArgMatches<'_>,
+    wallet_manager: Option<Arc<RemoteWalletManager>>,
+) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
     } else {
@@ -99,62 +98,29 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<CliConfig, Box<dyn error::
         default.json_rpc_url
     };
 
-    let CliCommandInfo {
-        command,
-        require_keypair,
-    } = parse_command(&matches)?;
-
-    let (keypair, keypair_path) = if require_keypair {
-        let KeypairWithSource { keypair, source } = keypair_input(&matches, "keypair")?;
-        match source {
-            keypair::Source::Path => (
-                keypair,
-                Some(matches.value_of("keypair").unwrap().to_string()),
-            ),
-            keypair::Source::SeedPhrase => (keypair, None),
-            keypair::Source::Generated => {
-                let keypair_path = if config.keypair_path != "" {
-                    config.keypair_path
-                } else {
-                    let default_keypair_path = CliConfig::default_keypair_path();
-                    if !std::path::Path::new(&default_keypair_path).exists() {
-                        return Err(CliError::KeypairFileNotFound(format!(
-                            "Generate a new keypair at {} with `solana-keygen new`",
-                            default_keypair_path
-                        ))
-                        .into());
-                    }
-                    default_keypair_path
-                };
-
-                let keypair = if keypair_path.starts_with("usb://") {
-                    keypair
-                } else {
-                    read_keypair_file(&keypair_path).or_else(|err| {
-                        Err(CliError::BadParameter(format!(
-                            "{}: Unable to open keypair file: {}",
-                            err, keypair_path
-                        )))
-                    })?
-                };
-
-                (keypair, Some(keypair_path))
-            }
-        }
+    let default_signer_path = if matches.is_present("keypair") {
+        matches.value_of("keypair").unwrap().to_string()
+    } else if config.keypair_path != "" {
+        config.keypair_path
     } else {
-        let default = CliConfig::default();
-        (default.keypair, None)
+        CliConfig::default_keypair_path()
     };
 
-    Ok(CliConfig {
-        command,
-        json_rpc_url,
-        keypair,
-        keypair_path,
-        derivation_path: derivation_of(matches, "derivation_path"),
-        rpc_client: None,
-        verbose: matches.is_present("verbose"),
-    })
+    let CliCommandInfo { command, signers } =
+        parse_command(&matches, &default_signer_path, wallet_manager.as_ref())?;
+
+    Ok((
+        CliConfig {
+            command,
+            json_rpc_url,
+            signers: vec![],
+            keypair_path: default_signer_path,
+            derivation_path: derivation_of(matches, "derivation_path"),
+            rpc_client: None,
+            verbose: matches.is_present("verbose"),
+        },
+        signers,
+    ))
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -201,6 +167,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name("derivation_path")
             .long("derivation-path")
             .value_name("ACCOUNT or ACCOUNT/CHANGE")
+            .global(true)
             .takes_value(true)
             .validator(is_derivation)
             .help("Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'")
@@ -211,15 +178,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .short("v")
             .global(true)
             .help("Show extra information header"),
-    )
-    .arg(
-        Arg::with_name(ASK_SEED_PHRASE_ARG.name)
-            .long(ASK_SEED_PHRASE_ARG.long)
-            .value_name("KEYPAIR NAME")
-            .global(true)
-            .takes_value(true)
-            .possible_values(&["keypair"])
-            .help(ASK_SEED_PHRASE_ARG.help),
     )
     .arg(
         Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
@@ -258,7 +216,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     .get_matches();
 
     if parse_settings(&matches)? {
-        let config = parse_args(&matches)?;
+        let wallet_manager = maybe_wallet_manager()?;
+
+        let (mut config, signers) = parse_args(&matches, wallet_manager)?;
+        config.signers = signers.iter().map(|s| s.as_ref()).collect();
         let result = process_command(&config)?;
         println!("{}", result);
     }

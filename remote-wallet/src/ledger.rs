@@ -1,11 +1,13 @@
 use crate::remote_wallet::{
-    initialize_wallet_manager, DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo,
+    DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
 };
 use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
 use semver::Version as FirmwareVersion;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::{cmp::min, fmt, sync::Arc};
+
+const HARDENED_BIT: u32 = 1 << 31;
 
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
@@ -41,7 +43,7 @@ const HID_PREFIX_ZERO: usize = 0;
 
 mod commands {
     #[allow(dead_code)]
-    pub const GET_APP_CONFIGURATION: u8 = 0x06;
+    pub const GET_APP_CONFIGURATION: u8 = 0x01;
     pub const GET_PUBKEY: u8 = 0x02;
     pub const SIGN_MESSAGE: u8 = 0x03;
 }
@@ -74,7 +76,7 @@ impl LedgerWallet {
     //		* APDU_INS				(1 byte)
     //		* APDU_P1				(1 byte)
     //		* APDU_P2				(1 byte)
-    //		* APDU_LENGTH				(1 byte)
+    //		* APDU_LENGTH				(2 bytes)
     //		* APDU_Payload				(Variable)
     //
     fn write(&self, command: u8, p1: u8, p2: u8, data: &[u8]) -> Result<(), RemoteWalletError> {
@@ -139,11 +141,6 @@ impl LedgerWallet {
     //		* Payload				(Optional)
     //
     // Payload
-    //		* APDU Total Length			(2 bytes big endian)
-    //		* APDU_CLA				(1 byte)
-    //		* APDU_INS				(1 byte)
-    //		* APDU_P1				(1 byte)
-    //		* APDU_P2				(1 byte)
     //		* APDU_LENGTH				(1 byte)
     //		* APDU_Payload				(Variable)
     //
@@ -193,6 +190,10 @@ impl LedgerWallet {
         match status {
             // These need to be aligned with solana Ledger app error codes, and clippy allowance removed
             0x6700 => Err(RemoteWalletError::Protocol("Incorrect length")),
+            0x6802 => Err(RemoteWalletError::Protocol("Invalid parameter")),
+            0x6803 => Err(RemoteWalletError::Protocol(
+                "Overflow: message longer than MAX_MESSAGE_LENGTH",
+            )),
             0x6982 => Err(RemoteWalletError::Protocol(
                 "Security status not satisfied (Canceled by user)",
             )),
@@ -260,7 +261,7 @@ impl RemoteWallet for LedgerWallet {
             .serial_number
             .clone()
             .unwrap_or_else(|| "Unknown".to_owned());
-        self.get_pubkey(&DerivationPath::default())
+        self.get_pubkey(&DerivationPath::default(), false)
             .map(|pubkey| RemoteWalletInfo {
                 model,
                 manufacturer,
@@ -269,12 +270,16 @@ impl RemoteWallet for LedgerWallet {
             })
     }
 
-    fn get_pubkey(&self, derivation_path: &DerivationPath) -> Result<Pubkey, RemoteWalletError> {
+    fn get_pubkey(
+        &self,
+        derivation_path: &DerivationPath,
+        confirm_key: bool,
+    ) -> Result<Pubkey, RemoteWalletError> {
         let derivation_path = extend_and_serialize(derivation_path);
 
         let key = self.send_apdu(
             commands::GET_PUBKEY,
-            0, // In the naive implementation, default request is for no device confirmation
+            if confirm_key { 1 } else { 0 },
             0,
             &derivation_path,
         )?;
@@ -361,16 +366,20 @@ pub fn is_valid_ledger(vendor_id: u16, product_id: u16) -> bool {
 fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
     let byte = if derivation_path.change.is_some() {
         4
-    } else {
+    } else if derivation_path.account.is_some() {
         3
+    } else {
+        2
     };
     let mut concat_derivation = vec![byte];
     concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
-    concat_derivation.extend_from_slice(&[0x80, 0]);
-    concat_derivation.extend_from_slice(&derivation_path.account.to_be_bytes());
-    if let Some(change) = derivation_path.change {
-        concat_derivation.extend_from_slice(&[0x80, 0]);
-        concat_derivation.extend_from_slice(&change.to_be_bytes());
+    if let Some(account) = derivation_path.account {
+        let hardened_account = account | HARDENED_BIT;
+        concat_derivation.extend_from_slice(&hardened_account.to_be_bytes());
+        if let Some(change) = derivation_path.change {
+            let hardened_change = change | HARDENED_BIT;
+            concat_derivation.extend_from_slice(&hardened_change.to_be_bytes());
+        }
     }
     concat_derivation
 }
@@ -378,9 +387,8 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
 /// Choose a Ledger wallet based on matching info fields
 pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
+    wallet_manager: &RemoteWalletManager,
 ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
-    let wallet_manager = initialize_wallet_manager();
-    let _device_count = wallet_manager.update_devices()?;
     let devices = wallet_manager.list_devices();
     let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = devices
         .iter()
