@@ -29,6 +29,8 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
+pub const SNAPSHOT_VERSION: &str = "1.0.0";
+
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
     pub slot: Slot,
@@ -165,10 +167,8 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
 
     // Write version file
     {
-        let snapshot_version = format!("{}\n", env!("CARGO_PKG_VERSION"));
         let mut f = std::fs::File::create(staging_version_file)?;
-        //f.write_all(&snapshot_version.to_string().into_bytes())?;
-        f.write_all(&snapshot_version.into_bytes())?;
+        f.write_all(&SNAPSHOT_VERSION.to_string().into_bytes())?;
     }
 
     let archive_compress_options = if is_snapshot_compression_disabled() {
@@ -456,15 +456,8 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     let unpacked_snapshots_dir = unpack_dir.as_ref().join(TAR_SNAPSHOTS_DIR);
     let unpacked_version_file = unpack_dir.as_ref().join(TAR_VERSION_FILE);
 
-    let snapshot_version = if let Ok(mut f) = File::open(unpacked_version_file) {
-        let mut snapshot_version = String::new();
-        f.read_to_string(&mut snapshot_version)?;
-        snapshot_version
-    } else {
-        // Once v0.23.x is deployed, this default can be removed and snapshots without a version
-        // file can be rejected
-        String::from("0.22.3")
-    };
+    let mut snapshot_version = String::new();
+    File::open(unpacked_version_file).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
 
     let bank = rebuild_bank_from_snapshots(
         snapshot_version.trim(),
@@ -558,7 +551,7 @@ where
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             let mut bank: Bank = match snapshot_version {
-                env!("CARGO_PKG_VERSION") => deserialize_from_snapshot(stream.by_ref())?,
+                SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
                 _ => {
                     return Err(get_io_error(&format!(
                         "unsupported snapshot version: {}",
