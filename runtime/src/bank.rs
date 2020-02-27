@@ -496,6 +496,14 @@ impl Bank {
         *self.hash.read().unwrap()
     }
 
+    pub fn get_accounts_hash(&self) -> Hash {
+        self.hash()
+    }
+
+    pub fn update_accounts_hash(&self) -> Hash {
+        self.hash()
+    }
+
     pub fn is_frozen(&self) -> bool {
         *self.hash.read().unwrap() != Hash::default()
     }
