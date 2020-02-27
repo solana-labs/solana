@@ -2,7 +2,7 @@
 
 **Subject to change.**
 
-The preceeding sections, outlined in the [Economic Design Overview](./), describe a long-term vision of a sustainable Solana economy. Of course, we don't expect the final implementation to perfectly match what has been described above. We intend to fully engage with network stakeholders throughout the implementation phases \(i.e. pre-testnet, testnet, mainnet\) to ensure the system supports, and is representative of, the various network participants' interests. The first step toward this goal, however, is outlining a some desired MVP economic features to be available for early pre-testnet and testnet participants. Below is a rough sketch outlining basic economic functionality from which a more complete and functional system can be developed.
+The preceding sections, outlined in the [Economic Design Overview](./), describe a long-term vision of a sustainable Solana economy. Of course, we don't expect the final implementation to perfectly match what has been described above. We intend to fully engage with network stakeholders throughout the implementation phases \(i.e. pre-testnet, testnet, mainnet\) to ensure the system supports, and is representative of, the various network participants' interests. The first step toward this goal, however, is outlining a some desired MVP economic features to be available for early pre-testnet and testnet participants. Below is a rough sketch outlining basic economic functionality from which a more complete and functional system can be developed.
 
 ## MVP Economic Features
 
