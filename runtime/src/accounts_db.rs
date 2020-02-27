@@ -641,7 +641,7 @@ impl AccountsDB {
     // Reclaim older states of rooted non-zero lamport accounts as a general
     // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
     fn clean_old_rooted_accounts(&self, purges: &HashMap<Pubkey, Vec<(Slot, AccountInfo)>>) {
-        let mut accounts_index = self.accounts_index.write().unwrap();
+        let accounts_index = self.accounts_index.read().unwrap();
         let mut all_pubkeys: HashSet<Pubkey> = HashSet::<Pubkey>::default();
         for root in accounts_index.uncleaned_roots.iter() {
             let pubkey_sets: Vec<HashSet<Pubkey>> = self.scan_account_storage(
@@ -659,16 +659,21 @@ impl AccountsDB {
                 }
             }
         }
-        let mut reclaims = Vec::new();
-        for pubkey in all_pubkeys {
+        let reclaim_vecs = all_pubkeys.into_par_iter().map(|pubkey| {
+            let accounts_index = self.accounts_index.read().unwrap();
+            let mut reclaims = Vec::new();
             if !purges.contains_key(&pubkey) {
                 accounts_index.clean_rooted_entries(&pubkey, &mut reclaims);
             }
-        }
-        accounts_index.uncleaned_roots.clear();
+            reclaims
+        });
         drop(accounts_index);
 
-        self.handle_reclaims(&reclaims);
+        reclaim_vecs.for_each(|reclaims| self.handle_reclaims(&reclaims));
+
+        let mut accounts_index = self.accounts_index.write().unwrap();
+        accounts_index.uncleaned_roots.clear();
+        drop(accounts_index);
     }
 
     // Purge zero lamport accounts and older rooted account states as garbage
