@@ -10,7 +10,7 @@ use crate::{
 };
 use log::*;
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
-use std::{fs, path::PathBuf, result, sync::Arc};
+use std::{fs, path::PathBuf, process, result, sync::Arc};
 
 pub type LoadResult = result::Result<
     (
@@ -52,37 +52,50 @@ pub fn load(
         fs::create_dir_all(&snapshot_config.snapshot_path)
             .expect("Couldn't create snapshot directory");
 
-        let tar = snapshot_utils::get_snapshot_archive_path(
+        match snapshot_utils::get_highest_snapshot_archive_path(
             &snapshot_config.snapshot_package_output_path,
-        );
-        if tar.exists() {
-            info!("Loading snapshot package: {:?}", tar);
-            // Fail hard here if snapshot fails to load, don't silently continue
+        ) {
+            Some((archive_filename, archive_snapshot_hash)) => {
+                info!("Loading snapshot package: {:?}", archive_filename);
+                // Fail hard here if snapshot fails to load, don't silently continue
 
-            if account_paths.is_empty() {
-                panic!("Account paths not present when booting from snapshot")
+                if account_paths.is_empty() {
+                    error!("Account paths not present when booting from snapshot");
+                    process::exit(1);
+                }
+
+                let deserialized_bank = snapshot_utils::bank_from_archive(
+                    &account_paths,
+                    &snapshot_config.snapshot_path,
+                    &archive_filename,
+                )
+                .expect("Load from snapshot failed");
+
+                let deserialized_snapshot_hash = (
+                    deserialized_bank.slot(),
+                    deserialized_bank.get_accounts_hash(),
+                );
+
+                if deserialized_snapshot_hash != archive_snapshot_hash {
+                    error!(
+                        "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",
+                        archive_snapshot_hash, deserialized_snapshot_hash
+                    );
+                    process::exit(1);
+                }
+
+                return to_loadresult(
+                    blockstore_processor::process_blockstore_from_root(
+                        genesis_config,
+                        blockstore,
+                        Arc::new(deserialized_bank),
+                        &process_options,
+                        &VerifyRecyclers::default(),
+                    ),
+                    Some(deserialized_snapshot_hash),
+                );
             }
-
-            let deserialized_bank = snapshot_utils::bank_from_archive(
-                &account_paths,
-                &snapshot_config.snapshot_path,
-                &tar,
-            )
-            .expect("Load from snapshot failed");
-
-            let snapshot_hash = (deserialized_bank.slot(), deserialized_bank.hash());
-            return to_loadresult(
-                blockstore_processor::process_blockstore_from_root(
-                    genesis_config,
-                    blockstore,
-                    Arc::new(deserialized_bank),
-                    &process_options,
-                    &VerifyRecyclers::default(),
-                ),
-                Some(snapshot_hash),
-            );
-        } else {
-            info!("Snapshot package does not exist: {:?}", tar);
+            None => info!("No snapshot package available"),
         }
     } else {
         info!("Snapshots disabled");

@@ -18,10 +18,11 @@ use solana_local_cluster::{
 };
 use solana_sdk::{
     client::SyncClient,
-    clock,
+    clock::{self, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_config::OperatingMode,
+    hash::Hash,
     poh_config::PohConfig,
     signature::{Keypair, Signer},
 };
@@ -648,14 +649,16 @@ fn test_snapshot_restart_tower() {
         .as_ref()
         .unwrap()
         .snapshot_package_output_path;
-    let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
-    wait_for_next_snapshot(&cluster, &tar);
 
-    // Copy tar to validator's snapshot output directory
-    let validator_tar_path = snapshot_utils::get_snapshot_archive_path(
+    let (archive_filename, archive_snapshot_hash) =
+        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
+
+    // Copy archive to validator's snapshot output directory
+    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
+        &archive_snapshot_hash,
     );
-    fs::hard_link(tar, &validator_tar_path).unwrap();
+    fs::hard_link(archive_filename, &validator_archive_path).unwrap();
 
     // Restart validator from snapshot, the validator's tower state in this snapshot
     // will contain slots < the root bank of the snapshot. Validator should not panic.
@@ -704,21 +707,23 @@ fn test_snapshots_blockstore_floor() {
 
     trace!("Waiting for snapshot tar to be generated with slot",);
 
-    let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
-    loop {
-        if tar.exists() {
-            trace!("snapshot tar exists");
-            break;
+    let (archive_filename, (archive_slot, archive_hash)) = loop {
+        let archive =
+            snapshot_utils::get_highest_snapshot_archive_path(&snapshot_package_output_path);
+        if archive.is_some() {
+            trace!("snapshot exists");
+            break archive.unwrap();
         }
         sleep(Duration::from_millis(5000));
-    }
+    };
 
-    // Copy tar to validator's snapshot output directory
-    let validator_tar_path = snapshot_utils::get_snapshot_archive_path(
+    // Copy archive to validator's snapshot output directory
+    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
+        &(archive_slot, archive_hash),
     );
-    fs::hard_link(tar, &validator_tar_path).unwrap();
-    let slot_floor = snapshot_utils::bank_slot_from_archive(&validator_tar_path).unwrap();
+    fs::hard_link(archive_filename, &validator_archive_path).unwrap();
+    let slot_floor = archive_slot;
 
     // Start up a new node from a snapshot
     let validator_stake = 5;
@@ -814,8 +819,7 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        let tar = snapshot_utils::get_snapshot_archive_path(&snapshot_package_output_path);
-        wait_for_next_snapshot(&cluster, &tar);
+        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
@@ -952,7 +956,10 @@ fn test_no_voting() {
     }
 }
 
-fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P) {
+fn wait_for_next_snapshot(
+    cluster: &LocalCluster,
+    snapshot_package_output_path: &Path,
+) -> (PathBuf, (Slot, Hash)) {
     // Get slot after which this was generated
     let client = cluster
         .get_validator_client(&cluster.entry_point_info.id)
@@ -964,17 +971,18 @@ fn wait_for_next_snapshot<P: AsRef<Path>>(cluster: &LocalCluster, tar: P) {
     // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
     // must include the transactions just pushed
     trace!(
-        "Waiting for snapshot tar to be generated with slot > {}",
+        "Waiting for snapshot archive to be generated with slot > {}",
         last_slot
     );
     loop {
-        if tar.as_ref().exists() {
-            trace!("snapshot tar exists");
-            let slot = snapshot_utils::bank_slot_from_archive(&tar).unwrap();
+        if let Some((filename, (slot, hash))) =
+            snapshot_utils::get_highest_snapshot_archive_path(snapshot_package_output_path)
+        {
+            trace!("snapshot for slot {} exists", slot);
             if slot >= last_slot {
-                break;
+                return (filename, (slot, hash));
             }
-            trace!("snapshot tar slot {} < last_slot {}", slot, last_slot);
+            trace!("snapshot slot {} < last_slot {}", slot, last_slot);
         }
         sleep(Duration::from_millis(5000));
     }
