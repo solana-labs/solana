@@ -232,9 +232,8 @@ mod tests {
         let saved_snapshots_dir = TempDir::new().unwrap();
         let saved_accounts_dir = TempDir::new().unwrap();
         let saved_slot = 4;
-        let saved_tar = snapshot_config
-            .snapshot_package_output_path
-            .join(saved_slot.to_string());
+        let mut saved_archive_path = None;
+
         for forks in 0..MAX_CACHE_ENTRIES + 2 {
             let bank = Bank::new_from_parent(
                 &bank_forks[forks as u64],
@@ -246,6 +245,7 @@ mod tests {
             let tx = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
+            let accounts_hash = bank.update_accounts_hash();
             bank_forks.insert(bank);
 
             let package_sender = {
@@ -286,6 +286,11 @@ mod tests {
                     &options,
                 )
                 .unwrap();
+
+                saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
+                    &snapshot_config.snapshot_package_output_path,
+                    &(slot, accounts_hash),
+                ));
             }
         }
 
@@ -323,7 +328,7 @@ mod tests {
             .join()
             .expect("SnapshotPackagerService exited with error");
 
-        // Check the tar we cached the state for earlier was generated correctly
+        // Check the archive we cached the state for earlier was generated correctly
 
         // before we compare, stick an empty status_cache in this dir so that the package comparision works
         // This is needed since the status_cache is added by the packager and is not collected from
@@ -342,7 +347,7 @@ mod tests {
         .unwrap();
 
         snapshot_utils::verify_snapshot_archive(
-            saved_tar,
+            saved_archive_path.unwrap(),
             saved_snapshots_dir.path(),
             saved_accounts_dir
                 .path()

@@ -220,7 +220,8 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
 
     timer.stop();
     info!(
-        "Successfully created tarball. slot: {}, elapsed ms: {}, size={}",
+        "Successfully created {:?}. slot: {}, elapsed ms: {}, size={}",
+        snapshot_package.tar_output_file,
         snapshot_package.root,
         timer.as_ms(),
         metadata.len()
@@ -639,7 +640,7 @@ fn get_io_error(error: &str) -> SnapshotError {
 }
 
 pub fn verify_snapshot_archive<P, Q, R>(
-    snapshot_tar: P,
+    snapshot_archive: P,
     snapshots_to_verify: Q,
     storages_to_verify: R,
 ) where
@@ -649,7 +650,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    untar_snapshot_in(snapshot_tar, &unpack_dir).unwrap();
+    untar_snapshot_in(snapshot_archive, &unpack_dir).unwrap();
 
     // Check snapshots are the same
     let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOTS_DIR);
