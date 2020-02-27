@@ -206,13 +206,10 @@ fn add_stakes(
     genesis_config: &mut GenesisConfig,
     staker_infos: &[StakerInfo],
     unlock_info: &UnlockInfo,
-    granularity: u64,
 ) -> u64 {
     staker_infos
         .iter()
-        .map(|staker_info| {
-            create_and_add_stakes(genesis_config, staker_info, unlock_info, granularity)
-        })
+        .map(|staker_info| create_and_add_stakes(genesis_config, staker_info, unlock_info, None))
         .sum::<u64>()
 }
 
@@ -224,23 +221,16 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         genesis_config,
         &BATCH_FOUR_STAKER_INFOS,
         &UNLOCKS_ALL_AT_9_MONTHS,
-        1_000_000 * LAMPORTS_PER_SOL,
     ) + add_stakes(
         genesis_config,
         &FOUNDATION_STAKER_INFOS,
         &UNLOCKS_ALL_DAY_ZERO,
-        1_000_000 * LAMPORTS_PER_SOL,
-    ) + add_stakes(
-        genesis_config,
-        &GRANTS_STAKER_INFOS,
-        &UNLOCKS_ALL_DAY_ZERO,
-        1_000_000 * LAMPORTS_PER_SOL,
-    ) + add_stakes(
-        genesis_config,
-        &COMMUNITY_STAKER_INFOS,
-        &UNLOCKS_ALL_DAY_ZERO,
-        1_000_000 * LAMPORTS_PER_SOL,
-    );
+    ) + add_stakes(genesis_config, &GRANTS_STAKER_INFOS, &UNLOCKS_ALL_DAY_ZERO)
+        + add_stakes(
+            genesis_config,
+            &COMMUNITY_STAKER_INFOS,
+            &UNLOCKS_ALL_DAY_ZERO,
+        );
 
     // "one thanks" (community pool) gets 500_000_000SOL (total) - above distributions
     create_and_add_stakes(
@@ -252,7 +242,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
             withdrawer: Some("3FFaheyqtyAXZSYxDzsr5CVKvJuvZD1WE1VEsBtDbRqB"),
         },
         &UNLOCKS_ALL_DAY_ZERO,
-        1_000_000 * LAMPORTS_PER_SOL,
+        None,
     );
 }
 
