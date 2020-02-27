@@ -12,6 +12,7 @@ const HARDENED_BIT: u32 = 1 << 31;
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
 const APDU_PAYLOAD_HEADER_LEN: usize = 8;
+const P1_NON_CONFIRM: u8 = 0x00;
 const P1_CONFIRM: u8 = 0x01;
 const P2_EXTEND: u8 = 0x01;
 const P2_MORE: u8 = 0x02;
@@ -197,15 +198,15 @@ impl LedgerWallet {
             0x6982 => Err(RemoteWalletError::Protocol(
                 "Security status not satisfied (Canceled by user)",
             )),
+            0x6985 => Err(RemoteWalletError::UserCancel),
             0x6a80 => Err(RemoteWalletError::Protocol("Invalid data")),
             0x6a82 => Err(RemoteWalletError::Protocol("File not found")),
-            0x6a85 => Err(RemoteWalletError::UserCancel),
             0x6b00 => Err(RemoteWalletError::Protocol("Incorrect parameters")),
             0x6d00 => Err(RemoteWalletError::Protocol(
                 "Not implemented. Make sure the Ledger Solana Wallet app is running.",
             )),
             0x6faa => Err(RemoteWalletError::Protocol(
-                "Your Ledger needs to be unplugged",
+                "Your Ledger device needs to be unplugged",
             )),
             0x6f00..=0x6fff => Err(RemoteWalletError::Protocol("Internal error")),
             0x9000 => Ok(()),
@@ -224,6 +225,9 @@ impl LedgerWallet {
         data: &[u8],
     ) -> Result<Vec<u8>, RemoteWalletError> {
         self.write(command, p1, p2, data)?;
+        if p1 == P1_CONFIRM {
+            println!("Waiting for remote wallet to approve...");
+        }
         self.read()
     }
 
@@ -279,7 +283,11 @@ impl RemoteWallet for LedgerWallet {
 
         let key = self.send_apdu(
             commands::GET_PUBKEY,
-            if confirm_key { 1 } else { 0 },
+            if confirm_key {
+                P1_CONFIRM
+            } else {
+                P1_NON_CONFIRM
+            },
             0,
             &derivation_path,
         )?;
