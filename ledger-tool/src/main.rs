@@ -915,12 +915,9 @@ fn main() {
                             snapshot_utils::package_snapshot(
                                 &bank,
                                 &slot_snapshot_paths,
-                                snapshot_utils::get_snapshot_archive_path(
-                                    output_directory,
-                                    &(bank.slot(), bank.hash()),
-                                ),
                                 &temp_dir,
                                 &bank.src.roots(),
+                                output_directory,
                                 storages,
                             )
                         })

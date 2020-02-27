@@ -82,9 +82,9 @@ impl SlotSnapshotPaths {
 pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     bank: &Bank,
     snapshot_files: &SlotSnapshotPaths,
-    snapshot_package_output_file: P,
     snapshot_path: Q,
     slots_to_snapshot: &[Slot],
+    snapshot_package_output_path: P,
     snapshot_storages: SnapshotStorages,
 ) -> Result<SnapshotPackage> {
     // Hard link all the snapshots we need for this package
@@ -101,12 +101,17 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     // any temporary state created for the SnapshotPackage (like the snapshot_hard_links_dir)
     snapshot_files.copy_snapshot_directory(snapshot_hard_links_dir.path())?;
 
+    let snapshot_package_output_file = get_snapshot_archive_path(
+        &snapshot_package_output_path,
+        &(bank.slot(), bank.get_accounts_hash()),
+    );
+
     let package = SnapshotPackage::new(
         bank.slot(),
         bank.src.slot_deltas(slots_to_snapshot),
         snapshot_hard_links_dir,
         snapshot_storages,
-        snapshot_package_output_file.as_ref().to_path_buf(),
+        snapshot_package_output_file,
         bank.get_accounts_hash(),
     );
 
@@ -555,9 +560,9 @@ fn get_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P) -> Vec<(PathBuf
 
 pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
     snapshot_output_dir: P,
-) -> Option<PathBuf> {
+) -> Option<(PathBuf, (Slot, Hash))> {
     let archives = get_snapshot_archives(snapshot_output_dir);
-    archives.into_iter().next().map(|archive| archive.0)
+    archives.into_iter().next()
 }
 
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(

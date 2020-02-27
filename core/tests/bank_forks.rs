@@ -67,12 +67,18 @@ mod tests {
         }
     }
 
-    fn restore_from_snapshot(old_bank_forks: &BankForks, account_paths: Vec<PathBuf>) {
+    fn restore_from_snapshot(
+        old_bank_forks: &BankForks,
+        old_last_slot: Slot,
+        account_paths: Vec<PathBuf>,
+    ) {
         let (snapshot_path, snapshot_package_output_path) = old_bank_forks
             .snapshot_config
             .as_ref()
             .map(|c| (&c.snapshot_path, &c.snapshot_package_output_path))
             .unwrap();
+
+        let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let deserialized_bank = snapshot_utils::bank_from_archive(
             &account_paths,
@@ -81,7 +87,10 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .snapshot_path,
-            snapshot_utils::get_snapshot_archive_path(snapshot_package_output_path),
+            snapshot_utils::get_snapshot_archive_path(
+                snapshot_package_output_path,
+                &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
+            ),
         )
         .unwrap();
 
@@ -139,18 +148,20 @@ mod tests {
             slot_snapshot_paths
                 .last()
                 .expect("no snapshots found in path"),
-            snapshot_utils::get_snapshot_archive_path(
-                &snapshot_config.snapshot_package_output_path,
-            ),
             &snapshot_config.snapshot_path,
             &last_bank.src.roots(),
+            &snapshot_config.snapshot_package_output_path,
             storages,
         )
         .unwrap();
 
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
-        restore_from_snapshot(bank_forks, vec![accounts_dir.path().to_path_buf()]);
+        restore_from_snapshot(
+            bank_forks,
+            last_slot,
+            vec![accounts_dir.path().to_path_buf()],
+        );
     }
 
     #[test]
@@ -249,14 +260,7 @@ mod tests {
             };
 
             bank_forks
-                .generate_snapshot(
-                    slot,
-                    &vec![],
-                    &package_sender,
-                    snapshot_config
-                        .snapshot_package_output_path
-                        .join(slot.to_string()),
-                )
+                .generate_snapshot(slot, &vec![], &package_sender)
                 .unwrap();
 
             if slot == saved_slot as u64 {
