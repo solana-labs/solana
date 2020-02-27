@@ -219,8 +219,8 @@ pub enum SignerError {
     #[error("device protocol error: {0}")]
     Protocol(String),
 
-    #[error("operation has been cancelled")]
-    UserCancel,
+    #[error("{0}")]
+    UserCancel(String),
 }
 
 #[derive(Clone, Debug, Default)]
