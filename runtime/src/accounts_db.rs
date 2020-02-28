@@ -640,46 +640,16 @@ impl AccountsDB {
 
     // Reclaim older states of rooted non-zero lamport accounts as a general
     // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
-    fn clean_old_rooted_accounts(&self, purges: &HashMap<Pubkey, Vec<(Slot, AccountInfo)>>) {
-        let mut measure = Measure::start("clean_old_root-ms");
-        let accounts_index = self.accounts_index.read().unwrap();
-        let mut all_pubkeys: HashSet<Pubkey> = HashSet::new();
-        for root in accounts_index.uncleaned_roots.iter() {
-            let pubkey_sets: Vec<HashSet<Pubkey>> = self.scan_account_storage(
-                *root,
-                |stored_account: &StoredAccount,
-                 _store_id: AppendVecId,
-                 accum: &mut HashSet<Pubkey>| {
-                    accum.insert(stored_account.meta.pubkey);
-                },
-            );
-
-            for pubkey_set in pubkey_sets {
-                for pubkey in pubkey_set {
-                    all_pubkeys.insert(pubkey);
-                }
-            }
-        }
-        measure.stop();
-        inc_new_counter_info!("clean-old-root-collect-ms", measure.as_ms() as usize);
-
-        let mut measure = Measure::start("clean_old_root-ms");
-        let all_pubkeys: Vec<_> = all_pubkeys.into_iter().collect();
-        measure.stop();
-        inc_new_counter_info!("clean-old-root-prepare-par-ms", measure.as_ms() as usize);
-
+    fn clean_old_rooted_accounts(&self, all_pubkeys: Vec<Pubkey>) {
         let mut measure = Measure::start("clean_old_root-ms");
         let reclaim_vecs = all_pubkeys.par_chunks(4096).map(|pubkeys: &[Pubkey]| {
             let mut reclaims = Vec::new();
             let accounts_index = self.accounts_index.read().unwrap();
             for pubkey in pubkeys {
-                if !purges.contains_key(&pubkey) {
-                    accounts_index.clean_rooted_entries(&pubkey, &mut reclaims);
-                }
+                accounts_index.clean_rooted_entries(&pubkey, &mut reclaims);
             }
             reclaims
         });
-        drop(accounts_index);
         let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
         measure.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", measure.as_ms() as usize);
@@ -698,20 +668,22 @@ impl AccountsDB {
     // collection
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
-    pub fn clean_accounts(&self, ancestors: &HashMap<u64, usize>) {
+    pub fn clean_accounts(&self, _ancestors: &HashMap<u64, usize>) {
         self.report_store_stats();
         let mut purges = HashMap::new();
+        let mut rooted_purges = Vec::new();
         let accounts_index = self.accounts_index.read().unwrap();
-        accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
-            if account_info.lamports == 0 && accounts_index.is_root(slot) {
+        accounts_index.scan_accounts(&HashMap::new(), |pubkey, (account_info, slot)| {
+            if account_info.lamports == 0 {
                 purges.insert(*pubkey, accounts_index.would_purge(pubkey));
+            } else if accounts_index.uncleaned_roots.contains(&slot) {
+                rooted_purges.push(*pubkey);
             }
         });
-        let needs_to_clean_old_accounts = !accounts_index.uncleaned_roots.is_empty();
         drop(accounts_index);
 
-        if needs_to_clean_old_accounts {
-            self.clean_old_rooted_accounts(&purges);
+        if !rooted_purges.is_empty() {
+            self.clean_old_rooted_accounts(rooted_purges);
         }
 
         let accounts_index = self.accounts_index.read().unwrap();

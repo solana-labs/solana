@@ -56,7 +56,7 @@ impl<T: Clone> AccountsIndex<T> {
         let mut max = 0;
         let mut rv = None;
         for (i, (slot, _t)) in list.iter().rev().enumerate() {
-            if *slot >= max && (ancestors.get(slot).is_some() || self.is_root(*slot)) {
+            if *slot >= max && (ancestors.contains_key(slot) || self.is_root(*slot)) {
                 rv = Some((list.len() - 1) - i);
                 max = *slot;
             }
