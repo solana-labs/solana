@@ -805,20 +805,9 @@ impl RpcClient {
     }
 
     pub fn get_fee_rate_governor(&self) -> RpcResponse<FeeRateGovernor> {
-        self.get_fee_rate_governor_with_commitment(CommitmentConfig::default())
-    }
-
-    pub fn get_fee_rate_governor_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig,
-    ) -> RpcResponse<FeeRateGovernor> {
         let response = self
             .client
-            .send(
-                &RpcRequest::GetFeeRateGovernor,
-                json!([commitment_config]),
-                0,
-            )
+            .send(&RpcRequest::GetFeeRateGovernor, Value::Null, 0)
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,

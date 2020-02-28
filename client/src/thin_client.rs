@@ -446,16 +446,7 @@ impl SyncClient for ThinClient {
     }
 
     fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor> {
-        self.get_fee_rate_governor_with_commitment(CommitmentConfig::default())
-    }
-
-    fn get_fee_rate_governor_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig,
-    ) -> TransportResult<FeeRateGovernor> {
-        let fee_rate_governor = self
-            .rpc_client()
-            .get_fee_rate_governor_with_commitment(commitment_config)?;
+        let fee_rate_governor = self.rpc_client().get_fee_rate_governor()?;
         Ok(fee_rate_governor.value)
     }
 

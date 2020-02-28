@@ -164,11 +164,8 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    fn get_fee_rate_governor(
-        &self,
-        commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcFeeRateGovernor> {
-        let bank = &*self.bank(commitment);
+    fn get_fee_rate_governor(&self) -> RpcResponse<RpcFeeRateGovernor> {
+        let bank = &*self.bank(None);
         let fee_rate_governor = bank.get_fee_rate_governor();
         new_response(
             bank,
@@ -506,11 +503,7 @@ pub trait RpcSol {
     ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
     #[rpc(meta, name = "getFeeRateGovernor")]
-    fn get_fee_rate_governor(
-        &self,
-        meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcFeeRateGovernor>;
+    fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
@@ -834,16 +827,12 @@ impl RpcSol for RpcSolImpl {
             .get_recent_blockhash(commitment)
     }
 
-    fn get_fee_rate_governor(
-        &self,
-        meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
-    ) -> RpcResponse<RpcFeeRateGovernor> {
+    fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor> {
         debug!("get_fee_rate_governor rpc request received");
         meta.request_processor
             .read()
             .unwrap()
-            .get_fee_rate_governor(commitment)
+            .get_fee_rate_governor()
     }
 
     fn get_signature_status(

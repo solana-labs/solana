@@ -141,13 +141,6 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_fee_rate_governor().clone())
     }
 
-    fn get_fee_rate_governor_with_commitment(
-        &self,
-        _commitment_config: CommitmentConfig,
-    ) -> Result<FeeRateGovernor> {
-        self.get_fee_rate_governor()
-    }
-
     fn get_signature_status(
         &self,
         signature: &Signature,
