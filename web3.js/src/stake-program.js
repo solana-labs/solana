@@ -107,12 +107,12 @@ export class StakeInstruction extends TransactionInstruction {
    */
   get stakePublicKey(): PublicKey | null {
     switch (this.type) {
-      case STAKE_INSTRUCTION_LAYOUTS.Initialize:
-      case STAKE_INSTRUCTION_LAYOUTS.Delegate:
-      case STAKE_INSTRUCTION_LAYOUTS.Authorize:
-      case STAKE_INSTRUCTION_LAYOUTS.Split:
-      case STAKE_INSTRUCTION_LAYOUTS.Withdraw:
-      case STAKE_INSTRUCTION_LAYOUTS.Deactivate:
+      case 'Initialize':
+      case 'Delegate':
+      case 'Authorize':
+      case 'Split':
+      case 'Withdraw':
+      case 'Deactivate':
         return this.keys[0].pubkey;
       default:
         return null;
@@ -126,16 +126,16 @@ export class StakeInstruction extends TransactionInstruction {
    */
   get authorizedPublicKey(): PublicKey | null {
     switch (this.type) {
-      case STAKE_INSTRUCTION_LAYOUTS.Delegate:
+      case 'Delegate':
         return this.keys[5].pubkey;
-      case STAKE_INSTRUCTION_LAYOUTS.Authorize:
+      case 'Authorize':
         return this.keys[2].pubkey;
-      case STAKE_INSTRUCTION_LAYOUTS.Split:
+      case 'Split':
         return this.keys[2].pubkey;
-      case STAKE_INSTRUCTION_LAYOUTS.Withdraw:
+      case 'Withdraw':
         return this.keys[4].pubkey;
-      case STAKE_INSTRUCTION_LAYOUTS.Deactivate:
-        return this.keys[0].pubkey;
+      case 'Deactivate':
+        return this.keys[2].pubkey;
       default:
         return null;
     }
