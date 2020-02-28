@@ -8,6 +8,11 @@ pub use crate::clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
 ///  the beginning of epoch X - 1.
 pub const DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET: u64 = DEFAULT_SLOTS_PER_EPOCH;
 
+/// The maximum number of slots before an epoch starts to calculate the leader schedule.
+///  Default is an entire epoch, i.e. leader schedule for epoch X is calculated at
+///  the beginning of epoch X - 1.
+pub const MAX_LEADER_SCHEDULE_EPOCH_OFFSET: u64 = 3;
+
 /// based on MAX_LOCKOUT_HISTORY from vote_program
 pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
