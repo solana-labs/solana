@@ -75,7 +75,7 @@ Helpful JSON-RPC methods:
 
 Before detaching your validator from the TdS cluster, you should deactivate the stake that was previously delegated by running:
 
-```
+```bash
 solana deactivate-stake ~/validator-stake-keypair.json
 ```
 
