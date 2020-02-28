@@ -44,7 +44,7 @@ pub struct FeeRateGovernor {
     // Used to estimate the desired processing capacity of the cluster.  As the signatures for
     // recent slots are fewer/greater than this value, lamports_per_signature will decrease/increase
     // for the next slot.  A value of 0 disables lamports_per_signature fee adjustments
-    pub target_signatures_per_slot: usize,
+    pub target_signatures_per_slot: u64,
 
     pub min_lamports_per_signature: u64,
     pub max_lamports_per_signature: u64,
@@ -54,8 +54,8 @@ pub struct FeeRateGovernor {
 }
 
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 10_000;
-pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
-    50_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_TICKS_PER_SECOND as usize;
+pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: u64 =
+    50_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 
 // Percentage of tx fees to burn
 pub const DEFAULT_BURN_PERCENT: u8 = 50;
@@ -74,7 +74,7 @@ impl Default for FeeRateGovernor {
 }
 
 impl FeeRateGovernor {
-    pub fn new(target_lamports_per_signature: u64, target_signatures_per_slot: usize) -> Self {
+    pub fn new(target_lamports_per_signature: u64, target_signatures_per_slot: u64) -> Self {
         let base_fee_rate_governor = Self {
             target_lamports_per_signature,
             lamports_per_signature: target_lamports_per_signature,
@@ -87,7 +87,7 @@ impl FeeRateGovernor {
 
     pub fn new_derived(
         base_fee_rate_governor: &FeeRateGovernor,
-        latest_signatures_per_slot: usize,
+        latest_signatures_per_slot: u64,
     ) -> Self {
         let mut me = base_fee_rate_governor.clone();
 
@@ -102,7 +102,7 @@ impl FeeRateGovernor {
                 me.max_lamports_per_signature
                     .min(me.min_lamports_per_signature.max(
                         me.target_lamports_per_signature
-                            * std::cmp::min(latest_signatures_per_slot, std::u32::MAX as usize)
+                            * std::cmp::min(latest_signatures_per_slot, std::u32::MAX as u64)
                                 as u64
                             / me.target_signatures_per_slot as u64,
                     ));
@@ -246,7 +246,7 @@ mod tests {
         loop {
             let last_lamports_per_signature = f.lamports_per_signature;
 
-            f = FeeRateGovernor::new_derived(&f, std::usize::MAX);
+            f = FeeRateGovernor::new_derived(&f, std::u64::MAX);
             info!("[up] f.lamports_per_signature={}", f.lamports_per_signature);
 
             // some maximum target reached

@@ -451,7 +451,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let mut fee_rate_governor = FeeRateGovernor::new(
         value_t_or_exit!(matches, "target_lamports_per_signature", u64),
-        value_t_or_exit!(matches, "target_signatures_per_slot", usize),
+        value_t_or_exit!(matches, "target_signatures_per_slot", u64),
     );
     fee_rate_governor.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
 

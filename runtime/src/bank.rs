@@ -405,7 +405,7 @@ impl Bank {
         let epoch = epoch_schedule.get_epoch(slot);
 
         let fee_rate_governor =
-            FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count() as usize);
+            FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
         let mut new = Bank {
             rc,
