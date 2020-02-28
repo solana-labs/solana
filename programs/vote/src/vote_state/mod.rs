@@ -1,4 +1,3 @@
-#![allow(clippy::implicit_hasher)]
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use crate::authorized_voters::AuthorizedVoters;
@@ -18,7 +17,12 @@ use solana_sdk::{
     slot_hashes::SlotHash,
     sysvar::clock::Clock,
 };
+use std::boxed::Box;
 use std::collections::{HashSet, VecDeque};
+
+mod vote_state_0_23_5;
+pub mod vote_state_versions;
+pub use vote_state_versions::*;
 
 // Maximum number of votes to keep around, tightly coupled with epoch_schedule::MIN_SLOTS_PER_EPOCH
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
@@ -205,7 +209,7 @@ impl VoteState {
     pub fn size_of() -> usize {
         // Upper limit on the size of the Vote State. Equal to
         // size_of(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
-        let vote_state = Self::get_max_sized_vote_state();
+        let vote_state = VoteStateVersions::Current(Box::new(Self::get_max_sized_vote_state()));
         serialized_size(&vote_state).unwrap() as usize
     }
 
@@ -215,22 +219,26 @@ impl VoteState {
     }
 
     // utility function, used by Stakes, tests
-    pub fn to(&self, account: &mut Account) -> Option<()> {
-        Self::serialize(self, &mut account.data).ok()
+    pub fn to(versioned: &VoteStateVersions, account: &mut Account) -> Option<()> {
+        Self::serialize(versioned, &mut account.data).ok()
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
-        deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
+        deserialize::<VoteStateVersions>(&input)
+            .map(|versioned| versioned.convert_to_current())
+            .map_err(|_| InstructionError::InvalidAccountData)
     }
 
-    pub fn serialize(&self, output: &mut [u8]) -> Result<(), InstructionError> {
-        serialize_into(output, self).map_err(|err| match *err {
+    pub fn serialize(
+        versioned: &VoteStateVersions,
+        output: &mut [u8],
+    ) -> Result<(), InstructionError> {
+        serialize_into(output, versioned).map_err(|err| match *err {
             ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
             _ => InstructionError::GenericError,
         })
     }
 
-    // utility function, used by Stakes, tests
     pub fn credits_from(account: &Account) -> Option<u64> {
         Self::from(account).map(|state| state.credits())
     }
@@ -540,14 +548,15 @@ impl VoteState {
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
 /// but will implicitly withdraw authorization from the previously authorized
 /// key
-pub fn authorize(
+pub fn authorize<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
+    let mut vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
     // current authorized signer must say "yay"
     match vote_authorize {
@@ -565,17 +574,18 @@ pub fn authorize(
         }
     }
 
-    vote_account.set_state(&vote_state)
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
 /// Update the node_pubkey, requires signature of the authorized voter
-pub fn update_node(
+pub fn update_node<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     node_pubkey: &Pubkey,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
+    let mut vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
     let authorized_voter = vote_state
         .get_and_update_authorized_voter(clock.epoch)
         .expect("the clock epoch is monotonically increasing, so authorized voter must be known");
@@ -585,12 +595,12 @@ pub fn update_node(
 
     vote_state.node_pubkey = *node_pubkey;
 
-    vote_account.set_state(&vote_state)
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
-fn verify_authorized_signer(
+fn verify_authorized_signer<S: std::hash::BuildHasher>(
     authorized: &Pubkey,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     if signers.contains(authorized) {
         Ok(())
@@ -600,13 +610,14 @@ fn verify_authorized_signer(
 }
 
 /// Withdraw funds from the vote account
-pub fn withdraw(
+pub fn withdraw<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     lamports: u64,
     to_account: &KeyedAccount,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
-    let vote_state: VoteState = vote_account.state()?;
+    let vote_state: VoteState =
+        State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
@@ -626,27 +637,31 @@ pub fn initialize_account(
     vote_init: &VoteInit,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
-    let vote_state: VoteState = vote_account.state()?;
+    let versioned = State::<VoteStateVersions>::state(vote_account)?;
 
-    if !vote_state.authorized_voters.is_empty() {
+    if !versioned.is_uninitialized() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
-    vote_account.set_state(&VoteState::new(vote_init, clock))
+
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(VoteState::new(
+        vote_init, clock,
+    ))))
 }
 
-pub fn process_vote(
+pub fn process_vote<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
     vote: &Vote,
-    signers: &HashSet<Pubkey>,
+    signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
+    let versioned = State::<VoteStateVersions>::state(vote_account)?;
 
-    if vote_state.authorized_voters.is_empty() {
+    if versioned.is_uninitialized() {
         return Err(InstructionError::UninitializedAccount);
     }
 
+    let mut vote_state = versioned.convert_to_current();
     let authorized_voter = vote_state
         .get_and_update_authorized_voter(clock.epoch)
         .expect("the clock epoch is monotonically increasinig, so authorized voter must be known");
@@ -660,7 +675,7 @@ pub fn process_vote(
             .ok_or_else(|| VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
-    vote_account.set_state(&vote_state)
+    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
 // utility function, used by Bank, tests
@@ -672,7 +687,7 @@ pub fn create_account(
 ) -> Account {
     let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
-    VoteState::new(
+    let vote_state = VoteState::new(
         &VoteInit {
             node_pubkey: *node_pubkey,
             authorized_voter: *vote_pubkey,
@@ -680,9 +695,10 @@ pub fn create_account(
             commission,
         },
         &Clock::default(),
-    )
-    .to(&mut vote_account)
-    .unwrap();
+    );
+
+    let versioned = VoteStateVersions::Current(Box::new(vote_state));
+    VoteState::to(&versioned, &mut vote_account).unwrap();
 
     vote_account
 }
@@ -771,7 +787,7 @@ mod tests {
         epoch: Epoch,
     ) -> Result<VoteState, InstructionError> {
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         process_vote(
             &keyed_accounts[0],
             slot_hashes,
@@ -782,7 +798,8 @@ mod tests {
             &vote.clone(),
             &signers,
         )?;
-        vote_account.borrow().state()
+        StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .map(|versioned| versioned.convert_to_current())
     }
 
     /// exercises all the keyed accounts stuff
@@ -807,16 +824,22 @@ mod tests {
         vote_state
             .votes
             .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
-        assert!(vote_state.serialize(&mut buffer[0..4]).is_err());
-        vote_state.serialize(&mut buffer).unwrap();
-        assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
+        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+        assert!(VoteState::serialize(&versioned, &mut buffer[0..4]).is_err());
+        VoteState::serialize(&versioned, &mut buffer).unwrap();
+        assert_eq!(
+            VoteStateVersions::Current(Box::new(VoteState::deserialize(&buffer).unwrap())),
+            versioned
+        );
     }
 
     #[test]
     fn test_voter_registration() {
         let (vote_pubkey, vote_account) = create_test_account();
 
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert_eq!(vote_state.authorized_voters.len(), 1);
         assert_eq!(
             *vote_state.authorized_voters.first().unwrap().1,
@@ -878,7 +901,7 @@ mod tests {
         let node_pubkey = Pubkey::new_rand();
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = update_node(
             &keyed_accounts[0],
             &node_pubkey,
@@ -886,11 +909,13 @@ mod tests {
             &Clock::default(),
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert!(vote_state.node_pubkey != node_pubkey);
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = update_node(
             &keyed_accounts[0],
             &node_pubkey,
@@ -898,16 +923,20 @@ mod tests {
             &Clock::default(),
         );
         assert_eq!(res, Ok(()));
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert_eq!(vote_state.node_pubkey, node_pubkey);
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let mut clock = Clock::default();
         clock.epoch += 10;
         let res = update_node(&keyed_accounts[0], &node_pubkey, &signers, &clock);
         assert_eq!(res, Ok(()));
-        let vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+            .unwrap()
+            .convert_to_current();
         assert_eq!(vote_state.node_pubkey, node_pubkey);
     }
 
@@ -918,7 +947,7 @@ mod tests {
 
         // unsigned
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
@@ -934,7 +963,7 @@ mod tests {
 
         // signed
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = process_vote(
             &keyed_accounts[0],
             &[(*vote.slots.last().unwrap(), vote.hash)],
@@ -950,7 +979,7 @@ mod tests {
 
         // another voter, unsigned
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let authorized_voter_pubkey = Pubkey::new_rand();
         let res = authorize(
             &keyed_accounts[0],
@@ -966,7 +995,7 @@ mod tests {
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_voter_pubkey,
@@ -981,7 +1010,7 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // Already set an authorized voter earlier for leader_schedule_epoch == 2
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_voter_pubkey,
@@ -1001,7 +1030,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_voter_pubkey,
@@ -1020,7 +1049,7 @@ mod tests {
         // authorize another withdrawer
         // another voter
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
         let res = authorize(
             &keyed_accounts[0],
@@ -1041,7 +1070,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_withdrawer_pubkey,
@@ -1057,7 +1086,7 @@ mod tests {
 
         // not signed by authorized voter
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let vote = Vote::new(vec![2], Hash::default());
         let res = process_vote(
             &keyed_accounts[0],
@@ -1078,7 +1107,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_voter_pubkey, true, &authorized_voter_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let vote = Vote::new(vec![2], Hash::default());
         let res = process_vote(
             &keyed_accounts[0],
@@ -1111,7 +1140,10 @@ mod tests {
     fn test_vote_lockout() {
         let (_vote_pubkey, vote_account) = create_test_account();
 
-        let mut vote_state: VoteState = vote_account.borrow().state().unwrap();
+        let mut vote_state: VoteState =
+            StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
+                .unwrap()
+                .convert_to_current();
 
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
             vote_state.process_slot_vote_unchecked((INITIAL_LOCKOUT as usize * i) as u64);
@@ -1421,7 +1453,7 @@ mod tests {
 
         // unsigned request
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = withdraw(
             &keyed_accounts[0],
             0,
@@ -1436,7 +1468,7 @@ mod tests {
 
         // insufficient funds
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = withdraw(
             &keyed_accounts[0],
             101,
@@ -1453,7 +1485,7 @@ mod tests {
         let to_account = RefCell::new(Account::default());
         let lamports = vote_account.borrow().lamports;
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = withdraw(
             &keyed_accounts[0],
             lamports,
@@ -1470,7 +1502,7 @@ mod tests {
         // authorize authorized_withdrawer
         let authorized_withdrawer_pubkey = Pubkey::new_rand();
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = authorize(
             &keyed_accounts[0],
             &authorized_withdrawer_pubkey,
@@ -1486,7 +1518,7 @@ mod tests {
             KeyedAccount::new(&vote_pubkey, false, &vote_account),
             KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
         ];
-        let signers = get_signers(keyed_accounts);
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let keyed_accounts = &mut keyed_accounts.iter();
         let vote_keyed_account = next_keyed_account(keyed_accounts).unwrap();
         let withdrawer_keyed_account = next_keyed_account(keyed_accounts).unwrap();
@@ -1802,21 +1834,25 @@ mod tests {
     #[test]
     fn test_vote_state_max_size() {
         let mut max_sized_data = vec![0; VoteState::size_of()];
-        let mut vote_state = VoteState::get_max_sized_vote_state();
+        let vote_state = VoteState::get_max_sized_vote_state();
         let (start_leader_schedule_epoch, _) = vote_state.authorized_voters.last().unwrap();
         let start_current_epoch =
             start_leader_schedule_epoch - MAX_LEADER_SCHEDULE_EPOCH_OFFSET + 1;
 
+        let mut vote_state = Some(vote_state);
         for i in start_current_epoch..start_current_epoch + 2 * MAX_LEADER_SCHEDULE_EPOCH_OFFSET {
-            vote_state
-                .set_new_authorized_voter(
+            vote_state.as_mut().map(|vote_state| {
+                vote_state.set_new_authorized_voter(
                     &Pubkey::new_rand(),
                     i,
                     i + MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
                     |_| Ok(()),
                 )
-                .unwrap();
-            vote_state.serialize(&mut max_sized_data).unwrap();
+            });
+
+            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            VoteState::serialize(&versioned, &mut max_sized_data).unwrap();
+            vote_state = Some(versioned.convert_to_current());
         }
     }
 }
