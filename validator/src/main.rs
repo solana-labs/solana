@@ -847,8 +847,18 @@ pub fn main() {
     });
 
     let trusted_validators = if matches.is_present("trusted_validators") {
-        let trusted_validators = values_t_or_exit!(matches, "trusted_validators", Pubkey);
-        Some(trusted_validators.into_iter().collect())
+        let trusted_validators: HashSet<_> =
+            values_t_or_exit!(matches, "trusted_validators", Pubkey)
+                .into_iter()
+                .collect();
+        if trusted_validators.contains(&identity_keypair.pubkey()) {
+            eprintln!(
+                "The validator's identity pubkey cannot be a --trusted-validator: {}",
+                identity_keypair.pubkey()
+            );
+            exit(1);
+        }
+        Some(trusted_validators)
     } else {
         None
     };
