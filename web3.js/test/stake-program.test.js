@@ -10,7 +10,6 @@ import {
   LAMPORTS_PER_SOL,
   StakeAuthorizationLayout,
   StakeInstruction,
-  StakeInstructionLayout,
   StakeProgram,
   SystemInstruction,
   SystemProgram,
@@ -197,7 +196,7 @@ test('StakeInstructions', () => {
   const stakeInstruction = StakeInstruction.from(
     createWithSeedTransaction.instructions[1],
   );
-  expect(stakeInstruction.type).toEqual(StakeInstructionLayout.Initialize);
+  expect(stakeInstruction.type).toEqual('Initialize');
 
   expect(() => {
     StakeInstruction.from(createWithSeedTransaction.instructions[0]);
@@ -216,9 +215,7 @@ test('StakeInstructions', () => {
   const anotherStakeInstruction = StakeInstruction.from(
     delegateTransaction.instructions[0],
   );
-  expect(anotherStakeInstruction.type).toEqual(
-    StakeInstructionLayout.DelegateStake,
-  );
+  expect(anotherStakeInstruction.type).toEqual('Delegate');
 });
 
 test('live staking actions', async () => {

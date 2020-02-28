@@ -233,73 +233,6 @@ declare module '@solana/web3.js' {
     ): Promise<number>;
   }
 
-  // === src/stake-program.js ===
-  export type StakeAuthorizationType = {
-    index: number;
-  };
-
-  export class Authorized {
-    staker: PublicKey;
-    withdrawer: PublicKey;
-    constructor(staker: PublicKey, withdrawer: PublicKey);
-  }
-
-  export class Lockup {
-    unixTimestamp: number;
-    epoch: number;
-    custodian: PublicKey;
-
-    constructor(unixTimestamp: number, epoch: number, custodian: PublicKey);
-  }
-
-  export class StakeProgram {
-    static programId: PublicKey;
-    static space: number;
-
-    static createAccount(
-      from: PublicKey,
-      stakeAccount: PublicKey,
-      authorized: Authorized,
-      lockup: Lockup,
-      lamports: number,
-    ): Transaction;
-    static createAccountWithSeed(
-      from: PublicKey,
-      stakeAccount: PublicKey,
-      seed: string,
-      authorized: Authorized,
-      lockup: Lockup,
-      lamports: number,
-    ): Transaction;
-    static delegate(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      votePubkey: PublicKey,
-    ): Transaction;
-    static authorize(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      newAuthorized: PublicKey,
-      stakeAuthorizationType: StakeAuthorizationType,
-    ): Transaction;
-    static split(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      lamports: number,
-      splitStakePubkey: PublicKey,
-    ): Transaction;
-    static withdraw(
-      stakeAccount: PublicKey,
-      withdrawerPubkey: PublicKey,
-      to: PublicKey,
-      lamports: number,
-    ): Transaction;
-    static deactivate(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-    ): Transaction;
-  }
-
   // === src/validator-info.js ===
   export const VALIDATOR_INFO_KEY: PublicKey;
   export type Info = {
@@ -421,6 +354,97 @@ declare module '@solana/web3.js' {
     serialize(): Buffer;
   }
 
+  // === src/stake-program.js ===
+  export type StakeAuthorizationType = {
+    index: number;
+  };
+
+  export class Authorized {
+    staker: PublicKey;
+    withdrawer: PublicKey;
+    constructor(staker: PublicKey, withdrawer: PublicKey);
+  }
+
+  export class Lockup {
+    unixTimestamp: number;
+    epoch: number;
+    custodian: PublicKey;
+
+    constructor(unixTimestamp: number, epoch: number, custodian: PublicKey);
+  }
+
+  export class StakeProgram {
+    static programId: PublicKey;
+    static space: number;
+
+    static createAccount(
+      from: PublicKey,
+      stakeAccount: PublicKey,
+      authorized: Authorized,
+      lockup: Lockup,
+      lamports: number,
+    ): Transaction;
+    static createAccountWithSeed(
+      from: PublicKey,
+      stakeAccount: PublicKey,
+      seed: string,
+      authorized: Authorized,
+      lockup: Lockup,
+      lamports: number,
+    ): Transaction;
+    static delegate(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      votePubkey: PublicKey,
+    ): Transaction;
+    static authorize(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      newAuthorized: PublicKey,
+      stakeAuthorizationType: StakeAuthorizationType,
+    ): Transaction;
+    static split(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+      lamports: number,
+      splitStakePubkey: PublicKey,
+    ): Transaction;
+    static withdraw(
+      stakeAccount: PublicKey,
+      withdrawerPubkey: PublicKey,
+      to: PublicKey,
+      lamports: number,
+    ): Transaction;
+    static deactivate(
+      stakeAccount: PublicKey,
+      authorizedPubkey: PublicKey,
+    ): Transaction;
+  }
+
+  export type StakeInstructionType =
+    | 'Initialize'
+    | 'Authorize'
+    | 'Delegate'
+    | 'Split'
+    | 'Withdraw'
+    | 'Deactivate';
+
+  export const STAKE_INSTRUCTION_LAYOUTS: {
+    [StakeInstructionType]: InstructionType;
+  };
+
+  export class StakeInstruction extends TransactionInstruction {
+    type: StakeInstructionType;
+    stakePublicKey: PublicKey | null;
+    authorizedPublicKey: PublicKey | null;
+
+    constructor(
+      opts?: TransactionInstructionCtorFields,
+      type: StakeInstructionType,
+    );
+    static from(instruction: TransactionInstruction): StakeInstruction;
+  }
+
   // === src/system-program.js ===
   export class SystemProgram {
     static programId: PublicKey;
@@ -471,15 +495,29 @@ declare module '@solana/web3.js' {
     ): Transaction;
   }
 
+  export type SystemInstructionType =
+    | 'Create'
+    | 'Assign'
+    | 'Transfer'
+    | 'CreateWithSeed'
+    | 'AdvanceNonceAccount'
+    | 'WithdrawNonceAccount'
+    | 'InitializeNonceAccount'
+    | 'AuthorizeNonceAccount';
+
+  export const SYSTEM_INSTRUCTION_LAYOUTS: {
+    [SystemInstructionType]: InstructionType;
+  };
+
   export class SystemInstruction extends TransactionInstruction {
-    type: InstructionType;
+    type: SystemInstructionType;
     fromPublicKey: PublicKey | null;
     toPublicKey: PublicKey | null;
     amount: number | null;
 
     constructor(
       opts?: TransactionInstructionCtorFields,
-      type?: InstructionType,
+      type: SystemInstructionType,
     );
     static from(instruction: TransactionInstruction): SystemInstruction;
   }

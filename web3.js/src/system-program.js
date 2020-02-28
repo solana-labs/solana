@@ -3,7 +3,6 @@
 import * as BufferLayout from 'buffer-layout';
 
 import {encodeData} from './instruction';
-import type {InstructionType} from './instruction';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import {SYSVAR_RECENT_BLOCKHASHES_PUBKEY, SYSVAR_RENT_PUBKEY} from './sysvar';
@@ -17,9 +16,12 @@ export class SystemInstruction extends TransactionInstruction {
   /**
    * Type of SystemInstruction
    */
-  type: InstructionType;
+  _type: SystemInstructionType;
 
-  constructor(opts?: TransactionInstructionCtorFields, type?: InstructionType) {
+  constructor(
+    opts?: TransactionInstructionCtorFields,
+    type: SystemInstructionType,
+  ) {
     if (
       opts &&
       opts.programId &&
@@ -28,9 +30,7 @@ export class SystemInstruction extends TransactionInstruction {
       throw new Error('programId incorrect; not a SystemInstruction');
     }
     super(opts);
-    if (type) {
-      this.type = type;
-    }
+    this._type = type;
   }
 
   static from(instruction: TransactionInstruction): SystemInstruction {
@@ -41,9 +41,9 @@ export class SystemInstruction extends TransactionInstruction {
     const instructionTypeLayout = BufferLayout.u32('instruction');
     const typeIndex = instructionTypeLayout.decode(instruction.data);
     let type;
-    for (const t in SystemInstructionLayout) {
-      if (SystemInstructionLayout[t].index == typeIndex) {
-        type = SystemInstructionLayout[t];
+    for (const t of Object.keys(SYSTEM_INSTRUCTION_LAYOUTS)) {
+      if (SYSTEM_INSTRUCTION_LAYOUTS[t].index == typeIndex) {
+        type = t;
       }
     }
     if (!type) {
@@ -60,19 +60,26 @@ export class SystemInstruction extends TransactionInstruction {
   }
 
   /**
+   * Type of SystemInstruction
+   */
+  get type(): SystemInstructionType {
+    return this._type;
+  }
+
+  /**
    * The `from` public key of the instruction;
    * returns null if SystemInstructionType does not support this field
    */
   get fromPublicKey(): PublicKey | null {
-    if (
-      this.type == SystemInstructionLayout.Create ||
-      this.type == SystemInstructionLayout.CreateWithSeed ||
-      this.type == SystemInstructionLayout.WithdrawNonceAccount ||
-      this.type == SystemInstructionLayout.Transfer
-    ) {
-      return this.keys[0].pubkey;
+    switch (this.type) {
+      case 'Create':
+      case 'CreateWithSeed':
+      case 'WithdrawNonceAccount':
+      case 'Transfer':
+        return this.keys[0].pubkey;
+      default:
+        return null;
     }
-    return null;
   }
 
   /**
@@ -80,15 +87,15 @@ export class SystemInstruction extends TransactionInstruction {
    * returns null if SystemInstructionType does not support this field
    */
   get toPublicKey(): PublicKey | null {
-    if (
-      this.type == SystemInstructionLayout.Create ||
-      this.type == SystemInstructionLayout.CreateWithSeed ||
-      this.type == SystemInstructionLayout.WithdrawNonceAccount ||
-      this.type == SystemInstructionLayout.Transfer
-    ) {
-      return this.keys[1].pubkey;
+    switch (this.type) {
+      case 'Create':
+      case 'CreateWithSeed':
+      case 'WithdrawNonceAccount':
+      case 'Transfer':
+        return this.keys[1].pubkey;
+      default:
+        return null;
     }
-    return null;
   }
 
   /**
@@ -96,23 +103,31 @@ export class SystemInstruction extends TransactionInstruction {
    * returns null if SystemInstructionType does not support this field
    */
   get amount(): number | null {
-    const data = this.type.layout.decode(this.data);
-    if (
-      this.type == SystemInstructionLayout.Create ||
-      this.type == SystemInstructionLayout.CreateWithSeed ||
-      this.type == SystemInstructionLayout.WithdrawNonceAccount ||
-      this.type == SystemInstructionLayout.Transfer
-    ) {
-      return data.lamports;
+    const data = SYSTEM_INSTRUCTION_LAYOUTS[this.type].layout.decode(this.data);
+    switch (this.type) {
+      case 'Create':
+      case 'CreateWithSeed':
+      case 'WithdrawNonceAccount':
+      case 'Transfer':
+        return data.lamports;
+      default:
+        return null;
     }
-    return null;
   }
 }
 
 /**
- * An enumeration of valid SystemInstructionTypes
+ * An enumeration of valid SystemInstructionType's
+ * @typedef {'Create' | 'Assign' | 'Transfer' | 'CreateWithSeed'
+ | 'AdvanceNonceAccount' | 'WithdrawNonceAccount' | 'InitializeNonceAccount'
+ | 'AuthorizeNonceAccount'} SystemInstructionType
  */
-const SystemInstructionLayout = Object.freeze({
+export type SystemInstructionType = $Keys<typeof SYSTEM_INSTRUCTION_LAYOUTS>;
+
+/**
+ * An enumeration of valid system InstructionType's
+ */
+const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze({
   Create: {
     index: 0,
     layout: BufferLayout.struct([
@@ -204,7 +219,7 @@ export class SystemProgram {
     space: number,
     programId: PublicKey,
   ): Transaction {
-    const type = SystemInstructionLayout.Create;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.Create;
     const data = encodeData(type, {
       lamports,
       space,
@@ -229,7 +244,7 @@ export class SystemProgram {
     to: PublicKey,
     lamports: number,
   ): Transaction {
-    const type = SystemInstructionLayout.Transfer;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.Transfer;
     const data = encodeData(type, {lamports});
 
     return new Transaction().add({
@@ -246,7 +261,7 @@ export class SystemProgram {
    * Generate a Transaction that assigns an account to a program
    */
   static assign(from: PublicKey, programId: PublicKey): Transaction {
-    const type = SystemInstructionLayout.Assign;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.Assign;
     const data = encodeData(type, {programId: programId.toBuffer()});
 
     return new Transaction().add({
@@ -269,7 +284,7 @@ export class SystemProgram {
     space: number,
     programId: PublicKey,
   ): Transaction {
-    const type = SystemInstructionLayout.CreateWithSeed;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.CreateWithSeed;
     const data = encodeData(type, {
       base: base.toBuffer(),
       seed,
@@ -305,7 +320,7 @@ export class SystemProgram {
       this.programId,
     );
 
-    const type = SystemInstructionLayout.InitializeNonceAccount;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.InitializeNonceAccount;
     const data = encodeData(type, {
       authorized: authorizedPubkey.toBuffer(),
     });
@@ -332,7 +347,7 @@ export class SystemProgram {
     nonceAccount: PublicKey,
     authorizedPubkey: PublicKey,
   ): TransactionInstruction {
-    const type = SystemInstructionLayout.AdvanceNonceAccount;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.AdvanceNonceAccount;
     const data = encodeData(type);
     const instructionData = {
       keys: [
@@ -359,7 +374,7 @@ export class SystemProgram {
     to: PublicKey,
     lamports: number,
   ): Transaction {
-    const type = SystemInstructionLayout.WithdrawNonceAccount;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.WithdrawNonceAccount;
     const data = encodeData(type, {lamports});
 
     return new Transaction().add({
@@ -392,7 +407,7 @@ export class SystemProgram {
     authorizedPubkey: PublicKey,
     newAuthorized: PublicKey,
   ): Transaction {
-    const type = SystemInstructionLayout.AuthorizeNonceAccount;
+    const type = SYSTEM_INSTRUCTION_LAYOUTS.AuthorizeNonceAccount;
     const data = encodeData(type, {
       newAuthorized: newAuthorized.toBuffer(),
     });

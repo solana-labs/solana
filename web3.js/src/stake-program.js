@@ -3,7 +3,6 @@
 import * as BufferLayout from 'buffer-layout';
 
 import {encodeData} from './instruction';
-import type {InstructionType} from './instruction';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import {SystemProgram} from './system-program';
@@ -51,12 +50,12 @@ export class Lockup {
  * Stake Instruction class
  */
 export class StakeInstruction extends TransactionInstruction {
-  /**
-   * Type of StakeInstruction
-   */
-  type: InstructionType;
+  _type: StakeInstructionType;
 
-  constructor(opts?: TransactionInstructionCtorFields, type?: InstructionType) {
+  constructor(
+    opts?: TransactionInstructionCtorFields,
+    type: StakeInstructionType,
+  ) {
     if (
       opts &&
       opts.programId &&
@@ -65,9 +64,7 @@ export class StakeInstruction extends TransactionInstruction {
       throw new Error('programId incorrect; not a StakeInstruction');
     }
     super(opts);
-    if (type) {
-      this.type = type;
-    }
+    this._type = type;
   }
 
   static from(instruction: TransactionInstruction): StakeInstruction {
@@ -77,10 +74,11 @@ export class StakeInstruction extends TransactionInstruction {
 
     const instructionTypeLayout = BufferLayout.u32('instruction');
     const typeIndex = instructionTypeLayout.decode(instruction.data);
+
     let type;
-    for (const t in StakeInstructionLayout) {
-      if (StakeInstructionLayout[t].index == typeIndex) {
-        type = StakeInstructionLayout[t];
+    for (const t of Object.keys(STAKE_INSTRUCTION_LAYOUTS)) {
+      if (STAKE_INSTRUCTION_LAYOUTS[t].index == typeIndex) {
+        type = t;
       }
     }
     if (!type) {
@@ -95,12 +93,66 @@ export class StakeInstruction extends TransactionInstruction {
       type,
     );
   }
+
+  /**
+   * Type of StakeInstruction
+   */
+  get type(): StakeInstructionType {
+    return this._type;
+  }
+
+  /**
+   * The `stake account` public key of the instruction;
+   * returns null if StakeInstructionType does not support this field
+   */
+  get stakePublicKey(): PublicKey | null {
+    switch (this.type) {
+      case STAKE_INSTRUCTION_LAYOUTS.Initialize:
+      case STAKE_INSTRUCTION_LAYOUTS.Delegate:
+      case STAKE_INSTRUCTION_LAYOUTS.Authorize:
+      case STAKE_INSTRUCTION_LAYOUTS.Split:
+      case STAKE_INSTRUCTION_LAYOUTS.Withdraw:
+      case STAKE_INSTRUCTION_LAYOUTS.Deactivate:
+        return this.keys[0].pubkey;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * The `authorized account` public key of the instruction;
+   *
+   * returns null if StakeInstructionType does not support this field
+   */
+  get authorizedPublicKey(): PublicKey | null {
+    switch (this.type) {
+      case STAKE_INSTRUCTION_LAYOUTS.Delegate:
+        return this.keys[5].pubkey;
+      case STAKE_INSTRUCTION_LAYOUTS.Authorize:
+        return this.keys[2].pubkey;
+      case STAKE_INSTRUCTION_LAYOUTS.Split:
+        return this.keys[2].pubkey;
+      case STAKE_INSTRUCTION_LAYOUTS.Withdraw:
+        return this.keys[4].pubkey;
+      case STAKE_INSTRUCTION_LAYOUTS.Deactivate:
+        return this.keys[0].pubkey;
+      default:
+        return null;
+    }
+  }
 }
 
 /**
- * An enumeration of valid StakeInstructionTypes
+ * An enumeration of valid StakeInstructionType's
+ * @typedef { 'Initialize' | 'Authorize' | 'Delegate' | 'Split' | 'Withdraw'
+ | 'Deactivate' } StakeInstructionType
  */
-export const StakeInstructionLayout = Object.freeze({
+export type StakeInstructionType = $Keys<typeof STAKE_INSTRUCTION_LAYOUTS>;
+
+/**
+ * An enumeration of valid stake InstructionType's
+ */
+export const STAKE_INSTRUCTION_LAYOUTS = Object.freeze({
   Initialize: {
     index: 0,
     layout: BufferLayout.struct([
@@ -117,7 +169,7 @@ export const StakeInstructionLayout = Object.freeze({
       BufferLayout.u32('stakeAuthorizationType'),
     ]),
   },
-  DelegateStake: {
+  Delegate: {
     index: 2,
     layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
@@ -150,7 +202,7 @@ export type StakeAuthorizationType = {|
 |};
 
 /**
- * An enumeration of valid StakeInstructionTypes
+ * An enumeration of valid StakeAuthorizationLayout's
  */
 export const StakeAuthorizationLayout = Object.freeze({
   Staker: {
@@ -183,11 +235,11 @@ export class StakeProgram {
    * Generate an Initialize instruction to add to a Stake Create transaction
    */
   static initialize(
-    stakeAccount: PublicKey,
+    stakePubkey: PublicKey,
     authorized: Authorized,
     lockup: Lockup,
   ): TransactionInstruction {
-    const type = StakeInstructionLayout.Initialize;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Initialize;
     const data = encodeData(type, {
       authorized: {
         staker: authorized.staker.toBuffer(),
@@ -201,7 +253,7 @@ export class StakeProgram {
     });
     const instructionData = {
       keys: [
-        {pubkey: stakeAccount, isSigner: false, isWritable: true},
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false},
       ],
       programId: this.programId,
@@ -216,7 +268,7 @@ export class StakeProgram {
    */
   static createAccountWithSeed(
     from: PublicKey,
-    stakeAccount: PublicKey,
+    stakePubkey: PublicKey,
     base: PublicKey,
     seed: string,
     authorized: Authorized,
@@ -225,7 +277,7 @@ export class StakeProgram {
   ): Transaction {
     let transaction = SystemProgram.createAccountWithSeed(
       from,
-      stakeAccount,
+      stakePubkey,
       base,
       seed,
       lamports,
@@ -233,7 +285,7 @@ export class StakeProgram {
       this.programId,
     );
 
-    return transaction.add(this.initialize(stakeAccount, authorized, lockup));
+    return transaction.add(this.initialize(stakePubkey, authorized, lockup));
   }
 
   /**
@@ -241,20 +293,20 @@ export class StakeProgram {
    */
   static createAccount(
     from: PublicKey,
-    stakeAccount: PublicKey,
+    stakePubkey: PublicKey,
     authorized: Authorized,
     lockup: Lockup,
     lamports: number,
   ): Transaction {
     let transaction = SystemProgram.createAccount(
       from,
-      stakeAccount,
+      stakePubkey,
       lamports,
       this.space,
       this.programId,
     );
 
-    return transaction.add(this.initialize(stakeAccount, authorized, lockup));
+    return transaction.add(this.initialize(stakePubkey, authorized, lockup));
   }
 
   /**
@@ -263,16 +315,16 @@ export class StakeProgram {
    * to a new validator Vote PublicKey.
    */
   static delegate(
-    stakeAccount: PublicKey,
+    stakePubkey: PublicKey,
     authorizedPubkey: PublicKey,
     votePubkey: PublicKey,
   ): Transaction {
-    const type = StakeInstructionLayout.DelegateStake;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Delegate;
     const data = encodeData(type);
 
     return new Transaction().add({
       keys: [
-        {pubkey: stakeAccount, isSigner: false, isWritable: true},
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: votePubkey, isSigner: false, isWritable: false},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
         {
@@ -293,12 +345,12 @@ export class StakeProgram {
    * or Withdrawer on the Stake account.
    */
   static authorize(
-    stakeAccount: PublicKey,
+    stakePubkey: PublicKey,
     authorizedPubkey: PublicKey,
     newAuthorized: PublicKey,
     stakeAuthorizationType: StakeAuthorizationType,
   ): Transaction {
-    const type = StakeInstructionLayout.Authorize;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Authorize;
     const data = encodeData(type, {
       newAuthorized: newAuthorized.toBuffer(),
       stakeAuthorizationType: stakeAuthorizationType.index,
@@ -306,7 +358,7 @@ export class StakeProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: stakeAccount, isSigner: false, isWritable: true},
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: true},
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
@@ -319,25 +371,25 @@ export class StakeProgram {
    * Generate a Transaction that splits Stake tokens into another stake account
    */
   static split(
-    stakeAccount: PublicKey,
+    stakePubkey: PublicKey,
     authorizedPubkey: PublicKey,
     lamports: number,
     splitStakePubkey: PublicKey,
   ): Transaction {
     let transaction = SystemProgram.createAccount(
-      stakeAccount,
+      stakePubkey,
       splitStakePubkey,
       0,
       this.space,
       this.programId,
     );
     transaction.instructions[0].keys[0].isSigner = false;
-    const type = StakeInstructionLayout.Split;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Split;
     const data = encodeData(type, {lamports});
 
     return transaction.add({
       keys: [
-        {pubkey: stakeAccount, isSigner: false, isWritable: true},
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: splitStakePubkey, isSigner: false, isWritable: true},
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
@@ -350,17 +402,17 @@ export class StakeProgram {
    * Generate a Transaction that withdraws deactivated Stake tokens.
    */
   static withdraw(
-    stakeAccount: PublicKey,
-    withdrawerPubkey: PublicKey,
+    stakePubkey: PublicKey,
+    authorizedPubkey: PublicKey,
     to: PublicKey,
     lamports: number,
   ): Transaction {
-    const type = StakeInstructionLayout.Withdraw;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Withdraw;
     const data = encodeData(type, {lamports});
 
     return new Transaction().add({
       keys: [
-        {pubkey: stakeAccount, isSigner: false, isWritable: true},
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: to, isSigner: false, isWritable: true},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
         {
@@ -368,7 +420,7 @@ export class StakeProgram {
           isSigner: false,
           isWritable: false,
         },
-        {pubkey: withdrawerPubkey, isSigner: true, isWritable: false},
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
       programId: this.programId,
       data,
@@ -379,15 +431,15 @@ export class StakeProgram {
    * Generate a Transaction that deactivates Stake tokens.
    */
   static deactivate(
-    stakeAccount: PublicKey,
+    stakePubkey: PublicKey,
     authorizedPubkey: PublicKey,
   ): Transaction {
-    const type = StakeInstructionLayout.Deactivate;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Deactivate;
     const data = encodeData(type);
 
     return new Transaction().add({
       keys: [
-        {pubkey: stakeAccount, isSigner: false, isWritable: true},
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],

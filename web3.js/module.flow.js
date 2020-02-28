@@ -318,6 +318,30 @@ declare module '@solana/web3.js' {
     ): Transaction;
   }
 
+  declare export type StakeInstructionType =
+    | 'Initialize'
+    | 'Authorize'
+    | 'Delegate'
+    | 'Split'
+    | 'Withdraw'
+    | 'Deactivate';
+
+  declare export var STAKE_INSTRUCTION_LAYOUTS: {
+    [StakeInstructionType]: InstructionType,
+  };
+
+  declare export class StakeInstruction extends TransactionInstruction {
+    type: StakeInstructionType;
+    stakePublicKey: PublicKey | null;
+    authorizedPublicKey: PublicKey | null;
+
+    constructor(
+      opts?: TransactionInstructionCtorFields,
+      type: StakeInstructionType,
+    ): StakeInstruction;
+    static from(instruction: TransactionInstruction): StakeInstruction;
+  }
+
   // === src/system-program.js ===
   declare export class SystemProgram {
     static programId: PublicKey;
@@ -368,15 +392,29 @@ declare module '@solana/web3.js' {
     ): Transaction;
   }
 
+  declare export type SystemInstructionType =
+    | 'Create'
+    | 'Assign'
+    | 'Transfer'
+    | 'CreateWithSeed'
+    | 'AdvanceNonceAccount'
+    | 'WithdrawNonceAccount'
+    | 'InitializeNonceAccount'
+    | 'AuthorizeNonceAccount';
+
+  declare export var SYSTEM_INSTRUCTION_LAYOUTS: {
+    [SystemInstructionType]: InstructionType,
+  };
+
   declare export class SystemInstruction extends TransactionInstruction {
-    type: InstructionType;
+    type: SystemInstructionType;
     fromPublicKey: PublicKey | null;
     toPublicKey: PublicKey | null;
     amount: number | null;
 
     constructor(
       opts?: TransactionInstructionCtorFields,
-      type?: InstructionType,
+      type: SystemInstructionType,
     ): SystemInstruction;
     static from(instruction: TransactionInstruction): SystemInstruction;
   }
