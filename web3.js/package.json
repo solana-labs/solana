@@ -26,7 +26,7 @@
     "solana-bpf-sdk-install": "bin/bpf-sdk-install.sh",
     "solana-localnet": "bin/localnet.sh"
   },
-  "testnetDefaultChannel": "beta",
+  "testnetDefaultChannel": "edge",
   "files": [
     "/bin",
     "/doc",
