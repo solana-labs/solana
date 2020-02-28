@@ -24,7 +24,7 @@ pub fn timestamp() -> u64 {
     duration_as_ms(&now)
 }
 
-pub const SECONDS_PER_YEAR: f64 = (365.242_199 * 24.0 * 60.0 * 60.0);
+pub const SECONDS_PER_YEAR: f64 = 365.242_199 * 24.0 * 60.0 * 60.0;
 
 /// from years to slots
 pub fn years_as_slots(years: f64, tick_duration: &Duration, ticks_per_slot: u64) -> f64 {
