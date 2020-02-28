@@ -49,6 +49,8 @@ test('createAccountWithSeed', () => {
     SystemProgram.programId,
   );
   expect(transaction.instructions[1].programId).toEqual(StakeProgram.programId);
+  const stakeInstruction = StakeInstruction.from(transaction.instructions[1]);
+  expect(stakeInstruction.stakePublicKey).toEqual(newAccountPubkey);
   // TODO: Validate transaction contents more
 });
 
@@ -71,6 +73,12 @@ test('createAccount', () => {
     SystemProgram.programId,
   );
   expect(transaction.instructions[1].programId).toEqual(StakeProgram.programId);
+  const stakeInstruction = StakeInstruction.from(transaction.instructions[1]);
+  expect(stakeInstruction.stakePublicKey).toEqual(newAccount.publicKey);
+
+  expect(() => {
+    StakeInstruction.from(transaction.instructions[0]);
+  }).toThrow();
   // TODO: Validate transaction contents more
 });
 
@@ -88,6 +96,9 @@ test('delegate', () => {
 
   expect(transaction.keys).toHaveLength(6);
   expect(transaction.programId).toEqual(StakeProgram.programId);
+  const stakeInstruction = StakeInstruction.from(transaction.instructions[0]);
+  expect(stakeInstruction.stakePublicKey).toEqual(stake.publicKey);
+  expect(stakeInstruction.authorizedPublicKey).toEqual(authorized.publicKey);
   // TODO: Validate transaction contents more
 });
 
@@ -107,6 +118,9 @@ test('authorize', () => {
 
   expect(transaction.keys).toHaveLength(3);
   expect(transaction.programId).toEqual(StakeProgram.programId);
+  const stakeInstruction = StakeInstruction.from(transaction.instructions[0]);
+  expect(stakeInstruction.stakePublicKey).toEqual(stake.publicKey);
+  expect(stakeInstruction.authorizedPublicKey).toEqual(authorized.publicKey);
   // TODO: Validate transaction contents more
 });
 
@@ -128,6 +142,9 @@ test('split', () => {
     SystemProgram.programId,
   );
   expect(transaction.instructions[1].programId).toEqual(StakeProgram.programId);
+  const stakeInstruction = StakeInstruction.from(transaction.instructions[1]);
+  expect(stakeInstruction.stakePublicKey).toEqual(stake.publicKey);
+  expect(stakeInstruction.authorizedPublicKey).toEqual(authorized.publicKey);
   // TODO: Validate transaction contents more
 });
 
@@ -146,6 +163,9 @@ test('withdraw', () => {
 
   expect(transaction.keys).toHaveLength(5);
   expect(transaction.programId).toEqual(StakeProgram.programId);
+  const stakeInstruction = StakeInstruction.from(transaction.instructions[0]);
+  expect(stakeInstruction.stakePublicKey).toEqual(stake.publicKey);
+  expect(stakeInstruction.authorizedPublicKey).toEqual(withdrawer.publicKey);
   // TODO: Validate transaction contents more
 });
 
@@ -158,6 +178,9 @@ test('deactivate', () => {
 
   expect(transaction.keys).toHaveLength(3);
   expect(transaction.programId).toEqual(StakeProgram.programId);
+  const stakeInstruction = StakeInstruction.from(transaction.instructions[0]);
+  expect(stakeInstruction.stakePublicKey).toEqual(stake.publicKey);
+  expect(stakeInstruction.authorizedPublicKey).toEqual(authorized.publicKey);
   // TODO: Validate transaction contents more
 });
 
