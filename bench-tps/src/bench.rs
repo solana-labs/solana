@@ -1059,8 +1059,8 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     //   pay for the transaction fees in a new run.
     let enough_lamports = 8 * lamports_per_account / 10;
     if first_keypair_balance < enough_lamports || last_keypair_balance < enough_lamports {
-        let (_blockhash, fee_calculator) = get_recent_blockhash(client.as_ref());
-        let max_fee = fee_calculator.max_lamports_per_signature;
+        let fee_rate_governor = client.get_fee_rate_governor().unwrap();
+        let max_fee = fee_rate_governor.max_lamports_per_signature;
         let extra_fees = extra * max_fee;
         let total_keypairs = keypairs.len() as u64 + 1; // Add one for funding keypair
         let mut total = lamports_per_account * total_keypairs + extra_fees;
@@ -1134,7 +1134,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::fee_calculator::FeeCalculator;
+    use solana_sdk::fee_calculator::FeeRateGovernor;
     use solana_sdk::genesis_config::create_genesis_config;
 
     #[test]
@@ -1181,8 +1181,8 @@ mod tests {
     #[test]
     fn test_bench_tps_fund_keys_with_fees() {
         let (mut genesis_config, id) = create_genesis_config(10_000);
-        let fee_calculator = FeeCalculator::new(11, 0);
-        genesis_config.fee_calculator = fee_calculator;
+        let fee_rate_governor = FeeRateGovernor::new(11, 0);
+        genesis_config.fee_rate_governor = fee_rate_governor;
         let bank = Bank::new(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;

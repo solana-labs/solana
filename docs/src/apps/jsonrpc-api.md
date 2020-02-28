@@ -24,6 +24,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
+* [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
 * [getInflation](jsonrpc-api.md#getinflation)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
@@ -401,6 +402,34 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"firstNormalEpoch":8,"firstNormalSlot":8160,"leaderScheduleSlotOffset":8192,"slotsPerEpoch":8192,"warmup":true},"id":1}
+```
+
+### getFeeRateGovernor
+
+Returns the fee rate governor information from the root bank
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The `result` field will be an `object` with the following fields:
+
+* `burnPercent: <u8>`, Percentage of fees collected to be destroyed
+* `maxLamportsPerSignature: <u64>`, Largest value `lamportsPerSignature` can attain for the next slot
+* `minLamportsPerSignature: <u64>`, Smallest value `lamportsPerSignature` can attain for the next slot
+* `targetLamportsPerSignature: <u64>`, Desired fee rate for the cluster
+* `targetSignaturesPerSlot: <u64>`, Desired signature rate for the cluster
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":54},"value":{"feeRateGovernor":{"burnPercent":50,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
 ```
 
 ### getGenesisHash

@@ -9,9 +9,9 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::{
     Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
-    RpcContactInfo, RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext,
-    RpcSignatureConfirmation, RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo,
-    RpcVoteAccountInfo, RpcVoteAccountStatus,
+    RpcContactInfo, RpcEpochInfo, RpcFeeRateGovernor, RpcKeyedAccount, RpcLeaderSchedule,
+    RpcResponseContext, RpcSignatureConfirmation, RpcStorageTurn, RpcTransactionEncoding,
+    RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -160,6 +160,17 @@ impl JsonRpcRequestProcessor {
             RpcBlockhashFeeCalculator {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
+            },
+        )
+    }
+
+    fn get_fee_rate_governor(&self) -> RpcResponse<RpcFeeRateGovernor> {
+        let bank = &*self.bank(None);
+        let fee_rate_governor = bank.get_fee_rate_governor();
+        new_response(
+            bank,
+            RpcFeeRateGovernor {
+                fee_rate_governor: fee_rate_governor.clone(),
             },
         )
     }
@@ -491,6 +502,9 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
+    #[rpc(meta, name = "getFeeRateGovernor")]
+    fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
+
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
         &self,
@@ -811,6 +825,14 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_recent_blockhash(commitment)
+    }
+
+    fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor> {
+        debug!("get_fee_rate_governor rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_fee_rate_governor()
     }
 
     fn get_signature_status(
@@ -1770,8 +1792,32 @@ pub mod tests {
             "value":{
                 "blockhash": blockhash.to_string(),
                 "feeCalculator": {
-                    "burnPercent": DEFAULT_BURN_PERCENT,
                     "lamportsPerSignature": 0,
+                }
+            }},
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_fee_rate_governor() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeRateGovernor"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+            "context":{"slot":0},
+            "value":{
+                "feeRateGovernor": {
+                    "burnPercent": DEFAULT_BURN_PERCENT,
                     "maxLamportsPerSignature": 0,
                     "minLamportsPerSignature": 0,
                     "targetLamportsPerSignature": 0,
