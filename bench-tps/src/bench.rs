@@ -1059,7 +1059,7 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     //   pay for the transaction fees in a new run.
     let enough_lamports = 8 * lamports_per_account / 10;
     if first_keypair_balance < enough_lamports || last_keypair_balance < enough_lamports {
-        let fee_rate_governor = client.get_recent_fee_rate_governor().unwrap();
+        let fee_rate_governor = client.get_fee_rate_governor().unwrap();
         let max_fee = fee_rate_governor.max_lamports_per_signature;
         let extra_fees = extra * max_fee;
         let total_keypairs = keypairs.len() as u64 + 1; // Add one for funding keypair

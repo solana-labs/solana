@@ -804,25 +804,25 @@ impl RpcClient {
         })
     }
 
-    pub fn get_recent_fee_rate_governor(&self) -> RpcResponse<FeeRateGovernor> {
-        self.get_recent_fee_rate_governor_with_commitment(CommitmentConfig::default())
+    pub fn get_fee_rate_governor(&self) -> RpcResponse<FeeRateGovernor> {
+        self.get_fee_rate_governor_with_commitment(CommitmentConfig::default())
     }
 
-    pub fn get_recent_fee_rate_governor_with_commitment(
+    pub fn get_fee_rate_governor_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
     ) -> RpcResponse<FeeRateGovernor> {
         let response = self
             .client
             .send(
-                &RpcRequest::GetRecentFeeRateGovernor,
+                &RpcRequest::GetFeeRateGovernor,
                 json!([commitment_config]),
                 0,
             )
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("GetRecentFeeRateGovernor request failure: {:?}", e),
+                    format!("GetFeeRateGovernor request failure: {:?}", e),
                 )
             })?;
         let Response {
@@ -831,7 +831,7 @@ impl RpcClient {
         } = serde_json::from_value::<Response<RpcFeeRateGovernor>>(response).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("GetRecentFeeRateGovernor parse failure: {:?}", e),
+                format!("GetFeeRateGovernor parse failure: {:?}", e),
             )
         })?;
         Ok(Response {

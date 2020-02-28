@@ -71,7 +71,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                     serde_json::to_value(FeeCalculator::default()).unwrap(),
                 ),
             })?,
-            RpcRequest::GetRecentFeeRateGovernor => serde_json::to_value(Response {
+            RpcRequest::GetFeeRateGovernor => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
             })?,

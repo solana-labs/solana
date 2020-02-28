@@ -20,7 +20,7 @@ pub enum RpcRequest {
     GetNumBlocksSinceSignatureConfirmation,
     GetProgramAccounts,
     GetRecentBlockhash,
-    GetRecentFeeRateGovernor,
+    GetFeeRateGovernor,
     GetSignatureStatus,
     GetSlot,
     GetSlotLeader,
@@ -62,7 +62,7 @@ impl RpcRequest {
             }
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
-            RpcRequest::GetRecentFeeRateGovernor => "getRecentFeeRateGovernor",
+            RpcRequest::GetFeeRateGovernor => "getFeeRateGovernor",
             RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetSlot => "getSlot",
             RpcRequest::GetSlotLeader => "getSlotLeader",
@@ -140,9 +140,9 @@ mod tests {
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getRecentBlockhash");
 
-        let test_request = RpcRequest::GetRecentFeeRateGovernor;
+        let test_request = RpcRequest::GetFeeRateGovernor;
         let request = test_request.build_request_json(1, Value::Null);
-        assert_eq!(request["method"], "getRecentFeeRateGovernor");
+        assert_eq!(request["method"], "getFeeRateGovernor");
 
         let test_request = RpcRequest::GetSlot;
         let request = test_request.build_request_json(1, Value::Null);

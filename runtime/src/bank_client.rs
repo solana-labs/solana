@@ -137,15 +137,15 @@ impl SyncClient for BankClient {
         Ok(self.bank.last_blockhash_with_fee_calculator())
     }
 
-    fn get_recent_fee_rate_governor(&self) -> Result<FeeRateGovernor> {
+    fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor> {
         Ok(self.bank.get_fee_rate_governor().clone())
     }
 
-    fn get_recent_fee_rate_governor_with_commitment(
+    fn get_fee_rate_governor_with_commitment(
         &self,
         _commitment_config: CommitmentConfig,
     ) -> Result<FeeRateGovernor> {
-        self.get_recent_fee_rate_governor()
+        self.get_fee_rate_governor()
     }
 
     fn get_signature_status(

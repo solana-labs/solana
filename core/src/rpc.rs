@@ -164,7 +164,7 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    fn get_recent_fee_rate_governor(
+    fn get_fee_rate_governor(
         &self,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcFeeRateGovernor> {
@@ -505,8 +505,8 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
-    #[rpc(meta, name = "getRecentFeeRateGovernor")]
-    fn get_recent_fee_rate_governor(
+    #[rpc(meta, name = "getFeeRateGovernor")]
+    fn get_fee_rate_governor(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
@@ -834,16 +834,16 @@ impl RpcSol for RpcSolImpl {
             .get_recent_blockhash(commitment)
     }
 
-    fn get_recent_fee_rate_governor(
+    fn get_fee_rate_governor(
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcFeeRateGovernor> {
-        debug!("get_recent_fee_rate_governor rpc request received");
+        debug!("get_fee_rate_governor rpc request received");
         meta.request_processor
             .read()
             .unwrap()
-            .get_recent_fee_rate_governor(commitment)
+            .get_fee_rate_governor(commitment)
     }
 
     fn get_signature_status(
@@ -1816,11 +1816,11 @@ pub mod tests {
     }
 
     #[test]
-    fn test_rpc_get_recent_fee_rate_governor() {
+    fn test_rpc_get_fee_rate_governor() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentFeeRateGovernor"}}"#);
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeRateGovernor"}}"#);
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
