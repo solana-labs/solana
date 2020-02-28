@@ -201,7 +201,7 @@ mod tests {
     fn test_blockhashspec_get_blockhash_fee_calc() {
         let test_blockhash = hash(&[0u8]);
         let rpc_blockhash = hash(&[1u8]);
-        let rpc_fee_calc = FeeCalculator::new(42, 42);
+        let rpc_fee_calc = FeeCalculator::new(42);
         let get_recent_blockhash_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!((

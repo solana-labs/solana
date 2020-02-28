@@ -11,7 +11,7 @@ use solana_sdk::{
     account::Account,
     clock,
     epoch_schedule::EpochSchedule,
-    fee_calculator::FeeCalculator,
+    fee_calculator::FeeRateGovernor,
     genesis_config::{GenesisConfig, OperatingMode},
     native_token::sol_to_lamports,
     poh_config::PohConfig,
@@ -99,16 +99,16 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let fee_calculator = FeeCalculator::default();
+    let fee_rate_governor = FeeRateGovernor::default();
     let (
         default_target_lamports_per_signature,
         default_target_signatures_per_slot,
         default_fee_burn_percentage,
     ) = {
         (
-            &fee_calculator.target_lamports_per_signature.to_string(),
-            &fee_calculator.target_signatures_per_slot.to_string(),
-            &fee_calculator.burn_percent.to_string(),
+            &fee_rate_governor.target_lamports_per_signature.to_string(),
+            &fee_rate_governor.target_signatures_per_slot.to_string(),
+            &fee_rate_governor.burn_percent.to_string(),
         )
     };
 
@@ -449,11 +449,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
 
-    let mut fee_calculator = FeeCalculator::new(
+    let mut fee_rate_governor = FeeRateGovernor::new(
         value_t_or_exit!(matches, "target_lamports_per_signature", u64),
-        value_t_or_exit!(matches, "target_signatures_per_slot", usize),
+        value_t_or_exit!(matches, "target_signatures_per_slot", u64),
     );
-    fee_calculator.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
+    fee_rate_governor.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
 
     let mut poh_config = PohConfig::default();
     poh_config.target_tick_duration = if matches.is_present("target_tick_duration") {
@@ -513,7 +513,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ticks_per_slot,
         epoch_schedule,
         inflation,
-        fee_calculator,
+        fee_rate_governor,
         rent,
         poh_config,
         operating_mode,

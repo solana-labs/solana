@@ -6,8 +6,8 @@ use crate::{
     rpc_request::RpcRequest,
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-        RpcEpochInfo, RpcKeyedAccount, RpcLeaderSchedule, RpcResponse, RpcVersionInfo,
-        RpcVoteAccountStatus,
+        RpcEpochInfo, RpcFeeRateGovernor, RpcKeyedAccount, RpcLeaderSchedule, RpcResponse,
+        RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -18,7 +18,7 @@ use solana_sdk::{
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     inflation::Inflation,
     pubkey::Pubkey,
@@ -801,6 +801,31 @@ impl RpcClient {
         Ok(Response {
             context,
             value: (blockhash, fee_calculator),
+        })
+    }
+
+    pub fn get_fee_rate_governor(&self) -> RpcResponse<FeeRateGovernor> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetFeeRateGovernor, Value::Null, 0)
+            .map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetFeeRateGovernor request failure: {:?}", e),
+                )
+            })?;
+        let Response {
+            context,
+            value: RpcFeeRateGovernor { fee_rate_governor },
+        } = serde_json::from_value::<Response<RpcFeeRateGovernor>>(response).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetFeeRateGovernor parse failure: {:?}", e),
+            )
+        })?;
+        Ok(Response {
+            context,
+            value: fee_rate_governor,
         })
     }
 

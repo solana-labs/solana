@@ -4,7 +4,7 @@ use jsonrpc_core::Result as JsonResult;
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     message::MessageHeader,
     pubkey::Pubkey,
     transaction::{Result, Transaction},
@@ -150,6 +150,12 @@ pub struct RpcTransactionStatus {
 pub struct RpcBlockhashFeeCalculator {
     pub blockhash: String,
     pub fee_calculator: FeeCalculator,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcFeeRateGovernor {
+    pub fee_rate_governor: FeeRateGovernor,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
