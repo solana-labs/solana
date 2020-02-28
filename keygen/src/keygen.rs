@@ -15,7 +15,9 @@ use solana_clap_utils::{
 use solana_cli_config::config::{Config, CONFIG_FILE};
 use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
 use solana_sdk::{
-    pubkey::write_pubkey_file,
+    instruction::{AccountMeta, Instruction},
+    message::Message,
+    pubkey::{write_pubkey_file, Pubkey},
     signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
 };
 use std::{
@@ -564,11 +566,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         ("verify", Some(matches)) => {
             let keypair = get_keypair_from_matches(matches, config, wallet_manager)?;
-            let test_data = b"test";
-            let signature = keypair.try_sign_message(test_data)?;
+            let simple_message = Message::new(vec![Instruction::new(
+                Pubkey::default(),
+                &0,
+                vec![AccountMeta::new(keypair.pubkey(), true)],
+            )])
+            .serialize();
+            let signature = keypair.try_sign_message(&simple_message)?;
             let pubkey_bs58 = matches.value_of("pubkey").unwrap();
             let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
-            if signature.verify(&pubkey, test_data) {
+            if signature.verify(&pubkey, &simple_message) {
                 println!("Verification for public key: {}: Success", pubkey_bs58);
             } else {
                 println!("Verification for public key: {}: Failed", pubkey_bs58);
