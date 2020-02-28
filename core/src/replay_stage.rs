@@ -315,10 +315,6 @@ impl ReplayStage {
                         );
                     }
 
-                    if vote_bank.is_none() && reset_bank.is_none() {
-                        break;
-                    }
-
                     info!(
                         "vote bank: {:?} reset bank: {:?}",
                         vote_bank.as_ref().map(|b| b.slot()),
