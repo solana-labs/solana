@@ -2172,6 +2172,7 @@ mod tests {
         stake_instruction,
         stake_state::{self, Authorized, Delegation, Lockup, Stake},
     };
+    use solana_vote_program::vote_state::VoteStateVersions;
     use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
@@ -3069,11 +3070,20 @@ mod tests {
         bank.store_account(&archiver_id, &archiver_account);
 
         // generate some rewards
-        let mut vote_state = VoteState::from(&vote_account).unwrap();
+        let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
         for i in 0..MAX_LOCKOUT_HISTORY + 42 {
-            vote_state.process_slot_vote_unchecked(i as u64);
-            vote_state.to(&mut vote_account).unwrap();
+            vote_state
+                .as_mut()
+                .map(|v| v.process_slot_vote_unchecked(i as u64));
+            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            VoteState::to(&versioned, &mut vote_account).unwrap();
             bank.store_account(&vote_id, &vote_account);
+            match versioned {
+                VoteStateVersions::Current(v) => {
+                    vote_state = Some(*v);
+                }
+                _ => panic!("Has to be of type Current"),
+            };
         }
         bank.store_account(&vote_id, &vote_account);
 
