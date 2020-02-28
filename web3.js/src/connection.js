@@ -535,12 +535,7 @@ const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
   struct({
     blockhash: 'string',
     feeCalculator: struct({
-      burnPercent: 'number',
       lamportsPerSignature: 'number',
-      maxLamportsPerSignature: 'number',
-      minLamportsPerSignature: 'number',
-      targetLamportsPerSignature: 'number',
-      targetSignaturesPerSlot: 'number',
     }),
   }),
 );

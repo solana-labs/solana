@@ -28,11 +28,6 @@ export function mockGetRecentBlockhash(commitment: ?Commitment) {
           blockhash: recentBlockhash.publicKey.toBase58(),
           feeCalculator: {
             lamportsPerSignature: 42,
-            burnPercent: 50,
-            maxLamportsPerSignature: 42,
-            minLamportsPerSignature: 42,
-            targetLamportsPerSignature: 42,
-            targetSignaturesPerSlot: 42,
           },
         },
       },
