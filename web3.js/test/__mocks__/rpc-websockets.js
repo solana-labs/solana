@@ -1,3 +1,5 @@
+// @flow
+
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
 // Define TEST_LIVE in the environment to test against the real full node
