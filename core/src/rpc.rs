@@ -1818,7 +1818,6 @@ pub mod tests {
             "value":{
                 "feeRateGovernor": {
                     "burnPercent": DEFAULT_BURN_PERCENT,
-                    "lamportsPerSignature": 0,
                     "maxLamportsPerSignature": 0,
                     "minLamportsPerSignature": 0,
                     "targetLamportsPerSignature": 0,

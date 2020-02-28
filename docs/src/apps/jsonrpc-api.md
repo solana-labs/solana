@@ -417,7 +417,6 @@ None
 The `result` field will be an `object` with the following fields:
 
 * `burnPercent: <u8>`, Percentage of fees collected to be destroyed
-* `lamportsPerSignature: <u64>`, Lamports charged as a fee for each signature on a transaction
 * `maxLamportsPerSignature: <u64>`, Largest value `lamportsPerSignature` can attain for the next slot
 * `minLamportsPerSignature: <u64>`, Smallest value `lamportsPerSignature` can attain for the next slot
 * `targetLamportsPerSignature: <u64>`, Desired fee rate for the cluster
@@ -430,7 +429,7 @@ The `result` field will be an `object` with the following fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":0},"value":{"feeRateGovernor":{"burnPercent":50,"lamportsPerSignature":9500,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":54},"value":{"feeRateGovernor":{"burnPercent":50,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
 ```
 
 ### getGenesisHash
