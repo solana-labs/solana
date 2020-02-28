@@ -5,8 +5,8 @@
 See [suggested hardware configuration here](../../running-validator/validator-reqs.md).
 
 * CPU Recommendations
-  * We recommend a CPU with the highest number of cores as possible. AMD Threadripper or Intel Server \(Xeon\) CPUs are fine. 
-  * We recommend AMD Threadripper as you get a larger number of cores for parallelization compared to Intel. 
+  * We recommend a CPU with the highest number of cores as possible. AMD Threadripper or Intel Server \(Xeon\) CPUs are fine.
+  * We recommend AMD Threadripper as you get a larger number of cores for parallelization compared to Intel.
   * Threadripper also has a cost-per-core advantage and a greater number of PCIe lanes compared to the equivalent Intel part. PoH \(Proof of History\) is based on sha256 and Threadripper also supports sha256 hardware instructions.
 * SSD size and I/O style \(SATA vs NVMe/M.2\)    for a validator
   * Minimum example - Samsung 860 Evo 2TB
@@ -24,4 +24,3 @@ See [suggested hardware configuration here](../../running-validator/validator-re
 
 * We build and run on Ubuntu 18.04.  Some users have had trouble when running on Ubuntu 16.04
 * See [Connecting Your Validator](steps-to-create-a-validator/connecting-your-validator.md#install-software) for the current Solana software release.
-

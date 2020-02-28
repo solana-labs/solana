@@ -21,4 +21,3 @@ solana ping
 ```
 
 This command sends a tiny transaction every 2 seconds and reports how long it takes to confirm it.
-

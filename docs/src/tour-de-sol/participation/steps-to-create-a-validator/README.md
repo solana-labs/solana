@@ -10,4 +10,3 @@ To create a Solana validator, complete the following steps, using the instructio
 * [Validator catch-up](monitoring-your-validator.md)
 * [Execute core validator functions](delegating-stake.md)
 * [Publish validator info \(optional\)](publishing-information-about-your-validator.md)
-

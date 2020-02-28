@@ -46,4 +46,3 @@ You must link your Solana pubkey to a Keybase.io account. The following instruct
    ```
 
 5. To check your public key was published, ensure you can successfully browse to `https://keybase.pub/<KEYBASE_USERNAME>/solana/validator-<BASE58_PUBKEY>`
-

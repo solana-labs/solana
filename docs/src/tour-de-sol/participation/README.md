@@ -3,4 +3,3 @@ description: Setup configuration
 ---
 
 # Participation
-

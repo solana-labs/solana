@@ -39,4 +39,3 @@ solana-gossip spy --entrypoint tds.solana.com:8001
 ```
 
 This command will display all the nodes that are visible to the TdS network’s entrypoint. If your validator is connected, its public key and IP address will appear in the list.
-

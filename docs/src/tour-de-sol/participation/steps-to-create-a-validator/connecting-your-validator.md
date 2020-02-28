@@ -41,4 +41,3 @@ solana balance --lamports
 If your validator identity keypair is created and the above command shows a non-zero balance, your validator is created and configured for TdS.
 
 Your starting balance will be 500 SOL. Read more about the [difference between SOL and lamports here](../../../introduction.md#what-are-sols).
-

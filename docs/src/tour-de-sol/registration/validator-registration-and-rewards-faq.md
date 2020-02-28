@@ -22,7 +22,7 @@ Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATIO
 
 ### How is the “50% of the active Tour event time” responsibility calculated?
 
-To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 50% of that stage’s slots. 
+To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 50% of that stage’s slots.
 
 If a validator isn’t able to submit &gt;= 50% of votes for a stage and still feels they should receive awards for that stage, they can petition Solana for reconsideration.
 
@@ -49,4 +49,3 @@ Please see the [Rewards section](rewards.md) for details
 ## How will we know what information we can and cannot share publicly?
 
 Please see [Confidentiality](confidentiality.md).
-

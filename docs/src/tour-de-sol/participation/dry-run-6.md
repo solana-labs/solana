@@ -28,4 +28,3 @@ Now that all validator stake is active, the Ramp TPS program will begin running 
 ## References
 
 * [Ramp TPS program](https://github.com/solana-labs/tour-de-sol/tree/master/ramp-tps)
-
