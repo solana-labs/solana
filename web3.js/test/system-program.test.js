@@ -249,7 +249,7 @@ test('non-SystemInstruction error', () => {
     data: Buffer.from([2, 0, 0, 0]),
   };
   expect(() => {
-    new SystemInstruction(badProgramId);
+    new SystemInstruction(badProgramId, 'Create');
   }).toThrow();
 
   const amount = 123;

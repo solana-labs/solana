@@ -12,7 +12,7 @@ export {
   Lockup,
   StakeAuthorizationLayout,
   StakeInstruction,
-  StakeInstructionLayout,
+  STAKE_INSTRUCTION_LAYOUTS,
   StakeProgram,
 } from './stake-program';
 export {SystemInstruction, SystemProgram} from './system-program';
