@@ -1,6 +1,10 @@
 // @flow
 
-import {Client as RpcWebSocketClient} from 'rpc-websockets';
+import {
+  Client as RpcWebSocketClient,
+  NodeWebSocketTypeOptions,
+  IWSClientAdditionalOptions,
+} from 'rpc-websockets';
 
 // Define TEST_LIVE in the environment to test against the real full node
 // identified by `url` instead of using the mock
@@ -11,7 +15,10 @@ let mockNotice = true;
 export class Client {
   client: RpcWebSocketClient;
 
-  constructor(url, options) {
+  constructor(
+    url: string,
+    options: NodeWebSocketTypeOptions & IWSClientAdditionalOptions,
+  ) {
     //console.log('MockClient', url, options);
     if (!mockRpcEnabled) {
       if (mockNotice) {
