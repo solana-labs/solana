@@ -641,6 +641,7 @@ impl AccountsDB {
     // Reclaim older states of rooted non-zero lamport accounts as a general
     // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
     fn clean_old_rooted_accounts(&self, purges: &HashMap<Pubkey, Vec<(Slot, AccountInfo)>>) {
+        let mut measure = Measure::start("clean_old_root-ms");
         let accounts_index = self.accounts_index.read().unwrap();
         let mut all_pubkeys: HashSet<Pubkey> = HashSet::new();
         for root in accounts_index.uncleaned_roots.iter() {
@@ -659,7 +660,15 @@ impl AccountsDB {
                 }
             }
         }
+        measure.stop();
+        inc_new_counter_info!("clean-old-root-collect-ms", measure.as_ms() as usize);
+
+        let mut measure = Measure::start("clean_old_root-ms");
         let all_pubkeys: Vec<_> = all_pubkeys.into_iter().collect();
+        measure.stop();
+        inc_new_counter_info!("clean-old-root-prepare-par-ms", measure.as_ms() as usize);
+
+        let mut measure = Measure::start("clean_old_root-ms");
         let reclaim_vecs = all_pubkeys.par_chunks(4096).map(|pubkeys: &[Pubkey]| {
             let mut reclaims = Vec::new();
             let accounts_index = self.accounts_index.read().unwrap();
@@ -671,8 +680,14 @@ impl AccountsDB {
             reclaims
         });
         drop(accounts_index);
+        measure.stop();
+        inc_new_counter_info!("clean-old-root-par-clean-ms", measure.as_ms() as usize);
 
-        reclaim_vecs.for_each(|reclaims| self.handle_reclaims(&reclaims));
+        let mut measure = Measure::start("clean_old_root-ms");
+        let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
+        self.handle_reclaims(&reclaims);
+        measure.stop();
+        inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
 
         let mut accounts_index = self.accounts_index.write().unwrap();
         accounts_index.uncleaned_roots.clear();
