@@ -8,7 +8,7 @@ pub const NUM_PACKETS: usize = 1024 * 8;
 
 pub const PACKETS_PER_BATCH: usize = 256;
 pub const NUM_RCVMMSGS: usize = 128;
-pub const PACKETS_BATCH_SIZE: usize = (PACKETS_PER_BATCH * PACKET_DATA_SIZE);
+pub const PACKETS_BATCH_SIZE: usize = PACKETS_PER_BATCH * PACKET_DATA_SIZE;
 
 #[derive(Debug, Clone)]
 pub struct Packets {
