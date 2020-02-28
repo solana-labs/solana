@@ -8,12 +8,14 @@ module.exports = {
     'eslint:recommended',
     'plugin:import/errors',
     'plugin:import/warnings',
+    'plugin:flowtype/recommended',
   ],
   parser: 'babel-eslint',
   parserOptions: {
     sourceType: 'module',
     ecmaVersion: 8,
   },
+  plugins: ['flowtype'],
   rules: {
     'no-trailing-spaces': ['error'],
     'import/first': ['error'],
@@ -45,6 +47,7 @@ module.exports = {
     ],
     'require-await': ['error'],
     semi: ['error', 'always'],
+    'flowtype/generic-spacing': [0],
   },
 
   // Used to lint the TypeScript type declaration file
