@@ -134,7 +134,9 @@ fn test_transfer() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: nonce::State = account.state().unwrap();
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
     let nonce_hash = match nonce_state {
         nonce::State::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -156,7 +158,9 @@ fn test_transfer() {
     check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
     check_balance(30, &rpc_client, &recipient_pubkey);
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: nonce::State = account.state().unwrap();
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
     let new_nonce_hash = match nonce_state {
         nonce::State::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -175,7 +179,9 @@ fn test_transfer() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: nonce::State = account.state().unwrap();
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
     let nonce_hash = match nonce_state {
         nonce::State::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
