@@ -1,30 +1,34 @@
-use crate::accounts_db::{
-    AccountInfo, AccountStorage, AccountsDB, AppendVecId, BankHashInfo, ErrorCounters,
+use crate::{
+    accounts_db::{
+        AccountInfo, AccountStorage, AccountsDB, AppendVecId, BankHashInfo, ErrorCounters,
+    },
+    accounts_index::AccountsIndex,
+    append_vec::StoredAccount,
+    bank::{HashAgeKind, TransactionProcessResult},
+    blockhash_queue::BlockhashQueue,
+    nonce_utils::prepare_if_nonce_account,
+    rent_collector::RentCollector,
+    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
+    transaction_utils::OrderedIterator,
 };
-use crate::accounts_index::AccountsIndex;
-use crate::append_vec::StoredAccount;
-use crate::bank::{HashAgeKind, TransactionProcessResult};
-use crate::blockhash_queue::BlockhashQueue;
-use crate::nonce_utils::prepare_if_nonce_account;
-use crate::rent_collector::RentCollector;
-use crate::system_instruction_processor::{get_system_account_kind, SystemAccountKind};
 use log::*;
 use rayon::slice::ParallelSliceMut;
-use solana_sdk::account::Account;
-use solana_sdk::bank_hash::BankHash;
-use solana_sdk::clock::Slot;
-use solana_sdk::hash::Hash;
-use solana_sdk::native_loader;
-use solana_sdk::nonce_state::NonceState;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::Result;
-use solana_sdk::transaction::{Transaction, TransactionError};
-use std::collections::{HashMap, HashSet};
-use std::io::{BufReader, Error as IOError, Read};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock};
-
-use crate::transaction_utils::OrderedIterator;
+use solana_sdk::{
+    account::Account,
+    clock::Slot,
+    hash::Hash,
+    native_loader,
+    nonce_state::NonceState,
+    pubkey::Pubkey,
+    transaction::Result,
+    transaction::{Transaction, TransactionError},
+};
+use std::{
+    collections::{HashMap, HashSet},
+    io::{BufReader, Error as IOError, Read},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, RwLock},
+};
 
 #[derive(Default, Debug)]
 struct ReadonlyLock {
@@ -369,6 +373,7 @@ impl Accounts {
         })
     }
 
+    #[must_use]
     pub fn verify_bank_hash(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash(slot, ancestors) {
             warn!("verify_bank_hash failed: {:?}", err);
@@ -504,16 +509,19 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_at(&self, slot_id: Slot) -> BankHash {
+    pub fn bank_hash_at(&self, slot_id: Slot) -> Hash {
         self.bank_hash_info_at(slot_id).hash
     }
 
     pub fn bank_hash_info_at(&self, slot_id: Slot) -> BankHashInfo {
+        let delta_hash = self.accounts_db.get_accounts_delta_hash(slot_id);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
-        bank_hashes
+        let mut hash_info = bank_hashes
             .get(&slot_id)
             .expect("No bank hash was found for this bank, that should not be possible")
-            .clone()
+            .clone();
+        hash_info.hash = delta_hash;
+        hash_info
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
@@ -656,10 +664,14 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
-    use crate::accounts_db::tests::copy_append_vecs;
-    use crate::accounts_db::{get_temp_accounts_paths, AccountsDBSerialize};
-    use crate::bank::HashAgeKind;
-    use crate::rent_collector::RentCollector;
+    use crate::{
+        accounts_db::{
+            tests::copy_append_vecs,
+            {get_temp_accounts_paths, AccountsDBSerialize},
+        },
+        bank::HashAgeKind,
+        rent_collector::RentCollector,
+    };
     use bincode::serialize_into;
     use rand::{thread_rng, Rng};
     use solana_sdk::{
@@ -1303,7 +1315,7 @@ mod tests {
     #[should_panic]
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new(Vec::new());
-        accounts.bank_hash_at(0);
+        accounts.bank_hash_at(1);
     }
 
     fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {

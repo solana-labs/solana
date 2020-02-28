@@ -496,14 +496,6 @@ impl Bank {
         *self.hash.read().unwrap()
     }
 
-    pub fn get_accounts_hash(&self) -> Hash {
-        self.hash()
-    }
-
-    pub fn update_accounts_hash(&self) -> Hash {
-        self.hash()
-    }
-
     pub fn is_frozen(&self) -> bool {
         *self.hash.read().unwrap() != Hash::default()
     }
@@ -1876,7 +1868,7 @@ impl Bank {
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
     /// snapshot.
-    pub fn verify_hash_internal_state(&self) -> bool {
+    pub fn verify_bank_hash(&self) -> bool {
         self.rc
             .accounts
             .verify_bank_hash(self.slot(), &self.ancestors)
@@ -1889,13 +1881,42 @@ impl Bank {
             .collect()
     }
 
+    #[must_use]
+    fn verify_hash(&self) -> bool {
+        assert!(self.is_frozen());
+        let calculated_hash = self.hash_internal_state();
+        let expected_hash = self.hash();
+
+        if calculated_hash == expected_hash {
+            true
+        } else {
+            warn!(
+                "verify failed: slot: {}, {} (calculated) != {} (expected)",
+                self.slot(),
+                calculated_hash,
+                expected_hash
+            );
+            false
+        }
+    }
+
+    pub fn get_accounts_hash(&self) -> Hash {
+        self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
+    }
+
+    pub fn update_accounts_hash(&self) -> Hash {
+        self.rc
+            .accounts
+            .accounts_db
+            .update_accounts_hash(self.slot(), &self.ancestors)
+    }
+
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
         self.clean_accounts();
-        self.rc
-            .accounts
-            .verify_bank_hash(self.slot(), &self.ancestors)
+        // Order and short-circuiting is significant; verify_hash requires a valid bank hash
+        self.verify_bank_hash() && self.verify_hash()
     }
 
     /// Return the number of hashes per tick
@@ -3127,7 +3148,9 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
 
+        let hash = bank.update_accounts_hash();
         bank.clean_accounts();
+        assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
@@ -3143,30 +3166,37 @@ mod tests {
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+
+        info!("bank0 purge");
+        let hash = bank0.update_accounts_hash();
         bank0.clean_accounts();
+        assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+
+        info!("bank1 purge");
         bank1.clean_accounts();
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
-        assert!(bank0.verify_hash_internal_state());
+        assert!(bank0.verify_bank_hash());
 
         // Squash and then verify hash_internal value
         bank0.squash();
-        assert!(bank0.verify_hash_internal_state());
+        assert!(bank0.verify_bank_hash());
 
         bank1.squash();
-        assert!(bank1.verify_hash_internal_state());
+        bank1.update_accounts_hash();
+        assert!(bank1.verify_bank_hash());
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
         bank1.clean_accounts();
 
-        assert!(bank1.verify_hash_internal_state());
+        assert!(bank1.verify_bank_hash());
     }
 
     #[test]
@@ -3887,7 +3917,8 @@ mod tests {
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        assert!(bank2.verify_hash_internal_state());
+        bank2.update_accounts_hash();
+        assert!(bank2.verify_bank_hash());
     }
 
     #[test]
@@ -3903,24 +3934,51 @@ mod tests {
         let bank0_state = bank0.hash_internal_state();
         let bank0 = Arc::new(bank0);
         // Checkpointing should result in a new state while freezing the parent
-        let bank2 = new_from_parent(&bank0);
+        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 1);
         assert_ne!(bank0_state, bank2.hash_internal_state());
         // Checkpointing should modify the checkpoint's state when freezed
         assert_ne!(bank0_state, bank0.hash_internal_state());
 
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
-        assert!(bank2.verify_hash_internal_state());
-        let bank3 = new_from_parent(&bank0);
+        bank2.update_accounts_hash();
+        assert!(bank2.verify_bank_hash());
+        let bank3 = Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_hash_internal_state());
-        assert!(bank3.verify_hash_internal_state());
+        assert!(bank2.verify_bank_hash());
+        bank3.update_accounts_hash();
+        assert!(bank3.verify_bank_hash());
 
         let pubkey2 = Pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        assert!(bank2.verify_hash_internal_state());
-        assert!(bank3.verify_hash_internal_state());
+        bank2.update_accounts_hash();
+        assert!(bank2.verify_bank_hash());
+        assert!(bank3.verify_bank_hash());
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: self.is_frozen()")]
+    fn test_verify_hash_unfrozen() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(2_000);
+        let bank = Bank::new(&genesis_config);
+        assert!(bank.verify_hash());
+    }
+
+    #[test]
+    fn test_verify_snapshot_bank() {
+        let pubkey = Pubkey::new_rand();
+        let (genesis_config, mint_keypair) = create_genesis_config(2_000);
+        let bank = Bank::new(&genesis_config);
+
+        bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
+        bank.freeze();
+        bank.update_accounts_hash();
+        assert!(bank.verify_snapshot_bank());
+
+        // tamper the bank after freeze!
+        bank.increment_signature_count(1);
+        assert!(!bank.verify_snapshot_bank());
     }
 
     // Test that two bank forks with the same accounts should not hash to the same value.
@@ -4167,7 +4225,6 @@ mod tests {
 
     #[test]
     fn test_bank_update_sysvar_account() {
-        use solana_sdk::bank_hash::BankHash;
         use sysvar::clock::Clock;
 
         let dummy_clock_id = Pubkey::new_rand();
@@ -4187,7 +4244,6 @@ mod tests {
             .create_account(1)
         });
         let current_account = bank1.get_account(&dummy_clock_id).unwrap();
-        let removed_bank_hash = BankHash::from_hash(&current_account.hash);
         assert_eq!(
             expected_previous_slot,
             Clock::from_account(&current_account).unwrap().slot
@@ -4195,7 +4251,6 @@ mod tests {
 
         // Updating should increment the clock's slot
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
-        let mut expected_bank_hash = bank2.rc.accounts.bank_hash_at(bank2.slot);
         bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
             let slot = Clock::from_account(optional_account.as_ref().unwrap())
                 .unwrap()
@@ -4209,16 +4264,10 @@ mod tests {
             .create_account(1)
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
-        let added_bank_hash = BankHash::from_hash(&current_account.hash);
-        expected_bank_hash.xor(removed_bank_hash);
-        expected_bank_hash.xor(added_bank_hash);
+        //let added_bank_hash = BankHash::from_hash(&current_account.hash);
         assert_eq!(
             expected_next_slot,
             Clock::from_account(&current_account).unwrap().slot
-        );
-        assert_eq!(
-            expected_bank_hash,
-            bank2.rc.accounts.bank_hash_at(bank2.slot)
         );
 
         // Updating again should give bank1's sysvar to the closure not bank2's.
@@ -4239,10 +4288,6 @@ mod tests {
         assert_eq!(
             expected_next_slot,
             Clock::from_account(&current_account).unwrap().slot
-        );
-        assert_eq!(
-            expected_bank_hash,
-            bank2.rc.accounts.bank_hash_at(bank2.slot)
         );
     }
 
@@ -4465,9 +4510,9 @@ mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
         // Bank 1
-        let bank1 = Arc::new(new_from_parent(&bank0));
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 1));
         // Bank 2
-        let bank2 = new_from_parent(&bank0);
+        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 2);
 
         // transfer a token
         assert_eq!(
@@ -4490,7 +4535,7 @@ mod tests {
         assert_eq!(bank2.transaction_count(), 0);
         assert_eq!(bank1.transaction_count(), 1);
 
-        let bank6 = new_from_parent(&bank1);
+        let bank6 = Bank::new_from_parent(&bank1, &Pubkey::new_rand(), 3);
         assert_eq!(bank1.transaction_count(), 1);
         assert_eq!(bank6.transaction_count(), 1);
 
