@@ -680,11 +680,11 @@ impl AccountsDB {
             reclaims
         });
         drop(accounts_index);
+        let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
         measure.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", measure.as_ms() as usize);
 
         let mut measure = Measure::start("clean_old_root-ms");
-        let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
         self.handle_reclaims(&reclaims);
         measure.stop();
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
