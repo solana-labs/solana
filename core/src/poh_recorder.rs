@@ -1189,7 +1189,7 @@ mod tests {
 
             // From the bootstrap validator's perspective, it should have reached
             // the tick
-            poh_recorder.id = bootstrap_leader_id;
+            poh_recorder.id = bootstrap_validator_id;
             assert!(poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
         }
     }
