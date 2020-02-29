@@ -18,13 +18,15 @@ lazy_static! {
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 pub struct Config {
     pub url: String,
+    pub websocket_url: String,
     pub keypair_path: String,
 }
 
 impl Config {
-    pub fn new(url: &str, keypair_path: &str) -> Self {
+    pub fn new(url: &str, websocket_url: &str, keypair_path: &str) -> Self {
         Self {
             url: url.to_string(),
+            websocket_url: websocket_url.to_string(),
             keypair_path: keypair_path.to_string(),
         }
     }
