@@ -174,7 +174,7 @@ supported.
 The following subcommands have received this treatment so far
 * [`pay`](../api-reference/cli.md#solana-pay)
 * [`delegate-stake`](../api-reference/cli.md#solana-delegate-stake)
-* [`deactivate-stake`](../api-reference/cli.md#solana-deactivate-stake)
+* [`deactivate-stake-account`](../api-reference/cli.md#solana-deactivate-stake-account)
 
 ### Example Pay Using Durable Nonce
 

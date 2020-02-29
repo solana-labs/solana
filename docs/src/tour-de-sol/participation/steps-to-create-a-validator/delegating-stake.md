@@ -76,7 +76,7 @@ Helpful JSON-RPC methods:
 Before detaching your validator from the TdS cluster, you should deactivate the stake that was previously delegated by running:
 
 ```bash
-solana deactivate-stake ~/validator-stake-keypair.json
+solana deactivate-stake-account ~/validator-stake-keypair.json
 ```
 
 Stake is not deactivated immediately and instead cools down in a similar fashion as stake warm up.  Your validator should remain attached to the cluster while the stake is cooling down. More information about the stake cool down can be found [here](../../../running-validator/validator-stake.md)

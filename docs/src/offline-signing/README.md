@@ -15,7 +15,7 @@ transaction.
 
 At present, the following commands support offline signing:
   * [`delegate-stake`](../api-reference/cli.md#solana-delegate-stake)
-  * [`deactivate-stake`](../api-reference/cli.md#solana-deactivate-stake)
+  * [`deactivate-stake-account`](../api-reference/cli.md#solana-deactivate-stake-account)
   * [`pay`](../api-reference/cli.md#solana-pay)
 
 ## Signing Transactions Offline

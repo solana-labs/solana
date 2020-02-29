@@ -251,7 +251,7 @@ pub enum CliCommand {
         fee_payer: SignerIndex,
         from: SignerIndex,
     },
-    DeactivateStake {
+    DeactivateStakeAccount {
         stake_account_pubkey: Pubkey,
         stake_authority: SignerIndex,
         sign_only: bool,
@@ -271,7 +271,7 @@ pub enum CliCommand {
         nonce_authority: SignerIndex,
         fee_payer: SignerIndex,
     },
-    SplitStake {
+    SplitStakeAccount {
         stake_account_pubkey: Pubkey,
         stake_authority: SignerIndex,
         sign_only: bool,
@@ -557,10 +557,10 @@ pub fn parse_command(
         ("withdraw-stake", Some(matches)) => {
             parse_stake_withdraw_stake(matches, default_signer_path, wallet_manager)
         }
-        ("deactivate-stake", Some(matches)) => {
+        ("deactivate-stake-account", Some(matches)) => {
             parse_stake_deactivate_stake(matches, default_signer_path, wallet_manager)
         }
-        ("split-stake", Some(matches)) => {
+        ("split-stake-account", Some(matches)) => {
             parse_split_stake(matches, default_signer_path, wallet_manager)
         }
         ("stake-authorize-staker", Some(matches)) => parse_stake_authorize(
@@ -1602,7 +1602,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *fee_payer,
             *from,
         ),
-        CliCommand::DeactivateStake {
+        CliCommand::DeactivateStakeAccount {
             stake_account_pubkey,
             stake_authority,
             sign_only,
@@ -1644,7 +1644,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             *fee_payer,
         ),
-        CliCommand::SplitStake {
+        CliCommand::SplitStakeAccount {
             stake_account_pubkey,
             stake_authority,
             sign_only,
@@ -3070,7 +3070,7 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let stake_pubkey = Pubkey::new_rand();
-        config.command = CliCommand::DeactivateStake {
+        config.command = CliCommand::DeactivateStakeAccount {
             stake_account_pubkey: stake_pubkey,
             stake_authority: 0,
             sign_only: false,
@@ -3084,7 +3084,7 @@ mod tests {
 
         let stake_pubkey = Pubkey::new_rand();
         let split_stake_account = Keypair::new();
-        config.command = CliCommand::SplitStake {
+        config.command = CliCommand::SplitStakeAccount {
             stake_account_pubkey: stake_pubkey,
             stake_authority: 0,
             sign_only: false,

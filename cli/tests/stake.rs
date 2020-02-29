@@ -195,7 +195,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     process_command(&config_validator).unwrap();
 
     // Deactivate stake
-    config_validator.command = CliCommand::DeactivateStake {
+    config_validator.command = CliCommand::DeactivateStakeAccount {
         stake_account_pubkey: stake_address,
         stake_authority: 0,
         sign_only: false,
@@ -279,7 +279,7 @@ fn test_stake_delegation_and_deactivation() {
     process_command(&config_validator).unwrap();
 
     // Deactivate stake
-    config_validator.command = CliCommand::DeactivateStake {
+    config_validator.command = CliCommand::DeactivateStakeAccount {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: false,
@@ -401,7 +401,7 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     // Deactivate stake offline
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
-    config_offline.command = CliCommand::DeactivateStake {
+    config_offline.command = CliCommand::DeactivateStakeAccount {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: true,
@@ -415,7 +415,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     let offline_presigner =
         presigner_from_pubkey_sigs(&config_offline.signers[0].pubkey(), &signers).unwrap();
     config_payer.signers = vec![&offline_presigner];
-    config_payer.command = CliCommand::DeactivateStake {
+    config_payer.command = CliCommand::DeactivateStakeAccount {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: false,
@@ -527,7 +527,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     };
 
     // Deactivate stake
-    config.command = CliCommand::DeactivateStake {
+    config.command = CliCommand::DeactivateStakeAccount {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: false,
@@ -1004,7 +1004,7 @@ fn test_stake_split() {
     let split_account = keypair_from_seed(&[2u8; 32]).unwrap();
     check_balance(0, &rpc_client, &split_account.pubkey());
     config_offline.signers.push(&split_account);
-    config_offline.command = CliCommand::SplitStake {
+    config_offline.command = CliCommand::SplitStakeAccount {
         stake_account_pubkey: stake_account_pubkey,
         stake_authority: 0,
         sign_only: true,
@@ -1020,7 +1020,7 @@ fn test_stake_split() {
     let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
     let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
     config.signers = vec![&offline_presigner, &split_account];
-    config.command = CliCommand::SplitStake {
+    config.command = CliCommand::SplitStakeAccount {
         stake_account_pubkey: stake_account_pubkey,
         stake_authority: 0,
         sign_only: false,

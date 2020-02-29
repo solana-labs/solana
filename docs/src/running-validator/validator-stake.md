@@ -115,7 +115,7 @@ Before detaching your validator from the cluster, you should deactivate the
 stake that was previously delegated by running:
 
 ```bash
-solana deactivate-stake ~/validator-stake-keypair.json
+solana deactivate-stake-account ~/validator-stake-keypair.json
 ```
 
 Stake is not deactivated immediately and instead cools down in a similar fashion

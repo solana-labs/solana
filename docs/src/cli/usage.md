@@ -223,7 +223,7 @@ SUBCOMMANDS:
     create-stake-account                Create a stake account
     create-validator-storage-account    Create a validator storage account
     create-vote-account                 Create a vote account
-    deactivate-stake                    Deactivate the delegated stake from the stake account
+    deactivate-stake-account            Deactivate the delegated stake from the stake account
     delegate-stake                      Delegate stake to a vote account
     deploy                              Deploy a program
     epoch-info                          Get information about the current epoch
@@ -241,7 +241,7 @@ SUBCOMMANDS:
     send-signature                      Send a signature to authorize a transfer
     send-timestamp                      Send a timestamp to unlock a transfer
     slot                                Get current slot
-    split-stake                         Split a stake account
+    split-stake-account                 Split a stake account
     stake-account                       Show the contents of a stake account
     stake-authorize-staker              Authorize a new stake signing keypair for the given stake account
     stake-authorize-withdrawer          Authorize a new withdraw signing keypair for the given stake account
@@ -830,13 +830,13 @@ ARGS:
     <VALIDATOR IDENTITY PUBKEY>    Validator that will vote with this account
 ```
 
-#### solana-deactivate-stake
+#### solana-deactivate-stake-account
 ```text
-solana-deactivate-stake
+solana-deactivate-stake-account
 Deactivate the delegated stake from the stake account
 
 USAGE:
-    solana deactivate-stake [FLAGS] [OPTIONS] <STAKE ACCOUNT>
+    solana deactivate-stake-account [FLAGS] [OPTIONS] <STAKE ACCOUNT>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1349,13 +1349,13 @@ OPTIONS:
     -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
 ```
 
-#### solana-split-stake
+#### solana-split-stake-account
 ```text
-solana-split-stake
+solana-split-stake-account
 Split a stake account
 
 USAGE:
-    solana split-stake [FLAGS] [OPTIONS] <STAKE ACCOUNT> <SPLIT STAKE ACCOUNT> <AMOUNT>
+    solana split-stake-account [FLAGS] [OPTIONS] <STAKE ACCOUNT> <SPLIT STAKE ACCOUNT> <AMOUNT>
 
 FLAGS:
     -h, --help                           Prints help information

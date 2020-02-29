@@ -235,7 +235,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
         )
         .subcommand(
-            SubCommand::with_name("deactivate-stake")
+            SubCommand::with_name("deactivate-stake-account")
                 .about("Deactivate the delegated stake from the stake account")
                 .arg(
                     Arg::with_name("stake_account_pubkey")
@@ -252,7 +252,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
         )
         .subcommand(
-            SubCommand::with_name("split-stake")
+            SubCommand::with_name("split-stake-account")
                 .about("Split a stake account")
                 .arg(
                     Arg::with_name("stake_account_pubkey")
@@ -574,7 +574,7 @@ pub fn parse_split_stake(
         generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
-        command: CliCommand::SplitStake {
+        command: CliCommand::SplitStakeAccount {
             stake_account_pubkey,
             stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
@@ -613,7 +613,7 @@ pub fn parse_stake_deactivate_stake(
         generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
     Ok(CliCommandInfo {
-        command: CliCommand::DeactivateStake {
+        command: CliCommand::DeactivateStakeAccount {
             stake_account_pubkey,
             stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
@@ -2297,16 +2297,16 @@ mod tests {
             }
         );
 
-        // Test DeactivateStake Subcommand
+        // Test DeactivateStakeAccount Subcommand
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
-            "deactivate-stake",
+            "deactivate-stake-account",
             &stake_account_string,
         ]);
         assert_eq!(
             parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake {
+                command: CliCommand::DeactivateStakeAccount {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
@@ -2319,10 +2319,10 @@ mod tests {
             }
         );
 
-        // Test DeactivateStake Subcommand w/ authority
+        // Test DeactivateStakeAccount Subcommand w/ authority
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
-            "deactivate-stake",
+            "deactivate-stake-account",
             &stake_account_string,
             "--stake-authority",
             &stake_authority_keypair_file,
@@ -2330,7 +2330,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake {
+                command: CliCommand::DeactivateStakeAccount {
                     stake_account_pubkey,
                     stake_authority: 1,
                     sign_only: false,
@@ -2353,7 +2353,7 @@ mod tests {
         let blockhash_string = format!("{}", blockhash);
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
-            "deactivate-stake",
+            "deactivate-stake-account",
             &stake_account_string,
             "--blockhash",
             &blockhash_string,
@@ -2361,7 +2361,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake {
+                command: CliCommand::DeactivateStakeAccount {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
@@ -2376,7 +2376,7 @@ mod tests {
 
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
-            "deactivate-stake",
+            "deactivate-stake-account",
             &stake_account_string,
             "--blockhash",
             &blockhash_string,
@@ -2385,7 +2385,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake {
+                command: CliCommand::DeactivateStakeAccount {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: true,
@@ -2404,7 +2404,7 @@ mod tests {
         let signer1 = format!("{}={}", key1, sig1);
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
-            "deactivate-stake",
+            "deactivate-stake-account",
             &stake_account_string,
             "--blockhash",
             &blockhash_string,
@@ -2416,7 +2416,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake {
+                command: CliCommand::DeactivateStakeAccount {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
@@ -2438,7 +2438,7 @@ mod tests {
         let signer2 = format!("{}={}", key2, sig2);
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
-            "deactivate-stake",
+            "deactivate-stake-account",
             &stake_account_string,
             "--blockhash",
             &blockhash_string,
@@ -2456,7 +2456,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake {
+                command: CliCommand::DeactivateStakeAccount {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
@@ -2476,7 +2476,7 @@ mod tests {
         // Test Deactivate Subcommand w/ fee-payer
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
-            "deactivate-stake",
+            "deactivate-stake-account",
             &stake_account_string,
             "--fee-payer",
             &fee_payer_keypair_file,
@@ -2484,7 +2484,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deactivate_stake, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::DeactivateStake {
+                command: CliCommand::DeactivateStakeAccount {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
@@ -2500,7 +2500,7 @@ mod tests {
             }
         );
 
-        // Test SplitStake SubCommand
+        // Test SplitStakeAccount SubCommand
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let stake_account_keypair = Keypair::new();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
@@ -2510,7 +2510,7 @@ mod tests {
 
         let test_split_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
-            "split-stake",
+            "split-stake-account",
             &keypair_file,
             &split_stake_account_keypair_file,
             "50",
@@ -2518,7 +2518,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_split_stake_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::SplitStake {
+                command: CliCommand::SplitStakeAccount {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
                     stake_authority: 0,
                     sign_only: false,
@@ -2557,7 +2557,7 @@ mod tests {
 
         let test_split_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
-            "split-stake",
+            "split-stake-account",
             &keypair_file,
             &split_stake_account_keypair_file,
             "50",
@@ -2579,7 +2579,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_split_stake_account, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::SplitStake {
+                command: CliCommand::SplitStakeAccount {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
                     stake_authority: 0,
                     sign_only: false,
