@@ -1156,7 +1156,7 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
-            let bootstrap_leader_id = leader_schedule_cache.slot_leader_at(0, None).unwrap();
+            let bootstrap_validator_id = leader_schedule_cache.slot_leader_at(0, None).unwrap();
 
             assert_eq!(poh_recorder.reached_leader_tick(0), true);
 
