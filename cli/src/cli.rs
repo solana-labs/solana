@@ -52,6 +52,7 @@ use std::{
     time::Duration,
     {error, fmt},
 };
+use url::Url;
 
 pub type CliSigners = Vec<Box<dyn Signer>>;
 pub type SignerIndex = usize;
@@ -185,9 +186,7 @@ pub enum CliCommand {
         commitment_config: CommitmentConfig,
     },
     LeaderSchedule,
-    LiveSlots {
-        url: String,
-    },
+    LiveSlots,
     Ping {
         lamports: u64,
         interval: Duration,
@@ -435,9 +434,16 @@ impl From<Box<dyn error::Error>> for CliError {
     }
 }
 
+pub enum SettingType {
+    Explicit,
+    Computed,
+    SystemDefault,
+}
+
 pub struct CliConfig<'a> {
     pub command: CliCommand,
     pub json_rpc_url: String,
+    pub websocket_url: String,
     pub signers: Vec<&'a dyn Signer>,
     pub keypair_path: String,
     pub derivation_path: Option<DerivationPath>,
@@ -446,14 +452,95 @@ pub struct CliConfig<'a> {
 }
 
 impl CliConfig<'_> {
-    pub fn default_keypair_path() -> String {
+    fn default_keypair_path() -> String {
         let mut keypair_path = dirs::home_dir().expect("home directory");
         keypair_path.extend(&[".config", "solana", "id.json"]);
         keypair_path.to_str().unwrap().to_string()
     }
 
-    pub fn default_json_rpc_url() -> String {
+    fn default_json_rpc_url() -> String {
         "http://127.0.0.1:8899".to_string()
+    }
+
+    fn default_websocket_url() -> String {
+        Self::compute_ws_url(&Self::default_json_rpc_url())
+    }
+
+    fn compute_ws_url(rpc_url: &str) -> String {
+        let rpc_url: Option<Url> = rpc_url.parse().ok();
+        if rpc_url.is_none() {
+            return "".to_string();
+        }
+        let rpc_url = rpc_url.unwrap();
+        let is_secure = rpc_url.scheme().to_ascii_lowercase() == "https";
+        let mut ws_url = rpc_url.clone();
+        ws_url
+            .set_scheme(if is_secure { "wss" } else { "ws" })
+            .expect("unable to set scheme");
+        let ws_port = match rpc_url.port() {
+            Some(port) => port + 1,
+            None => {
+                if is_secure {
+                    8901
+                } else {
+                    8900
+                }
+            }
+        };
+        ws_url.set_port(Some(ws_port)).expect("unable to set port");
+        ws_url.to_string()
+    }
+
+    fn first_nonempty_setting(
+        settings: std::vec::Vec<(SettingType, String)>,
+    ) -> (SettingType, String) {
+        settings
+            .into_iter()
+            .find(|(_, value)| value != "")
+            .expect("no nonempty setting")
+    }
+
+    pub fn compute_websocket_url_setting(
+        websocket_cmd_url: &str,
+        websocket_cfg_url: &str,
+        json_rpc_cmd_url: &str,
+        json_rpc_cfg_url: &str,
+    ) -> (SettingType, String) {
+        Self::first_nonempty_setting(vec![
+            (SettingType::Explicit, websocket_cmd_url.to_string()),
+            (SettingType::Explicit, websocket_cfg_url.to_string()),
+            (
+                SettingType::Computed,
+                Self::compute_ws_url(json_rpc_cmd_url),
+            ),
+            (
+                SettingType::Computed,
+                Self::compute_ws_url(json_rpc_cfg_url),
+            ),
+            (SettingType::SystemDefault, Self::default_websocket_url()),
+        ])
+    }
+
+    pub fn compute_json_rpc_url_setting(
+        json_rpc_cmd_url: &str,
+        json_rpc_cfg_url: &str,
+    ) -> (SettingType, String) {
+        Self::first_nonempty_setting(vec![
+            (SettingType::Explicit, json_rpc_cmd_url.to_string()),
+            (SettingType::Explicit, json_rpc_cfg_url.to_string()),
+            (SettingType::SystemDefault, Self::default_json_rpc_url()),
+        ])
+    }
+
+    pub fn compute_keypair_path_setting(
+        keypair_cmd_path: &str,
+        keypair_cfg_path: &str,
+    ) -> (SettingType, String) {
+        Self::first_nonempty_setting(vec![
+            (SettingType::Explicit, keypair_cmd_path.to_string()),
+            (SettingType::Explicit, keypair_cfg_path.to_string()),
+            (SettingType::SystemDefault, Self::default_keypair_path()),
+        ])
     }
 
     pub(crate) fn pubkey(&self) -> Result<Pubkey, SignerError> {
@@ -475,6 +562,7 @@ impl Default for CliConfig<'_> {
                 use_lamports_unit: false,
             },
             json_rpc_url: Self::default_json_rpc_url(),
+            websocket_url: Self::default_websocket_url(),
             signers: Vec::new(),
             keypair_path: Self::default_keypair_path(),
             derivation_path: None,
@@ -514,7 +602,10 @@ pub fn parse_command(
             signers: vec![],
         }),
         ("ping", Some(matches)) => parse_cluster_ping(matches, default_signer_path, wallet_manager),
-        ("live-slots", Some(matches)) => parse_live_slots(matches),
+        ("live-slots", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::LiveSlots,
+            signers: vec![],
+        }),
         ("block-production", Some(matches)) => parse_show_block_production(matches),
         ("gossip", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ShowGossip,
@@ -1474,7 +1565,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_get_transaction_count(&rpc_client, commitment_config)
         }
         CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
-        CliCommand::LiveSlots { url } => process_live_slots(&url),
+        CliCommand::LiveSlots => process_live_slots(&config.websocket_url),
         CliCommand::Ping {
             lamports,
             interval,
