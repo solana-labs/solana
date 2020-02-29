@@ -237,6 +237,7 @@ impl Validator {
                 JsonRpcService::new(
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
                     config.rpc_config.clone(),
+                    config.snapshot_config.clone(),
                     bank_forks.clone(),
                     block_commitment_cache.clone(),
                     blockstore.clone(),
