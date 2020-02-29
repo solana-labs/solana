@@ -55,7 +55,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let notifier = Notifier::new();
     let mut last_transaction_count = 0;
-    let mut last_check_notification_sent = false;
     loop {
         let mut notify_msg = String::from("solana-watchtower: undefined error");
         let ok = rpc_client
@@ -166,13 +165,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         datapoint_info!("watchtower-sanity", ("ok", ok, bool));
         if !ok {
-            last_check_notification_sent = true;
             notifier.send(&notify_msg);
-        } else {
-            if last_check_notification_sent {
-                notifier.send("solana-watchtower: All Clear");
-            }
-            last_check_notification_sent = false;
         }
         sleep(interval);
     }
