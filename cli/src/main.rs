@@ -20,29 +20,31 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
             ("get", Some(subcommand_matches)) => {
                 if let Some(config_file) = matches.value_of("config_file") {
                     let config = Config::load(config_file).unwrap_or_default();
+
+                    let (url_setting_type, json_rpc_url) =
+                        CliConfig::compute_json_rpc_url_setting("", &config.url);
+                    let (ws_setting_type, websocket_url) = CliConfig::compute_websocket_url_setting(
+                        "",
+                        &config.websocket_url,
+                        "",
+                        &config.url,
+                    );
+                    let (keypair_setting_type, keypair_path) =
+                        CliConfig::compute_keypair_path_setting("", &config.keypair_path);
+
                     if let Some(field) = subcommand_matches.value_of("specific_setting") {
-                        let (field_name, value, default_value) = match field {
-                            "url" => ("RPC URL", config.url, CliConfig::default_json_rpc_url()),
-                            "keypair" => (
-                                "Key Path",
-                                config.keypair_path,
-                                CliConfig::default_keypair_path(),
-                            ),
+                        let (field_name, value, setting_type) = match field {
+                            "json_rpc_url" => ("RPC URL", json_rpc_url, url_setting_type),
+                            "websocket_url" => ("WS URL", websocket_url, ws_setting_type),
+                            "keypair" => ("Key Path", keypair_path, keypair_setting_type),
                             _ => unreachable!(),
                         };
-                        println_name_value_or(&format!("{}:", field_name), &value, &default_value);
+                        println_name_value_or(&format!("{}:", field_name), &value, setting_type);
                     } else {
                         println_name_value("Config File:", config_file);
-                        println_name_value_or(
-                            "RPC URL:",
-                            &config.url,
-                            &CliConfig::default_json_rpc_url(),
-                        );
-                        println_name_value_or(
-                            "Keypair Path:",
-                            &config.keypair_path,
-                            &CliConfig::default_keypair_path(),
-                        );
+                        println_name_value_or("RPC URL:", &json_rpc_url, url_setting_type);
+                        println_name_value_or("WS URL:", &websocket_url, ws_setting_type);
+                        println_name_value_or("Keypair Path:", &keypair_path, keypair_setting_type);
                     }
                 } else {
                     println!(
@@ -58,13 +60,29 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
                         config.url = url.to_string();
                     }
+                    if let Some(url) = subcommand_matches.value_of("websocket_url") {
+                        config.websocket_url = url.to_string();
+                    }
                     if let Some(keypair) = subcommand_matches.value_of("keypair") {
                         config.keypair_path = keypair.to_string();
                     }
                     config.save(config_file)?;
+
+                    let (url_setting_type, json_rpc_url) =
+                        CliConfig::compute_json_rpc_url_setting("", &config.url);
+                    let (ws_setting_type, websocket_url) = CliConfig::compute_websocket_url_setting(
+                        "",
+                        &config.websocket_url,
+                        "",
+                        &config.url,
+                    );
+                    let (keypair_setting_type, keypair_path) =
+                        CliConfig::compute_keypair_path_setting("", &config.keypair_path);
+
                     println_name_value("Config File:", config_file);
-                    println_name_value("RPC URL:", &config.url);
-                    println_name_value("Keypair Path:", &config.keypair_path);
+                    println_name_value_or("RPC URL:", &json_rpc_url, url_setting_type);
+                    println_name_value_or("WS URL:", &websocket_url, ws_setting_type);
+                    println_name_value_or("Keypair Path:", &keypair_path, keypair_setting_type);
                 } else {
                     println!(
                         "{} Either provide the `--config` arg or ensure home directory exists to use the default config location",
@@ -89,22 +107,20 @@ pub fn parse_args<'a>(
     } else {
         Config::default()
     };
-    let json_rpc_url = if let Some(url) = matches.value_of("json_rpc_url") {
-        url.to_string()
-    } else if config.url != "" {
-        config.url
-    } else {
-        let default = CliConfig::default();
-        default.json_rpc_url
-    };
-
-    let default_signer_path = if matches.is_present("keypair") {
-        matches.value_of("keypair").unwrap().to_string()
-    } else if config.keypair_path != "" {
-        config.keypair_path
-    } else {
-        CliConfig::default_keypair_path()
-    };
+    let (_, json_rpc_url) = CliConfig::compute_json_rpc_url_setting(
+        matches.value_of("json_rpc_url").unwrap_or(""),
+        &config.url,
+    );
+    let (_, websocket_url) = CliConfig::compute_websocket_url_setting(
+        matches.value_of("websocket_url").unwrap_or(""),
+        &config.websocket_url,
+        matches.value_of("json_rpc_url").unwrap_or(""),
+        &config.url,
+    );
+    let (_, default_signer_path) = CliConfig::compute_keypair_path_setting(
+        matches.value_of("keypair").unwrap_or(""),
+        &config.keypair_path,
+    );
 
     let CliCommandInfo { command, signers } =
         parse_command(&matches, &default_signer_path, wallet_manager.as_ref())?;
@@ -113,6 +129,7 @@ pub fn parse_args<'a>(
         CliConfig {
             command,
             json_rpc_url,
+            websocket_url,
             signers: vec![],
             keypair_path: default_signer_path,
             derivation_path: derivation_of(matches, "derivation_path"),
@@ -153,6 +170,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .global(true)
             .validator(is_url)
             .help("JSON RPC URL for the solana cluster"),
+    )
+    .arg(
+        Arg::with_name("websocket_url")
+            .long("ws")
+            .value_name("URL")
+            .takes_value(true)
+            .global(true)
+            .validator(is_url)
+            .help("WebSocket URL for the solana cluster"),
     )
     .arg(
         Arg::with_name("keypair")
@@ -198,7 +224,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             .index(1)
                             .value_name("CONFIG_FIELD")
                             .takes_value(true)
-                            .possible_values(&["url", "keypair"])
+                            .possible_values(&["json_rpc_url", "websocket_url", "keypair"])
                             .help("Return a specific config setting"),
                     ),
             )
@@ -207,7 +233,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     .about("Set a config setting")
                     .group(
                         ArgGroup::with_name("config_settings")
-                            .args(&["json_rpc_url", "keypair"])
+                            .args(&["json_rpc_url", "websocket_url", "keypair"])
                             .multiple(true)
                             .required(true),
                     ),
