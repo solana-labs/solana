@@ -239,6 +239,7 @@ pub enum CliCommand {
     // Stake Commands
     CreateStakeAccount {
         stake_account: SignerIndex,
+        stake_account_pubkey: Option<Pubkey>,
         seed: Option<String>,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
@@ -1575,6 +1576,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create stake account
         CliCommand::CreateStakeAccount {
             stake_account,
+            stake_account_pubkey,
             seed,
             staker,
             withdrawer,
@@ -1590,6 +1592,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             *stake_account,
+            stake_account_pubkey,
             seed,
             staker,
             withdrawer,

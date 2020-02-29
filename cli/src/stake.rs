@@ -75,7 +75,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("STAKE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_pubkey_or_keypair)
                         .help("Signing authority of the stake address to fund")
                 )
                 .arg(
@@ -432,6 +432,7 @@ pub fn parse_stake_create_account(
     let (from, from_pubkey) = signer_of(matches, "from", wallet_manager)?;
     let (stake_account, stake_account_pubkey) =
         signer_of(matches, "stake_account", wallet_manager)?;
+    let stake_account_pubkey = stake_account_pubkey.or_else(|| pubkey_of(matches, "stake_account"));
 
     let mut bulk_signers = vec![fee_payer, from, stake_account];
     if nonce_account.is_some() {
@@ -443,6 +444,7 @@ pub fn parse_stake_create_account(
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
             stake_account: signer_info.index_of(stake_account_pubkey).unwrap(),
+            stake_account_pubkey,
             seed,
             staker,
             withdrawer,
@@ -736,6 +738,7 @@ pub fn process_create_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account: SignerIndex,
+    stake_account_pubkey: &Option<Pubkey>,
     seed: &Option<String>,
     staker: &Option<Pubkey>,
     withdrawer: &Option<Pubkey>,
@@ -749,10 +752,11 @@ pub fn process_create_stake_account(
     from: SignerIndex,
 ) -> ProcessResult {
     let stake_account = config.signers[stake_account];
+    let stake_account_pubkey = stake_account_pubkey.unwrap_or(stake_account.pubkey());
     let stake_account_address = if let Some(seed) = seed {
-        create_address_with_seed(&stake_account.pubkey(), &seed, &solana_stake_program::id())?
+        create_address_with_seed(&stake_account_pubkey, &seed, &solana_stake_program::id())?
     } else {
-        stake_account.pubkey()
+        stake_account_pubkey
     };
     let from = config.signers[from];
     check_unique_pubkeys(
@@ -792,10 +796,10 @@ pub fn process_create_stake_account(
 
     let ixs = if let Some(seed) = seed {
         stake_instruction::create_account_with_seed(
-            &from.pubkey(),          // from
-            &stake_account_address,  // to
-            &stake_account.pubkey(), // base
-            seed,                    // seed
+            &from.pubkey(),         // from
+            &stake_account_address, // to
+            &stake_account_pubkey,  // base
+            seed,                   // seed
             &authorized,
             lockup,
             lamports,
@@ -803,7 +807,7 @@ pub fn process_create_stake_account(
     } else {
         stake_instruction::create_account(
             &from.pubkey(),
-            &stake_account.pubkey(),
+            &stake_account_pubkey,
             &authorized,
             lockup,
             lamports,
