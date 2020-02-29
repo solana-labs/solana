@@ -152,6 +152,17 @@ impl PohRecorder {
         })
     }
 
+    fn prev_slot_was_mine(&self, current_slot: Slot) -> bool {
+        if let Some(leader_id) = self
+            .leader_schedule_cache
+            .slot_leader_at(current_slot.saturating_sub(1), None)
+        {
+            leader_id == self.id
+        } else {
+            false
+        }
+    }
+
     fn reached_leader_tick(&self, leader_first_tick_height: u64) -> bool {
         let target_tick_height = leader_first_tick_height.saturating_sub(1);
         let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
@@ -161,7 +172,8 @@ impl PohRecorder {
         self.tick_height >= target_tick_height
             || self.start_tick_height + self.grace_ticks == leader_first_tick_height
             || (self.tick_height >= ideal_target_tick_height
-                && !self.received_any_previous_leader_data(current_slot))
+                && (self.prev_slot_was_mine(current_slot)
+                    || !self.received_any_previous_leader_data(current_slot)))
     }
 
     /// returns if leader slot has been reached, how many grace ticks were afforded,
@@ -1131,6 +1143,7 @@ mod tests {
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new(&genesis_config));
             let prev_hash = bank.last_blockhash();
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
             let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
                 0,
                 prev_hash,
@@ -1139,9 +1152,11 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &leader_schedule_cache,
                 &Arc::new(PohConfig::default()),
             );
+
+            let bootstrap_validator_id = leader_schedule_cache.slot_leader_at(0, None).unwrap();
 
             assert_eq!(poh_recorder.reached_leader_tick(0), true);
 
@@ -1171,6 +1186,11 @@ mod tests {
                 poh_recorder.reached_leader_tick(new_tick_height + grace_ticks),
                 false
             );
+
+            // From the bootstrap validator's perspective, it should have reached
+            // the tick
+            poh_recorder.id = bootstrap_validator_id;
+            assert!(poh_recorder.reached_leader_tick(new_tick_height + grace_ticks));
         }
     }
 
