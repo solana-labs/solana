@@ -8,11 +8,19 @@ struct TelegramWebHook {
     chat_id: String,
 }
 
+struct TwilioWebHook {
+    twilio_account: String,
+    twilio_token: String,
+    twilio_to: String,
+    twilio_from: String,
+}
+
 pub struct Notifier {
     client: Client,
     discord_webhook: Option<String>,
     slack_webhook: Option<String>,
     telegram_webhook: Option<TelegramWebHook>,
+    twilio_webhook: Option<TwilioWebHook>,
 }
 
 impl Notifier {
@@ -35,12 +43,21 @@ impl Notifier {
             info!("Telegram notifications disabled");
             None
         };
+        let twilio_webhook = if let (Ok(twilio_account), Ok(twilio_token), Ok(twilio_to), Ok(twilio_from)) =
+            (env::var("TWILIO_ACCOUNT"), env::var("TWILIO_TOKEN"), env::var("TWILIO_TO"), env::var("TWILIO_FROM"))
+        {
+            Some(TwilioWebHook { twilio_account, twilio_token, twilio_to, twilio_from })
+        } else {
+            info!("Twilio notifications disabled");
+            None
+        };
 
         Notifier {
             client: Client::new(),
             discord_webhook,
             slack_webhook,
             telegram_webhook,
+            twilio_webhook,
         }
     }
 
@@ -67,5 +84,14 @@ impl Notifier {
                 warn!("Failed to send Telegram message: {:?}", err);
             }
         }
+
+        if let Some(TwilioWebHook { twilio_account, twilio_token, twilio_to, twilio_from }) = &self.twilio_webhook {
+            let url = format!("https://{}:{}@api.twilio.com/2010-04-01/Accounts/{}/Messages.json", twilio_account, twilio_token, twilio_account);
+            let params = [("To",twilio_to), ("From",twilio_from), ("Body",&msg.to_string())];
+            if let Err(err) = self.client.post(&url).form(&params).send() {
+                warn!("Failed to send Twilio message: {:?}", err);
+            }
+        }
+
     }
 }
