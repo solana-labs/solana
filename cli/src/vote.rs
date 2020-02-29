@@ -16,7 +16,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_vote_program::{
-    vote_instruction::{self, VoteError},
+    vote_instruction::{self, withdraw, VoteError},
     vote_state::{VoteAuthorize, VoteInit, VoteState},
 };
 use std::sync::Arc;
@@ -183,6 +183,47 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("vote-account-withdraw")
+                .about("Withdraw lamports from a vote account into a specified account")
+                .arg(
+                    Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Vote account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("withdrawer_account_pubkey")
+                        .index(2)
+                        .value_name("WITHDRAWER ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Withdrawer account pubkey"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(3)
+                        .long("lamports")
+                        .value_name("TRANSFER AMOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_amount)
+                        .help("Number of lamports to transfer"),
+                )
+                .arg(
+                    Arg::with_name("to_account_pubkey")
+                        .index(4)
+                        .value_name("TO ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("To account pubkey"),
+                )
+        )
     }
 }
 
@@ -288,6 +329,35 @@ pub fn parse_vote_get_account_command(
             commitment_config,
         },
         signers: vec![],
+    })
+}
+
+pub fn parse_vote_account_withdraw_command(
+    matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+    let withdrawer_account_pubkey = pubkey_of(matches, "withdrawer_account_pubkey").unwrap();
+    let lamports: u64 = matches.value_of("lamports").unwrap().parse().unwrap();
+    let to_account_pubkey = pubkey_of(matches, "to_account_pubkey").unwrap();
+
+    let withdrawer_signer = None;
+    let CliSignerInfo { signers } = generate_unique_signers(
+        vec![withdrawer_signer],
+        matches,
+        default_signer_path,
+        wallet_manager,
+    )?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::VoteAccountWithdraw {
+            vote_account_pubkey,
+            withdrawer_account_pubkey,
+            lamports,
+            to_account_pubkey,
+        },
+        signers,
     })
 }
 
@@ -515,6 +585,41 @@ pub fn process_show_vote_account(
         }
     }
     Ok("".to_string())
+}
+
+pub fn process_vote_account_withdraw(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    vote_account_pubkey: &Pubkey,
+    withdrawer_account_pubkey: &Pubkey,
+    lamports: u64,
+    to_account_pubkey: &Pubkey,
+) -> ProcessResult {
+    println!("Vote Account: {}", vote_account_pubkey.to_string());
+    println!(
+        "Withdrawer Account: {}",
+        withdrawer_account_pubkey.to_string()
+    );
+    println!("Amount (in lamports): {}", lamports);
+    println!("To Account: {}", to_account_pubkey.to_string());
+
+    let ixs = withdraw(
+        &vote_account_pubkey,
+        &withdrawer_account_pubkey,
+        lamports,
+        &to_account_pubkey,
+    );
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let message = Message::new(vec![ixs]);
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(&config.signers, recent_blockhash)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+
+    Ok(format!(
+        "{:?}",
+        log_instruction_custom_error::<SystemError>(result)
+    ))
 }
 
 #[cfg(test)]
