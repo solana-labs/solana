@@ -2118,7 +2118,7 @@ impl Bank {
     }
 
     pub fn clean_accounts(&self) {
-        self.rc.accounts.accounts_db.clean_accounts(&self.ancestors);
+        self.rc.accounts.accounts_db.clean_accounts();
     }
 }
 
