@@ -2,7 +2,7 @@ use bzip2::bufread::BzDecoder;
 use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, ArgMatches,
 };
-use console::{style, Emoji};
+use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use rand::{thread_rng, Rng};
@@ -953,12 +953,6 @@ pub fn main() {
         warn!("--vote-signer-address ignored");
     }
 
-    println!(
-        "{} {}",
-        style(crate_name!()).bold(),
-        solana_clap_utils::version!()
-    );
-
     let _log_redirect = {
         #[cfg(unix)]
         {
@@ -996,6 +990,7 @@ pub fn main() {
         .join(","),
     );
 
+    info!("{} {}", crate_name!(), solana_clap_utils::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
