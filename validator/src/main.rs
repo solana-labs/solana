@@ -93,12 +93,15 @@ fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
 
-    let client = reqwest::blocking::Client::new();
-    let response = client.get(url).send().map_err(|err| err.to_string())?;
+    let response = reqwest::blocking::Client::new()
+        .get(url)
+        .send()
+        .and_then(|response| response.error_for_status())
+        .map_err(|err| {
+            progress_bar.finish_and_clear();
+            err.to_string()
+        })?;
 
-    let response = response
-        .error_for_status()
-        .map_err(|err| format!("Unable to download {}: {}", url, err))?;
     let download_size = {
         response
             .headers()
@@ -139,9 +142,8 @@ fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
         response,
     };
 
-    let mut file = File::create(&temp_destination_file)
-        .map_err(|err| format!("Unable to create {:?}: {:?}", temp_destination_file, err))?;
-    std::io::copy(&mut source, &mut file)
+    File::create(&temp_destination_file)
+        .and_then(|mut file| std::io::copy(&mut source, &mut file))
         .map_err(|err| format!("Unable to write {:?}: {:?}", temp_destination_file, err))?;
 
     source.progress_bar.finish_and_clear();
@@ -1138,7 +1140,12 @@ pub fn main() {
                 })
                 .and_then(|_| {
                     if let Some(snapshot_hash) = snapshot_hash {
-                        download_snapshot(&rpc_contact_info.rpc, &ledger_path, snapshot_hash)
+                        rpc_client.get_slot()
+                            .map_err(|err| format!("Failed to get RPC node slot: {}", err))
+                            .and_then(|slot| {
+                               info!("RPC node root slot: {}", slot);
+                               download_snapshot(&rpc_contact_info.rpc, &ledger_path, snapshot_hash)
+                            })
                     } else {
                         Ok(())
                     }
