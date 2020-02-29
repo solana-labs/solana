@@ -56,6 +56,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let notifier = Notifier::new();
     let mut last_transaction_count = 0;
     loop {
+        let mut notify_msg = String::from("solana-watchtower: undefined error");
         let ok = rpc_client
             .get_transaction_count()
             .and_then(|transaction_count| {
@@ -75,6 +76,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }
             })
             .unwrap_or_else(|err| {
+                notify_msg = format!("solana-watchtower: {}", err.to_string());
                 datapoint_error!(
                     "watchtower-sanity-failure",
                     ("test", "transaction-count", String),
@@ -93,6 +95,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Ok(true)
                 })
                 .unwrap_or_else(|err| {
+                    notify_msg = format!("solana-watchtower: {}", err.to_string());
                     datapoint_error!(
                         "watchtower-sanity-failure",
                         ("test", "blockhash", String),
@@ -149,6 +152,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     }
                 })
                 .unwrap_or_else(|err| {
+                    notify_msg = format!("solana-watchtower: {}", err.to_string());
                     datapoint_error!(
                         "watchtower-sanity-failure",
                         ("test", "delinquent-validators", String),
@@ -157,9 +161,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     false
                 });
 
+
+
         datapoint_info!("watchtower-sanity", ("ok", ok, bool));
         if !ok {
-            notifier.send("solana-watchtower sanity failure");
+            notifier.send(&notify_msg);
         }
         sleep(interval);
     }
