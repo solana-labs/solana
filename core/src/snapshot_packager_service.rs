@@ -1,4 +1,4 @@
-use crate::cluster_info::ClusterInfo;
+use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_ledger::{
     snapshot_package::SnapshotPackageReceiver, snapshot_utils::archive_snapshot_package,
 };
@@ -15,8 +15,6 @@ use std::{
 pub struct SnapshotPackagerService {
     t_snapshot_packager: JoinHandle<()>,
 }
-
-const MAX_SNAPSHOT_HASHES: usize = 24;
 
 impl SnapshotPackagerService {
     pub fn new(

@@ -84,6 +84,9 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 const NUM_BITS_PER_BYTE: u64 = 8;
 const MIN_SIZE_TO_COMPRESS_GZIP: u64 = 64;
 
+/// Keep the number of snapshot hashes a node publishes under MAX_PROTOCOL_PAYLOAD_SIZE
+pub const MAX_SNAPSHOT_HASHES: usize = 16;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
     NoPeers,
@@ -441,6 +444,14 @@ impl ClusterInfo {
     }
 
     pub fn push_snapshot_hashes(&mut self, snapshot_hashes: Vec<(Slot, Hash)>) {
+        if snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
+            warn!(
+                "snapshot_hashes too large, ignored: {}",
+                snapshot_hashes.len()
+            );
+            return;
+        }
+
         let now = timestamp();
         let entry = CrdsValue::new_signed(
             CrdsData::SnapshotHash(SnapshotHash::new(self.id(), snapshot_hashes, now)),
@@ -1059,7 +1070,7 @@ impl ClusterInfo {
     }
 
     /// Splits a Vec of CrdsValues into a nested Vec, trying to make sure that
-    /// each Vec is no larger than `PROTOCOL_PAYLOAD_SIZE`
+    /// each Vec is no larger than `MAX_PROTOCOL_PAYLOAD_SIZE`
     /// Note: some messages cannot be contained within that size so in the worst case this returns
     /// N nested Vecs with 1 item each.
     fn split_gossip_messages(msgs: Vec<CrdsValue>) -> Vec<Vec<CrdsValue>> {
