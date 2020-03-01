@@ -133,7 +133,7 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) ->
                 match e {
                     StreamerError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     StreamerError::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    _ => warn!("{} responder error: {:?}", name, e),
+                    _ => info!("{} responder error: {:?}", name, e),
                 }
             }
         })
