@@ -665,7 +665,9 @@ impl AccountsDB {
         self.handle_reclaims(&reclaims);
         measure.stop();
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
+    }
 
+    fn clear_uncleaned_roots(&self) {
         let mut accounts_index = self.accounts_index.write().unwrap();
         accounts_index.uncleaned_roots.clear();
         drop(accounts_index);
@@ -694,6 +696,7 @@ impl AccountsDB {
         if !purges_in_root.is_empty() {
             self.clean_old_rooted_accounts(purges_in_root);
         }
+        self.clear_uncleaned_roots();
 
         let accounts_index = self.accounts_index.read().unwrap();
 
@@ -1996,6 +1999,10 @@ pub mod tests {
                 0
             }
         }
+
+        fn uncleaned_root_count(&self) -> usize {
+            self.accounts_index.read().unwrap().uncleaned_roots.len()
+        }
     }
 
     #[test]
@@ -2022,15 +2029,6 @@ pub mod tests {
         //now old state is cleaned up
         assert_eq!(accounts.store_count_for_slot(0), 0);
         assert_eq!(accounts.store_count_for_slot(1), 1);
-        assert_eq!(
-            accounts
-                .accounts_index
-                .read()
-                .unwrap()
-                .uncleaned_roots
-                .len(),
-            0
-        );
     }
 
     #[test]
@@ -2094,6 +2092,43 @@ pub mod tests {
         assert_eq!(accounts.store_count_for_slot(0), 0);
         assert_eq!(accounts.store_count_for_slot(1), 0);
         assert_eq!(accounts.store_count_for_slot(2), 1);
+    }
+
+    #[test]
+    fn test_uncleaned_roots_with_account() {
+        solana_logger::setup();
+
+        let accounts = AccountsDB::new(Vec::new());
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new(1, 0, &Account::default().owner);
+        //store an account
+        accounts.store(0, &[(&pubkey, &account)]);
+        assert_eq!(accounts.uncleaned_root_count(), 0);
+
+        // simulate slots are rooted after while
+        accounts.add_root(0);
+        assert_eq!(accounts.uncleaned_root_count(), 1);
+
+        //now uncleaned roots are cleaned up
+        accounts.clean_accounts();
+        assert_eq!(accounts.uncleaned_root_count(), 0);
+    }
+
+    #[test]
+    fn test_uncleaned_roots_with_no_account() {
+        solana_logger::setup();
+
+        let accounts = AccountsDB::new(Vec::new());
+
+        assert_eq!(accounts.uncleaned_root_count(), 0);
+
+        // simulate slots are rooted after while
+        accounts.add_root(0);
+        assert_eq!(accounts.uncleaned_root_count(), 1);
+
+        //now uncleaned roots are cleaned up
+        accounts.clean_accounts();
+        assert_eq!(accounts.uncleaned_root_count(), 0);
     }
 
     fn print_accounts(label: &'static str, accounts: &AccountsDB) {
