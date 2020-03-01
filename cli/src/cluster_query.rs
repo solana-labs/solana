@@ -170,16 +170,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("live-slots")
-                .about("Show information about the current slot progression")
-                .arg(
-                    Arg::with_name("websocket_url")
-                        .short("w")
-                        .long("ws")
-                        .value_name("URL")
-                        .takes_value(true)
-                        .default_value("ws://127.0.0.1:8900")
-                        .help("WebSocket URL for PubSub RPC connection"),
-                ),
+                .about("Show information about the current slot progression"),
         )
         .subcommand(
             SubCommand::with_name("block-production")
@@ -276,14 +267,6 @@ pub fn parse_cluster_ping(
             "keypair",
             wallet_manager,
         )?],
-    })
-}
-
-pub fn parse_live_slots(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let url: String = value_t_or_exit!(matches, "websocket_url", String);
-    Ok(CliCommandInfo {
-        command: CliCommand::LiveSlots { url },
-        signers: vec![],
     })
 }
 
@@ -873,6 +856,9 @@ pub fn process_live_slots(url: &str) -> ProcessResult {
     let (mut client, receiver) = PubsubClient::slot_subscribe(url)?;
     slot_progress.set_message("Connected.");
 
+    let spacer = "|";
+    slot_progress.println(spacer);
+
     let mut last_root = std::u64::MAX;
     let mut last_root_update = Instant::now();
     let mut slots_per_second = std::f64::NAN;
@@ -918,11 +904,19 @@ pub fn process_live_slots(url: &str) -> ProcessResult {
                     //
                     if slot_delta != root_delta {
                         let prev_root = format!(
-                            "|<- {} <- … <- {} <- {}",
+                            "|<--- {} <- … <- {} <- {}   (prev)",
                             previous.root, previous.parent, previous.slot
-                        )
-                        .to_owned();
+                        );
                         slot_progress.println(&prev_root);
+
+                        let new_root = format!(
+                            "|  '- {} <- … <- {} <- {}   (next)",
+                            new_info.root, new_info.parent, new_info.slot
+                        );
+
+                        slot_progress.println(prev_root);
+                        slot_progress.println(new_root);
+                        slot_progress.println(spacer);
                     }
                 }
                 current = Some(new_info);
