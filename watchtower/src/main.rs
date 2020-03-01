@@ -1,4 +1,4 @@
-//! A command-line executable for monitoring the health of a cluster 
+//! A command-line executable for monitoring the health of a cluster
 
 mod notifier;
 

@@ -8,9 +8,9 @@ If you only care about the health of one specific validator, the
 `--validator-identity` command-line argument can be used to restrict failure
 notifications to issues only affecting that validator.
 
-If you do not want duplicate notifications, for example if you have elected to 
-recieve notifications by SMS the 
-`--no-duplicate-notifications` command-line argument will suppress identical 
+If you do not want duplicate notifications, for example if you have elected to
+recieve notifications by SMS the
+`--no-duplicate-notifications` command-line argument will suppress identical
 failure notifications.
 
 ### Metrics
