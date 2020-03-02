@@ -307,19 +307,16 @@ impl ReplayStage {
                             &tower,
                         );
 
-                    if !failure_reasons.is_empty() {
+                    if heaviest_bank.is_some()
+                        && tower.is_recent(heaviest_bank.as_ref().unwrap().slot())
+                        && !failure_reasons.is_empty()
+                    {
                         info!(
                             "Couldn't vote on heaviest fork: {:?}, failure_reasons: {:?}",
                             heaviest_bank.as_ref().map(|b| b.slot()),
                             failure_reasons
                         );
                     }
-
-                    info!(
-                        "vote bank: {:?} reset bank: {:?}",
-                        vote_bank.as_ref().map(|b| b.slot()),
-                        reset_bank.as_ref().map(|b| b.slot()),
-                    );
 
                     let start = allocated.get();
 
@@ -376,6 +373,11 @@ impl ReplayStage {
                         if last_reset != reset_bank.last_blockhash()
                             && (selected_same_fork || switch_threshold)
                         {
+                            info!(
+                                "vote bank: {:?} reset bank: {:?}",
+                                vote_bank.as_ref().map(|b| b.slot()),
+                                reset_bank.slot(),
+                            );
                             Self::reset_poh_recorder(
                                 &my_pubkey,
                                 &blockstore,
