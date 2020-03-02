@@ -48,6 +48,7 @@ use std::{
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
+pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 
 pub(crate) type ProgressMap = HashMap<Slot, ForkProgress>;
 
@@ -56,6 +57,7 @@ pub(crate) enum HeaviestForkFailures {
     LockedOut(u64),
     FailedThreshold(u64),
     FailedSwitchThreshold(u64),
+    NoPropagatedConfirmation(u64),
 }
 
 // Implement a destructor for the ReplayStage thread to signal it exited
@@ -124,8 +126,12 @@ pub(crate) struct ForkStats {
     pub(crate) vote_threshold: bool,
     pub(crate) is_locked_out: bool,
     pub(crate) stake_lockouts: HashMap<u64, StakeLockout>,
+    pub(crate) propagated_validators: HashSet<(Arc<Pubkey>, u64)>,
+    pub(crate) propagated_confirmation: bool,
     computed: bool,
     confirmation_reported: bool,
+    my_latest_leader_slot: Slot,
+    total_epoch_stake: u64,
 }
 
 impl ReplaySlotStats {
@@ -160,10 +166,14 @@ pub(crate) struct ForkProgress {
 }
 
 impl ForkProgress {
-    pub fn new(last_entry: Hash) -> Self {
+    pub fn new(last_entry: Hash, my_latest_leader_slot: u64, total_epoch_stake: u64) -> Self {
         Self {
             is_dead: false,
-            fork_stats: ForkStats::default(),
+            fork_stats: ForkStats {
+                my_latest_leader_slot,
+                total_epoch_stake,
+                ..ForkStats::default()
+            },
             replay_stats: ReplaySlotStats::default(),
             replay_progress: ConfirmationProgress::new(last_entry),
         }
@@ -215,7 +225,22 @@ impl ReplayStage {
                 let mut progress = HashMap::new();
                 // Initialize progress map with any root banks
                 for bank in bank_forks.read().unwrap().frozen_banks().values() {
-                    progress.insert(bank.slot(), ForkProgress::new(bank.last_blockhash()));
+                    let total_epoch_stake = bank.total_epoch_stake();
+                    let mut my_latest_leader_slot = None;
+                    for parent in bank.parents() {
+                        if parent.collector_id() == &my_pubkey {
+                            my_latest_leader_slot = Some(parent.slot());
+                            break;
+                        }
+                    }
+                    progress.insert(
+                        bank.slot(),
+                        ForkProgress::new(
+                            bank.last_blockhash(),
+                            my_latest_leader_slot.unwrap_or(0),
+                            total_epoch_stake,
+                        ),
+                    );
                 }
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
@@ -810,12 +835,29 @@ impl ReplayStage {
 
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
 
+            let parent_latest_leader_slot = progress
+                .get(&bank.parent_slot())
+                .map(|b| b.fork_stats.my_latest_leader_slot)
+                .unwrap_or(0);
+
             // Insert a progress entry even for slots this node is the leader for, so that
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
             // this bank in `select_forks()`
-            let bank_progress = &mut progress
-                .entry(bank.slot())
-                .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
+            let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
+                let my_latest_leader_slot = {
+                    if bank.collector_id() == my_pubkey {
+                        bank.slot()
+                    } else {
+                        parent_latest_leader_slot
+                    }
+                };
+                let total_epoch_stake = bank.total_epoch_stake();
+                ForkProgress::new(
+                    bank.last_blockhash(),
+                    my_latest_leader_slot,
+                    total_epoch_stake,
+                )
+            });
             if bank.collector_id() != my_pubkey {
                 let replay_result = Self::replay_blockstore_into_bank(
                     &bank,
@@ -1099,11 +1141,12 @@ impl ReplayStage {
         };
 
         if let Some(bank) = selected_fork {
-            let (is_locked_out, vote_threshold, fork_weight) = {
+            let (is_locked_out, vote_threshold, propagated_confirmation, fork_weight) = {
                 let fork_stats = &progress.get(&bank.slot()).unwrap().fork_stats;
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
+                    fork_stats.propagated_confirmation,
                     fork_stats.weight,
                 )
             };
@@ -1113,8 +1156,11 @@ impl ReplayStage {
             if !vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
             }
+            if !propagated_confirmation {
+                failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
+            }
 
-            if !is_locked_out && vote_threshold {
+            if !is_locked_out && vote_threshold && propagated_confirmation {
                 info!("voting: {} {}", bank.slot(), fork_weight);
                 (
                     selected_fork.clone(),
@@ -1422,9 +1468,12 @@ pub(crate) mod tests {
             .collect();
 
         for fork_progress in fork_progresses.iter_mut() {
+            let bank = bank_forks.banks[&0];
             fork_progress
                 .entry(neutral_fork.fork[0])
-                .or_insert_with(|| ForkProgress::new(bank_forks.banks[&0].last_blockhash()));
+                .or_insert_with(|| {
+                    ForkProgress::new(bank.last_blockhash(), 0, bank.total_epoch_stake())
+                });
         }
 
         for index in 1..neutral_fork.fork.len() {
@@ -1447,12 +1496,11 @@ pub(crate) mod tests {
             bank_forks.banks[&neutral_fork.fork[index]].freeze();
 
             for fork_progress in fork_progresses.iter_mut() {
+                let bank = bank_forks.banks[&neutral_fork.fork[index]];
                 fork_progress
                     .entry(bank_forks.banks[&neutral_fork.fork[index]].slot())
                     .or_insert_with(|| {
-                        ForkProgress::new(
-                            bank_forks.banks[&neutral_fork.fork[index]].last_blockhash(),
-                        )
+                        ForkProgress::new(banks.last_blockhash(), 0, bank.total_epoch_stake())
                     });
             }
         }
@@ -1490,12 +1538,11 @@ pub(crate) mod tests {
                 bank_forks.banks[&fork_info.fork[index]].freeze();
 
                 for fork_progress in fork_progresses.iter_mut() {
+                    let bank = bank_forks.banks[&fork_info.fork[index]];
                     fork_progress
                         .entry(bank_forks.banks[&fork_info.fork[index]].slot())
                         .or_insert_with(|| {
-                            ForkProgress::new(
-                                bank_forks.banks[&fork_info.fork[index]].last_blockhash(),
-                            )
+                            ForkProgress::new(bank.last_blockhash(), 0, bank.total_epoch_stake())
                         });
                 }
             }
@@ -1664,7 +1711,7 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(root_bank);
         let mut progress = HashMap::new();
         for i in 0..=root {
-            progress.insert(i, ForkProgress::new(Hash::default()));
+            progress.insert(i, ForkProgress::new(Hash::default(), 0, 0));
         }
         let mut earliest_vote_on_fork = root - 1;
         ReplayStage::handle_new_root(
@@ -1920,7 +1967,7 @@ pub(crate) mod tests {
             let last_blockhash = bank0.last_blockhash();
             let mut bank0_progress = progress
                 .entry(bank0.slot())
-                .or_insert_with(|| ForkProgress::new(last_blockhash));
+                .or_insert_with(|| ForkProgress::new(last_blockhash, 0, 0));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let res = ReplayStage::replay_blockstore_into_bank(
