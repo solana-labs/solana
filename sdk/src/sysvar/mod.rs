@@ -65,17 +65,23 @@ pub trait Sysvar:
     fn size_of() -> usize {
         bincode::serialized_size(&Self::default()).unwrap() as usize
     }
+    fn serialize_into(&self, data: &mut [u8]) -> Option<()> {
+        bincode::serialize_into(data, self).ok()
+    }
+    fn deserialize(data: &[u8]) -> Result<Self, ProgramError> {
+        bincode::deserialize(&data).map_err(|_| ProgramError::InvalidArgument)
+    }
     fn from_account(account: &Account) -> Option<Self> {
-        bincode::deserialize(&account.data).ok()
+        Sysvar::deserialize(&account.data).ok()
     }
     fn to_account(&self, account: &mut Account) -> Option<()> {
-        bincode::serialize_into(&mut account.data[..], self).ok()
+        self.serialize_into(&mut account.data[..])
     }
     fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
-        bincode::deserialize(&account_info.data.borrow()).map_err(|_| ProgramError::InvalidArgument)
+        Sysvar::deserialize(&account_info.data.borrow())
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
-        bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
+        self.serialize_into(&mut account_info.data.borrow_mut()[..])
     }
     fn from_keyed_account(keyed_account: &KeyedAccount) -> Result<Self, InstructionError> {
         if !Self::check_id(keyed_account.unsigned_key()) {
