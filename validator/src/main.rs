@@ -8,7 +8,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
-    input_validators::{is_keypair, is_pubkey, is_pubkey_or_keypair},
+    input_validators::{is_keypair, is_pubkey, is_pubkey_or_keypair, is_slot},
     keypair::{
         self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
@@ -664,6 +664,7 @@ pub fn main() {
             Arg::with_name("dev_halt_at_slot")
                 .long("dev-halt-at-slot")
                 .value_name("SLOT")
+                .validator(is_slot)
                 .takes_value(true)
                 .help("Halt the validator when it reaches the given slot"),
         )
@@ -796,22 +797,17 @@ pub fn main() {
                 .help("Redirect logging to the specified file, '-' for standard error"),
         )
         .arg(
-            Arg::with_name("no_wait_for_supermajority")
-                .long("no-wait-for-supermajority")
-                .takes_value(false)
-                .help("After processing the ledger, do not wait until a supermajority of stake is visible on gossip before starting PoH"),
-        )
-        .arg(
-            // Legacy flag that is now enabled by default.  Remove this flag a couple months after the 0.23.0
-            // release
             Arg::with_name("wait_for_supermajority")
                 .long("wait-for-supermajority")
-                .hidden(true)
+                .value_name("SLOT")
+                .validator(is_slot)
+                .help("After processing the ledger and the next slot is SLOT, wait until a supermajority of stake is visible on gossip before starting PoH"),
         )
         .arg(
             Arg::with_name("hard_forks")
                 .long("hard-fork")
                 .value_name("SLOT")
+                .validator(is_slot)
                 .multiple(true)
                 .takes_value(true)
                 .help("Add a hard fork at this slot"),
@@ -915,7 +911,7 @@ pub fn main() {
             .ok()
             .map(|rpc_port| (rpc_port, rpc_port + 1)),
         voting_disabled: matches.is_present("no_voting"),
-        wait_for_supermajority: !matches.is_present("no_wait_for_supermajority"),
+        wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
         ..ValidatorConfig::default()
     };
