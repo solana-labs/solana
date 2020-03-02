@@ -87,9 +87,7 @@ impl Notifier {
             None
         };
         let twilio_webhook = get_twilio_config()
-            .map_err(|err| {
-                panic!("Twilio config error: {}",err)
-            })
+            .map_err(|err| panic!("Twilio config error: {}", err))
             .unwrap();
 
         Notifier {
@@ -125,9 +123,18 @@ impl Notifier {
             }
         }
 
-        if let Some(TwilioWebHook { account, token, to, from }) = &self.twilio_webhook {
-            let url = format!("https://{}:{}@api.twilio.com/2010-04-01/Accounts/{}/Messages.json", account, token, account);
-            let params = [("To",to), ("From",from), ("Body",&msg.to_string())];
+        if let Some(TwilioWebHook {
+            account,
+            token,
+            to,
+            from,
+        }) = &self.twilio_webhook
+        {
+            let url = format!(
+                "https://{}:{}@api.twilio.com/2010-04-01/Accounts/{}/Messages.json",
+                account, token, account
+            );
+            let params = [("To", to), ("From", from), ("Body", &msg.to_string())];
             if let Err(err) = self.client.post(&url).form(&params).send() {
                 warn!("Failed to send Twilio message: {:?}", err);
             }
