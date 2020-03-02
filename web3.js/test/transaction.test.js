@@ -112,11 +112,11 @@ test('use nonce', () => {
   const stakeAccount = new Account();
   const voteAccount = new Account();
   const stakeTransaction = new Transaction({nonceInfo}).add(
-    StakeProgram.delegate(
-      stakeAccount.publicKey,
-      account1.publicKey,
-      voteAccount.publicKey,
-    ),
+    StakeProgram.delegate({
+      stakePubkey: stakeAccount.publicKey,
+      authorizedPubkey: account1.publicKey,
+      votePubkey: voteAccount.publicKey,
+    }),
   );
   stakeTransaction.sign(account1);
 
