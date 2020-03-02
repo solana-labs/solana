@@ -7,7 +7,8 @@ use crate::{
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::*,
 };
-use clap::{App, Arg, ArgMatches, SubCommand};
+use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
+use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
@@ -24,7 +25,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_stake_program::{
-    stake_instruction::{self, StakeError},
+    stake_instruction::{self, LockupArgs, StakeError},
     stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_program::vote_state::VoteState;
@@ -364,6 +365,9 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair)
                         .help("Identity of the new lockup custodian (can withdraw before lockup expires)")
                 )
+                .group(ArgGroup::with_name("lockup_details")
+                    .args(&["lockup_epoch", "lockup_date", "new_custodian"])
+                    .required(true))
                 .arg(
                     Arg::with_name("custodian")
                         .long("custodian")
@@ -672,9 +676,9 @@ pub fn parse_stake_set_lockup(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
-    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
-    let new_custodian = pubkey_of(matches, "new_custodian").unwrap_or_default();
+    let epoch = value_of(matches, "lockup_epoch");
+    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date");
+    let new_custodian = pubkey_of(matches, "new_custodian");
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
@@ -695,7 +699,7 @@ pub fn parse_stake_set_lockup(
     Ok(CliCommandInfo {
         command: CliCommand::StakeSetLockup {
             stake_account_pubkey,
-            lockup: Lockup {
+            lockup: LockupArgs {
                 custodian: new_custodian,
                 epoch,
                 unix_timestamp,
@@ -1155,7 +1159,7 @@ pub fn process_stake_set_lockup(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    lockup: &mut Lockup,
+    lockup: &mut LockupArgs,
     custodian: SignerIndex,
     sign_only: bool,
     blockhash_query: &BlockhashQuery,
@@ -1166,10 +1170,7 @@ pub fn process_stake_set_lockup(
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
     let custodian = config.signers[custodian];
-    // If new custodian is not explicitly set, default to current custodian
-    if lockup.custodian == Pubkey::default() {
-        lockup.custodian = custodian.pubkey();
-    }
+
     let ixs = vec![stake_instruction::set_lockup(
         stake_account_pubkey,
         lockup,
@@ -1215,6 +1216,12 @@ pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamp
         println!("Authorized Withdrawer: {}", authorized.withdrawer);
     }
     fn show_lockup(lockup: &Lockup) {
+        println!(
+            "Lockup Timestamp: {} (UnixTimestamp: {})",
+            DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(lockup.unix_timestamp, 0), Utc)
+                .to_rfc3339_opts(SecondsFormat::Secs, true),
+            lockup.unix_timestamp
+        );
         println!("Lockup Epoch: {}", lockup.epoch);
         println!("Lockup Custodian: {}", lockup.custodian);
     }
