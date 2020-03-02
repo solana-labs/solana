@@ -40,7 +40,10 @@ use solana_sdk::{
     system_instruction::{self, create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
     transaction::{Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::{Lockup, StakeAuthorize};
+use solana_stake_program::{
+    stake_instruction::LockupArgs,
+    stake_state::{Lockup, StakeAuthorize},
+};
 use solana_storage_program::storage_instruction::StorageAccountType;
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
@@ -302,7 +305,7 @@ pub enum CliCommand {
     },
     StakeSetLockup {
         stake_account_pubkey: Pubkey,
-        lockup: Lockup,
+        lockup: LockupArgs,
         custodian: SignerIndex,
         sign_only: bool,
         blockhash_query: BlockhashQuery,
