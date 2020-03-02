@@ -1,6 +1,7 @@
 use crate::keypair::{parse_keypair_path, KeypairUrl, ASK_KEYWORD};
 use chrono::DateTime;
 use solana_sdk::{
+    clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
     signature::{read_keypair_file, Signature},
@@ -91,6 +92,12 @@ pub fn is_url(string: String) -> Result<(), String> {
         }
         Err(err) => Err(format!("{:?}", err)),
     }
+}
+
+pub fn is_slot(slot: String) -> Result<(), String> {
+    slot.parse::<Slot>()
+        .map(|_| ())
+        .map_err(|e| format!("{:?}", e))
 }
 
 pub fn is_port(port: String) -> Result<(), String> {
