@@ -7,6 +7,7 @@ use crate::{
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::*,
 };
+use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
@@ -1215,6 +1216,12 @@ pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamp
         println!("Authorized Withdrawer: {}", authorized.withdrawer);
     }
     fn show_lockup(lockup: &Lockup) {
+        println!(
+            "Lockup Timestamp: {} (UnixTimestamp: {})",
+            DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(lockup.unix_timestamp, 0), Utc)
+                .to_rfc3339_opts(SecondsFormat::Secs, true),
+            lockup.unix_timestamp
+        );
         println!("Lockup Epoch: {}", lockup.epoch);
         println!("Lockup Custodian: {}", lockup.custodian);
     }
