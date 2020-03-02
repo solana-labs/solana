@@ -452,6 +452,8 @@ pub struct AccountsDB {
     min_num_stores: usize,
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
+
+    pub dont_cleanup_dead_slots: AtomicBool,
 }
 
 impl Default for AccountsDB {
@@ -474,6 +476,7 @@ impl Default for AccountsDB {
                 .unwrap(),
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
+            dont_cleanup_dead_slots: AtomicBool::new(false),
         }
     }
 }
@@ -1296,6 +1299,10 @@ impl AccountsDB {
     }
 
     fn cleanup_dead_slots(&self, dead_slots: &mut HashSet<Slot>) {
+        if self.dont_cleanup_dead_slots.load(Ordering::Relaxed) {
+            return;
+        }
+
         if !dead_slots.is_empty() {
             {
                 let mut index = self.accounts_index.write().unwrap();
@@ -2290,10 +2297,10 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
     }
 
-    #[test]
-    fn test_accounts_purge_chained() {
-        solana_logger::setup();
-
+    fn with_chained_zero_lamport_accounts<F>(f: F)
+    where
+        F: Fn(AccountsDB, Slot) -> (AccountsDB, bool),
+    {
         let some_lamport = 223;
         let zero_lamport = 0;
         let dummy_lamport = 999;
@@ -2332,13 +2339,40 @@ pub mod tests {
         accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
         accounts.add_root(current_slot);
 
-        purge_zero_lamport_accounts(&accounts, current_slot);
-        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        let (accounts, skip_account_assertion) = f(accounts, current_slot);
+
+        assert_eq!(4, accounts.accounts_index.read().unwrap().roots.len());
+        if skip_account_assertion {
+            return;
+        }
 
         assert_load_account(&accounts, current_slot, pubkey, some_lamport);
         assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
         assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+    }
+
+    #[test]
+    fn test_accounts_purge_chained_purge_before_snapshot_restore() {
+        solana_logger::setup();
+        with_chained_zero_lamport_accounts(|accounts, current_slot| {
+            purge_zero_lamport_accounts(&accounts, current_slot);
+            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+            (accounts, false)
+        });
+    }
+
+    #[test]
+    fn test_accounts_purge_chained_purge_after_snapshot_restore() {
+        solana_logger::setup();
+        with_chained_zero_lamport_accounts(|accounts, current_slot| {
+            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+            accounts
+                .dont_cleanup_dead_slots
+                .store(true, Ordering::Relaxed);
+            purge_zero_lamport_accounts(&accounts, current_slot);
+            (accounts, true)
+        });
     }
 
     #[test]
