@@ -4,6 +4,7 @@ use clap::{
 };
 use histogram;
 use serde_json::json;
+use solana_clap_utils::input_validators::is_slot;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
@@ -576,11 +577,13 @@ fn main() {
     let halt_at_slot_arg = Arg::with_name("halt_at_slot")
         .long("halt-at-slot")
         .value_name("SLOT")
+        .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
     let hard_forks_arg = Arg::with_name("hard_forks")
         .long("hard-fork")
         .value_name("SLOT")
+        .validator(is_slot)
         .multiple(true)
         .takes_value(true)
         .help("Add a hard fork at this slot");
@@ -609,6 +612,7 @@ fn main() {
                 Arg::with_name("slots")
                     .index(1)
                     .value_name("SLOTS")
+                    .validator(is_slot)
                     .takes_value(true)
                     .multiple(true)
                     .required(true)
@@ -685,6 +689,7 @@ fn main() {
                 Arg::with_name("snapshot_slot")
                     .index(1)
                     .value_name("SLOT")
+                    .validator(is_slot)
                     .takes_value(true)
                     .help("Slot at which to create the snapshot"),
             )
