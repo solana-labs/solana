@@ -7,6 +7,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{get_signers, KeyedAccount},
+    clock::{Epoch, UnixTimestamp},
     instruction::{AccountMeta, Instruction, InstructionError, WithSigner},
     program_utils::{limited_deserialize, next_keyed_account, DecodeError},
     pubkey::Pubkey,
@@ -121,7 +122,14 @@ pub enum StakeInstruction {
     /// Expects 1 Account:
     ///    0 - initialized StakeAccount
     ///
-    SetLockup(Lockup),
+    SetLockup(LockupArgs),
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub struct LockupArgs {
+    pub unix_timestamp: Option<UnixTimestamp>,
+    pub epoch: Option<Epoch>,
+    pub custodian: Option<Pubkey>,
 }
 
 fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
@@ -361,7 +369,7 @@ pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> In
 
 pub fn set_lockup(
     stake_pubkey: &Pubkey,
-    lockup: &Lockup,
+    lockup: &LockupArgs,
     custodian_pubkey: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![AccountMeta::new(*stake_pubkey, false)].with_signer(custodian_pubkey);
@@ -540,7 +548,7 @@ mod tests {
         assert_eq!(
             process_instruction(&set_lockup(
                 &Pubkey::default(),
-                &Lockup::default(),
+                &LockupArgs::default(),
                 &Pubkey::default()
             )),
             Err(InstructionError::InvalidAccountData),
