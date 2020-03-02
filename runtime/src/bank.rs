@@ -1730,6 +1730,14 @@ impl Bank {
         self.rc.parent = RwLock::new(Some(parent.clone()));
     }
 
+    pub fn work_around_dead_slots_cleaning_bug(&mut self, flag: bool) {
+        self.rc
+            .accounts
+            .accounts_db
+            .dont_cleanup_dead_slots
+            .store(flag, Ordering::Relaxed);
+    }
+
     pub fn set_inflation(&self, inflation: Inflation) {
         *self.inflation.write().unwrap() = inflation;
     }
