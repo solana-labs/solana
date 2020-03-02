@@ -35,24 +35,24 @@ impl SnapshotPackagerService {
 
                     match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
                         Ok(mut snapshot_package) => {
-                            hashes.push((snapshot_package.root, snapshot_package.hash));
                             // Only package the latest
                             while let Ok(new_snapshot_package) =
                                 snapshot_package_receiver.try_recv()
                             {
                                 snapshot_package = new_snapshot_package;
-                                hashes.push((snapshot_package.root, snapshot_package.hash));
                             }
                             if let Err(err) = archive_snapshot_package(&snapshot_package) {
                                 warn!("Failed to create snapshot archive: {}", err);
+                            } else {
+                                hashes.push((snapshot_package.root, snapshot_package.hash));
+                                while hashes.len() > MAX_SNAPSHOT_HASHES {
+                                    hashes.remove(0);
+                                }
+                                cluster_info
+                                    .write()
+                                    .unwrap()
+                                    .push_snapshot_hashes(hashes.clone());
                             }
-                            while hashes.len() > MAX_SNAPSHOT_HASHES {
-                                hashes.remove(0);
-                            }
-                            cluster_info
-                                .write()
-                                .unwrap()
-                                .push_snapshot_hashes(hashes.clone());
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
                         Err(RecvTimeoutError::Timeout) => (),
