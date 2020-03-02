@@ -255,7 +255,7 @@ SUBCOMMANDS:
 
 #### solana-account
 ```text
-solana-account 
+solana-account
 Show the contents of an account
 
 USAGE:
@@ -287,7 +287,7 @@ ARGS:
 
 #### solana-address
 ```text
-solana-address 
+solana-address
 Get your public key
 
 USAGE:
@@ -315,7 +315,7 @@ OPTIONS:
 
 #### solana-airdrop
 ```text
-solana-airdrop 
+solana-airdrop
 Request lamports
 
 USAGE:
@@ -348,7 +348,7 @@ ARGS:
 
 #### solana-authorize-nonce-account
 ```text
-solana-authorize-nonce-account 
+solana-authorize-nonce-account
 Assign account authority to a new entity
 
 USAGE:
@@ -385,7 +385,7 @@ ARGS:
 
 #### solana-balance
 ```text
-solana-balance 
+solana-balance
 Get your balance
 
 USAGE:
@@ -416,7 +416,7 @@ ARGS:
 
 #### solana-block-production
 ```text
-solana-block-production 
+solana-block-production
 Show information about block production
 
 USAGE:
@@ -447,7 +447,7 @@ OPTIONS:
 
 #### solana-block-time
 ```text
-solana-block-time 
+solana-block-time
 Get estimated production time of a block
 
 USAGE:
@@ -477,7 +477,7 @@ ARGS:
 
 #### solana-cancel
 ```text
-solana-cancel 
+solana-cancel
 Cancel a transfer
 
 USAGE:
@@ -507,7 +507,7 @@ ARGS:
 
 #### solana-catchup
 ```text
-solana-catchup 
+solana-catchup
 Wait for a validator to catch up to the cluster
 
 USAGE:
@@ -537,7 +537,7 @@ ARGS:
 
 #### solana-claim-storage-reward
 ```text
-solana-claim-storage-reward 
+solana-claim-storage-reward
 Redeem storage reward credits
 
 USAGE:
@@ -568,7 +568,7 @@ ARGS:
 
 #### solana-cluster-version
 ```text
-solana-cluster-version 
+solana-cluster-version
 Get the version of the cluster entrypoint
 
 USAGE:
@@ -595,7 +595,7 @@ OPTIONS:
 
 #### solana-config
 ```text
-solana-config 
+solana-config
 Solana command-line tool configuration settings
 
 USAGE:
@@ -627,7 +627,7 @@ SUBCOMMANDS:
 
 #### solana-confirm
 ```text
-solana-confirm 
+solana-confirm
 Confirm transaction by signature
 
 USAGE:
@@ -657,7 +657,7 @@ ARGS:
 
 #### solana-create-address-with-seed
 ```text
-solana-create-address-with-seed 
+solana-create-address-with-seed
 Generate a derived account address with a seed
 
 USAGE:
@@ -684,13 +684,13 @@ OPTIONS:
 
 ARGS:
     <SEED_STRING>    The seed.  Must not take more than 32 bytes to encode as utf-8
-    <PROGRAM_ID>     The program_id that the address will ultimately be used for, 
+    <PROGRAM_ID>     The program_id that the address will ultimately be used for,
                      or one of STAKE, VOTE, and STORAGE keywords
 ```
 
 #### solana-create-archiver-storage-account
 ```text
-solana-create-archiver-storage-account 
+solana-create-archiver-storage-account
 Create an archiver storage account
 
 USAGE:
@@ -715,13 +715,13 @@ OPTIONS:
         --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT>                 
+    <STORAGE ACCOUNT OWNER PUBKEY>
+    <STORAGE ACCOUNT>
 ```
 
 #### solana-create-nonce-account
 ```text
-solana-create-nonce-account 
+solana-create-nonce-account
 Create a nonce account
 
 USAGE:
@@ -753,7 +753,7 @@ ARGS:
 
 #### solana-create-stake-account
 ```text
-solana-create-stake-account 
+solana-create-stake-account
 Create a stake account
 
 USAGE:
@@ -779,8 +779,8 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
         --from <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Source account of funds (if different from client local account)
@@ -794,9 +794,9 @@ OPTIONS:
             The epoch height at which this account will be available for withdrawal
 
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -822,7 +822,7 @@ ARGS:
 
 #### solana-create-validator-storage-account
 ```text
-solana-create-validator-storage-account 
+solana-create-validator-storage-account
 Create a validator storage account
 
 USAGE:
@@ -847,13 +847,13 @@ OPTIONS:
         --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
-    <STORAGE ACCOUNT OWNER PUBKEY>    
-    <STORAGE ACCOUNT>                 
+    <STORAGE ACCOUNT OWNER PUBKEY>
+    <STORAGE ACCOUNT>
 ```
 
 #### solana-create-vote-account
 ```text
-solana-create-vote-account 
+solana-create-vote-account
 Create a vote account
 
 USAGE:
@@ -894,7 +894,7 @@ ARGS:
 
 #### solana-deactivate-stake
 ```text
-solana-deactivate-stake 
+solana-deactivate-stake
 Deactivate the delegated stake from the stake account
 
 USAGE:
@@ -917,15 +917,15 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
     -u, --url <URL>                                                    JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -944,7 +944,7 @@ ARGS:
 
 #### solana-delegate-stake
 ```text
-solana-delegate-stake 
+solana-delegate-stake
 Delegate stake to a vote account
 
 USAGE:
@@ -967,15 +967,15 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
     -u, --url <URL>                                                    JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -995,7 +995,7 @@ ARGS:
 
 #### solana-deploy
 ```text
-solana-deploy 
+solana-deploy
 Deploy a program
 
 USAGE:
@@ -1025,7 +1025,7 @@ ARGS:
 
 #### solana-epoch-info
 ```text
-solana-epoch-info 
+solana-epoch-info
 Get information about the current epoch
 
 USAGE:
@@ -1053,7 +1053,7 @@ OPTIONS:
 
 #### solana-fees
 ```text
-solana-fees 
+solana-fees
 Display current cluster fees
 
 USAGE:
@@ -1080,7 +1080,7 @@ OPTIONS:
 
 #### solana-genesis-hash
 ```text
-solana-genesis-hash 
+solana-genesis-hash
 Get the genesis hash
 
 USAGE:
@@ -1107,7 +1107,7 @@ OPTIONS:
 
 #### solana-gossip
 ```text
-solana-gossip 
+solana-gossip
 Show the current gossip network nodes
 
 USAGE:
@@ -1134,7 +1134,7 @@ OPTIONS:
 
 #### solana-help
 ```text
-solana-help 
+solana-help
 Prints this message or the help of the given subcommand(s)
 
 USAGE:
@@ -1146,7 +1146,7 @@ ARGS:
 
 #### solana-leader-schedule
 ```text
-solana-leader-schedule 
+solana-leader-schedule
 Display leader schedule
 
 USAGE:
@@ -1173,7 +1173,7 @@ OPTIONS:
 
 #### solana-live-slots
 ```text
-solana-live-slots 
+solana-live-slots
 Show information about the current slot progression
 
 USAGE:
@@ -1200,7 +1200,7 @@ OPTIONS:
 
 #### solana-new-nonce
 ```text
-solana-new-nonce 
+solana-new-nonce
 Generate a new nonce, rendering the existing nonce useless
 
 USAGE:
@@ -1233,7 +1233,7 @@ ARGS:
 
 #### solana-nonce
 ```text
-solana-nonce 
+solana-nonce
 Get the current nonce value
 
 USAGE:
@@ -1263,7 +1263,7 @@ ARGS:
 
 #### solana-nonce-account
 ```text
-solana-nonce-account 
+solana-nonce-account
 Show the contents of a nonce account
 
 USAGE:
@@ -1294,14 +1294,14 @@ ARGS:
 
 #### solana-pay
 ```text
-solana-pay 
+solana-pay
 Send a payment
 
 USAGE:
     solana pay [FLAGS] [OPTIONS] <TO PUBKEY> <AMOUNT>
 
 FLAGS:
-        --cancelable                     
+        --cancelable
     -h, --help                           Prints help information
         --sign-only                      Sign the transaction offline
         --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
@@ -1320,9 +1320,9 @@ OPTIONS:
     -u, --url <URL>                                                    JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -1344,7 +1344,7 @@ ARGS:
 
 #### solana-ping
 ```text
-solana-ping 
+solana-ping
 Submit transactions sequentially
 
 USAGE:
@@ -1382,7 +1382,7 @@ OPTIONS:
 
 #### solana-send-signature
 ```text
-solana-send-signature 
+solana-send-signature
 Send a signature to authorize a transfer
 
 USAGE:
@@ -1413,7 +1413,7 @@ ARGS:
 
 #### solana-send-timestamp
 ```text
-solana-send-timestamp 
+solana-send-timestamp
 Send a timestamp to unlock a transfer
 
 USAGE:
@@ -1445,7 +1445,7 @@ ARGS:
 
 #### solana-slot
 ```text
-solana-slot 
+solana-slot
 Get current slot
 
 USAGE:
@@ -1473,7 +1473,7 @@ OPTIONS:
 
 #### solana-split-stake
 ```text
-solana-split-stake 
+solana-split-stake
 Split a stake account
 
 USAGE:
@@ -1496,15 +1496,15 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
     -u, --url <URL>                                                    JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -1528,7 +1528,7 @@ ARGS:
 
 #### solana-stake-account
 ```text
-solana-stake-account 
+solana-stake-account
 Show the contents of a stake account
 
 USAGE:
@@ -1559,7 +1559,7 @@ ARGS:
 
 #### solana-stake-authorize-staker
 ```text
-solana-stake-authorize-staker 
+solana-stake-authorize-staker
 Authorize a new stake signing keypair for the given stake account
 
 USAGE:
@@ -1582,15 +1582,15 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
     -u, --url <URL>                                                    JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -1610,7 +1610,7 @@ ARGS:
 
 #### solana-stake-authorize-withdrawer
 ```text
-solana-stake-authorize-withdrawer 
+solana-stake-authorize-withdrawer
 Authorize a new withdraw signing keypair for the given stake account
 
 USAGE:
@@ -1633,15 +1633,15 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
     -u, --url <URL>                                                       JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                                  /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -1661,7 +1661,7 @@ ARGS:
 
 #### solana-stake-history
 ```text
-solana-stake-history 
+solana-stake-history
 Show the stake history
 
 USAGE:
@@ -1689,7 +1689,7 @@ OPTIONS:
 
 #### solana-stake-set-lockup
 ```text
-solana-stake-set-lockup 
+solana-stake-set-lockup
 Set Lockup for the stake account
 
 USAGE:
@@ -1715,8 +1715,8 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
     -u, --url <URL>                                                    JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
@@ -1730,9 +1730,9 @@ OPTIONS:
             Identity of the new lockup custodian (can withdraw before lockup expires)
 
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -1748,7 +1748,7 @@ ARGS:
 
 #### solana-stakes
 ```text
-solana-stakes 
+solana-stakes
 Show stake account information
 
 USAGE:
@@ -1779,7 +1779,7 @@ ARGS:
 
 #### solana-storage-account
 ```text
-solana-storage-account 
+solana-storage-account
 Show the contents of a storage account
 
 USAGE:
@@ -1809,7 +1809,7 @@ ARGS:
 
 #### solana-transaction-count
 ```text
-solana-transaction-count 
+solana-transaction-count
 Get current transaction count
 
 USAGE:
@@ -1837,7 +1837,7 @@ OPTIONS:
 
 #### solana-transfer
 ```text
-solana-transfer 
+solana-transfer
 Transfer funds between system accounts
 
 USAGE:
@@ -1860,8 +1860,8 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
         --from <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Source account of funds (if different from client local account)
@@ -1869,9 +1869,9 @@ OPTIONS:
     -u, --url <URL>                                                    JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
@@ -1888,7 +1888,7 @@ ARGS:
 
 #### solana-validator-info
 ```text
-solana-validator-info 
+solana-validator-info
 Publish/get Validator info on Solana
 
 USAGE:
@@ -1920,7 +1920,7 @@ SUBCOMMANDS:
 
 #### solana-validators
 ```text
-solana-validators 
+solana-validators
 Show summary information about the current validators
 
 USAGE:
@@ -1948,7 +1948,7 @@ OPTIONS:
 
 #### solana-vote-account
 ```text
-solana-vote-account 
+solana-vote-account
 Show the contents of a vote account
 
 USAGE:
@@ -1979,7 +1979,7 @@ ARGS:
 
 #### solana-vote-authorize-voter
 ```text
-solana-vote-authorize-voter 
+solana-vote-authorize-voter
 Authorize a new vote signing keypair for the given vote account
 
 USAGE:
@@ -2010,7 +2010,7 @@ ARGS:
 
 #### solana-vote-authorize-withdrawer
 ```text
-solana-vote-authorize-withdrawer 
+solana-vote-authorize-withdrawer
 Authorize a new withdraw signing keypair for the given vote account
 
 USAGE:
@@ -2041,7 +2041,7 @@ ARGS:
 
 #### solana-vote-update-validator
 ```text
-solana-vote-update-validator 
+solana-vote-update-validator
 Update the vote account's validator identity
 
 USAGE:
@@ -2073,7 +2073,7 @@ ARGS:
 
 #### solana-withdraw-from-nonce-account
 ```text
-solana-withdraw-from-nonce-account 
+solana-withdraw-from-nonce-account
 Withdraw lamports from the nonce account
 
 USAGE:
@@ -2108,7 +2108,7 @@ ARGS:
 
 #### solana-withdraw-stake
 ```text
-solana-withdraw-stake 
+solana-withdraw-stake
 Withdraw the unstaked lamports from the stake account
 
 USAGE:
@@ -2131,15 +2131,15 @@ OPTIONS:
             Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
 
         --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
-            Specify the fee-payer account. This may be a keypair file, the ASK keyword 
-            or the pubkey of an offline signer, provided an appropriate --signer argument 
+            Specify the fee-payer account. This may be a keypair file, the ASK keyword
+            or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
     -u, --url <URL>                                                       JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                                  /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
-            Provide the nonce account to use when creating a nonced 
-            transaction. Nonced transactions are useful when a transaction 
-            requires a lengthy signing process. Learn more about nonced 
+            Provide the nonce account to use when creating a nonced
+            transaction. Nonced transactions are useful when a transaction
+            requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
