@@ -72,7 +72,7 @@ pub struct ValidatorConfig {
     pub broadcast_stage_type: BroadcastStageType,
     pub enable_partition: Option<Arc<AtomicBool>>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
-    pub wait_for_supermajority: bool,
+    pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
 }
@@ -95,7 +95,7 @@ impl Default for ValidatorConfig {
             broadcast_stage_type: BroadcastStageType::Standard,
             enable_partition: None,
             fixed_leader_schedule: None,
-            wait_for_supermajority: false,
+            wait_for_supermajority: None,
             new_hard_forks: None,
             trusted_validators: None,
         }
@@ -631,7 +631,7 @@ fn wait_for_supermajority(
     bank: &Arc<Bank>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
 ) {
-    if !config.wait_for_supermajority {
+    if config.wait_for_supermajority != Some(bank.slot()) {
         return;
     }
 
