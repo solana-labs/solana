@@ -266,52 +266,74 @@ declare module '@solana/web3.js' {
     ): Lockup;
   }
 
+  declare export type CreateStakeAccountParams = {|
+    fromPubkey: PublicKey,
+    stakePubkey: PublicKey,
+    authorized: Authorized,
+    lockup: Lockup,
+    lamports: number,
+  |};
+
+  declare export type CreateStakeAccountWithSeedParams = {|
+    fromPubkey: PublicKey,
+    stakePubkey: PublicKey,
+    basePubkey: PublicKey,
+    seed: string,
+    authorized: Authorized,
+    lockup: Lockup,
+    lamports: number,
+  |};
+
+  declare export type InitializeStakeParams = {|
+    stakePubkey: PublicKey,
+    authorized: Authorized,
+    lockup: Lockup,
+  |};
+
+  declare export type DelegateStakeParams = {|
+    stakePubkey: PublicKey,
+    authorizedPubkey: PublicKey,
+    votePubkey: PublicKey,
+  |};
+
+  declare export type AuthorizeStakeParams = {|
+    stakePubkey: PublicKey,
+    authorizedPubkey: PublicKey,
+    newAuthorizedPubkey: PublicKey,
+    stakeAuthorizationType: StakeAuthorizationType,
+  |};
+
+  declare export type SplitStakeParams = {|
+    stakePubkey: PublicKey,
+    authorizedPubkey: PublicKey,
+    splitStakePubkey: PublicKey,
+    lamports: number,
+  |};
+
+  declare export type WithdrawStakeParams = {|
+    stakePubkey: PublicKey,
+    authorizedPubkey: PublicKey,
+    toPubkey: PublicKey,
+    lamports: number,
+  |};
+
+  declare export type DeactivateStakeParams = {|
+    stakePubkey: PublicKey,
+    authorizedPubkey: PublicKey,
+  |};
+
   declare export class StakeProgram {
     static programId: PublicKey;
     static space: number;
-
-    static createAccount(
-      from: PublicKey,
-      stakeAccount: PublicKey,
-      authorized: Authorized,
-      lockup: Lockup,
-      lamports: number,
-    ): Transaction;
+    static createAccount(params: CreateStakeAccountParams): Transaction;
     static createAccountWithSeed(
-      from: PublicKey,
-      stakeAccount: PublicKey,
-      seed: string,
-      authorized: Authorized,
-      lockup: Lockup,
-      lamports: number,
+      params: CreateStakeAccountWithSeedParams,
     ): Transaction;
-    static delegate(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      votePubkey: PublicKey,
-    ): Transaction;
-    static authorize(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      newAuthorized: PublicKey,
-      stakeAuthorizationType: StakeAuthorizationType,
-    ): Transaction;
-    static split(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      lamports: number,
-      splitStakePubkey: PublicKey,
-    ): Transaction;
-    static withdraw(
-      stakeAccount: PublicKey,
-      withdrawerPubkey: PublicKey,
-      to: PublicKey,
-      lamports: number,
-    ): Transaction;
-    static deactivate(
-      stakeAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-    ): Transaction;
+    static delegate(params: DelegateStakeParams): Transaction;
+    static authorize(params: AuthorizeStakeParams): Transaction;
+    static split(params: SplitStakeParams): Transaction;
+    static withdraw(params: WithdrawStakeParams): Transaction;
+    static deactivate(params: DeactivateStakeParams): Transaction;
   }
 
   declare export type StakeInstructionType =
@@ -326,16 +348,26 @@ declare module '@solana/web3.js' {
     [StakeInstructionType]: InstructionType,
   };
 
-  declare export class StakeInstruction extends TransactionInstruction {
-    type: StakeInstructionType;
-    stakePublicKey: PublicKey | null;
-    authorizedPublicKey: PublicKey | null;
-
-    constructor(
-      opts?: TransactionInstructionCtorFields,
-      type: StakeInstructionType,
-    ): StakeInstruction;
-    static from(instruction: TransactionInstruction): StakeInstruction;
+  declare export class StakeInstruction {
+    static decodeInstructionType(
+      instruction: TransactionInstruction,
+    ): StakeInstructionType;
+    static decodeInitialize(
+      instruction: TransactionInstruction,
+    ): InitializeStakeParams;
+    static decodeDelegate(
+      instruction: TransactionInstruction,
+    ): DelegateStakeParams;
+    static decodeAuthorize(
+      instruction: TransactionInstruction,
+    ): AuthorizeStakeParams;
+    static decodeSplit(instruction: TransactionInstruction): SplitStakeParams;
+    static decodeWithdraw(
+      instruction: TransactionInstruction,
+    ): WithdrawStakeParams;
+    static decodeDeactivate(
+      instruction: TransactionInstruction,
+    ): DeactivateStakeParams;
   }
 
   // === src/system-program.js ===
