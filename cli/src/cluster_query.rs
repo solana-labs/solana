@@ -5,6 +5,7 @@ use crate::{
     },
     display::println_name_value,
 };
+use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -454,7 +455,13 @@ pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
 
 pub fn process_get_block_time(rpc_client: &RpcClient, slot: Slot) -> ProcessResult {
     let timestamp = rpc_client.get_block_time(slot)?;
-    Ok(timestamp.to_string())
+    let result = format!(
+        "{} (UnixTimestamp: {})",
+        DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc)
+            .to_rfc3339_opts(SecondsFormat::Secs, true),
+        timestamp
+    );
+    Ok(result)
 }
 
 fn slot_to_human_time(slot: Slot) -> String {
