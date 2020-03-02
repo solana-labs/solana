@@ -212,6 +212,14 @@ fn get_shred_rpc_peers(
     }
 }
 
+fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>>) -> bool {
+    if let Some(trusted_validators) = trusted_validators {
+        trusted_validators.contains(id)
+    } else {
+        false
+    }
+}
+
 fn get_trusted_snapshot_hashes(
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     trusted_validators: &Option<HashSet<Pubkey>>,
@@ -262,6 +270,7 @@ fn get_rpc_node(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
+    no_untrusted_rpc: bool,
 ) -> (ContactInfo, Option<(Slot, Hash)>) {
     let mut blacklist_timeout = Instant::now();
     loop {
@@ -281,10 +290,16 @@ fn get_rpc_node(
             .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(&rpc_peer.id))
             .collect();
         let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
+        let rpc_peers_trusted = rpc_peers
+            .iter()
+            .filter(|rpc_peer| {
+                is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+            })
+            .count();
 
         info!(
-            "Total {} RPC nodes found. {} blacklisted ",
-            rpc_peers_total, rpc_peers_blacklisted
+            "Total {} RPC nodes found. {} trusted, {} blacklisted ",
+            rpc_peers_total, rpc_peers_trusted, rpc_peers_blacklisted
         );
 
         if rpc_peers_blacklisted == rpc_peers_total {
@@ -308,6 +323,11 @@ fn get_rpc_node(
             let mut eligible_rpc_peers = vec![];
 
             for rpc_peer in rpc_peers.iter() {
+                if no_untrusted_rpc
+                    && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+                {
+                    continue;
+                }
                 if let Some(snapshot_hashes) = cluster_info
                     .read()
                     .unwrap()
@@ -806,6 +826,13 @@ pub fn main() {
                 .help("A snapshot hash must be published in gossip by this validator to be accepted. \
                        May be specified multiple times. If unspecified any snapshot hash will be accepted"),
         )
+        .arg(
+            Arg::with_name("no_untrusted_rpc")
+                .long("no-untrusted-rpc")
+                .takes_value(false)
+                .requires("trusted_validators")
+                .help("Use the RPC service of trusted validators only")
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(
@@ -848,6 +875,7 @@ pub fn main() {
         exit(1);
     });
 
+    let no_untrusted_rpc = matches.is_present("no_untrusted_rpc");
     let trusted_validators = if matches.is_present("trusted_validators") {
         let trusted_validators: HashSet<_> =
             values_t_or_exit!(matches, "trusted_validators", Pubkey)
@@ -1102,6 +1130,7 @@ pub fn main() {
                     &validator_config,
                     &mut blacklisted_rpc_nodes,
                     no_snapshot_fetch,
+                    no_untrusted_rpc,
                 );
                 info!(
                     "Using RPC service from node {}: {:?}",
