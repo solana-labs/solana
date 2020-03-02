@@ -193,6 +193,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 SUBCOMMANDS:
     account                             Show the contents of an account
@@ -278,6 +279,7 @@ OPTIONS:
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
     -o, --output <FILE>                                  Write the account data to this file
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <ACCOUNT PUBKEY>    Account pubkey
@@ -308,6 +310,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-airdrop
@@ -336,6 +339,7 @@ OPTIONS:
         --faucet-port <PORT>                             Faucet port to use [default: 9900]
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <AMOUNT>    The airdrop amount to request, in SOL
@@ -372,6 +376,7 @@ OPTIONS:
         --seed <SEED STRING>
             Seed for address generation; if specified, the resulting account will be at a derived address of the
             NONCE_ACCOUNT pubkey
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <NONCE_ACCOUNT>           Address of the nonce account
@@ -403,6 +408,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <PUBKEY>    The public key of the balance to check
@@ -435,6 +441,8 @@ OPTIONS:
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
         --slot-limit <slot_limit>
             Limit results to this many slots from the end of the epoch [default: full epoch]
+
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-block-time
@@ -461,6 +469,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <SLOT>    Slot number of the block to query
@@ -490,6 +499,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <PROCESS ID>    The process id of the transfer to cancel
@@ -519,6 +529,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <PUBKEY>    Identity pubkey of the validator
@@ -548,6 +559,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <NODE PUBKEY>               The node account to credit the rewards to
@@ -578,6 +590,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-config
@@ -604,6 +617,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 SUBCOMMANDS:
     get     Get current config settings
@@ -635,6 +649,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <SIGNATURE>    The transaction signature to confirm
@@ -665,6 +680,7 @@ OPTIONS:
         --from <PUBKEY>                                  From (base) key, defaults to client keypair.
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <SEED_STRING>    The seed.  Must not take more than 32 bytes to encode as utf-8
@@ -696,6 +712,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <STORAGE ACCOUNT OWNER PUBKEY>    
@@ -727,6 +744,7 @@ OPTIONS:
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
         --nonce-authority <BASE58_PUBKEY>                Assign noncing authority to another entity
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <NONCE ACCOUNT>    Keypair of the nonce account to fund
@@ -792,6 +810,7 @@ OPTIONS:
         --stake-authority <PUBKEY>
             Public key of authorized staker (defaults to cli config pubkey)
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
         --withdraw-authority <PUBKEY>
             Public key of authorized withdrawer (defaults to cli config pubkey)
 
@@ -825,6 +844,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <STORAGE ACCOUNT OWNER PUBKEY>    
@@ -865,6 +885,7 @@ OPTIONS:
         --seed <SEED STRING>
             Seed for address generation; if specified, the resulting account will be at a derived address of the VOTE
             ACCOUNT pubkey
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <VOTE ACCOUNT KEYPAIR>         Vote account keypair to fund
@@ -915,6 +936,7 @@ OPTIONS:
         --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Public key of authorized staker (defaults to cli config pubkey)
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to be deactivated.
@@ -964,6 +986,7 @@ OPTIONS:
         --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Public key of authorized staker (defaults to cli config pubkey)
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to delegate
@@ -994,6 +1017,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <PATH TO BPF PROGRAM>    /path/to/program.o
@@ -1024,6 +1048,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-fees
@@ -1050,6 +1075,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-genesis-hash
@@ -1076,6 +1102,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-gossip
@@ -1102,6 +1129,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-help
@@ -1140,6 +1168,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-live-slots
@@ -1166,8 +1195,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
-    -w, --ws <URL>
-            WebSocket URL for PubSub RPC connection [default: ws://127.0.0.1:8900]
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-new-nonce
@@ -1197,6 +1225,7 @@ OPTIONS:
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <NONCE ACCOUNT>    Address of the nonce account
@@ -1226,6 +1255,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <NONCE ACCOUNT>    Address of the nonce account to display
@@ -1256,6 +1286,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <NONCE ACCOUNT>    Address of the nonce account to display
@@ -1301,6 +1332,7 @@ OPTIONS:
 
         --after <DATETIME>                                             A timestamp after which transaction will execute
         --require-timestamp-from <PUBKEY>                              Require timestamp from this third party
+        --ws <URL>                                                     WebSocket URL for the solana cluster
         --require-signature-from <PUBKEY>...
             Any third party signatures required to unlock the lamports
 
@@ -1344,6 +1376,8 @@ OPTIONS:
 
     -t, --timeout <SECONDS>
             Wait up to timeout seconds for transaction confirmation [default: 15]
+
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-send-signature
@@ -1370,6 +1404,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <PUBKEY>        The pubkey of recipient
@@ -1401,6 +1436,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <PUBKEY>        The pubkey of recipient
@@ -1432,6 +1468,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-split-stake
@@ -1481,6 +1518,7 @@ OPTIONS:
         --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Public key of authorized staker (defaults to cli config pubkey)
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <STAKE ACCOUNT>          Stake account to be split
@@ -1513,6 +1551,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <STAKE ACCOUNT>    Address of the stake account to display
@@ -1562,6 +1601,7 @@ OPTIONS:
         --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Public key of authorized staker (defaults to cli config pubkey)
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <STAKE ACCOUNT>       Stake account in which to set the authorized staker
@@ -1609,6 +1649,7 @@ OPTIONS:
         --signer <BASE58_PUBKEY=BASE58_SIG>...
             Provide a public-key/signature pair for the transaction
 
+        --ws <URL>                                                        WebSocket URL for the solana cluster
         --withdraw-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Public key of authorized withdrawer (defaults to cli config pubkey)
 
@@ -1643,6 +1684,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-stake-set-lockup
@@ -1651,7 +1693,7 @@ solana-stake-set-lockup
 Set Lockup for the stake account
 
 USAGE:
-    solana stake-set-lockup [FLAGS] [OPTIONS] <STAKE ACCOUNT>
+    solana stake-set-lockup [FLAGS] [OPTIONS] <STAKE ACCOUNT> <--lockup-epoch <EPOCH>|--lockup-date <RFC3339 DATE TIME>|--new-custodian <KEYPAIR or PUBKEY>>
 
 FLAGS:
     -h, --help                           Prints help information
@@ -1698,6 +1740,7 @@ OPTIONS:
         --signer <BASE58_PUBKEY=BASE58_SIG>...
             Provide a public-key/signature pair for the transaction
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <STAKE ACCOUNT>    Stake account for which to set Lockup
@@ -1728,6 +1771,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <VOTE ACCOUNT PUBKEYS>...    Only show stake accounts delegated to the provided vote accounts
@@ -1757,6 +1801,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <STORAGE ACCOUNT PUBKEY>    Storage account pubkey
@@ -1787,6 +1832,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-transfer
@@ -1833,6 +1879,7 @@ OPTIONS:
         --signer <BASE58_PUBKEY=BASE58_SIG>...
             Provide a public-key/signature pair for the transaction
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <TO PUBKEY>    The pubkey of recipient
@@ -1863,6 +1910,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 SUBCOMMANDS:
     get        Get and parse Solana Validator info
@@ -1895,6 +1943,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 ```
 
 #### solana-vote-account
@@ -1922,6 +1971,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account pubkey
@@ -1951,6 +2001,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account in which to set the authorized voter
@@ -1981,6 +2032,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>      Vote account in which to set the authorized withdrawer
@@ -2011,6 +2063,7 @@ OPTIONS:
 
     -u, --url <URL>                                      JSON RPC URL for the solana cluster
     -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --ws <URL>                                       WebSocket URL for the solana cluster
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>              Vote account to update
@@ -2045,6 +2098,7 @@ OPTIONS:
         --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
+        --ws <URL>                                                     WebSocket URL for the solana cluster
 
 ARGS:
     <NONCE ACCOUNT>          Nonce account from to withdraw from
@@ -2093,6 +2147,7 @@ OPTIONS:
         --signer <BASE58_PUBKEY=BASE58_SIG>...
             Provide a public-key/signature pair for the transaction
 
+        --ws <URL>                                                        WebSocket URL for the solana cluster
         --withdraw-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Public key of authorized withdrawer (defaults to cli config pubkey)
 
