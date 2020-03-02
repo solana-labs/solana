@@ -126,7 +126,8 @@ pub(crate) struct ForkStats {
     pub(crate) vote_threshold: bool,
     pub(crate) is_locked_out: bool,
     pub(crate) stake_lockouts: HashMap<u64, StakeLockout>,
-    pub(crate) propagated_validators: HashSet<(Arc<Pubkey>, u64)>,
+    pub(crate) propagated_validators: HashSet<Arc<Pubkey>>,
+    pub(crate) propagated_validators_stake: u64,
     pub(crate) propagated_confirmation: bool,
     computed: bool,
     confirmation_reported: bool,
@@ -189,7 +190,7 @@ impl ReplayStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        _vote_tracker: Arc<VoteTracker>,
+        vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
@@ -299,6 +300,7 @@ impl ReplayStage {
                         &mut frozen_banks,
                         &tower,
                         &mut progress,
+                        vote_tracker,
                     );
                     for slot in newly_computed_slot_stats {
                         let fork_stats = &progress.get(&slot).unwrap().fork_stats;
@@ -905,6 +907,8 @@ impl ReplayStage {
         frozen_banks: &mut Vec<Arc<Bank>>,
         tower: &Tower,
         progress: &mut ProgressMap,
+        vote_tracker: Arc<RwLock<VoteTracker>>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
@@ -952,6 +956,47 @@ impl ReplayStage {
                 stats.computed = true;
                 new_stats.push(stats.slot);
             }
+
+            // Should only be None if my_latest_leader_slot < current root, in which case we
+            // know it's confirmed and can skip this propagation check
+            if let Some(my_latest_leader_slot_progress) = progress.get(&stats.my_latest_leader_slot)
+            {
+                if !my_latest_leader_slot_progress
+                    .fork_stats
+                    .propagated_confirmation
+                {
+                    // Compute the threshold
+                    let slot_votes = vote_tracker.read().unwrap().votes().get(&bank.slot());
+                    let my_latest_leader_bank = bank_forks
+                        .read()
+                        .unwrap()
+                        .get(stats.my_latest_leader_slot)
+                        .expect("Entry in progress map must exist in BankForks");
+                    let my_latest_leader_slot_received_validators =
+                        &mut my_latest_leader_slot_progress
+                            .fork_stats
+                            .propagated_validators;
+                    for pubkey in slot_votes {
+                        if !my_latest_leader_slot_received_validators.contains(pubkey) {
+                            my_latest_leader_slot_received_validators.insert(pubkey);
+                            propagated_validators_stake += my_latest_leader_bank
+                                .epoch_vote_accounts(my_latest_leader_bank.epoch)
+                                .get(pubkey)
+                                .map(|(stake, _)| stake)
+                                .unwrap_or(0);
+                            if propagated_validators_stake as f64
+                                / my_latest_leader_bank.total_epoch_stake
+                                > SUPERMINORITY_THRESHOLD
+                            {
+                                my_latest_leader_slot_progress = true;
+                            }
+                        }
+                    }
+                } else {
+                    stats.propagated_confirmation = true;
+                }
+            }
+
             stats.vote_threshold = tower.check_vote_stake_threshold(
                 bank.slot(),
                 &stats.stake_lockouts,
