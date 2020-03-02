@@ -43,29 +43,13 @@ pub fn create_and_add_stakes(
     // the largest each stake account should be, in lamports
     granularity: Option<u64>,
 ) -> u64 {
-<<<<<<< HEAD
+    let granularity = granularity.unwrap_or(std::u64::MAX);
     let authorized = Authorized::auto(
         &staker_info
             .staker
             .parse::<Pubkey>()
             .expect("invalid staker"),
     );
-=======
-    let granularity = granularity.unwrap_or(std::u64::MAX);
-    let staker = &staker_info
-        .staker
-        .parse::<Pubkey>()
-        .expect("invalid staker");
-    let withdrawer = &staker_info
-        .withdrawer
-        .unwrap_or(staker_info.staker)
-        .parse::<Pubkey>()
-        .expect("invalid staker");
-    let authorized = Authorized {
-        staker: *staker,
-        withdrawer: *withdrawer,
-    };
->>>>>>> 4831c7b9a... Remove granularity from genesis (#8514)
     let custodian = unlock_info
         .custodian
         .parse::<Pubkey>()
