@@ -453,16 +453,18 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         String::from("0.22.3")
     };
 
-    let bank = rebuild_bank_from_snapshots(
+    let mut bank = rebuild_bank_from_snapshots(
         snapshot_version.trim(),
         account_paths,
         &unpacked_snapshots_dir,
         unpacked_accounts_dir,
     )?;
 
+    bank.work_around_dead_slots_cleaning_bug(true);
     if !bank.verify_snapshot_bank() {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
+    bank.work_around_dead_slots_cleaning_bug(false);
     measure.stop();
     info!("{}", measure);
 
