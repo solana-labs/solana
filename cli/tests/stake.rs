@@ -14,7 +14,10 @@ use solana_sdk::{
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction::create_address_with_seed,
 };
-use solana_stake_program::stake_state::{Lockup, StakeAuthorize, StakeState};
+use solana_stake_program::{
+    stake_instruction::LockupArgs,
+    stake_state::{Lockup, StakeAuthorize, StakeState},
+};
 use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
@@ -1128,10 +1131,10 @@ fn test_stake_set_lockup() {
     );
 
     // Online set lockup
-    let mut lockup = Lockup {
-        unix_timestamp: 1581534570,
-        epoch: 200,
-        custodian: Pubkey::default(),
+    let lockup = LockupArgs {
+        unix_timestamp: Some(1581534570),
+        epoch: Some(200),
+        custodian: None,
     };
     config.signers.pop();
     config.command = CliCommand::StakeSetLockup {
@@ -1151,17 +1154,21 @@ fn test_stake_set_lockup() {
         StakeState::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
-    lockup.custodian = config.signers[0].pubkey(); // Default new_custodian is config.signers[0]
-    assert_eq!(current_lockup, lockup);
+    assert_eq!(
+        current_lockup.unix_timestamp,
+        lockup.unix_timestamp.unwrap()
+    );
+    assert_eq!(current_lockup.epoch, lockup.epoch.unwrap());
+    assert_eq!(current_lockup.custodian, config.signers[0].pubkey());
 
     // Set custodian to another pubkey
     let online_custodian = Keypair::new();
     let online_custodian_pubkey = online_custodian.pubkey();
 
-    let lockup = Lockup {
-        unix_timestamp: 1581534571,
-        epoch: 201,
-        custodian: online_custodian_pubkey,
+    let lockup = LockupArgs {
+        unix_timestamp: Some(1581534571),
+        epoch: Some(201),
+        custodian: Some(online_custodian_pubkey),
     };
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
@@ -1175,10 +1182,10 @@ fn test_stake_set_lockup() {
     };
     process_command(&config).unwrap();
 
-    let mut lockup = Lockup {
-        unix_timestamp: 1581534572,
-        epoch: 202,
-        custodian: Pubkey::default(),
+    let lockup = LockupArgs {
+        unix_timestamp: Some(1581534572),
+        epoch: Some(202),
+        custodian: None,
     };
     config.signers = vec![&default_signer, &online_custodian];
     config.command = CliCommand::StakeSetLockup {
@@ -1198,14 +1205,18 @@ fn test_stake_set_lockup() {
         StakeState::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
-    lockup.custodian = online_custodian_pubkey; // Default new_custodian is designated custodian
-    assert_eq!(current_lockup, lockup);
+    assert_eq!(
+        current_lockup.unix_timestamp,
+        lockup.unix_timestamp.unwrap()
+    );
+    assert_eq!(current_lockup.epoch, lockup.epoch.unwrap());
+    assert_eq!(current_lockup.custodian, online_custodian_pubkey);
 
     // Set custodian to offline pubkey
-    let lockup = Lockup {
-        unix_timestamp: 1581534573,
-        epoch: 203,
-        custodian: offline_pubkey,
+    let lockup = LockupArgs {
+        unix_timestamp: Some(1581534573),
+        epoch: Some(203),
+        custodian: Some(offline_pubkey),
     };
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
@@ -1244,10 +1255,10 @@ fn test_stake_set_lockup() {
     };
 
     // Nonced offline set lockup
-    let lockup = Lockup {
-        unix_timestamp: 1581534576,
-        epoch: 222,
-        custodian: offline_pubkey,
+    let lockup = LockupArgs {
+        unix_timestamp: Some(1581534576),
+        epoch: Some(222),
+        custodian: None,
     };
     config_offline.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
@@ -1280,7 +1291,12 @@ fn test_stake_set_lockup() {
         StakeState::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
     };
-    assert_eq!(current_lockup, lockup);
+    assert_eq!(
+        current_lockup.unix_timestamp,
+        lockup.unix_timestamp.unwrap()
+    );
+    assert_eq!(current_lockup.epoch, lockup.epoch.unwrap());
+    assert_eq!(current_lockup.custodian, offline_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
