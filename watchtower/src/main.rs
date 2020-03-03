@@ -42,11 +42,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_pubkey_or_keypair)
                 .help("Monitor a specific validator only instead of the entire cluster"),
         )
+        .arg(
+            Arg::with_name("no_duplicate_notifications")
+                .long("no-duplicate-notifications")
+                .takes_value(false)
+                .help("Subsequent identical notifications will be suppressed"),
+        )
         .get_matches();
 
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let json_rpc_url = value_t_or_exit!(matches, "json_rpc_url", String);
     let validator_identity = pubkey_of(&matches, "validator_identity").map(|i| i.to_string());
+    let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
 
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
@@ -55,7 +62,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let notifier = Notifier::new();
     let mut last_transaction_count = 0;
+    let mut last_check_notification_sent = false;
+    let mut last_notification_msg = String::from("");
     loop {
+        let mut notify_msg = String::from("solana-watchtower: undefined error");
         let ok = rpc_client
             .get_transaction_count()
             .and_then(|transaction_count| {
@@ -75,6 +85,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }
             })
             .unwrap_or_else(|err| {
+                notify_msg = format!("solana-watchtower: {}", err.to_string());
                 datapoint_error!(
                     "watchtower-sanity-failure",
                     ("test", "transaction-count", String),
@@ -93,6 +104,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Ok(true)
                 })
                 .unwrap_or_else(|err| {
+                    notify_msg = format!("solana-watchtower: {}", err.to_string());
                     datapoint_error!(
                         "watchtower-sanity-failure",
                         ("test", "blockhash", String),
@@ -149,6 +161,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     }
                 })
                 .unwrap_or_else(|err| {
+                    notify_msg = format!("solana-watchtower: {}", err.to_string());
                     datapoint_error!(
                         "watchtower-sanity-failure",
                         ("test", "delinquent-validators", String),
@@ -159,7 +172,26 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         datapoint_info!("watchtower-sanity", ("ok", ok, bool));
         if !ok {
-            notifier.send("solana-watchtower sanity failure");
+            last_check_notification_sent = true;
+            if no_duplicate_notifications {
+                if last_notification_msg != notify_msg {
+                    notifier.send(&notify_msg);
+                    last_notification_msg = notify_msg;
+                } else {
+                    datapoint_info!(
+                        "watchtower-sanity",
+                        ("Suppressing duplicate notification", ok, bool)
+                    );
+                }
+            } else {
+                notifier.send(&notify_msg);
+            }
+        } else {
+            if last_check_notification_sent {
+                notifier.send("solana-watchtower: All Clear");
+            }
+            last_check_notification_sent = false;
+            last_notification_msg = String::from("");
         }
         sleep(interval);
     }
