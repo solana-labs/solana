@@ -8,6 +8,11 @@ If you only care about the health of one specific validator, the
 `--validator-identity` command-line argument can be used to restrict failure
 notifications to issues only affecting that validator.
 
+If you do not want duplicate notifications, for example if you have elected to
+recieve notifications by SMS the
+`--no-duplicate-notifications` command-line argument will suppress identical
+failure notifications.
+
 ### Metrics
 #### `watchtower-sanity`
 On every iteration this data point will be emitted indicating the overall result
@@ -32,4 +37,11 @@ Telegram requires the following two variables:
 ```
 export TELEGRAM_BOT_TOKEN=...
 export TELEGRAM_CHAT_ID=...
+```
+
+To receive a Twilio SMS notification on failure, having a Twilio account, 
+and a sending number owned by that account,
+define environment variable before running `solana-watchtower`:
+```
+export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'
 ```
