@@ -1,20 +1,91 @@
 use crate::{
     account::Account,
+    declare_sysvar_id,
     hash::{hash, Hash},
+    program_error::ProgramError,
     sysvar::Sysvar,
 };
-use bincode::serialize;
 use std::{collections::BinaryHeap, iter::FromIterator, ops::Deref};
 
 const MAX_ENTRIES: usize = 32;
 
-crate::declare_sysvar_id!(
+declare_sysvar_id!(
     "SysvarRecentB1ockHashes11111111111111111111",
     RecentBlockhashes
 );
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
+enum Versions {
+    Current(Box<RecentBlockhashes>),
+}
+
+pub mod unversioned {
+    use super::*;
+
+    declare_sysvar_id!(
+        "SysvarRecentB1ockHashes11111111111111111111",
+        RecentBlockhashes
+    );
+
+    #[repr(C)]
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+    pub struct RecentBlockhashes(Vec<Hash>);
+
+    impl Default for RecentBlockhashes {
+        fn default() -> Self {
+            Self(Vec::with_capacity(MAX_ENTRIES))
+        }
+    }
+
+    impl<'a> FromIterator<&'a Hash> for RecentBlockhashes {
+        fn from_iter<I>(iter: I) -> Self
+        where
+            I: IntoIterator<Item = &'a Hash>,
+        {
+            let mut new = Self::default();
+            for i in iter {
+                new.0.push(*i)
+            }
+            new
+        }
+    }
+
+    impl Deref for RecentBlockhashes {
+        type Target = Vec<Hash>;
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl Sysvar for RecentBlockhashes {
+        fn size_of() -> usize {
+            // hard-coded so that we don't have to construct an empty
+            1032 // golden, update if MAX_ENTRIES changes
+        }
+    }
+
+    pub fn create_account(lamports: u64) -> Account {
+        RecentBlockhashes::default().create_account(lamports)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_size_of() {
+            assert_eq!(
+                bincode::serialized_size(&RecentBlockhashes(vec![Hash::default(); MAX_ENTRIES]))
+                    .unwrap() as usize,
+                RecentBlockhashes::size_of()
+            );
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RecentBlockhashes(Vec<Hash>);
 
 impl Default for RecentBlockhashes {
@@ -64,10 +135,50 @@ impl<T: Ord> Iterator for IntoIterSorted<T> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum Versioning {
+    Versioned(Versions),
+    Unversioned(unversioned::RecentBlockhashes),
+}
+
+impl From<unversioned::RecentBlockhashes> for RecentBlockhashes {
+    fn from(other: unversioned::RecentBlockhashes) -> Self {
+        RecentBlockhashes::from_iter(other.iter())
+    }
+}
+
+fn resolve_versioning(data: &[u8]) -> bincode::Result<Versioning> {
+    if data.len() == unversioned::RecentBlockhashes::size_of() {
+        bincode::deserialize::<unversioned::RecentBlockhashes>(&data).map(Versioning::Unversioned)
+    } else {
+        bincode::deserialize::<Versions>(data).map(Versioning::Versioned)
+    }
+}
+
 impl Sysvar for RecentBlockhashes {
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty
-        1032 // golden, update if MAX_ENTRIES changes
+        1036 // golden, update if MAX_ENTRIES changes
+    }
+
+    fn serialize_into(&self, data: &mut [u8]) -> Option<()> {
+        match resolve_versioning(data).ok()? {
+            Versioning::Versioned(_) => {
+                let versioned = Versions::Current(Box::new(self.clone()));
+                bincode::serialize_into(data, &versioned).ok()
+            }
+            Versioning::Unversioned(_) => bincode::serialize_into(data, self).ok(),
+        }
+    }
+
+    fn deserialize(data: &[u8]) -> Result<Self, ProgramError> {
+        let versioned = match resolve_versioning(data).map_err(|_| ProgramError::InvalidArgument)? {
+            Versioning::Versioned(versioned) => versioned,
+            Versioning::Unversioned(unversioned) => Versions::Current(Box::new(unversioned.into())),
+        };
+        match versioned {
+            Versions::Current(recent_blockhashes) => Ok(*recent_blockhashes),
+        }
     }
 }
 
@@ -104,7 +215,7 @@ where
 
 pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
     let bhq: Vec<_> = (start..start + MAX_ENTRIES)
-        .map(|i| hash(&serialize(&i).unwrap()))
+        .map(|i| hash(&bincode::serialize(&i).unwrap()))
         .collect();
     RecentBlockhashes::from_iter(bhq.iter())
 }
@@ -112,15 +223,18 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hash::HASH_BYTES;
+    use crate::{account_utils::StateMut, hash::HASH_BYTES, pubkey::Pubkey};
+    use assert_matches::assert_matches;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
 
     #[test]
     fn test_size_of() {
         assert_eq!(
-            bincode::serialized_size(&RecentBlockhashes(vec![Hash::default(); MAX_ENTRIES]))
-                .unwrap() as usize,
+            bincode::serialized_size(&Versions::Current(Box::new(RecentBlockhashes(
+                vec![Hash::default(); MAX_ENTRIES]
+            ))))
+            .unwrap() as usize,
             RecentBlockhashes::size_of()
         );
     }
@@ -178,5 +292,32 @@ mod tests {
         expected_recent_blockhashes.reverse();
 
         assert_eq!(*recent_blockhashes, expected_recent_blockhashes);
+    }
+
+    #[test]
+    fn test_resolve_versioning() {
+        let account =
+            create_account_with_data(42, vec![(0u64, &Hash::default()); MAX_ENTRIES].into_iter());
+        assert_matches!(
+            resolve_versioning(&account.data),
+            Ok(Versioning::Versioned(_))
+        );
+        let unversioned_acc = unversioned::create_account(1);
+        assert_matches!(
+            resolve_versioning(&unversioned_acc.data),
+            Ok(Versioning::Unversioned(_))
+        );
+        let too_small_acc = Account::new(1, 0, &Pubkey::new(&[2u8; 32]));
+        assert!(resolve_versioning(&too_small_acc.data).is_err());
+    }
+
+    #[test]
+    fn test_store_versioned_data_in_unversioned_account() {
+        let mut unversioned_acc = unversioned::create_account(1);
+        let modern_data = create_test_recent_blockhashes(0);
+        // Manual write of versioned data fails
+        let versioned = Versions::Current(Box::new(modern_data.clone()));
+        assert!(unversioned_acc.set_state(&versioned).is_err());
+        assert!(modern_data.to_account(&mut unversioned_acc).is_some());
     }
 }
