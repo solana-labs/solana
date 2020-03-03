@@ -12,7 +12,6 @@ import {
   StakeInstruction,
   StakeProgram,
   SystemInstruction,
-  SystemProgram,
   Transaction,
 } from '../src';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
@@ -34,6 +33,7 @@ test('createAccountWithSeed', () => {
   const authorizedPubkey = new Account().publicKey;
   const authorized = new Authorized(authorizedPubkey, authorizedPubkey);
   const lockup = new Lockup(0, 0, fromPubkey);
+  const lamports = 123;
   const transaction = StakeProgram.createAccountWithSeed({
     fromPubkey,
     stakePubkey: newAccountPubkey,
@@ -41,19 +41,26 @@ test('createAccountWithSeed', () => {
     seed,
     authorized,
     lockup,
-    lamports: 123,
+    lamports,
   });
-
   expect(transaction.instructions).toHaveLength(2);
   const [systemInstruction, stakeInstruction] = transaction.instructions;
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
-
-  // TODO decode system instruction
-
-  const params = StakeInstruction.decodeInitialize(stakeInstruction);
-  expect(params.stakePubkey).toEqual(newAccountPubkey);
-  expect(params.authorized).toEqual(authorized);
-  expect(params.lockup).toEqual(lockup);
+  const systemParams = {
+    fromPubkey,
+    newAccountPubkey,
+    basePubkey: fromPubkey,
+    seed,
+    lamports,
+    space: StakeProgram.space,
+    programId: StakeProgram.programId,
+  };
+  expect(systemParams).toEqual(
+    SystemInstruction.decodeCreateWithSeed(systemInstruction),
+  );
+  const initParams = {stakePubkey: newAccountPubkey, authorized, lockup};
+  expect(initParams).toEqual(
+    StakeInstruction.decodeInitialize(stakeInstruction),
+  );
 });
 
 test('createAccount', () => {
@@ -62,24 +69,31 @@ test('createAccount', () => {
   const authorizedPubkey = new Account().publicKey;
   const authorized = new Authorized(authorizedPubkey, authorizedPubkey);
   const lockup = new Lockup(0, 0, fromPubkey);
+  const lamports = 123;
   const transaction = StakeProgram.createAccount({
     fromPubkey,
     stakePubkey: newAccountPubkey,
     authorized,
     lockup,
-    lamports: 123,
+    lamports,
   });
-
   expect(transaction.instructions).toHaveLength(2);
   const [systemInstruction, stakeInstruction] = transaction.instructions;
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
+  const systemParams = {
+    fromPubkey,
+    newAccountPubkey,
+    lamports,
+    space: StakeProgram.space,
+    programId: StakeProgram.programId,
+  };
+  expect(systemParams).toEqual(
+    SystemInstruction.decodeCreateAccount(systemInstruction),
+  );
 
-  // TODO decode system instruction
-
-  const params = StakeInstruction.decodeInitialize(stakeInstruction);
-  expect(params.stakePubkey).toEqual(newAccountPubkey);
-  expect(params.authorized).toEqual(authorized);
-  expect(params.lockup).toEqual(lockup);
+  const initParams = {stakePubkey: newAccountPubkey, authorized, lockup};
+  expect(initParams).toEqual(
+    StakeInstruction.decodeInitialize(stakeInstruction),
+  );
 });
 
 test('delegate', () => {
@@ -127,7 +141,16 @@ test('split', () => {
   const transaction = StakeProgram.split(params);
   expect(transaction.instructions).toHaveLength(2);
   const [systemInstruction, stakeInstruction] = transaction.instructions;
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
+  const systemParams = {
+    fromPubkey: stakePubkey,
+    newAccountPubkey: splitStakePubkey,
+    lamports: 0,
+    space: StakeProgram.space,
+    programId: StakeProgram.programId,
+  };
+  expect(systemParams).toEqual(
+    SystemInstruction.decodeCreateAccount(systemInstruction),
+  );
   expect(params).toEqual(StakeInstruction.decodeSplit(stakeInstruction));
 });
 
@@ -182,13 +205,10 @@ test('StakeInstructions', () => {
   );
 
   expect(createWithSeedTransaction.instructions).toHaveLength(2);
-  const systemInstruction = SystemInstruction.from(
+  const systemInstructionType = SystemInstruction.decodeInstructionType(
     createWithSeedTransaction.instructions[0],
   );
-  expect(systemInstruction.fromPublicKey).toEqual(from.publicKey);
-  expect(systemInstruction.toPublicKey).toEqual(newAccountPubkey);
-  expect(systemInstruction.amount).toEqual(amount);
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
+  expect(systemInstructionType).toEqual('CreateWithSeed');
 
   const stakeInstructionType = StakeInstruction.decodeInstructionType(
     createWithSeedTransaction.instructions[1],
@@ -236,6 +256,35 @@ test('live staking actions', async () => {
     StakeProgram.space,
     'recent',
   );
+
+  {
+    // Create Stake account without seed
+    const newStakeAccount = new Account();
+    let createAndInitialize = StakeProgram.createAccount({
+      fromPubkey: from.publicKey,
+      stakePubkey: newStakeAccount.publicKey,
+      authorized: new Authorized(authorized.publicKey, authorized.publicKey),
+      lockup: new Lockup(0, 0, new PublicKey('0x00')),
+      lamports: minimumAmount + 42,
+    });
+
+    await sendAndConfirmRecentTransaction(
+      connection,
+      createAndInitialize,
+      from,
+      newStakeAccount,
+    );
+    expect(await connection.getBalance(newStakeAccount.publicKey)).toEqual(
+      minimumAmount + 42,
+    );
+
+    let delegation = StakeProgram.delegate({
+      stakePubkey: newStakeAccount.publicKey,
+      authorizedPubkey: authorized.publicKey,
+      votePubkey,
+    });
+    await sendAndConfirmRecentTransaction(connection, delegation, authorized);
+  }
 
   // Create Stake account with seed
   const seed = 'test string';

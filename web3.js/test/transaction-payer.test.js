@@ -100,11 +100,11 @@ test('transaction-payer', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.transfer(
-    accountFrom.publicKey,
-    accountTo.publicKey,
-    10,
-  );
+  const transaction = SystemProgram.transfer({
+    fromPubkey: accountFrom.publicKey,
+    toPubkey: accountTo.publicKey,
+    lamports: 10,
+  });
 
   const signature = await connection.sendTransaction(
     transaction,

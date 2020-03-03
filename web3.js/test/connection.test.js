@@ -109,10 +109,10 @@ test('get program accounts', async () => {
       result: {Ok: null},
     },
   ]);
-  let transaction = SystemProgram.assign(
-    account0.publicKey,
-    programId.publicKey,
-  );
+  let transaction = SystemProgram.assign({
+    fromPubkey: account0.publicKey,
+    programId: programId.publicKey,
+  });
   await sendAndConfirmTransaction(connection, transaction, account0);
 
   mockRpc.push([
@@ -140,7 +140,11 @@ test('get program accounts', async () => {
       result: {Ok: null},
     },
   ]);
-  transaction = SystemProgram.assign(account1.publicKey, programId.publicKey);
+  transaction = SystemProgram.assign({
+    fromPubkey: account1.publicKey,
+    programId: programId.publicKey,
+  });
+
   await sendAndConfirmTransaction(connection, transaction, account1);
 
   mockGetRecentBlockhash('recent');
@@ -651,14 +655,16 @@ test('get confirmed block', async () => {
     url,
     {
       method: 'getConfirmedBlock',
-      params: [10000],
+      params: [Number.MAX_SAFE_INTEGER],
     },
     {
       error: null,
       result: null,
     },
   ]);
-  await expect(connection.getConfirmedBlock(10000)).rejects.toThrow();
+  await expect(
+    connection.getConfirmedBlock(Number.MAX_SAFE_INTEGER),
+  ).rejects.toThrow();
 });
 
 test('get recent blockhash', async () => {
@@ -962,11 +968,11 @@ test('transaction', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.transfer(
-    accountFrom.publicKey,
-    accountTo.publicKey,
-    10,
-  );
+  const transaction = SystemProgram.transfer({
+    fromPubkey: accountFrom.publicKey,
+    toPubkey: accountTo.publicKey,
+    lamports: 10,
+  });
   const signature = await connection.sendTransaction(transaction, accountFrom);
 
   mockRpc.push([
@@ -1088,12 +1094,16 @@ test('multi-instruction transaction', async () => {
 
   // 1. Move(accountFrom, accountTo)
   // 2. Move(accountTo, accountFrom)
-  const transaction = SystemProgram.transfer(
-    accountFrom.publicKey,
-    accountTo.publicKey,
-    100,
-  ).add(
-    SystemProgram.transfer(accountTo.publicKey, accountFrom.publicKey, 100),
+  const transaction = SystemProgram.transfer({
+    fromPubkey: accountFrom.publicKey,
+    toPubkey: accountTo.publicKey,
+    lamports: 100,
+  }).add(
+    SystemProgram.transfer({
+      fromPubkey: accountTo.publicKey,
+      toPubkey: accountFrom.publicKey,
+      lamports: 100,
+    }),
   );
   const signature = await connection.sendTransaction(
     transaction,
@@ -1149,11 +1159,11 @@ test('account change notification', async () => {
 
   await connection.requestAirdrop(owner.publicKey, LAMPORTS_PER_SOL);
   try {
-    let transaction = SystemProgram.transfer(
-      owner.publicKey,
-      programAccount.publicKey,
-      balanceNeeded,
-    );
+    let transaction = SystemProgram.transfer({
+      fromPubkey: owner.publicKey,
+      toPubkey: programAccount.publicKey,
+      lamports: balanceNeeded,
+    });
     await sendAndConfirmTransaction(connection, transaction, owner);
   } catch (err) {
     await connection.removeAccountChangeListener(subscriptionId);
@@ -1213,11 +1223,11 @@ test('program account change notification', async () => {
 
   await connection.requestAirdrop(owner.publicKey, LAMPORTS_PER_SOL);
   try {
-    let transaction = SystemProgram.transfer(
-      owner.publicKey,
-      programAccount.publicKey,
-      balanceNeeded,
-    );
+    let transaction = SystemProgram.transfer({
+      fromPubkey: owner.publicKey,
+      toPubkey: programAccount.publicKey,
+      lamports: balanceNeeded,
+    });
     await sendAndConfirmTransaction(connection, transaction, owner);
   } catch (err) {
     await connection.removeProgramAccountChangeListener(subscriptionId);

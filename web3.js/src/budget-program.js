@@ -191,13 +191,13 @@ export class BudgetProgram {
         }
         const trimmedData = data.slice(0, pos);
 
-        const transaction = SystemProgram.createAccount(
-          from,
-          program,
-          amount,
-          trimmedData.length,
-          this.programId,
-        );
+        const transaction = SystemProgram.createAccount({
+          fromPubkey: from,
+          newAccountPubkey: program,
+          lamports: amount,
+          space: trimmedData.length,
+          programId: this.programId,
+        });
 
         return transaction.add({
           keys: [
@@ -227,13 +227,13 @@ export class BudgetProgram {
         }
         const trimmedData = data.slice(0, pos);
 
-        const transaction = SystemProgram.createAccount(
-          from,
-          program,
-          amount,
-          trimmedData.length,
-          this.programId,
-        );
+        const transaction = SystemProgram.createAccount({
+          fromPubkey: from,
+          newAccountPubkey: program,
+          lamports: amount,
+          space: trimmedData.length,
+          programId: this.programId,
+        });
 
         return transaction.add({
           keys: [{pubkey: program, isSigner: false, isWritable: true}],
@@ -260,13 +260,13 @@ export class BudgetProgram {
         }
         const trimmedData = data.slice(0, pos);
 
-        const transaction = SystemProgram.createAccount(
-          from,
-          program,
-          amount,
-          trimmedData.length,
-          this.programId,
-        );
+        const transaction = SystemProgram.createAccount({
+          fromPubkey: from,
+          newAccountPubkey: program,
+          lamports: amount,
+          space: trimmedData.length,
+          programId: this.programId,
+        });
 
         return transaction.add({
           keys: [{pubkey: program, isSigner: false, isWritable: true}],
@@ -316,13 +316,13 @@ export class BudgetProgram {
 
     const trimmedData = data.slice(0, pos);
 
-    const transaction = SystemProgram.createAccount(
-      from,
-      program,
-      amount,
-      trimmedData.length,
-      this.programId,
-    );
+    const transaction = SystemProgram.createAccount({
+      fromPubkey: from,
+      newAccountPubkey: program,
+      lamports: amount,
+      space: trimmedData.length,
+      programId: this.programId,
+    });
 
     return transaction.add({
       keys: [{pubkey: program, isSigner: false, isWritable: true}],

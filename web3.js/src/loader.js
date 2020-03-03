@@ -58,13 +58,13 @@ export class Loader {
       const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
         data.length,
       );
-      const transaction = SystemProgram.createAccount(
-        payer.publicKey,
-        program.publicKey,
-        balanceNeeded > 0 ? balanceNeeded : 1,
-        data.length,
+      const transaction = SystemProgram.createAccount({
+        fromPubkey: payer.publicKey,
+        newAccountPubkey: program.publicKey,
+        lamports: balanceNeeded > 0 ? balanceNeeded : 1,
+        space: data.length,
         programId,
-      );
+      });
       await sendAndConfirmTransaction(connection, transaction, payer, program);
     }
 
