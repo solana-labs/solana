@@ -1,15 +1,15 @@
 # Troubleshooting
 
 There is a **\#validator-support** Discord channel available to reach other
-testnet participants, [https://discord.gg/pquxPsq](https://discord.gg/pquxPsq).
+testnet participants, [https://discord.gg/DEDbUZ](https://discord.gg/DEDbUZ).
 
 ## Useful Links & Discussion
 * [Network Explorer](http://explorer.solana.com/)
 * [Testnet Metrics Dashboard](https://metrics.solana.com:3000/d/testnet-edge/testnet-monitor-edge?refresh=60s&orgId=2)
 * Validator chat channels
-  * [\#validator-support](https://discord.gg/rZsenD) General support channel for any Validator related queries.
+  * [\#validator-support](https://discord.gg/DEDbUZ) General support channel for any Validator related queries.
   * [\#tourdesol](https://discord.gg/BdujK2) Discussion and support channel for Tour de SOL participants ([What is Tour de SOL?](https://solana.com/tds/)).
-  * [\#tourdesol-announcements](https://discord.gg/Q5TxEC) The single source of truth for critical information relating to Tour de SOL
+  * [\#tourdesol-announcements](https://discord.gg/HEgJPM) The single source of truth for critical information relating to Tour de SOL
   * [\#tourdesol-stage0](https://discord.gg/Xf8tES) Discussion for events within Tour de SOL Stage 0. Stage 0 includes all the dry-run
 * [Core software repo](https://github.com/solana-labs/solana)
 * [Tour de SOL Docs](https://docs.solana.com/tour-de-sol)
