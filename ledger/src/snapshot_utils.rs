@@ -337,7 +337,7 @@ pub fn add_snapshot<P: AsRef<Path>>(
     bank: &Bank,
     snapshot_storages: &[SnapshotStorage],
 ) -> Result<SlotSnapshotPaths> {
-    bank.purge_zero_lamport_accounts();
+    bank.clean_accounts();
     bank.update_accounts_hash();
     let slot = bank.slot();
     // snapshot_path/slot

@@ -12,6 +12,7 @@ pub struct AccountsIndex<T> {
     pub account_maps: HashMap<Pubkey, RwLock<SlotList<T>>>,
 
     pub roots: HashSet<Slot>,
+    pub uncleaned_roots: HashSet<Slot>,
 }
 
 impl<T: Clone> AccountsIndex<T> {
@@ -55,7 +56,7 @@ impl<T: Clone> AccountsIndex<T> {
         let mut max = 0;
         let mut rv = None;
         for (i, (slot, _t)) in list.iter().rev().enumerate() {
-            if *slot >= max && (ancestors.get(slot).is_some() || self.is_root(*slot)) {
+            if *slot >= max && (ancestors.contains_key(slot) || self.is_root(*slot)) {
                 rv = Some((list.len() - 1) - i);
                 max = *slot;
             }
@@ -112,28 +113,44 @@ impl<T: Clone> AccountsIndex<T> {
         account_info: T,
         reclaims: &mut Vec<(Slot, T)>,
     ) -> Option<T> {
-        let roots = &self.roots;
         if let Some(lock) = self.account_maps.get(pubkey) {
             let mut slot_vec = lock.write().unwrap();
-            // filter out old entries
+            // filter out other dirty entries
             reclaims.extend(slot_vec.iter().filter(|(f, _)| *f == slot).cloned());
             slot_vec.retain(|(f, _)| *f != slot);
 
-            // add the new entry
             slot_vec.push((slot, account_info));
+            // now, do lazy clean
+            self.purge_older_root_entries(&mut slot_vec, reclaims);
 
-            let max_root = Self::get_max_root(roots, &slot_vec);
-
-            reclaims.extend(
-                slot_vec
-                    .iter()
-                    .filter(|(slot, _)| Self::can_purge(max_root, *slot))
-                    .cloned(),
-            );
-            slot_vec.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
             None
         } else {
             Some(account_info)
+        }
+    }
+
+    fn purge_older_root_entries(
+        &self,
+        slot_vec: &mut Vec<(Slot, T)>,
+        reclaims: &mut Vec<(Slot, T)>,
+    ) {
+        let roots = &self.roots;
+
+        let max_root = Self::get_max_root(roots, &slot_vec);
+
+        reclaims.extend(
+            slot_vec
+                .iter()
+                .filter(|(slot, _)| Self::can_purge(max_root, *slot))
+                .cloned(),
+        );
+        slot_vec.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
+    }
+
+    pub fn clean_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut Vec<(Slot, T)>) {
+        if let Some(lock) = self.account_maps.get(pubkey) {
+            let mut slot_vec = lock.write().unwrap();
+            self.purge_older_root_entries(&mut slot_vec, reclaims);
         }
     }
 
@@ -155,11 +172,13 @@ impl<T: Clone> AccountsIndex<T> {
 
     pub fn add_root(&mut self, slot: Slot) {
         self.roots.insert(slot);
+        self.uncleaned_roots.insert(slot);
     }
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
-    pub fn cleanup_dead_slot(&mut self, slot: Slot) {
+    pub fn clean_dead_slot(&mut self, slot: Slot) {
         self.roots.remove(&slot);
+        self.uncleaned_roots.remove(&slot);
     }
 }
 
@@ -259,24 +278,34 @@ mod tests {
     }
 
     #[test]
-    fn test_cleanup_first() {
+    fn test_clean_first() {
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(0);
         index.add_root(1);
-        index.cleanup_dead_slot(0);
+        index.clean_dead_slot(0);
         assert!(index.is_root(1));
         assert!(!index.is_root(0));
     }
 
     #[test]
-    fn test_cleanup_last() {
+    fn test_clean_last() {
         //this behavior might be undefined, clean up should only occur on older slots
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(0);
         index.add_root(1);
-        index.cleanup_dead_slot(1);
+        index.clean_dead_slot(1);
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
+    }
+
+    #[test]
+    fn test_clean_and_unclean_slot() {
+        let mut index = AccountsIndex::<bool>::default();
+        assert_eq!(0, index.uncleaned_roots.len());
+        index.add_root(1);
+        assert_eq!(1, index.uncleaned_roots.len());
+        index.clean_dead_slot(1);
+        assert_eq!(0, index.uncleaned_roots.len());
     }
 
     #[test]
