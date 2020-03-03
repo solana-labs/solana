@@ -11,19 +11,19 @@ test('verify getConfirmedBlock', () => {
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
 
   // Create a couple signed transactions
-  const transfer0 = SystemProgram.transfer(
-    account0.publicKey,
-    account1.publicKey,
-    123,
-  );
+  const transfer0 = SystemProgram.transfer({
+    fromPubkey: account0.publicKey,
+    toPubkey: account1.publicKey,
+    lamports: 123,
+  });
 
   const transaction0 = new Transaction({recentBlockhash}).add(transfer0);
   transaction0.sign(account0);
-  const transfer1 = SystemProgram.transfer(
-    account2.publicKey,
-    account3.publicKey,
-    456,
-  );
+  const transfer1 = SystemProgram.transfer({
+    fromPubkey: account2.publicKey,
+    toPubkey: account3.publicKey,
+    lamports: 456,
+  });
 
   let transaction1 = new Transaction({recentBlockhash}).add(transfer1);
   transaction1.sign(account2);
