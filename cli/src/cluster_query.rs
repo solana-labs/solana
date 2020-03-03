@@ -219,6 +219,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Show summary information about the current validators")
                 .alias("show-validators")
                 .arg(
+                    Arg::with_name("confirmed")
+                        .long("confirmed")
+                        .takes_value(false)
+                        .help(
+                            "Return information at maximum-lockout commitment level",
+                        ),
+                )
+                .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
@@ -330,9 +338,17 @@ pub fn parse_show_stakes(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, Cli
 
 pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
 
     Ok(CliCommandInfo {
-        command: CliCommand::ShowValidators { use_lamports_unit },
+        command: CliCommand::ShowValidators {
+            use_lamports_unit,
+            commitment_config,
+        },
         signers: vec![],
     })
 }
@@ -473,7 +489,7 @@ fn slot_to_human_time(slot: Slot) -> String {
 
 pub fn process_get_epoch_info(
     rpc_client: &RpcClient,
-    commitment_config: &CommitmentConfig,
+    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config.clone())?;
     println!();
@@ -519,7 +535,7 @@ pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
 
 pub fn process_get_slot(
     rpc_client: &RpcClient,
-    commitment_config: &CommitmentConfig,
+    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let slot = rpc_client.get_slot_with_commitment(commitment_config.clone())?;
     Ok(slot.to_string())
@@ -708,7 +724,7 @@ pub fn process_show_block_production(
 
 pub fn process_get_transaction_count(
     rpc_client: &RpcClient,
-    commitment_config: &CommitmentConfig,
+    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let transaction_count =
         rpc_client.get_transaction_count_with_commitment(commitment_config.clone())?;
@@ -722,7 +738,7 @@ pub fn process_ping(
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
-    commitment_config: &CommitmentConfig,
+    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let to = Keypair::new().pubkey();
 
@@ -1013,9 +1029,13 @@ pub fn process_show_stakes(
     Ok("".to_string())
 }
 
-pub fn process_show_validators(rpc_client: &RpcClient, use_lamports_unit: bool) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info()?;
-    let vote_accounts = rpc_client.get_vote_accounts()?;
+pub fn process_show_validators(
+    rpc_client: &RpcClient,
+    use_lamports_unit: bool,
+    commitment_config: CommitmentConfig,
+) -> ProcessResult {
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config)?;
+    let vote_accounts = rpc_client.get_vote_accounts_with_commitment(commitment_config)?;
     let total_active_stake = vote_accounts
         .current
         .iter()

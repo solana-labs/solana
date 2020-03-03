@@ -1,4 +1,4 @@
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitmentConfig {
     pub commitment: CommitmentLevel,
@@ -25,16 +25,16 @@ impl CommitmentConfig {
         }
     }
 
-    pub fn ok(&self) -> Option<Self> {
-        if self == &Self::default() {
+    pub fn ok(self) -> Option<Self> {
+        if self == Self::default() {
             None
         } else {
-            Some(self.clone())
+            Some(self)
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum CommitmentLevel {
     Max,
