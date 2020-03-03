@@ -103,7 +103,7 @@ where
 }
 
 pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
-    let bhq: Vec<_> = (start..start + (MAX_ENTRIES - 1))
+    let bhq: Vec<_> = (start..start + MAX_ENTRIES)
         .map(|i| hash(&serialize(&i).unwrap()))
         .collect();
     RecentBlockhashes::from_iter(bhq.iter())
