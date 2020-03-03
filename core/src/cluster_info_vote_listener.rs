@@ -706,6 +706,105 @@ mod tests {
     }
 
     #[test]
+    fn test_get_voters_by_epoch() {
+        // Create some voters at genesis
+        let validator_voting_keypairs: Vec<_> = (0..10)
+            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+            .collect();
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+            );
+        let bank = Bank::new(&genesis_config);
+
+        let mut vote_tracker = VoteTracker::new(&bank);
+        let last_known_epoch = bank.get_leader_schedule_epoch(bank.slot());
+        let last_known_slot = bank
+            .epoch_schedule()
+            .get_last_slot_in_epoch(last_known_epoch);
+
+        // Check we can get the voters and authorized voters
+        for keypairs in &validator_voting_keypairs {
+            assert!(vote_tracker
+                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), last_known_slot)
+                .is_some());
+            assert!(vote_tracker
+                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), last_known_slot + 1)
+                .is_none());
+            assert!(vote_tracker
+                .get_authorized_voter(&keypairs.vote_keypair.pubkey(), last_known_slot)
+                .is_some());
+            assert!(vote_tracker
+                .get_authorized_voter(&keypairs.vote_keypair.pubkey(), last_known_slot + 1)
+                .is_none());
+        }
+
+        // Create the set of relevant voters for the next epoch
+        let new_epoch = last_known_epoch + 1;
+        let first_slot_in_new_epoch = bank.epoch_schedule().get_first_slot_in_epoch(new_epoch);
+        let new_keypairs: Vec<_> = (0..10)
+            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+            .collect();
+        let new_epoch_vote_accounts: HashMap<_, _> = new_keypairs
+            .iter()
+            .chain(validator_voting_keypairs[0..5].iter())
+            .map(|keypair| {
+                (
+                    keypair.vote_keypair.pubkey(),
+                    (
+                        1,
+                        bank.get_account(&keypair.vote_keypair.pubkey())
+                            .unwrap_or(create_account(
+                                &keypair.vote_keypair.pubkey(),
+                                &keypair.vote_keypair.pubkey(),
+                                0,
+                                100,
+                            )),
+                    ),
+                )
+            })
+            .collect();
+
+        let (new_epoch_authorized_voters, new_node_id_to_vote_accounts, new_pubkeys) =
+            VoteTracker::parse_epoch_state(
+                new_epoch,
+                &new_epoch_vote_accounts,
+                &vote_tracker.all_pubkeys,
+            );
+
+        vote_tracker.process_new_leader_schedule_epoch_state(
+            new_epoch,
+            new_epoch_authorized_voters,
+            new_node_id_to_vote_accounts,
+            new_pubkeys,
+        );
+
+        // These keypairs made it into the new epoch
+        for keypairs in new_keypairs
+            .iter()
+            .chain(validator_voting_keypairs[0..5].iter())
+        {
+            assert!(vote_tracker
+                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
+                .is_some());
+            assert!(vote_tracker
+                .get_authorized_voter(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
+                .is_some());
+        }
+
+        // These keypairs were not refreshed in new epoch
+        for keypairs in validator_voting_keypairs[5..10].iter() {
+            assert!(vote_tracker
+                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
+                .is_none());
+            assert!(vote_tracker
+                .get_authorized_voter(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
+                .is_none());
+        }
+    }
+
+    #[test]
     fn test_diff_vote_accounts() {
         // Create some voters at genesis
         let validator_voting_keypairs: Vec<_> = (0..10)
