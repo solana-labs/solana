@@ -1924,7 +1924,7 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
-        self.purge_zero_lamport_accounts();
+        self.clean_accounts();
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }
@@ -2117,11 +2117,8 @@ impl Bank {
         );
     }
 
-    pub fn purge_zero_lamport_accounts(&self) {
-        self.rc
-            .accounts
-            .accounts_db
-            .purge_zero_lamport_accounts(&self.ancestors);
+    pub fn clean_accounts(&self) {
+        self.rc.accounts.accounts_db.clean_accounts();
     }
 }
 
@@ -3170,7 +3167,7 @@ mod tests {
         }
 
         let hash = bank.update_accounts_hash();
-        bank.purge_zero_lamport_accounts();
+        bank.clean_accounts();
         assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
@@ -3190,14 +3187,14 @@ mod tests {
 
         info!("bank0 purge");
         let hash = bank0.update_accounts_hash();
-        bank0.purge_zero_lamport_accounts();
+        bank0.clean_accounts();
         assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank1 purge");
-        bank1.purge_zero_lamport_accounts();
+        bank1.clean_accounts();
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
@@ -3215,7 +3212,7 @@ mod tests {
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank1.purge_zero_lamport_accounts();
+        bank1.clean_accounts();
 
         assert!(bank1.verify_bank_hash());
     }
