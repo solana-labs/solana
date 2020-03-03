@@ -12,22 +12,22 @@ secure transaction signing.
 
 ## Install the Solana App on Ledger Nano S
 
-The Solana Ledger app is not yet available on Ledger Live. Until it is, you
+The Solana Ledger app is not yet available on Ledger Live. Until it is, you can
 install a development version of the app from the command-line. Note that
-once installed, any time you open the development app, you will be greeted
-with the undesirable message, "This app is not genuine". Once the app is
-available on Ledger Live, you can reinstall the app from there, and the
-message will no longer be shown.
+because the app is not installed via Ledger Live, you will see the message,
+"This app is not genuine" each time you open the app. Once the app is available
+on Ledger Live, you can reinstall the app from there, and the message will no
+longer be displayed.
 
 1. Connect and unlock your Ledger Nano S
 2. Download and run the Solana Ledger app installer:
    ```text
    curl -sSLf https://github.com/solana-labs/ledger-app-solana/releases/download/v0.1.1/install.sh | sh
    ```
-3. When prompted, allow the "unsafe" manager on your device by pressing the right button.
+3. When prompted, approve the "unsafe" manager on your device by pressing the right button.
    It is called unsafe because it is an installer for development apps and not the App
    Manager from Ledger Live.
-4. When prompted, allow the installation on your device by pressing the right button
+4. When prompted, approve the installation on your device by pressing the right button
 5. An installation window appears and your device will display Processing…
 6. The app installation is confirmed
 
