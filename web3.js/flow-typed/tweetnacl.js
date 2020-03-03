@@ -8,13 +8,17 @@ declare module "tweetnacl" {
     (): KeyPair,
     fromSecretKey(secretKey: Buffer): KeyPair,
     fromSeed(seed: Uint8Array): KeyPair,
-
   };
+
+  declare type DetachedFunc = {
+    (text: Buffer, secretKey: Buffer): Buffer,
+    verify(message: Buffer, signature: Buffer|null, publicKey: Buffer): bool,
+  };
+
   declare module.exports: {
     sign: {
       keyPair: KeypairFunc;
-      detached(text: Buffer, secretKey: Buffer): Buffer;
+      detached: DetachedFunc;
     };
   };
 }
-
