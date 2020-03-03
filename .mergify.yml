@@ -19,14 +19,6 @@ pull_request_rules:
       label:
         add:
           - automerge
-  - name: v0.23 backport
-    conditions:
-      - base=master
-      - label=v0.23
-    actions:
-      backport:
-        branches:
-          - v0.23
   - name: v1.0 backport
     conditions:
       - base=master
