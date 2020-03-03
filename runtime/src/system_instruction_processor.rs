@@ -354,10 +354,7 @@ mod tests {
         ))
     }
     fn create_default_rent_account() -> RefCell<Account> {
-        RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
-            1,
-            vec![(0u64, &Hash::default()); 32].into_iter(),
-        ))
+        RefCell::new(sysvar::rent::create_account(1, &Rent::free()))
     }
 
     #[test]
