@@ -1892,7 +1892,7 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
-        self.purge_zero_lamport_accounts();
+        self.clean_accounts();
         self.rc
             .accounts
             .verify_bank_hash(self.slot(), &self.ancestors)
@@ -2086,11 +2086,8 @@ impl Bank {
         );
     }
 
-    pub fn purge_zero_lamport_accounts(&self) {
-        self.rc
-            .accounts
-            .accounts_db
-            .purge_zero_lamport_accounts(&self.ancestors);
+    pub fn clean_accounts(&self) {
+        self.rc.accounts.accounts_db.clean_accounts();
     }
 }
 
@@ -3130,7 +3127,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
 
-        bank.purge_zero_lamport_accounts();
+        bank.clean_accounts();
 
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
@@ -3146,11 +3143,11 @@ mod tests {
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank0.purge_zero_lamport_accounts();
+        bank0.clean_accounts();
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank1.purge_zero_lamport_accounts();
+        bank1.clean_accounts();
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
@@ -3167,7 +3164,7 @@ mod tests {
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank1.purge_zero_lamport_accounts();
+        bank1.clean_accounts();
 
         assert!(bank1.verify_hash_internal_state());
     }
