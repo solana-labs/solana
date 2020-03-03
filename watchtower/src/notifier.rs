@@ -26,7 +26,6 @@ impl TwilioWebHook {
 }
 
 fn get_twilio_config() -> Result<Option<TwilioWebHook>, String> {
-
     let config_var = env::var("TWILIO_CONFIG");
 
     if config_var.is_err() {
@@ -66,7 +65,6 @@ pub struct Notifier {
 }
 
 impl Notifier {
-
     pub fn new() -> Self {
         let discord_webhook = env::var("DISCORD_WEBHOOK")
             .map_err(|_| {

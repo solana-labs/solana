@@ -170,30 +170,28 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     false
                 });
 
-
         datapoint_info!("watchtower-sanity", ("ok", ok, bool));
         if !ok {
-
             last_check_notification_sent = true;
             if no_duplicate_notifications {
                 if last_notification_msg != notify_msg {
                     notifier.send(&notify_msg);
                     last_notification_msg = notify_msg;
                 } else {
-                    datapoint_info!("watchtower-sanity", ("Suppressing duplicate notification", ok, bool));
+                    datapoint_info!(
+                        "watchtower-sanity",
+                        ("Suppressing duplicate notification", ok, bool)
+                    );
                 }
             } else {
                 notifier.send(&notify_msg);
             }
-
         } else {
-
             if last_check_notification_sent {
                 notifier.send("solana-watchtower: All Clear");
             }
             last_check_notification_sent = false;
             last_notification_msg = String::from("");
-
         }
         sleep(interval);
     }
