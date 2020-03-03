@@ -552,23 +552,26 @@ impl AccountsDB {
                         AppendVec::new_relative_path(slot_id, storage_entry.id);
                     let append_vec_abs_path =
                         append_vecs_path.as_ref().join(&append_vec_relative_path);
-                    let mut copy_options = CopyOptions::new();
-                    copy_options.overwrite = true;
-                    let e = fs_extra::move_items(
-                        &vec![&append_vec_abs_path],
-                        &local_dir,
-                        &copy_options,
-                    )
-                    .map_err(|e| {
-                        AccountsDB::get_io_error(&format!(
-                            "Unable to move {:?} to {:?}: {}",
-                            append_vec_abs_path, local_dir, e
-                        ))
-                    });
-                    if e.is_err() {
-                        info!("{:?}", e);
-                        continue;
-                    }
+                    let target = local_dir.join(append_vec_abs_path.file_name().unwrap());
+                    if std::fs::rename(append_vec_abs_path.clone(), target).is_err() {
+                        let mut copy_options = CopyOptions::new();
+                        copy_options.overwrite = true;
+                        let e = fs_extra::move_items(
+                            &vec![&append_vec_abs_path],
+                            &local_dir,
+                            &copy_options,
+                        )
+                        .map_err(|e| {
+                            AccountsDB::get_io_error(&format!(
+                                "Unable to move {:?} to {:?}: {}",
+                                append_vec_abs_path, local_dir, e
+                            ))
+                        });
+                        if e.is_err() {
+                            info!("{:?}", e);
+                            continue;
+                        }
+                    };
 
                     // Notify the AppendVec of the new file location
                     let local_path = local_dir.join(append_vec_relative_path);
