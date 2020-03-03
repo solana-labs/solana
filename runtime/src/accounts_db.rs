@@ -2960,4 +2960,67 @@ pub mod tests {
         storage_entry.remove_account();
         storage_entry.remove_account();
     }
+
+    #[test]
+    fn test_accounts_purge_chained_purge_after_snapshot_restore_complex() {
+        solana_logger::setup();
+        let old_lamport = 223;
+        let latest_lamport = 777;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let owner = Account::default().owner;
+
+        let account = Account::new(old_lamport, no_data, &owner);
+        let account2 = Account::new(old_lamport + 100_001, no_data, &owner);
+        let account3 = Account::new(old_lamport + 100_002, no_data, &owner);
+        let dummy_account = Account::new(99999999, no_data, &owner);
+        let latest_account = Account::new(latest_lamport, no_data, &owner);
+        let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
+
+        let pubkey = Pubkey::new_rand();
+        let zero_lamport_pubkey = Pubkey::new_rand();
+        let dummy_pubkey = Pubkey::new_rand();
+        let purged_pubkey1 = Pubkey::new_rand();
+        let purged_pubkey2 = Pubkey::new_rand();
+
+        let mut current_slot = 0;
+        let accounts = AccountsDB::new_single();
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &account)]);
+        accounts.store(
+            current_slot,
+            &[(&zero_lamport_pubkey, &zero_lamport_account)],
+        );
+        accounts.store(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&purged_pubkey1, &zero_lamport_account)]);
+        accounts.store(current_slot, &[(&purged_pubkey2, &account3)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&purged_pubkey2, &zero_lamport_account)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &latest_account)]);
+        accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &latest_account)]);
+        accounts.add_root(current_slot);
+
+        print_count_and_status("before reconstruct", &accounts);
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        print_count_and_status("before purge zero", &accounts);
+        accounts.clean_accounts();
+        print_count_and_status("after purge zero", &accounts);
+
+        assert_load_account(&accounts, current_slot, pubkey, latest_lamport);
+        assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
+        assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
+    }
 }
