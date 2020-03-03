@@ -376,12 +376,6 @@ impl Validator {
                     process::exit(1);
                 }
             }
-
-            // If the node was loaded from a snapshot, advertise it in gossip
-            cluster_info
-                .write()
-                .unwrap()
-                .push_snapshot_hashes(vec![snapshot_hash]);
         }
 
         wait_for_supermajority(config, &bank, &cluster_info);
