@@ -43,7 +43,7 @@ use std::fmt;
 use std::io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult};
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use tempfile::TempDir;
 
