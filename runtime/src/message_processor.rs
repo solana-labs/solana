@@ -183,7 +183,7 @@ impl MessageProcessor {
                 let is_writable = message.is_writable(index);
                 (
                     key,
-                    index < message.header.num_required_signatures as usize,
+                    index <= message.header.num_required_signatures as usize,
                     is_writable,
                 )
             })
