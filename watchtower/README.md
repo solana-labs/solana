@@ -39,7 +39,7 @@ export TELEGRAM_BOT_TOKEN=...
 export TELEGRAM_CHAT_ID=...
 ```
 
-To receive a Twilio SMS notification on failure, having a Twilio account, 
+To receive a Twilio SMS notification on failure, having a Twilio account,
 and a sending number owned by that account,
 define environment variable before running `solana-watchtower`:
 ```
