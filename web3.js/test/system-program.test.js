@@ -7,6 +7,7 @@ import {
   SystemInstruction,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
   sendAndConfirmRecentTransaction,
   LAMPORTS_PER_SOL,
 } from '../src';
@@ -20,219 +21,129 @@ if (!mockRpcEnabled) {
 }
 
 test('createAccount', () => {
-  const from = new Account();
-  const newAccount = new Account();
-  let transaction;
-
-  transaction = SystemProgram.createAccount(
-    from.publicKey,
-    newAccount.publicKey,
-    123,
-    BudgetProgram.space,
-    BudgetProgram.programId,
+  const params = {
+    fromPubkey: new Account().publicKey,
+    newAccountPubkey: new Account().publicKey,
+    lamports: 123,
+    space: BudgetProgram.space,
+    programId: BudgetProgram.programId,
+  };
+  const transaction = SystemProgram.createAccount(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [systemInstruction] = transaction.instructions;
+  expect(params).toEqual(
+    SystemInstruction.decodeCreateAccount(systemInstruction),
   );
-
-  expect(transaction.keys).toHaveLength(2);
-  expect(transaction.programId).toEqual(SystemProgram.programId);
-  // TODO: Validate transaction contents more
 });
 
 test('transfer', () => {
-  const from = new Account();
-  const to = new Account();
-  let transaction;
-
-  transaction = SystemProgram.transfer(from.publicKey, to.publicKey, 123);
-
-  expect(transaction.keys).toHaveLength(2);
-  expect(transaction.programId).toEqual(SystemProgram.programId);
-  // TODO: Validate transaction contents more
+  const params = {
+    fromPubkey: new Account().publicKey,
+    toPubkey: new Account().publicKey,
+    lamports: 123,
+  };
+  const transaction = SystemProgram.transfer(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [systemInstruction] = transaction.instructions;
+  expect(params).toEqual(SystemInstruction.decodeTransfer(systemInstruction));
 });
 
 test('assign', () => {
-  const from = new Account();
-  const to = new Account();
-  let transaction;
-
-  transaction = SystemProgram.assign(from.publicKey, to.publicKey);
-
-  expect(transaction.keys).toHaveLength(1);
-  expect(transaction.programId).toEqual(SystemProgram.programId);
-  // TODO: Validate transaction contents more
+  const params = {
+    fromPubkey: new Account().publicKey,
+    programId: new Account().publicKey,
+  };
+  const transaction = SystemProgram.assign(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [systemInstruction] = transaction.instructions;
+  expect(params).toEqual(SystemInstruction.decodeAssign(systemInstruction));
 });
 
 test('createAccountWithSeed', () => {
-  const from = new Account();
-  const newAccount = new Account();
-  let transaction;
-
-  transaction = SystemProgram.createAccountWithSeed(
-    from.publicKey,
-    newAccount.publicKey,
-    from.publicKey,
-    'hi there',
-    123,
-    BudgetProgram.space,
-    BudgetProgram.programId,
+  const fromPubkey = new Account().publicKey;
+  const params = {
+    fromPubkey,
+    newAccountPubkey: new Account().publicKey,
+    basePubkey: fromPubkey,
+    seed: 'hi there',
+    lamports: 123,
+    space: BudgetProgram.space,
+    programId: BudgetProgram.programId,
+  };
+  const transaction = SystemProgram.createAccountWithSeed(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [systemInstruction] = transaction.instructions;
+  expect(params).toEqual(
+    SystemInstruction.decodeCreateWithSeed(systemInstruction),
   );
-
-  expect(transaction.keys).toHaveLength(2);
-  expect(transaction.programId).toEqual(SystemProgram.programId);
-  // TODO: Validate transaction contents more
 });
 
 test('createNonceAccount', () => {
-  const from = new Account();
-  const nonceAccount = new Account();
+  const fromPubkey = new Account().publicKey;
+  const params = {
+    fromPubkey,
+    noncePubkey: new Account().publicKey,
+    authorizedPubkey: fromPubkey,
+    lamports: 123,
+  };
 
-  const transaction = SystemProgram.createNonceAccount(
-    from.publicKey,
-    nonceAccount.publicKey,
-    from.publicKey,
-    123,
-  );
-
+  const transaction = SystemProgram.createNonceAccount(params);
   expect(transaction.instructions).toHaveLength(2);
-  expect(transaction.instructions[0].programId).toEqual(
-    SystemProgram.programId,
+  const [createInstruction, initInstruction] = transaction.instructions;
+
+  const createParams = {
+    fromPubkey: params.fromPubkey,
+    newAccountPubkey: params.noncePubkey,
+    lamports: params.lamports,
+    space: SystemProgram.nonceSpace,
+    programId: SystemProgram.programId,
+  };
+  expect(createParams).toEqual(
+    SystemInstruction.decodeCreateAccount(createInstruction),
   );
-  expect(transaction.instructions[1].programId).toEqual(
-    SystemProgram.programId,
+
+  const initParams = {
+    noncePubkey: params.noncePubkey,
+    authorizedPubkey: fromPubkey,
+  };
+  expect(initParams).toEqual(
+    SystemInstruction.decodeNonceInitialize(initInstruction),
   );
-  // TODO: Validate transaction contents more
+});
+
+test('nonceAdvance', () => {
+  const params = {
+    noncePubkey: new Account().publicKey,
+    authorizedPubkey: new Account().publicKey,
+  };
+  const instruction = SystemProgram.nonceAdvance(params);
+  expect(params).toEqual(SystemInstruction.decodeNonceAdvance(instruction));
 });
 
 test('nonceWithdraw', () => {
-  const from = new Account();
-  const nonceAccount = new Account();
-  const to = new Account();
-
-  const transaction = SystemProgram.nonceWithdraw(
-    nonceAccount.publicKey,
-    from.publicKey,
-    to.publicKey,
-    123,
-  );
-
-  expect(transaction.keys).toHaveLength(5);
-  expect(transaction.programId).toEqual(SystemProgram.programId);
-  // TODO: Validate transaction contents more
+  const params = {
+    noncePubkey: new Account().publicKey,
+    authorizedPubkey: new Account().publicKey,
+    toPubkey: new Account().publicKey,
+    lamports: 123,
+  };
+  const transaction = SystemProgram.nonceWithdraw(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [instruction] = transaction.instructions;
+  expect(params).toEqual(SystemInstruction.decodeNonceWithdraw(instruction));
 });
 
 test('nonceAuthorize', () => {
-  const nonceAccount = new Account();
-  const authorized = new Account();
-  const newAuthorized = new Account();
+  const params = {
+    noncePubkey: new Account().publicKey,
+    authorizedPubkey: new Account().publicKey,
+    newAuthorizedPubkey: new Account().publicKey,
+  };
 
-  const transaction = SystemProgram.nonceAuthorize(
-    nonceAccount.publicKey,
-    authorized.publicKey,
-    newAuthorized.publicKey,
-  );
-
-  expect(transaction.keys).toHaveLength(2);
-  expect(transaction.programId).toEqual(SystemProgram.programId);
-  // TODO: Validate transaction contents more
-});
-
-test('SystemInstruction create', () => {
-  const from = new Account();
-  const to = new Account();
-  const program = new Account();
-  const amount = 42;
-  const space = 100;
-  const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
-  const create = SystemProgram.createAccount(
-    from.publicKey,
-    to.publicKey,
-    amount,
-    space,
-    program.publicKey,
-  );
-  const transaction = new Transaction({recentBlockhash}).add(create);
-
-  const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.fromPublicKey).toEqual(from.publicKey);
-  expect(systemInstruction.toPublicKey).toEqual(to.publicKey);
-  expect(systemInstruction.amount).toEqual(amount);
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
-});
-
-test('SystemInstruction transfer', () => {
-  const from = new Account();
-  const to = new Account();
-  const amount = 42;
-  const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
-  const transfer = SystemProgram.transfer(from.publicKey, to.publicKey, amount);
-  const transaction = new Transaction({recentBlockhash}).add(transfer);
-  transaction.sign(from);
-
-  const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.fromPublicKey).toEqual(from.publicKey);
-  expect(systemInstruction.toPublicKey).toEqual(to.publicKey);
-  expect(systemInstruction.amount).toEqual(amount);
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
-});
-
-test('SystemInstruction assign', () => {
-  const from = new Account();
-  const program = new Account();
-  const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
-  const assign = SystemProgram.assign(from.publicKey, program.publicKey);
-  const transaction = new Transaction({recentBlockhash}).add(assign);
-  transaction.sign(from);
-
-  const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.fromPublicKey).toBeNull();
-  expect(systemInstruction.toPublicKey).toBeNull();
-  expect(systemInstruction.amount).toBeNull();
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
-});
-
-test('SystemInstruction createWithSeed', () => {
-  const from = new Account();
-  const to = new Account();
-  const program = new Account();
-  const amount = 42;
-  const space = 100;
-  const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
-  const create = SystemProgram.createAccountWithSeed(
-    from.publicKey,
-    to.publicKey,
-    from.publicKey,
-    'hi there',
-    amount,
-    space,
-    program.publicKey,
-  );
-  const transaction = new Transaction({recentBlockhash}).add(create);
-
-  const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.fromPublicKey).toEqual(from.publicKey);
-  expect(systemInstruction.toPublicKey).toEqual(to.publicKey);
-  expect(systemInstruction.amount).toEqual(amount);
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
-});
-
-test('SystemInstruction nonceWithdraw', () => {
-  const nonceAccount = new Account();
-  const authorized = new Account();
-  const to = new Account();
-  const amount = 42;
-  const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
-  const nonceWithdraw = SystemProgram.nonceWithdraw(
-    nonceAccount.publicKey,
-    authorized.publicKey,
-    to.publicKey,
-    amount,
-  );
-  const transaction = new Transaction({recentBlockhash}).add(nonceWithdraw);
-
-  const systemInstruction = SystemInstruction.from(transaction.instructions[0]);
-  expect(systemInstruction.fromPublicKey).toEqual(nonceAccount.publicKey);
-  expect(systemInstruction.toPublicKey).toEqual(to.publicKey);
-  expect(systemInstruction.amount).toEqual(amount);
-  expect(systemInstruction.programId).toEqual(SystemProgram.programId);
+  const transaction = SystemProgram.nonceAuthorize(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [instruction] = transaction.instructions;
+  expect(params).toEqual(SystemInstruction.decodeNonceAuthorize(instruction));
 });
 
 test('non-SystemInstruction error', () => {
@@ -249,7 +160,9 @@ test('non-SystemInstruction error', () => {
     data: Buffer.from([2, 0, 0, 0]),
   };
   expect(() => {
-    new SystemInstruction(badProgramId, 'Create');
+    SystemInstruction.decodeInstructionType(
+      new TransactionInstruction(badProgramId),
+    );
   }).toThrow();
 
   const amount = 123;
@@ -264,12 +177,12 @@ test('non-SystemInstruction error', () => {
   transaction.sign(from);
 
   expect(() => {
-    SystemInstruction.from(transaction.instructions[1]);
+    SystemInstruction.decodeInstructionType(transaction.instructions[1]);
   }).toThrow();
 
   transaction.instructions[0].data[0] = 11;
   expect(() => {
-    SystemInstruction.from(transaction.instructions[0]);
+    SystemInstruction.decodeInstructionType(transaction.instructions[0]);
   }).toThrow();
 });
 
@@ -284,20 +197,22 @@ test('live Nonce actions', async () => {
   const from = new Account();
   const to = new Account();
   const authority = new Account();
+  const newAuthority = new Account();
   await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
   await connection.requestAirdrop(authority.publicKey, LAMPORTS_PER_SOL);
+  await connection.requestAirdrop(newAuthority.publicKey, LAMPORTS_PER_SOL);
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
     SystemProgram.nonceSpace,
     'recent',
   );
 
-  let createNonceAccount = SystemProgram.createNonceAccount(
-    from.publicKey,
-    nonceAccount.publicKey,
-    from.publicKey,
-    minimumAmount,
-  );
+  let createNonceAccount = SystemProgram.createNonceAccount({
+    fromPubkey: from.publicKey,
+    noncePubkey: nonceAccount.publicKey,
+    authorizedPubkey: from.publicKey,
+    lamports: minimumAmount,
+  });
   await sendAndConfirmRecentTransaction(
     connection,
     createNonceAccount,
@@ -311,33 +226,74 @@ test('live Nonce actions', async () => {
   const nonceQuery2 = await connection.getNonce(nonceAccount.publicKey);
   expect(nonceQuery1.nonce).toEqual(nonceQuery2.nonce);
 
+  // Wait for blockhash to advance
   await sleep(500);
 
   const advanceNonce = new Transaction().add(
-    SystemProgram.nonceAdvance(nonceAccount.publicKey, from.publicKey),
+    SystemProgram.nonceAdvance({
+      noncePubkey: nonceAccount.publicKey,
+      authorizedPubkey: from.publicKey,
+    }),
   );
   await sendAndConfirmRecentTransaction(connection, advanceNonce, from);
-
   const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
   expect(nonceQuery1.nonce).not.toEqual(nonceQuery3.nonce);
   const nonce = nonceQuery3.nonce;
 
+  // Wait for blockhash to advance
   await sleep(500);
 
-  let transfer = SystemProgram.transfer(
-    from.publicKey,
-    to.publicKey,
-    minimumAmount,
+  const authorizeNonce = new Transaction().add(
+    SystemProgram.nonceAuthorize({
+      noncePubkey: nonceAccount.publicKey,
+      authorizedPubkey: from.publicKey,
+      newAuthorizedPubkey: newAuthority.publicKey,
+    }),
   );
+  await sendAndConfirmRecentTransaction(connection, authorizeNonce, from);
+
+  let transfer = SystemProgram.transfer({
+    fromPubkey: from.publicKey,
+    toPubkey: to.publicKey,
+    lamports: minimumAmount,
+  });
   transfer.nonceInfo = {
     nonce,
-    nonceInstruction: SystemProgram.nonceAdvance(
-      nonceAccount.publicKey,
-      from.publicKey,
-    ),
+    nonceInstruction: SystemProgram.nonceAdvance({
+      noncePubkey: nonceAccount.publicKey,
+      authorizedPubkey: newAuthority.publicKey,
+    }),
   };
 
-  await sendAndConfirmRecentTransaction(connection, transfer, from);
+  await sendAndConfirmRecentTransaction(
+    connection,
+    transfer,
+    from,
+    newAuthority,
+  );
   const toBalance = await connection.getBalance(to.publicKey);
   expect(toBalance).toEqual(minimumAmount);
+
+  // Wait for blockhash to advance
+  await sleep(500);
+
+  const withdrawAccount = new Account();
+  const withdrawNonce = new Transaction().add(
+    SystemProgram.nonceWithdraw({
+      noncePubkey: nonceAccount.publicKey,
+      authorizedPubkey: newAuthority.publicKey,
+      lamports: minimumAmount,
+      toPubkey: withdrawAccount.publicKey,
+    }),
+  );
+  await sendAndConfirmRecentTransaction(
+    connection,
+    withdrawNonce,
+    newAuthority,
+  );
+  expect(await connection.getBalance(nonceAccount.publicKey)).toEqual(0);
+  const withdrawBalance = await connection.getBalance(
+    withdrawAccount.publicKey,
+  );
+  expect(withdrawBalance).toEqual(minimumAmount);
 });

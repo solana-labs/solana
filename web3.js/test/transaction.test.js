@@ -12,11 +12,11 @@ test('signPartial', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
-  const transfer = SystemProgram.transfer(
-    account1.publicKey,
-    account2.publicKey,
-    123,
-  );
+  const transfer = SystemProgram.transfer({
+    fromPubkey: account1.publicKey,
+    toPubkey: account2.publicKey,
+    lamports: 123,
+  });
 
   const transaction = new Transaction({recentBlockhash}).add(transfer);
   transaction.sign(account1, account2);
@@ -33,16 +33,16 @@ test('transfer signatures', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
-  const transfer1 = SystemProgram.transfer(
-    account1.publicKey,
-    account2.publicKey,
-    123,
-  );
-  const transfer2 = SystemProgram.transfer(
-    account2.publicKey,
-    account1.publicKey,
-    123,
-  );
+  const transfer1 = SystemProgram.transfer({
+    fromPubkey: account1.publicKey,
+    toPubkey: account2.publicKey,
+    lamports: 123,
+  });
+  const transfer2 = SystemProgram.transfer({
+    fromPubkey: account2.publicKey,
+    toPubkey: account1.publicKey,
+    lamports: 123,
+  });
 
   const orgTransaction = new Transaction({recentBlockhash}).add(
     transfer1,
@@ -62,16 +62,16 @@ test('dedup signatures', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
-  const transfer1 = SystemProgram.transfer(
-    account1.publicKey,
-    account2.publicKey,
-    123,
-  );
-  const transfer2 = SystemProgram.transfer(
-    account1.publicKey,
-    account2.publicKey,
-    123,
-  );
+  const transfer1 = SystemProgram.transfer({
+    fromPubkey: account1.publicKey,
+    toPubkey: account2.publicKey,
+    lamports: 123,
+  });
+  const transfer2 = SystemProgram.transfer({
+    fromPubkey: account1.publicKey,
+    toPubkey: account2.publicKey,
+    lamports: 123,
+  });
 
   const orgTransaction = new Transaction({recentBlockhash}).add(
     transfer1,
@@ -88,14 +88,18 @@ test('use nonce', () => {
 
   const nonceInfo = {
     nonce,
-    nonceInstruction: SystemProgram.nonceAdvance(
-      nonceAccount.publicKey,
-      account1.publicKey,
-    ),
+    nonceInstruction: SystemProgram.nonceAdvance({
+      noncePubkey: nonceAccount.publicKey,
+      authorizedPubkey: account1.publicKey,
+    }),
   };
 
   const transferTransaction = new Transaction({nonceInfo}).add(
-    SystemProgram.transfer(account1.publicKey, account2.publicKey, 123),
+    SystemProgram.transfer({
+      fromPubkey: account1.publicKey,
+      toPubkey: account2.publicKey,
+      lamports: 123,
+    }),
   );
   transferTransaction.sign(account1);
 
@@ -137,7 +141,11 @@ test('parse wire format and serialize', () => {
   const recipient = new PublicKey(
     'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99',
   ); // Arbitrary known public key
-  const transfer = SystemProgram.transfer(sender.publicKey, recipient, 49);
+  const transfer = SystemProgram.transfer({
+    fromPubkey: sender.publicKey,
+    toPubkey: recipient,
+    lamports: 49,
+  });
   const expectedTransaction = new Transaction({recentBlockhash}).add(transfer);
   expectedTransaction.sign(sender);
 
@@ -198,7 +206,11 @@ test('serialize unsigned transaction', () => {
   const recipient = new PublicKey(
     'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99',
   ); // Arbitrary known public key
-  const transfer = SystemProgram.transfer(sender.publicKey, recipient, 49);
+  const transfer = SystemProgram.transfer({
+    fromPubkey: sender.publicKey,
+    toPubkey: recipient,
+    lamports: 49,
+  });
   const expectedTransaction = new Transaction({recentBlockhash}).add(transfer);
 
   const wireTransactionArray = [

@@ -475,6 +475,65 @@ declare module '@solana/web3.js' {
   }
 
   // === src/system-program.js ===
+  export type CreateAccountParams = {
+    fromPubkey: PublicKey;
+    newAccountPubkey: PublicKey;
+    lamports: number;
+    space: number;
+    programId: PublicKey;
+  };
+
+  export type TransferParams = {
+    fromPubkey: PublicKey;
+    toPubkey: PublicKey;
+    lamports: number;
+  };
+
+  export type AssignParams = {
+    fromPubkey: PublicKey;
+    programId: PublicKey;
+  };
+
+  export type CreateAccountWithSeedParams = {
+    fromPubkey: PublicKey;
+    newAccountPubkey: PublicKey;
+    basePubkey: PublicKey;
+    seed: string;
+    lamports: number;
+    space: number;
+    programId: PublicKey;
+  };
+
+  export type CreateNonceAccountParams = {
+    fromPubkey: PublicKey;
+    noncePubkey: PublicKey;
+    authorizedPubkey: PublicKey;
+    lamports: number;
+  };
+
+  export type InitializeNonceParams = {
+    noncePubkey: PublicKey;
+    authorizedPubkey: PublicKey;
+  };
+
+  export type AdvanceNonceParams = {
+    noncePubkey: PublicKey;
+    authorizedPubkey: PublicKey;
+  };
+
+  export type WithdrawNonceParams = {
+    noncePubkey: PublicKey;
+    authorizedPubkey: PublicKey;
+    toPubkey: PublicKey;
+    lamports: number;
+  };
+
+  export type AuthorizeNonceParams = {
+    noncePubkey: PublicKey;
+    authorizedPubkey: PublicKey;
+    newAuthorizedPubkey: PublicKey;
+  };
+
   export class SystemProgram {
     static programId: PublicKey;
     static nonceSpace: number;
@@ -538,17 +597,30 @@ declare module '@solana/web3.js' {
     [type in SystemInstructionType]: InstructionType;
   };
 
-  export class SystemInstruction extends TransactionInstruction {
-    type: SystemInstructionType;
-    fromPublicKey: PublicKey | null;
-    toPublicKey: PublicKey | null;
-    amount: number | null;
-
-    constructor(
-      opts: TransactionInstructionCtorFields,
-      type: SystemInstructionType,
-    );
-    static from(instruction: TransactionInstruction): SystemInstruction;
+  export class SystemInstruction {
+    static decodeInstructionType(
+      instruction: TransactionInstruction,
+    ): SystemInstructionType;
+    static decodeCreateAccount(
+      instruction: TransactionInstruction,
+    ): CreateAccountParams;
+    static decodeTransfer(instruction: TransactionInstruction): TransferParams;
+    static decodeAssign(instruction: TransactionInstruction): AssignParams;
+    static decodeCreateWithSeed(
+      instruction: TransactionInstruction,
+    ): CreateAccountWithSeedParams;
+    static decodeNonceInitialize(
+      instruction: TransactionInstruction,
+    ): InitializeNonceParams;
+    static decodeNonceAdvance(
+      instruction: TransactionInstruction,
+    ): AdvanceNonceParams;
+    static decodeNonceWithdraw(
+      instruction: TransactionInstruction,
+    ): WithdrawNonceParams;
+    static decodeNonceAuthorize(
+      instruction: TransactionInstruction,
+    ): AuthorizeNonceParams;
   }
 
   // === src/loader.js ===

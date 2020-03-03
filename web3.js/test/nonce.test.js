@@ -86,12 +86,12 @@ test('create and query nonce account', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.createNonceAccount(
-    from.publicKey,
-    nonceAccount.publicKey,
-    from.publicKey,
-    minimumAmount,
-  );
+  const transaction = SystemProgram.createNonceAccount({
+    fromPubkey: from.publicKey,
+    noncePubkey: nonceAccount.publicKey,
+    authorizedPubkey: from.publicKey,
+    lamports: minimumAmount,
+  });
   await connection.sendTransaction(transaction, from, nonceAccount);
 
   const expectedData = Buffer.alloc(68);
