@@ -45,6 +45,7 @@
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
     "doc": "set -ex; esdoc; node -p '\"\\nDocumentation coverage: \" + require(\"./doc/coverage.json\").coverage'",
+    "defs": "set -ex; flow check-contents < module.flow.js; tsc module.d.ts",
     "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "examples": "set -ex; for example in examples/*.js; do node $example; done",
     "flow": "set -ex; flow stop; flow-typed install jest@24; flow",
@@ -57,7 +58,7 @@
     "localnet:logs": "bin/localnet.sh logs -f",
     "localnet:up": "bin/localnet.sh up",
     "localnet:update": "bin/localnet.sh update",
-    "ok": "run-s lint flow test doc",
+    "ok": "run-s lint flow test doc defs",
     "prepare": "run-s clean bpf-sdk:install bpf-sdk:remove-symlinks build",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.{j,t}s'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
@@ -70,6 +71,7 @@
     "@babel/runtime": "^7.3.1",
     "bn.js": "^5.0.0",
     "bs58": "^4.0.1",
+    "buffer": "^5.4.3",
     "buffer-layout": "^1.2.0",
     "esdoc-inject-style-plugin": "^1.0.0",
     "hasha": "^5.1.0",
@@ -129,6 +131,7 @@
     "rollup-plugin-replace": "2.2.0",
     "rollup-plugin-terser": "^5.0.0",
     "semantic-release": "^17.0.2",
+    "typescript": "^3.8.3",
     "watch": "^1.0.2"
   }
 }

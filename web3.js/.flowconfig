@@ -3,8 +3,6 @@
 <PROJECT_ROOT>/lib/.*
 <PROJECT_ROOT>/internals/.*
 
-[include]
-
 [options]
 
 emoji=true

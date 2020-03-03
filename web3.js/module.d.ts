@@ -1,4 +1,5 @@
 declare module '@solana/web3.js' {
+  import {Buffer} from 'buffer';
   import * as BufferLayout from 'buffer-layout';
 
   // === src/publickey.js ===
@@ -425,7 +426,7 @@ declare module '@solana/web3.js' {
     | 'Deactivate';
 
   export const STAKE_INSTRUCTION_LAYOUTS: {
-    [StakeInstructionType]: InstructionType;
+    [type in StakeInstructionType]: InstructionType;
   };
 
   export class StakeInstruction extends TransactionInstruction {
@@ -434,7 +435,7 @@ declare module '@solana/web3.js' {
     authorizedPublicKey: PublicKey | null;
 
     constructor(
-      opts?: TransactionInstructionCtorFields,
+      opts: TransactionInstructionCtorFields,
       type: StakeInstructionType,
     );
     static from(instruction: TransactionInstruction): StakeInstruction;
@@ -501,7 +502,7 @@ declare module '@solana/web3.js' {
     | 'AuthorizeNonceAccount';
 
   export const SYSTEM_INSTRUCTION_LAYOUTS: {
-    [SystemInstructionType]: InstructionType;
+    [type in SystemInstructionType]: InstructionType;
   };
 
   export class SystemInstruction extends TransactionInstruction {
@@ -511,7 +512,7 @@ declare module '@solana/web3.js' {
     amount: number | null;
 
     constructor(
-      opts?: TransactionInstructionCtorFields,
+      opts: TransactionInstructionCtorFields,
       type: SystemInstructionType,
     );
     static from(instruction: TransactionInstruction): SystemInstruction;

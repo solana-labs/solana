@@ -10,6 +10,7 @@
  *
  */
 
+import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
 
 declare module '@solana/web3.js' {
