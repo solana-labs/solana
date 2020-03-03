@@ -412,6 +412,22 @@ export class Transaction {
   }
 
   /**
+   * Verify signatures of a complete, signed Transaction
+   */
+  verifySignatures(): boolean {
+    let verified = true;
+    const signData = this._getSignData();
+    for (const {signature, publicKey} of this.signatures) {
+      if (
+        !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
+      ) {
+        verified = false;
+      }
+    }
+    return verified;
+  }
+
+  /**
    * Serialize the Transaction in the wire format.
    *
    * The Transaction must have a valid `signature` before invoking this method
