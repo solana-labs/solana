@@ -1,4 +1,4 @@
-# Installing the Validator Software
+# Installing Solana
 
 Install the Solana release
 [v1.0.0](https://github.com/solana-labs/solana/releases/tag/v1.0.0) on your

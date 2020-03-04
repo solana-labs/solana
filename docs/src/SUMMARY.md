@@ -1,12 +1,12 @@
 # Table of contents
 
 * [Introduction](introduction.md)
+* [Installing Solana](install-solana.md)
 * [Using Solana from the Command-line](cli/README.md)
   * [Command-line Usage](cli/usage.md)
   * [Remote Wallet](remote-wallet/README.md)
     * [Ledger Hardware Wallet](remote-wallet/ledger.md)
   * [Paper Wallet](paper-wallet/README.md)
-    * [Installation](paper-wallet/installation.md)
     * [Paper Wallet Usage](paper-wallet/usage.md)
   * [Offline Signing](offline-signing/README.md)
     * [Durable Transaction Nonces](offline-signing/durable-nonce.md)
@@ -41,7 +41,6 @@
 * [Running a Validator](running-validator/README.md)
   * [Validator Requirements](running-validator/validator-reqs.md)
   * [Choosing a Testnet](running-validator/validator-testnet.md)
-  * [Installing the Validator Software](running-validator/validator-software.md)
   * [Starting a Validator](running-validator/validator-start.md)
   * [Staking](running-validator/validator-stake.md)
   * [Monitoring a Validator](running-validator/validator-monitor.md)

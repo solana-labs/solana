@@ -33,7 +33,7 @@ Here are our recommendations for low, medium, and high end machine specification
 ## Software
 
 * We build and run on Ubuntu 18.04.  Some users have had trouble when running on Ubuntu 16.04
-* See [Validator Software](validator-software.md) for the current Solana software release.
+* See [Installing Solana](../install-solana.md) for the current Solana software release.
 
 Be sure to ensure that the machine used is not behind a residential NAT to avoid
 NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
