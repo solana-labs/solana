@@ -200,12 +200,11 @@ impl MessageProcessor {
 
         assert!(
             keyed_accounts[0].try_account_ref()?.executable,
-            "loader not executable"
+            "root program not executable"
         );
-
-        let loader_id = keyed_accounts[0].unsigned_key();
+        let root_program_id = keyed_accounts[0].unsigned_key();
         for (id, process_instruction) in &self.instruction_processors {
-            if id == loader_id {
+            if id == root_program_id {
                 return process_instruction(&program_id, &keyed_accounts[1..], &instruction.data);
             }
         }
