@@ -30,8 +30,8 @@ src/.gitbook/assets/%.svg: art/%.msc
 ../target/debug/solana:
 	cd ../cli && cargo build
 
-src/cli/usage.md: ../target/debug/solana
-	./build-cli-usage.sh
+src/cli/usage.md: build-cli-usage.sh ../target/debug/solana
+	./$<
 
 src/%.md: %.md
 	@mkdir -p $(@D)
