@@ -526,11 +526,7 @@ mod tests {
     };
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, Signer};
-    use solana_sdk::transaction::Transaction;
-    use solana_vote_program::{
-        vote_instruction,
-        vote_state::{create_account, Vote},
-    };
+    use solana_vote_program::{vote_state::create_account, vote_transaction};
 
     #[test]
     fn test_max_vote_tx_fits() {
@@ -539,8 +535,9 @@ mod tests {
         let vote_keypair = Keypair::new();
         let slots: Vec<_> = (0..31).into_iter().collect();
 
-        let vote_tx = new_vote_tx(
+        let vote_tx = vote_transaction::new_vote_transaction(
             slots,
+            Hash::default(),
             Hash::default(),
             &node_keypair,
             &vote_keypair,
@@ -561,8 +558,9 @@ mod tests {
         let vote_keypair = Keypair::new();
         let authorized_voter = Keypair::new();
 
-        let vote_tx = new_vote_tx(
+        let vote_tx = vote_transaction::new_vote_transaction(
             vec![0],
+            Hash::default(),
             Hash::default(),
             &node_keypair,
             &vote_keypair,
@@ -587,8 +585,9 @@ mod tests {
         ));
 
         // Set the authorized voter == vote keypair
-        let vote_tx = new_vote_tx(
+        let vote_tx = vote_transaction::new_vote_transaction(
             vec![0],
+            Hash::default(),
             Hash::default(),
             &node_keypair,
             &vote_keypair,
@@ -634,8 +633,9 @@ mod tests {
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;
             let vote_keypair = &keypairs.vote_keypair;
-            let vote_tx = new_vote_tx(
+            let vote_tx = vote_transaction::new_vote_transaction(
                 vote_slots.clone(),
+                Hash::default(),
                 Hash::default(),
                 node_keypair,
                 vote_keypair,
@@ -680,8 +680,9 @@ mod tests {
                 .map(|keypairs| {
                     let node_keypair = &keypairs.node_keypair;
                     let vote_keypair = &keypairs.vote_keypair;
-                    let vote_tx = new_vote_tx(
+                    let vote_tx = vote_transaction::new_vote_transaction(
                         vec![i as u64 + 1],
+                        Hash::default(),
                         Hash::default(),
                         node_keypair,
                         vote_keypair,
@@ -868,9 +869,10 @@ mod tests {
         // in the tracker
         let validator0_keypairs = &validator_voting_keypairs[0];
         let vote_tracker = Arc::new(RwLock::new(VoteTracker::new(&bank)));
-        let vote_tx = vec![new_vote_tx(
+        let vote_tx = vec![vote_transaction::new_vote_transaction(
             // Must vote > root to be processed
             vec![bank.slot() + 1],
+            Hash::default(),
             Hash::default(),
             &validator0_keypairs.node_keypair,
             &validator0_keypairs.vote_keypair,
@@ -972,9 +974,10 @@ mod tests {
         let vote_txs: Vec<_> = [bank.slot() + 2, first_slot_in_new_epoch]
             .iter()
             .map(|slot| {
-                new_vote_tx(
+                vote_transaction::new_vote_transaction(
                     // Must vote > root to be processed
                     vec![*slot],
+                    Hash::default(),
                     Hash::default(),
                     &validator0_keypairs.node_keypair,
                     &validator0_keypairs.vote_keypair,
@@ -996,26 +999,5 @@ mod tests {
         // Ref count goes up by 2 (see above comments)
         current_ref_count += 2;
         assert_eq!(ref_count, current_ref_count);
-    }
-
-    fn new_vote_tx(
-        slots: Vec<Slot>,
-        blockhash: Hash,
-        node_keypair: &Keypair,
-        vote_keypair: &Keypair,
-        authorized_voter_keypair: &Keypair,
-    ) -> Transaction {
-        let votes = Vote::new(slots, blockhash);
-        let vote_ix = vote_instruction::vote(
-            &vote_keypair.pubkey(),
-            &authorized_voter_keypair.pubkey(),
-            votes,
-        );
-
-        let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
-
-        vote_tx.partial_sign(&[node_keypair], blockhash);
-        vote_tx.partial_sign(&[authorized_voter_keypair], blockhash);
-        vote_tx
     }
 }
