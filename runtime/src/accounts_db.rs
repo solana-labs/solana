@@ -452,8 +452,6 @@ pub struct AccountsDB {
     min_num_stores: usize,
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
-
-    pub dont_cleanup_dead_slots: AtomicBool,
 }
 
 impl Default for AccountsDB {
@@ -476,7 +474,6 @@ impl Default for AccountsDB {
                 .unwrap(),
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
-            dont_cleanup_dead_slots: AtomicBool::new(false),
         }
     }
 }
@@ -1351,10 +1348,6 @@ impl AccountsDB {
     }
 
     fn clean_dead_slots(&self, dead_slots: &mut HashSet<Slot>) {
-        if self.dont_cleanup_dead_slots.load(Ordering::Relaxed) {
-            return;
-        }
-
         if !dead_slots.is_empty() {
             {
                 let mut index = self.accounts_index.write().unwrap();
@@ -1451,35 +1444,54 @@ impl AccountsDB {
         slots.sort();
         let mut accounts_index = self.accounts_index.write().unwrap();
         for slot_id in slots.iter() {
-            let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
+            let accumulator: Vec<HashMap<Pubkey, Vec<(u64, AccountInfo)>>> = self
                 .scan_account_storage(
                     *slot_id,
                     |stored_account: &StoredAccount,
                      store_id: AppendVecId,
-                     accum: &mut HashMap<Pubkey, (u64, AccountInfo)>| {
+                     accum: &mut HashMap<Pubkey, Vec<(u64, AccountInfo)>>| {
                         let account_info = AccountInfo {
                             store_id,
                             offset: stored_account.offset,
                             lamports: stored_account.account_meta.lamports,
                         };
-                        accum.insert(
-                            stored_account.meta.pubkey,
-                            (stored_account.meta.write_version, account_info),
-                        );
+                        let entry = accum
+                            .entry(stored_account.meta.pubkey)
+                            .or_insert_with(|| vec![]);
+                        entry.push((stored_account.meta.write_version, account_info));
                     },
                 );
 
-            let mut account_maps = accumulator.pop().unwrap();
-            while let Some(maps) = accumulator.pop() {
-                AccountsDB::merge(&mut account_maps, &maps);
-            }
-            if !account_maps.is_empty() {
-                accounts_index.roots.insert(*slot_id);
-                let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
-                for (pubkey, (_, account_info)) in account_maps.iter() {
-                    accounts_index.insert(*slot_id, pubkey, account_info.clone(), &mut _reclaims);
+            let mut accounts_map: HashMap<Pubkey, Vec<(u64, AccountInfo)>> = HashMap::new();
+            for accumulator_entry in accumulator.iter() {
+                for (pubkey, storage_entry) in accumulator_entry {
+                    let entry = accounts_map.entry(*pubkey).or_insert_with(|| vec![]);
+                    entry.extend(storage_entry.iter().cloned());
                 }
             }
+
+            // Need to restore indexes even with older write versions which may
+            // be shielding other accounts. When they are then purged, the
+            // original non-shielded account value will be visible when the account
+            // is restored from the append-vec
+            if !accumulator.is_empty() {
+                let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
+                for (pubkey, account_infos) in accounts_map.iter_mut() {
+                    account_infos.sort_by(|a, b| a.0.cmp(&b.0));
+                    for (_, account_info) in account_infos {
+                        accounts_index.insert(
+                            *slot_id,
+                            pubkey,
+                            account_info.clone(),
+                            &mut _reclaims,
+                        );
+                    }
+                }
+            }
+        }
+        // Need to add these last, otherwise older updates will be cleaned
+        for slot_id in slots {
+            accounts_index.roots.insert(slot_id);
         }
 
         let mut counts = HashMap::new();
@@ -2251,8 +2263,8 @@ pub mod tests {
         // Don't check the first 35 accounts which have not been modified on slot 0
         check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
-        assert!(check_storage(&daccounts, 0, 78));
-        assert!(check_storage(&daccounts, 1, 11));
+        assert!(check_storage(&daccounts, 0, 100));
+        assert!(check_storage(&daccounts, 1, 21));
         assert!(check_storage(&daccounts, 2, 31));
 
         let ancestors = linear_ancestors(latest_slot);
@@ -2488,7 +2500,7 @@ pub mod tests {
 
     fn with_chained_zero_lamport_accounts<F>(f: F)
     where
-        F: Fn(AccountsDB, Slot) -> (AccountsDB, bool),
+        F: Fn(AccountsDB, Slot) -> AccountsDB,
     {
         let some_lamport = 223;
         let zero_lamport = 0;
@@ -2528,12 +2540,14 @@ pub mod tests {
         accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
         accounts.add_root(current_slot);
 
-        let (accounts, skip_account_assertion) = f(accounts, current_slot);
+        print_accounts("pre_f", &accounts);
+        accounts.update_accounts_hash(4, &HashMap::default());
 
-        assert_eq!(4, accounts.accounts_index.read().unwrap().roots.len());
-        if skip_account_assertion {
-            return;
-        }
+        let accounts = f(accounts, current_slot);
+
+        print_accounts("post_f", &accounts);
+
+        accounts.verify_bank_hash(4, &HashMap::default()).unwrap();
 
         assert_load_account(&accounts, current_slot, pubkey, some_lamport);
         assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
@@ -2547,7 +2561,7 @@ pub mod tests {
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             accounts.clean_accounts();
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-            (accounts, false)
+            accounts
         });
     }
 
@@ -2556,11 +2570,10 @@ pub mod tests {
         solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-            accounts
-                .dont_cleanup_dead_slots
-                .store(true, Ordering::Relaxed);
+            print_accounts("after_reconstruct", &accounts);
             accounts.clean_accounts();
-            (accounts, true)
+            let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+            accounts
         });
     }
 
@@ -2946,5 +2959,68 @@ pub mod tests {
         let storage_entry = storage.0[&0].values().next().unwrap();
         storage_entry.remove_account();
         storage_entry.remove_account();
+    }
+
+    #[test]
+    fn test_accounts_purge_chained_purge_after_snapshot_restore_complex() {
+        solana_logger::setup();
+        let old_lamport = 223;
+        let latest_lamport = 777;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let owner = Account::default().owner;
+
+        let account = Account::new(old_lamport, no_data, &owner);
+        let account2 = Account::new(old_lamport + 100_001, no_data, &owner);
+        let account3 = Account::new(old_lamport + 100_002, no_data, &owner);
+        let dummy_account = Account::new(99999999, no_data, &owner);
+        let latest_account = Account::new(latest_lamport, no_data, &owner);
+        let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
+
+        let pubkey = Pubkey::new_rand();
+        let zero_lamport_pubkey = Pubkey::new_rand();
+        let dummy_pubkey = Pubkey::new_rand();
+        let purged_pubkey1 = Pubkey::new_rand();
+        let purged_pubkey2 = Pubkey::new_rand();
+
+        let mut current_slot = 0;
+        let accounts = AccountsDB::new_single();
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &account)]);
+        accounts.store(
+            current_slot,
+            &[(&zero_lamport_pubkey, &zero_lamport_account)],
+        );
+        accounts.store(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&purged_pubkey1, &zero_lamport_account)]);
+        accounts.store(current_slot, &[(&purged_pubkey2, &account3)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&purged_pubkey2, &zero_lamport_account)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &latest_account)]);
+        accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey, &latest_account)]);
+        accounts.add_root(current_slot);
+
+        print_count_and_status("before reconstruct", &accounts);
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        print_count_and_status("before purge zero", &accounts);
+        accounts.clean_accounts();
+        print_count_and_status("after purge zero", &accounts);
+
+        assert_load_account(&accounts, current_slot, pubkey, latest_lamport);
+        assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
+        assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
     }
 }
