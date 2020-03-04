@@ -61,7 +61,7 @@ fn output_slot(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod)
                     for (signature_index, signature) in transaction.signatures.iter().enumerate() {
                         println!("      Signature {}: {:?}", signature_index, signature);
                     }
-                    println!("      Header: {:?}", message.header);
+                    println!("      {:?}", message.header);
                     for (account_index, account) in message.account_keys.iter().enumerate() {
                         println!("      Account {}: {:?}", account_index, account);
                     }
