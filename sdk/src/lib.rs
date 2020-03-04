@@ -17,7 +17,7 @@ pub mod message;
 pub mod move_loader;
 pub mod native_loader;
 pub mod native_token;
-pub mod nonce_state;
+pub mod nonce;
 pub mod packet;
 pub mod poh_config;
 pub mod program_utils;

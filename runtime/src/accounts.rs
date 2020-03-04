@@ -17,8 +17,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     hash::Hash,
-    native_loader,
-    nonce_state::NonceState,
+    native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
     transaction::{Transaction, TransactionError},
@@ -160,7 +159,7 @@ impl Accounts {
                 })? {
                     SystemAccountKind::System => 0,
                     SystemAccountKind::Nonce => {
-                        rent_collector.rent.minimum_balance(NonceState::size())
+                        rent_collector.rent.minimum_balance(nonce::State::size())
                     }
                 };
 
@@ -681,7 +680,7 @@ mod tests {
         hash::Hash,
         instruction::CompiledInstruction,
         message::Message,
-        nonce_state,
+        nonce,
         rent::Rent,
         signature::{Keypair, Signer},
         system_program,
@@ -915,17 +914,15 @@ mod tests {
                 ..Rent::default()
             },
         );
-        let min_balance = rent_collector
-            .rent
-            .minimum_balance(nonce_state::NonceState::size());
+        let min_balance = rent_collector.rent.minimum_balance(nonce::State::size());
         let fee_calculator = FeeCalculator::new(min_balance);
         let nonce = Keypair::new();
         let mut accounts = vec![(
             nonce.pubkey(),
             Account::new_data(
                 min_balance * 2,
-                &nonce_state::NonceState::Initialized(
-                    nonce_state::Meta::new(&Pubkey::default()),
+                &nonce::State::Initialized(
+                    nonce::state::Meta::new(&Pubkey::default()),
                     Hash::default(),
                 ),
                 &system_program::id(),

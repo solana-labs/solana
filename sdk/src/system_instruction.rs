@@ -1,7 +1,7 @@
 use crate::{
     hash::hashv,
     instruction::{AccountMeta, Instruction, WithSigner},
-    nonce_state::NonceState,
+    nonce,
     program_utils::DecodeError,
     pubkey::Pubkey,
     system_program,
@@ -322,7 +322,7 @@ pub fn create_nonce_account_with_seed(
             base,
             seed,
             lamports,
-            NonceState::size() as u64,
+            nonce::State::size() as u64,
             &system_program::id(),
         ),
         Instruction::new(
@@ -348,7 +348,7 @@ pub fn create_nonce_account(
             from_pubkey,
             nonce_pubkey,
             lamports,
-            NonceState::size() as u64,
+            nonce::State::size() as u64,
             &system_program::id(),
         ),
         Instruction::new(

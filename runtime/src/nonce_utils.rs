@@ -3,7 +3,7 @@ use solana_sdk::{
     account_utils::StateMut,
     hash::Hash,
     instruction::CompiledInstruction,
-    nonce_state::NonceState,
+    nonce::State,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
@@ -40,7 +40,7 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 
 pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
     match acc.state() {
-        Ok(NonceState::Initialized(_meta, ref nonce)) => hash == nonce,
+        Ok(State::Initialized(_meta, ref nonce)) => hash == nonce,
         _ => false,
     }
 }
@@ -60,9 +60,9 @@ pub fn prepare_if_nonce_account(
                 *account = nonce_acc.clone()
             }
             // Since hash_age_kind is DurableNonce, unwrap is safe here
-            if let NonceState::Initialized(meta, _) = account.state().unwrap() {
+            if let State::Initialized(meta, _) = account.state().unwrap() {
                 account
-                    .set_state(&NonceState::Initialized(meta, *last_blockhash))
+                    .set_state(&State::Initialized(meta, *last_blockhash))
                     .unwrap();
             }
         }
@@ -74,10 +74,10 @@ mod tests {
     use super::*;
     use solana_sdk::{
         account::Account,
-        account_utils::State,
+        account_utils::State as AccountUtilsState,
         hash::Hash,
         instruction::InstructionError,
-        nonce_state::{with_test_keyed_account, Meta, NonceAccount},
+        nonce::{self, account::with_test_keyed_account, Account as NonceAccount},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
@@ -193,9 +193,9 @@ mod tests {
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap().clone());
-            let state: NonceState = nonce_account.state().unwrap();
+            let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
-            assert_eq!(state, NonceState::Uninitialized);
+            assert_eq!(state, State::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
@@ -223,9 +223,9 @@ mod tests {
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap().clone());
-            let state: NonceState = nonce_account.state().unwrap();
+            let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
-            assert_eq!(state, NonceState::Uninitialized);
+            assert_eq!(state, State::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
@@ -242,7 +242,7 @@ mod tests {
         let stored_nonce = Hash::default();
         let account = Account::new_data(
             42,
-            &NonceState::Initialized(Meta::new(&Pubkey::default()), stored_nonce),
+            &State::Initialized(nonce::state::Meta::new(&Pubkey::default()), stored_nonce),
             &system_program::id(),
         )
         .unwrap();
@@ -297,8 +297,8 @@ mod tests {
 
         let mut expect_account = post_account.clone();
         expect_account
-            .set_state(&NonceState::Initialized(
-                Meta::new(&Pubkey::default()),
+            .set_state(&State::Initialized(
+                nonce::state::Meta::new(&Pubkey::default()),
                 last_blockhash,
             ))
             .unwrap();
@@ -356,8 +356,8 @@ mod tests {
 
         let mut expect_account = pre_account.clone();
         expect_account
-            .set_state(&NonceState::Initialized(
-                Meta::new(&Pubkey::default()),
+            .set_state(&State::Initialized(
+                nonce::state::Meta::new(&Pubkey::default()),
                 last_blockhash,
             ))
             .unwrap();
