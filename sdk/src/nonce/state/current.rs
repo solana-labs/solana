@@ -3,22 +3,15 @@ use crate::{hash::Hash, pubkey::Pubkey};
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub struct Meta {
-    pub nonce_authority: Pubkey,
-}
-
-impl Meta {
-    pub fn new(nonce_authority: &Pubkey) -> Self {
-        Self {
-            nonce_authority: *nonce_authority,
-        }
-    }
+pub struct Data {
+    pub authority: Pubkey,
+    pub blockhash: Hash,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum State {
     Uninitialized,
-    Initialized(Meta, Hash),
+    Initialized(Data),
 }
 
 impl Default for State {
@@ -29,7 +22,7 @@ impl Default for State {
 
 impl State {
     pub fn size() -> usize {
-        let data = Versions::new_current(State::Initialized(Meta::default(), Hash::default()));
+        let data = Versions::new_current(State::Initialized(Data::default()));
         bincode::serialized_size(&data).unwrap() as usize
     }
 }

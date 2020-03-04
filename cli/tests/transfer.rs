@@ -138,7 +138,7 @@ fn test_transfer() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -162,7 +162,7 @@ fn test_transfer() {
         .unwrap()
         .convert_to_current();
     let new_nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
     assert_ne!(nonce_hash, new_nonce_hash);
@@ -183,7 +183,7 @@ fn test_transfer() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 

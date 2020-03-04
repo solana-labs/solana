@@ -413,7 +413,7 @@ fn test_nonced_pay_tx() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -437,7 +437,7 @@ fn test_nonced_pay_tx() {
         .unwrap()
         .convert_to_current();
     match nonce_state {
-        nonce::State::Initialized(_meta, hash) => assert_ne!(hash, nonce_hash),
+        nonce::State::Initialized(ref data) => assert_ne!(data.blockhash, nonce_hash),
         _ => assert!(false, "Nonce is not initialized"),
     }
 

@@ -367,10 +367,10 @@ pub fn check_nonce_account(
         .map(|v| v.convert_to_current())
         .map_err(|_| Box::new(CliError::InvalidNonce(CliNonceError::InvalidAccountData)))?;
     match nonce_state {
-        State::Initialized(meta, hash) => {
-            if &hash != nonce_hash {
+        State::Initialized(ref data) => {
+            if &data.blockhash != nonce_hash {
                 Err(CliError::InvalidNonce(CliNonceError::InvalidHash).into())
-            } else if nonce_authority != &meta.nonce_authority {
+            } else if nonce_authority != &data.authority {
                 Err(CliError::InvalidNonce(CliNonceError::InvalidAuthority).into())
             } else {
                 Ok(())
@@ -496,7 +496,7 @@ pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) 
     let nonce_state = StateMut::<Versions>::state(&nonce_account).map(|v| v.convert_to_current());
     match nonce_state {
         Ok(State::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
-        Ok(State::Initialized(_, hash)) => Ok(format!("{:?}", hash)),
+        Ok(State::Initialized(ref data)) => Ok(format!("{:?}", data.blockhash)),
         Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to nonce state: {:?}",
             err
@@ -553,7 +553,7 @@ pub fn process_show_nonce_account(
         ))
         .into());
     }
-    let print_account = |data: Option<(nonce::state::Meta, Hash)>| {
+    let print_account = |data: Option<&nonce::state::Data>| {
         println!(
             "Balance: {}",
             build_balance_message(nonce_account.lamports, use_lamports_unit, true)
@@ -567,9 +567,9 @@ pub fn process_show_nonce_account(
             )
         );
         match data {
-            Some((meta, hash)) => {
-                println!("Nonce: {}", hash);
-                println!("Authority: {}", meta.nonce_authority);
+            Some(ref data) => {
+                println!("Nonce: {}", data.blockhash);
+                println!("Authority: {}", data.authority);
             }
             None => {
                 println!("Nonce: uninitialized");
@@ -581,7 +581,7 @@ pub fn process_show_nonce_account(
     let nonce_state = StateMut::<Versions>::state(&nonce_account).map(|v| v.convert_to_current());
     match nonce_state {
         Ok(State::Uninitialized) => print_account(None),
-        Ok(State::Initialized(meta, hash)) => print_account(Some((meta, hash))),
+        Ok(State::Initialized(ref data)) => print_account(Some(data)),
         Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to nonce state: {:?}",
             err
@@ -903,10 +903,10 @@ mod tests {
     fn test_check_nonce_account() {
         let blockhash = Hash::default();
         let nonce_pubkey = Pubkey::new_rand();
-        let data = Versions::new_current(State::Initialized(
-            nonce::state::Meta::new(&nonce_pubkey),
+        let data = Versions::new_current(State::Initialized(nonce::state::Data {
+            authority: nonce_pubkey,
             blockhash,
-        ));
+        }));
         let valid = Account::new_data(1, &data, &system_program::ID);
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
 
@@ -926,20 +926,20 @@ mod tests {
             ))),
         );
 
-        let data = Versions::new_current(State::Initialized(
-            nonce::state::Meta::new(&nonce_pubkey),
-            hash(b"invalid"),
-        ));
+        let data = Versions::new_current(State::Initialized(nonce::state::Data {
+            authority: nonce_pubkey,
+            blockhash: hash(b"invalid"),
+        }));
         let invalid_hash = Account::new_data(1, &data, &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(CliNonceError::InvalidHash))),
         );
 
-        let data = Versions::new_current(State::Initialized(
-            nonce::state::Meta::new(&Pubkey::new_rand()),
+        let data = Versions::new_current(State::Initialized(nonce::state::Data {
+            authority: Pubkey::new_rand(),
             blockhash,
-        ));
+        }));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash),

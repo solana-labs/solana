@@ -3,7 +3,7 @@ use solana_sdk::{
     account_utils::StateMut,
     hash::Hash,
     instruction::CompiledInstruction,
-    nonce::{state::Versions, State},
+    nonce::{self, state::Versions, State},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
@@ -40,7 +40,7 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 
 pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
     match StateMut::<Versions>::state(acc).map(|v| v.convert_to_current()) {
-        Ok(State::Initialized(_meta, ref nonce)) => hash == nonce,
+        Ok(State::Initialized(ref data)) => *hash == data.blockhash,
         _ => false,
     }
 }
@@ -63,8 +63,11 @@ pub fn prepare_if_nonce_account(
             let state = StateMut::<Versions>::state(nonce_acc)
                 .unwrap()
                 .convert_to_current();
-            if let State::Initialized(meta, _) = state {
-                let new_data = Versions::new_current(State::Initialized(meta, *last_blockhash));
+            if let State::Initialized(ref data) = state {
+                let new_data = Versions::new_current(State::Initialized(nonce::state::Data {
+                    blockhash: *last_blockhash,
+                    ..*data
+                }));
                 account.set_state(&new_data).unwrap();
             }
         }
@@ -79,7 +82,7 @@ mod tests {
         account_utils::State as AccountUtilsState,
         hash::Hash,
         instruction::InstructionError,
-        nonce::{self, account::with_test_keyed_account, Account as NonceAccount},
+        nonce::{self, account::with_test_keyed_account, Account as NonceAccount, State},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
@@ -241,10 +244,10 @@ mod tests {
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash) {
-        let data = Versions::new_current(State::Initialized(
-            nonce::state::Meta::new(&Pubkey::default()),
-            Hash::default(),
-        ));
+        let data = Versions::new_current(State::Initialized(nonce::state::Data {
+            authority: Pubkey::default(),
+            blockhash: Hash::default(),
+        }));
         let account = Account::new_data(42, &data, &system_program::id()).unwrap();
         let pre_account = Account {
             lamports: 43,
@@ -296,10 +299,10 @@ mod tests {
         let post_account_pubkey = pre_account_pubkey;
 
         let mut expect_account = post_account.clone();
-        let data = Versions::new_current(State::Initialized(
-            nonce::state::Meta::new(&Pubkey::default()),
-            last_blockhash,
-        ));
+        let data = Versions::new_current(State::Initialized(nonce::state::Data {
+            authority: Pubkey::default(),
+            blockhash: last_blockhash,
+        }));
         expect_account.set_state(&data).unwrap();
 
         assert!(run_prepare_if_nonce_account_test(
@@ -356,8 +359,10 @@ mod tests {
         let mut expect_account = pre_account.clone();
         expect_account
             .set_state(&Versions::new_current(State::Initialized(
-                nonce::state::Meta::new(&Pubkey::default()),
-                last_blockhash,
+                nonce::state::Data {
+                    authority: Pubkey::default(),
+                    blockhash: last_blockhash,
+                },
             )))
             .unwrap();
 

@@ -3265,10 +3265,11 @@ mod tests {
 
         // Nonced pay
         let blockhash = Hash::default();
-        let data = nonce::state::Versions::new_current(nonce::State::Initialized(
-            nonce::state::Meta::new(&config.signers[0].pubkey()),
-            blockhash,
-        ));
+        let data =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: config.signers[0].pubkey(),
+                blockhash,
+            }));
         let nonce_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(
@@ -3292,10 +3293,11 @@ mod tests {
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let blockhash = Hash::default();
-        let data = nonce::state::Versions::new_current(nonce::State::Initialized(
-            nonce::state::Meta::new(&bob_pubkey),
-            blockhash,
-        ));
+        let data =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: bob_pubkey,
+                blockhash,
+            }));
         let nonce_authority_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(
