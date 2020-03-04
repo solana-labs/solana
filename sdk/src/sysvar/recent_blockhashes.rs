@@ -7,7 +7,7 @@ use crate::{
 };
 use std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref};
 
-const MAX_ENTRIES: usize = 32;
+pub const MAX_ENTRIES: usize = 300;
 
 declare_sysvar_id!(
     "SysvarRecentB1ockHashes11111111111111111111",
@@ -107,7 +107,7 @@ impl<T: Ord> Iterator for IntoIterSorted<T> {
 impl Sysvar for RecentBlockhashes {
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty
-        1288 // golden, update if MAX_ENTRIES changes
+        12008 // golden, update if MAX_ENTRIES changes
     }
 }
 
@@ -162,9 +162,15 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hash::HASH_BYTES;
+    use crate::{clock::MAX_RECENT_BLOCKHASHES, hash::HASH_BYTES};
     use rand::seq::SliceRandom;
     use rand::thread_rng;
+
+    #[test]
+    fn test_sysvar_can_hold_blockhash_queue() {
+        // Ensure we can still hold the entire `BlockhashQueue`
+        assert!(MAX_RECENT_BLOCKHASHES <= MAX_ENTRIES);
+    }
 
     #[test]
     fn test_size_of() {
