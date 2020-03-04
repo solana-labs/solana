@@ -945,7 +945,7 @@ Creates new transaction
 
 #### Parameters:
 
-* `<array>` - array of octets containing a fully-signed Transaction
+* `<string>` - fully-signed Transaction, as base-58 encoded string
 
 #### Results:
 
