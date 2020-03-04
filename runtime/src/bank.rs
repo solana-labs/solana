@@ -4991,9 +4991,9 @@ mod tests {
                 sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
             // Check length
             assert_eq!(recent_blockhashes.len(), i);
-            let most_recent_hash = recent_blockhashes.iter().nth(0).unwrap();
+            let most_recent_hash = recent_blockhashes.iter().nth(0).unwrap().blockhash;
             // Check order
-            assert_eq!(Some(true), bank.check_hash_age(most_recent_hash, 0));
+            assert_eq!(Some(true), bank.check_hash_age(&most_recent_hash, 0));
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             bank = Arc::new(new_from_parent(&bank));
         }

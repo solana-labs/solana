@@ -324,6 +324,7 @@ mod tests {
     use solana_sdk::{
         account::Account,
         client::SyncClient,
+        fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -331,6 +332,7 @@ mod tests {
         nonce,
         signature::{Keypair, Signer},
         system_instruction, system_program, sysvar,
+        sysvar::recent_blockhashes::IterItem,
         transaction::TransactionError,
     };
     use std::cell::RefCell;
@@ -350,7 +352,7 @@ mod tests {
     fn create_default_recent_blockhashes_account() -> RefCell<Account> {
         RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
             1,
-            vec![(0u64, &Hash::default()); 32].into_iter(),
+            vec![IterItem(0u64, &Hash::default(), &FeeCalculator::default()); 32].into_iter(),
         ))
     }
     fn create_default_rent_account() -> RefCell<Account> {
@@ -1011,7 +1013,8 @@ mod tests {
                 RefCell::new(if sysvar::recent_blockhashes::check_id(&meta.pubkey) {
                     sysvar::recent_blockhashes::create_account_with_data(
                         1,
-                        vec![(0u64, &Hash::default()); 32].into_iter(),
+                        vec![IterItem(0u64, &Hash::default(), &FeeCalculator::default()); 32]
+                            .into_iter(),
                     )
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     sysvar::rent::create_account(1, &Rent::free())
@@ -1110,7 +1113,15 @@ mod tests {
         let new_recent_blockhashes_account =
             RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
                 1,
-                vec![(0u64, &hash(&serialize(&0).unwrap())); 32].into_iter(),
+                vec![
+                    IterItem(
+                        0u64,
+                        &hash(&serialize(&0).unwrap()),
+                        &FeeCalculator::default()
+                    );
+                    32
+                ]
+                .into_iter(),
             ));
         assert_eq!(
             super::process_instruction(

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use solana_sdk::{fee_calculator::FeeCalculator, hash::Hash, timing::timestamp};
+use solana_sdk::{
+    fee_calculator::FeeCalculator, hash::Hash, sysvar::recent_blockhashes, timing::timestamp,
+};
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -112,15 +114,19 @@ impl BlockhashQueue {
         None
     }
 
-    pub fn get_recent_blockhashes(&self) -> impl Iterator<Item = (u64, &Hash)> {
-        (&self.ages).iter().map(|(k, v)| (v.hash_height, k))
+    pub fn get_recent_blockhashes(&self) -> impl Iterator<Item = recent_blockhashes::IterItem> {
+        (&self.ages)
+            .iter()
+            .map(|(k, v)| recent_blockhashes::IterItem(v.hash_height, k, &v.fee_calculator))
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::{clock::MAX_RECENT_BLOCKHASHES, hash::hash};
+    use solana_sdk::{
+        clock::MAX_RECENT_BLOCKHASHES, hash::hash, sysvar::recent_blockhashes::IterItem,
+    };
 
     #[test]
     fn test_register_hash() {
@@ -172,7 +178,7 @@ mod tests {
         }
         let recent_blockhashes = blockhash_queue.get_recent_blockhashes();
         // Verify that the returned hashes are most recent
-        for (_slot, hash) in recent_blockhashes {
+        for IterItem(_slot, hash, _fee_calc) in recent_blockhashes {
             assert_eq!(
                 Some(true),
                 blockhash_queue.check_hash_age(hash, MAX_RECENT_BLOCKHASHES)
