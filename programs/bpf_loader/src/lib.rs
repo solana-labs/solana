@@ -266,13 +266,13 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &vec![], &instruction_data)
+            process_instruction(&bpf_loader::id(), &vec![], &instruction_data)
         );
 
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&program_id, &keyed_accounts, &instruction_data)
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
         );
 
         // Case: Write bytes to an offset
@@ -280,7 +280,7 @@ mod tests {
         keyed_accounts[0].account.borrow_mut().data = vec![0; 6];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &keyed_accounts, &instruction_data)
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
         );
         assert_eq!(
             vec![0, 0, 0, 1, 2, 3],
@@ -292,7 +292,7 @@ mod tests {
         keyed_accounts[0].account.borrow_mut().data = vec![0; 5];
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&program_id, &keyed_accounts, &instruction_data)
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
         );
     }
 
@@ -313,7 +313,7 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &vec![], &instruction_data)
+            process_instruction(&bpf_loader::id(), &vec![], &instruction_data)
         );
 
         let rent_account = RefCell::new(rent::create_account(1, &rent));
@@ -322,7 +322,7 @@ mod tests {
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&program_id, &keyed_accounts, &instruction_data)
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
         );
 
         // Case: Finalize
@@ -332,7 +332,7 @@ mod tests {
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &keyed_accounts, &instruction_data)
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
         );
         assert!(keyed_accounts[0].account.borrow().executable);
 
@@ -346,7 +346,7 @@ mod tests {
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&program_id, &keyed_accounts, &instruction_data)
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
         );
     }
 
@@ -370,20 +370,20 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &vec![], &vec![])
+            process_instruction(&bpf_loader::id(), &vec![], &vec![])
         );
 
         // Case: Only a program account
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &keyed_accounts, &vec![])
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
         );
 
         // Case: Account not executable
         keyed_accounts[0].account.borrow_mut().executable = false;
         assert_eq!(
             Err(InstructionError::InvalidInstructionData),
-            process_instruction(&program_id, &keyed_accounts, &vec![])
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
         );
         keyed_accounts[0].account.borrow_mut().executable = true;
 
@@ -392,7 +392,7 @@ mod tests {
         keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &keyed_accounts, &vec![])
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
         );
 
         // Case: With duplicate accounts
@@ -403,7 +403,7 @@ mod tests {
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_id, &keyed_accounts, &vec![])
+            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
         );
     }
 }
