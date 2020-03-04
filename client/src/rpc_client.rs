@@ -165,9 +165,16 @@ impl RpcClient {
     }
 
     pub fn get_vote_accounts(&self) -> io::Result<RpcVoteAccountStatus> {
+        self.get_vote_accounts_with_commitment(CommitmentConfig::default())
+    }
+
+    pub fn get_vote_accounts_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<RpcVoteAccountStatus> {
         let response = self
             .client
-            .send(&RpcRequest::GetVoteAccounts, Value::Null, 0)
+            .send(&RpcRequest::GetVoteAccounts, json!([commitment_config]), 0)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
