@@ -5,7 +5,8 @@
 extern crate solana_sdk;
 
 use solana_sdk::{
-    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, log::*, pubkey::Pubkey, bpf_loader,
+    account_info::AccountInfo, bpf_loader, entrypoint, entrypoint::ProgramResult, info, log::*,
+    pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq)]
