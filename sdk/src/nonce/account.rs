@@ -53,12 +53,13 @@ impl<'a> Account for KeyedAccount<'a> {
                 if !signers.contains(&data.authority) {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                if data.blockhash == recent_blockhashes[0] {
+                let recent_blockhash = recent_blockhashes[0].blockhash;
+                if data.blockhash == recent_blockhash {
                     return Err(NonceError::NotExpired.into());
                 }
 
                 let new_data = nonce::state::Data {
-                    blockhash: recent_blockhashes[0],
+                    blockhash: recent_blockhash,
                     ..data
                 };
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
@@ -84,7 +85,7 @@ impl<'a> Account for KeyedAccount<'a> {
             }
             State::Initialized(ref data) => {
                 if lamports == self.lamports()? {
-                    if data.blockhash == recent_blockhashes[0] {
+                    if data.blockhash == recent_blockhashes[0].blockhash {
                         return Err(NonceError::NotExpired.into());
                     }
                 } else {
@@ -125,7 +126,7 @@ impl<'a> Account for KeyedAccount<'a> {
                 }
                 let data = nonce::state::Data {
                     authority: *nonce_authority,
-                    blockhash: recent_blockhashes[0],
+                    blockhash: recent_blockhashes[0].blockhash,
                 };
                 self.set_state(&Versions::new_current(State::Initialized(data)))
             }
@@ -223,7 +224,7 @@ mod test {
                 .unwrap()
                 .convert_to_current();
             let data = nonce::state::Data {
-                blockhash: recent_blockhashes[0],
+                blockhash: recent_blockhashes[0].blockhash,
                 ..data
             };
             // First nonce instruction drives state from Uninitialized to Initialized
@@ -236,7 +237,7 @@ mod test {
                 .unwrap()
                 .convert_to_current();
             let data = nonce::state::Data {
-                blockhash: recent_blockhashes[0],
+                blockhash: recent_blockhashes[0].blockhash,
                 ..data
             };
             // Second nonce instruction consumes and replaces stored nonce
@@ -249,7 +250,7 @@ mod test {
                 .unwrap()
                 .convert_to_current();
             let data = nonce::state::Data {
-                blockhash: recent_blockhashes[0],
+                blockhash: recent_blockhashes[0].blockhash,
                 ..data
             };
             // Third nonce instruction for fun and profit
@@ -300,7 +301,7 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0],
+                blockhash: recent_blockhashes[0].blockhash,
             };
             assert_eq!(state, State::Initialized(data));
             let signers = HashSet::new();
@@ -588,7 +589,7 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0],
+                blockhash: recent_blockhashes[0].blockhash,
             };
             assert_eq!(state, State::Initialized(data));
             with_test_keyed_account(42, false, |to_keyed| {
@@ -609,7 +610,7 @@ mod test {
                     .unwrap()
                     .convert_to_current();
                 let data = nonce::state::Data {
-                    blockhash: recent_blockhashes[0],
+                    blockhash: recent_blockhashes[0].blockhash,
                     ..data
                 };
                 assert_eq!(state, State::Initialized(data));
@@ -744,7 +745,7 @@ mod test {
                 keyed_account.initialize_nonce_account(&authority, &recent_blockhashes, &rent);
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0],
+                blockhash: recent_blockhashes[0].blockhash,
             };
             assert_eq!(result, Ok(()));
             let state = AccountUtilsState::<Versions>::state(keyed_account)
@@ -826,7 +827,7 @@ mod test {
             let authority = Pubkey::default();
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0],
+                blockhash: recent_blockhashes[0].blockhash,
             };
             let result = nonce_account.authorize_nonce_account(&Pubkey::default(), &signers);
             assert_eq!(result, Ok(()));

@@ -208,7 +208,7 @@ mod tests {
                 .unwrap();
             assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
-                &recent_blockhashes[0]
+                &recent_blockhashes[0].blockhash,
             ));
         });
     }
@@ -238,7 +238,7 @@ mod tests {
                 .unwrap();
             assert!(!verify_nonce_account(
                 &nonce_account.account.borrow(),
-                &recent_blockhashes[1]
+                &recent_blockhashes[1].blockhash,
             ));
         });
     }
