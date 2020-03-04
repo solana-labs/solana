@@ -47,7 +47,7 @@ use solana_storage_program::{
 };
 use std::{
     io::{self, ErrorKind},
-    net::{SocketAddr, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     path::{Path, PathBuf},
     result,
     sync::atomic::{AtomicBool, Ordering},
@@ -804,14 +804,15 @@ impl Archiver {
         blockstore: &Arc<Blockstore>,
         slots_per_segment: u64,
     ) -> Result<u64> {
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         // Create a client which downloads from the archiver and see that it
         // can respond with shreds.
-        let start_slot = Self::get_archiver_segment_slot(archiver_info.storage_addr);
+        let start_slot = Self::get_archiver_segment_slot(ip_addr, archiver_info.storage_addr);
         info!("Archiver download: start at {}", start_slot);
 
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let repair_socket = Arc::new(bind_in_range(VALIDATOR_PORT_RANGE).unwrap().1);
+        let repair_socket = Arc::new(bind_in_range(ip_addr, VALIDATOR_PORT_RANGE).unwrap().1);
         let t_receiver = receiver(
             repair_socket.clone(),
             &exit,
@@ -908,8 +909,8 @@ impl Archiver {
         true
     }
 
-    fn get_archiver_segment_slot(to: SocketAddr) -> u64 {
-        let (_port, socket) = bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
+    fn get_archiver_segment_slot(bind_ip_addr: IpAddr, to: SocketAddr) -> u64 {
+        let (_port, socket) = bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE).unwrap();
         socket
             .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();

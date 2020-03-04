@@ -197,8 +197,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let gossip_addr = SocketAddr::new(
                 gossip_host,
                 value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-                    solana_net_utils::find_available_port_in_range((0, 1))
-                        .expect("unable to find an available gossip port")
+                    solana_net_utils::find_available_port_in_range(
+                        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                        (0, 1),
+                    )
+                    .expect("unable to find an available gossip port")
                 }),
             );
 
