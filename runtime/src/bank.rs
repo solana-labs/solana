@@ -4884,10 +4884,13 @@ mod tests {
         let mut bank = Bank::new(&genesis_config);
 
         fn mock_vote_processor(
-            _pubkey: &Pubkey,
-            _ka: &[KeyedAccount],
-            _data: &[u8],
+            program_id: &Pubkey,
+            _keyed_accounts: &[KeyedAccount],
+            _instruction_data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
+            if !solana_vote_program::check_id(program_id) {
+                return Err(InstructionError::IncorrectProgramId);
+            }
             Err(InstructionError::CustomError(42))
         }
 

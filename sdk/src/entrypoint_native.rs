@@ -3,6 +3,10 @@
 use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 
 // Prototype of a native program entry point
+///
+/// program_id: Program ID of the currently executing program
+/// keyed_accounts: Accounts passed as part of the instruction
+/// instruction_data: Instruction data
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],

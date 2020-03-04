@@ -9,6 +9,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
 use solana_sdk::{
     account::KeyedAccount,
+    bpf_loader,
     entrypoint::SUCCESS,
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
@@ -142,6 +143,8 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     solana_logger::setup_with_default("solana=info");
 
+    debug_assert!(bpf_loader::check_id(program_id));
+
     if keyed_accounts.is_empty() {
         warn!("No account keys");
         return Err(InstructionError::NotEnoughAccountKeys);
@@ -159,8 +162,11 @@ pub fn process_instruction(
             }
         };
         let parameter_accounts = keyed_accounts_iter.as_slice();
-        let parameter_bytes =
-            serialize_parameters(program_id, parameter_accounts, &instruction_data)?;
+        let parameter_bytes = serialize_parameters(
+            program.unsigned_key(),
+            parameter_accounts,
+            &instruction_data,
+        )?;
 
         info!("Call BPF program");
         match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
