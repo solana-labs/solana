@@ -6,7 +6,7 @@ use crate::{
 };
 use serde_json::{Number, Value};
 use solana_sdk::{
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     instruction::InstructionError,
     transaction::{self, TransactionError},
 };
@@ -70,6 +70,10 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                     Value::String(PUBKEY.to_string()),
                     serde_json::to_value(FeeCalculator::default()).unwrap(),
                 ),
+            })?,
+            RpcRequest::GetFeeRateGovernor => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
             })?,
             RpcRequest::GetSignatureStatus => {
                 let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {

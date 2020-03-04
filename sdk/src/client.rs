@@ -11,7 +11,7 @@ use crate::{
     account::Account,
     clock::Slot,
     commitment_config::CommitmentConfig,
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
     message::Message,
@@ -71,6 +71,9 @@ pub trait SyncClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> Result<(Hash, FeeCalculator)>;
+
+    /// Get recent fee rate governor
+    fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor>;
 
     /// Get signature status.
     fn get_signature_status(

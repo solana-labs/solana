@@ -11,7 +11,7 @@ use solana_sdk::{
     client::{AsyncClient, Client, SyncClient},
     clock::MAX_PROCESSING_AGE,
     commitment_config::CommitmentConfig,
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
     message::Message,
@@ -443,6 +443,11 @@ impl SyncClient for ThinClient {
                 Err(e.into())
             }
         }
+    }
+
+    fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor> {
+        let fee_rate_governor = self.rpc_client().get_fee_rate_governor()?;
+        Ok(fee_rate_governor.value)
     }
 
     fn get_signature_status(

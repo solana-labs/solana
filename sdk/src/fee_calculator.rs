@@ -8,6 +8,35 @@ pub struct FeeCalculator {
     // The current cost of a signature  This amount may increase/decrease over time based on
     // cluster processing load.
     pub lamports_per_signature: u64,
+}
+
+impl Default for FeeCalculator {
+    fn default() -> Self {
+        Self {
+            lamports_per_signature: 0,
+        }
+    }
+}
+
+impl FeeCalculator {
+    pub fn new(lamports_per_signature: u64) -> Self {
+        Self {
+            lamports_per_signature,
+        }
+    }
+
+    pub fn calculate_fee(&self, message: &Message) -> u64 {
+        self.lamports_per_signature * u64::from(message.header.num_required_signatures)
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeRateGovernor {
+    // The current cost of a signature  This amount may increase/decrease over time based on
+    // cluster processing load.
+    #[serde(skip)]
+    lamports_per_signature: u64,
 
     // The target cost of a signature when the cluster is operating around target_signatures_per_slot
     // signatures
@@ -16,7 +45,7 @@ pub struct FeeCalculator {
     // Used to estimate the desired processing capacity of the cluster.  As the signatures for
     // recent slots are fewer/greater than this value, lamports_per_signature will decrease/increase
     // for the next slot.  A value of 0 disables lamports_per_signature fee adjustments
-    pub target_signatures_per_slot: usize,
+    pub target_signatures_per_slot: u64,
 
     pub min_lamports_per_signature: u64,
     pub max_lamports_per_signature: u64,
@@ -26,15 +55,15 @@ pub struct FeeCalculator {
 }
 
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 10_000;
-pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: usize =
-    50_000 * DEFAULT_TICKS_PER_SLOT as usize / DEFAULT_TICKS_PER_SECOND as usize;
+pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: u64 =
+    50_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 
 // Percentage of tx fees to burn
 pub const DEFAULT_BURN_PERCENT: u8 = 50;
 
-impl Default for FeeCalculator {
+impl Default for FeeRateGovernor {
     fn default() -> Self {
-        FeeCalculator {
+        Self {
             lamports_per_signature: 0,
             target_lamports_per_signature: DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE,
             target_signatures_per_slot: DEFAULT_TARGET_SIGNATURES_PER_SLOT,
@@ -45,23 +74,23 @@ impl Default for FeeCalculator {
     }
 }
 
-impl FeeCalculator {
-    pub fn new(target_lamports_per_signature: u64, target_signatures_per_slot: usize) -> Self {
-        let base_fee_calculator = Self {
+impl FeeRateGovernor {
+    pub fn new(target_lamports_per_signature: u64, target_signatures_per_slot: u64) -> Self {
+        let base_fee_rate_governor = Self {
             target_lamports_per_signature,
             lamports_per_signature: target_lamports_per_signature,
             target_signatures_per_slot,
-            ..FeeCalculator::default()
+            ..FeeRateGovernor::default()
         };
 
-        Self::new_derived(&base_fee_calculator, 0)
+        Self::new_derived(&base_fee_rate_governor, 0)
     }
 
     pub fn new_derived(
-        base_fee_calculator: &FeeCalculator,
-        latest_signatures_per_slot: usize,
+        base_fee_rate_governor: &FeeRateGovernor,
+        latest_signatures_per_slot: u64,
     ) -> Self {
-        let mut me = base_fee_calculator.clone();
+        let mut me = base_fee_rate_governor.clone();
 
         if me.target_signatures_per_slot > 0 {
             // lamports_per_signature can range from 50% to 1000% of
@@ -74,7 +103,7 @@ impl FeeCalculator {
                 me.max_lamports_per_signature
                     .min(me.min_lamports_per_signature.max(
                         me.target_lamports_per_signature
-                            * std::cmp::min(latest_signatures_per_slot, std::u32::MAX as usize)
+                            * std::cmp::min(latest_signatures_per_slot, std::u32::MAX as u64)
                                 as u64
                             / me.target_signatures_per_slot as u64,
                     ));
@@ -85,7 +114,7 @@ impl FeeCalculator {
             );
 
             let gap = desired_lamports_per_signature as i64
-                - base_fee_calculator.lamports_per_signature as i64;
+                - base_fee_rate_governor.lamports_per_signature as i64;
 
             if gap == 0 {
                 me.lamports_per_signature = desired_lamports_per_signature;
@@ -104,11 +133,12 @@ impl FeeCalculator {
                 me.lamports_per_signature =
                     me.max_lamports_per_signature
                         .min(me.min_lamports_per_signature.max(
-                            (base_fee_calculator.lamports_per_signature as i64 + gap_adjust) as u64,
+                            (base_fee_rate_governor.lamports_per_signature as i64 + gap_adjust)
+                                as u64,
                         ));
             }
         } else {
-            me.lamports_per_signature = base_fee_calculator.target_lamports_per_signature;
+            me.lamports_per_signature = base_fee_rate_governor.target_lamports_per_signature;
             me.min_lamports_per_signature = me.target_lamports_per_signature;
             me.max_lamports_per_signature = me.target_lamports_per_signature;
         }
@@ -119,14 +149,17 @@ impl FeeCalculator {
         me
     }
 
-    pub fn calculate_fee(&self, message: &Message) -> u64 {
-        self.lamports_per_signature * u64::from(message.header.num_required_signatures)
-    }
-
     /// calculate unburned fee from a fee total, returns (unburned, burned)
     pub fn burn(&self, fees: u64) -> (u64, u64) {
         let burned = fees * u64::from(self.burn_percent) / 100;
         (fees - burned, burned)
+    }
+
+    /// create a FeeCalculator based on current cluster signature throughput
+    pub fn create_fee_calculator(&self) -> FeeCalculator {
+        FeeCalculator {
+            lamports_per_signature: self.lamports_per_signature,
+        }
     }
 }
 
@@ -136,15 +169,15 @@ mod tests {
     use crate::{pubkey::Pubkey, system_instruction};
 
     #[test]
-    fn test_fee_calculator_burn() {
-        let mut fee_calculator = FeeCalculator::default();
-        assert_eq!(fee_calculator.burn(2), (1, 1));
+    fn test_fee_rate_governor_burn() {
+        let mut fee_rate_governor = FeeRateGovernor::default();
+        assert_eq!(fee_rate_governor.burn(2), (1, 1));
 
-        fee_calculator.burn_percent = 0;
-        assert_eq!(fee_calculator.burn(2), (2, 0));
+        fee_rate_governor.burn_percent = 0;
+        assert_eq!(fee_rate_governor.burn(2), (2, 0));
 
-        fee_calculator.burn_percent = 100;
-        assert_eq!(fee_calculator.burn(2), (0, 2));
+        fee_rate_governor.burn_percent = 100;
+        assert_eq!(fee_rate_governor.burn(2), (0, 2));
     }
 
     #[test]
@@ -154,27 +187,27 @@ mod tests {
         assert_eq!(FeeCalculator::default().calculate_fee(&message), 0);
 
         // No signature, no fee.
-        assert_eq!(FeeCalculator::new(1, 0).calculate_fee(&message), 0);
+        assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 0);
 
         // One signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message = Message::new(vec![ix0]);
-        assert_eq!(FeeCalculator::new(2, 0).calculate_fee(&message), 2);
+        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 2);
 
         // Two signatures, double the fee.
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
         let message = Message::new(vec![ix0, ix1]);
-        assert_eq!(FeeCalculator::new(2, 0).calculate_fee(&message), 4);
+        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 4);
     }
 
     #[test]
-    fn test_fee_calculator_derived_default() {
+    fn test_fee_rate_governor_derived_default() {
         solana_logger::setup();
 
-        let f0 = FeeCalculator::default();
+        let f0 = FeeRateGovernor::default();
         assert_eq!(
             f0.target_signatures_per_slot,
             DEFAULT_TARGET_SIGNATURES_PER_SLOT
@@ -185,7 +218,7 @@ mod tests {
         );
         assert_eq!(f0.lamports_per_signature, 0);
 
-        let f1 = FeeCalculator::new_derived(&f0, DEFAULT_TARGET_SIGNATURES_PER_SLOT);
+        let f1 = FeeRateGovernor::new_derived(&f0, DEFAULT_TARGET_SIGNATURES_PER_SLOT);
         assert_eq!(
             f1.target_signatures_per_slot,
             DEFAULT_TARGET_SIGNATURES_PER_SLOT
@@ -201,20 +234,20 @@ mod tests {
     }
 
     #[test]
-    fn test_fee_calculator_derived_adjust() {
+    fn test_fee_rate_governor_derived_adjust() {
         solana_logger::setup();
 
-        let mut f = FeeCalculator::default();
+        let mut f = FeeRateGovernor::default();
         f.target_lamports_per_signature = 100;
         f.target_signatures_per_slot = 100;
-        f = FeeCalculator::new_derived(&f, 0);
+        f = FeeRateGovernor::new_derived(&f, 0);
 
         // Ramp fees up
         let mut count = 0;
         loop {
             let last_lamports_per_signature = f.lamports_per_signature;
 
-            f = FeeCalculator::new_derived(&f, std::usize::MAX);
+            f = FeeRateGovernor::new_derived(&f, std::u64::MAX);
             info!("[up] f.lamports_per_signature={}", f.lamports_per_signature);
 
             // some maximum target reached
@@ -230,7 +263,7 @@ mod tests {
         let mut count = 0;
         loop {
             let last_lamports_per_signature = f.lamports_per_signature;
-            f = FeeCalculator::new_derived(&f, 0);
+            f = FeeRateGovernor::new_derived(&f, 0);
 
             info!(
                 "[down] f.lamports_per_signature={}",
@@ -250,7 +283,7 @@ mod tests {
         // Arrive at target rate
         let mut count = 0;
         while f.lamports_per_signature != f.target_lamports_per_signature {
-            f = FeeCalculator::new_derived(&f, f.target_signatures_per_slot);
+            f = FeeRateGovernor::new_derived(&f, f.target_signatures_per_slot);
             info!(
                 "[target] f.lamports_per_signature={}",
                 f.lamports_per_signature

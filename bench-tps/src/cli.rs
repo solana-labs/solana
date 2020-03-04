@@ -1,6 +1,6 @@
 use clap::{crate_description, crate_name, App, Arg, ArgMatches};
 use solana_faucet::faucet::FAUCET_PORT;
-use solana_sdk::fee_calculator::FeeCalculator;
+use solana_sdk::fee_calculator::FeeRateGovernor;
 use solana_sdk::signature::{read_keypair_file, Keypair};
 use std::{net::SocketAddr, process::exit, time::Duration};
 
@@ -43,7 +43,7 @@ impl Default for Config {
             client_ids_and_stake_file: String::new(),
             write_to_client_file: false,
             read_from_client_file: false,
-            target_lamports_per_signature: FeeCalculator::default().target_lamports_per_signature,
+            target_lamports_per_signature: FeeRateGovernor::default().target_lamports_per_signature,
             multi_client: true,
             use_move: false,
             num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,

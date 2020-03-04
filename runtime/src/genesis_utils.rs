@@ -1,6 +1,6 @@
 use solana_sdk::{
     account::Account,
-    fee_calculator::FeeCalculator,
+    fee_calculator::FeeRateGovernor,
     genesis_config::GenesisConfig,
     pubkey::Pubkey,
     rent::Rent,
@@ -140,11 +140,11 @@ pub fn create_genesis_config_with_leader_ex(
         solana_stake_program!(),
     ];
 
-    let fee_calculator = FeeCalculator::new(0, 0); // most tests can't handle transaction fees
+    let fee_rate_governor = FeeRateGovernor::new(0, 0); // most tests can't handle transaction fees
     let mut genesis_config = GenesisConfig {
         accounts,
         native_instruction_processors,
-        fee_calculator,
+        fee_rate_governor,
         rent,
         ..GenesisConfig::default()
     };
