@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn test_create_account_unsorted() {
         let def_fees = FeeCalculator::default();
-        let mut blocks: Vec<_> = (0..MAX_ENTRIES)
+        let mut unsorted_blocks: Vec<_> = (0..MAX_ENTRIES)
             .map(|i| {
                 (i as u64, {
                     // create hash with visibly recognizable ordering
@@ -215,18 +215,20 @@ mod tests {
                 })
             })
             .collect();
-        blocks.shuffle(&mut thread_rng());
+        unsorted_blocks.shuffle(&mut thread_rng());
 
-        let mut unsorted_recent_blockhashes: Vec<_> = blocks
-            .iter()
-            .map(|(i, hash)| IterItem(*i, hash, &def_fees))
-            .collect();
         let account = create_account_with_data(
             42,
-            blocks.iter().map(|(i, hash)| IterItem(*i, hash, &def_fees)),
+            unsorted_blocks
+                .iter()
+                .map(|(i, hash)| IterItem(*i, hash, &def_fees)),
         );
         let recent_blockhashes = RecentBlockhashes::from_account(&account).unwrap();
 
+        let mut unsorted_recent_blockhashes: Vec<_> = unsorted_blocks
+            .iter()
+            .map(|(i, hash)| IterItem(*i, hash, &def_fees))
+            .collect();
         unsorted_recent_blockhashes.sort();
         unsorted_recent_blockhashes.reverse();
         let expected_recent_blockhashes: Vec<_> = (unsorted_recent_blockhashes
