@@ -97,6 +97,9 @@ pub fn serialize_parameters(
                 .unwrap();
             v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
             v.write_all(keyed_account.owner()?.as_ref()).unwrap();
+            v.write_u8(keyed_account.executable()? as u8).unwrap();
+            v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
+                .unwrap();
         }
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
@@ -129,7 +132,9 @@ pub fn deserialize_parameters(
                 .data
                 .clone_from_slice(&buffer[start..end]);
             start += keyed_account.data_len()? // data
-                + mem::size_of::<Pubkey>(); // owner
+                + mem::size_of::<Pubkey>() // owner
+                + mem::size_of::<u8>() // executable
+                + mem::size_of::<u64>(); // rent_epoch
         }
     }
     Ok(())

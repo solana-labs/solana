@@ -1,4 +1,4 @@
-use crate::{account::Account, program_error::ProgramError, pubkey::Pubkey};
+use crate::{account::Account, clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
@@ -20,6 +20,10 @@ pub struct AccountInfo<'a> {
     pub data: Rc<RefCell<&'a mut [u8]>>,
     /// Program that owns this account
     pub owner: &'a Pubkey,
+    /// This account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+    /// The epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
 }
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
@@ -27,7 +31,7 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
         let data_len = cmp::min(64, self.data_len());
         let data_str = if data_len > 0 {
             format!(
-                " data: {}",
+                " data: {} ...",
                 hex::encode(self.data.borrow()[..data_len].to_vec())
             )
         } else {
@@ -35,10 +39,15 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
         };
         write!(
             f,
-            "AccountInfo {{ lamports: {} data.len: {} owner: {} {} }}",
+            "AccountInfo {{ key: {} owner: {} is_signer: {} is_writable: {} executable: {} rent_epoch: {} lamports: {} data.len: {} {} }}",
+            self.key,
+            self.owner,
+            self.is_signer,
+            self.is_writable,
+            self.executable,
+            self.rent_epoch,
             self.lamports(),
             self.data_len(),
-            self.owner,
             data_str,
         )
     }
@@ -55,10 +64,6 @@ impl<'a> AccountInfo<'a> {
 
     pub fn unsigned_key(&self) -> &Pubkey {
         self.key
-    }
-
-    pub fn is_writable(&self) -> bool {
-        self.is_writable
     }
 
     pub fn lamports(&self) -> u64 {
@@ -116,6 +121,8 @@ impl<'a> AccountInfo<'a> {
         lamports: &'a mut u64,
         data: &'a mut [u8],
         owner: &'a Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
     ) -> Self {
         Self {
             key,
@@ -124,6 +131,8 @@ impl<'a> AccountInfo<'a> {
             lamports: Rc::new(RefCell::new(lamports)),
             data: Rc::new(RefCell::new(data)),
             owner,
+            executable,
+            rent_epoch,
         }
     }
 
@@ -148,6 +157,8 @@ impl<'a> From<(&'a Pubkey, &'a mut Account)> for AccountInfo<'a> {
             &mut account.lamports,
             &mut account.data,
             &account.owner,
+            account.executable,
+            account.rent_epoch,
         )
     }
 }
@@ -161,6 +172,8 @@ impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for AccountInfo<'a> {
             &mut account.lamports,
             &mut account.data,
             &account.owner,
+            account.executable,
+            account.rent_epoch,
         )
     }
 }
@@ -174,6 +187,8 @@ impl<'a> From<&'a mut (Pubkey, Account)> for AccountInfo<'a> {
             &mut account.lamports,
             &mut account.data,
             &account.owner,
+            account.executable,
+            account.rent_epoch,
         )
     }
 }
@@ -195,6 +210,8 @@ pub fn create_is_signer_account_infos<'a>(
                 &mut account.lamports,
                 &mut account.data,
                 &account.owner,
+                account.executable,
+                account.rent_epoch,
             )
         })
         .collect()

@@ -170,12 +170,14 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
  */
 typedef struct {
   SolPubkey *key;      /** Public key of the account */
-  bool is_signer;      /** Transaction was signed by this account's key? */
-  bool is_writable;    /** Is the account writable? */
   uint64_t *lamports;  /** Number of lamports owned by this account */
   uint64_t data_len;   /** Length of data in bytes */
   uint8_t *data;       /** On-chain data within this account */
   SolPubkey *owner;    /** Program that owns this account */
+  uint64_t rent_epoch; /** The epoch at which this account will next owe rent */
+  bool is_signer;      /** Transaction was signed by this account's key? */
+  bool is_writable;    /** Is the account writable? */
+  bool executable;     /** This account's data contains a loaded program (and is now read-only) */
 } SolKeyedAccount;
 
 /**
@@ -315,6 +317,14 @@ SOL_FN_PREFIX bool sol_deserialize(
       // owner
       params->ka[i].owner = (SolPubkey *) input;
       input += sizeof(SolPubkey);
+
+      // executable?
+      params->ka[i].executable = *(uint8_t *) input;
+      input += sizeof(uint8_t);
+
+      // rent epoch
+      params->ka[i].rent_epoch = *(uint64_t *) input;
+      input += sizeof(uint64_t);
     } else {
       params->ka[i].is_signer = params->ka[dup_info].is_signer;
       params->ka[i].key = params->ka[dup_info].key;
@@ -322,6 +332,8 @@ SOL_FN_PREFIX bool sol_deserialize(
       params->ka[i].data_len = params->ka[dup_info].data_len;
       params->ka[i].data = params->ka[dup_info].data;
       params->ka[i].owner = params->ka[dup_info].owner;
+      params->ka[i].executable = params->ka[dup_info].executable;
+      params->ka[i].rent_epoch = params->ka[dup_info].rent_epoch;
     }
   }
 
@@ -387,6 +399,10 @@ SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
     sol_log_array(params->ka[i].data, params->ka[i].data_len);
     sol_log("  - Owner");
     sol_log_key(params->ka[i].owner);
+    sol_log("  - Executable");
+    sol_log_64(0, 0, 0, 0, params->ka[i].executable);
+    sol_log("  - Rent Epoch");
+    sol_log_64(0, 0, 0, 0, params->ka[i].rent_epoch);
   }
   sol_log("- Instruction data\0");
   sol_log_array(params->data, params->data_len);
