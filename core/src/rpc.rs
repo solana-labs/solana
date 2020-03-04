@@ -9,9 +9,9 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::{
     Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
-    RpcContactInfo, RpcEpochInfo, RpcFeeRateGovernor, RpcKeyedAccount, RpcLeaderSchedule,
-    RpcResponseContext, RpcSignatureConfirmation, RpcStorageTurn, RpcTransactionEncoding,
-    RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
+    RpcContactInfo, RpcEpochInfo, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
+    RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation, RpcStorageTurn,
+    RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -49,6 +49,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool,
     pub enable_get_confirmed_block: bool,
+    pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
 }
 
@@ -594,6 +595,9 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<RpcSignatureConfirmation>>;
 
+    #[rpc(meta, name = "getIdentity")]
+    fn get_identity(&self, meta: Self::Metadata) -> Result<RpcIdentity>;
+
     #[rpc(meta, name = "getVersion")]
     fn get_version(&self, meta: Self::Metadata) -> Result<RpcVersionInfo>;
 
@@ -1076,6 +1080,18 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().validator_exit()
     }
 
+    fn get_identity(&self, meta: Self::Metadata) -> Result<RpcIdentity> {
+        Ok(RpcIdentity {
+            identity: meta
+                .request_processor
+                .read()
+                .unwrap()
+                .config
+                .identity_pubkey
+                .to_string(),
+        })
+    }
+
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
         Ok(RpcVersionInfo {
             solana_core: solana_clap_utils::version!().to_string(),
@@ -1269,6 +1285,7 @@ pub mod tests {
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_get_confirmed_block: true,
+                identity_pubkey: *pubkey,
                 ..JsonRpcConfig::default()
             },
             bank_forks.clone(),
@@ -1994,6 +2011,27 @@ pub mod tests {
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
+    }
+
+    #[test]
+    fn test_rpc_get_identity() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getIdentity"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "identity": bob_pubkey.to_string()
+            },
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
     }
 
     #[test]
