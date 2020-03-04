@@ -170,14 +170,14 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
  */
 typedef struct {
   SolPubkey *key;      /** Public key of the account */
-  bool is_signer;      /** Transaction was signed by this account's key? */
-  bool is_writable;    /** Is the account writable? */
   uint64_t *lamports;  /** Number of lamports owned by this account */
   uint64_t data_len;   /** Length of data in bytes */
   uint8_t *data;       /** On-chain data within this account */
   SolPubkey *owner;    /** Program that owns this account */
-  bool executable;     /** This account's data contains a loaded program (and is now read-only) */
   uint64_t rent_epoch; /** The epoch at which this account will next owe rent */
+  bool is_signer;      /** Transaction was signed by this account's key? */
+  bool is_writable;    /** Is the account writable? */
+  bool executable;     /** This account's data contains a loaded program (and is now read-only) */
 } SolKeyedAccount;
 
 /**
