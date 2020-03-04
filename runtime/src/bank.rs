@@ -5560,4 +5560,47 @@ mod tests {
         assert_eq!(bank.get_balance(&from_pubkey), 80);
         assert_eq!(bank.get_balance(&to_pubkey), 20);
     }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds: the len is 3 but the index is 3")]
+    fn test_transaction_with_program_ids_passed_to_programs() {
+        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let mut bank = Bank::new(&genesis_config);
+
+        fn mock_process_instruction(
+            _program_id: &Pubkey,
+            _keyed_accounts: &[KeyedAccount],
+            _data: &[u8],
+        ) -> result::Result<(), InstructionError> {
+            Ok(())
+        }
+
+        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
+        let dup_pubkey = from_pubkey.clone();
+        let from_account = Account::new(100, 1, &mock_program_id);
+        let to_account = Account::new(0, 1, &mock_program_id);
+        bank.store_account(&from_pubkey, &from_account);
+        bank.store_account(&to_pubkey, &to_account);
+
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey, false),
+            AccountMeta::new(to_pubkey, false),
+            AccountMeta::new(dup_pubkey, false),
+            AccountMeta::new(mock_program_id, false),
+        ];
+        let instruction = Instruction::new(mock_program_id, &10, account_metas);
+        let tx = Transaction::new_signed_with_payer(
+            vec![instruction],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+
+        let result = bank.process_transaction(&tx);
+        assert_eq!(result, Ok(()));
+    }
 }
