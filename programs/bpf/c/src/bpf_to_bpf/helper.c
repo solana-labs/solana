@@ -3,7 +3,6 @@
  * passed to it
  */
 #include <solana_sdk.h>
-
 #include "helper.h"
 
 void helper_function(void) {

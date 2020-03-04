@@ -3,7 +3,6 @@
  *
  * Counts Armstrong Numbers between 1 and x
  */
-
 #include <solana_sdk.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
