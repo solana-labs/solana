@@ -1,3 +1,4 @@
+use super::Versions;
 use crate::{hash::Hash, pubkey::Pubkey};
 use serde_derive::{Deserialize, Serialize};
 
@@ -30,23 +31,6 @@ impl State {
     pub fn size() -> usize {
         let data = Versions::new_current(State::Initialized(Meta::default(), Hash::default()));
         bincode::serialized_size(&data).unwrap() as usize
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub enum Versions {
-    Current(Box<State>),
-}
-
-impl Versions {
-    pub fn new_current(state: State) -> Self {
-        Self::Current(Box::new(state))
-    }
-
-    pub fn convert_to_current(self) -> State {
-        match self {
-            Self::Current(state) => *state,
-        }
     }
 }
 
