@@ -1,4 +1,4 @@
 # TVU
 
-![TVU Block Diagram](../../.gitbook/assets/tvu.svg)
+![TVU Block Diagram](../.gitbook/assets/tvu.svg)
 
