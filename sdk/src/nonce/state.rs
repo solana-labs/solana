@@ -28,8 +28,25 @@ impl Default for State {
 
 impl State {
     pub fn size() -> usize {
-        bincode::serialized_size(&State::Initialized(Meta::default(), Hash::default())).unwrap()
-            as usize
+        let data = Versions::new_current(State::Initialized(Meta::default(), Hash::default()));
+        bincode::serialized_size(&data).unwrap() as usize
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum Versions {
+    Current(Box<State>),
+}
+
+impl Versions {
+    pub fn new_current(state: State) -> Self {
+        Self::Current(Box::new(state))
+    }
+
+    pub fn convert_to_current(self) -> State {
+        match self {
+            Self::Current(state) => *state,
+        }
     }
 }
 

@@ -3,7 +3,7 @@ use solana_sdk::{
     account_utils::StateMut,
     hash::Hash,
     instruction::CompiledInstruction,
-    nonce::State,
+    nonce::{state::Versions, State},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
@@ -39,7 +39,7 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 }
 
 pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
-    match acc.state() {
+    match StateMut::<Versions>::state(acc).map(|v| v.convert_to_current()) {
         Ok(State::Initialized(_meta, ref nonce)) => hash == nonce,
         _ => false,
     }
@@ -60,10 +60,12 @@ pub fn prepare_if_nonce_account(
                 *account = nonce_acc.clone()
             }
             // Since hash_age_kind is DurableNonce, unwrap is safe here
-            if let State::Initialized(meta, _) = account.state().unwrap() {
-                account
-                    .set_state(&State::Initialized(meta, *last_blockhash))
-                    .unwrap();
+            let state = StateMut::<Versions>::state(nonce_acc)
+                .unwrap()
+                .convert_to_current();
+            if let State::Initialized(meta, _) = state {
+                let new_data = Versions::new_current(State::Initialized(meta, *last_blockhash));
+                account.set_state(&new_data).unwrap();
             }
         }
     }
@@ -239,13 +241,11 @@ mod tests {
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash) {
-        let stored_nonce = Hash::default();
-        let account = Account::new_data(
-            42,
-            &State::Initialized(nonce::state::Meta::new(&Pubkey::default()), stored_nonce),
-            &system_program::id(),
-        )
-        .unwrap();
+        let data = Versions::new_current(State::Initialized(
+            nonce::state::Meta::new(&Pubkey::default()),
+            Hash::default(),
+        ));
+        let account = Account::new_data(42, &data, &system_program::id()).unwrap();
         let pre_account = Account {
             lamports: 43,
             ..account.clone()
@@ -296,12 +296,11 @@ mod tests {
         let post_account_pubkey = pre_account_pubkey;
 
         let mut expect_account = post_account.clone();
-        expect_account
-            .set_state(&State::Initialized(
-                nonce::state::Meta::new(&Pubkey::default()),
-                last_blockhash,
-            ))
-            .unwrap();
+        let data = Versions::new_current(State::Initialized(
+            nonce::state::Meta::new(&Pubkey::default()),
+            last_blockhash,
+        ));
+        expect_account.set_state(&data).unwrap();
 
         assert!(run_prepare_if_nonce_account_test(
             &mut post_account,
@@ -356,10 +355,10 @@ mod tests {
 
         let mut expect_account = pre_account.clone();
         expect_account
-            .set_state(&State::Initialized(
+            .set_state(&Versions::new_current(State::Initialized(
                 nonce::state::Meta::new(&Pubkey::default()),
                 last_blockhash,
-            ))
+            )))
             .unwrap();
 
         assert!(run_prepare_if_nonce_account_test(
