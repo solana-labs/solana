@@ -9,7 +9,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
-    nonce_state::NonceState,
+    nonce,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
 };
@@ -120,7 +120,7 @@ fn test_transfer() {
     // Create nonce account
     let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap();
     let minimum_nonce_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .get_minimum_balance_for_rent_exemption(nonce::State::size())
         .unwrap();
     config.signers = vec![&default_signer, &nonce_account];
     config.command = CliCommand::CreateNonceAccount {
@@ -134,9 +134,9 @@ fn test_transfer() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_state: nonce::State = account.state().unwrap();
     let nonce_hash = match nonce_state {
-        NonceState::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -156,9 +156,9 @@ fn test_transfer() {
     check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
     check_balance(30, &rpc_client, &recipient_pubkey);
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_state: nonce::State = account.state().unwrap();
     let new_nonce_hash = match nonce_state {
-        NonceState::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
     };
     assert_ne!(nonce_hash, new_nonce_hash);
@@ -175,9 +175,9 @@ fn test_transfer() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_state: nonce::State = account.state().unwrap();
     let nonce_hash = match nonce_state {
-        NonceState::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
     };
 

@@ -40,8 +40,7 @@ use solana_sdk::{
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
     inflation::Inflation,
-    native_loader,
-    nonce_state::NonceState,
+    native_loader, nonce,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
@@ -1691,9 +1690,10 @@ impl Bank {
         match self.get_account(pubkey) {
             Some(mut account) => {
                 let min_balance = match get_system_account_kind(&account) {
-                    Some(SystemAccountKind::Nonce) => {
-                        self.rent_collector.rent.minimum_balance(NonceState::size())
-                    }
+                    Some(SystemAccountKind::Nonce) => self
+                        .rent_collector
+                        .rent
+                        .minimum_balance(nonce::State::size()),
                     _ => 0,
                 };
                 if lamports + min_balance > account.lamports {
@@ -2173,7 +2173,7 @@ mod tests {
         genesis_config::create_genesis_config,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         message::{Message, MessageHeader},
-        nonce_state,
+        nonce,
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -3421,13 +3421,12 @@ mod tests {
         genesis_config.rent.lamports_per_byte_year = 42;
         let bank = Bank::new(&genesis_config);
 
-        let min_balance =
-            bank.get_minimum_balance_for_rent_exemption(nonce_state::NonceState::size());
+        let min_balance = bank.get_minimum_balance_for_rent_exemption(nonce::State::size());
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             min_balance + 42,
-            &nonce_state::NonceState::Initialized(
-                nonce_state::Meta::new(&Pubkey::default()),
+            &nonce::State::Initialized(
+                nonce::state::Meta::new(&Pubkey::default()),
                 Hash::default(),
             ),
             &system_program::id(),
@@ -5108,7 +5107,7 @@ mod tests {
     fn get_nonce_account(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
         bank.get_account(&nonce_pubkey)
             .and_then(|acc| match acc.state() {
-                Ok(nonce_state::NonceState::Initialized(_meta, hash)) => Some(hash),
+                Ok(nonce::State::Initialized(_meta, hash)) => Some(hash),
                 _ => None,
             })
     }
@@ -5282,8 +5281,8 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             42424242,
-            &nonce_state::NonceState::Initialized(
-                nonce_state::Meta::new(&Pubkey::default()),
+            &nonce::State::Initialized(
+                nonce::state::Meta::new(&Pubkey::default()),
                 Hash::default(),
             ),
             &system_program::id(),

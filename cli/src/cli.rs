@@ -2482,7 +2482,7 @@ mod tests {
     };
     use solana_sdk::{
         account::Account,
-        nonce_state::{Meta as NonceMeta, NonceState},
+        nonce,
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Presigner},
         system_program,
@@ -3266,8 +3266,8 @@ mod tests {
             value: json!(RpcAccount::encode(
                 Account::new_data(
                     1,
-                    &NonceState::Initialized(
-                        NonceMeta::new(&config.signers[0].pubkey()),
+                    &nonce::State::Initialized(
+                        nonce::state::Meta::new(&config.signers[0].pubkey()),
                         blockhash
                     ),
                     &system_program::ID,
@@ -3297,7 +3297,7 @@ mod tests {
             value: json!(RpcAccount::encode(
                 Account::new_data(
                     1,
-                    &NonceState::Initialized(NonceMeta::new(&bob_pubkey), blockhash),
+                    &nonce::State::Initialized(nonce::state::Meta::new(&bob_pubkey), blockhash),
                     &system_program::ID,
                 )
                 .unwrap()
