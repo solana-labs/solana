@@ -171,25 +171,18 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
-        program_accounts: &[Rc<RefCell<Account>>],
+        accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts = create_keyed_readonly_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
             .iter()
             .map(|&index| {
+                let is_signer = index < message.header.num_required_signatures;
                 let index = index as usize;
                 let key = &message.account_keys[index];
-                let is_writable = message.is_writable(index);
-                (
-                    key,
-                    index < message.header.num_required_signatures as usize,
-                    is_writable,
-                )
-            })
-            .zip(program_accounts.iter())
-            .map(|((key, is_signer, is_writable), account)| {
-                if is_writable {
+                let account = &accounts[index];
+                if message.is_writable(index) {
                     KeyedAccount::new(key, is_signer, account)
                 } else {
                     KeyedAccount::new_readonly(key, is_signer, account)
@@ -218,30 +211,43 @@ impl MessageProcessor {
         )
     }
 
-    /// Record the initial state of the accounts so that it can be compared
-    // after the instruction is processed
-    pub fn create_pre_accounts(
-        // program_id: &Pubkey,
-        message: &Message,
+    /// Visit each unique instruction account index once
+    pub fn visit_instruction_accounts_once(
         instruction: &CompiledInstruction,
-        program_accounts: &[Rc<RefCell<Account>>],
-    ) -> Vec<Option<PreAccount>> {
-        let program_id = instruction.program_id(&message.account_keys);
-
-        // Copy only what we need to verify after instruction processing
-        let mut pre_accounts = Vec::with_capacity(program_accounts.len());
-        'root: for (i, account) in program_accounts.iter().enumerate() {
+        work: &mut dyn FnMut(usize, usize) -> Result<(), InstructionError>,
+    ) -> Result<(), InstructionError> {
+        let mut unique_index = 0;
+        'root: for (i, account_index) in instruction.accounts.iter().enumerate() {
             // Note: This is an O(n^2) algorithm,
             // but performed on a very small slice and requires no heap allocations
-            for account_after in program_accounts.iter().skip(i + 1) {
-                if Rc::ptr_eq(account, account_after) {
-                    pre_accounts.push(None);
-                    continue 'root; // don't verify duplicates
+            for account_index_before in instruction.accounts[..i].iter() {
+                if account_index_before == account_index {
+                    continue 'root; // skip dups
                 }
             }
-            let is_writable = message.is_writable(instruction.accounts[i] as usize);
-            let account = account.borrow();
-            pre_accounts.push(Some(PreAccount::new(&account, is_writable, program_id)))
+            work(unique_index, *account_index as usize)?;
+            unique_index += 1;
+        }
+        Ok(())
+    }
+
+    /// Record the initial state of the accounts so that they can be compared
+    /// after the instruction is processed
+    pub fn create_pre_accounts(
+        message: &Message,
+        instruction: &CompiledInstruction,
+        accounts: &[Rc<RefCell<Account>>],
+    ) -> Vec<PreAccount> {
+        let mut pre_accounts = Vec::with_capacity(accounts.len());
+        {
+            let program_id = instruction.program_id(&message.account_keys);
+            let mut work = |_unique_index: usize, account_index: usize| {
+                let is_writable = message.is_writable(account_index);
+                let account = accounts[account_index].borrow();
+                pre_accounts.push(PreAccount::new(&account, is_writable, program_id));
+                Ok(())
+            };
+            let _ = Self::visit_instruction_accounts_once(instruction, &mut work);
         }
         pre_accounts
     }
@@ -249,9 +255,9 @@ impl MessageProcessor {
     /// Verify there are no outstanding borrows
     pub fn verify_account_references(
         executable_accounts: &[(Pubkey, RefCell<Account>)],
-        program_accounts: &[Rc<RefCell<Account>>],
+        accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
-        for account in program_accounts.iter() {
+        for account in accounts.iter() {
             account
                 .try_borrow_mut()
                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
@@ -268,26 +274,25 @@ impl MessageProcessor {
     pub fn verify(
         message: &Message,
         instruction: &CompiledInstruction,
-        pre_accounts: &[Option<PreAccount>],
+        pre_accounts: &[PreAccount],
         executable_accounts: &[(Pubkey, RefCell<Account>)],
-        program_accounts: &[Rc<RefCell<Account>>],
+        accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
-        let program_id = instruction.program_id(&message.account_keys);
-
         // Verify all accounts have zero outstanding refs
-        Self::verify_account_references(executable_accounts, program_accounts)?;
+        Self::verify_account_references(executable_accounts, accounts)?;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        for (pre_account, account) in pre_accounts.iter().zip(program_accounts) {
-            if let Some(pre_account) = pre_account {
-                let account = account
-                    .try_borrow()
-                    .map_err(|_| InstructionError::AccountBorrowFailed)?;
-                pre_account.verify(&program_id, &account)?;
-                pre_sum += u128::from(pre_account.lamports);
+        {
+            let program_id = instruction.program_id(&message.account_keys);
+            let mut work = |unique_index: usize, account_index: usize| {
+                let account = accounts[account_index].borrow();
+                pre_accounts[unique_index].verify(&program_id, &account)?;
+                pre_sum += u128::from(pre_accounts[unique_index].lamports);
                 post_sum += u128::from(account.lamports);
-            }
+                Ok(())
+            };
+            Self::visit_instruction_accounts_once(instruction, &mut work)?;
         }
 
         // Verify that the total sum of all the lamports did not change
@@ -306,17 +311,16 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
-        program_accounts: &[Rc<RefCell<Account>>],
+        accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
-        assert_eq!(instruction.accounts.len(), program_accounts.len());
-        let pre_accounts = Self::create_pre_accounts(message, instruction, program_accounts);
-        self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
+        let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
+        self.process_instruction(message, instruction, executable_accounts, accounts)?;
         Self::verify(
             message,
             instruction,
             &pre_accounts,
             executable_accounts,
-            program_accounts,
+            accounts,
         )?;
         Ok(())
     }
@@ -336,13 +340,7 @@ impl MessageProcessor {
                 .ok_or(TransactionError::InvalidAccountIndex)?;
             let executable_accounts = &loaders[executable_index];
 
-            let program_accounts: Vec<_> = instruction
-                .accounts
-                .iter()
-                .map(|i| accounts[*i as usize].clone())
-                .collect();
-
-            self.execute_instruction(message, instruction, executable_accounts, &program_accounts)
+            self.execute_instruction(message, instruction, executable_accounts, accounts)
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(())
