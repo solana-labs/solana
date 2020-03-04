@@ -22,12 +22,6 @@ $ solana airdrop 2
 
 // Return
 "2.00000000 SOL"
-
-// Command
-$ solana airdrop 123 --lamports
-
-// Return
-"123 lamports"
 ```
 
 ### Get Balance
@@ -191,9 +185,6 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
@@ -278,13 +269,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
-    -o, --output <FILE>                     Write the account data to this file
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+    -o, --output <FILE>                                  Write the account data to this file
 
 ARGS:
     <ACCOUNT PUBKEY>    Account pubkey
@@ -299,6 +292,7 @@ USAGE:
     solana address [FLAGS] [OPTIONS]
 
 FLAGS:
+        --confirm-key                    Confirm key on device; only relevant if using remote wallet
     -h, --help                           Prints help information
         --skip-seed-phrase-validation    Skip validation of seed phrases. Use this if your phrase does not use the BIP39
                                          official English word list
@@ -306,12 +300,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-airdrop
@@ -330,14 +326,16 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-        --faucet-host <HOST>                Faucet host to use [default: the --url host]
-        --faucet-port <PORT>                Faucet port to use [default: 9900]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --faucet-host <HOST>                             Faucet host to use [default: the --url host]
+        --faucet-port <PORT>                             Faucet port to use [default: 9900]
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <AMOUNT>    The airdrop amount to request, in SOL
@@ -360,15 +358,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-    -u, --url <URL>                              JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                         /path/to/id.json or usb://remote/wallet/path
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
         --seed <SEED STRING>
@@ -397,12 +395,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <PUBKEY>    The public key of the balance to check
@@ -424,15 +424,17 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-        --epoch <epoch>                     Epoch to show block production for [default: current epoch]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
-        --slot-limit <slot_limit>           Limit results to this many slots from the end of the epoch [default: full
-                                            epoch]
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --epoch <epoch>                                  Epoch to show block production for [default: current epoch]
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --slot-limit <slot_limit>
+            Limit results to this many slots from the end of the epoch [default: full epoch]
 ```
 
 #### solana-block-time
@@ -451,12 +453,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <SLOT>    Slot number of the block to query
@@ -478,12 +482,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <PROCESS ID>    The process id of the transfer to cancel
@@ -505,12 +511,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <PUBKEY>    Identity pubkey of the validator
@@ -532,12 +540,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <NODE PUBKEY>               The node account to credit the rewards to
@@ -560,12 +570,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-config
@@ -584,12 +596,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 SUBCOMMANDS:
     get     Get current config settings
@@ -613,12 +627,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <SIGNATURE>    The transaction signature to confirm
@@ -640,13 +656,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-        --from <PUBKEY>                     From (base) key, defaults to client keypair.
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --from <PUBKEY>                                  From (base) key, defaults to client keypair.
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <SEED_STRING>    The seed.  Must not take more than 32 bytes to encode as utf-8
@@ -670,12 +688,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <STORAGE ACCOUNT OWNER PUBKEY>
@@ -698,13 +718,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>     Recover a keypair using a seed phrase and optional passphrase [possible
-                                             values: keypair]
-    -C, --config <PATH>                      Configuration file to use [default:
-                                             ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                          JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                     /path/to/id.json or usb://remote/wallet/path
-        --nonce-authority <BASE58_PUBKEY>    Assign noncing authority to another entity
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --nonce-authority <BASE58_PUBKEY>                Assign noncing authority to another entity
 
 ARGS:
     <NONCE ACCOUNT>    Keypair of the nonce account to fund
@@ -728,21 +750,25 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --custodian <KEYPAIR or PUBKEY>           Identity of the custodian (can withdraw before lockup expires)
-        --fee-payer <KEYPAIR or PUBKEY>
+        --custodian <KEYPAIR or PUBKEY>
+            Identity of the custodian (can withdraw before lockup expires)
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-        --from <KEYPAIR or PUBKEY>                Source account of funds (if different from client local account)
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+        --from <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Source account of funds (if different from client local account)
+
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --lockup-date <RFC3339 DATE TIME>
             The date and time at which this account will be available for withdrawal
 
@@ -754,15 +780,21 @@ OPTIONS:
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
         --seed <SEED STRING>
             Seed for address generation; if specified, the resulting account will be at a derived address of the STAKE
             ACCOUNT pubkey
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
-        --stake-authority <PUBKEY>                Public key of authorized staker (defaults to cli config pubkey)
-        --withdraw-authority <PUBKEY>             Public key of authorized withdrawer (defaults to cli config pubkey)
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --stake-authority <PUBKEY>
+            Public key of authorized staker (defaults to cli config pubkey)
+
+        --withdraw-authority <PUBKEY>
+            Public key of authorized withdrawer (defaults to cli config pubkey)
+
 
 ARGS:
     <STAKE ACCOUNT>    Signing authority of the stake address to fund
@@ -785,12 +817,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <STORAGE ACCOUNT OWNER PUBKEY>
@@ -813,17 +847,24 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-        --authorized-voter <PUBKEY>         Public key of the authorized voter (defaults to vote account)
-        --authorized-withdrawer <PUBKEY>    Public key of the authorized withdrawer (defaults to cli config pubkey)
-        --commission <NUM>                  The commission taken on reward redemption (0-100) [default: 100]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
-        --seed <SEED STRING>                Seed for address generation; if specified, the resulting account will be at
-                                            a derived address of the VOTE ACCOUNT pubkey
+        --authorized-voter <PUBKEY>                      Public key of the authorized voter (defaults to vote account)
+        --authorized-withdrawer <PUBKEY>
+            Public key of the authorized withdrawer (defaults to cli config pubkey)
+
+        --commission <NUM>
+            The commission taken on reward redemption (0-100) [default: 100]
+
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --seed <SEED STRING>
+            Seed for address generation; if specified, the resulting account will be at a derived address of the VOTE
+            ACCOUNT pubkey
 
 ARGS:
     <VOTE ACCOUNT KEYPAIR>         Vote account keypair to fund
@@ -847,29 +888,33 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --fee-payer <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
-        --stake-authority <KEYPAIR or PUBKEY>     Public key of authorized staker (defaults to cli config pubkey)
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Public key of authorized staker (defaults to cli config pubkey)
+
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to be deactivated.
@@ -892,29 +937,33 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --fee-payer <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
-        --stake-authority <KEYPAIR or PUBKEY>     Public key of authorized staker (defaults to cli config pubkey)
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Public key of authorized staker (defaults to cli config pubkey)
+
 
 ARGS:
     <STAKE ACCOUNT>    Stake account to delegate
@@ -937,12 +986,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <PATH TO BPF PROGRAM>    /path/to/program.o
@@ -965,12 +1016,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-fees
@@ -989,12 +1042,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-genesis-hash
@@ -1013,12 +1068,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-gossip
@@ -1037,12 +1094,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-help
@@ -1073,12 +1132,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-live-slots
@@ -1097,13 +1158,16 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
-    -w, --ws <URL>                          WebSocket URL for PubSub RPC connection [default: ws://127.0.0.1:8900]
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+    -w, --ws <URL>
+            WebSocket URL for PubSub RPC connection [default: ws://127.0.0.1:8900]
 ```
 
 #### solana-new-nonce
@@ -1122,15 +1186,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-    -u, --url <URL>                              JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                         /path/to/id.json or usb://remote/wallet/path
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
 
@@ -1154,12 +1218,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <NONCE ACCOUNT>    Address of the nonce account to display
@@ -1182,12 +1248,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <NONCE ACCOUNT>    Address of the nonce account to display
@@ -1211,27 +1279,31 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
-        --after <DATETIME>                        A timestamp after which transaction will execute
-        --require-timestamp-from <PUBKEY>         Require timestamp from this third party
-        --require-signature-from <PUBKEY>...      Any third party signatures required to unlock the lamports
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --after <DATETIME>                                             A timestamp after which transaction will execute
+        --require-timestamp-from <PUBKEY>                              Require timestamp from this third party
+        --require-signature-from <PUBKEY>...
+            Any third party signatures required to unlock the lamports
+
 
 ARGS:
     <TO PUBKEY>    The pubkey of recipient
@@ -1255,16 +1327,23 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -c, --count <NUMBER>                    Stop after submitting count transactions
-    -i, --interval <SECONDS>                Wait interval seconds between submitting the next transaction [default: 2]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
-        --lamports <NUMBER>                 Number of lamports to transfer for each transaction [default: 1]
-    -t, --timeout <SECONDS>                 Wait up to timeout seconds for transaction confirmation [default: 15]
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+    -c, --count <NUMBER>                                 Stop after submitting count transactions
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -i, --interval <SECONDS>
+            Wait interval seconds between submitting the next transaction [default: 2]
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
+        --lamports <NUMBER>
+            Number of lamports to transfer for each transaction [default: 1]
+
+    -t, --timeout <SECONDS>
+            Wait up to timeout seconds for transaction confirmation [default: 15]
 ```
 
 #### solana-send-signature
@@ -1283,12 +1362,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <PUBKEY>        The pubkey of recipient
@@ -1311,13 +1392,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-        --date <DATETIME>                   Optional arbitrary timestamp to apply
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --date <DATETIME>                                Optional arbitrary timestamp to apply
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <PUBKEY>        The pubkey of recipient
@@ -1341,12 +1424,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-split-stake
@@ -1366,32 +1451,36 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --fee-payer <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
         --seed <SEED STRING>
             Seed for address generation; if specified, the resulting account will be at a derived address of the SPLIT
             STAKE ACCOUNT pubkey
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
-        --stake-authority <KEYPAIR or PUBKEY>     Public key of authorized staker (defaults to cli config pubkey)
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Public key of authorized staker (defaults to cli config pubkey)
+
 
 ARGS:
     <STAKE ACCOUNT>          Stake account to be split
@@ -1416,12 +1505,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <STAKE ACCOUNT>    Address of the stake account to display
@@ -1444,29 +1535,33 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --fee-payer <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
-        --stake-authority <KEYPAIR or PUBKEY>     Public key of authorized staker (defaults to cli config pubkey)
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --stake-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Public key of authorized staker (defaults to cli config pubkey)
+
 
 ARGS:
     <STAKE ACCOUNT>       Stake account in which to set the authorized staker
@@ -1490,29 +1585,33 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                     Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                           Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --fee-payer <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-    -u, --url <URL>                                 JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                            /path/to/id.json or usb://remote/wallet/path
+    -u, --url <URL>                                                       JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                                  /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...      Provide a public-key/signature pair for the transaction
-        --withdraw-authority <KEYPAIR or PUBKEY>    Public key of authorized withdrawer (defaults to cli config pubkey)
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --withdraw-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Public key of authorized withdrawer (defaults to cli config pubkey)
+
 
 ARGS:
     <STAKE ACCOUNT>       Stake account in which to set the authorized withdrawer
@@ -1536,12 +1635,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-stake-set-lockup
@@ -1561,20 +1662,22 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --custodian <KEYPAIR or PUBKEY>           Public key of signing custodian (defaults to cli config pubkey)
-        --fee-payer <KEYPAIR or PUBKEY>
+        --custodian <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Public key of signing custodian (defaults to cli config pubkey)
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --lockup-date <RFC3339 DATE TIME>
             The date and time at which this account will be available for withdrawal
 
@@ -1589,10 +1692,12 @@ OPTIONS:
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
 
 ARGS:
     <STAKE ACCOUNT>    Stake account for which to set Lockup
@@ -1615,12 +1720,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <VOTE ACCOUNT PUBKEYS>...    Only show stake accounts delegated to the provided vote accounts
@@ -1642,12 +1749,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <STORAGE ACCOUNT PUBKEY>    Storage account pubkey
@@ -1670,12 +1779,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-transfer
@@ -1695,29 +1806,33 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                   Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                        Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --fee-payer <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-        --from <KEYPAIR or PUBKEY>                Source account of funds (if different from client local account)
-    -u, --url <URL>                               JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                          /path/to/id.json or usb://remote/wallet/path
+        --from <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Source account of funds (if different from client local account)
+
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...    Provide a public-key/signature pair for the transaction
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
 
 ARGS:
     <TO PUBKEY>    The pubkey of recipient
@@ -1740,12 +1855,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 SUBCOMMANDS:
     get        Get and parse Solana Validator info
@@ -1770,12 +1887,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 ```
 
 #### solana-vote-account
@@ -1795,12 +1914,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account pubkey
@@ -1822,12 +1943,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>    Vote account in which to set the authorized voter
@@ -1850,12 +1973,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>      Vote account in which to set the authorized withdrawer
@@ -1878,12 +2003,14 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>    Recover a keypair using a seed phrase and optional passphrase [possible
-                                            values: keypair]
-    -C, --config <PATH>                     Configuration file to use [default:
-                                            ~/.config/solana/cli/config.yml]
-    -u, --url <URL>                         JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                    /path/to/id.json or usb://remote/wallet/path
+    -C, --config <PATH>
+            Configuration file to use [default: ~/.config/solana/cli/config.yml]
+
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                      JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                 /path/to/id.json or usb://remote/wallet/path
 
 ARGS:
     <VOTE ACCOUNT PUBKEY>              Vote account to update
@@ -1907,15 +2034,15 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-    -u, --url <URL>                              JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                         /path/to/id.json or usb://remote/wallet/path
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+    -u, --url <URL>                                                    JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                               /path/to/id.json or usb://remote/wallet/path
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
 
@@ -1942,29 +2069,33 @@ FLAGS:
     -v, --verbose                        Show extra information header
 
 OPTIONS:
-        --ask-seed-phrase <KEYPAIR NAME>
-            Recover a keypair using a seed phrase and optional passphrase [possible values: keypair]
-
-        --blockhash <BLOCKHASH>                     Use the supplied blockhash
+        --blockhash <BLOCKHASH>                                           Use the supplied blockhash
     -C, --config <PATH>
             Configuration file to use [default: ~/.config/solana/cli/config.yml]
 
-        --fee-payer <KEYPAIR or PUBKEY>
+        --derivation-path <ACCOUNT or ACCOUNT/CHANGE>
+            Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'
+
+        --fee-payer <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Specify the fee-payer account. This may be a keypair file, the ASK keyword
             or the pubkey of an offline signer, provided an appropriate --signer argument
             is also passed. Defaults to the client keypair.
-    -u, --url <URL>                                 JSON RPC URL for the solana cluster
-    -k, --keypair <PATH>                            /path/to/id.json or usb://remote/wallet/path
+    -u, --url <URL>                                                       JSON RPC URL for the solana cluster
+    -k, --keypair <PATH>                                                  /path/to/id.json or usb://remote/wallet/path
         --nonce <PUBKEY>
             Provide the nonce account to use when creating a nonced
             transaction. Nonced transactions are useful when a transaction
             requires a lengthy signing process. Learn more about nonced
             transactions at https://docs.solana.com/offline-signing/durable-nonce
-        --nonce-authority <KEYPAIR or PUBKEY>
+        --nonce-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
             Provide the nonce authority keypair to use when signing a nonced transaction
 
-        --signer <BASE58_PUBKEY=BASE58_SIG>...      Provide a public-key/signature pair for the transaction
-        --withdraw-authority <KEYPAIR or PUBKEY>    Public key of authorized withdrawer (defaults to cli config pubkey)
+        --signer <BASE58_PUBKEY=BASE58_SIG>...
+            Provide a public-key/signature pair for the transaction
+
+        --withdraw-authority <KEYPAIR or PUBKEY or REMOTE WALLET PATH>
+            Public key of authorized withdrawer (defaults to cli config pubkey)
+
 
 ARGS:
     <STAKE ACCOUNT>          Stake account from which to withdraw
