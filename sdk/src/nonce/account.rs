@@ -60,7 +60,8 @@ impl<'a> Account for KeyedAccount<'a> {
 
                 let new_data = nonce::state::Data {
                     blockhash: recent_blockhash,
-                    ..data
+                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                    ..data.clone()
                 };
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
             }
@@ -127,6 +128,7 @@ impl<'a> Account for KeyedAccount<'a> {
                 let data = nonce::state::Data {
                     authority: *nonce_authority,
                     blockhash: recent_blockhashes[0].blockhash,
+                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
                 };
                 self.set_state(&Versions::new_current(State::Initialized(data)))
             }
@@ -146,7 +148,7 @@ impl<'a> Account for KeyedAccount<'a> {
                 }
                 let new_data = nonce::state::Data {
                     authority: *nonce_authority,
-                    ..data
+                    ..data.clone()
                 };
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
             }
@@ -159,7 +161,7 @@ pub fn create_account(lamports: u64) -> RefCell<account::Account> {
     RefCell::new(
         account::Account::new_data_with_space(
             lamports,
-            &State::Uninitialized,
+            &Versions::new_current(State::Uninitialized),
             State::size(),
             &system_program::id(),
         )

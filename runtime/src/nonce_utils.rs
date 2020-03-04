@@ -1,6 +1,7 @@
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
+    fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::CompiledInstruction,
     nonce::{self, state::Versions, State},
@@ -71,6 +72,14 @@ pub fn prepare_if_nonce_account(
                 account.set_state(&new_data).unwrap();
             }
         }
+    }
+}
+
+pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
+    let state = StateMut::<Versions>::state(account).ok()?.convert_to_current();
+    match state {
+        State::Initialized(data) => Some(data.fee_calculator.clone()),
+        _ => None,
     }
 }
 

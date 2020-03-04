@@ -19,15 +19,7 @@ impl Versions {
     pub fn convert_to_current(self) -> State {
         match self {
             Self::Current(state) => *state,
-            Self::V0(v0_state) => {
-                match *v0_state {
-                    v0::State::Uninitialized => State::Uninitialized,
-                    v0::State::Initialized(v0_data) => {
-                        let v0::Data { authority, blockhash} = v0_data;
-                        State::Initialized(Data { authority, blockhash })
-                    }
-                }
-            }
+            Self::V0(_) => panic!("incompatible nonce account"),
         }
     }
 }
