@@ -6,8 +6,8 @@ use crate::{
     rpc_request::RpcRequest,
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-        RpcEpochInfo, RpcFeeRateGovernor, RpcKeyedAccount, RpcLeaderSchedule, RpcResponse,
-        RpcVersionInfo, RpcVoteAccountStatus,
+        RpcEpochInfo, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount, RpcLeaderSchedule,
+        RpcResponse, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -354,6 +354,34 @@ impl RpcClient {
                 format!("GetEpochSchedule parse failure: {:?}", err),
             )
         })
+    }
+
+    pub fn get_identity(&self) -> io::Result<Pubkey> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetIdentity, Value::Null, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetIdentity request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetIdentity failure: {:?}", err),
+                )
+            })
+            .and_then(|rpc_identity: RpcIdentity| {
+                rpc_identity.identity.parse::<Pubkey>().map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("GetIdentity invalid pubkey failure: {:?}", err),
+                    )
+                })
+            })
     }
 
     pub fn get_inflation(&self) -> io::Result<Inflation> {

@@ -26,6 +26,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
 * [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
+* [getIdentity](jsonrpc-api.md#getidentity)
 * [getInflation](jsonrpc-api.md#getinflation)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
@@ -452,6 +453,29 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+```
+
+### getIdentity
+
+Returns the identity pubkey for the current node
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The result field will be a JSON object with the following fields:
+
+* `identity`, the identity pubkey of the current node \(as a base-58 encoded string\)
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getIdentity"}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN"},"id":1}
 ```
 
 ### getInflation
