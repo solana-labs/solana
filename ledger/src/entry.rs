@@ -258,6 +258,7 @@ pub trait EntrySlice {
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
     /// Counts tick entries
     fn tick_count(&self) -> u64;
+    fn verify_transaction_signatures(&self) -> bool;
 }
 
 impl EntrySlice for [Entry] {
@@ -304,19 +305,41 @@ impl EntrySlice for [Entry] {
         })
     }
 
+    fn verify_transaction_signatures(&self) -> bool {
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                self.par_iter().all(|e| {
+                    e.transactions
+                        .par_iter()
+                        .all(|transaction| transaction.verify().is_ok())
+                })
+            })
+        })
+    }
+
     fn start_verify(
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
+        let start = Instant::now();
+        let res = self.verify_transaction_signatures();
+        if !res {
+            return EntryVerificationState::CPU(VerificationData {
+                thread_h: None,
+                verification_status: EntryVerificationStatus::Failure,
+                duration_ms: timing::duration_as_ms(&start.elapsed()),
+                hashes: None,
+                tx_hashes: vec![],
+            });
+        }
+
         let api = perf_libs::api();
         if api.is_none() {
             return self.verify_cpu(start_hash);
         }
         let api = api.unwrap();
         inc_new_counter_warn!("entry_verify-num_entries", self.len() as usize);
-
-        let start = Instant::now();
 
         let genesis = [Entry {
             num_hashes: 0,
@@ -510,6 +533,40 @@ mod tests {
     }
 
     #[test]
+    fn test_transaction_signing() {
+        use solana_sdk::signature::Signature;
+        let zero = Hash::default();
+
+        let keypair = Keypair::new();
+        let tx0 = system_transaction::transfer(&keypair, &keypair.pubkey(), 0, zero);
+        let tx1 = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, zero);
+
+        // Verify entry with 2 transctions
+        let mut e0 = vec![Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()])];
+        assert!(e0.verify(&zero));
+
+        // Clear signature of the first transaction, see that it does not verify
+        let orig_sig = e0[0].transactions[0].signatures[0];
+        e0[0].transactions[0].signatures[0] = Signature::default();
+        assert!(!e0.verify(&zero));
+
+        // restore original signature
+        e0[0].transactions[0].signatures[0] = orig_sig;
+        assert!(e0.verify(&zero));
+
+        // Resize signatures and see verification fails.
+        let len = e0[0].transactions[0].signatures.len();
+        e0[0].transactions[0]
+            .signatures
+            .resize(len - 1, Signature::default());
+        assert!(!e0.verify(&zero));
+
+        // Pass an entry with no transactions
+        let e0 = vec![Entry::new(&zero, 0, vec![])];
+        assert!(e0.verify(&zero));
+    }
+
+    #[test]
     fn test_witness_reorder_attack() {
         let zero = Hash::default();
 
@@ -597,7 +654,7 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let two = hash(&one.as_ref());
-        let alice_pubkey = Keypair::default();
+        let alice_pubkey = Keypair::new();
         let tx0 = create_sample_payment(&alice_pubkey, one);
         let tx1 = create_sample_timestamp(&alice_pubkey, one);
         assert_eq!(vec![][..].verify(&one), true); // base case
