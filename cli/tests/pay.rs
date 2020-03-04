@@ -409,7 +409,13 @@ fn test_nonced_pay_tx() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -431,7 +437,13 @@ fn test_nonced_pay_tx() {
 
     // Verify that nonce has been used
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     match nonce_state {
         NonceState::Initialized(_meta, hash) => assert_ne!(hash, nonce_hash),
         _ => assert!(false, "Nonce is not initialized"),

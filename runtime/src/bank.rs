@@ -5098,11 +5098,20 @@ mod tests {
     }
 
     fn get_nonce_account(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
+<<<<<<< HEAD
         bank.get_account(&nonce_pubkey)
             .and_then(|acc| match acc.state() {
                 Ok(nonce_state::NonceState::Initialized(_meta, hash)) => Some(hash),
+=======
+        bank.get_account(&nonce_pubkey).and_then(|acc| {
+            let state =
+                StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
+            match state {
+                Ok(nonce::State::Initialized(_meta, hash)) => Some(hash),
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
                 _ => None,
-            })
+            }
+        })
     }
 
     fn nonce_setup(

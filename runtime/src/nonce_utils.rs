@@ -3,7 +3,11 @@ use solana_sdk::{
     account_utils::StateMut,
     hash::Hash,
     instruction::CompiledInstruction,
+<<<<<<< HEAD
     nonce_state::NonceState,
+=======
+    nonce::{state::Versions, State},
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
@@ -39,8 +43,13 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 }
 
 pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
+<<<<<<< HEAD
     match acc.state() {
         Ok(NonceState::Initialized(_meta, ref nonce)) => hash == nonce,
+=======
+    match StateMut::<Versions>::state(acc).map(|v| v.convert_to_current()) {
+        Ok(State::Initialized(_meta, ref nonce)) => hash == nonce,
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         _ => false,
     }
 }
@@ -60,10 +69,19 @@ pub fn prepare_if_nonce_account(
                 *account = nonce_acc.clone()
             }
             // Since hash_age_kind is DurableNonce, unwrap is safe here
+<<<<<<< HEAD
             if let NonceState::Initialized(meta, _) = account.state().unwrap() {
                 account
                     .set_state(&NonceState::Initialized(meta, *last_blockhash))
                     .unwrap();
+=======
+            let state = StateMut::<Versions>::state(nonce_acc)
+                .unwrap()
+                .convert_to_current();
+            if let State::Initialized(meta, _) = state {
+                let new_data = Versions::new_current(State::Initialized(meta, *last_blockhash));
+                account.set_state(&new_data).unwrap();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
             }
         }
     }
@@ -239,6 +257,7 @@ mod tests {
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash) {
+<<<<<<< HEAD
         let stored_nonce = Hash::default();
         let account = Account::new_data(
             42,
@@ -246,6 +265,13 @@ mod tests {
             &system_program::id(),
         )
         .unwrap();
+=======
+        let data = Versions::new_current(State::Initialized(
+            nonce::state::Meta::new(&Pubkey::default()),
+            Hash::default(),
+        ));
+        let account = Account::new_data(42, &data, &system_program::id()).unwrap();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         let pre_account = Account {
             lamports: 43,
             ..account.clone()
@@ -296,12 +322,20 @@ mod tests {
         let post_account_pubkey = pre_account_pubkey;
 
         let mut expect_account = post_account.clone();
+<<<<<<< HEAD
         expect_account
             .set_state(&NonceState::Initialized(
                 Meta::new(&Pubkey::default()),
                 last_blockhash,
             ))
             .unwrap();
+=======
+        let data = Versions::new_current(State::Initialized(
+            nonce::state::Meta::new(&Pubkey::default()),
+            last_blockhash,
+        ));
+        expect_account.set_state(&data).unwrap();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
 
         assert!(run_prepare_if_nonce_account_test(
             &mut post_account,
@@ -356,10 +390,15 @@ mod tests {
 
         let mut expect_account = pre_account.clone();
         expect_account
+<<<<<<< HEAD
             .set_state(&NonceState::Initialized(
                 Meta::new(&Pubkey::default()),
+=======
+            .set_state(&Versions::new_current(State::Initialized(
+                nonce::state::Meta::new(&Pubkey::default()),
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
                 last_blockhash,
-            ))
+            )))
             .unwrap();
 
         assert!(run_prepare_if_nonce_account_test(

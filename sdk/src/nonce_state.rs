@@ -3,6 +3,10 @@ use crate::{
     account_utils::State,
     hash::Hash,
     instruction::InstructionError,
+<<<<<<< HEAD:sdk/src/nonce_state.rs
+=======
+    nonce::{self, state::Versions, State},
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
     pubkey::Pubkey,
     system_instruction::NonceError,
     system_program,
@@ -80,8 +84,14 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
             return Err(NonceError::NoRecentBlockhashes.into());
         }
 
+<<<<<<< HEAD:sdk/src/nonce_state.rs
         let meta = match self.state()? {
             NonceState::Initialized(meta, ref hash) => {
+=======
+        let state = AccountUtilsState::<Versions>::state(self)?.convert_to_current();
+        let meta = match state {
+            State::Initialized(meta, ref hash) => {
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
                 if !signers.contains(&meta.nonce_authority) {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
@@ -93,7 +103,14 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
             _ => return Err(NonceError::BadAccountState.into()),
         };
 
+<<<<<<< HEAD:sdk/src/nonce_state.rs
         self.set_state(&NonceState::Initialized(meta, recent_blockhashes[0]))
+=======
+        self.set_state(&Versions::new_current(State::Initialized(
+            meta,
+            recent_blockhashes[0],
+        )))
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
     }
 
     fn withdraw_nonce_account(
@@ -104,8 +121,13 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         rent: &Rent,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
+<<<<<<< HEAD:sdk/src/nonce_state.rs
         let signer = match self.state()? {
             NonceState::Uninitialized => {
+=======
+        let signer = match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
+            State::Uninitialized => {
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
                 if lamports > self.lamports()? {
                     return Err(InstructionError::InsufficientFunds);
                 }
@@ -146,8 +168,13 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
             return Err(NonceError::NoRecentBlockhashes.into());
         }
 
+<<<<<<< HEAD:sdk/src/nonce_state.rs
         let meta = match self.state()? {
             NonceState::Uninitialized => {
+=======
+        let meta = match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
+            State::Uninitialized => {
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
                 let min_balance = rent.minimum_balance(self.data_len()?);
                 if self.lamports()? < min_balance {
                     return Err(InstructionError::InsufficientFunds);
@@ -157,7 +184,14 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
             _ => return Err(NonceError::BadAccountState.into()),
         };
 
+<<<<<<< HEAD:sdk/src/nonce_state.rs
         self.set_state(&NonceState::Initialized(meta, recent_blockhashes[0]))
+=======
+        self.set_state(&Versions::new_current(State::Initialized(
+            meta,
+            recent_blockhashes[0],
+        )))
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
     }
 
     fn authorize_nonce_account(
@@ -165,12 +199,24 @@ impl<'a> NonceAccount for KeyedAccount<'a> {
         nonce_authority: &Pubkey,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
+<<<<<<< HEAD:sdk/src/nonce_state.rs
         match self.state()? {
             NonceState::Initialized(meta, nonce) => {
                 if !signers.contains(&meta.nonce_authority) {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
                 self.set_state(&NonceState::Initialized(Meta::new(nonce_authority), nonce))
+=======
+        match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
+            State::Initialized(meta, nonce) => {
+                if !signers.contains(&meta.nonce_authority) {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                self.set_state(&Versions::new_current(State::Initialized(
+                    nonce::state::Meta::new(nonce_authority),
+                    nonce,
+                )))
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             }
             _ => Err(NonceError::BadAccountState.into()),
         }
@@ -206,6 +252,11 @@ mod test {
     use super::*;
     use crate::{
         account::KeyedAccount,
+<<<<<<< HEAD:sdk/src/nonce_state.rs
+=======
+        account_utils::State as AccountUtilsState,
+        nonce::{self, State},
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
         system_instruction::NonceError,
         sysvar::recent_blockhashes::{create_test_recent_blockhashes, RecentBlockhashes},
     };
@@ -233,7 +284,13 @@ mod test {
             let meta = Meta::new(&keyed_account.unsigned_key());
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = keyed_account.state().unwrap();
+=======
+            let state = AccountUtilsState::<Versions>::state(keyed_account)
+                .unwrap()
+                .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             // New is in Uninitialzed state
             assert_eq!(state, NonceState::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(95);
@@ -241,7 +298,13 @@ mod test {
             keyed_account
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = keyed_account.state().unwrap();
+=======
+            let state = AccountUtilsState::<Versions>::state(keyed_account)
+                .unwrap()
+                .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             let stored = recent_blockhashes[0];
             // First nonce instruction drives state from Uninitialized to Initialized
             assert_eq!(state, NonceState::Initialized(meta, stored));
@@ -249,7 +312,13 @@ mod test {
             keyed_account
                 .advance_nonce_account(&recent_blockhashes, &signers)
                 .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = keyed_account.state().unwrap();
+=======
+            let state = AccountUtilsState::<Versions>::state(keyed_account)
+                .unwrap()
+                .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             let stored = recent_blockhashes[0];
             // Second nonce instruction consumes and replaces stored nonce
             assert_eq!(state, NonceState::Initialized(meta, stored));
@@ -257,7 +326,13 @@ mod test {
             keyed_account
                 .advance_nonce_account(&recent_blockhashes, &signers)
                 .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = keyed_account.state().unwrap();
+=======
+            let state = AccountUtilsState::<Versions>::state(keyed_account)
+                .unwrap()
+                .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             let stored = recent_blockhashes[0];
             // Third nonce instruction for fun and profit
             assert_eq!(state, NonceState::Initialized(meta, stored));
@@ -304,8 +379,15 @@ mod test {
                 .unwrap();
             let pubkey = nonce_account.account.borrow().owner.clone();
             let nonce_account = KeyedAccount::new(&pubkey, false, nonce_account.account);
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = nonce_account.state().unwrap();
             assert_eq!(state, NonceState::Initialized(meta, stored));
+=======
+            let state = AccountUtilsState::<Versions>::state(&nonce_account)
+                .unwrap()
+                .convert_to_current();
+            assert_eq!(state, State::Initialized(meta, stored));
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             let signers = HashSet::new();
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let result = nonce_account.advance_nonce_account(&recent_blockhashes, &signers);
@@ -425,8 +507,15 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = nonce_keyed.state().unwrap();
             assert_eq!(state, NonceState::Uninitialized);
+=======
+            let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                .unwrap()
+                .convert_to_current();
+            assert_eq!(state, State::Uninitialized);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
                 signers.insert(nonce_keyed.signer_key().unwrap().clone());
@@ -444,7 +533,13 @@ mod test {
                         &signers,
                     )
                     .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
                 let state: NonceState = nonce_keyed.state().unwrap();
+=======
+                let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                    .unwrap()
+                    .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
                 // Withdraw instruction...
                 // Deinitializes NonceAccount state
                 assert_eq!(state, NonceState::Uninitialized);
@@ -464,8 +559,15 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
         with_test_keyed_account(min_lamports + 42, false, |nonce_keyed| {
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = nonce_keyed.state().unwrap();
             assert_eq!(state, NonceState::Uninitialized);
+=======
+            let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                .unwrap()
+                .convert_to_current();
+            assert_eq!(state, State::Uninitialized);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             with_test_keyed_account(42, false, |to_keyed| {
                 let signers = HashSet::new();
                 let recent_blockhashes = create_test_recent_blockhashes(0);
@@ -490,8 +592,15 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = nonce_keyed.state().unwrap();
             assert_eq!(state, NonceState::Uninitialized);
+=======
+            let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                .unwrap()
+                .convert_to_current();
+            assert_eq!(state, State::Uninitialized);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
                 signers.insert(nonce_keyed.signer_key().unwrap().clone());
@@ -534,8 +643,15 @@ mod test {
                         &signers,
                     )
                     .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
                 let state: NonceState = nonce_keyed.state().unwrap();
                 assert_eq!(state, NonceState::Uninitialized);
+=======
+                let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                    .unwrap()
+                    .convert_to_current();
+                assert_eq!(state, State::Uninitialized);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
                 assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
                 assert_eq!(to_keyed.account.borrow().lamports, to_expect_lamports);
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports;
@@ -551,8 +667,15 @@ mod test {
                         &signers,
                     )
                     .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
                 let state: NonceState = nonce_keyed.state().unwrap();
                 assert_eq!(state, NonceState::Uninitialized);
+=======
+                let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                    .unwrap()
+                    .convert_to_current();
+                assert_eq!(state, State::Uninitialized);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
                 assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
                 assert_eq!(to_keyed.account.borrow().lamports, to_expect_lamports);
             })
@@ -575,7 +698,13 @@ mod test {
             nonce_keyed
                 .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
                 .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = nonce_keyed.state().unwrap();
+=======
+            let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                .unwrap()
+                .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             let stored = recent_blockhashes[0];
             assert_eq!(state, NonceState::Initialized(meta, stored));
             with_test_keyed_account(42, false, |to_keyed| {
@@ -592,7 +721,13 @@ mod test {
                         &signers,
                     )
                     .unwrap();
+<<<<<<< HEAD:sdk/src/nonce_state.rs
                 let state: NonceState = nonce_keyed.state().unwrap();
+=======
+                let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                    .unwrap()
+                    .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
                 let stored = recent_blockhashes[0];
                 assert_eq!(state, NonceState::Initialized(meta, stored));
                 assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
@@ -714,8 +849,15 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(NonceState::size());
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = keyed_account.state().unwrap();
             assert_eq!(state, NonceState::Uninitialized);
+=======
+            let state = AccountUtilsState::<Versions>::state(keyed_account)
+                .unwrap()
+                .convert_to_current();
+            assert_eq!(state, State::Uninitialized);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
             let mut signers = HashSet::new();
             signers.insert(keyed_account.signer_key().unwrap().clone());
             let recent_blockhashes = create_test_recent_blockhashes(0);
@@ -725,8 +867,15 @@ mod test {
             let result =
                 keyed_account.initialize_nonce_account(&authorized, &recent_blockhashes, &rent);
             assert_eq!(result, Ok(()));
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = keyed_account.state().unwrap();
             assert_eq!(state, NonceState::Initialized(meta, stored));
+=======
+            let state = AccountUtilsState::<Versions>::state(keyed_account)
+                .unwrap()
+                .convert_to_current();
+            assert_eq!(state, State::Initialized(meta, stored));
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
         })
     }
 
@@ -804,8 +953,15 @@ mod test {
             let meta = Meta::new(&authorized);
             let result = nonce_account.authorize_nonce_account(&Pubkey::default(), &signers);
             assert_eq!(result, Ok(()));
+<<<<<<< HEAD:sdk/src/nonce_state.rs
             let state: NonceState = nonce_account.state().unwrap();
             assert_eq!(state, NonceState::Initialized(meta, stored));
+=======
+            let state = AccountUtilsState::<Versions>::state(nonce_account)
+                .unwrap()
+                .convert_to_current();
+            assert_eq!(state, State::Initialized(meta, stored));
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607):sdk/src/nonce/account.rs
         })
     }
 

@@ -500,7 +500,13 @@ fn test_nonced_stake_delegation_and_deactivation() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -523,7 +529,13 @@ fn test_nonced_stake_delegation_and_deactivation() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -714,7 +726,13 @@ fn test_stake_authorize() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -763,7 +781,13 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, online_authority_pubkey);
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let new_nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -997,7 +1021,13 @@ fn test_stake_split() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -1248,7 +1278,13 @@ fn test_stake_set_lockup() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account_pubkey).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -1362,7 +1398,13 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -1410,7 +1452,13 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),
@@ -1451,7 +1499,13 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
+<<<<<<< HEAD
     let nonce_state: NonceState = account.state().unwrap();
+=======
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     let nonce_hash = match nonce_state {
         NonceState::Initialized(_meta, hash) => hash,
         _ => panic!("Nonce is not initialized"),

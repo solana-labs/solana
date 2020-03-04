@@ -14,7 +14,11 @@ use solana_sdk::{
     account_utils::StateMut,
     hash::Hash,
     message::Message,
+<<<<<<< HEAD
     nonce_state::{Meta, NonceState},
+=======
+    nonce::{self, state::Versions, State},
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
     pubkey::Pubkey,
     system_instruction::{
         advance_nonce_account, authorize_nonce_account, create_address_with_seed,
@@ -363,8 +367,13 @@ pub fn check_nonce_account(
     if nonce_account.owner != system_program::ID {
         return Err(CliError::InvalidNonce(CliNonceError::InvalidAccountOwner).into());
     }
+<<<<<<< HEAD
     let nonce_state: NonceState = nonce_account
         .state()
+=======
+    let nonce_state = StateMut::<Versions>::state(nonce_account)
+        .map(|v| v.convert_to_current())
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         .map_err(|_| Box::new(CliError::InvalidNonce(CliNonceError::InvalidAccountData)))?;
     match nonce_state {
         NonceState::Initialized(meta, hash) => {
@@ -429,7 +438,11 @@ pub fn process_create_nonce_account(
 
     if let Ok(nonce_account) = rpc_client.get_account(&nonce_account_address) {
         let err_msg = if nonce_account.owner == system_program::id()
+<<<<<<< HEAD
             && StateMut::<NonceState>::state(&nonce_account).is_ok()
+=======
+            && StateMut::<Versions>::state(&nonce_account).is_ok()
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         {
             format!("Nonce account {} already exists", nonce_account_address)
         } else {
@@ -495,9 +508,16 @@ pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) 
         ))
         .into());
     }
+<<<<<<< HEAD
     match nonce_account.state() {
         Ok(NonceState::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
         Ok(NonceState::Initialized(_, hash)) => Ok(format!("{:?}", hash)),
+=======
+    let nonce_state = StateMut::<Versions>::state(&nonce_account).map(|v| v.convert_to_current());
+    match nonce_state {
+        Ok(State::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
+        Ok(State::Initialized(_, hash)) => Ok(format!("{:?}", hash)),
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to nonce state: {:?}",
             err
@@ -579,9 +599,16 @@ pub fn process_show_nonce_account(
         }
         Ok("".to_string())
     };
+<<<<<<< HEAD
     match nonce_account.state() {
         Ok(NonceState::Uninitialized) => print_account(None),
         Ok(NonceState::Initialized(meta, hash)) => print_account(Some((meta, hash))),
+=======
+    let nonce_state = StateMut::<Versions>::state(&nonce_account).map(|v| v.convert_to_current());
+    match nonce_state {
+        Ok(State::Uninitialized) => print_account(None),
+        Ok(State::Initialized(meta, hash)) => print_account(Some((meta, hash))),
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to nonce state: {:?}",
             err
@@ -903,6 +930,7 @@ mod tests {
     fn test_check_nonce_account() {
         let blockhash = Hash::default();
         let nonce_pubkey = Pubkey::new_rand();
+<<<<<<< HEAD
         let valid = Account::new_data(
             1,
             &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), blockhash),
@@ -915,6 +943,16 @@ mod tests {
             &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), blockhash),
             &Pubkey::new(&[1u8; 32]),
         );
+=======
+        let data = Versions::new_current(State::Initialized(
+            nonce::state::Meta::new(&nonce_pubkey),
+            blockhash,
+        ));
+        let valid = Account::new_data(1, &data, &system_program::ID);
+        assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
+
+        let invalid_owner = Account::new_data(1, &data, &Pubkey::new(&[1u8; 32]));
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         assert_eq!(
             check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(
@@ -930,21 +968,37 @@ mod tests {
             ))),
         );
 
+<<<<<<< HEAD
         let invalid_hash = Account::new_data(
             1,
             &NonceState::Initialized(NonceMeta::new(&nonce_pubkey), hash(b"invalid")),
             &system_program::ID,
         );
+=======
+        let data = Versions::new_current(State::Initialized(
+            nonce::state::Meta::new(&nonce_pubkey),
+            hash(b"invalid"),
+        ));
+        let invalid_hash = Account::new_data(1, &data, &system_program::ID);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         assert_eq!(
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(CliNonceError::InvalidHash))),
         );
 
+<<<<<<< HEAD
         let invalid_authority = Account::new_data(
             1,
             &NonceState::Initialized(NonceMeta::new(&Pubkey::new_rand()), blockhash),
             &system_program::ID,
         );
+=======
+        let data = Versions::new_current(State::Initialized(
+            nonce::state::Meta::new(&Pubkey::new_rand()),
+            blockhash,
+        ));
+        let invalid_authority = Account::new_data(1, &data, &system_program::ID);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         assert_eq!(
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(
@@ -952,7 +1006,12 @@ mod tests {
             ))),
         );
 
+<<<<<<< HEAD
         let invalid_state = Account::new_data(1, &NonceState::Uninitialized, &system_program::ID);
+=======
+        let data = Versions::new_current(State::Uninitialized);
+        let invalid_state = Account::new_data(1, &data, &system_program::ID);
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
         assert_eq!(
             check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(

@@ -3265,9 +3265,14 @@ mod tests {
 
         // Nonced pay
         let blockhash = Hash::default();
+        let data = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Meta::new(&config.signers[0].pubkey()),
+            blockhash,
+        ));
         let nonce_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(
+<<<<<<< HEAD
                 Account::new_data(
                     1,
                     &NonceState::Initialized(
@@ -3277,6 +3282,9 @@ mod tests {
                     &system_program::ID,
                 )
                 .unwrap()
+=======
+                Account::new_data(1, &data, &system_program::ID,).unwrap()
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
             )),
         });
         let mut mocks = HashMap::new();
@@ -3296,15 +3304,23 @@ mod tests {
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let blockhash = Hash::default();
+        let data = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Meta::new(&bob_pubkey),
+            blockhash,
+        ));
         let nonce_authority_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(
+<<<<<<< HEAD
                 Account::new_data(
                     1,
                     &NonceState::Initialized(NonceMeta::new(&bob_pubkey), blockhash),
                     &system_program::ID,
                 )
                 .unwrap()
+=======
+                Account::new_data(1, &data, &system_program::ID,).unwrap()
+>>>>>>> 1cb6101c6... SDK: Add versioning to nonce state (#8607)
             )),
         });
         let mut mocks = HashMap::new();
