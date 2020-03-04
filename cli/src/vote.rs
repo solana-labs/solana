@@ -9,6 +9,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
+    commitment_config::CommitmentConfig,
     message::Message,
     pubkey::Pubkey,
     system_instruction::{create_address_with_seed, SystemError},
@@ -159,6 +160,14 @@ impl VoteSubCommands for App<'_, '_> {
                 .about("Show the contents of a vote account")
                 .alias("show-vote-account")
                 .arg(
+                    Arg::with_name("confirmed")
+                        .long("confirmed")
+                        .takes_value(false)
+                        .help(
+                            "Return information at maximum-lockout commitment level",
+                        ),
+                )
+                .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE ACCOUNT PUBKEY")
@@ -267,10 +276,16 @@ pub fn parse_vote_get_account_command(
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
     let use_lamports_unit = matches.is_present("lamports");
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
     Ok(CliCommandInfo {
         command: CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
+            commitment_config,
         },
         signers: vec![],
     })
@@ -423,8 +438,14 @@ pub fn process_vote_update_validator(
 fn get_vote_account(
     rpc_client: &RpcClient,
     vote_account_pubkey: &Pubkey,
+    commitment_config: CommitmentConfig,
 ) -> Result<(Account, VoteState), Box<dyn std::error::Error>> {
-    let vote_account = rpc_client.get_account(vote_account_pubkey)?;
+    let vote_account = rpc_client
+        .get_account_with_commitment(vote_account_pubkey, commitment_config)?
+        .value
+        .ok_or_else(|| {
+            CliError::RpcRequestError(format!("{:?} account does not exist", vote_account_pubkey))
+        })?;
 
     if vote_account.owner != solana_vote_program::id() {
         return Err(CliError::RpcRequestError(format!(
@@ -447,8 +468,10 @@ pub fn process_show_vote_account(
     _config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
+    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let (vote_account, vote_state) = get_vote_account(rpc_client, vote_account_pubkey)?;
+    let (vote_account, vote_state) =
+        get_vote_account(rpc_client, vote_account_pubkey, commitment_config)?;
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 

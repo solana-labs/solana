@@ -208,6 +208,7 @@ pub enum CliCommand {
     },
     ShowValidators {
         use_lamports_unit: bool,
+        commitment_config: CommitmentConfig,
     },
     // Nonce commands
     AuthorizeNonceAccount {
@@ -353,6 +354,7 @@ pub enum CliCommand {
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
+        commitment_config: CommitmentConfig,
     },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
@@ -1559,13 +1561,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, *slot),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetEpochInfo { commitment_config } => {
-            process_get_epoch_info(&rpc_client, commitment_config)
+            process_get_epoch_info(&rpc_client, *commitment_config)
         }
         CliCommand::GetSlot { commitment_config } => {
-            process_get_slot(&rpc_client, commitment_config)
+            process_get_slot(&rpc_client, *commitment_config)
         }
         CliCommand::GetTransactionCount { commitment_config } => {
-            process_get_transaction_count(&rpc_client, commitment_config)
+            process_get_transaction_count(&rpc_client, *commitment_config)
         }
         CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
         CliCommand::LiveSlots => process_live_slots(&config.websocket_url),
@@ -1582,7 +1584,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             interval,
             count,
             timeout,
-            commitment_config,
+            *commitment_config,
         ),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
@@ -1596,9 +1598,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
         ),
-        CliCommand::ShowValidators { use_lamports_unit } => {
-            process_show_validators(&rpc_client, *use_lamports_unit)
-        }
+        CliCommand::ShowValidators {
+            use_lamports_unit,
+            commitment_config,
+        } => process_show_validators(&rpc_client, *use_lamports_unit, *commitment_config),
 
         // Nonce Commands
 
@@ -1910,11 +1913,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
+            commitment_config,
         } => process_show_vote_account(
             &rpc_client,
             config,
             &vote_account_pubkey,
             *use_lamports_unit,
+            *commitment_config,
         ),
         CliCommand::VoteAuthorize {
             vote_account_pubkey,
