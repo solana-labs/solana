@@ -852,7 +852,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
-        let new_stats = vec![];
+        let mut new_stats = vec![];
         for bank in frozen_banks {
             // Only time progress map should be missing a bank slot
             // is if this node was the leader for this slot as those banks
@@ -895,6 +895,7 @@ impl ReplayStage {
                 stats.stake_lockouts = stake_lockouts;
                 stats.block_height = bank.block_height();
                 stats.computed = true;
+                new_stats.push(stats.slot);
             }
             stats.vote_threshold = tower.check_vote_stake_threshold(
                 bank.slot(),
@@ -1171,6 +1172,7 @@ impl ReplayStage {
         bank: Arc<Bank>,
         slot_full_senders: &[Sender<(u64, Pubkey)>],
     ) {
+        info!("bank frozen: {}", bank.slot());
         bank.freeze();
         slot_full_senders.iter().for_each(|sender| {
             if let Err(e) = sender.send((bank.slot(), *bank.collector_id())) {
@@ -1306,7 +1308,10 @@ pub(crate) mod tests {
         transaction::TransactionError,
     };
     use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state::{self, Vote, VoteState, VoteStateVersions};
+    use solana_vote_program::{
+        vote_state::{self, Vote, VoteState, VoteStateVersions},
+        vote_transaction,
+    };
     use std::{
         fs::remove_dir_all,
         iter,
@@ -2155,6 +2160,119 @@ pub(crate) mod tests {
             }
         }
         Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_compute_bank_stats_confirmed() {
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let stake_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let mut keypairs = HashMap::new();
+        keypairs.insert(
+            node_pubkey,
+            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
+        );
+
+        let (bank_forks, mut progress) = initialize_state(&keypairs);
+        let bank0 = bank_forks.get(0).unwrap().clone();
+        let my_keypairs = keypairs.get(&node_pubkey).unwrap();
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![0],
+            bank0.hash(),
+            bank0.last_blockhash(),
+            &my_keypairs.node_keypair,
+            &my_keypairs.vote_keypair,
+            &my_keypairs.vote_keypair,
+        );
+
+        let bank_forks = RwLock::new(bank_forks);
+        let bank1 = Bank::new_from_parent(&bank0, &node_pubkey, 1);
+        bank1.process_transaction(&vote_tx).unwrap();
+        bank1.freeze();
+
+        // Test confirmations
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+        let tower = Tower::new_for_tests(0, 0.67);
+        let newly_computed = ReplayStage::compute_bank_stats(
+            &node_pubkey,
+            &ancestors,
+            &mut frozen_banks,
+            &tower,
+            &mut progress,
+        );
+        assert_eq!(newly_computed, vec![0]);
+        // The only vote is in bank 1, and bank_forks does not currently contain
+        // bank 1, so no slot should be confirmed.
+        {
+            let fork_progress = progress.get(&0).unwrap();
+            let confirmed_forks = ReplayStage::confirm_forks(
+                &tower,
+                &fork_progress.fork_stats.stake_lockouts,
+                fork_progress.fork_stats.total_staked,
+                &progress,
+                &bank_forks,
+            );
+
+            assert!(confirmed_forks.is_empty())
+        }
+
+        // Insert the bank that contains a vote for slot 0, which confirms slot 0
+        bank_forks.write().unwrap().insert(bank1);
+        progress.insert(1, ForkProgress::new(bank0.last_blockhash()));
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+        let newly_computed = ReplayStage::compute_bank_stats(
+            &node_pubkey,
+            &ancestors,
+            &mut frozen_banks,
+            &tower,
+            &mut progress,
+        );
+
+        assert_eq!(newly_computed, vec![1]);
+        {
+            let fork_progress = progress.get(&1).unwrap();
+            let confirmed_forks = ReplayStage::confirm_forks(
+                &tower,
+                &fork_progress.fork_stats.stake_lockouts,
+                fork_progress.fork_stats.total_staked,
+                &progress,
+                &bank_forks,
+            );
+            assert_eq!(confirmed_forks, vec![0]);
+        }
+
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let mut frozen_banks: Vec<_> = bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+        let newly_computed = ReplayStage::compute_bank_stats(
+            &node_pubkey,
+            &ancestors,
+            &mut frozen_banks,
+            &tower,
+            &mut progress,
+        );
+        // No new stats should have been computed
+        assert!(newly_computed.is_empty());
     }
 
     #[test]
