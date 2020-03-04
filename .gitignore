@@ -1,5 +1,6 @@
 /docs/html/
 /docs/src/tests.ok
+/docs/src/cli/usage.md
 /docs/src/.gitbook/assets/*.svg
 /farf/
 /solana-release/
