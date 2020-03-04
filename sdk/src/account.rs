@@ -1,8 +1,4 @@
-use crate::{
-    hash::Hash,
-    instruction::InstructionError,
-    {clock::Epoch, pubkey::Pubkey},
-};
+use crate::{clock::Epoch, hash::Hash, instruction::InstructionError, pubkey::Pubkey};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
@@ -181,6 +177,10 @@ impl<'a> KeyedAccount<'a> {
 
     pub fn executable(&self) -> Result<bool, InstructionError> {
         Ok(self.try_borrow()?.executable)
+    }
+
+    pub fn rent_epoch(&self) -> Result<Epoch, InstructionError> {
+        Ok(self.try_borrow()?.rent_epoch)
     }
 
     pub fn try_account_ref(&'a self) -> Result<Ref<Account>, InstructionError> {
