@@ -629,6 +629,7 @@ mod tests {
     use crate::cli::{app, parse_command};
     use solana_sdk::{
         account::Account,
+        fee_calculator::FeeCalculator,
         hash::hash,
         nonce::{self, State},
         signature::{read_keypair_file, write_keypair, Keypair, Signer},
@@ -909,6 +910,7 @@ mod tests {
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: nonce_pubkey,
             blockhash,
+            fee_calculator: FeeCalculator::default(),
         }));
         let valid = Account::new_data(1, &data, &system_program::ID);
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
@@ -932,6 +934,7 @@ mod tests {
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: nonce_pubkey,
             blockhash: hash(b"invalid"),
+            fee_calculator: FeeCalculator::default(),
         }));
         let invalid_hash = Account::new_data(1, &data, &system_program::ID);
         assert_eq!(
@@ -942,6 +945,7 @@ mod tests {
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: Pubkey::new_rand(),
             blockhash,
+            fee_calculator: FeeCalculator::default(),
         }));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
         assert_eq!(

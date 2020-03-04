@@ -3269,6 +3269,7 @@ mod tests {
             nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
                 authority: config.signers[0].pubkey(),
                 blockhash,
+                fee_calculator: FeeCalculator::default(),
             }));
         let nonce_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
@@ -3297,6 +3298,7 @@ mod tests {
             nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
                 authority: bob_pubkey,
                 blockhash,
+                fee_calculator: FeeCalculator::default(),
             }));
         let nonce_authority_response = json!(Response {
             context: RpcResponseContext { slot: 1 },

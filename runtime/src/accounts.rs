@@ -925,10 +925,7 @@ mod tests {
             nonce.pubkey(),
             Account::new_data(
                 min_balance * 2,
-                &nonce::State::Initialized(nonce::state::Data {
-                    authority: Pubkey::default(),
-                    blockhash: Hash::default(),
-                }),
+                &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data::default())),
                 &system_program::id(),
             )
             .unwrap(),
