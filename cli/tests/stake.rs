@@ -504,7 +504,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -529,7 +529,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -722,7 +722,7 @@ fn test_stake_authorize() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -773,7 +773,7 @@ fn test_stake_authorize() {
         .unwrap()
         .convert_to_current();
     let new_nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
     assert_ne!(nonce_hash, new_nonce_hash);
@@ -1009,7 +1009,7 @@ fn test_stake_split() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -1262,7 +1262,7 @@ fn test_stake_set_lockup() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -1378,7 +1378,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -1428,7 +1428,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -1471,7 +1471,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         .unwrap()
         .convert_to_current();
     let nonce_hash = match nonce_state {
-        nonce::State::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 

@@ -3417,10 +3417,10 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             min_balance + 42,
-            &nonce::State::Initialized(
-                nonce::state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
+            &nonce::State::Initialized(nonce::state::Data {
+                authority: Pubkey::default(),
+                blockhash: Hash::default(),
+            }),
             &system_program::id(),
         )
         .unwrap();
@@ -5101,7 +5101,7 @@ mod tests {
             let state =
                 StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
             match state {
-                Ok(nonce::State::Initialized(_meta, hash)) => Some(hash),
+                Ok(nonce::State::Initialized(ref data)) => Some(data.blockhash),
                 _ => None,
             }
         })
@@ -5276,10 +5276,10 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             42424242,
-            &nonce::State::Initialized(
-                nonce::state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
+            &nonce::State::Initialized(nonce::state::Data {
+                authority: Pubkey::default(),
+                blockhash: Hash::default(),
+            }),
             &system_program::id(),
         )
         .unwrap();

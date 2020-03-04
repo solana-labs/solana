@@ -1,5 +1,5 @@
 mod current;
-pub use current::{Meta, State};
+pub use current::{Data, State};
 
 use serde_derive::{Deserialize, Serialize};
 
