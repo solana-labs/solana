@@ -281,25 +281,6 @@ mod tests {
     }
 
     #[test]
-    fn test_node_capacity_constant_time() {
-        use std::time::Instant;
-
-        // trigger function invoking optimize once
-        MerkleTree::calculate_vec_capacity(2);
-
-        // record time spending
-        let mut time_record = Instant::now();
-        MerkleTree::calculate_vec_capacity(4);
-        let small_leaf_count_duration = time_record.elapsed();
-
-        time_record = Instant::now();
-        MerkleTree::calculate_vec_capacity(65536);
-        let large_leaf_count_duration = time_record.elapsed();
-        // large leafs should not bring time inceasing
-        assert!(large_leaf_count_duration < 2 * small_leaf_count_duration);
-    }
-
-    #[test]
     #[should_panic]
     fn test_proof_entry_instantiation_both_clear() {
         ProofEntry::new(&Hash::default(), None, None);
