@@ -242,6 +242,13 @@ pub struct RpcVersionInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpcIdentity {
+    /// The current node identity pubkey
+    pub identity: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcVoteAccountStatus {
     pub current: Vec<RpcVoteAccountInfo>,

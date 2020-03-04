@@ -394,6 +394,19 @@ pub fn process_catchup(
         )
     };
 
+    let reported_node_pubkey = node_client.get_identity()?;
+    if reported_node_pubkey != *node_pubkey {
+        return Err(format!(
+            "The identity reported by node RPC URL does not match.  Expected: {:?}.  Reported: {:?}",
+            node_pubkey, reported_node_pubkey
+        )
+        .into());
+    }
+
+    if rpc_client.get_identity()? == *node_pubkey {
+        return Err("Both RPC URLs reference the same node, unable to monitor for catchup.  Try a different --url".into());
+    }
+
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Connecting...");
 
