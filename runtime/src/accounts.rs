@@ -1100,15 +1100,52 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = Account::new(40, 0, &Pubkey::default());
+        let mut account = Account::new(40, 1, &native_loader::id());
         account.executable = true;
-        account.owner = Pubkey::default();
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            vec![key1],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+
+        assert_eq!(error_counters.invalid_account_for_fee, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(
+            loaded_accounts[0],
+            (
+                Err(TransactionError::InvalidAccountForFee),
+                Some(HashAgeKind::Extant)
+            )
+        );
+    }
+
+    #[test]
+    fn test_load_accounts_bad_owner() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+
+        let account = Account::new(1, 0, &Pubkey::default());
+        accounts.push((key0, account));
+
+        let mut account = Account::new(40, 1, &Pubkey::default());
+        account.executable = true;
+        accounts.push((key1, account));
+
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
@@ -1142,8 +1179,7 @@ mod tests {
         let account = Account::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = Account::new(40, 1, &Pubkey::default());
-        account.owner = native_loader::id();
+        let account = Account::new(40, 1, &native_loader::id());
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
