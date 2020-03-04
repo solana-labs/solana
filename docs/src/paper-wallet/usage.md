@@ -14,6 +14,14 @@ protect against this scenario.
 
 - [Install the Solana command-line tools](../install-solana.md)
 
+### Check your installation
+
+Check that `solana-keygen` is installed correctly by running:
+
+```bash
+solana-keygen --version
+```
+
 ## Creating a Paper Wallet
 
 Using the `solana-keygen` tool, it is possible to generate new seed phrases as
