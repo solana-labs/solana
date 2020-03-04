@@ -6,6 +6,7 @@ secure transaction signing.
 
 ## Before You Begin
 
+- [Install the Solana command-line tools](../install-solana.md)
 - [Initialize your Ledger Nano S](https://support.ledger.com/hc/en-us/articles/360000613793)
 - [Install the latest device firmware](https://support.ledgerwallet.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
 - [Install Ledger Live](https://support.ledger.com/hc/en-us/articles/360006395553/) software on your computer
