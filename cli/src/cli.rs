@@ -167,6 +167,7 @@ pub enum CliCommand {
     // Cluster Query Commands
     Catchup {
         node_pubkey: Pubkey,
+        node_json_rpc_url: Option<String>,
     },
     ClusterVersion,
     CreateAddressWithSeed {
@@ -1550,7 +1551,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Address => Ok(format!("{}", config.pubkey()?)),
 
         // Return software version of solana-cli and cluster entrypoint node
-        CliCommand::Catchup { node_pubkey } => process_catchup(&rpc_client, node_pubkey),
+        CliCommand::Catchup {
+            node_pubkey,
+            node_json_rpc_url,
+        } => process_catchup(&rpc_client, node_pubkey, node_json_rpc_url),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::CreateAddressWithSeed {
             from_pubkey,

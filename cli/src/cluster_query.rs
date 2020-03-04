@@ -60,6 +60,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .validator(is_pubkey_or_keypair)
                         .required(true)
                         .help("Identity pubkey of the validator"),
+                )
+                .arg(
+                    Arg::with_name("node_json_rpc_url")
+                        .index(2)
+                        .value_name("URL")
+                        .takes_value(true)
+                        .validator(is_url)
+                        .help("JSON RPC URL for validator, which is useful for validators with a private RPC service")
                 ),
         )
         .subcommand(
@@ -238,8 +246,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
 
 pub fn parse_catchup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
+    let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
     Ok(CliCommandInfo {
-        command: CliCommand::Catchup { node_pubkey },
+        command: CliCommand::Catchup {
+            node_pubkey,
+            node_json_rpc_url,
+        },
         signers: vec![],
     })
 }
@@ -362,20 +374,29 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub fn process_catchup(rpc_client: &RpcClient, node_pubkey: &Pubkey) -> ProcessResult {
+pub fn process_catchup(
+    rpc_client: &RpcClient,
+    node_pubkey: &Pubkey,
+    node_json_rpc_url: &Option<String>,
+) -> ProcessResult {
     let cluster_nodes = rpc_client.get_cluster_nodes()?;
 
-    let rpc_addr = cluster_nodes
-        .iter()
-        .find(|contact_info| contact_info.pubkey == node_pubkey.to_string())
-        .ok_or_else(|| format!("Contact information not found for {}", node_pubkey))?
-        .rpc
-        .ok_or_else(|| format!("RPC service not found for {}", node_pubkey))?;
+    let node_client = if let Some(node_json_rpc_url) = node_json_rpc_url {
+        RpcClient::new(node_json_rpc_url.to_string())
+    } else {
+        RpcClient::new_socket(
+            cluster_nodes
+                .iter()
+                .find(|contact_info| contact_info.pubkey == node_pubkey.to_string())
+                .ok_or_else(|| format!("Contact information not found for {}", node_pubkey))?
+                .rpc
+                .ok_or_else(|| format!("RPC service not found for {}", node_pubkey))?,
+        )
+    };
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Connecting...");
 
-    let node_client = RpcClient::new_socket(rpc_addr);
     let mut previous_rpc_slot = std::u64::MAX;
     let mut previous_slot_distance = 0;
     let sleep_interval = 5;
