@@ -13,7 +13,12 @@ use solana_core::{
     contact_info::ContactInfo,
 };
 use solana_sdk::{commitment_config::CommitmentConfig, signature::Signer};
-use std::{net::SocketAddr, path::PathBuf, process::exit, sync::Arc};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
+    process::exit,
+    sync::Arc,
+};
 
 fn main() {
     solana_logger::setup();
@@ -116,6 +121,7 @@ fn main() {
         &identity_keypair.pubkey(),
         &gossip_addr,
         VALIDATOR_PORT_RANGE,
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
     );
 
     println!(

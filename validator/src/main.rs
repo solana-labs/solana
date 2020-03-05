@@ -732,7 +732,7 @@ pub fn main() {
                 .takes_value(true)
                 .conflicts_with("entrypoint")
                 .validator(solana_net_utils::is_host)
-                .help("Gossip DNS name or IP address for the node when --entrypoint is not provided [default: 127.0.0.1]"),
+                .help("IP address for the node to advertise in gossip when --entrypoint is not provided [default: 127.0.0.1]"),
         )
         .arg(
             clap::Arg::with_name("dynamic_port_range")
@@ -829,6 +829,23 @@ pub fn main() {
                 .requires("trusted_validators")
                 .help("Use the RPC service of trusted validators only")
         )
+        .arg(
+            clap::Arg::with_name("bind_address")
+                .long("bind-address")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .default_value("0.0.0.0")
+                .help("IP address to bind the validator ports"),
+        )
+        .arg(
+            clap::Arg::with_name("rpc_bind_address")
+                .long("rpc-bind-address")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .help("IP address to bind the RPC port [default: use --bind-address]"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(
@@ -920,6 +937,15 @@ pub fn main() {
     let dynamic_port_range =
         solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
             .expect("invalid dynamic_port_range");
+
+    let bind_address = solana_net_utils::parse_host(matches.value_of("bind_address").unwrap())
+        .expect("invalid bind_address");
+    let rpc_bind_address = if matches.is_present("rpc_bind_address") {
+        solana_net_utils::parse_host(matches.value_of("rpc_bind_address").unwrap())
+            .expect("invalid rpc_bind_address")
+    } else {
+        bind_address
+    };
 
     let account_paths = if let Some(account_paths) = matches.value_of("account_paths") {
         account_paths.split(',').map(PathBuf::from).collect()
@@ -1064,8 +1090,12 @@ pub fn main() {
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range((0, 1))
-                .expect("unable to find an available gossip port")
+            solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
+                |err| {
+                    eprintln!("Unable to find an available gossip port: {}", err);
+                    exit(1);
+                },
+            )
         }),
     );
 
@@ -1073,35 +1103,39 @@ pub fn main() {
         .as_ref()
         .map(ContactInfo::new_gossip_entry_point);
 
-    let mut tcp_ports = vec![];
-    let mut node =
-        Node::new_with_external_ip(&identity_keypair.pubkey(), &gossip_addr, dynamic_port_range);
+    let mut node = Node::new_with_external_ip(
+        &identity_keypair.pubkey(),
+        &gossip_addr,
+        dynamic_port_range,
+        bind_address,
+    );
 
     if !private_rpc {
         if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_port);
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_port);
-            tcp_ports = vec![rpc_port, rpc_pubsub_port];
         }
     }
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
         let udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
-        let mut tcp_listeners: Vec<(_, _)> = tcp_ports
-            .iter()
-            .map(|port| {
-                (
-                    *port,
-                    TcpListener::bind(&SocketAddr::from(([0, 0, 0, 0], *port))).unwrap_or_else(
-                        |err| {
-                            error!("Unable to bind to tcp/{}: {}", port, err);
-                            std::process::exit(1);
-                        },
-                    ),
-                )
-            })
-            .collect();
+        let mut tcp_listeners = vec![];
+        if !private_rpc {
+            if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
+                for port in &[rpc_port, rpc_pubsub_port] {
+                    tcp_listeners.push((
+                        *port,
+                        TcpListener::bind(&SocketAddr::from((rpc_bind_address, *port)))
+                            .unwrap_or_else(|err| {
+                                error!("Unable to bind to tcp/{}: {}", port, err);
+                                std::process::exit(1);
+                            }),
+                    ));
+                }
+            }
+        }
+
         if let Some(ip_echo) = &node.sockets.ip_echo {
             let ip_echo = ip_echo.try_clone().expect("unable to clone tcp_listener");
             tcp_listeners.push((node.info.gossip.port(), ip_echo));

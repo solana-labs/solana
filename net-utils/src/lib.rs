@@ -3,7 +3,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use socket2::{Domain, SockAddr, Socket, Type};
 use std::io::{self, Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
+use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
@@ -257,12 +257,15 @@ fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
 }
 
 // Find a port in the given range that is available for both TCP and UDP
-pub fn bind_common_in_range(range: PortRange) -> io::Result<(u16, (UdpSocket, TcpListener))> {
+pub fn bind_common_in_range(
+    ip_addr: IpAddr,
+    range: PortRange,
+) -> io::Result<(u16, (UdpSocket, TcpListener))> {
     let (start, end) = range;
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        match bind_common(rand_port, false) {
+        match bind_common(ip_addr, rand_port, false) {
             Ok((sock, listener)) => {
                 break Result::Ok((sock.local_addr().unwrap().port(), (sock, listener)));
             }
@@ -280,14 +283,14 @@ pub fn bind_common_in_range(range: PortRange) -> io::Result<(u16, (UdpSocket, Tc
     }
 }
 
-pub fn bind_in_range(range: PortRange) -> io::Result<(u16, UdpSocket)> {
+pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpSocket)> {
     let sock = udp_socket(false)?;
 
     let (start, end) = range;
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rand_port);
+        let addr = SocketAddr::new(ip_addr, rand_port);
 
         match sock.bind(&SockAddr::from(addr)) {
             Ok(_) => {
@@ -309,7 +312,11 @@ pub fn bind_in_range(range: PortRange) -> io::Result<(u16, UdpSocket)> {
 }
 
 // binds many sockets to the same port in a range
-pub fn multi_bind_in_range(range: PortRange, mut num: usize) -> io::Result<(u16, Vec<UdpSocket>)> {
+pub fn multi_bind_in_range(
+    ip_addr: IpAddr,
+    range: PortRange,
+    mut num: usize,
+) -> io::Result<(u16, Vec<UdpSocket>)> {
     if cfg!(windows) && num != 1 {
         // See https://github.com/solana-labs/solana/issues/4607
         warn!(
@@ -321,42 +328,46 @@ pub fn multi_bind_in_range(range: PortRange, mut num: usize) -> io::Result<(u16,
     let mut sockets = Vec::with_capacity(num);
 
     let port = {
-        let (port, _) = bind_in_range(range)?;
+        let (port, _) = bind_in_range(ip_addr, range)?;
         port
     }; // drop the probe, port should be available... briefly.
 
     for _ in 0..num {
-        sockets.push(bind_to(port, true)?);
+        sockets.push(bind_to(ip_addr, port, true)?);
     }
     Ok((port, sockets))
 }
 
-pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
+pub fn bind_to(ip_addr: IpAddr, port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
     let sock = udp_socket(reuseaddr)?;
 
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+    let addr = SocketAddr::new(ip_addr, port);
 
     sock.bind(&SockAddr::from(addr))
         .and_then(|_| Result::Ok(sock.into_udp_socket()))
 }
 
 // binds both a UdpSocket and a TcpListener
-pub fn bind_common(port: u16, reuseaddr: bool) -> io::Result<(UdpSocket, TcpListener)> {
+pub fn bind_common(
+    ip_addr: IpAddr,
+    port: u16,
+    reuseaddr: bool,
+) -> io::Result<(UdpSocket, TcpListener)> {
     let sock = udp_socket(reuseaddr)?;
 
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+    let addr = SocketAddr::new(ip_addr, port);
     let sock_addr = SockAddr::from(addr);
     sock.bind(&sock_addr).and_then(|_| {
         TcpListener::bind(&addr).and_then(|listener| Result::Ok((sock.into_udp_socket(), listener)))
     })
 }
 
-pub fn find_available_port_in_range(range: PortRange) -> io::Result<u16> {
+pub fn find_available_port_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<u16> {
     let (start, end) = range;
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        match bind_common(rand_port, false) {
+        match bind_common(ip_addr, rand_port, false) {
             Ok(_) => {
                 break Ok(rand_port);
             }
@@ -377,6 +388,7 @@ pub fn find_available_port_in_range(range: PortRange) -> io::Result<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::Ipv4Addr;
 
     #[test]
     fn test_parse_port_or_addr() {
@@ -423,17 +435,19 @@ mod tests {
 
     #[test]
     fn test_bind() {
-        assert_eq!(bind_in_range((2000, 2001)).unwrap().0, 2000);
-        let x = bind_to(2002, true).unwrap();
-        let y = bind_to(2002, true).unwrap();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        assert_eq!(bind_in_range(ip_addr, (2000, 2001)).unwrap().0, 2000);
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let x = bind_to(ip_addr, 2002, true).unwrap();
+        let y = bind_to(ip_addr, 2002, true).unwrap();
         assert_eq!(
             x.local_addr().unwrap().port(),
             y.local_addr().unwrap().port()
         );
-        bind_to(2002, false).unwrap_err();
-        bind_in_range((2002, 2003)).unwrap_err();
+        bind_to(ip_addr, 2002, false).unwrap_err();
+        bind_in_range(ip_addr, (2002, 2003)).unwrap_err();
 
-        let (port, v) = multi_bind_in_range((2010, 2110), 10).unwrap();
+        let (port, v) = multi_bind_in_range(ip_addr, (2010, 2110), 10).unwrap();
         for sock in &v {
             assert_eq!(port, sock.local_addr().unwrap().port());
         }
@@ -442,34 +456,41 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_bind_in_range_nil() {
-        let _ = bind_in_range((2000, 2000));
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let _ = bind_in_range(ip_addr, (2000, 2000));
     }
 
     #[test]
     fn test_find_available_port_in_range() {
-        assert_eq!(find_available_port_in_range((3000, 3001)).unwrap(), 3000);
-        let port = find_available_port_in_range((3000, 3050)).unwrap();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        assert_eq!(
+            find_available_port_in_range(ip_addr, (3000, 3001)).unwrap(),
+            3000
+        );
+        let port = find_available_port_in_range(ip_addr, (3000, 3050)).unwrap();
         assert!(3000 <= port && port < 3050);
 
-        let _socket = bind_to(port, false).unwrap();
-        find_available_port_in_range((port, port + 1)).unwrap_err();
+        let _socket = bind_to(ip_addr, port, false).unwrap();
+        find_available_port_in_range(ip_addr, (port, port + 1)).unwrap_err();
     }
 
     #[test]
     fn test_bind_common_in_range() {
-        let (port, _sockets) = bind_common_in_range((3100, 3150)).unwrap();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let (port, _sockets) = bind_common_in_range(ip_addr, (3100, 3150)).unwrap();
         assert!(3100 <= port && port < 3150);
 
-        bind_common_in_range((port, port + 1)).unwrap_err();
+        bind_common_in_range(ip_addr, (port, port + 1)).unwrap_err();
     }
 
     #[test]
     fn test_get_public_ip_addr() {
         solana_logger::setup();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
-            bind_common_in_range((3200, 3250)).unwrap();
+            bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
         let (client_port, (client_udp_socket, client_tcp_listener)) =
-            bind_common_in_range((3200, 3250)).unwrap();
+            bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
         let _runtime = ip_echo_server(server_tcp_listener);
 

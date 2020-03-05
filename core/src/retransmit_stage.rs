@@ -284,6 +284,7 @@ mod tests {
     use solana_ledger::create_new_tmp_ledger;
     use solana_net_utils::find_available_port_in_range;
     use solana_sdk::pubkey::Pubkey;
+    use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_skip_repair() {
@@ -300,11 +301,12 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let mut me = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
-        let port = find_available_port_in_range((8000, 10000)).unwrap();
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
         let me_retransmit = UdpSocket::bind(format!("127.0.0.1:{}", port)).unwrap();
         // need to make sure tvu and tpu are valid addresses
         me.tvu_forwards = me_retransmit.local_addr().unwrap();
-        let port = find_available_port_in_range((8000, 10000)).unwrap();
+        let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
         me.tvu = UdpSocket::bind(format!("127.0.0.1:{}", port))
             .unwrap()
             .local_addr()

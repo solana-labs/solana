@@ -67,7 +67,8 @@ fn main() -> Result<()> {
     }
 
     let mut port = 0;
-    let mut addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+    let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+    let mut addr = SocketAddr::new(ip_addr, 0);
 
     let exit = Arc::new(AtomicBool::new(false));
 
@@ -75,7 +76,7 @@ fn main() -> Result<()> {
     let mut read_threads = Vec::new();
     let recycler = PacketsRecycler::default();
     for _ in 0..num_sockets {
-        let read = solana_net_utils::bind_to(port, false).unwrap();
+        let read = solana_net_utils::bind_to(ip_addr, port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         addr = read.local_addr().unwrap();
