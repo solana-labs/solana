@@ -174,9 +174,9 @@ If your validator is connected, its public key and IP address will appear in the
 ### Controlling local network port allocation
 
 By default the validator will dynamically select available network ports in the
-8000-1.0.3 range, and may be overridden with `--dynamic-port-range`. For
-example, `solana-validator --dynamic-port-range 1.0.3-1.0.3 ...` will restrict
-the validator to ports 1.0.3-1.0.3.
+8000-1.0.4 range, and may be overridden with `--dynamic-port-range`. For
+example, `solana-validator --dynamic-port-range 1.0.4-1.0.4 ...` will restrict
+the validator to ports 1.0.4-1.0.4.
 
 ### Limiting ledger size to conserve disk space
 

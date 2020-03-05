@@ -45,7 +45,7 @@ $ git pull --rebase upstream master
 
 If there are no functional changes, PRs can be very large and that's no
 problem. If, however, your changes are making meaningful changes or additions,
-then about 1.0.3 lines of changes is about the most you should ask a Solana
+then about 1.0.4 lines of changes is about the most you should ask a Solana
 maintainer to review.
 
 ### Should I send small PRs as I develop large, new components?
