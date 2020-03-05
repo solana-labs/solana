@@ -341,6 +341,7 @@ mod tests {
         transaction::TransactionError,
     };
     use std::cell::RefCell;
+    use std::sync::Arc;
 
     impl From<Pubkey> for Address {
         fn from(address: Pubkey) -> Self {
@@ -940,6 +941,78 @@ mod tests {
         assert!(bank_client
             .send_instruction(&alice_keypair, allocate)
             .is_ok());
+    }
+
+    fn with_create_zero_lamport<F>(callback: F)
+    where
+        F: Fn(&Bank) -> (),
+    {
+        solana_logger::setup();
+
+        let alice_keypair = Keypair::new();
+        let bob_keypair = Keypair::new();
+
+        let alice_pubkey = alice_keypair.pubkey();
+        let bob_pubkey = bob_keypair.pubkey();
+
+        let program = Pubkey::new_rand();
+        let collector = Pubkey::new_rand();
+
+        let mint_lamports = 10000;
+        let len1 = 123;
+        let len2 = 456;
+
+        // create initial bank and fund the alice account
+        let (genesis_config, mint_keypair) = create_genesis_config(mint_lamports);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank_client = BankClient::new_shared(&bank);
+        bank_client
+            .transfer(mint_lamports, &mint_keypair, &alice_pubkey)
+            .unwrap();
+
+        // create zero-lamports account to be cleaned
+        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+        let bank_client = BankClient::new_shared(&bank);
+        let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 0, len1, &program);
+        let message = Message::new(vec![ix]);
+        let r = bank_client.send_message(&[&alice_keypair, &bob_keypair], message);
+        assert!(r.is_ok());
+
+        // transfer some to bogus pubkey just to make previous bank (=slot) really cleanable
+        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+        let bank_client = BankClient::new_shared(&bank);
+        bank_client
+            .transfer(50, &alice_keypair, &Pubkey::new_rand())
+            .unwrap();
+
+        // super fun time; callback chooses to .clean_accounts() or not
+        callback(&*bank);
+
+        // create a normal account at the same pubkey as the zero-lamports account
+        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+        let bank_client = BankClient::new_shared(&bank);
+        let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 1, len2, &program);
+        let message = Message::new(vec![ix]);
+        let r = bank_client.send_message(&[&alice_keypair, &bob_keypair], message);
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_create_zero_lamport_with_clean() {
+        with_create_zero_lamport(|bank| {
+            bank.squash();
+            // do clean and assert that it actually did its job
+            assert_eq!(3, bank.get_snapshot_storages().len());
+            bank.clean_accounts();
+            assert_eq!(2, bank.get_snapshot_storages().len());
+        });
+    }
+
+    #[test]
+    fn test_create_zero_lamport_without_clean() {
+        with_create_zero_lamport(|_| {
+            // just do nothing; this should behave identically with test_create_zero_lamport_with_clean
+        });
     }
 
     #[test]
