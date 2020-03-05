@@ -3,7 +3,7 @@ use alloc::Alloc;
 use libc::c_char;
 use log::*;
 use solana_rbpf::{
-    ebpf::{HelperContext, MM_HEAP_START},
+    ebpf::{HelperObject, MM_HEAP_START},
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
@@ -11,7 +11,7 @@ use std::{
     alloc::Layout,
     ffi::CStr,
     io::{Error, ErrorKind},
-    mem,
+    mem::align_of,
     slice::from_raw_parts,
     str::from_utf8,
 };
@@ -29,18 +29,22 @@ use crate::allocator_bump::BPFAllocator;
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
 pub fn register_helpers(vm: &mut EbpfVm) -> Result<MemoryRegion, Error> {
-    vm.register_helper_ex("abort", helper_abort, None)?;
-    vm.register_helper_ex("sol_panic", helper_sol_panic, None)?;
-    vm.register_helper_ex("sol_panic_", helper_sol_panic, None)?;
-    vm.register_helper_ex("sol_log", helper_sol_log, None)?;
-    vm.register_helper_ex("sol_log_", helper_sol_log, None)?;
-    vm.register_helper_ex("sol_log_64", helper_sol_log_u64, None)?;
-    vm.register_helper_ex("sol_log_64_", helper_sol_log_u64, None)?;
+    vm.register_helper_ex("abort", helper_abort)?;
+    vm.register_helper_ex("sol_panic", helper_sol_panic)?;
+    vm.register_helper_ex("sol_panic_", helper_sol_panic)?;
+    vm.register_helper_ex("sol_log", helper_sol_log)?;
+    vm.register_helper_ex("sol_log_", helper_sol_log)?;
+    vm.register_helper_ex("sol_log_64", helper_sol_log_u64)?;
+    vm.register_helper_ex("sol_log_64_", helper_sol_log_u64)?;
 
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
-    let context = Box::new(BPFAllocator::new(heap, MM_HEAP_START));
-    vm.register_helper_ex("sol_alloc_free_", helper_sol_alloc_free, Some(context))?;
+    vm.register_helper_with_context_ex(
+        "sol_alloc_free_",
+        Box::new(HelperSolAllocFree {
+            allocator: BPFAllocator::new(heap, MM_HEAP_START),
+        }),
+    )?;
 
     Ok(heap_region)
 }
@@ -54,7 +58,6 @@ pub fn helper_abort(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut HelperContext,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, Error> {
@@ -73,7 +76,6 @@ pub fn helper_sol_panic(
     line: u64,
     column: u64,
     _arg5: u64,
-    _context: &mut HelperContext,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, Error> {
@@ -99,7 +101,6 @@ pub fn helper_sol_log(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut HelperContext,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, Error> {
@@ -132,7 +133,6 @@ pub fn helper_sol_log_u64(
     arg3: u64,
     arg4: u64,
     arg5: u64,
-    _context: &mut HelperContext,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, Error> {
@@ -151,31 +151,29 @@ pub fn helper_sol_log_u64(
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
-pub fn helper_sol_alloc_free(
-    size: u64,
-    free_addr: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    context: &mut HelperContext,
-    _ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
-    if let Some(context) = context {
-        if let Some(allocator) = context.downcast_mut::<BPFAllocator>() {
-            return {
-                let layout = Layout::from_size_align(size as usize, mem::align_of::<u8>()).unwrap();
-                if free_addr == 0 {
-                    match allocator.alloc(layout) {
-                        Ok(addr) => Ok(addr as u64),
-                        Err(_) => Ok(0),
-                    }
-                } else {
-                    allocator.dealloc(free_addr, layout);
-                    Ok(0)
-                }
-            };
-        };
+pub struct HelperSolAllocFree {
+    allocator: BPFAllocator,
+}
+impl HelperObject for HelperSolAllocFree {
+    fn call(
+        &mut self,
+        size: u64,
+        free_addr: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, Error> {
+        let layout = Layout::from_size_align(size as usize, align_of::<u8>()).unwrap();
+        if free_addr == 0 {
+            match self.allocator.alloc(layout) {
+                Ok(addr) => Ok(addr as u64),
+                Err(_) => Ok(0),
+            }
+        } else {
+            self.allocator.dealloc(free_addr, layout);
+            Ok(0)
+        }
     }
-    panic!("Failed to get alloc_free context");
 }
