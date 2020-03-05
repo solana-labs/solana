@@ -1413,9 +1413,12 @@ impl Bank {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
                         (nonce_utils::fee_calculator_of(account), true)
                     }
-                    _ => {
-                        (hash_queue.get_fee_calculator(&tx.message().recent_blockhash).map(|f| f.clone()), false)
-                    }
+                    _ => (
+                        hash_queue
+                            .get_fee_calculator(&tx.message().recent_blockhash)
+                            .cloned(),
+                        false,
+                    ),
                 };
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
@@ -3415,7 +3418,9 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             min_balance + 42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data::default())),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();
@@ -5150,7 +5155,7 @@ mod tests {
 
         // Banks 0 and 1 have no fees, wait two blocks before
         // initializing our nonce accounts
-        for i in 0..2 {
+        for _ in 0..2 {
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             bank = Arc::new(new_from_parent(&bank));
         }
@@ -5278,7 +5283,9 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             42424242,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data::default())),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();

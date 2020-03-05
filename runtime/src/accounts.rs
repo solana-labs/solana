@@ -269,11 +269,9 @@ impl Accounts {
                         Some(HashAgeKind::DurableNonce(_, account)) => {
                             nonce_utils::fee_calculator_of(account)
                         }
-                        _ => {
-                            hash_queue
-                                .get_fee_calculator(&tx.message().recent_blockhash)
-                                .map(|f| f.clone())
-                        }
+                        _ => hash_queue
+                            .get_fee_calculator(&tx.message().recent_blockhash)
+                            .cloned(),
                     };
                     let fee = if let Some(fee_calculator) = fee_calculator {
                         fee_calculator.calculate_fee(tx.message())
@@ -634,7 +632,13 @@ impl Accounts {
                 .enumerate()
                 .zip(acc.0.iter_mut())
             {
-                nonce_utils::prepare_if_nonce_account(account, key, res, maybe_nonce, last_blockhash);
+                nonce_utils::prepare_if_nonce_account(
+                    account,
+                    key,
+                    res,
+                    maybe_nonce,
+                    last_blockhash,
+                );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
                         account.rent_epoch = rent_collector.epoch;
@@ -925,7 +929,9 @@ mod tests {
             nonce.pubkey(),
             Account::new_data(
                 min_balance * 2,
-                &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data::default())),
+                &nonce::state::Versions::new_current(nonce::State::Initialized(
+                    nonce::state::Data::default(),
+                )),
                 &system_program::id(),
             )
             .unwrap(),

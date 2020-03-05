@@ -61,7 +61,7 @@ impl<'a> Account for KeyedAccount<'a> {
                 let new_data = nonce::state::Data {
                     blockhash: recent_blockhash,
                     fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
-                    ..data.clone()
+                    ..data
                 };
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
             }
@@ -148,7 +148,7 @@ impl<'a> Account for KeyedAccount<'a> {
                 }
                 let new_data = nonce::state::Data {
                     authority: *nonce_authority,
-                    ..data.clone()
+                    ..data
                 };
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
             }
@@ -187,7 +187,6 @@ mod test {
     use crate::{
         account::KeyedAccount,
         account_utils::State as AccountUtilsState,
-        fee_calculator::FeeCalculator,
         nonce::{self, State},
         system_instruction::NonceError,
         sysvar::recent_blockhashes::{create_test_recent_blockhashes, RecentBlockhashes},

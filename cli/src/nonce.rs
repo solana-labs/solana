@@ -569,7 +569,10 @@ pub fn process_show_nonce_account(
         match data {
             Some(ref data) => {
                 println!("Nonce: {}", data.blockhash);
-                println!("Fee: {} lamports per signature", data.fee_calculator.lamports_per_signature);
+                println!(
+                    "Fee: {} lamports per signature",
+                    data.fee_calculator.lamports_per_signature
+                );
                 println!("Authority: {}", data.authority);
             }
             None => {

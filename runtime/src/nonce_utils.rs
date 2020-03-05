@@ -76,9 +76,11 @@ pub fn prepare_if_nonce_account(
 }
 
 pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
-    let state = StateMut::<Versions>::state(account).ok()?.convert_to_current();
+    let state = StateMut::<Versions>::state(account)
+        .ok()?
+        .convert_to_current();
     match state {
-        State::Initialized(data) => Some(data.fee_calculator.clone()),
+        State::Initialized(data) => Some(data.fee_calculator),
         _ => None,
     }
 }

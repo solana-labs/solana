@@ -308,12 +308,10 @@ pub fn get_system_account_kind(account: &Account) -> Option<SystemAccountKind> {
             Some(SystemAccountKind::System)
         } else if account.data.len() == nonce::State::size() {
             match account.state().ok()? {
-                nonce::state::Versions::Current(state) => {
-                    match *state {
-                        nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
-                        _ => None,
-                    }
-                }
+                nonce::state::Versions::Current(state) => match *state {
+                    nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
+                    _ => None,
+                },
             }
         } else {
             None
@@ -742,7 +740,9 @@ mod tests {
         let nonce = Pubkey::new_rand();
         let nonce_account = Account::new_ref_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data::default())),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();
@@ -1386,7 +1386,9 @@ mod tests {
     fn test_get_system_account_kind_nonce_ok() {
         let nonce_account = Account::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data::default())),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();
@@ -1414,7 +1416,9 @@ mod tests {
     fn test_get_system_account_kind_nonsystem_owner_with_nonce_data_fail() {
         let nonce_account = Account::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data::default())),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &Pubkey::new_rand(),
         )
         .unwrap();
