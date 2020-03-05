@@ -60,6 +60,7 @@ impl<'a> Account for KeyedAccount<'a> {
 
                 let new_data = nonce::state::Data {
                     blockhash: recent_blockhash,
+                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
                     ..data
                 };
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
@@ -127,6 +128,7 @@ impl<'a> Account for KeyedAccount<'a> {
                 let data = nonce::state::Data {
                     authority: *nonce_authority,
                     blockhash: recent_blockhashes[0].blockhash,
+                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
                 };
                 self.set_state(&Versions::new_current(State::Initialized(data)))
             }
@@ -159,7 +161,7 @@ pub fn create_account(lamports: u64) -> RefCell<account::Account> {
     RefCell::new(
         account::Account::new_data_with_space(
             lamports,
-            &State::Uninitialized,
+            &Versions::new_current(State::Uninitialized),
             State::size(),
             &system_program::id(),
         )
@@ -225,10 +227,11 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data {
                 blockhash: recent_blockhashes[0].blockhash,
-                ..data
+                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                ..data.clone()
             };
             // First nonce instruction drives state from Uninitialized to Initialized
-            assert_eq!(state, State::Initialized(data));
+            assert_eq!(state, State::Initialized(data.clone()));
             let recent_blockhashes = create_test_recent_blockhashes(63);
             keyed_account
                 .advance_nonce_account(&recent_blockhashes, &signers)
@@ -238,10 +241,11 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data {
                 blockhash: recent_blockhashes[0].blockhash,
-                ..data
+                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                ..data.clone()
             };
             // Second nonce instruction consumes and replaces stored nonce
-            assert_eq!(state, State::Initialized(data));
+            assert_eq!(state, State::Initialized(data.clone()));
             let recent_blockhashes = create_test_recent_blockhashes(31);
             keyed_account
                 .advance_nonce_account(&recent_blockhashes, &signers)
@@ -251,10 +255,11 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data {
                 blockhash: recent_blockhashes[0].blockhash,
-                ..data
+                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                ..data.clone()
             };
             // Third nonce instruction for fun and profit
-            assert_eq!(state, State::Initialized(data));
+            assert_eq!(state, State::Initialized(data.clone()));
             with_test_keyed_account(42, false, |to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(0);
                 let withdraw_lamports = keyed_account.account.borrow().lamports;
@@ -302,6 +307,7 @@ mod test {
             let data = nonce::state::Data {
                 authority,
                 blockhash: recent_blockhashes[0].blockhash,
+                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
             };
             assert_eq!(state, State::Initialized(data));
             let signers = HashSet::new();
@@ -590,8 +596,9 @@ mod test {
             let data = nonce::state::Data {
                 authority,
                 blockhash: recent_blockhashes[0].blockhash,
+                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
             };
-            assert_eq!(state, State::Initialized(data));
+            assert_eq!(state, State::Initialized(data.clone()));
             with_test_keyed_account(42, false, |to_keyed| {
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports - min_lamports;
                 let nonce_expect_lamports =
@@ -611,7 +618,8 @@ mod test {
                     .convert_to_current();
                 let data = nonce::state::Data {
                     blockhash: recent_blockhashes[0].blockhash,
-                    ..data
+                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                    ..data.clone()
                 };
                 assert_eq!(state, State::Initialized(data));
                 assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
@@ -746,6 +754,7 @@ mod test {
             let data = nonce::state::Data {
                 authority,
                 blockhash: recent_blockhashes[0].blockhash,
+                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
             };
             assert_eq!(result, Ok(()));
             let state = AccountUtilsState::<Versions>::state(keyed_account)
@@ -828,6 +837,7 @@ mod test {
             let data = nonce::state::Data {
                 authority,
                 blockhash: recent_blockhashes[0].blockhash,
+                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
             };
             let result = nonce_account.authorize_nonce_account(&Pubkey::default(), &signers);
             assert_eq!(result, Ok(()));

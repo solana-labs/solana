@@ -144,12 +144,17 @@ where
 
 pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
     let blocks: Vec<_> = (start..start + MAX_ENTRIES)
-        .map(|i| (i as u64, hash(&bincode::serialize(&i).unwrap())))
+        .map(|i| {
+            (
+                i as u64,
+                hash(&bincode::serialize(&i).unwrap()),
+                FeeCalculator::new(i as u64 * 100),
+            )
+        })
         .collect();
-    let def_fees = FeeCalculator::default();
     let bhq: Vec<_> = blocks
         .iter()
-        .map(|(i, hash)| IterItem(*i, hash, &def_fees))
+        .map(|(i, hash, fee_calc)| IterItem(*i, hash, fee_calc))
         .collect();
     RecentBlockhashes::from_iter(bhq.into_iter())
 }

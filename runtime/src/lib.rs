@@ -10,7 +10,7 @@ pub mod genesis_utils;
 pub mod loader_utils;
 pub mod message_processor;
 mod native_loader;
-mod nonce_utils;
+pub mod nonce_utils;
 pub mod rent_collector;
 mod serde_utils;
 pub mod stakes;

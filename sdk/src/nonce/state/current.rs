@@ -1,14 +1,15 @@
 use super::Versions;
-use crate::{hash::Hash, pubkey::Pubkey};
+use crate::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey};
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Data {
     pub authority: Pubkey,
     pub blockhash: Hash,
+    pub fee_calculator: FeeCalculator,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum State {
     Uninitialized,
     Initialized(Data),

@@ -6,7 +6,7 @@ use crate::{
     append_vec::StoredAccount,
     bank::{HashAgeKind, TransactionProcessResult},
     blockhash_queue::BlockhashQueue,
-    nonce_utils::prepare_if_nonce_account,
+    nonce_utils,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_utils::OrderedIterator,
@@ -265,13 +265,15 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, (Ok(()), hash_age_kind)) => {
-                    let fee_hash = if let Some(HashAgeKind::DurableNonce(_, _)) = hash_age_kind {
-                        hash_queue.last_hash()
-                    } else {
-                        tx.message().recent_blockhash
+                    let fee_calculator = match hash_age_kind.as_ref() {
+                        Some(HashAgeKind::DurableNonce(_, account)) => {
+                            nonce_utils::fee_calculator_of(account)
+                        }
+                        _ => hash_queue
+                            .get_fee_calculator(&tx.message().recent_blockhash)
+                            .cloned(),
                     };
-                    let fee = if let Some(fee_calculator) = hash_queue.get_fee_calculator(&fee_hash)
-                    {
+                    let fee = if let Some(fee_calculator) = fee_calculator {
                         fee_calculator.calculate_fee(tx.message())
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), hash_age_kind);
@@ -630,7 +632,13 @@ impl Accounts {
                 .enumerate()
                 .zip(acc.0.iter_mut())
             {
-                prepare_if_nonce_account(account, key, res, maybe_nonce, last_blockhash);
+                nonce_utils::prepare_if_nonce_account(
+                    account,
+                    key,
+                    res,
+                    maybe_nonce,
+                    last_blockhash,
+                );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
                         account.rent_epoch = rent_collector.epoch;
@@ -921,10 +929,9 @@ mod tests {
             nonce.pubkey(),
             Account::new_data(
                 min_balance * 2,
-                &nonce::State::Initialized(nonce::state::Data {
-                    authority: Pubkey::default(),
-                    blockhash: Hash::default(),
-                }),
+                &nonce::state::Versions::new_current(nonce::State::Initialized(
+                    nonce::state::Data::default(),
+                )),
                 &system_program::id(),
             )
             .unwrap(),
