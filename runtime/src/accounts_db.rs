@@ -1033,22 +1033,25 @@ impl AccountsDB {
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
     ) -> Vec<AccountInfo> {
+        let default_account = Account::default();
+
         let with_meta: Vec<(StoredMeta, &Account)> = accounts
             .iter()
             .map(|(pubkey, account)| {
                 let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
-                let data_len = if account.lamports == 0 {
-                    0
+                let account = if account.lamports == 0 {
+                    &default_account
                 } else {
-                    account.data.len() as u64
+                    *account
                 };
+                let data_len = account.data.len() as u64;
+
                 let meta = StoredMeta {
                     write_version,
                     pubkey: **pubkey,
                     data_len,
                 };
-
-                (meta, *account)
+                (meta, account)
             })
             .collect();
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(with_meta.len());
