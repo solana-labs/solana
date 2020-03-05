@@ -1,6 +1,6 @@
 BOB_SRCS=$(wildcard art/*.bob)
 MSC_SRCS=$(wildcard art/*.msc)
-MD_SRCS=$(wildcard src/*.md src/*/*.md)
+MD_SRCS=$(wildcard src/*.md src/*/*.md) src/cli/usage.md
 
 SVG_IMGS=$(BOB_SRCS:art/%.bob=src/.gitbook/assets/%.svg) $(MSC_SRCS:art/%.msc=src/.gitbook/assets/%.svg)
 
@@ -26,6 +26,12 @@ src/.gitbook/assets/%.svg: art/%.bob
 src/.gitbook/assets/%.svg: art/%.msc
 	@mkdir -p $(@D)
 	mscgen -T svg -i $< -o $@
+
+../target/debug/solana:
+	cd ../cli && cargo build
+
+src/cli/usage.md: build-cli-usage.sh ../target/debug/solana
+	./$<
 
 src/%.md: %.md
 	@mkdir -p $(@D)
