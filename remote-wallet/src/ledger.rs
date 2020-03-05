@@ -190,7 +190,9 @@ impl LedgerWallet {
         #[allow(clippy::match_overlapping_arm)]
         match status {
             // These need to be aligned with solana Ledger app error codes, and clippy allowance removed
-            0x6700 => Err(RemoteWalletError::Protocol("Incorrect length")),
+            0x6700 => Err(RemoteWalletError::Protocol(
+                "Solana app not open on Ledger device",
+            )),
             0x6802 => Err(RemoteWalletError::Protocol("Invalid parameter")),
             0x6803 => Err(RemoteWalletError::Protocol(
                 "Overflow: message longer than MAX_MESSAGE_LENGTH",
