@@ -5568,7 +5568,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "index out of bounds: the len is 3 but the index is 3")]
     fn test_transaction_with_program_ids_passed_to_programs() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);

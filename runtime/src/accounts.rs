@@ -127,17 +127,13 @@ impl Accounts {
             // If a fee can pay for execution then the program will be scheduled
             let mut accounts: TransactionAccounts = Vec::with_capacity(message.account_keys.len());
             let mut tx_rent: TransactionRent = 0;
-            for (i, key) in message
-                .account_keys
-                .iter()
-                .enumerate()
-                .filter(|(_, key)| !message.program_ids().contains(key))
-            {
+            for (i, key) in message.account_keys.iter().enumerate().filter(|(i, key)| {
+                !message.program_ids().contains(key) || message.is_key_passed_to_program(*i)
+            }) {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
                     .and_then(|(mut account, _)| {
-                        let rent_due: u64;
-                        if message.is_writable(i) {
-                            rent_due = rent_collector.update(&mut account);
+                        if message.is_writable(i) && !account.executable {
+                            let rent_due = rent_collector.update(&mut account);
                             Some((account, rent_due))
                         } else {
                             Some((account, 0))
@@ -1125,12 +1121,12 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.invalid_account_for_fee, 1);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
             (
-                Err(TransactionError::InvalidAccountForFee),
+                Err(TransactionError::AccountNotFound),
                 Some(HashAgeKind::Extant)
             )
         );
