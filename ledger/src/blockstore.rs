@@ -1749,24 +1749,11 @@ impl Blockstore {
             .is_some()
     }
 
-    pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {
-        let mut results = vec![];
-
-        let mut iter = self
+    pub fn orphans_iterator<'a>(&'a self, slot: Slot) -> Result<impl Iterator<Item = u64> + 'a> {
+        let orphans_iter = self
             .db
-            .raw_iterator_cf(self.db.cf_handle::<cf::Orphans>())
-            .unwrap();
-        iter.seek_to_first();
-        while iter.valid() {
-            if let Some(max) = max {
-                if results.len() > max {
-                    break;
-                }
-            }
-            results.push(<cf::Orphans as Column>::index(&iter.key().unwrap()));
-            iter.next();
-        }
-        results
+            .iter::<cf::Orphans>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+        Ok(orphans_iter.map(|(slot, _)| slot))
     }
 
     /// Prune blockstore such that slots higher than `target_slot` are deleted and all references to
@@ -3765,7 +3752,10 @@ pub mod tests {
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(is_orphan(&meta));
-            assert_eq!(blockstore.get_orphans(None), vec![1]);
+            assert_eq!(
+                blockstore.orphans_iterator(0).unwrap().collect::<Vec<_>>(),
+                vec![1]
+            );
 
             // Write slot 1 which chains to slot 0, so now slot 0 is the
             // orphan, and slot 1 is no longer the orphan.
@@ -3783,7 +3773,10 @@ pub mod tests {
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(is_orphan(&meta));
-            assert_eq!(blockstore.get_orphans(None), vec![0]);
+            assert_eq!(
+                blockstore.orphans_iterator(0).unwrap().collect::<Vec<_>>(),
+                vec![0]
+            );
 
             // Write some slot that also chains to existing slots and orphan,
             // nothing should change
@@ -3791,7 +3784,10 @@ pub mod tests {
             let (shred5, _) = make_slot_entries(5, 1, 1);
             blockstore.insert_shreds(shred4, None, false).unwrap();
             blockstore.insert_shreds(shred5, None, false).unwrap();
-            assert_eq!(blockstore.get_orphans(None), vec![0]);
+            assert_eq!(
+                blockstore.orphans_iterator(0).unwrap().collect::<Vec<_>>(),
+                vec![0]
+            );
 
             // Write zeroth slot, no more orphans
             blockstore.insert_shreds(shreds, None, false).unwrap();

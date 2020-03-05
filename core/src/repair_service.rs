@@ -13,6 +13,7 @@ use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::BTreeSet,
+    iter::Iterator,
     net::UdpSocket,
     ops::Bound::{Included, Unbounded},
     sync::atomic::{AtomicBool, Ordering},
@@ -209,10 +210,8 @@ impl RepairService {
         // TODO: Incorporate gossip to determine priorities for repair?
 
         // Try to resolve orphans in blockstore
-        let mut orphans = blockstore.get_orphans(Some(MAX_ORPHANS));
-        orphans.retain(|x| *x > root);
-
-        Self::generate_repairs_for_orphans(&orphans[..], &mut repairs);
+        let orphans = blockstore.orphans_iterator(root + 1).unwrap();
+        Self::generate_repairs_for_orphans(orphans, &mut repairs);
         Ok(repairs)
     }
 
@@ -240,8 +239,11 @@ impl RepairService {
         }
     }
 
-    fn generate_repairs_for_orphans(orphans: &[u64], repairs: &mut Vec<RepairType>) {
-        repairs.extend(orphans.iter().map(|h| RepairType::Orphan(*h)));
+    fn generate_repairs_for_orphans(
+        orphans: impl Iterator<Item = u64>,
+        repairs: &mut Vec<RepairType>,
+    ) {
+        repairs.extend(orphans.take(MAX_ORPHANS).map(RepairType::Orphan));
     }
 
     /// Repairs any fork starting at the input slot
