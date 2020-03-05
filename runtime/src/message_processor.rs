@@ -198,10 +198,7 @@ impl MessageProcessor {
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
 
-        assert!(
-            keyed_accounts[0].try_account_ref()?.executable,
-            "root program not executable"
-        );
+        assert!(keyed_accounts[0].executable()?, "account not executable");
         let root_program_id = keyed_accounts[0].unsigned_key();
         for (id, process_instruction) in &self.instruction_processors {
             if id == root_program_id {
