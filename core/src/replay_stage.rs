@@ -990,10 +990,15 @@ impl ReplayStage {
                         )
                     });
 
-            if let Some((new_completed_validators, did_newly_reach_threshold)) =
-                propagation_result
+            if let Some((new_completed_validators, did_newly_reach_threshold)) = propagation_result
             {
-                //Self::update_prev_leader_slots(new_completed_validators, did_newly_reach_threshold, prev_leader_slot_p)
+                Self::update_prev_leader_slots(
+                    new_completed_validators,
+                    did_newly_reach_threshold,
+                    prev_leader_slot,
+                    progress,
+                    bank_forks,
+                );
             }
 
             let stats = &mut progress
@@ -1280,6 +1285,94 @@ impl ReplayStage {
         }
 
         (new_votes, newly_reached_threshold)
+    }
+
+    fn update_prev_leader_slots(
+        mut new_completed_validators: HashSet<Rc<Pubkey>>,
+        mut did_newly_reach_threshold: bool,
+        mut prev_leader_slot: Slot,
+        progress: &mut ProgressMap,
+        bank_forks: &RwLock<BankForks>,
+    ) {
+        if !new_completed_validators.is_empty() || did_newly_reach_threshold {
+            let root = bank_forks.read().unwrap().root();
+            loop {
+                prev_leader_slot = progress
+                    .get(&prev_leader_slot)
+                    .expect(
+                        "If there was an update on this slot, it must exist in the progress map",
+                    )
+                    .propagated_stats
+                    .prev_leader_slot;
+
+                // These cases mean confirmation of propagation on any earlier
+                // leader blocks must have been reached
+                if prev_leader_slot == 0 || prev_leader_slot < root {
+                    break;
+                }
+
+                let prev_leader_stats = &mut progress
+                    .get_mut(&prev_leader_slot)
+                    .expect(
+                        "If there was an update on this slot, it must exist in the progress map",
+                    )
+                    .propagated_stats;
+
+                if prev_leader_stats.propagated_confirmation {
+                    break;
+                } else if did_newly_reach_threshold {
+                    // If a descendant has reached propagation threshold, then
+                    // its ancestor bank has reached propagation threshold as well
+                    // (Validators can't have voted for a descendant without also
+                    // getting the ancestor block)
+                    prev_leader_stats.propagated_confirmation = true;
+                } else {
+                    let prev_leader_bank = bank_forks
+                        .read()
+                        .unwrap()
+                        .get(prev_leader_slot)
+                        .unwrap()
+                        .clone();
+                    // Remove the valdators that we already know voted for `prev_leader_slot`
+                    // Those validators are safe to drop because they don't to be ported back any
+                    // further because parents must have:
+                    // 1) Also recorded this validator already, or
+                    // 2) Already reached the propagation threshold, in which case
+                    //    they no longer need to track the set of propagated validators
+                    new_completed_validators.retain(|validator| {
+                        if !prev_leader_stats.propagated_validators.contains(validator) {
+                            prev_leader_stats
+                                .propagated_validators
+                                .insert(validator.clone());
+                            prev_leader_stats.propagated_validators_stake += prev_leader_bank
+                                .epoch_vote_accounts(prev_leader_bank.epoch())
+                                .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
+                                .get(&validator)
+                                .map(|(stake, _)| stake)
+                                .unwrap_or(&0);
+
+                            if prev_leader_stats.propagated_validators_stake as f64
+                                / prev_leader_bank.total_epoch_stake() as f64
+                                > SUPERMINORITY_THRESHOLD
+                            {
+                                prev_leader_stats.propagated_confirmation = true;
+                                did_newly_reach_threshold = true
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                }
+
+                // If there's no new validators to record, and there's no
+                // newly achieved threshold, then there's no further
+                // information to propagate backwards to past leader blocks
+                if new_completed_validators.is_empty() && !did_newly_reach_threshold {
+                    break;
+                }
+            }
+        }
     }
 
     fn confirm_forks(
