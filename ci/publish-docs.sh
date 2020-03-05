@@ -11,7 +11,7 @@ if [[ -n $CI_BRANCH ]]; then
     set -x
     (
       . ci/rust-version.sh stable
-      ci/docker-run.sh "$rust_stable_docker_image" make -C docs -B svg
+      ci/docker-run.sh "$rust_stable_docker_image" make -C docs
     )
     # make a local commit for the svgs
     git add -A -f docs/src/.gitbook/assets/.
