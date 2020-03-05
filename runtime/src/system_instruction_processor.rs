@@ -358,7 +358,11 @@ mod tests {
     fn create_default_recent_blockhashes_account() -> RefCell<Account> {
         RefCell::new(sysvar::recent_blockhashes::create_account_with_data(
             1,
-            vec![IterItem(0u64, &Hash::default(), &FeeCalculator::default()); 32].into_iter(),
+            vec![
+                IterItem(0u64, &Hash::default(), &FeeCalculator::default());
+                sysvar::recent_blockhashes::MAX_ENTRIES
+            ]
+            .into_iter(),
         ))
     }
     fn create_default_rent_account() -> RefCell<Account> {
@@ -1088,11 +1092,7 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::recent_blockhashes::check_id(&meta.pubkey) {
-                    sysvar::recent_blockhashes::create_account_with_data(
-                        1,
-                        vec![IterItem(0u64, &Hash::default(), &FeeCalculator::default()); 32]
-                            .into_iter(),
-                    )
+                    create_default_recent_blockhashes_account().into_inner()
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     sysvar::rent::create_account(1, &Rent::free())
                 } else {
@@ -1196,7 +1196,7 @@ mod tests {
                         &hash(&serialize(&0).unwrap()),
                         &FeeCalculator::default()
                     );
-                    32
+                    sysvar::recent_blockhashes::MAX_ENTRIES
                 ]
                 .into_iter(),
             ));
