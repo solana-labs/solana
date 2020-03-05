@@ -21,7 +21,6 @@ use solana_sdk::{
     system_program, timing,
 };
 use solana_stake_program::stake_state::{self, StakeState};
-use solana_storage_program::storage_contract;
 use solana_vote_program::vote_state::{self, VoteState};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -213,13 +212,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("bootstrap_storage_pubkey_file")
-                .long("bootstrap-storage-pubkey")
-                .value_name("BOOTSTRAP STORAGE PUBKEY")
-                .takes_value(true)
-                .help("Path to file containing the bootstrap validator's storage pubkey"),
-        )
-        .arg(
             Arg::with_name("bootstrap_validator_lamports")
                 .long("bootstrap-validator-lamports")
                 .value_name("LAMPORTS")
@@ -405,7 +397,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_stake_pubkey = required_pubkey(&matches, "bootstrap_stake_pubkey_file")?;
     let bootstrap_stake_authorized_pubkey =
         pubkey_of(&matches, "bootstrap_stake_authorized_pubkey_file");
-    let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
     let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
 
     let bootstrap_validator_vote_account = vote_state::create_account(
@@ -425,7 +416,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         bootstrap_validator_stake_lamports,
     );
 
-    let mut accounts: BTreeMap<Pubkey, Account> = [
+    let accounts: BTreeMap<Pubkey, Account> = [
         // node needs an account to issue votes from
         (
             bootstrap_validator_pubkey,
@@ -439,13 +430,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     .iter()
     .cloned()
     .collect();
-
-    if let Some(bootstrap_storage_pubkey) = bootstrap_storage_pubkey {
-        accounts.insert(
-            bootstrap_storage_pubkey,
-            storage_contract::create_validator_storage_account(bootstrap_validator_pubkey, 1),
-        );
-    }
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
 

@@ -70,12 +70,6 @@ if [[ -e $faucet_keypair ]]; then
 else
   solana-keygen new --no-passphrase -fso "$faucet_keypair"
 fi
-leader_storage_account_keypair="$dataDir"/leader-storage-account-keypair.json
-if [[ -e $leader_storage_account_keypair ]]; then
-  echo "Use existing leader storage account keypair"
-else
-  solana-keygen new --no-passphrase -fso "$leader_storage_account_keypair"
-fi
 
 if [[ -e "$ledgerDir"/genesis.bin ]]; then
   echo "Use existing genesis"
@@ -87,7 +81,6 @@ else
     --bootstrap-validator-pubkey "$dataDir"/leader-keypair.json \
     --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
     --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
-    --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
     --ledger "$ledgerDir" \
     --operating-mode development
 fi
