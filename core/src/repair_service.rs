@@ -8,7 +8,6 @@ use crate::{
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
-    next_slots_iterator::NextSlotsIterator,
 };
 use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
@@ -407,24 +406,16 @@ impl RepairService {
 
     #[allow(dead_code)]
     fn find_incomplete_slots(blockstore: &Blockstore, root: Slot) -> HashSet<Slot> {
-        let mut incomplete_slots = HashSet::new();
-        let root_forks = NextSlotsIterator::new(root, blockstore);
-        for (slot, slot_meta) in root_forks {
-            if !slot_meta.is_full() {
-                incomplete_slots.insert(slot);
-            }
-        }
-
-        let orphans_iter = blockstore.orphans_iterator(root + 1).unwrap();
-        for orphan in orphans_iter {
-            let orphan_forks = NextSlotsIterator::new(orphan, blockstore);
-            for (slot, slot_meta) in orphan_forks {
+        blockstore
+            .live_slots_iterator(root)
+            .filter_map(|(slot, slot_meta)| {
                 if !slot_meta.is_full() {
-                    incomplete_slots.insert(slot);
+                    Some(slot)
+                } else {
+                    None
                 }
-            }
-        }
-        incomplete_slots
+            })
+            .collect()
     }
 
     pub fn join(self) -> thread::Result<()> {
