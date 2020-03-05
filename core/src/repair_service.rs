@@ -12,7 +12,7 @@ use solana_ledger::{
 use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashSet},
     iter::Iterator,
     net::UdpSocket,
     ops::Bound::{Included, Unbounded},
@@ -402,6 +402,20 @@ impl RepairService {
                     .collect();
             }
         }
+    }
+
+    #[allow(dead_code)]
+    fn find_incomplete_slots(blockstore: &Blockstore, root: Slot) -> HashSet<Slot> {
+        blockstore
+            .live_slots_iterator(root)
+            .filter_map(|(slot, slot_meta)| {
+                if !slot_meta.is_full() {
+                    Some(slot)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -915,5 +929,64 @@ mod test {
             DEFAULT_SLOTS_PER_EPOCH + DEFAULT_SLOTS_PER_EPOCH / 2 + 1,
         );
         assert_eq!(stash.len(), 2);
+    }
+
+    #[test]
+    fn test_find_incomplete_slots() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let num_entries_per_slot = 100;
+            let (mut shreds, _) = make_slot_entries(0, 0, num_entries_per_slot);
+            assert!(shreds.len() > 1);
+            let (shreds4, _) = make_slot_entries(4, 0, num_entries_per_slot);
+            shreds.extend(shreds4);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+
+            // Nothing is incomplete
+            assert!(RepairService::find_incomplete_slots(&blockstore, 0).is_empty());
+
+            // Insert a slot 5 that chains to an incomplete orphan slot 3
+            let (shreds5, _) = make_slot_entries(5, 3, num_entries_per_slot);
+            blockstore.insert_shreds(shreds5, None, false).unwrap();
+            assert_eq!(
+                RepairService::find_incomplete_slots(&blockstore, 0),
+                vec![3].into_iter().collect()
+            );
+
+            // Insert another incomplete orphan slot 2 that is the parent of slot 3.
+            // Both should be incomplete
+            let (shreds3, _) = make_slot_entries(3, 2, num_entries_per_slot);
+            blockstore
+                .insert_shreds(shreds3[1..].to_vec(), None, false)
+                .unwrap();
+            assert_eq!(
+                RepairService::find_incomplete_slots(&blockstore, 0),
+                vec![2, 3].into_iter().collect()
+            );
+
+            // Insert a incomplete slot 6 that chains to the root 0,
+            // should also be incomplete
+            let (shreds6, _) = make_slot_entries(6, 0, num_entries_per_slot);
+            blockstore
+                .insert_shreds(shreds6[1..].to_vec(), None, false)
+                .unwrap();
+            assert_eq!(
+                RepairService::find_incomplete_slots(&blockstore, 0),
+                vec![2, 3, 6].into_iter().collect()
+            );
+
+            // Complete slot 3, should no longer be marked incomplete
+            blockstore
+                .insert_shreds(shreds3[..].to_vec(), None, false)
+                .unwrap();
+
+            assert_eq!(
+                RepairService::find_incomplete_slots(&blockstore, 0),
+                vec![2, 6].into_iter().collect()
+            );
+        }
+
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }

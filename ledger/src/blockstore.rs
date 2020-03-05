@@ -11,6 +11,7 @@ use crate::{
     entry::{create_ticks, Entry},
     erasure::ErasureConfig,
     leader_schedule_cache::LeaderScheduleCache,
+    next_slots_iterator::NextSlotsIterator,
     rooted_slot_iterator::RootedSlotIterator,
     shred::{Shred, Shredder},
 };
@@ -435,6 +436,17 @@ impl Blockstore {
                     .unwrap_or_else(|_| panic!("Could not deserialize SlotMeta for slot {}", slot)),
             )
         }))
+    }
+
+    #[allow(dead_code)]
+    pub fn live_slots_iterator<'a>(
+        &'a self,
+        root: Slot,
+    ) -> impl Iterator<Item = (Slot, SlotMeta)> + 'a {
+        let root_forks = NextSlotsIterator::new(root, self);
+
+        let orphans_iter = self.orphans_iterator(root + 1).unwrap();
+        root_forks.chain(orphans_iter.flat_map(move |orphan| NextSlotsIterator::new(orphan, self)))
     }
 
     pub fn slot_data_iterator<'a>(
