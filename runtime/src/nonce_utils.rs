@@ -1,9 +1,10 @@
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
+    fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::CompiledInstruction,
-    nonce_state::NonceState,
+    nonce::{self, state::Versions, State},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
@@ -39,8 +40,8 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 }
 
 pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
-    match acc.state() {
-        Ok(NonceState::Initialized(_meta, ref nonce)) => hash == nonce,
+    match StateMut::<Versions>::state(acc).map(|v| v.convert_to_current()) {
+        Ok(State::Initialized(ref data)) => *hash == data.blockhash,
         _ => false,
     }
 }
@@ -60,12 +61,27 @@ pub fn prepare_if_nonce_account(
                 *account = nonce_acc.clone()
             }
             // Since hash_age_kind is DurableNonce, unwrap is safe here
-            if let NonceState::Initialized(meta, _) = account.state().unwrap() {
-                account
-                    .set_state(&NonceState::Initialized(meta, *last_blockhash))
-                    .unwrap();
+            let state = StateMut::<Versions>::state(nonce_acc)
+                .unwrap()
+                .convert_to_current();
+            if let State::Initialized(ref data) = state {
+                let new_data = Versions::new_current(State::Initialized(nonce::state::Data {
+                    blockhash: *last_blockhash,
+                    ..data.clone()
+                }));
+                account.set_state(&new_data).unwrap();
             }
         }
+    }
+}
+
+pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
+    let state = StateMut::<Versions>::state(account)
+        .ok()?
+        .convert_to_current();
+    match state {
+        State::Initialized(data) => Some(data.fee_calculator),
+        _ => None,
     }
 }
 
@@ -74,10 +90,10 @@ mod tests {
     use super::*;
     use solana_sdk::{
         account::Account,
-        account_utils::State,
+        account_utils::State as AccountUtilsState,
         hash::Hash,
         instruction::InstructionError,
-        nonce_state::{with_test_keyed_account, Meta, NonceAccount},
+        nonce::{self, account::with_test_keyed_account, Account as NonceAccount, State},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
@@ -193,9 +209,9 @@ mod tests {
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap().clone());
-            let state: NonceState = nonce_account.state().unwrap();
+            let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
-            assert_eq!(state, NonceState::Uninitialized);
+            assert_eq!(state, State::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
@@ -203,7 +219,7 @@ mod tests {
                 .unwrap();
             assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
-                &recent_blockhashes[0]
+                &recent_blockhashes[0].blockhash,
             ));
         });
     }
@@ -223,9 +239,9 @@ mod tests {
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap().clone());
-            let state: NonceState = nonce_account.state().unwrap();
+            let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
-            assert_eq!(state, NonceState::Uninitialized);
+            assert_eq!(state, State::Uninitialized);
             let recent_blockhashes = create_test_recent_blockhashes(0);
             let authorized = nonce_account.unsigned_key().clone();
             nonce_account
@@ -233,19 +249,14 @@ mod tests {
                 .unwrap();
             assert!(!verify_nonce_account(
                 &nonce_account.account.borrow(),
-                &recent_blockhashes[1]
+                &recent_blockhashes[1].blockhash,
             ));
         });
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash) {
-        let stored_nonce = Hash::default();
-        let account = Account::new_data(
-            42,
-            &NonceState::Initialized(Meta::new(&Pubkey::default()), stored_nonce),
-            &system_program::id(),
-        )
-        .unwrap();
+        let data = Versions::new_current(State::Initialized(nonce::state::Data::default()));
+        let account = Account::new_data(42, &data, &system_program::id()).unwrap();
         let pre_account = Account {
             lamports: 43,
             ..account.clone()
@@ -296,12 +307,11 @@ mod tests {
         let post_account_pubkey = pre_account_pubkey;
 
         let mut expect_account = post_account.clone();
-        expect_account
-            .set_state(&NonceState::Initialized(
-                Meta::new(&Pubkey::default()),
-                last_blockhash,
-            ))
-            .unwrap();
+        let data = Versions::new_current(State::Initialized(nonce::state::Data {
+            blockhash: last_blockhash,
+            ..nonce::state::Data::default()
+        }));
+        expect_account.set_state(&data).unwrap();
 
         assert!(run_prepare_if_nonce_account_test(
             &mut post_account,
@@ -356,10 +366,12 @@ mod tests {
 
         let mut expect_account = pre_account.clone();
         expect_account
-            .set_state(&NonceState::Initialized(
-                Meta::new(&Pubkey::default()),
-                last_blockhash,
-            ))
+            .set_state(&Versions::new_current(State::Initialized(
+                nonce::state::Data {
+                    blockhash: last_blockhash,
+                    ..nonce::state::Data::default()
+                },
+            )))
             .unwrap();
 
         assert!(run_prepare_if_nonce_account_test(

@@ -11,7 +11,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
-    nonce_state::NonceState,
+    nonce,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -377,7 +377,7 @@ fn test_nonced_pay_tx() {
     config.signers = vec![&default_signer];
 
     let minimum_nonce_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .get_minimum_balance_for_rent_exemption(nonce::State::size())
         .unwrap();
 
     request_and_confirm_airdrop(
@@ -409,9 +409,11 @@ fn test_nonced_pay_tx() {
 
     // Fetch nonce hash
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
     let nonce_hash = match nonce_state {
-        NonceState::Initialized(_meta, hash) => hash,
+        nonce::State::Initialized(ref data) => data.blockhash,
         _ => panic!("Nonce is not initialized"),
     };
 
@@ -431,9 +433,11 @@ fn test_nonced_pay_tx() {
 
     // Verify that nonce has been used
     let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state: NonceState = account.state().unwrap();
+    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+        .unwrap()
+        .convert_to_current();
     match nonce_state {
-        NonceState::Initialized(_meta, hash) => assert_ne!(hash, nonce_hash),
+        nonce::State::Initialized(ref data) => assert_ne!(data.blockhash, nonce_hash),
         _ => assert!(false, "Nonce is not initialized"),
     }
 

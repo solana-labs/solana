@@ -6,7 +6,7 @@ use crate::{
     append_vec::StoredAccount,
     bank::{HashAgeKind, TransactionProcessResult},
     blockhash_queue::BlockhashQueue,
-    nonce_utils::prepare_if_nonce_account,
+    nonce_utils,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_utils::OrderedIterator,
@@ -17,8 +17,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     hash::Hash,
-    native_loader,
-    nonce_state::NonceState,
+    native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
     transaction::{Transaction, TransactionError},
@@ -160,7 +159,7 @@ impl Accounts {
                 })? {
                     SystemAccountKind::System => 0,
                     SystemAccountKind::Nonce => {
-                        rent_collector.rent.minimum_balance(NonceState::size())
+                        rent_collector.rent.minimum_balance(nonce::State::size())
                     }
                 };
 
@@ -266,13 +265,15 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, (Ok(()), hash_age_kind)) => {
-                    let fee_hash = if let Some(HashAgeKind::DurableNonce(_, _)) = hash_age_kind {
-                        hash_queue.last_hash()
-                    } else {
-                        tx.message().recent_blockhash
+                    let fee_calculator = match hash_age_kind.as_ref() {
+                        Some(HashAgeKind::DurableNonce(_, account)) => {
+                            nonce_utils::fee_calculator_of(account)
+                        }
+                        _ => hash_queue
+                            .get_fee_calculator(&tx.message().recent_blockhash)
+                            .cloned(),
                     };
-                    let fee = if let Some(fee_calculator) = hash_queue.get_fee_calculator(&fee_hash)
-                    {
+                    let fee = if let Some(fee_calculator) = fee_calculator {
                         fee_calculator.calculate_fee(tx.message())
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), hash_age_kind);
@@ -631,7 +632,13 @@ impl Accounts {
                 .enumerate()
                 .zip(acc.0.iter_mut())
             {
-                prepare_if_nonce_account(account, key, res, maybe_nonce, last_blockhash);
+                nonce_utils::prepare_if_nonce_account(
+                    account,
+                    key,
+                    res,
+                    maybe_nonce,
+                    last_blockhash,
+                );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
                         account.rent_epoch = rent_collector.epoch;
@@ -681,7 +688,7 @@ mod tests {
         hash::Hash,
         instruction::CompiledInstruction,
         message::Message,
-        nonce_state,
+        nonce,
         rent::Rent,
         signature::{Keypair, Signer},
         system_program,
@@ -915,19 +922,16 @@ mod tests {
                 ..Rent::default()
             },
         );
-        let min_balance = rent_collector
-            .rent
-            .minimum_balance(nonce_state::NonceState::size());
+        let min_balance = rent_collector.rent.minimum_balance(nonce::State::size());
         let fee_calculator = FeeCalculator::new(min_balance);
         let nonce = Keypair::new();
         let mut accounts = vec![(
             nonce.pubkey(),
             Account::new_data(
                 min_balance * 2,
-                &nonce_state::NonceState::Initialized(
-                    nonce_state::Meta::new(&Pubkey::default()),
-                    Hash::default(),
-                ),
+                &nonce::state::Versions::new_current(nonce::State::Initialized(
+                    nonce::state::Data::default(),
+                )),
                 &system_program::id(),
             )
             .unwrap(),

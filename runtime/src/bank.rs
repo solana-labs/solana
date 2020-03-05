@@ -40,8 +40,7 @@ use solana_sdk::{
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
     inflation::Inflation,
-    native_loader,
-    nonce_state::NonceState,
+    native_loader, nonce,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
@@ -1410,19 +1409,20 @@ impl Bank {
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|(tx, (res, hash_age_kind))| {
-                let is_durable_nonce = hash_age_kind
-                    .as_ref()
-                    .map(|hash_age_kind| hash_age_kind.is_durable_nonce())
-                    .unwrap_or(false);
-                let fee_hash = if is_durable_nonce {
-                    self.last_blockhash()
-                } else {
-                    tx.message().recent_blockhash
+                let (fee_calculator, is_durable_nonce) = match hash_age_kind {
+                    Some(HashAgeKind::DurableNonce(_, account)) => {
+                        (nonce_utils::fee_calculator_of(account), true)
+                    }
+                    _ => (
+                        hash_queue
+                            .get_fee_calculator(&tx.message().recent_blockhash)
+                            .cloned(),
+                        false,
+                    ),
                 };
-                let fee = hash_queue
-                    .get_fee_calculator(&fee_hash)
-                    .ok_or(TransactionError::BlockhashNotFound)?
-                    .calculate_fee(tx.message());
+                let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
+
+                let fee = fee_calculator.calculate_fee(tx.message());
 
                 let message = tx.message();
                 match *res {
@@ -1691,9 +1691,10 @@ impl Bank {
         match self.get_account(pubkey) {
             Some(mut account) => {
                 let min_balance = match get_system_account_kind(&account) {
-                    Some(SystemAccountKind::Nonce) => {
-                        self.rent_collector.rent.minimum_balance(NonceState::size())
-                    }
+                    Some(SystemAccountKind::Nonce) => self
+                        .rent_collector
+                        .rent
+                        .minimum_balance(nonce::State::size()),
                     _ => 0,
                 };
                 if lamports + min_balance > account.lamports {
@@ -2165,7 +2166,7 @@ mod tests {
         genesis_config::create_genesis_config,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         message::{Message, MessageHeader},
-        nonce_state,
+        nonce,
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -3413,15 +3414,13 @@ mod tests {
         genesis_config.rent.lamports_per_byte_year = 42;
         let bank = Bank::new(&genesis_config);
 
-        let min_balance =
-            bank.get_minimum_balance_for_rent_exemption(nonce_state::NonceState::size());
+        let min_balance = bank.get_minimum_balance_for_rent_exemption(nonce::State::size());
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             min_balance + 42,
-            &nonce_state::NonceState::Initialized(
-                nonce_state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();
@@ -4992,9 +4991,9 @@ mod tests {
                 sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
             // Check length
             assert_eq!(recent_blockhashes.len(), i);
-            let most_recent_hash = recent_blockhashes.iter().nth(0).unwrap();
+            let most_recent_hash = recent_blockhashes.iter().nth(0).unwrap().blockhash;
             // Check order
-            assert_eq!(Some(true), bank.check_hash_age(most_recent_hash, 0));
+            assert_eq!(Some(true), bank.check_hash_age(&most_recent_hash, 0));
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             bank = Arc::new(new_from_parent(&bank));
         }
@@ -5098,11 +5097,14 @@ mod tests {
     }
 
     fn get_nonce_account(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
-        bank.get_account(&nonce_pubkey)
-            .and_then(|acc| match acc.state() {
-                Ok(nonce_state::NonceState::Initialized(_meta, hash)) => Some(hash),
+        bank.get_account(&nonce_pubkey).and_then(|acc| {
+            let state =
+                StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
+            match state {
+                Ok(nonce::State::Initialized(ref data)) => Some(data.blockhash),
                 _ => None,
-            })
+            }
+        })
     }
 
     fn nonce_setup(
@@ -5150,6 +5152,13 @@ mod tests {
         genesis_config.rent.lamports_per_byte_year = 0;
         genesis_cfg_fn(&mut genesis_config);
         let mut bank = Arc::new(Bank::new(&genesis_config));
+
+        // Banks 0 and 1 have no fees, wait two blocks before
+        // initializing our nonce accounts
+        for _ in 0..2 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
 
         let (custodian_keypair, nonce_keypair) = nonce_setup(
             &mut bank,
@@ -5274,10 +5283,9 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             42424242,
-            &nonce_state::NonceState::Initialized(
-                nonce_state::Meta::new(&Pubkey::default()),
-                Hash::default(),
-            ),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();

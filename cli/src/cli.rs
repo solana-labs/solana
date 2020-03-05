@@ -2486,7 +2486,7 @@ mod tests {
     };
     use solana_sdk::{
         account::Account,
-        nonce_state::{Meta as NonceMeta, NonceState},
+        nonce,
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Presigner},
         system_program,
@@ -3265,18 +3265,16 @@ mod tests {
 
         // Nonced pay
         let blockhash = Hash::default();
+        let data =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: config.signers[0].pubkey(),
+                blockhash,
+                fee_calculator: FeeCalculator::default(),
+            }));
         let nonce_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(
-                Account::new_data(
-                    1,
-                    &NonceState::Initialized(
-                        NonceMeta::new(&config.signers[0].pubkey()),
-                        blockhash
-                    ),
-                    &system_program::ID,
-                )
-                .unwrap()
+                Account::new_data(1, &data, &system_program::ID,).unwrap()
             )),
         });
         let mut mocks = HashMap::new();
@@ -3296,15 +3294,16 @@ mod tests {
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let blockhash = Hash::default();
+        let data =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: bob_pubkey,
+                blockhash,
+                fee_calculator: FeeCalculator::default(),
+            }));
         let nonce_authority_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(
-                Account::new_data(
-                    1,
-                    &NonceState::Initialized(NonceMeta::new(&bob_pubkey), blockhash),
-                    &system_program::ID,
-                )
-                .unwrap()
+                Account::new_data(1, &data, &system_program::ID,).unwrap()
             )),
         });
         let mut mocks = HashMap::new();
