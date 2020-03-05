@@ -70,12 +70,6 @@ if [[ -e $faucet_keypair ]]; then
 else
   solana-keygen new --no-passphrase -fso "$faucet_keypair"
 fi
-leader_storage_account_keypair="$dataDir"/leader-storage-account-keypair.json
-if [[ -e $leader_storage_account_keypair ]]; then
-  echo "Use existing leader storage account keypair"
-else
-  solana-keygen new --no-passphrase -fso "$leader_storage_account_keypair"
-fi
 
 if [[ -e "$ledgerDir"/genesis.bin ]]; then
   echo "Use existing genesis"
@@ -84,10 +78,10 @@ else
     --hashes-per-tick sleep \
     --faucet-pubkey "$dataDir"/faucet-keypair.json \
     --faucet-lamports 500000000000000000 \
-    --bootstrap-validator-pubkey "$dataDir"/leader-keypair.json \
-    --bootstrap-vote-pubkey "$dataDir"/leader-vote-account-keypair.json \
-    --bootstrap-stake-pubkey "$dataDir"/leader-stake-account-keypair.json \
-    --bootstrap-storage-pubkey "$dataDir"/leader-storage-account-keypair.json \
+    --bootstrap-validator \
+      "$dataDir"/leader-keypair.json \
+      "$dataDir"/leader-vote-account-keypair.json \
+      "$dataDir"/leader-stake-account-keypair.json \
     --ledger "$ledgerDir" \
     --operating-mode development
 fi
@@ -104,7 +98,6 @@ faucet=$!
 
 args=(
   --identity-keypair "$dataDir"/leader-keypair.json
-  --storage-keypair "$dataDir"/leader-storage-account-keypair.json
   --voting-keypair "$dataDir"/leader-vote-account-keypair.json
   --ledger "$ledgerDir"
   --gossip-port 8001

@@ -24,14 +24,14 @@ fi
 
 $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-keypair.json
 $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-keypair.json
-$solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/storage-keypair.json
 
-args=("$@")
-default_arg --enable-warmup-epochs
-default_arg --bootstrap-validator-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-validator/identity-keypair.json
-default_arg --bootstrap-vote-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-keypair.json
-default_arg --bootstrap-stake-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-keypair.json
-default_arg --bootstrap-storage-pubkey "$SOLANA_CONFIG_DIR"/bootstrap-validator/storage-keypair.json
+args=(
+  "$@"
+  --enable-warmup-epochs
+  --bootstrap-validator "$SOLANA_CONFIG_DIR"/bootstrap-validator/identity-keypair.json
+                        "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-keypair.json
+                        "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-keypair.json
+)
 default_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-validator
 default_arg --faucet-pubkey "$SOLANA_CONFIG_DIR"/faucet-keypair.json
 default_arg --faucet-lamports 500000000000000000

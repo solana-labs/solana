@@ -66,7 +66,6 @@ done
 # These keypairs are created by ./setup.sh and included in the genesis config
 identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-validator/identity-keypair.json
 vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-keypair.json
-storage_keypair=$SOLANA_CONFIG_DIR/bootstrap-validator/storage-keypair.json
 
 ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 [[ -d "$ledger_dir" ]] || {
@@ -82,13 +81,11 @@ args+=(
   --rpc-port 8899
   --snapshot-interval-slots 100
   --identity-keypair "$identity_keypair"
-  --storage-keypair "$storage_keypair"
   --voting-keypair "$vote_keypair"
   --rpc-faucet-address 127.0.0.1:9900
 )
 default_arg --gossip-port 8001
 default_arg --log -
-
 
 
 pid=
