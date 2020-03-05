@@ -5148,6 +5148,13 @@ mod tests {
         genesis_cfg_fn(&mut genesis_config);
         let mut bank = Arc::new(Bank::new(&genesis_config));
 
+        // Banks 0 and 1 have no fees, wait two blocks before
+        // initializing our nonce accounts
+        for i in 0..2 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
         let (custodian_keypair, nonce_keypair) = nonce_setup(
             &mut bank,
             &mint_keypair,
