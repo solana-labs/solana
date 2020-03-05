@@ -24,7 +24,7 @@ stability, all that can be said is that CI automation was successful.
 ### Get Testnet Version
 
 You can submit a JSON-RPC request to see the specific software version of the
-cluster. Use this to specify [the software version to install](validator-software.md).
+cluster. Use this to specify [the software version to install](../install-solana.md).
 
 ```bash
 curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' devnet.solana.com:8899
