@@ -2,8 +2,8 @@
 
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::{
-    input_parsers::{pubkey_of, unix_timestamp_from_rfc3339_datetime},
-    input_validators::{is_rfc3339_datetime, is_valid_percentage},
+    input_parsers::{pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
+    input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{blockstore::create_new_ledger, poh::compute_hashes_per_tick};
@@ -21,31 +21,14 @@ use solana_sdk::{
     system_program, timing,
 };
 use solana_stake_program::stake_state::{self, StakeState};
-use solana_storage_program::storage_contract;
 use solana_vote_program::vote_state::{self, VoteState};
 use std::{
-    collections::{BTreeMap, HashMap},
-    error,
-    fs::File,
-    io,
-    path::PathBuf,
-    str::FromStr,
-    time::Duration,
+    collections::HashMap, error, fs::File, io, path::PathBuf, process, str::FromStr, time::Duration,
 };
 
 pub enum AccountFileFormat {
     Pubkey,
     Keypair,
-}
-
-fn required_pubkey(matches: &ArgMatches<'_>, name: &str) -> Result<Pubkey, Box<dyn error::Error>> {
-    pubkey_of(matches, name).ok_or_else(|| {
-        format!(
-            "Invalid pubkey or file: {}",
-            matches.value_of(name).unwrap()
-        )
-        .into()
-    })
 }
 
 fn pubkey_from_str(key_str: &str) -> Result<Pubkey, Box<dyn error::Error>> {
@@ -151,13 +134,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Time when the bootstrap validator will start the cluster [default: current system time]"),
         )
         .arg(
-            Arg::with_name("bootstrap_validator_pubkey_file")
+            Arg::with_name("bootstrap_validator")
                 .short("b")
-                .long("bootstrap-validator-pubkey")
-                .value_name("BOOTSTRAP VALIDATOR PUBKEY")
+                .long("bootstrap-validator")
+                .value_name("IDENTITY_PUBKEY VOTE_PUBKEY STAKE_PUBKEY")
                 .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .number_of_values(3)
+                .multiple(true)
                 .required(true)
-                .help("Path to file containing the bootstrap validator's pubkey"),
+                .help("The bootstrap validator's identity, vote and stake pubkeys"),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -174,50 +160,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("faucet-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
-                .requires("faucet_pubkey_file")
+                .requires("faucet_pubkey")
                 .help("Number of lamports to assign to the faucet"),
         )
         .arg(
-            Arg::with_name("faucet_pubkey_file")
+            Arg::with_name("faucet_pubkey")
                 .short("m")
                 .long("faucet-pubkey")
                 .value_name("PUBKEY")
                 .takes_value(true)
+                .validator(is_pubkey_or_keypair)
                 .requires("faucet_lamports")
                 .help("Path to file containing the faucet's pubkey"),
         )
         .arg(
-            Arg::with_name("bootstrap_vote_pubkey_file")
-                .long("bootstrap-vote-pubkey")
-                .value_name("BOOTSTRAP VOTE PUBKEY")
-                .takes_value(true)
-                .required(true)
-                .help("Path to file containing the bootstrap validator's voting pubkey"),
-        )
-        .arg(
-            Arg::with_name("bootstrap_stake_pubkey_file")
-                .long("bootstrap-stake-pubkey")
-                .value_name("BOOTSTRAP STAKE PUBKEY")
-                .takes_value(true)
-                .required(true)
-                .help("Path to file containing the bootstrap validator's staking pubkey"),
-        )
-        .arg(
-            Arg::with_name("bootstrap_stake_authorized_pubkey_file")
+            Arg::with_name("bootstrap_stake_authorized_pubkey")
                 .long("bootstrap-stake-authorized-pubkey")
                 .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
                 .takes_value(true)
+                .validator(is_pubkey_or_keypair)
                 .help(
                     "Path to file containing the pubkey authorized to manage the bootstrap \
                      validator's stake [default: --bootstrap-validator-pubkey]",
                 ),
-        )
-        .arg(
-            Arg::with_name("bootstrap_storage_pubkey_file")
-                .long("bootstrap-storage-pubkey")
-                .value_name("BOOTSTRAP STORAGE PUBKEY")
-                .takes_value(true)
-                .help("Path to file containing the bootstrap validator's storage pubkey"),
         )
         .arg(
             Arg::with_name("bootstrap_validator_lamports")
@@ -225,7 +190,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("LAMPORTS")
                 .takes_value(true)
                 .default_value(default_bootstrap_validator_lamports)
-                .required(true)
                 .help("Number of lamports to assign to the bootstrap validator"),
         )
         .arg(
@@ -234,7 +198,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("LAMPORTS")
                 .takes_value(true)
                 .default_value(default_bootstrap_validator_stake_lamports)
-                .required(true)
                 .help("Number of lamports to assign to the bootstrap validator's stake account"),
         )
         .arg(
@@ -391,6 +354,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
+    let bootstrap_validator_pubkeys = pubkeys_of(&matches, "bootstrap_validator").unwrap();
+    assert_eq!(bootstrap_validator_pubkeys.len() % 3, 0);
+
+    // Ensure there are no duplicated pubkeys in the --bootstrap-validator list
+    {
+        let mut v = bootstrap_validator_pubkeys.clone();
+        v.sort();
+        v.dedup();
+        if v.len() != bootstrap_validator_pubkeys.len() {
+            eprintln!("Error: --bootstrap-validator pubkeys cannot be duplicated");
+            process::exit(1);
+        }
+    }
+
     let bootstrap_validator_lamports =
         value_t_or_exit!(matches, "bootstrap_validator_lamports", u64);
 
@@ -400,52 +377,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         StakeState::get_rent_exempt_reserve(&rent),
     )?;
 
-    let bootstrap_validator_pubkey = required_pubkey(&matches, "bootstrap_validator_pubkey_file")?;
-    let bootstrap_vote_pubkey = required_pubkey(&matches, "bootstrap_vote_pubkey_file")?;
-    let bootstrap_stake_pubkey = required_pubkey(&matches, "bootstrap_stake_pubkey_file")?;
     let bootstrap_stake_authorized_pubkey =
-        pubkey_of(&matches, "bootstrap_stake_authorized_pubkey_file");
-    let bootstrap_storage_pubkey = pubkey_of(&matches, "bootstrap_storage_pubkey_file");
-    let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey_file");
-
-    let bootstrap_validator_vote_account = vote_state::create_account(
-        &bootstrap_vote_pubkey,
-        &bootstrap_validator_pubkey,
-        100,
-        VoteState::get_rent_exempt_reserve(&rent).max(1),
-    );
-
-    let bootstrap_validator_stake_account = stake_state::create_account(
-        bootstrap_stake_authorized_pubkey
-            .as_ref()
-            .unwrap_or(&bootstrap_validator_pubkey),
-        &bootstrap_vote_pubkey,
-        &bootstrap_validator_vote_account,
-        &rent,
-        bootstrap_validator_stake_lamports,
-    );
-
-    let mut accounts: BTreeMap<Pubkey, Account> = [
-        // node needs an account to issue votes from
-        (
-            bootstrap_validator_pubkey,
-            Account::new(bootstrap_validator_lamports, 0, &system_program::id()),
-        ),
-        // where votes go to
-        (bootstrap_vote_pubkey, bootstrap_validator_vote_account),
-        // bootstrap validator stake
-        (bootstrap_stake_pubkey, bootstrap_validator_stake_account),
-    ]
-    .iter()
-    .cloned()
-    .collect();
-
-    if let Some(bootstrap_storage_pubkey) = bootstrap_storage_pubkey {
-        accounts.insert(
-            bootstrap_storage_pubkey,
-            storage_contract::create_validator_storage_account(bootstrap_validator_pubkey, 1),
-        );
-    }
+        pubkey_of(&matches, "bootstrap_stake_authorized_pubkey");
+    let faucet_pubkey = pubkey_of(&matches, "faucet_pubkey");
 
     let ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
 
@@ -508,7 +442,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let inflation = solana_genesis_programs::get_inflation(operating_mode, 0).unwrap();
 
     let mut genesis_config = GenesisConfig {
-        accounts,
         native_instruction_processors,
         ticks_per_slot,
         epoch_schedule,
@@ -519,6 +452,43 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         operating_mode,
         ..GenesisConfig::default()
     };
+
+    let mut bootstrap_validator_pubkeys_iter = bootstrap_validator_pubkeys.iter();
+    loop {
+        let identity_pubkey = match bootstrap_validator_pubkeys_iter.next() {
+            None => break,
+            Some(identity_pubkey) => identity_pubkey,
+        };
+        let vote_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
+        let stake_pubkey = bootstrap_validator_pubkeys_iter.next().unwrap();
+
+        genesis_config.add_account(
+            *identity_pubkey,
+            Account::new(bootstrap_validator_lamports, 0, &system_program::id()),
+        );
+
+        let vote_account = vote_state::create_account(
+            &vote_pubkey,
+            &identity_pubkey,
+            100,
+            VoteState::get_rent_exempt_reserve(&rent).max(1),
+        );
+
+        genesis_config.add_account(
+            *stake_pubkey,
+            stake_state::create_account(
+                bootstrap_stake_authorized_pubkey
+                    .as_ref()
+                    .unwrap_or(&identity_pubkey),
+                &vote_pubkey,
+                &vote_account,
+                &rent,
+                bootstrap_validator_stake_lamports,
+            ),
+        );
+
+        genesis_config.add_account(*vote_pubkey, vote_account);
+    }
 
     if let Some(creation_time) = unix_timestamp_from_rfc3339_datetime(&matches, "creation_time") {
         genesis_config.creation_time = creation_time;
