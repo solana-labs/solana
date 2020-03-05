@@ -62,7 +62,6 @@
   * [Blockstore](validator/blockstore.md)
   * [Gossip Service](validator/gossip.md)
   * [The Runtime](validator/runtime.md)
-* [Build from Source](building-from-source.md)
 * [Terminology](terminology.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
