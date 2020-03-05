@@ -46,7 +46,6 @@
   * [Monitoring a Validator](running-validator/validator-monitor.md)
   * [Publishing Validator Info](running-validator/validator-info.md)
   * [Troubleshooting](running-validator/validator-troubleshoot.md)
-* [Running an Archiver](running-archiver.md)
 * [Understanding Solana's Architecture](cluster/README.md)
   * [Synchronization](cluster/synchronization.md)
   * [Leader Rotation](cluster/leader-rotation.md)
