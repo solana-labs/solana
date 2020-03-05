@@ -103,8 +103,23 @@ where
 }
 
 pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
+<<<<<<< HEAD
     let bhq: Vec<_> = (start..start + (MAX_ENTRIES - 1))
         .map(|i| hash(&serialize(&i).unwrap()))
+=======
+    let blocks: Vec<_> = (start..start + MAX_ENTRIES)
+        .map(|i| {
+            (
+                i as u64,
+                hash(&bincode::serialize(&i).unwrap()),
+                FeeCalculator::new(i as u64 * 100),
+            )
+        })
+        .collect();
+    let bhq: Vec<_> = blocks
+        .iter()
+        .map(|(i, hash, fee_calc)| IterItem(*i, hash, fee_calc))
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
         .collect();
     RecentBlockhashes::from_iter(bhq.iter())
 }

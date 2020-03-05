@@ -1,6 +1,7 @@
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
+    fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::CompiledInstruction,
     nonce_state::NonceState,
@@ -60,12 +61,34 @@ pub fn prepare_if_nonce_account(
                 *account = nonce_acc.clone()
             }
             // Since hash_age_kind is DurableNonce, unwrap is safe here
+<<<<<<< HEAD
             if let NonceState::Initialized(meta, _) = account.state().unwrap() {
                 account
                     .set_state(&NonceState::Initialized(meta, *last_blockhash))
                     .unwrap();
+=======
+            let state = StateMut::<Versions>::state(nonce_acc)
+                .unwrap()
+                .convert_to_current();
+            if let State::Initialized(ref data) = state {
+                let new_data = Versions::new_current(State::Initialized(nonce::state::Data {
+                    blockhash: *last_blockhash,
+                    ..data.clone()
+                }));
+                account.set_state(&new_data).unwrap();
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
             }
         }
+    }
+}
+
+pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
+    let state = StateMut::<Versions>::state(account)
+        .ok()?
+        .convert_to_current();
+    match state {
+        State::Initialized(data) => Some(data.fee_calculator),
+        _ => None,
     }
 }
 
@@ -239,6 +262,7 @@ mod tests {
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash) {
+<<<<<<< HEAD
         let stored_nonce = Hash::default();
         let account = Account::new_data(
             42,
@@ -246,6 +270,10 @@ mod tests {
             &system_program::id(),
         )
         .unwrap();
+=======
+        let data = Versions::new_current(State::Initialized(nonce::state::Data::default()));
+        let account = Account::new_data(42, &data, &system_program::id()).unwrap();
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
         let pre_account = Account {
             lamports: 43,
             ..account.clone()
@@ -296,12 +324,20 @@ mod tests {
         let post_account_pubkey = pre_account_pubkey;
 
         let mut expect_account = post_account.clone();
+<<<<<<< HEAD
         expect_account
             .set_state(&NonceState::Initialized(
                 Meta::new(&Pubkey::default()),
                 last_blockhash,
             ))
             .unwrap();
+=======
+        let data = Versions::new_current(State::Initialized(nonce::state::Data {
+            blockhash: last_blockhash,
+            ..nonce::state::Data::default()
+        }));
+        expect_account.set_state(&data).unwrap();
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
 
         assert!(run_prepare_if_nonce_account_test(
             &mut post_account,
@@ -356,10 +392,19 @@ mod tests {
 
         let mut expect_account = pre_account.clone();
         expect_account
+<<<<<<< HEAD
             .set_state(&NonceState::Initialized(
                 Meta::new(&Pubkey::default()),
                 last_blockhash,
             ))
+=======
+            .set_state(&Versions::new_current(State::Initialized(
+                nonce::state::Data {
+                    blockhash: last_blockhash,
+                    ..nonce::state::Data::default()
+                },
+            )))
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
             .unwrap();
 
         assert!(run_prepare_if_nonce_account_test(

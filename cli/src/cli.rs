@@ -3265,6 +3265,15 @@ mod tests {
 
         // Nonced pay
         let blockhash = Hash::default();
+<<<<<<< HEAD
+=======
+        let data =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: config.signers[0].pubkey(),
+                blockhash,
+                fee_calculator: FeeCalculator::default(),
+            }));
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
         let nonce_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(
@@ -3296,6 +3305,15 @@ mod tests {
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let blockhash = Hash::default();
+<<<<<<< HEAD
+=======
+        let data =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: bob_pubkey,
+                blockhash,
+                fee_calculator: FeeCalculator::default(),
+            }));
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
         let nonce_authority_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(RpcAccount::encode(

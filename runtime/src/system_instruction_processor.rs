@@ -306,8 +306,18 @@ pub fn get_system_account_kind(account: &Account) -> Option<SystemAccountKind> {
     if system_program::check_id(&account.owner) {
         if account.data.is_empty() {
             Some(SystemAccountKind::System)
+<<<<<<< HEAD
         } else if let Ok(NonceState::Initialized(_, _)) = account.state() {
             Some(SystemAccountKind::Nonce)
+=======
+        } else if account.data.len() == nonce::State::size() {
+            match account.state().ok()? {
+                nonce::state::Versions::Current(state) => match *state {
+                    nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
+                    _ => None,
+                },
+            }
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
         } else {
             None
         }
@@ -736,10 +746,16 @@ mod tests {
         let nonce = Pubkey::new_rand();
         let nonce_account = Account::new_ref_data(
             42,
+<<<<<<< HEAD
             &nonce_state::NonceState::Initialized(
                 nonce_state::Meta::new(&Pubkey::default()),
                 Hash::default(),
             ),
+=======
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
             &system_program::id(),
         )
         .unwrap();
@@ -878,7 +894,14 @@ mod tests {
         let from = Pubkey::new_rand();
         let from_account = Account::new_ref_data(
             100,
+<<<<<<< HEAD
             &nonce_state::NonceState::Initialized(nonce_state::Meta::new(&from), Hash::default()),
+=======
+            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: from,
+                ..nonce::state::Data::default()
+            })),
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
             &system_program::id(),
         )
         .unwrap();
@@ -1391,10 +1414,16 @@ mod tests {
     fn test_get_system_account_kind_nonce_ok() {
         let nonce_account = Account::new_data(
             42,
+<<<<<<< HEAD
             &nonce_state::NonceState::Initialized(
                 nonce_state::Meta::new(&Pubkey::default()),
                 Hash::default(),
             ),
+=======
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
             &system_program::id(),
         )
         .unwrap();
@@ -1422,10 +1451,16 @@ mod tests {
     fn test_get_system_account_kind_nonsystem_owner_with_nonce_state_data_fail() {
         let nonce_account = Account::new_data(
             42,
+<<<<<<< HEAD
             &nonce_state::NonceState::Initialized(
                 nonce_state::Meta::new(&Pubkey::default()),
                 Hash::default(),
             ),
+=======
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
+>>>>>>> fd00e5cb3... Store FeeCalculator with blockhash in nonce accounts (#8650)
             &Pubkey::new_rand(),
         )
         .unwrap();

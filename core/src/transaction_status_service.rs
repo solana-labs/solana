@@ -1,7 +1,10 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use solana_client::rpc_response::RpcTransactionStatus;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
-use solana_runtime::bank::{Bank, HashAgeKind};
+use solana_runtime::{
+    bank::{Bank, HashAgeKind},
+    nonce_utils,
+};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -59,14 +62,13 @@ impl TransactionStatusService {
             .zip(balances.post_balances)
         {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
-                let fee_hash = if let Some(HashAgeKind::DurableNonce(_, _)) = hash_age_kind {
-                    bank.last_blockhash()
-                } else {
-                    transaction.message().recent_blockhash
-                };
-                let fee_calculator = bank
-                    .get_fee_calculator(&fee_hash)
-                    .expect("FeeCalculator must exist");
+                let fee_calculator = match hash_age_kind {
+                    Some(HashAgeKind::DurableNonce(_, account)) => {
+                        nonce_utils::fee_calculator_of(&account)
+                    }
+                    _ => bank.get_fee_calculator(&transaction.message().recent_blockhash),
+                }
+                .expect("FeeCalculator must exist");
                 let fee = fee_calculator.calculate_fee(transaction.message());
                 blockstore
                     .write_transaction_status(
