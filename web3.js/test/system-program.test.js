@@ -11,6 +11,7 @@ import {
   sendAndConfirmRecentTransaction,
   LAMPORTS_PER_SOL,
 } from '../src';
+import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {sleep} from '../src/util/sleep';
 import {url} from './url';
@@ -95,7 +96,7 @@ test('createNonceAccount', () => {
     fromPubkey: params.fromPubkey,
     newAccountPubkey: params.noncePubkey,
     lamports: params.lamports,
-    space: SystemProgram.nonceSpace,
+    space: NONCE_ACCOUNT_LENGTH,
     programId: SystemProgram.programId,
   };
   expect(createParams).toEqual(
@@ -203,7 +204,7 @@ test('live Nonce actions', async () => {
   await connection.requestAirdrop(newAuthority.publicKey, LAMPORTS_PER_SOL);
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
-    SystemProgram.nonceSpace,
+    NONCE_ACCOUNT_LENGTH,
     'recent',
   );
 
