@@ -25,6 +25,7 @@ pull_request_rules:
       - label=v1.0
     actions:
       backport:
+        ignore_conflicts: true
         branches:
           - v1.0
   - name: v1.1 backport
@@ -33,6 +34,7 @@ pull_request_rules:
       - label=v1.1
     actions:
       backport:
+        ignore_conflicts: true
         branches:
           - v1.1
   - name: v1.2 backport
@@ -41,5 +43,6 @@ pull_request_rules:
       - label=v1.2
     actions:
       backport:
+        ignore_conflicts: true
         branches:
           - v1.2
