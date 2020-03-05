@@ -217,7 +217,9 @@ fn run_cluster_partition(
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
     let partition_start_epoch = 2;
+    let enable_partition = Arc::new(AtomicBool::new(true));
     let mut validator_config = ValidatorConfig::default();
+    validator_config.enable_partition = Some(enable_partition.clone());
 
     // Returns:
     // 1) The keys for the validiators
@@ -255,7 +257,6 @@ fn run_cluster_partition(
         ..ClusterConfig::default()
     };
 
-    let enable_partition = Some(Arc::new(AtomicBool::new(true)));
     info!(
         "PARTITION_TEST starting cluster with {:?} partitions slots_per_epoch: {}",
         partitions, config.slots_per_epoch,
@@ -282,10 +283,7 @@ fn run_cluster_partition(
 
         if reached_epoch {
             info!("PARTITION_TEST start partition");
-            enable_partition
-                .clone()
-                .unwrap()
-                .store(false, Ordering::Relaxed);
+            enable_partition.clone().store(false, Ordering::Relaxed);
             break;
         } else {
             sleep(Duration::from_millis(100));
@@ -294,7 +292,7 @@ fn run_cluster_partition(
     sleep(Duration::from_millis(leader_schedule_time));
 
     info!("PARTITION_TEST remove partition");
-    enable_partition.unwrap().store(true, Ordering::Relaxed);
+    enable_partition.store(true, Ordering::Relaxed);
 
     let mut dead_nodes = HashSet::new();
     let mut alive_node_contact_infos = vec![];
