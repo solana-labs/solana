@@ -262,9 +262,10 @@ mod tests {
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::default(),
         )));
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let rpc_addr = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            solana_net_utils::find_available_port_in_range((10000, 65535)).unwrap(),
+            ip_addr,
+            solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));

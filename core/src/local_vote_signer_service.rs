@@ -15,9 +15,12 @@ pub struct LocalVoteSignerService {
 impl LocalVoteSignerService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(port_range: PortRange) -> (Self, SocketAddr) {
-        let addr = solana_net_utils::find_available_port_in_range(port_range)
-            .map(|port| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))
-            .expect("Failed to find an available port for local vote signer service");
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let addr = SocketAddr::new(
+            ip_addr,
+            solana_net_utils::find_available_port_in_range(ip_addr, port_range)
+                .expect("Failed to find an available port for local vote signer service"),
+        );
         let exit = Arc::new(AtomicBool::new(false));
         let thread_exit = exit.clone();
         let thread = Builder::new()

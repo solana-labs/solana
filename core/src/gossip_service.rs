@@ -9,7 +9,7 @@ use solana_ledger::bank_forks::BankForks;
 use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
-use std::net::{SocketAddr, TcpListener, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
@@ -163,7 +163,11 @@ pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-    let (_, transactions_socket) = solana_net_utils::bind_in_range(VALIDATOR_PORT_RANGE).unwrap();
+    let (_, transactions_socket) = solana_net_utils::bind_in_range(
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        VALIDATOR_PORT_RANGE,
+    )
+    .unwrap();
     let num_nodes = tpu_addrs.len();
     (
         ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),
