@@ -1,6 +1,7 @@
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
+    fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::CompiledInstruction,
     nonce::{self, state::Versions, State},
@@ -66,11 +67,21 @@ pub fn prepare_if_nonce_account(
             if let State::Initialized(ref data) = state {
                 let new_data = Versions::new_current(State::Initialized(nonce::state::Data {
                     blockhash: *last_blockhash,
-                    ..*data
+                    ..data.clone()
                 }));
                 account.set_state(&new_data).unwrap();
             }
         }
+    }
+}
+
+pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
+    let state = StateMut::<Versions>::state(account)
+        .ok()?
+        .convert_to_current();
+    match state {
+        State::Initialized(data) => Some(data.fee_calculator),
+        _ => None,
     }
 }
 
@@ -244,10 +255,7 @@ mod tests {
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash) {
-        let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: Pubkey::default(),
-            blockhash: Hash::default(),
-        }));
+        let data = Versions::new_current(State::Initialized(nonce::state::Data::default()));
         let account = Account::new_data(42, &data, &system_program::id()).unwrap();
         let pre_account = Account {
             lamports: 43,
@@ -300,8 +308,8 @@ mod tests {
 
         let mut expect_account = post_account.clone();
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: Pubkey::default(),
             blockhash: last_blockhash,
+            ..nonce::state::Data::default()
         }));
         expect_account.set_state(&data).unwrap();
 
@@ -360,8 +368,8 @@ mod tests {
         expect_account
             .set_state(&Versions::new_current(State::Initialized(
                 nonce::state::Data {
-                    authority: Pubkey::default(),
                     blockhash: last_blockhash,
+                    ..nonce::state::Data::default()
                 },
             )))
             .unwrap();

@@ -1409,19 +1409,20 @@ impl Bank {
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|(tx, (res, hash_age_kind))| {
-                let is_durable_nonce = hash_age_kind
-                    .as_ref()
-                    .map(|hash_age_kind| hash_age_kind.is_durable_nonce())
-                    .unwrap_or(false);
-                let fee_hash = if is_durable_nonce {
-                    self.last_blockhash()
-                } else {
-                    tx.message().recent_blockhash
+                let (fee_calculator, is_durable_nonce) = match hash_age_kind {
+                    Some(HashAgeKind::DurableNonce(_, account)) => {
+                        (nonce_utils::fee_calculator_of(account), true)
+                    }
+                    _ => (
+                        hash_queue
+                            .get_fee_calculator(&tx.message().recent_blockhash)
+                            .cloned(),
+                        false,
+                    ),
                 };
-                let fee = hash_queue
-                    .get_fee_calculator(&fee_hash)
-                    .ok_or(TransactionError::BlockhashNotFound)?
-                    .calculate_fee(tx.message());
+                let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
+
+                let fee = fee_calculator.calculate_fee(tx.message());
 
                 let message = tx.message();
                 match *res {
@@ -3417,10 +3418,9 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             min_balance + 42,
-            &nonce::State::Initialized(nonce::state::Data {
-                authority: Pubkey::default(),
-                blockhash: Hash::default(),
-            }),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();
@@ -5153,6 +5153,13 @@ mod tests {
         genesis_cfg_fn(&mut genesis_config);
         let mut bank = Arc::new(Bank::new(&genesis_config));
 
+        // Banks 0 and 1 have no fees, wait two blocks before
+        // initializing our nonce accounts
+        for _ in 0..2 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
         let (custodian_keypair, nonce_keypair) = nonce_setup(
             &mut bank,
             &mint_keypair,
@@ -5276,10 +5283,9 @@ mod tests {
         let nonce = Keypair::new();
         let nonce_account = Account::new_data(
             42424242,
-            &nonce::State::Initialized(nonce::state::Data {
-                authority: Pubkey::default(),
-                blockhash: Hash::default(),
-            }),
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::default(),
+            )),
             &system_program::id(),
         )
         .unwrap();
