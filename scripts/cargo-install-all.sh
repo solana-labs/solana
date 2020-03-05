@@ -84,7 +84,6 @@ BINS=(
   solana-ledger-tool
   solana-log-analyzer
   solana-net-shaper
-  solana-archiver
   solana-sys-tuner
   solana-validator
   solana-watchtower
