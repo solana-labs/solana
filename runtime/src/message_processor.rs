@@ -6,6 +6,7 @@ use solana_sdk::{
     entrypoint_native,
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
+    native_loader::id as native_loader_id,
     pubkey::Pubkey,
     system_program,
     transaction::TransactionError,
@@ -172,7 +173,6 @@ impl MessageProcessor {
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         program_accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
-        let program_id = instruction.program_id(&message.account_keys);
         let mut keyed_accounts = create_keyed_readonly_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
@@ -202,12 +202,16 @@ impl MessageProcessor {
         let root_program_id = keyed_accounts[0].unsigned_key();
         for (id, process_instruction) in &self.instruction_processors {
             if id == root_program_id {
-                return process_instruction(&program_id, &keyed_accounts[1..], &instruction.data);
+                return process_instruction(
+                    &root_program_id,
+                    &keyed_accounts[1..],
+                    &instruction.data,
+                );
             }
         }
 
         native_loader::invoke_entrypoint(
-            &program_id,
+            &native_loader_id(),
             &keyed_accounts,
             &instruction.data,
             &self.symbol_cache,

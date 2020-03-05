@@ -83,7 +83,7 @@ fn library_open(path: &PathBuf) -> std::io::Result<Library> {
 }
 
 pub fn invoke_entrypoint(
-    program_id: &Pubkey,
+    _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     symbol_cache: &SymbolCache,
@@ -94,7 +94,7 @@ pub fn invoke_entrypoint(
     let name_vec = &program.try_account_ref()?.data;
     if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
         unsafe {
-            return entrypoint(program_id, params, instruction_data);
+            return entrypoint(names[0].unsigned_key(), params, instruction_data);
         }
     }
     let name = match str::from_utf8(name_vec) {
@@ -120,7 +120,7 @@ pub fn invoke_entrypoint(
                         return Err(NativeLoaderError::EntrypointNotFound.into());
                     }
                 };
-            let ret = entrypoint(program_id, params, instruction_data);
+            let ret = entrypoint(names[0].unsigned_key(), params, instruction_data);
             symbol_cache
                 .write()
                 .unwrap()
