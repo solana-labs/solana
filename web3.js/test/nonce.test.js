@@ -3,6 +3,7 @@
 import bs58 from 'bs58';
 
 import {Account, Connection, SystemProgram} from '../src';
+import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
@@ -21,7 +22,7 @@ test('create and query nonce account', async () => {
     url,
     {
       method: 'getMinimumBalanceForRentExemption',
-      params: [68, {commitment: 'recent'}],
+      params: [NONCE_ACCOUNT_LENGTH, {commitment: 'recent'}],
     },
     {
       error: null,
@@ -30,7 +31,7 @@ test('create and query nonce account', async () => {
   ]);
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
-    SystemProgram.nonceSpace,
+    NONCE_ACCOUNT_LENGTH,
     'recent',
   );
 
@@ -94,11 +95,13 @@ test('create and query nonce account', async () => {
   });
   await connection.sendTransaction(transaction, from, nonceAccount);
 
-  const expectedData = Buffer.alloc(68);
-  expectedData.writeInt32LE(1, 0);
-  from.publicKey.toBuffer().copy(expectedData, 4);
+  const expectedData = Buffer.alloc(NONCE_ACCOUNT_LENGTH);
+  expectedData.writeInt32LE(0, 0); // Version, 4 bytes
+  expectedData.writeInt32LE(1, 4); // State, 4 bytes
+  from.publicKey.toBuffer().copy(expectedData, 8); // authorizedPubkey, 32 bytes
   const mockNonce = new Account();
-  mockNonce.publicKey.toBuffer().copy(expectedData, 36);
+  mockNonce.publicKey.toBuffer().copy(expectedData, 40); // Hash, 32 bytes
+  expectedData.writeUInt16LE(5000, 72); // feeCalculator, 8 bytes
 
   mockRpc.push([
     url,

@@ -4,6 +4,7 @@ import * as BufferLayout from 'buffer-layout';
 
 import {encodeData, decodeData} from './instruction';
 import * as Layout from './layout';
+import {NONCE_ACCOUNT_LENGTH} from './nonce-account';
 import {PublicKey} from './publickey';
 import {SYSVAR_RECENT_BLOCKHASHES_PUBKEY, SYSVAR_RENT_PUBKEY} from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
@@ -438,13 +439,6 @@ export class SystemProgram {
   }
 
   /**
-   * Max space of a Nonce account
-   */
-  static get nonceSpace(): number {
-    return 68;
-  }
-
-  /**
    * Generate a Transaction that creates a new account
    */
   static createAccount(params: CreateAccountParams): Transaction {
@@ -530,7 +524,7 @@ export class SystemProgram {
       fromPubkey: params.fromPubkey,
       newAccountPubkey: params.noncePubkey,
       lamports: params.lamports,
-      space: this.nonceSpace,
+      space: NONCE_ACCOUNT_LENGTH,
       programId: this.programId,
     });
 

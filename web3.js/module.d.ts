@@ -229,6 +229,13 @@ declare module '@solana/web3.js' {
     ): Promise<number>;
   }
 
+  // === src/nonce-account.js ===
+  export class NonceAccount {
+    authorizedPubkey: PublicKey;
+    nonce: Blockhash;
+    feeCalculator: FeeCalculator;
+  }
+
   // === src/validator-info.js ===
   export const VALIDATOR_INFO_KEY: PublicKey;
   export type Info = {
@@ -536,7 +543,6 @@ declare module '@solana/web3.js' {
 
   export class SystemProgram {
     static programId: PublicKey;
-    static nonceSpace: number;
 
     static createAccount(
       from: PublicKey,
