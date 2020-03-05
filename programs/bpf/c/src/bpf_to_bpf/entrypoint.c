@@ -3,7 +3,6 @@
  * passed to it
  */
 #include <solana_sdk.h>
-
 #include "helper.h"
 
 extern uint64_t entrypoint(const uint8_t *input) {

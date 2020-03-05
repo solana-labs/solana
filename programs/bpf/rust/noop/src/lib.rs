@@ -3,7 +3,6 @@
 #![allow(unreachable_code)]
 
 extern crate solana_sdk;
-
 use solana_sdk::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, log::*, pubkey::Pubkey,
 };
@@ -65,7 +64,7 @@ fn process_instruction(
 #[cfg(test)]
 mod test {
     use super::*;
-    // Pulls in the stubs requried for `info!()`
+    // Pulls in the stubs required for `info!()`
     solana_sdk_bpf_test::stubs!();
 
     #[test]

@@ -85,7 +85,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
 #[cfg(test)]
 mod test {
     use super::*;
-    // Pulls in the stubs requried for `info!()`
+    // Pulls in the stubs required for `info!()`
     solana_sdk_bpf_test::stubs!();
 
     #[test]

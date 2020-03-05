@@ -2,7 +2,6 @@
  * @brief Example C-based BPF program that moves funds from one account to
  * another
  */
-
 #include <solana_sdk.h>
 
 /**
