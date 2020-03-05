@@ -3,7 +3,7 @@ use alloc::Alloc;
 use libc::c_char;
 use log::*;
 use solana_rbpf::{
-    ebpf::{HelperContext, MM_HEAP_START},
+    ebpf::{Helper, MM_HEAP_START},
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
@@ -11,7 +11,7 @@ use std::{
     alloc::Layout,
     ffi::CStr,
     io::{Error, ErrorKind},
-    mem,
+    mem::align_of,
     slice::from_raw_parts,
     str::from_utf8,
 };
@@ -29,18 +29,22 @@ use crate::allocator_bump::BPFAllocator;
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
 pub fn register_helpers(vm: &mut EbpfVm) -> Result<MemoryRegion, Error> {
-    vm.register_helper_ex("abort", helper_abort, None)?;
-    vm.register_helper_ex("sol_panic", helper_sol_panic, None)?;
-    vm.register_helper_ex("sol_panic_", helper_sol_panic, None)?;
-    vm.register_helper_ex("sol_log", helper_sol_log, None)?;
-    vm.register_helper_ex("sol_log_", helper_sol_log, None)?;
-    vm.register_helper_ex("sol_log_64", helper_sol_log_u64, None)?;
-    vm.register_helper_ex("sol_log_64_", helper_sol_log_u64, None)?;
+    vm.register_helper_ex("abort", Box::new(HelperAbort::default()))?;
+    vm.register_helper_ex("sol_panic", Box::new(HelperSolPanic::default()))?;
+    vm.register_helper_ex("sol_panic_", Box::new(HelperSolPanic::default()))?;
+    vm.register_helper_ex("sol_log", Box::new(HelperSolLog::default()))?;
+    vm.register_helper_ex("sol_log_", Box::new(HelperSolLog::default()))?;
+    vm.register_helper_ex("sol_log_64", Box::new(HelperSolLogu64::default()))?;
+    vm.register_helper_ex("sol_log_64_", Box::new(HelperSolLogu64::default()))?;
 
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
-    let context = Box::new(BPFAllocator::new(heap, MM_HEAP_START));
-    vm.register_helper_ex("sol_alloc_free_", helper_sol_alloc_free, Some(context))?;
+    vm.register_helper_ex(
+        "sol_alloc_free_",
+        Box::new(HelperSolAllocFree {
+            allocator: BPFAllocator::new(heap, MM_HEAP_START),
+        }),
+    )?;
 
     Ok(heap_region)
 }
@@ -48,101 +52,118 @@ pub fn register_helpers(vm: &mut EbpfVm) -> Result<MemoryRegion, Error> {
 /// Abort helper functions, called when the BPF program calls `abort()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
-pub fn helper_abort(
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _context: &mut HelperContext,
-    _ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
-    Err(Error::new(
-        ErrorKind::Other,
-        "Error: BPF program called abort()!",
-    ))
+#[derive(Default)]
+pub struct HelperAbort {}
+impl Helper for HelperAbort {
+    fn call(
+        &mut self,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, Error> {
+        Err(Error::new(
+            ErrorKind::Other,
+            "Error: BPF program called abort()!",
+        ))
+    }
 }
 
 /// Panic helper functions, called when the BPF program calls 'sol_panic_()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
-pub fn helper_sol_panic(
-    file: u64,
-    len: u64,
-    line: u64,
-    column: u64,
-    _arg5: u64,
-    _context: &mut HelperContext,
-    ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
-    if let Ok(host_addr) = translate_addr(file, len as usize, "Load", 0, ro_regions) {
-        let c_buf: *const c_char = host_addr as *const c_char;
-        let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
-        if let Ok(slice) = c_str.to_str() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Error: BPF program Panicked at {}, {}:{}",
-                    slice, line, column
-                ),
-            ));
-        }
-    }
-    Err(Error::new(ErrorKind::Other, "Error: BPF program Panicked"))
-}
-
-pub fn helper_sol_log(
-    addr: u64,
-    len: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _context: &mut HelperContext,
-    ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
-    if log_enabled!(log::Level::Info) {
-        let host_addr = translate_addr(addr, len as usize, "Load", 0, ro_regions)?;
-        let c_buf: *const c_char = host_addr as *const c_char;
-        unsafe {
-            for i in 0..len {
-                let c = std::ptr::read(c_buf.offset(i as isize));
-                if i == len - 1 || c == 0 {
-                    let message =
-                        from_utf8(from_raw_parts(host_addr as *const u8, len as usize)).unwrap();
-                    info!("info!: {}", message);
-                    return Ok(0);
-                }
+#[derive(Default)]
+pub struct HelperSolPanic {}
+impl Helper for HelperSolPanic {
+    fn call(
+        &mut self,
+        file: u64,
+        len: u64,
+        line: u64,
+        column: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, Error> {
+        if let Ok(host_addr) = translate_addr(file, len as usize, "Load", 0, ro_regions) {
+            let c_buf: *const c_char = host_addr as *const c_char;
+            let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
+            if let Ok(slice) = c_str.to_str() {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!(
+                        "Error: BPF program Panicked at {}, {}:{}",
+                        slice, line, column
+                    ),
+                ));
             }
         }
-        Err(Error::new(
-            ErrorKind::Other,
-            "Error: Unterminated string logged",
-        ))
-    } else {
-        Ok(0)
+        Err(Error::new(ErrorKind::Other, "Error: BPF program Panicked"))
     }
 }
 
-pub fn helper_sol_log_u64(
-    arg1: u64,
-    arg2: u64,
-    arg3: u64,
-    arg4: u64,
-    arg5: u64,
-    _context: &mut HelperContext,
-    _ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
-    if log_enabled!(log::Level::Info) {
-        info!(
-            "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
-            arg1, arg2, arg3, arg4, arg5
-        );
+#[derive(Default)]
+pub struct HelperSolLog {}
+impl Helper for HelperSolLog {
+    fn call(
+        &mut self,
+        addr: u64,
+        len: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, Error> {
+        if log_enabled!(log::Level::Info) {
+            let host_addr = translate_addr(addr, len as usize, "Load", 0, ro_regions)?;
+            let c_buf: *const c_char = host_addr as *const c_char;
+            unsafe {
+                for i in 0..len {
+                    let c = std::ptr::read(c_buf.offset(i as isize));
+                    if i == len - 1 || c == 0 {
+                        let message =
+                            from_utf8(from_raw_parts(host_addr as *const u8, len as usize))
+                                .unwrap();
+                        info!("info!: {}", message);
+                        return Ok(0);
+                    }
+                }
+            }
+            Err(Error::new(
+                ErrorKind::Other,
+                "Error: Unterminated string logged",
+            ))
+        } else {
+            Ok(0)
+        }
     }
-    Ok(0)
+}
+
+#[derive(Default)]
+pub struct HelperSolLogu64 {}
+impl Helper for HelperSolLogu64 {
+    fn call(
+        &mut self,
+        arg1: u64,
+        arg2: u64,
+        arg3: u64,
+        arg4: u64,
+        arg5: u64,
+        _ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, Error> {
+        if log_enabled!(log::Level::Info) {
+            info!(
+                "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+                arg1, arg2, arg3, arg4, arg5
+            );
+        }
+        Ok(0)
+    }
 }
 
 /// Dynamic memory allocation helper called when the BPF program calls
@@ -151,31 +172,29 @@ pub fn helper_sol_log_u64(
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
-pub fn helper_sol_alloc_free(
-    size: u64,
-    free_addr: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    context: &mut HelperContext,
-    _ro_regions: &[MemoryRegion],
-    _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
-    if let Some(context) = context {
-        if let Some(allocator) = context.downcast_mut::<BPFAllocator>() {
-            return {
-                let layout = Layout::from_size_align(size as usize, mem::align_of::<u8>()).unwrap();
-                if free_addr == 0 {
-                    match allocator.alloc(layout) {
-                        Ok(addr) => Ok(addr as u64),
-                        Err(_) => Ok(0),
-                    }
-                } else {
-                    allocator.dealloc(free_addr, layout);
-                    Ok(0)
-                }
-            };
-        };
+pub struct HelperSolAllocFree {
+    allocator: BPFAllocator,
+}
+impl Helper for HelperSolAllocFree {
+    fn call(
+        &mut self,
+        size: u64,
+        free_addr: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, Error> {
+        let layout = Layout::from_size_align(size as usize, align_of::<u8>()).unwrap();
+        if free_addr == 0 {
+            match self.allocator.alloc(layout) {
+                Ok(addr) => Ok(addr as u64),
+                Err(_) => Ok(0),
+            }
+        } else {
+            self.allocator.dealloc(free_addr, layout);
+            Ok(0)
+        }
     }
-    panic!("Failed to get alloc_free context");
 }
