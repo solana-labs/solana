@@ -99,6 +99,12 @@ usb://ledger/nano-s/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 
 ### Set CLI Configuration
 
+Configure the `solana` CLI tool to connect to a particular cluster:
+
+```bash
+solana config set --url <CLUSTER_URL> # (i.e. http://devnet.solana.com:8899)
+```
+
 If you want to set a Ledger key as the default signer for CLI commands, use the
 [CLI configuration settings](../cli/usage.md#solana-config):
 
