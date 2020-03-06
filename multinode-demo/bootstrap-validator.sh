@@ -77,6 +77,7 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 
 args+=(
   --enable-rpc-exit
+  --enable-rpc-set-log-filter
   --ledger "$ledger_dir"
   --rpc-port 8899
   --snapshot-interval-slots 100
