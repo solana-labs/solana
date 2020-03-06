@@ -2,21 +2,20 @@ use clap::{crate_description, crate_name, App, Arg};
 use console::style;
 use solana_archiver_lib::archiver::Archiver;
 use solana_clap_utils::{
-    input_validators::is_keypair,
-    keypair::{
-        self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
-    },
+    input_parsers::keypair_of, input_validators::is_keypair_or_ask_keyword,
+    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
 };
-use solana_sdk::{commitment_config::CommitmentConfig, signature::Signer};
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    signature::{Keypair, Signer},
+};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
-    process::exit,
     sync::Arc,
 };
 
@@ -32,7 +31,7 @@ fn main() {
                 .long("identity-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .validator(is_keypair)
+                .validator(is_keypair_or_ask_keyword)
                 .help("File containing an identity (keypair)"),
         )
         .arg(
@@ -60,48 +59,27 @@ fn main() {
                 .long("storage-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .validator(is_keypair)
+                .validator(is_keypair_or_ask_keyword)
                 .help("File containing the storage account keypair"),
-        )
-        .arg(
-            Arg::with_name(ASK_SEED_PHRASE_ARG.name)
-                .long(ASK_SEED_PHRASE_ARG.long)
-                .value_name("KEYPAIR NAME")
-                .multiple(true)
-                .takes_value(true)
-                .possible_values(&["identity-keypair", "storage-keypair"])
-                .help(ASK_SEED_PHRASE_ARG.help),
         )
         .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
-                .requires(ASK_SEED_PHRASE_ARG.name)
                 .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
         )
         .get_matches();
 
     let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
 
-    let identity_keypair = keypair_input(&matches, "identity_keypair")
-        .unwrap_or_else(|err| {
-            eprintln!("Identity keypair input failed: {}", err);
-            exit(1);
-        })
-        .keypair;
-    let KeypairWithSource {
-        keypair: storage_keypair,
-        source: storage_keypair_source,
-    } = keypair_input(&matches, "storage_keypair").unwrap_or_else(|err| {
-        eprintln!("Storage keypair input failed: {}", err);
-        exit(1);
-    });
-    if storage_keypair_source == keypair::Source::Generated {
+    let identity_keypair = keypair_of(&matches, "identity_keypair").unwrap_or_else(Keypair::new);
+
+    let storage_keypair = keypair_of(&matches, "storage_keypair").unwrap_or_else(|| {
         clap::Error::with_description(
             "The `storage-keypair` argument was not found",
             clap::ErrorKind::ArgumentNotFound,
         )
         .exit();
-    }
+    });
 
     let entrypoint_addr = matches
         .value_of("entrypoint")
