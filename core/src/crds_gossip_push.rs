@@ -107,10 +107,7 @@ impl CrdsGossipPush {
         let mut seed = [0; 32];
         seed[0..8].copy_from_slice(&thread_rng().next_u64().to_le_bytes());
         let shuffle = weighted_shuffle(
-            staked_peers
-                .iter()
-                .map(|(_, stake)| 1 + *stake)
-                .collect_vec(),
+            staked_peers.iter().map(|(_, stake)| *stake).collect_vec(),
             seed,
         );
 
@@ -253,7 +250,7 @@ impl CrdsGossipPush {
         let mut seed = [0; 32];
         seed[0..8].copy_from_slice(&thread_rng().next_u64().to_le_bytes());
         let mut shuffle = weighted_shuffle(
-            options.iter().map(|weighted| 1 + weighted.0).collect_vec(),
+            options.iter().map(|weighted| weighted.0).collect_vec(),
             seed,
         )
         .into_iter();
