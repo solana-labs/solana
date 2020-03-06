@@ -85,9 +85,19 @@ impl RpcRequestMiddleware {
     }
 
     fn get(&self, path: &str) -> RequestMiddlewareAction {
-        let filename = self.ledger_path.join(
-            path.split_at(1).1, // Drop leading '/' from path
-        );
+        let stem = path.split_at(1).1; // Drop leading '/' from path
+        let filename = {
+            match path {
+                "/genesis.tar.bz2" => self.ledger_path.join(stem),
+                _ => self
+                    .snapshot_config
+                    .as_ref()
+                    .unwrap()
+                    .snapshot_package_output_path
+                    .join(stem),
+            }
+        };
+
         info!("get {} -> {:?}", path, filename);
 
         RequestMiddlewareAction::Respond {

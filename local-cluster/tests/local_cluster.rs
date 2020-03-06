@@ -7,6 +7,7 @@ use solana_core::{
     broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
     gossip_service::discover_cluster, validator::ValidatorConfig,
 };
+use solana_download_utils::download_snapshot;
 use solana_ledger::{
     bank_forks::SnapshotConfig, blockstore::Blockstore, leader_schedule::FixedSchedule,
     leader_schedule::LeaderSchedule, snapshot_utils,
@@ -606,13 +607,69 @@ fn test_softlaunch_operating_mode() {
     }
 }
 
+#[test]
+#[serial]
+fn test_snapshot_download() {
+    solana_logger::setup();
+    // First set up the cluster with 1 node
+    let snapshot_interval_slots = 50;
+    let num_account_paths = 3;
+
+    let leader_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+    let validator_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+
+    let stake = 10_000;
+    let config = ClusterConfig {
+        node_stakes: vec![stake],
+        cluster_lamports: 1_000_000,
+        validator_configs: vec![leader_snapshot_test_config.validator_config.clone()],
+        ..ClusterConfig::default()
+    };
+
+    let mut cluster = LocalCluster::new(&config);
+
+    // Get slot after which this was generated
+    let snapshot_package_output_path = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_package_output_path;
+
+    trace!("Waiting for snapshot");
+    let (archive_filename, archive_snapshot_hash) =
+        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
+
+    trace!("found: {:?}", archive_filename);
+    let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
+        &validator_snapshot_test_config.snapshot_output_path,
+        &archive_snapshot_hash,
+    );
+
+    // Download the snapshot, then boot a validator from it.
+    download_snapshot(
+        &cluster.entry_point_info.rpc,
+        &validator_archive_path,
+        archive_snapshot_hash,
+    )
+    .unwrap();
+
+    cluster.add_validator(
+        &validator_snapshot_test_config.validator_config,
+        stake,
+        Arc::new(Keypair::new()),
+    );
+}
+
 #[allow(unused_attributes)]
 #[test]
 #[serial]
 fn test_snapshot_restart_tower() {
     // First set up the cluster with 2 nodes
     let snapshot_interval_slots = 10;
-    let num_account_paths = 4;
+    let num_account_paths = 2;
 
     let leader_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
@@ -774,7 +831,7 @@ fn test_snapshots_blockstore_floor() {
 fn test_snapshots_restart_validity() {
     solana_logger::setup();
     let snapshot_interval_slots = 10;
-    let num_account_paths = 4;
+    let num_account_paths = 1;
     let mut snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
     let snapshot_package_output_path = &snapshot_test_config
