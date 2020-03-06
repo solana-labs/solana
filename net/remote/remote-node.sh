@@ -228,6 +228,8 @@ EOF
         export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
       fi
       multinode-demo/setup.sh "${args[@]}"
+
+      solana-ledger-tool -l config/bootstrap-validator shred-version | tee config/shred-version
     fi
     args=(
       --gossip-host "$entrypointIp"
@@ -262,6 +264,7 @@ EOF
     if [[ $deployMethod != skip ]]; then
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
+      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
     fi
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
@@ -273,12 +276,15 @@ EOF
         net/scripts/rsync-retry.sh -vPrc \
           "$entrypointIp":~/solana/config/validator-identity-"$nodeIndex".json config/validator-identity.json
       fi
+      net/scripts/rsync-retry.sh -vPrc \
+        "$entrypointIp":~/solana/config/shred-version config/shred-version
     fi
 
     args=(
       --entrypoint "$entrypointIp:8001"
       --gossip-port 8001
       --rpc-port 8899
+      --expected-shred-version "$(cat config/shred-version)"
     )
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
