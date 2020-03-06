@@ -125,7 +125,7 @@ Command
 
 ```text
 solana transfer 11111111111111111111111111111111 0 --sign-only \
-    --ask-seed-phrase keypair --blockhash 11111111111111111111111111111111
+    --keypair ASK --blockhash 11111111111111111111111111111111
 ```
 
 Prompt for seed phrase
