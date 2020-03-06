@@ -154,6 +154,12 @@ pub struct RpcBlockhashFeeCalculator {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcFeeCalculator {
+    pub fee_calculator: FeeCalculator,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcFeeRateGovernor {
     pub fee_rate_governor: FeeRateGovernor,
 }

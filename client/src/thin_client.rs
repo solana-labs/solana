@@ -445,6 +445,16 @@ impl SyncClient for ThinClient {
         }
     }
 
+    fn get_fee_calculator_for_blockhash(
+        &self,
+        blockhash: &Hash,
+    ) -> TransportResult<Option<FeeCalculator>> {
+        let fee_calculator = self
+            .rpc_client()
+            .get_fee_calculator_for_blockhash(blockhash)?;
+        Ok(fee_calculator)
+    }
+
     fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor> {
         let fee_rate_governor = self.rpc_client().get_fee_rate_governor()?;
         Ok(fee_rate_governor.value)
