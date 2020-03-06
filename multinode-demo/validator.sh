@@ -66,6 +66,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --expected-genesis-hash ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --expected-shred-version ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = --identity-keypair ]]; then
       identity_keypair_path=$2
       args+=("$1" "$2")
