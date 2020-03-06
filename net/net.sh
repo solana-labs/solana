@@ -13,19 +13,36 @@ usage() {
     exitcode=1
     echo "Error: $*"
   fi
+  CLIENT_OPTIONS=$(cat << EOM
+-c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
+                                     more than once.  Defaults to bench-tps for all clients if not
+                                     specified.
+                                     Valid client types are:
+                                         idle
+                                         bench-tps
+                                         bench-exchange
+                                     User can optionally provide extraArgs that are transparently
+                                     supplied to the client program as command line parameters.
+                                     For example,
+                                         -c bench-tps=2="--tx_count 25000"
+                                     This will start 2 bench-tps clients, and supply "--tx_count 25000"
+                                     to the bench-tps client.
+EOM
+)
   cat <<EOF
 usage: $0 [start|stop|restart|sanity] [command-specific options]
 
 Operate a configured testnet
 
- start    - Start the network
- sanity   - Sanity check the network
- stop     - Stop the network
- restart  - Shortcut for stop then start
- logs     - Fetch remote logs from each network node
- startnode- Start an individual node (previously stopped with stopNode)
- stopnode - Stop an individual node
- update   - Deploy a new software update to the cluster
+ start        - Start the network
+ sanity       - Sanity check the network
+ stop         - Stop the network
+ restart      - Shortcut for stop then start
+ logs         - Fetch remote logs from each network node
+ startnode    - Start an individual node (previously stopped with stopNode)
+ stopnode     - Stop an individual node
+ startclients - Start client nodes only
+ update       - Deploy a new software update to the cluster
 
  start-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
@@ -35,19 +52,7 @@ Operate a configured testnet
    -r / --skip-setup                  - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -d / --debug                       - Build/deploy the testnet with debug binaries
-   -c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
-                                        more than once.  Defaults to bench-tps for all clients if not
-                                        specified.
-                                        Valid client types are:
-                                            idle
-                                            bench-tps
-                                            bench-exchange
-                                        User can optionally provide extraArgs that are transparently
-                                        supplied to the client program as command line parameters.
-                                        For example,
-                                            -c bench-tps=2="--tx_count 25000"
-                                        This will start 2 bench-tps clients, and supply "--tx_count 25000"
-                                        to the bench-tps client.
+   $CLIENT_OPTIONS
    --client-delay-start
                                       - Number of seconds to wait after validators have finished starting before starting client programs
                                         (default: $clientDelayStart)
@@ -118,10 +123,585 @@ Operate a configured testnet
  startnode/stopnode-specific options:
    -i [ip address]                    - IP Address of the node to start or stop
 
+ startclients-specific options:
+   $CLIENT_OPTIONS
+
 Note: if RUST_LOG is set in the environment it will be propogated into the
       network nodes.
 EOF
   exit $exitcode
+}
+
+initLogDir() { # Initializes the netLogDir global variable.  Idempotent
+  [[ -z $netLogDir ]] || return 0
+
+  netLogDir="$netDir"/log
+  declare netLogDateDir
+  netLogDateDir="$netDir"/log-$(date +"%Y-%m-%d_%H_%M_%S")
+  if [[ -d $netLogDir && ! -L $netLogDir ]]; then
+    echo "Warning: moving $netLogDir to make way for symlink."
+    mv "$netLogDir" "$netDir"/log.old
+  elif [[ -L $netLogDir ]]; then
+    rm "$netLogDir"
+  fi
+  mkdir -p "$netConfigDir" "$netLogDateDir"
+  ln -sf "$netLogDateDir" "$netLogDir"
+  echo "Log directory: $netLogDateDir"
+}
+
+annotate() {
+  [[ -z $BUILDKITE ]] || {
+    buildkite-agent annotate "$@"
+  }
+}
+
+annotateBlockexplorerUrl() {
+  declare blockstreamer=${blockstreamerIpList[0]}
+
+  if [[ -n $blockstreamer ]]; then
+    annotate --style info --context blockexplorer-url "Block explorer: http://$blockstreamer/"
+  fi
+}
+
+build() {
+  supported=("18.04")
+  declare MAYBE_DOCKER=
+  if [[ $(uname) != Linux || ! " ${supported[*]} " =~ $(lsb_release -sr) ]]; then
+    # shellcheck source=ci/rust-version.sh
+    source "$SOLANA_ROOT"/ci/rust-version.sh
+    MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
+  fi
+  SECONDS=0
+  (
+    cd "$SOLANA_ROOT"
+    echo "--- Build started at $(date)"
+
+    set -x
+    rm -rf farf
+
+    buildVariant=
+    if $debugBuild; then
+      buildVariant=debug
+    fi
+
+    $MAYBE_DOCKER bash -c "
+      set -ex
+      scripts/cargo-install-all.sh farf \"$buildVariant\" \"$maybeUseMove\"
+    "
+  )
+  echo "Build took $SECONDS seconds"
+}
+
+startCommon() {
+  declare ipAddress=$1
+  test -d "$SOLANA_ROOT"
+  if $skipSetup; then
+    ssh "${sshOptions[@]}" "$ipAddress" "
+      set -x;
+      mkdir -p ~/solana/config;
+      rm -rf ~/config;
+      mv ~/solana/config ~;
+      rm -rf ~/solana;
+      mkdir -p ~/solana ~/.cargo/bin;
+      mv ~/config ~/solana/
+    "
+  else
+    ssh "${sshOptions[@]}" "$ipAddress" "
+      set -x;
+      rm -rf ~/solana;
+      mkdir -p ~/.cargo/bin
+    "
+  fi
+  [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
+  syncScripts "$ipAddress"
+}
+
+syncScripts() {
+  echo "rsyncing scripts... to $ipAddress"
+  declare ipAddress=$1
+  rsync -vPrc -e "ssh ${sshOptions[*]}" \
+    --exclude 'net/log*' \
+    "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
+    "$ipAddress":~/solana/ > /dev/null
+}
+
+startBootstrapLeader() {
+  declare ipAddress=$1
+  declare nodeIndex="$2"
+  declare logFile="$3"
+  echo "--- Starting bootstrap validator: $ipAddress"
+  echo "start log: $logFile"
+
+  # Deploy local binaries to bootstrap validator.  Other validators and clients later fetch the
+  # binaries from it
+  (
+    set -x
+    startCommon "$ipAddress" || exit 1
+    [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
+      "$ipAddress:$remoteExternalPrimordialAccountsFile"
+    case $deployMethod in
+    tar)
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
+      ;;
+    local)
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
+      ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
+      ;;
+    skip)
+      ;;
+    *)
+      usage "Internal error: invalid deployMethod: $deployMethod"
+      ;;
+    esac
+
+    ssh "${sshOptions[@]}" -n "$ipAddress" \
+      "./solana/net/remote/remote-node.sh \
+         $deployMethod \
+         bootstrap-validator \
+         $entrypointIp \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
+         \"$RUST_LOG\" \
+         $skipSetup \
+         $failOnValidatorBootupFailure \
+         \"$remoteExternalPrimordialAccountsFile\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
+         $nodeIndex \
+         ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
+         ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
+         \"$genesisOptions\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$gpuMode\" \
+         \"$GEOLOCATION_API_KEY\" \
+      "
+
+  ) >> "$logFile" 2>&1 || {
+    cat "$logFile"
+    echo "^^^ +++"
+    exit 1
+  }
+}
+
+startNode() {
+  declare ipAddress=$1
+  declare nodeType=$2
+  declare nodeIndex="$3"
+
+  initLogDir
+  declare logFile="$netLogDir/validator-$ipAddress.log"
+
+  if [[ -z $nodeType ]]; then
+    echo nodeType not specified
+    exit 1
+  fi
+
+  if [[ -z $nodeIndex ]]; then
+    echo nodeIndex not specified
+    exit 1
+  fi
+
+  echo "--- Starting $nodeType: $ipAddress"
+  echo "start log: $logFile"
+  (
+    set -x
+    startCommon "$ipAddress"
+
+    if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
+      #
+      # Create/renew TLS certificate
+      #
+      declare localArchive=~/letsencrypt-"$letsEncryptDomainName".tgz
+      if [[ -r "$localArchive" ]]; then
+        timeout 30s scp "${sshOptions[@]}" "$localArchive" "$ipAddress:letsencrypt.tgz"
+      fi
+      ssh "${sshOptions[@]}" -n "$ipAddress" \
+        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solana.com"
+      rm -f letsencrypt.tgz
+      timeout 30s scp "${sshOptions[@]}" "$ipAddress:/letsencrypt.tgz" letsencrypt.tgz
+      test -s letsencrypt.tgz # Ensure non-empty before overwriting $localArchive
+      cp letsencrypt.tgz "$localArchive"
+    fi
+
+    ssh "${sshOptions[@]}" -n "$ipAddress" \
+      "./solana/net/remote/remote-node.sh \
+         $deployMethod \
+         $nodeType \
+         $entrypointIp \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
+         \"$RUST_LOG\" \
+         $skipSetup \
+         $failOnValidatorBootupFailure \
+         \"$remoteExternalPrimordialAccountsFile\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
+         $nodeIndex \
+         ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
+         ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
+         \"$genesisOptions\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
+         \"$gpuMode\" \
+         \"$GEOLOCATION_API_KEY\" \
+      "
+  ) >> "$logFile" 2>&1 &
+  declare pid=$!
+  ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
+  pids+=("$pid")
+}
+
+startClient() {
+  declare ipAddress=$1
+  declare clientToRun="$2"
+  declare clientIndex="$3"
+
+  initLogDir
+  declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
+
+  echo "--- Starting client: $ipAddress - $clientToRun"
+  echo "start log: $logFile"
+  (
+    set -x
+    startCommon "$ipAddress"
+    ssh "${sshOptions[@]}" -f "$ipAddress" \
+      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" \"$benchExchangeExtraArgs\" $clientIndex"
+  ) >> "$logFile" 2>&1 || {
+    cat "$logFile"
+    echo "^^^ +++"
+    exit 1
+  }
+}
+
+startClients() {
+  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
+    if [[ $i -lt "$numBenchTpsClients" ]]; then
+      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
+    elif [[ $i -lt $((numBenchTpsClients + numBenchExchangeClients)) ]]; then
+      startClient "${clientIpList[$i]}" "solana-bench-exchange" $((i-numBenchTpsClients))
+    else
+      startClient "${clientIpList[$i]}" "idle"
+    fi
+  done
+}
+
+sanity() {
+  declare skipBlockstreamerSanity=$1
+
+  $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
+
+  declare ok=true
+  declare bootstrapLeader=${validatorIpList[0]}
+  declare blockstreamer=${blockstreamerIpList[0]}
+
+  annotateBlockexplorerUrl
+
+  echo "--- Sanity: $bootstrapLeader"
+  (
+    set -x
+    # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
+    ssh "${sshOptions[@]}" "$bootstrapLeader" \
+      "./solana/net/remote/remote-sanity.sh $bootstrapLeader $sanityExtraArgs \"$RUST_LOG\""
+  ) || ok=false
+  $ok || exit 1
+
+  if [[ -z $skipBlockstreamerSanity && -n $blockstreamer ]]; then
+    # If there's a blockstreamer node run a reduced sanity check on it as well
+    echo "--- Sanity: $blockstreamer"
+    (
+      set -x
+      # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
+      ssh "${sshOptions[@]}" "$blockstreamer" \
+        "./solana/net/remote/remote-sanity.sh $blockstreamer $sanityExtraArgs \"$RUST_LOG\""
+    ) || ok=false
+    $ok || exit 1
+  fi
+
+  $metricsWriteDatapoint "testnet-deploy net-sanity-complete=1"
+}
+
+deployUpdate() {
+  if [[ -z $updatePlatforms ]]; then
+    echo "No update platforms"
+    return
+  fi
+  if [[ -z $releaseChannel ]]; then
+    echo "Release channel not specified (use -t option)"
+    exit 1
+  fi
+
+  declare ok=true
+  declare bootstrapLeader=${validatorIpList[0]}
+
+  for updatePlatform in $updatePlatforms; do
+    echo "--- Deploying solana-install update: $updatePlatform"
+    (
+      set -x
+
+      scripts/solana-install-update-manifest-keypair.sh "$updatePlatform"
+
+      timeout 30s scp "${sshOptions[@]}" \
+        update_manifest_keypair.json "$bootstrapLeader:solana/update_manifest_keypair.json"
+
+      # shellcheck disable=SC2029 # remote-deploy-update.sh args are expanded on client side intentionally
+      ssh "${sshOptions[@]}" "$bootstrapLeader" \
+        "./solana/net/remote/remote-deploy-update.sh $releaseChannel $updatePlatform"
+    ) || ok=false
+    $ok || exit 1
+  done
+}
+
+getNodeType() {
+  echo "getNodeType: $nodeAddress"
+  [[ -n $nodeAddress ]] || {
+    echo "Error: nodeAddress not set"
+    exit 1
+  }
+  nodeIndex=0 # <-- global
+  nodeType=validator # <-- global
+
+  for ipAddress in "${validatorIpList[@]}" b "${blockstreamerIpList[@]}" r "${archiverIpList[@]}"; do
+    if [[ $ipAddress = b ]]; then
+      nodeType=blockstreamer
+      continue
+    elif [[ $ipAddress = r ]]; then
+      nodeType=archiver
+      continue
+    fi
+
+    if [[ $ipAddress = "$nodeAddress" ]]; then
+      echo "getNodeType: $nodeType ($nodeIndex)"
+      return
+    fi
+    ((nodeIndex = nodeIndex + 1))
+  done
+
+  echo "Error: Unknown node: $nodeAddress"
+  exit 1
+}
+
+prepareDeploy() {
+  case $deployMethod in
+  tar)
+    if [[ -n $releaseChannel ]]; then
+      rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
+      declare updateDownloadUrl=http://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+      (
+        set -x
+        curl --retry 5 --retry-delay 2 --retry-connrefused \
+          -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
+      )
+      tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
+    fi
+    (
+      set -x
+      rm -rf "$SOLANA_ROOT"/solana-release
+      (cd "$SOLANA_ROOT"; tar jxv) < "$tarballFilename"
+      cat "$SOLANA_ROOT"/solana-release/version.yml
+    )
+    ;;
+  local)
+    if $doBuild; then
+      build
+    else
+      echo "Build skipped due to --no-build"
+    fi
+    ;;
+  skip)
+    ;;
+  *)
+    usage "Internal error: invalid deployMethod: $deployMethod"
+    ;;
+  esac
+
+  if [[ -n $deployIfNewer ]]; then
+    if [[ $deployMethod != tar ]]; then
+      echo "Error: --deploy-if-newer only supported for tar deployments"
+      exit 1
+    fi
+
+    echo "Fetching current software version"
+    (
+      set -x
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "${validatorIpList[0]}":~/version.yml current-version.yml
+    )
+    cat current-version.yml
+    if ! diff -q current-version.yml "$SOLANA_ROOT"/solana-release/version.yml; then
+      echo "Cluster software version is old.  Update required"
+    else
+      echo "Cluster software version is current.  No update required"
+      exit 0
+    fi
+  fi
+}
+
+deploy() {
+  initLogDir
+
+  echo "Deployment started at $(date)"
+  $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
+
+  declare bootstrapLeader=true
+  for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}"; do
+    nodeType=
+    nodeIndex=
+    getNodeType
+    if $bootstrapLeader; then
+      SECONDS=0
+      declare bootstrapNodeDeployTime=
+      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
+      bootstrapNodeDeployTime=$SECONDS
+      $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
+
+      bootstrapLeader=false
+      SECONDS=0
+      pids=()
+    else
+      startNode "$ipAddress" $nodeType $nodeIndex
+
+      # Stagger additional node start time. If too many nodes start simultaneously
+      # the bootstrap node gets more rsync requests from the additional nodes than
+      # it can handle.
+      sleep 2
+    fi
+  done
+
+
+  for pid in "${pids[@]}"; do
+    declare ok=true
+    wait "$pid" || ok=false
+    if ! $ok; then
+      echo "+++ validator failed to start"
+      cat "$netLogDir/validator-$pid.log"
+      if $failOnValidatorBootupFailure; then
+        exit 1
+      else
+        echo "Failure is non-fatal"
+      fi
+    fi
+  done
+
+  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
+  additionalNodeDeployTime=$SECONDS
+
+  annotateBlockexplorerUrl
+
+  sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
+                                 # have caught up to the bootstrap validator yet
+
+  echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
+  sleep "$clientDelayStart"
+
+  SECONDS=0
+  startClients
+  clientDeployTime=$SECONDS
+
+  $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
+
+  declare networkVersion=unknown
+  case $deployMethod in
+  tar)
+    networkVersion="$(
+      (
+        set -o pipefail
+        grep "^commit: " "$SOLANA_ROOT"/solana-release/version.yml | head -n1 | cut -d\  -f2
+      ) || echo "tar-unknown"
+    )"
+    ;;
+  local)
+    networkVersion="$(git rev-parse HEAD || echo local-unknown)"
+    ;;
+  skip)
+    ;;
+  *)
+    usage "Internal error: invalid deployMethod: $deployMethod"
+    ;;
+  esac
+  $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
+
+  echo
+  echo "+++ Deployment Successful"
+  echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
+  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
+  echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
+  echo "Network start logs in $netLogDir"
+}
+
+stopNode() {
+  local ipAddress=$1
+  local block=$2
+
+  initLogDir
+  declare logFile="$netLogDir/stop-validator-$ipAddress.log"
+
+  echo "--- Stopping node: $ipAddress"
+  echo "stop log: $logFile"
+  syncScripts "$ipAddress"
+  (
+    # Since cleanup.sh does a pkill, we cannot pass the command directly,
+    # otherwise the process which is doing the killing will be killed because
+    # the script itself will match the pkill pattern
+    set -x
+    # shellcheck disable=SC2029 # It's desired that PS4 be expanded on the client side
+    ssh "${sshOptions[@]}" "$ipAddress" "PS4=\"$PS4\" ./solana/net/remote/cleanup.sh"
+  ) >> "$logFile" 2>&1 &
+
+  declare pid=$!
+  ln -sf "stop-validator-$ipAddress.log" "$netLogDir/stop-validator-$pid.log"
+  if $block; then
+    wait $pid
+  else
+    pids+=("$pid")
+  fi
+}
+
+stop() {
+  SECONDS=0
+  $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
+
+  declare loopCount=0
+  pids=()
+  for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}" "${clientIpList[@]}"; do
+    stopNode "$ipAddress" false
+
+    # Stagger additional node stop time to avoid too many concurrent ssh
+    # sessions
+    ((loopCount++ % 4 == 0)) && sleep 2
+  done
+
+  echo --- Waiting for nodes to finish stopping
+  for pid in "${pids[@]}"; do
+    echo -n "$pid "
+    wait "$pid" || true
+  done
+  echo
+
+  $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
+  echo "Stopping nodes took $SECONDS seconds"
+}
+
+checkPremptibleInstances() {
+  # The validatorIpList nodes may be preemptible instances that can disappear at
+  # any time.  Try to detect when a validator has been preempted to help the user
+  # out.
+  #
+  # Of course this isn't airtight as an instance could always disappear
+  # immediately after its successfully pinged.
+  for ipAddress in "${validatorIpList[@]}"; do
+    (
+      set -x
+      timeout 5s ping -c 1 "$ipAddress" | tr - _
+    ) || {
+      cat <<EOF
+
+Warning: $ipAddress may have been preempted.
+
+Run |./gce.sh config| to restart it
+EOF
+      exit 1
+    }
+  done
 }
 
 releaseChannel=
@@ -156,6 +736,7 @@ netemConfig=""
 netemConfigFile=""
 netemCommand="add"
 clientDelayStart=0
+netLogDir=
 
 command=$1
 [[ -n $command ]] || usage
@@ -356,24 +937,6 @@ done
 
 loadConfigFile
 
-netLogDir=
-initLogDir() { # Initializes the netLogDir global variable.  Idempotent
-  [[ -z $netLogDir ]] || return 0
-
-  netLogDir="$netDir"/log
-  declare netLogDateDir
-  netLogDateDir="$netDir"/log-$(date +"%Y-%m-%d_%H_%M_%S")
-  if [[ -d $netLogDir && ! -L $netLogDir ]]; then
-    echo "Warning: moving $netLogDir to make way for symlink."
-    mv "$netLogDir" "$netDir"/log.old
-  elif [[ -L $netLogDir ]]; then
-    rm "$netLogDir"
-  fi
-  mkdir -p "$netConfigDir" "$netLogDateDir"
-  ln -sf "$netLogDateDir" "$netLogDir"
-  echo "Log directory: $netLogDateDir"
-}
-
 if [[ -n $numValidatorsRequested ]]; then
   truncatedNodeList=( "${validatorIpList[@]:0:$numValidatorsRequested}" )
   unset validatorIpList
@@ -392,567 +955,16 @@ else
   fi
 fi
 
-annotate() {
-  [[ -z $BUILDKITE ]] || {
-    buildkite-agent annotate "$@"
-  }
-}
-
-annotateBlockexplorerUrl() {
-  declare blockstreamer=${blockstreamerIpList[0]}
-
-  if [[ -n $blockstreamer ]]; then
-    annotate --style info --context blockexplorer-url "Block explorer: http://$blockstreamer/"
-  fi
-}
-
-build() {
-  supported=("18.04")
-  declare MAYBE_DOCKER=
-  if [[ $(uname) != Linux || ! " ${supported[*]} " =~ $(lsb_release -sr) ]]; then
-    # shellcheck source=ci/rust-version.sh
-    source "$SOLANA_ROOT"/ci/rust-version.sh
-    MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
-  fi
-  SECONDS=0
-  (
-    cd "$SOLANA_ROOT"
-    echo "--- Build started at $(date)"
-
-    set -x
-    rm -rf farf
-
-    buildVariant=
-    if $debugBuild; then
-      buildVariant=debug
-    fi
-
-    $MAYBE_DOCKER bash -c "
-      set -ex
-      scripts/cargo-install-all.sh farf \"$buildVariant\" \"$maybeUseMove\"
-    "
-  )
-  echo "Build took $SECONDS seconds"
-}
-
-startCommon() {
-  declare ipAddress=$1
-  test -d "$SOLANA_ROOT"
-  if $skipSetup; then
-    ssh "${sshOptions[@]}" "$ipAddress" "
-      set -x;
-      mkdir -p ~/solana/config;
-      rm -rf ~/config;
-      mv ~/solana/config ~;
-      rm -rf ~/solana;
-      mkdir -p ~/solana ~/.cargo/bin;
-      mv ~/config ~/solana/
-    "
-  else
-    ssh "${sshOptions[@]}" "$ipAddress" "
-      set -x;
-      rm -rf ~/solana;
-      mkdir -p ~/.cargo/bin
-    "
-  fi
-  [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
-  syncScripts "$ipAddress"
-}
-
-syncScripts() {
-  echo "rsyncing scripts... to $ipAddress"
-  declare ipAddress=$1
-  rsync -vPrc -e "ssh ${sshOptions[*]}" \
-    --exclude 'net/log*' \
-    "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
-    "$ipAddress":~/solana/ > /dev/null
-}
-
-startBootstrapLeader() {
-  declare ipAddress=$1
-  declare nodeIndex="$2"
-  declare logFile="$3"
-  echo "--- Starting bootstrap validator: $ipAddress"
-  echo "start log: $logFile"
-
-  # Deploy local binaries to bootstrap validator.  Other validators and clients later fetch the
-  # binaries from it
-  (
-    set -x
-    startCommon "$ipAddress" || exit 1
-    [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
-      "$ipAddress:$remoteExternalPrimordialAccountsFile"
-    case $deployMethod in
-    tar)
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/version.yml "$ipAddress:~/"
-      ;;
-    local)
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
-      ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
-      ;;
-    skip)
-      ;;
-    *)
-      usage "Internal error: invalid deployMethod: $deployMethod"
-      ;;
-    esac
-
-    ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh \
-         $deployMethod \
-         bootstrap-validator \
-         $entrypointIp \
-         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
-         \"$RUST_LOG\" \
-         $skipSetup \
-         $failOnValidatorBootupFailure \
-         \"$remoteExternalPrimordialAccountsFile\" \
-         \"$maybeDisableAirdrops\" \
-         \"$internalNodesStakeLamports\" \
-         \"$internalNodesLamports\" \
-         $nodeIndex \
-         $numBenchTpsClients \"$benchTpsExtraArgs\" \
-         $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
-         \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
-         \"$gpuMode\" \
-         \"$GEOLOCATION_API_KEY\" \
-      "
-
-  ) >> "$logFile" 2>&1 || {
-    cat "$logFile"
-    echo "^^^ +++"
-    exit 1
-  }
-}
-
-startNode() {
-  declare ipAddress=$1
-  declare nodeType=$2
-  declare nodeIndex="$3"
-
-  initLogDir
-  declare logFile="$netLogDir/validator-$ipAddress.log"
-
-  if [[ -z $nodeType ]]; then
-    echo nodeType not specified
-    exit 1
-  fi
-
-  if [[ -z $nodeIndex ]]; then
-    echo nodeIndex not specified
-    exit 1
-  fi
-
-  echo "--- Starting $nodeType: $ipAddress"
-  echo "start log: $logFile"
-  (
-    set -x
-    startCommon "$ipAddress"
-
-    if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
-      #
-      # Create/renew TLS certificate
-      #
-      declare localArchive=~/letsencrypt-"$letsEncryptDomainName".tgz
-      if [[ -r "$localArchive" ]]; then
-        timeout 30s scp "${sshOptions[@]}" "$localArchive" "$ipAddress:letsencrypt.tgz"
-      fi
-      ssh "${sshOptions[@]}" -n "$ipAddress" \
-        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solana.com"
-      rm -f letsencrypt.tgz
-      timeout 30s scp "${sshOptions[@]}" "$ipAddress:/letsencrypt.tgz" letsencrypt.tgz
-      test -s letsencrypt.tgz # Ensure non-empty before overwriting $localArchive
-      cp letsencrypt.tgz "$localArchive"
-    fi
-
-    ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh \
-         $deployMethod \
-         $nodeType \
-         $entrypointIp \
-         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]} + ${#archiverIpList[@]})) \
-         \"$RUST_LOG\" \
-         $skipSetup \
-         $failOnValidatorBootupFailure \
-         \"$remoteExternalPrimordialAccountsFile\" \
-         \"$maybeDisableAirdrops\" \
-         \"$internalNodesStakeLamports\" \
-         \"$internalNodesLamports\" \
-         $nodeIndex \
-         $numBenchTpsClients \"$benchTpsExtraArgs\" \
-         $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
-         \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
-         \"$gpuMode\" \
-         \"$GEOLOCATION_API_KEY\" \
-      "
-  ) >> "$logFile" 2>&1 &
-  declare pid=$!
-  ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
-  pids+=("$pid")
-}
-
-startClient() {
-  declare ipAddress=$1
-  declare clientToRun="$2"
-  declare clientIndex="$3"
-
-  initLogDir
-  declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
-
-  echo "--- Starting client: $ipAddress - $clientToRun"
-  echo "start log: $logFile"
-  (
-    set -x
-    startCommon "$ipAddress"
-    ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" \"$benchExchangeExtraArgs\" $clientIndex"
-  ) >> "$logFile" 2>&1 || {
-    cat "$logFile"
-    echo "^^^ +++"
-    exit 1
-  }
-}
-
-sanity() {
-  declare skipBlockstreamerSanity=$1
-
-  $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
-
-  declare ok=true
-  declare bootstrapLeader=${validatorIpList[0]}
-  declare blockstreamer=${blockstreamerIpList[0]}
-
-  annotateBlockexplorerUrl
-
-  echo "--- Sanity: $bootstrapLeader"
-  (
-    set -x
-    # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
-    ssh "${sshOptions[@]}" "$bootstrapLeader" \
-      "./solana/net/remote/remote-sanity.sh $bootstrapLeader $sanityExtraArgs \"$RUST_LOG\""
-  ) || ok=false
-  $ok || exit 1
-
-  if [[ -z $skipBlockstreamerSanity && -n $blockstreamer ]]; then
-    # If there's a blockstreamer node run a reduced sanity check on it as well
-    echo "--- Sanity: $blockstreamer"
-    (
-      set -x
-      # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
-      ssh "${sshOptions[@]}" "$blockstreamer" \
-        "./solana/net/remote/remote-sanity.sh $blockstreamer $sanityExtraArgs \"$RUST_LOG\""
-    ) || ok=false
-    $ok || exit 1
-  fi
-
-  $metricsWriteDatapoint "testnet-deploy net-sanity-complete=1"
-}
-
-deployUpdate() {
-  if [[ -z $updatePlatforms ]]; then
-    echo "No update platforms"
-    return
-  fi
-  if [[ -z $releaseChannel ]]; then
-    echo "Release channel not specified (use -t option)"
-    exit 1
-  fi
-
-  declare ok=true
-  declare bootstrapLeader=${validatorIpList[0]}
-
-  for updatePlatform in $updatePlatforms; do
-    echo "--- Deploying solana-install update: $updatePlatform"
-    (
-      set -x
-
-      scripts/solana-install-update-manifest-keypair.sh "$updatePlatform"
-
-      timeout 30s scp "${sshOptions[@]}" \
-        update_manifest_keypair.json "$bootstrapLeader:solana/update_manifest_keypair.json"
-
-      # shellcheck disable=SC2029 # remote-deploy-update.sh args are expanded on client side intentionally
-      ssh "${sshOptions[@]}" "$bootstrapLeader" \
-        "./solana/net/remote/remote-deploy-update.sh $releaseChannel $updatePlatform"
-    ) || ok=false
-    $ok || exit 1
-  done
-}
-
-getNodeType() {
-  echo "getNodeType: $nodeAddress"
-  [[ -n $nodeAddress ]] || {
-    echo "Error: nodeAddress not set"
-    exit 1
-  }
-  nodeIndex=0 # <-- global
-  nodeType=validator # <-- global
-
-  for ipAddress in "${validatorIpList[@]}" b "${blockstreamerIpList[@]}" r "${archiverIpList[@]}"; do
-    if [[ $ipAddress = b ]]; then
-      nodeType=blockstreamer
-      continue
-    elif [[ $ipAddress = r ]]; then
-      nodeType=archiver
-      continue
-    fi
-
-    if [[ $ipAddress = "$nodeAddress" ]]; then
-      echo "getNodeType: $nodeType ($nodeIndex)"
-      return
-    fi
-    ((nodeIndex = nodeIndex + 1))
-  done
-
-  echo "Error: Unknown node: $nodeAddress"
-  exit 1
-}
-
-prepare_deploy() {
-  case $deployMethod in
-  tar)
-    if [[ -n $releaseChannel ]]; then
-      rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
-      declare updateDownloadUrl=http://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
-      (
-        set -x
-        curl --retry 5 --retry-delay 2 --retry-connrefused \
-          -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
-      )
-      tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
-    fi
-    (
-      set -x
-      rm -rf "$SOLANA_ROOT"/solana-release
-      (cd "$SOLANA_ROOT"; tar jxv) < "$tarballFilename"
-      cat "$SOLANA_ROOT"/solana-release/version.yml
-    )
-    ;;
-  local)
-    if $doBuild; then
-      build
-    else
-      echo "Build skipped due to --no-build"
-    fi
-    ;;
-  skip)
-    ;;
-  *)
-    usage "Internal error: invalid deployMethod: $deployMethod"
-    ;;
-  esac
-
-  if [[ -n $deployIfNewer ]]; then
-    if [[ $deployMethod != tar ]]; then
-      echo "Error: --deploy-if-newer only supported for tar deployments"
-      exit 1
-    fi
-
-    echo "Fetching current software version"
-    (
-      set -x
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "${validatorIpList[0]}":~/version.yml current-version.yml
-    )
-    cat current-version.yml
-    if ! diff -q current-version.yml "$SOLANA_ROOT"/solana-release/version.yml; then
-      echo "Cluster software version is old.  Update required"
-    else
-      echo "Cluster software version is current.  No update required"
-      exit 0
-    fi
-  fi
-}
-
-deploy() {
-  initLogDir
-
-  echo "Deployment started at $(date)"
-  $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
-
-  declare bootstrapLeader=true
-  for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}"; do
-    nodeType=
-    nodeIndex=
-    getNodeType
-    if $bootstrapLeader; then
-      SECONDS=0
-      declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
-      bootstrapNodeDeployTime=$SECONDS
-      $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
-
-      bootstrapLeader=false
-      SECONDS=0
-      pids=()
-    else
-      startNode "$ipAddress" $nodeType $nodeIndex
-
-      # Stagger additional node start time. If too many nodes start simultaneously
-      # the bootstrap node gets more rsync requests from the additional nodes than
-      # it can handle.
-      sleep 2
-    fi
-  done
-
-
-  for pid in "${pids[@]}"; do
-    declare ok=true
-    wait "$pid" || ok=false
-    if ! $ok; then
-      echo "+++ validator failed to start"
-      cat "$netLogDir/validator-$pid.log"
-      if $failOnValidatorBootupFailure; then
-        exit 1
-      else
-        echo "Failure is non-fatal"
-      fi
-    fi
-  done
-
-  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
-  additionalNodeDeployTime=$SECONDS
-
-  annotateBlockexplorerUrl
-
-  sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
-                                 # have caught up to the bootstrap validator yet
-
-  echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
-  sleep "$clientDelayStart"
-
-  SECONDS=0
-  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
-    if [[ $i -lt "$numBenchTpsClients" ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
-    elif [[ $i -lt $((numBenchTpsClients + numBenchExchangeClients)) ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-exchange" $((i-numBenchTpsClients))
-    else
-      startClient "${clientIpList[$i]}" "idle"
-    fi
-  done
-  clientDeployTime=$SECONDS
-
-  $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
-
-  declare networkVersion=unknown
-  case $deployMethod in
-  tar)
-    networkVersion="$(
-      (
-        set -o pipefail
-        grep "^commit: " "$SOLANA_ROOT"/solana-release/version.yml | head -n1 | cut -d\  -f2
-      ) || echo "tar-unknown"
-    )"
-    ;;
-  local)
-    networkVersion="$(git rev-parse HEAD || echo local-unknown)"
-    ;;
-  skip)
-    ;;
-  *)
-    usage "Internal error: invalid deployMethod: $deployMethod"
-    ;;
-  esac
-  $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
-
-  echo
-  echo "+++ Deployment Successful"
-  echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
-  echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
-  echo "Network start logs in $netLogDir"
-}
-
-stopNode() {
-  local ipAddress=$1
-  local block=$2
-
-  initLogDir
-  declare logFile="$netLogDir/stop-validator-$ipAddress.log"
-
-  echo "--- Stopping node: $ipAddress"
-  echo "stop log: $logFile"
-  syncScripts "$ipAddress"
-  (
-    # Since cleanup.sh does a pkill, we cannot pass the command directly,
-    # otherwise the process which is doing the killing will be killed because
-    # the script itself will match the pkill pattern
-    set -x
-    # shellcheck disable=SC2029 # It's desired that PS4 be expanded on the client side
-    ssh "${sshOptions[@]}" "$ipAddress" "PS4=\"$PS4\" ./solana/net/remote/cleanup.sh"
-  ) >> "$logFile" 2>&1 &
-
-  declare pid=$!
-  ln -sf "stop-validator-$ipAddress.log" "$netLogDir/stop-validator-$pid.log"
-  if $block; then
-    wait $pid
-  else
-    pids+=("$pid")
-  fi
-}
-
-stop() {
-  SECONDS=0
-  $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
-
-  declare loopCount=0
-  pids=()
-  for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}" "${archiverIpList[@]}" "${clientIpList[@]}"; do
-    stopNode "$ipAddress" false
-
-    # Stagger additional node stop time to avoid too many concurrent ssh
-    # sessions
-    ((loopCount++ % 4 == 0)) && sleep 2
-  done
-
-  echo --- Waiting for nodes to finish stopping
-  for pid in "${pids[@]}"; do
-    echo -n "$pid "
-    wait "$pid" || true
-  done
-  echo
-
-  $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
-  echo "Stopping nodes took $SECONDS seconds"
-}
-
-checkPremptibleInstances() {
-  # The validatorIpList nodes may be preemptible instances that can disappear at
-  # any time.  Try to detect when a validator has been preempted to help the user
-  # out.
-  #
-  # Of course this isn't airtight as an instance could always disappear
-  # immediately after its successfully pinged.
-  for ipAddress in "${validatorIpList[@]}"; do
-    (
-      set -x
-      timeout 5s ping -c 1 "$ipAddress" | tr - _
-    ) || {
-      cat <<EOF
-
-Warning: $ipAddress may have been preempted.
-
-Run |./gce.sh config| to restart it
-EOF
-      exit 1
-    }
-  done
-}
-
 checkPremptibleInstances
 
 case $command in
 restart)
-  prepare_deploy
+  prepareDeploy
   stop
   deploy
   ;;
 start)
-  prepare_deploy
+  prepareDeploy
   deploy
   ;;
 sanity)
@@ -980,6 +992,9 @@ startnode)
   nodeIndex=
   getNodeType
   startNode "$nodeAddress" $nodeType $nodeIndex
+  ;;
+startclients)
+  startClients
   ;;
 logs)
   initLogDir
