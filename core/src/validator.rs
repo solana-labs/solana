@@ -16,6 +16,7 @@ use crate::{
     serve_repair::ServeRepair,
     serve_repair_service::ServeRepairService,
     sigverify,
+    snapshot_packager_service::SnapshotPackagerService,
     storage_stage::StorageState,
     tpu::Tpu,
     transaction_status_service::TransactionStatusService,
@@ -50,7 +51,7 @@ use std::{
     process,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
-    sync::{Arc, Mutex, RwLock},
+    sync::{mpsc::channel, Arc, Mutex, RwLock},
     thread::{sleep, Result},
     time::Duration,
 };
@@ -127,6 +128,7 @@ pub struct Validator {
     rewards_recorder_service: Option<RewardsRecorderService>,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
+    snapshot_packager_service: Option<SnapshotPackagerService>,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
     tpu: Tpu,
@@ -350,7 +352,7 @@ impl Validator {
                 .set_entrypoint(entrypoint_info.clone());
         }
 
-        if let Some(snapshot_hash) = snapshot_hash {
+        if let Some(ref snapshot_hash) = snapshot_hash {
             if let Some(ref trusted_validators) = config.trusted_validators {
                 let mut trusted = false;
                 for _ in 0..10 {
@@ -377,6 +379,17 @@ impl Validator {
                 }
             }
         }
+
+        let (snapshot_packager_service, snapshot_package_sender) =
+            if config.snapshot_config.is_some() {
+                // Start a snapshot packaging service
+                let (sender, receiver) = channel();
+                let snapshot_packager_service =
+                    SnapshotPackagerService::new(receiver, snapshot_hash, &exit, &cluster_info);
+                (Some(snapshot_packager_service), Some(sender))
+            } else {
+                (None, None)
+            };
 
         wait_for_supermajority(config, &bank, &cluster_info);
 
@@ -440,6 +453,7 @@ impl Validator {
             node.info.shred_version,
             transaction_status_sender.clone(),
             rewards_recorder_sender,
+            snapshot_package_sender,
         );
 
         if config.dev_sigverify_disabled {
@@ -469,6 +483,7 @@ impl Validator {
             rpc_service,
             transaction_status_service,
             rewards_recorder_service,
+            snapshot_packager_service,
             tpu,
             tvu,
             poh_service,
@@ -528,6 +543,10 @@ impl Validator {
 
         if let Some(rewards_recorder_service) = self.rewards_recorder_service {
             rewards_recorder_service.join()?;
+        }
+
+        if let Some(s) = self.snapshot_packager_service {
+            s.join()?;
         }
 
         self.gossip_service.join()?;
