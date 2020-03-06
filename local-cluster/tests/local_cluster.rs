@@ -609,6 +609,59 @@ fn test_softlaunch_operating_mode() {
 
 #[test]
 #[serial]
+fn test_consistency_halt() {
+    let snapshot_interval_slots = 40;
+    let num_account_paths = 1;
+
+    let mut validator_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+
+    let validator_stake = 10_000;
+    let config = ClusterConfig {
+        node_stakes: vec![validator_stake; 2],
+        cluster_lamports: 100_000,
+        validator_configs: vec![
+            validator_snapshot_test_config.validator_config.clone(),
+            validator_snapshot_test_config.validator_config.clone(),
+        ],
+        ..ClusterConfig::default()
+    };
+
+    let mut cluster = LocalCluster::new(&config);
+
+    sleep(Duration::from_millis(5000));
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let mut trusted_validators = HashSet::new();
+    trusted_validators.insert(cluster_nodes[0].id);
+    validator_snapshot_test_config
+        .validator_config
+        .trusted_validators = Some(trusted_validators);
+    validator_snapshot_test_config
+        .validator_config
+        .halt_on_trusted_validators_accounts_hash_mismatch = true;
+
+    cluster.add_validator(
+        &validator_snapshot_test_config.validator_config,
+        validator_stake as u64,
+        Arc::new(Keypair::new()),
+    );
+
+    cluster_tests::spend_and_verify_all_nodes(
+        &cluster.entry_point_info,
+        &cluster.funding_keypair,
+        1,
+        HashSet::new(),
+    );
+    /* do something here?
+     * let (gossip_service, listener, cluster_info) = make_gossip_node(cluster.entry_point_info,
+        exit,
+        gossip_addr);
+    let message = make_hashes_message();
+    cluster_info.write().unwrap().push_message();*/
+}
+
+#[test]
+#[serial]
 fn test_snapshot_download() {
     solana_logger::setup();
     // First set up the cluster with 1 node

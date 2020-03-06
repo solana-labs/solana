@@ -21,7 +21,7 @@ use crate::{
     storage_stage::StorageState,
     tpu::Tpu,
     transaction_status_service::TransactionStatusService,
-    tvu::{Sockets, Tvu},
+    tvu::{Sockets, Tvu, TvuConfig},
 };
 use crossbeam_channel::unbounded;
 use solana_ledger::{
@@ -77,6 +77,7 @@ pub struct ValidatorConfig {
     pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
+    pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -100,6 +101,7 @@ impl Default for ValidatorConfig {
             wait_for_supermajority: None,
             new_hard_forks: None,
             trusted_validators: None,
+            halt_on_trusted_validators_accounts_hash_mismatch: false,
         }
     }
 }
@@ -415,7 +417,6 @@ impl Validator {
             blockstore.clone(),
             &storage_state,
             config.blockstream_unix_socket.as_ref(),
-            config.max_ledger_slots,
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
@@ -423,13 +424,19 @@ impl Validator {
             &exit,
             completed_slots_receiver,
             block_commitment_cache,
-            config.dev_sigverify_disabled,
             config.enable_partition.clone(),
-            node.info.shred_version,
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             snapshot_package_sender,
             vote_tracker.clone(),
+            TvuConfig {
+                max_ledger_slots: config.max_ledger_slots,
+                sigverify_disabled: config.dev_sigverify_disabled,
+                halt_on_trusted_validators_accounts_hash_mismatch: config
+                    .halt_on_trusted_validators_accounts_hash_mismatch,
+                shred_version: node.info.shred_version,
+                trusted_validators: config.trusted_validators.clone(),
+            },
         );
 
         if config.dev_sigverify_disabled {

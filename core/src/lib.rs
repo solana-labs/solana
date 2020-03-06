@@ -5,6 +5,7 @@
 //! command-line tools to spin up validators and a Rust library
 //!
 
+pub mod accounts_hash_verifier;
 pub mod banking_stage;
 pub mod broadcast_stage;
 pub mod cluster_info_vote_listener;
