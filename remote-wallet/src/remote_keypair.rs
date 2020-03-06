@@ -53,13 +53,14 @@ pub fn generate_remote_keypair(
     explicit_derivation_path: Option<DerivationPath>,
     wallet_manager: &RemoteWalletManager,
     confirm_key: bool,
+    keypair_name: &str,
 ) -> Result<RemoteKeypair, RemoteWalletError> {
     let (remote_wallet_info, mut derivation_path) = RemoteWalletInfo::parse_path(path)?;
     if let Some(derivation) = explicit_derivation_path {
         derivation_path = derivation;
     }
     if remote_wallet_info.manufacturer == "ledger" {
-        let ledger = get_ledger_from_info(remote_wallet_info, wallet_manager)?;
+        let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
         Ok(RemoteKeypair::new(
             RemoteWalletType::Ledger(ledger),
             derivation_path,

@@ -402,6 +402,7 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
 /// Choose a Ledger wallet based on matching info fields
 pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
+    keypair_name: &str,
     wallet_manager: &RemoteWalletManager,
 ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
     let devices = wallet_manager.list_devices();
@@ -426,7 +427,10 @@ pub fn get_ledger_from_info(
     }
     let wallet_base_pubkey = if pubkeys.len() > 1 {
         let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Multiple hardware wallets found. Please select a device")
+            .with_prompt(&format!(
+                "Multiple hardware wallets found. Please select a device for {:?}",
+                keypair_name
+            ))
             .default(0)
             .items(&device_paths[..])
             .interact()
