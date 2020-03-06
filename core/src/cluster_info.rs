@@ -2481,4 +2481,25 @@ mod tests {
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
         PACKET_DATA_SIZE - (protocol_size - filter_size)
     }
+
+    #[test]
+    fn test_push_epoch_slots_large() {
+        use rand::Rng;
+        let node_keypair = Arc::new(Keypair::new());
+        let mut cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair,
+        );
+        let mut range: Vec<Slot> = vec![];
+        //random should be hard to compress
+        for _ in 0..32000 {
+            let last = *range.last().unwrap_or(&0);
+            range.push(last + rand::thread_rng().gen_range(1, 32));
+        }
+        cluster_info.push_epoch_slots(&range);
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
+        assert_eq!(slots, range);
+        assert!(since.is_some());
+    }
 }

@@ -56,7 +56,8 @@ impl Flate2 {
         Ok(rv)
     }
     pub fn inflate(&self) -> Result<Uncompressed> {
-        let mut uncompressed = Vec::with_capacity((self.num + 4) / 8);
+        //add some head room for the decompressor which might spill more bits
+        let mut uncompressed = Vec::with_capacity(32 + (self.num + 4) / 8);
         let mut decompress = Decompress::new(false);
         decompress.decompress_vec(&self.compressed, &mut uncompressed, FlushDecompress::Finish)?;
         Ok(Uncompressed {
@@ -82,6 +83,7 @@ impl Uncompressed {
         } else {
             (min_slot - self.first_slot) as usize
         };
+        println!("TO_SLOTS: {} {}", self.slots.len(), self.num);
         for i in start..self.num {
             if self.slots.get(i as u64) {
                 rv.push(self.first_slot + i as Slot);
@@ -319,6 +321,15 @@ mod tests {
         assert_eq!(slots.to_slots(0), range);
         assert_eq!(slots.to_slots(4999 * 3), vec![4999 * 3]);
     }
+
+    #[test]
+    fn test_epoch_slots_fill_large_sparce_range() {
+        let range: Vec<Slot> = (0..5000).into_iter().map(|x| x * 7).collect();
+        let mut slots = EpochSlots::default();
+        assert_eq!(slots.fill(&range, 2), 5000);
+        assert_eq!(slots.to_slots(0), range);
+    }
+
     #[test]
     fn test_epoch_slots_fill_uncompressed_random_range() {
         use rand::Rng;
