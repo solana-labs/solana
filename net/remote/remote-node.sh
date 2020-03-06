@@ -264,7 +264,6 @@ EOF
     if [[ $deployMethod != skip ]]; then
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
-      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
     fi
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
