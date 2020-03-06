@@ -118,245 +118,15 @@ Operate a configured testnet
  startnode/stopnode-specific options:
    -i [ip address]                    - IP Address of the node to start or stop
 
+ startclients-specific options:
+   $CLIENT_OPTIONS
+
 Note: if RUST_LOG is set in the environment it will be propogated into the
       network nodes.
 EOF
   exit $exitcode
 }
 
-releaseChannel=
-deployMethod=local
-deployIfNewer=
-sanityExtraArgs=
-skipSetup=false
-updatePlatforms=
-nodeAddress=
-numIdleClients=0
-numBenchTpsClients=0
-numBenchExchangeClients=0
-benchTpsExtraArgs=
-benchExchangeExtraArgs=
-failOnValidatorBootupFailure=true
-genesisOptions=
-numValidatorsRequested=
-externalPrimordialAccountsFile=
-remoteExternalPrimordialAccountsFile=
-internalNodesStakeLamports=
-internalNodesLamports=
-maybeNoSnapshot=""
-maybeLimitLedgerSize=""
-maybeSkipLedgerVerify=""
-maybeDisableAirdrops=""
-debugBuild=false
-doBuild=true
-gpuMode=auto
-maybeUseMove=""
-netemPartition=""
-netemConfig=""
-netemConfigFile=""
-netemCommand="add"
-clientDelayStart=0
-
-command=$1
-[[ -n $command ]] || usage
-shift
-
-shortArgs=()
-while [[ -n $1 ]]; do
-  if [[ ${1:0:2} = -- ]]; then
-    if [[ $1 = --hashes-per-tick ]]; then
-      genesisOptions="$genesisOptions $1 $2"
-      shift 2
-    elif [[ $1 = --slots-per-epoch ]]; then
-      genesisOptions="$genesisOptions $1 $2"
-      shift 2
-    elif [[ $1 = --target-lamports-per-signature ]]; then
-      genesisOptions="$genesisOptions $1 $2"
-      shift 2
-    elif [[ $1 = --faucet-lamports ]]; then
-      genesisOptions="$genesisOptions $1 $2"
-      shift 2
-    elif [[ $1 = --operating-mode ]]; then
-      case "$2" in
-        development|softlaunch)
-          ;;
-        *)
-          echo "Unexpected operating mode: \"$2\""
-          exit 1
-          ;;
-      esac
-      genesisOptions="$genesisOptions $1 $2"
-      shift 2
-    elif [[ $1 = --no-snapshot-fetch ]]; then
-      maybeNoSnapshot="$1"
-      shift 1
-    elif [[ $1 = --deploy-if-newer ]]; then
-      deployIfNewer=1
-      shift 1
-    elif [[ $1 = --no-deploy ]]; then
-      deployMethod=skip
-      shift 1
-    elif [[ $1 = --no-build ]]; then
-      doBuild=false
-      shift 1
-    elif [[ $1 = --limit-ledger-size ]]; then
-      maybeLimitLedgerSize="$1"
-      shift 1
-    elif [[ $1 = --skip-poh-verify ]]; then
-      maybeSkipLedgerVerify="$1"
-      shift 1
-    elif [[ $1 = --skip-setup ]]; then
-      skipSetup=true
-      shift 1
-    elif [[ $1 = --platform ]]; then
-      updatePlatforms="$updatePlatforms $2"
-      shift 2
-    elif [[ $1 = --internal-nodes-stake-lamports ]]; then
-      internalNodesStakeLamports="$2"
-      shift 2
-    elif [[ $1 = --internal-nodes-lamports ]]; then
-      internalNodesLamports="$2"
-      shift 2
-    elif [[ $1 = --external-accounts-file ]]; then
-      externalPrimordialAccountsFile="$2"
-      remoteExternalPrimordialAccountsFile=/tmp/external-primordial-accounts.yml
-      shift 2
-    elif [[ $1 = --no-airdrop ]]; then
-      maybeDisableAirdrops="$1"
-      shift 1
-    elif [[ $1 = --debug ]]; then
-      debugBuild=true
-      shift 1
-    elif [[ $1 = --use-move ]]; then
-      maybeUseMove=$1
-      shift 1
-    elif [[ $1 = --partition ]]; then
-      netemPartition=$2
-      shift 2
-    elif [[ $1 = --config ]]; then
-      netemConfig=$2
-      shift 2
-    elif [[ $1 == --config-file ]]; then
-      netemConfigFile=$2
-      shift 2
-    elif [[ $1 == --netem-cmd ]]; then
-      netemCommand=$2
-      shift 2
-    elif [[ $1 = --gpu-mode ]]; then
-      gpuMode=$2
-      case "$gpuMode" in
-        on|off|auto|cuda)
-          ;;
-        *)
-          echo "Unexpected GPU mode: \"$gpuMode\""
-          exit 1
-          ;;
-      esac
-      shift 2
-    elif [[ $1 == --client-delay-start ]]; then
-      clientDelayStart=$2
-      shift 2
-    else
-      usage "Unknown long option: $1"
-    fi
-  else
-    shortArgs+=("$1")
-    shift
-  fi
-done
-
-while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
-  case $opt in
-  h | \?)
-    usage
-    ;;
-  T)
-    tarballFilename=$OPTARG
-    [[ -r $tarballFilename ]] || usage "File not readable: $tarballFilename"
-    deployMethod=tar
-    ;;
-  t)
-    case $OPTARG in
-    edge|beta|stable|v*)
-      releaseChannel=$OPTARG
-      deployMethod=tar
-      ;;
-    *)
-      usage "Invalid release channel: $OPTARG"
-      ;;
-    esac
-    ;;
-  n)
-    numValidatorsRequested=$OPTARG
-    ;;
-  r)
-    skipSetup=true
-    ;;
-  o)
-    case $OPTARG in
-    rejectExtraNodes|noInstallCheck)
-      sanityExtraArgs="$sanityExtraArgs -o $OPTARG"
-      ;;
-    *)
-      usage "Unknown option: $OPTARG"
-      ;;
-    esac
-    ;;
-  c)
-    getClientTypeAndNum() {
-      if ! [[ $OPTARG == *'='* ]]; then
-        echo "Error: Expecting tuple \"clientType=numClientType=extraArgs\" but got \"$OPTARG\""
-        exit 1
-      fi
-      local keyValue
-      IFS='=' read -ra keyValue <<< "$OPTARG"
-      local clientType=${keyValue[0]}
-      local numClients=${keyValue[1]}
-      local extraArgs=${keyValue[2]}
-      re='^[0-9]+$'
-      if ! [[ $numClients =~ $re ]] ; then
-        echo "error: numClientType must be a number but got \"$numClients\""
-        exit 1
-      fi
-      case $clientType in
-        idle)
-          numIdleClients=$numClients
-          # $extraArgs ignored for 'idle'
-        ;;
-        bench-tps)
-          numBenchTpsClients=$numClients
-          benchTpsExtraArgs=$extraArgs
-        ;;
-        bench-exchange)
-          numBenchExchangeClients=$numClients
-          benchExchangeExtraArgs=$extraArgs
-        ;;
-        *)
-          echo "Unknown client type: $clientType"
-          exit 1
-          ;;
-      esac
-    }
-    getClientTypeAndNum
-    ;;
-  F)
-    failOnValidatorBootupFailure=false
-    ;;
-  i)
-    nodeAddress=$OPTARG
-    ;;
-  d)
-    debugBuild=true
-    ;;
-  *)
-    usage "Error: unhandled option: $opt"
-    ;;
-  esac
-done
-
-loadConfigFile
-
-netLogDir=
 initLogDir() { # Initializes the netLogDir global variable.  Idempotent
   [[ -z $netLogDir ]] || return 0
 
@@ -373,24 +143,6 @@ initLogDir() { # Initializes the netLogDir global variable.  Idempotent
   ln -sf "$netLogDateDir" "$netLogDir"
   echo "Log directory: $netLogDateDir"
 }
-
-if [[ -n $numValidatorsRequested ]]; then
-  truncatedNodeList=( "${validatorIpList[@]:0:$numValidatorsRequested}" )
-  unset validatorIpList
-  validatorIpList=( "${truncatedNodeList[@]}" )
-fi
-
-numClients=${#clientIpList[@]}
-numClientsRequested=$((numBenchTpsClients + numBenchExchangeClients + numIdleClients))
-if [[ "$numClientsRequested" -eq 0 ]]; then
-  numBenchTpsClients=$numClients
-  numClientsRequested=$numClients
-else
-  if [[ "$numClientsRequested" -gt "$numClients" ]]; then
-    echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
-    exit 1
-  fi
-fi
 
 annotate() {
   [[ -z $BUILDKITE ]] || {
@@ -712,7 +464,7 @@ getNodeType() {
   exit 1
 }
 
-prepare_deploy() {
+prepareDeploy() {
   case $deployMethod in
   tar)
     if [[ -n $releaseChannel ]]; then
@@ -943,16 +695,267 @@ EOF
   done
 }
 
+releaseChannel=
+deployMethod=local
+deployIfNewer=
+sanityExtraArgs=
+skipSetup=false
+updatePlatforms=
+nodeAddress=
+numIdleClients=0
+numBenchTpsClients=0
+numBenchExchangeClients=0
+benchTpsExtraArgs=
+benchExchangeExtraArgs=
+failOnValidatorBootupFailure=true
+genesisOptions=
+numValidatorsRequested=
+externalPrimordialAccountsFile=
+remoteExternalPrimordialAccountsFile=
+internalNodesStakeLamports=
+internalNodesLamports=
+maybeNoSnapshot=""
+maybeLimitLedgerSize=""
+maybeSkipLedgerVerify=""
+maybeDisableAirdrops=""
+debugBuild=false
+doBuild=true
+gpuMode=auto
+maybeUseMove=""
+netemPartition=""
+netemConfig=""
+netemConfigFile=""
+netemCommand="add"
+clientDelayStart=0
+netLogDir=
+
+command=$1
+[[ -n $command ]] || usage
+shift
+
+shortArgs=()
+while [[ -n $1 ]]; do
+  if [[ ${1:0:2} = -- ]]; then
+    if [[ $1 = --hashes-per-tick ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --slots-per-epoch ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --target-lamports-per-signature ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --faucet-lamports ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --operating-mode ]]; then
+      case "$2" in
+        development|softlaunch)
+          ;;
+        *)
+          echo "Unexpected operating mode: \"$2\""
+          exit 1
+          ;;
+      esac
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    elif [[ $1 = --no-snapshot-fetch ]]; then
+      maybeNoSnapshot="$1"
+      shift 1
+    elif [[ $1 = --deploy-if-newer ]]; then
+      deployIfNewer=1
+      shift 1
+    elif [[ $1 = --no-deploy ]]; then
+      deployMethod=skip
+      shift 1
+    elif [[ $1 = --no-build ]]; then
+      doBuild=false
+      shift 1
+    elif [[ $1 = --limit-ledger-size ]]; then
+      maybeLimitLedgerSize="$1"
+      shift 1
+    elif [[ $1 = --skip-poh-verify ]]; then
+      maybeSkipLedgerVerify="$1"
+      shift 1
+    elif [[ $1 = --skip-setup ]]; then
+      skipSetup=true
+      shift 1
+    elif [[ $1 = --platform ]]; then
+      updatePlatforms="$updatePlatforms $2"
+      shift 2
+    elif [[ $1 = --internal-nodes-stake-lamports ]]; then
+      internalNodesStakeLamports="$2"
+      shift 2
+    elif [[ $1 = --internal-nodes-lamports ]]; then
+      internalNodesLamports="$2"
+      shift 2
+    elif [[ $1 = --external-accounts-file ]]; then
+      externalPrimordialAccountsFile="$2"
+      remoteExternalPrimordialAccountsFile=/tmp/external-primordial-accounts.yml
+      shift 2
+    elif [[ $1 = --no-airdrop ]]; then
+      maybeDisableAirdrops="$1"
+      shift 1
+    elif [[ $1 = --debug ]]; then
+      debugBuild=true
+      shift 1
+    elif [[ $1 = --use-move ]]; then
+      maybeUseMove=$1
+      shift 1
+    elif [[ $1 = --partition ]]; then
+      netemPartition=$2
+      shift 2
+    elif [[ $1 = --config ]]; then
+      netemConfig=$2
+      shift 2
+    elif [[ $1 == --config-file ]]; then
+      netemConfigFile=$2
+      shift 2
+    elif [[ $1 == --netem-cmd ]]; then
+      netemCommand=$2
+      shift 2
+    elif [[ $1 = --gpu-mode ]]; then
+      gpuMode=$2
+      case "$gpuMode" in
+        on|off|auto|cuda)
+          ;;
+        *)
+          echo "Unexpected GPU mode: \"$gpuMode\""
+          exit 1
+          ;;
+      esac
+      shift 2
+    elif [[ $1 == --client-delay-start ]]; then
+      clientDelayStart=$2
+      shift 2
+    else
+      usage "Unknown long option: $1"
+    fi
+  else
+    shortArgs+=("$1")
+    shift
+  fi
+done
+
+while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
+  case $opt in
+  h | \?)
+    usage
+    ;;
+  T)
+    tarballFilename=$OPTARG
+    [[ -r $tarballFilename ]] || usage "File not readable: $tarballFilename"
+    deployMethod=tar
+    ;;
+  t)
+    case $OPTARG in
+    edge|beta|stable|v*)
+      releaseChannel=$OPTARG
+      deployMethod=tar
+      ;;
+    *)
+      usage "Invalid release channel: $OPTARG"
+      ;;
+    esac
+    ;;
+  n)
+    numValidatorsRequested=$OPTARG
+    ;;
+  r)
+    skipSetup=true
+    ;;
+  o)
+    case $OPTARG in
+    rejectExtraNodes|noInstallCheck)
+      sanityExtraArgs="$sanityExtraArgs -o $OPTARG"
+      ;;
+    *)
+      usage "Unknown option: $OPTARG"
+      ;;
+    esac
+    ;;
+  c)
+    getClientTypeAndNum() {
+      if ! [[ $OPTARG == *'='* ]]; then
+        echo "Error: Expecting tuple \"clientType=numClientType=extraArgs\" but got \"$OPTARG\""
+        exit 1
+      fi
+      local keyValue
+      IFS='=' read -ra keyValue <<< "$OPTARG"
+      local clientType=${keyValue[0]}
+      local numClients=${keyValue[1]}
+      local extraArgs=${keyValue[2]}
+      re='^[0-9]+$'
+      if ! [[ $numClients =~ $re ]] ; then
+        echo "error: numClientType must be a number but got \"$numClients\""
+        exit 1
+      fi
+      case $clientType in
+        idle)
+          numIdleClients=$numClients
+          # $extraArgs ignored for 'idle'
+        ;;
+        bench-tps)
+          numBenchTpsClients=$numClients
+          benchTpsExtraArgs=$extraArgs
+        ;;
+        bench-exchange)
+          numBenchExchangeClients=$numClients
+          benchExchangeExtraArgs=$extraArgs
+        ;;
+        *)
+          echo "Unknown client type: $clientType"
+          exit 1
+          ;;
+      esac
+    }
+    getClientTypeAndNum
+    ;;
+  F)
+    failOnValidatorBootupFailure=false
+    ;;
+  i)
+    nodeAddress=$OPTARG
+    ;;
+  d)
+    debugBuild=true
+    ;;
+  *)
+    usage "Error: unhandled option: $opt"
+    ;;
+  esac
+done
+
+loadConfigFile
+
+if [[ -n $numValidatorsRequested ]]; then
+  truncatedNodeList=( "${validatorIpList[@]:0:$numValidatorsRequested}" )
+  unset validatorIpList
+  validatorIpList=( "${truncatedNodeList[@]}" )
+fi
+
+numClients=${#clientIpList[@]}
+numClientsRequested=$((numBenchTpsClients + numBenchExchangeClients + numIdleClients))
+if [[ "$numClientsRequested" -eq 0 ]]; then
+  numBenchTpsClients=$numClients
+  numClientsRequested=$numClients
+else
+  if [[ "$numClientsRequested" -gt "$numClients" ]]; then
+    echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
+    exit 1
+  fi
+fi
+
 checkPremptibleInstances
 
 case $command in
 restart)
-  prepare_deploy
+  prepareDeploy
   stop
   deploy
   ;;
 start)
-  prepare_deploy
+  prepareDeploy
   deploy
   ;;
 sanity)
