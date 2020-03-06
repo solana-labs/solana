@@ -13,6 +13,15 @@ const UNLOCKS_ALL_AT_9_MONTHS: UnlockInfo = UnlockInfo {
     custodian: "Mc5XB47H3DKJHym5RLa9mPzWv5snERsF3KNv5AauXK8",
 };
 
+// 9 month schedule is 50% after 9 months, then monthly for 2 years
+const UNLOCKS_HALF_AT_9_MONTHS: UnlockInfo = UnlockInfo {
+    cliff_fraction: 0.5,
+    cliff_years: 0.75,
+    unlocks: 24,
+    unlock_years: 2.0,
+    custodian: "Mc5XB47H3DKJHym5RLa9mPzWv5snERsF3KNv5AauXK8",
+};
+
 // no lockups
 const UNLOCKS_ALL_DAY_ZERO: UnlockInfo = UnlockInfo {
     cliff_fraction: 1.0,
@@ -22,17 +31,11 @@ const UNLOCKS_ALL_DAY_ZERO: UnlockInfo = UnlockInfo {
     custodian: "Mc5XB47H3DKJHym5RLa9mPzWv5snERsF3KNv5AauXK8",
 };
 
-pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
+pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "impossible pizza",
         staker: "CDtJpwRSiPRDGeKrvymWQKM7JY9M3hU7iimEKBDxZyoP",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
-    },
-    StakerInfo {
-        name: "wretched texture",
-        staker: "HbENu65qjWLEB5TrMouSSWLq9mbtGx2bvfhPjk2FpYek",
-        lamports: 225_000 * LAMPORTS_PER_SOL,
         withdrawer: None,
     },
     StakerInfo {
@@ -45,12 +48,6 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
         name: "tidy impression",
         staker: "6ne6Rbag4FAnop1KNgVdM1SEHnJEysHSWyqvRpFrzaig",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
-    },
-    StakerInfo {
-        name: "unbecoming silver",
-        staker: "4AcoZa1P8fF5XK21RJsiuMRZPEScbbWNc75oakRFHiBz",
-        lamports: 28_800 * LAMPORTS_PER_SOL,
         withdrawer: None,
     },
     StakerInfo {
@@ -72,12 +69,6 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
         withdrawer: None,
     },
     StakerInfo {
-        name: "inexpensive uncle",
-        staker: "E4DLNkmdL34ejA48ApfPDoFVuD9XWAFqi8bXzBGRhKst",
-        lamports: 300_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
-    },
-    StakerInfo {
         name: "lopsided skill",
         staker: "8cV7zCTF5UMrZakZXiL2Jw5uY3ms2Wz4twzFXEY9Kge2",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
@@ -87,24 +78,6 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
         name: "red snake",
         staker: "JBGnGdLyo7V2z9hz51mnnbyDp9sBACtw5WYH9YRG8n7e",
         lamports: 3_655_292 * LAMPORTS_PER_SOL,
-        withdrawer: None,
-    },
-    StakerInfo {
-        name: "hellish money",
-        staker: "CqKdQ57mBj2mKcAbpjWc28Ls7yXzBXboxSTCRWocmUVj",
-        lamports: 200_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
-    },
-    StakerInfo {
-        name: "full grape",
-        staker: "2SCJKvh7wWo32PtfUZdVZQ84WnMWoUpF4WTm6ZxcCJ15",
-        lamports: 450_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
-    },
-    StakerInfo {
-        name: "nice ghost",
-        staker: "FeumxB3gfzrVQzABBiha8AacKPY3Rf4BTFSh2aZWHqR8",
-        lamports: 650_000 * LAMPORTS_PER_SOL,
         withdrawer: None,
     },
     StakerInfo {
@@ -147,6 +120,45 @@ pub const BATCH_FOUR_STAKER_INFOS: &[StakerInfo] = &[
         name: "noisy honey",
         staker: "DRp1Scyn4yJZQfMAdQew2x8RtvRmsNELN37JTK5Xvzgn",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
+        withdrawer: None,
+    },
+];
+
+pub const SERVICE_STAKER_INFOS: &[StakerInfo] = &[
+    StakerInfo {
+        name: "wretched texture",
+        staker: "HbENu65qjWLEB5TrMouSSWLq9mbtGx2bvfhPjk2FpYek",
+        lamports: 225_000 * LAMPORTS_PER_SOL,
+        withdrawer: None,
+    },
+    StakerInfo {
+        name: "unbecoming silver",
+        staker: "4AcoZa1P8fF5XK21RJsiuMRZPEScbbWNc75oakRFHiBz",
+        lamports: 28_800 * LAMPORTS_PER_SOL,
+        withdrawer: None,
+    },
+    StakerInfo {
+        name: "inexpensive uncle",
+        staker: "E4DLNkmdL34ejA48ApfPDoFVuD9XWAFqi8bXzBGRhKst",
+        lamports: 300_000 * LAMPORTS_PER_SOL,
+        withdrawer: None,
+    },
+    StakerInfo {
+        name: "hellish money",
+        staker: "CqKdQ57mBj2mKcAbpjWc28Ls7yXzBXboxSTCRWocmUVj",
+        lamports: 200_000 * LAMPORTS_PER_SOL,
+        withdrawer: None,
+    },
+    StakerInfo {
+        name: "full grape",
+        staker: "2SCJKvh7wWo32PtfUZdVZQ84WnMWoUpF4WTm6ZxcCJ15",
+        lamports: 450_000 * LAMPORTS_PER_SOL,
+        withdrawer: None,
+    },
+    StakerInfo {
+        name: "nice ghost",
+        staker: "FeumxB3gfzrVQzABBiha8AacKPY3Rf4BTFSh2aZWHqR8",
+        lamports: 650_000 * LAMPORTS_PER_SOL,
         withdrawer: None,
     },
 ];
@@ -219,7 +231,11 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
 
     issued_lamports += add_stakes(
         genesis_config,
-        &BATCH_FOUR_STAKER_INFOS,
+        &CREATOR_STAKER_INFOS,
+        &UNLOCKS_HALF_AT_9_MONTHS,
+    ) + add_stakes(
+        genesis_config,
+        &SERVICE_STAKER_INFOS,
         &UNLOCKS_ALL_AT_9_MONTHS,
     ) + add_stakes(
         genesis_config,
