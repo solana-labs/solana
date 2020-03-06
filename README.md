@@ -30,40 +30,6 @@ Before you jump into the code, review the documentation [Solana: Blockchain Rebu
 
 (The _latest_ development version of the docs is [available here](https://docs.solana.com/v/master).)
 
-Release Binaries
-===
-Official release binaries are available at [Github Releases](https://github.com/solana-labs/solana/releases).
-
-Additionally we provide pre-release binaries for the latest code on the edge and
-beta channels.  Note that these pre-release binaries may be less stable than an
-official release.
-
-### Edge channel
-#### Linux (x86_64-unknown-linux-gnu)
-* [solana.tar.bz2](http://release.solana.com/edge/solana-release-x86_64-unknown-linux-gnu.tar.bz2)
-* [solana-install-init](http://release.solana.com/edge/solana-install-init-x86_64-unknown-linux-gnu) as a stand-alone executable
-#### mac OS (x86_64-apple-darwin)
-* [solana.tar.bz2](http://release.solana.com/edge/solana-release-x86_64-apple-darwin.tar.bz2)
-* [solana-install-init](http://release.solana.com/edge/solana-install-init-x86_64-apple-darwin) as a stand-alone executable
-#### Windows (x86_64-pc-windows-msvc)
-* [solana.tar.bz2](http://release.solana.com/edge/solana-release-x86_64-pc-windows-msvc.tar.bz2)
-* [solana-install-init.exe](http://release.solana.com/edge/solana-install-init-x86_64-pc-windows-msvc.exe) as a stand-alone executable
-#### All platforms
-* [solana-metrics.tar.bz2](http://release.solana.com.s3.amazonaws.com/edge/solana-metrics.tar.bz2)
-
-### Beta channel
-#### Linux (x86_64-unknown-linux-gnu)
-* [solana.tar.bz2](http://release.solana.com/beta/solana-release-x86_64-unknown-linux-gnu.tar.bz2)
-* [solana-install-init](http://release.solana.com/beta/solana-install-init-x86_64-unknown-linux-gnu) as a stand-alone executable
-#### mac OS (x86_64-apple-darwin)
-* [solana.tar.bz2](http://release.solana.com/beta/solana-release-x86_64-apple-darwin.tar.bz2)
-* [solana-install-init](http://release.solana.com/beta/solana-install-init-x86_64-apple-darwin) as a stand-alone executable
-#### Windows (x86_64-pc-windows-msvc)
-* [solana.tar.bz2](http://release.solana.com/beta/solana-release-x86_64-pc-windows-msvc.tar.bz2)
-* [solana-install-init.exe](http://release.solana.com/beta/solana-install-init-x86_64-pc-windows-msvc.exe) as a stand-alone executable
-#### All platforms
-* [solana-metrics.tar.bz2](http://release.solana.com.s3.amazonaws.com/beta/solana-metrics.tar.bz2)
-
 Developing
 ===
 
