@@ -48,7 +48,7 @@ impl Tpu {
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
         shred_version: u16,
-        vote_tracker: Arc<RwLock<VoteTracker>>,
+        vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();

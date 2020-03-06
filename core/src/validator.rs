@@ -379,14 +379,7 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
-        let vote_tracker = Arc::new(RwLock::new({
-            let bank_forks = bank_forks.read().unwrap();
-            VoteTracker::new(
-                bank_forks
-                    .get(bank_forks.root())
-                    .expect("Root bank must exist"),
-            )
-        }));
+        let vote_tracker = Arc::new({ VoteTracker::new(bank_forks.read().unwrap().root_bank()) });
 
         let tvu = Tvu::new(
             vote_account,

@@ -177,7 +177,7 @@ impl ReplayStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        _vote_tracker: Arc<RwLock<VoteTracker>>,
+        _vote_tracker: Arc<VoteTracker>,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
