@@ -13,19 +13,36 @@ usage() {
     exitcode=1
     echo "Error: $*"
   fi
+  CLIENT_OPTIONS=$(cat << EOM
+-c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
+                                     more than once.  Defaults to bench-tps for all clients if not
+                                     specified.
+                                     Valid client types are:
+                                         idle
+                                         bench-tps
+                                         bench-exchange
+                                     User can optionally provide extraArgs that are transparently
+                                     supplied to the client program as command line parameters.
+                                     For example,
+                                         -c bench-tps=2="--tx_count 25000"
+                                     This will start 2 bench-tps clients, and supply "--tx_count 25000"
+                                     to the bench-tps client.
+EOM
+)
   cat <<EOF
 usage: $0 [start|stop|restart|sanity] [command-specific options]
 
 Operate a configured testnet
 
- start    - Start the network
- sanity   - Sanity check the network
- stop     - Stop the network
- restart  - Shortcut for stop then start
- logs     - Fetch remote logs from each network node
- startnode- Start an individual node (previously stopped with stopNode)
- stopnode - Stop an individual node
- update   - Deploy a new software update to the cluster
+ start        - Start the network
+ sanity       - Sanity check the network
+ stop         - Stop the network
+ restart      - Shortcut for stop then start
+ logs         - Fetch remote logs from each network node
+ startnode    - Start an individual node (previously stopped with stopNode)
+ stopnode     - Stop an individual node
+ startclients - Start client nodes only
+ update       - Deploy a new software update to the cluster
 
  start-specific options:
    -T [tarFilename]                   - Deploy the specified release tarball
@@ -35,19 +52,7 @@ Operate a configured testnet
    -r / --skip-setup                  - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -d / --debug                       - Build/deploy the testnet with debug binaries
-   -c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
-                                        more than once.  Defaults to bench-tps for all clients if not
-                                        specified.
-                                        Valid client types are:
-                                            idle
-                                            bench-tps
-                                            bench-exchange
-                                        User can optionally provide extraArgs that are transparently
-                                        supplied to the client program as command line parameters.
-                                        For example,
-                                            -c bench-tps=2="--tx_count 25000"
-                                        This will start 2 bench-tps clients, and supply "--tx_count 25000"
-                                        to the bench-tps client.
+   $CLIENT_OPTIONS
    --client-delay-start
                                       - Number of seconds to wait after validators have finished starting before starting client programs
                                         (default: $clientDelayStart)
@@ -264,8 +269,8 @@ startBootstrapLeader() {
          \"$internalNodesStakeLamports\" \
          \"$internalNodesLamports\" \
          $nodeIndex \
-         $numBenchTpsClients \"$benchTpsExtraArgs\" \
-         $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
+         ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
+         ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
@@ -333,8 +338,8 @@ startNode() {
          \"$internalNodesStakeLamports\" \
          \"$internalNodesLamports\" \
          $nodeIndex \
-         $numBenchTpsClients \"$benchTpsExtraArgs\" \
-         $numBenchExchangeClients \"$benchExchangeExtraArgs\" \
+         ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
+         ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize\" \
          \"$gpuMode\" \
@@ -367,6 +372,18 @@ startClient() {
     echo "^^^ +++"
     exit 1
   }
+}
+
+startClients() {
+  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
+    if [[ $i -lt "$numBenchTpsClients" ]]; then
+      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
+    elif [[ $i -lt $((numBenchTpsClients + numBenchExchangeClients)) ]]; then
+      startClient "${clientIpList[$i]}" "solana-bench-exchange" $((i-numBenchTpsClients))
+    else
+      startClient "${clientIpList[$i]}" "idle"
+    fi
+  done
 }
 
 sanity() {
@@ -577,15 +594,7 @@ deploy() {
   sleep "$clientDelayStart"
 
   SECONDS=0
-  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
-    if [[ $i -lt "$numBenchTpsClients" ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
-    elif [[ $i -lt $((numBenchTpsClients + numBenchExchangeClients)) ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-exchange" $((i-numBenchTpsClients))
-    else
-      startClient "${clientIpList[$i]}" "idle"
-    fi
-  done
+  startClients
   clientDeployTime=$SECONDS
 
   $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
@@ -983,6 +992,9 @@ startnode)
   nodeIndex=
   getNodeType
   startNode "$nodeAddress" $nodeType $nodeIndex
+  ;;
+startclients)
+  startClients
   ;;
 logs)
   initLogDir
