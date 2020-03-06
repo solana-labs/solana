@@ -35,7 +35,8 @@ pub struct SlotVoteTracker {
 }
 
 impl SlotVoteTracker {
-    fn get_updates(&mut self) -> Option<Vec<Arc<Pubkey>>> {
+    #[allow(dead_code)]
+    pub fn get_updates(&mut self) -> Option<Vec<Arc<Pubkey>>> {
         self.updates.take()
     }
 }
@@ -63,7 +64,7 @@ impl VoteTracker {
             slot_vote_trackers: RwLock::new(HashMap::new()),
             node_id_to_vote_accounts: RwLock::new(HashMap::new()),
             all_pubkeys: RwLock::new(HashSet::new()),
-            epoch_schedule: root_bank.epoch_schedule().clone(),
+            epoch_schedule: *root_bank.epoch_schedule(),
         };
 
         // Parse voter information about all the known epochs
@@ -92,7 +93,7 @@ impl VoteTracker {
     }
 
     // Returns Some if the given pubkey is a staked voter for the epoch at the given
-    // slot. Note this decisoin uses bank.EpochStakes not live stakes.
+    // slot. Note this decision uses bank.EpochStakes not live stakes.
     pub fn get_voter_pubkey(&self, pubkey: &Pubkey, slot: Slot) -> Option<Arc<Pubkey>> {
         let epoch = self.epoch_schedule.get_epoch(slot);
         self.epoch_authorized_voters
@@ -126,9 +127,9 @@ impl VoteTracker {
     ) -> (
         EpochAuthorizedVoters,
         NodeIdToVoteAccounts,
-        Vec<Arc<Pubkey>>,
+        HashSet<Arc<Pubkey>>,
     ) {
-        let mut new_pubkeys = vec![];
+        let mut new_pubkeys = HashSet::new();
         let mut node_id_to_vote_accounts: NodeIdToVoteAccounts = HashMap::new();
         // Get all known vote accounts with nonzero stake and read out their
         // authorized voters
@@ -161,19 +162,29 @@ impl VoteTracker {
                         .get(&authorized_voter)
                         .cloned()
                         .unwrap_or_else(|| {
-                            let new_key = Arc::new(authorized_voter);
-                            new_pubkeys.push(new_key.clone());
-                            new_key
+                            new_pubkeys
+                                .get(&authorized_voter)
+                                .cloned()
+                                .unwrap_or_else(|| {
+                                    let new_key = Arc::new(authorized_voter);
+                                    new_pubkeys.insert(new_key.clone());
+                                    new_key
+                                })
                         });
+
                     let unduplicated_key = all_pubkeys.get(key).cloned().unwrap_or_else(|| {
-                        let new_key = Arc::new(*key);
-                        new_pubkeys.push(new_key.clone());
-                        new_key
+                        new_pubkeys.get(key).cloned().unwrap_or_else(|| {
+                            let new_key = Arc::new(*key);
+                            new_pubkeys.insert(new_key.clone());
+                            new_key
+                        })
                     });
+
                     node_id_to_vote_accounts
                         .entry(vote_state.node_pubkey)
                         .or_default()
                         .push(unduplicated_key.clone());
+
                     Some((unduplicated_key, unduplicated_authorized_voter_key))
                 } else {
                     None
@@ -229,7 +240,7 @@ impl VoteTracker {
         new_leader_schedule_epoch: Epoch,
         new_epoch_authorized_voters: EpochAuthorizedVoters,
         new_node_id_to_vote_accounts: NodeIdToVoteAccounts,
-        new_pubkeys: Vec<Arc<Pubkey>>,
+        new_pubkeys: HashSet<Arc<Pubkey>>,
     ) {
         self.epoch_authorized_voters
             .write()
@@ -505,17 +516,25 @@ impl ClusterInfoVoteListener {
         }
 
         for (slot, slot_diff) in diff {
-            if let Some(slot_tracker) = vote_tracker.slot_vote_trackers.read().unwrap().get(&slot) {
+            let slot_tracker = vote_tracker
+                .slot_vote_trackers
+                .read()
+                .unwrap()
+                .get(&slot)
+                .cloned();
+            if let Some(slot_tracker) = slot_tracker {
                 let mut w_slot_tracker = slot_tracker.write().unwrap();
+                let mut updates = w_slot_tracker.updates.take().unwrap_or_else(|| vec![]);
                 for pk in slot_diff {
                     w_slot_tracker.voted.insert(pk.clone());
-                    w_slot_tracker.updates.push(pk);
+                    updates.push(pk);
                 }
+                w_slot_tracker.updates = Some(updates);
             } else {
                 let voted: HashSet<_> = slot_diff.into_iter().collect();
                 let new_slot_tracker = SlotVoteTracker {
-                    voted,
-                    updates: vec![],
+                    voted: voted.clone(),
+                    updates: Some(voted.into_iter().collect()),
                 };
                 vote_tracker
                     .slot_vote_trackers
@@ -702,9 +721,13 @@ mod tests {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
             let r_slot_vote_tracker = slot_vote_tracker.read().unwrap();
             for voting_keypairs in &validator_voting_keypairs {
+                let pubkey = voting_keypairs.vote_keypair.pubkey();
+                assert!(r_slot_vote_tracker.voted.contains(&pubkey));
                 assert!(r_slot_vote_tracker
-                    .voted
-                    .contains(&voting_keypairs.vote_keypair.pubkey()));
+                    .updates
+                    .as_ref()
+                    .unwrap()
+                    .contains(&Arc::new(pubkey)));
             }
         }
     }
@@ -750,12 +773,16 @@ mod tests {
         // Check that all the votes were registered for each validator correctly
         ClusterInfoVoteListener::get_and_process_votes(&votes_receiver, &vote_tracker, 0).unwrap();
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
-            let vote_tracker = vote_tracker.get_slot_vote_tracker(i as u64 + 1).unwrap();
-            let r_votes_for_slot = &vote_tracker.read().unwrap();
+            let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(i as u64 + 1).unwrap();
+            let r_slot_vote_tracker = &slot_vote_tracker.read().unwrap();
             for voting_keypairs in keyset {
-                assert!(r_votes_for_slot
-                    .voted
-                    .contains(&voting_keypairs.vote_keypair.pubkey()));
+                let pubkey = voting_keypairs.vote_keypair.pubkey();
+                assert!(r_slot_vote_tracker.voted.contains(&pubkey));
+                assert!(r_slot_vote_tracker
+                    .updates
+                    .as_ref()
+                    .unwrap()
+                    .contains(&Arc::new(pubkey)));
             }
         }
     }
@@ -907,6 +934,11 @@ mod tests {
 
     #[test]
     fn test_vote_tracker_references() {
+        // The number of references that get stored for a pubkey every time
+        // a vote is made. One stored in the SlotVoteTracker.voted, one in
+        // SlotVoteTracker.updates
+        let ref_count_per_vote = 2;
+
         // Create some voters at genesis
         let validator_voting_keypairs: Vec<_> = (0..2)
             .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
@@ -947,8 +979,8 @@ mod tests {
                     .unwrap(),
             );
 
-            // This pubkey voted for a slot, so the refcount is now 4
-            current_ref_count += 1;
+            // This pubkey voted for a slot, so ref count goes up
+            current_ref_count += ref_count_per_vote;
             assert_eq!(ref_count, current_ref_count);
         }
 
@@ -983,8 +1015,14 @@ mod tests {
                 &vote_tracker.all_pubkeys.read().unwrap(),
             );
 
-        // Should add 2 new references to `old_refreshed_pubkey`, one in `new_epoch_authorized_voters`,
-        // one in `new_node_id_to_vote_accounts`
+        assert_eq!(
+            new_pubkeys,
+            vec![Arc::new(new_pubkey)].into_iter().collect()
+        );
+
+        // Should add 3 new references to `old_refreshed_pubkey`, two in `new_epoch_authorized_voters`,
+        // (one for the voter, one for the authorized voter b/c both are the same key) and
+        // one in `new_node_id_to_vote_accounts`s
         vote_tracker.process_new_leader_schedule_epoch_state(
             new_epoch,
             new_epoch_authorized_voters,
@@ -1008,11 +1046,12 @@ mod tests {
                 .unwrap(),
         );
 
-        // Ref count goes up by 2 (see above comments)
-        current_ref_count += 2;
+        // Ref count goes up by 3 (see above comments)
+        current_ref_count += 3;
         assert_eq!(ref_count, current_ref_count);
 
-        // Make 2 new votes in two different epochs, ref count should go up by 2
+        // Make 2 new votes in two different epochs, ref count should go up
+        // by 2 * ref_count_per_vote
         let vote_txs: Vec<_> = [bank.slot() + 2, first_slot_in_new_epoch]
             .iter()
             .map(|slot| {
@@ -1037,7 +1076,7 @@ mod tests {
         );
 
         // Ref count goes up by 2 (see above comments)
-        current_ref_count += 2;
+        current_ref_count += 2 * ref_count_per_vote;
         assert_eq!(ref_count, current_ref_count);
     }
 }

@@ -88,11 +88,8 @@ impl Tvu {
         shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
-<<<<<<< HEAD
         snapshot_package_sender: Option<SnapshotPackageSender>,
-=======
         vote_tracker: Arc<VoteTracker>,
->>>>>>> Use more fine grained locking
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()

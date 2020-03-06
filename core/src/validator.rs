@@ -429,6 +429,7 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             snapshot_package_sender,
+            vote_tracker.clone(),
         );
 
         if config.dev_sigverify_disabled {
