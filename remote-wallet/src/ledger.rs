@@ -267,13 +267,18 @@ impl RemoteWallet for LedgerWallet {
             .serial_number
             .clone()
             .unwrap_or_else(|| "Unknown".to_owned());
-        self.get_pubkey(&DerivationPath::default(), false)
-            .map(|pubkey| RemoteWalletInfo {
-                model,
-                manufacturer,
-                serial,
-                pubkey,
-            })
+        let pubkey_result = self.get_pubkey(&DerivationPath::default(), false);
+        let (pubkey, error) = match pubkey_result {
+            Ok(pubkey) => (pubkey, None),
+            Err(err) => (Pubkey::default(), Some(err)),
+        };
+        Ok(RemoteWalletInfo {
+            model,
+            manufacturer,
+            serial,
+            pubkey,
+            error,
+        })
     }
 
     fn get_pubkey(
@@ -400,9 +405,20 @@ pub fn get_ledger_from_info(
     wallet_manager: &RemoteWalletManager,
 ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
     let devices = wallet_manager.list_devices();
-    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = devices
+    let mut matches = devices
         .iter()
-        .filter(|&device_info| device_info.matches(&info))
+        .filter(|&device_info| device_info.matches(&info));
+    if matches
+        .clone()
+        .all(|device_info| device_info.error.is_some())
+    {
+        let first_device = matches.next();
+        if let Some(device) = first_device {
+            return Err(device.error.clone().unwrap());
+        }
+    }
+    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = matches
+        .filter(|&device_info| device_info.error.is_none())
         .map(|device_info| (device_info.pubkey, device_info.get_pretty_path()))
         .unzip();
     if pubkeys.is_empty() {
