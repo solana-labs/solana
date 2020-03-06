@@ -50,7 +50,7 @@ SPECIAL=""
 semverParseInto "$(readCargoVariable version "${Cargo_tomls[0]}")" MAJOR MINOR PATCH SPECIAL
 [[ -n $MAJOR ]] || usage
 
-currentVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
+currentVersion="$MAJOR\.$MINOR\.$PATCH$SPECIAL"
 
 bump=$1
 if [[ -z $bump ]]; then
