@@ -178,7 +178,7 @@ impl MessageProcessor {
             .accounts
             .iter()
             .map(|&index| {
-                let is_signer = index < message.header.num_required_signatures;
+                let is_signer = message.is_signer(index as usize);
                 let index = index as usize;
                 let key = &message.account_keys[index];
                 let account = &accounts[index];
