@@ -650,7 +650,7 @@ impl ClusterInfo {
         stakes_and_index: &[(u64, usize)],
         seed: [u8; 32],
     ) -> Vec<(u64, usize)> {
-        let stake_weights = stakes_and_index.iter().map(|(w, _)| *w).collect();
+        let stake_weights = stakes_and_index.iter().map(|(w, _)| 1 + *w).collect();
 
         let shuffle = weighted_shuffle(stake_weights, seed);
 

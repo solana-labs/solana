@@ -286,7 +286,11 @@ impl ServeRepair {
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
-        let peers_and_stakes: Vec<_> = peers.iter().enumerate().map(|(i, x)| (x.1, i)).collect();
+        let peers_and_stakes: Vec<_> = peers
+            .iter()
+            .enumerate()
+            .map(|(i, x)| (x.1 + 1, i))
+            .collect();
         let peer_ix = weighted_best(&peers_and_stakes, Pubkey::new_rand().to_bytes());
         let peer_pubkey: Option<&(Rc<Pubkey>, u64)> = peers.get(peer_ix);
         let peer_pubkey = peer_pubkey.ok_or(ClusterInfoError::NoPeers)?;
