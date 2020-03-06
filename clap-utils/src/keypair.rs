@@ -87,6 +87,7 @@ pub fn signer_from_path(
                     derivation_of(matches, "derivation_path"),
                     wallet_manager,
                     matches.is_present("confirm_key"),
+                    keypair_name,
                 )?))
             } else {
                 Err(RemoteWalletError::NoDeviceFound.into())
