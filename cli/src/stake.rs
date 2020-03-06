@@ -5,7 +5,7 @@ use crate::{
         CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex, FEE_PAYER_ARG,
     },
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
-    offline::*,
+    offline::{blockhash_query::BlockhashQuery, *},
 };
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};

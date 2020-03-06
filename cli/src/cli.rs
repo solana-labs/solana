@@ -2,7 +2,7 @@ use crate::{
     cluster_query::*,
     display::{println_name_value, println_signers},
     nonce::{self, *},
-    offline::*,
+    offline::{blockhash_query::BlockhashQuery, *},
     stake::*,
     storage::*,
     validator_info::*,

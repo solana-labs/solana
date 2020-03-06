@@ -1,14 +1,4 @@
-use clap::{App, Arg, ArgMatches};
-use serde_json::Value;
-use solana_clap_utils::{
-    input_parsers::value_of,
-    input_validators::{is_hash, is_pubkey_sig},
-    offline::{BLOCKHASH_ARG, SIGNER_ARG, SIGN_ONLY_ARG},
-};
-use solana_client::rpc_client::RpcClient;
-use solana_sdk::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey, signature::Signature};
-use std::str::FromStr;
-
+use super::*;
 #[derive(Clone, Debug, PartialEq)]
 pub enum BlockhashQuery {
     None(Hash, FeeCalculator),
@@ -56,66 +46,10 @@ impl Default for BlockhashQuery {
     }
 }
 
-fn blockhash_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(BLOCKHASH_ARG.name)
-        .long(BLOCKHASH_ARG.long)
-        .takes_value(true)
-        .value_name("BLOCKHASH")
-        .validator(is_hash)
-        .help(BLOCKHASH_ARG.help)
-}
-
-fn sign_only_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(SIGN_ONLY_ARG.name)
-        .long(SIGN_ONLY_ARG.long)
-        .takes_value(false)
-        .requires(BLOCKHASH_ARG.name)
-        .help(SIGN_ONLY_ARG.help)
-}
-
-fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(SIGNER_ARG.name)
-        .long(SIGNER_ARG.long)
-        .takes_value(true)
-        .value_name("BASE58_PUBKEY=BASE58_SIG")
-        .validator(is_pubkey_sig)
-        .requires(BLOCKHASH_ARG.name)
-        .multiple(true)
-        .help(SIGNER_ARG.help)
-}
-
-pub trait OfflineArgs {
-    fn offline_args(self) -> Self;
-}
-
-impl OfflineArgs for App<'_, '_> {
-    fn offline_args(self) -> Self {
-        self.arg(blockhash_arg())
-            .arg(sign_only_arg())
-            .arg(signer_arg())
-    }
-}
-
-pub fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signature)>) {
-    let object: Value = serde_json::from_str(&reply).unwrap();
-    let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
-    let blockhash = blockhash_str.parse::<Hash>().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
-    (blockhash, signers)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::offline::blockhash_query::BlockhashQuery;
     use clap::App;
     use serde_json::{self, json, Value};
     use solana_client::{
@@ -126,7 +60,7 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn test_blockhashspec_new_ok() {
+    fn test_blockhash_query_new_ok() {
         let blockhash = hash(&[1u8]);
 
         assert_eq!(
@@ -142,18 +76,18 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_blockhashspec_new_fail() {
+    fn test_blockhash_query_new_fail() {
         BlockhashQuery::new(None, true);
     }
 
     #[test]
-    fn test_blockhashspec_new_from_matches_ok() {
-        let test_commands = App::new("blockhashspec_test").offline_args();
+    fn test_blockhash_query_new_from_matches_ok() {
+        let test_commands = App::new("blockhash_query_test").offline_args();
         let blockhash = hash(&[1u8]);
         let blockhash_string = blockhash.to_string();
 
         let matches = test_commands.clone().get_matches_from(vec![
-            "blockhashspec_test",
+            "blockhash_query_test",
             "--blockhash",
             &blockhash_string,
             "--sign-only",
@@ -164,7 +98,7 @@ mod tests {
         );
 
         let matches = test_commands.clone().get_matches_from(vec![
-            "blockhashspec_test",
+            "blockhash_query_test",
             "--blockhash",
             &blockhash_string,
         ]);
@@ -175,7 +109,7 @@ mod tests {
 
         let matches = test_commands
             .clone()
-            .get_matches_from(vec!["blockhashspec_test"]);
+            .get_matches_from(vec!["blockhash_query_test"]);
         assert_eq!(
             BlockhashQuery::new_from_matches(&matches),
             BlockhashQuery::All,
@@ -184,8 +118,8 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_blockhashspec_new_from_matches_fail() {
-        let test_commands = App::new("blockhashspec_test")
+    fn test_blockhash_query_new_from_matches_fail() {
+        let test_commands = App::new("blockhash_query_test")
             .arg(blockhash_arg())
             // We can really only hit this case unless the arg requirements
             // are broken, so unset the requires() to recreate that condition
@@ -193,12 +127,12 @@ mod tests {
 
         let matches = test_commands
             .clone()
-            .get_matches_from(vec!["blockhashspec_test", "--sign-only"]);
+            .get_matches_from(vec!["blockhash_query_test", "--sign-only"]);
         BlockhashQuery::new_from_matches(&matches);
     }
 
     #[test]
-    fn test_blockhashspec_get_blockhash_fee_calc() {
+    fn test_blockhash_query_get_blockhash_fee_calc() {
         let test_blockhash = hash(&[0u8]);
         let rpc_blockhash = hash(&[1u8]);
         let rpc_fee_calc = FeeCalculator::new(42);

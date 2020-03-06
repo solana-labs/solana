@@ -4,7 +4,7 @@ use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
     nonce,
-    offline::{parse_sign_only_reply_string, BlockhashQuery},
+    offline::{blockhash_query::BlockhashQuery, parse_sign_only_reply_string},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
