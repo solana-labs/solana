@@ -1,7 +1,6 @@
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_ledger::{
-    snapshot_package::SnapshotPackageReceiver, snapshot_utils::archive_snapshot_package,
-};
+use solana_ledger::{snapshot_package::SnapshotPackageReceiver, snapshot_utils};
+use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -19,15 +18,24 @@ pub struct SnapshotPackagerService {
 impl SnapshotPackagerService {
     pub fn new(
         snapshot_package_receiver: SnapshotPackageReceiver,
+        starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
+
         let t_snapshot_packager = Builder::new()
             .name("solana-snapshot-packager".to_string())
             .spawn(move || {
                 let mut hashes = vec![];
+                if let Some(starting_snapshot_hash) = starting_snapshot_hash {
+                    hashes.push(starting_snapshot_hash);
+                }
+                cluster_info
+                    .write()
+                    .unwrap()
+                    .push_snapshot_hashes(hashes.clone());
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -41,7 +49,9 @@ impl SnapshotPackagerService {
                             {
                                 snapshot_package = new_snapshot_package;
                             }
-                            if let Err(err) = archive_snapshot_package(&snapshot_package) {
+                            if let Err(err) =
+                                snapshot_utils::archive_snapshot_package(&snapshot_package)
+                            {
                                 warn!("Failed to create snapshot archive: {}", err);
                             } else {
                                 hashes.push((snapshot_package.root, snapshot_package.hash));
