@@ -199,7 +199,7 @@ mod tests {
         //root is 0, so it should clear out the slot
         let mut cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[0], 0).unwrap();
+        epoch_slot.fill(&[0], 0);
         cs.update_internal(0, (vec![epoch_slot], Some(0)));
         assert_eq!(cs.since, Some(0));
         assert!(cs.lookup(0).is_none());
@@ -209,7 +209,7 @@ mod tests {
     fn test_update_new_slot() {
         let mut cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0).unwrap();
+        epoch_slot.fill(&[1], 0);
         cs.update_internal(0, (vec![epoch_slot], Some(0)));
         assert_eq!(cs.since, Some(0));
         assert!(cs.lookup(0).is_none());
@@ -221,7 +221,7 @@ mod tests {
     fn test_update_new_staked_slot() {
         let mut cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0).unwrap();
+        epoch_slot.fill(&[1], 0);
         let map = vec![(Rc::new(Pubkey::default()), 1)].into_iter().collect();
         cs.default_peers = map;
         cs.update_internal(0, (vec![epoch_slot], None));
@@ -233,7 +233,7 @@ mod tests {
     fn test_generate_repairs() {
         let mut cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0).unwrap();
+        epoch_slot.fill(&[1], 0);
         cs.update_internal(0, (vec![epoch_slot], None));
         let self_id = Pubkey::new_rand();
         assert_eq!(
@@ -246,7 +246,7 @@ mod tests {
     fn test_collect_my_slots() {
         let mut cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0).unwrap();
+        epoch_slot.fill(&[1], 0);
         let self_id = epoch_slot.from;
         cs.update_internal(0, (vec![epoch_slot], None));
         let slots: Vec<Slot> = cs.collect(&self_id).into_iter().collect();
@@ -257,7 +257,7 @@ mod tests {
     fn test_generate_repairs_existing() {
         let mut cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0).unwrap();
+        epoch_slot.fill(&[1], 0);
         let self_id = epoch_slot.from;
         cs.update_internal(0, (vec![epoch_slot], None));
         assert!(cs

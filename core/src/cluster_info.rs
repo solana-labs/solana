@@ -359,15 +359,16 @@ impl ClusterInfo {
             } else {
                 EpochSlots::new(self.id(), now)
             };
-            if let Ok(n) = slots.fill(&update[num..], now) {
+            let n = slots.fill(&update[num..], now);
+            if n > 0 {
                 let entry = CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.keypair);
                 self.gossip
                     .process_push_message(&self.id(), vec![entry], now);
-                num += n;
-                if num < update.len() {
-                    epoch_slot_index += 1;
-                    reset = true;
-                }
+            }
+            num += n;
+            if num < update.len() {
+                epoch_slot_index += 1;
+                reset = true;
             }
         }
     }

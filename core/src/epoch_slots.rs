@@ -47,11 +47,13 @@ impl Flate2 {
         unc.slots.shrink_to_fit();
         let bits = unc.slots.into_boxed_slice();
         compressor.compress_vec(&bits, &mut compressed, FlushCompress::Finish)?;
-        Ok(Self {
+        let rv = Self {
             first_slot,
             num,
             compressed,
-        })
+        };
+        let _ = rv.inflate()?;
+        Ok(rv)
     }
     pub fn inflate(&self) -> Result<Uncompressed> {
         let mut uncompressed = Vec::with_capacity((self.num + 4) / 8);
@@ -154,8 +156,7 @@ impl CompressedSlots {
     pub fn deflate(&mut self) -> Result<()> {
         match self {
             CompressedSlots::Uncompressed(vals) => {
-                let mut unc = Uncompressed::new(0);
-                std::mem::swap(&mut unc, vals);
+                let unc = vals.clone();
                 let compressed = Flate2::deflate(unc)?;
                 let mut new = CompressedSlots::Flate2(compressed);
                 std::mem::swap(self, &mut new);
@@ -181,23 +182,25 @@ impl EpochSlots {
             slots: vec![],
         }
     }
-    pub fn fill(&mut self, slots: &[Slot], now: u64) -> Result<usize> {
+    pub fn fill(&mut self, slots: &[Slot], now: u64) -> usize {
         let mut num = 0;
         self.wallclock = std::cmp::max(now, self.wallclock + 1);
         while num < slots.len() {
             num += self.add(&slots[num..]);
             if num < slots.len() {
-                self.deflate()?;
+                if self.deflate().is_err() {
+                    return num;
+                }
                 let space = self.max_compressed_slot_size();
                 if space > 0 {
                     let cslot = CompressedSlots::new(space as usize);
                     self.slots.push(cslot);
                 } else {
-                    return Ok(num);
+                    return num;
                 }
             }
         }
-        Ok(num)
+        num
     }
     pub fn add(&mut self, slots: &[Slot]) -> usize {
         let mut num = 0;
@@ -294,7 +297,7 @@ mod tests {
     fn test_epoch_slots_fill_range() {
         let range: Vec<Slot> = (0..5000).into_iter().collect();
         let mut slots = EpochSlots::default();
-        assert_eq!(slots.fill(&range, 1), Ok(5000));
+        assert_eq!(slots.fill(&range, 1), 5000);
         assert_eq!(slots.wallclock, 1);
         assert_eq!(slots.to_slots(0), range);
         assert_eq!(slots.to_slots(4999), vec![4999]);
@@ -304,7 +307,7 @@ mod tests {
     fn test_epoch_slots_fill_sparce_range() {
         let range: Vec<Slot> = (0..5000).into_iter().map(|x| x * 3).collect();
         let mut slots = EpochSlots::default();
-        assert_eq!(slots.fill(&range, 2), Ok(5000));
+        assert_eq!(slots.fill(&range, 2), 5000);
         assert_eq!(slots.wallclock, 2);
         assert_eq!(slots.slots.len(), 3);
         assert_eq!(slots.slots[0].first_slot(), 0);
@@ -315,5 +318,69 @@ mod tests {
         assert_ne!(slots.slots[2].num_slots(), 0);
         assert_eq!(slots.to_slots(0), range);
         assert_eq!(slots.to_slots(4999 * 3), vec![4999 * 3]);
+    }
+    #[test]
+    fn test_epoch_slots_fill_uncompressed_random_range() {
+        use rand::Rng;
+        for _ in 0..10 {
+            let mut range: Vec<Slot> = vec![];
+            for _ in 0..5000 {
+                let last = *range.last().unwrap_or(&0);
+                range.push(last + rand::thread_rng().gen_range(1, 5));
+            }
+            let sz = EpochSlots::default().max_compressed_slot_size();
+            let mut slots = Uncompressed::new(sz as usize);
+            let sz = slots.add(&range);
+            let slots = slots.to_slots(0);
+            assert_eq!(slots.len(), sz);
+            assert_eq!(slots[..], range[..sz]);
+        }
+    }
+
+    #[test]
+    fn test_epoch_slots_fill_compressed_random_range() {
+        use rand::Rng;
+        for _ in 0..10 {
+            let mut range: Vec<Slot> = vec![];
+            for _ in 0..5000 {
+                let last = *range.last().unwrap_or(&0);
+                range.push(last + rand::thread_rng().gen_range(1, 5));
+            }
+            let sz = EpochSlots::default().max_compressed_slot_size();
+            let mut slots = Uncompressed::new(sz as usize);
+            let sz = slots.add(&range);
+            let mut slots = CompressedSlots::Uncompressed(slots);
+            slots.deflate().unwrap();
+            let slots = slots.to_slots(0).unwrap();
+            assert_eq!(slots.len(), sz);
+            assert_eq!(slots[..], range[..sz]);
+        }
+    }
+
+    #[test]
+    fn test_epoch_slots_fill_random_range() {
+        use rand::Rng;
+        for _ in 0..10 {
+            let mut range: Vec<Slot> = vec![];
+            for _ in 0..5000 {
+                let last = *range.last().unwrap_or(&0);
+                range.push(last + rand::thread_rng().gen_range(1, 5));
+            }
+            let mut slots = EpochSlots::default();
+            let sz = slots.fill(&range, 1);
+            let last = range[sz - 1];
+            assert_eq!(
+                last,
+                slots.slots.last().unwrap().first_slot()
+                    + slots.slots.last().unwrap().num_slots() as u64
+                    - 1
+            );
+            for s in &slots.slots {
+                assert!(s.to_slots(0).is_ok());
+            }
+            let slots = slots.to_slots(0);
+            assert_eq!(slots[..], range[..slots.len()]);
+            assert_eq!(sz, slots.len())
+        }
     }
 }
