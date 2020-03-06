@@ -83,7 +83,6 @@ impl Uncompressed {
         } else {
             (min_slot - self.first_slot) as usize
         };
-        println!("TO_SLOTS: {} {}", self.slots.len(), self.num);
         for i in start..self.num {
             if self.slots.get(i as u64) {
                 rv.push(self.first_slot + i as Slot);
