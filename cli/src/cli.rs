@@ -1070,9 +1070,12 @@ fn process_create_address_with_seed(
     seed: &str,
     program_id: &Pubkey,
 ) -> ProcessResult {
-    let config_pubkey = config.pubkey()?;
-    let from_pubkey = from_pubkey.unwrap_or(&config_pubkey);
-    let address = create_address_with_seed(from_pubkey, seed, program_id)?;
+    let from_pubkey = if let Some(from_pubkey) = from_pubkey {
+        *from_pubkey
+    } else {
+        config.pubkey()?
+    };
+    let address = create_address_with_seed(&from_pubkey, seed, program_id)?;
     Ok(address.to_string())
 }
 
