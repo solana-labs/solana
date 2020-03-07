@@ -293,7 +293,6 @@ EOF
         --enable-rpc-get-confirmed-block
       )
     else
-      args+=(--enable-rpc-exit)
       if [[ -n $internalNodesLamports ]]; then
         args+=(--node-lamports "$internalNodesLamports")
       fi

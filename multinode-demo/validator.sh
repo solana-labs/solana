@@ -219,6 +219,8 @@ default_arg --voting-keypair "$voting_keypair_path"
 default_arg --storage-keypair "$storage_keypair_path"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
+default_arg --enable-rpc-exit
+default_arg --enable-rpc-set-log-filter
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
