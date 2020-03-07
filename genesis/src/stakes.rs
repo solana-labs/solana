@@ -16,6 +16,7 @@ use solana_stake_program::{
 pub struct StakerInfo {
     pub name: &'static str,
     pub staker: &'static str,
+    pub withdrawer: Option<&'static str>,
     pub lamports: u64,
 }
 
@@ -44,12 +45,19 @@ pub fn create_and_add_stakes(
     granularity: Option<u64>,
 ) -> u64 {
     let granularity = granularity.unwrap_or(std::u64::MAX);
-    let authorized = Authorized::auto(
-        &staker_info
-            .staker
-            .parse::<Pubkey>()
-            .expect("invalid staker"),
-    );
+    let staker = &staker_info
+        .staker
+        .parse::<Pubkey>()
+        .expect("invalid staker");
+    let withdrawer = &staker_info
+        .withdrawer
+        .unwrap_or(staker_info.staker)
+        .parse::<Pubkey>()
+        .expect("invalid staker");
+    let authorized = Authorized {
+        staker: *staker,
+        withdrawer: *withdrawer,
+    };
     let custodian = unlock_info
         .custodian
         .parse::<Pubkey>()
@@ -240,6 +248,7 @@ mod tests {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
+                withdrawer: None,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
@@ -265,6 +274,7 @@ mod tests {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
+                withdrawer: None,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
@@ -290,6 +300,7 @@ mod tests {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
+                withdrawer: None,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
@@ -314,6 +325,7 @@ mod tests {
                 name: "fun",
                 staker: "P1aceHo1derPubkey11111111111111111111111111",
                 lamports: total_lamports,
+                withdrawer: None,
             },
             &UnlockInfo {
                 cliff_fraction: 0.5,
