@@ -7,12 +7,9 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
-    input_parsers::pubkey_of,
-    input_validators::{is_keypair, is_pubkey, is_pubkey_or_keypair, is_slot},
-    keypair::{
-        self, keypair_input, KeypairWithSource, ASK_SEED_PHRASE_ARG,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
-    },
+    input_parsers::{keypair_of, pubkey_of},
+    input_validators::{is_keypair_or_ask_keyword, is_pubkey, is_pubkey_or_keypair, is_slot},
+    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
@@ -554,18 +551,8 @@ pub fn main() {
                 .help("Stream entries to this unix domain socket path")
         )
         .arg(
-            Arg::with_name(ASK_SEED_PHRASE_ARG.name)
-                .long(ASK_SEED_PHRASE_ARG.long)
-                .value_name("KEYPAIR NAME")
-                .multiple(true)
-                .takes_value(true)
-                .possible_values(&["identity-keypair", "storage-keypair", "voting-keypair"])
-                .help(ASK_SEED_PHRASE_ARG.help),
-        )
-        .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
-                .requires(ASK_SEED_PHRASE_ARG.name)
                 .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
         )
         .arg(
@@ -574,7 +561,7 @@ pub fn main() {
                 .long("identity-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .validator(is_keypair)
+                .validator(is_keypair_or_ask_keyword)
                 .help("File containing the identity keypair for the validator"),
         )
         .arg(
@@ -582,7 +569,7 @@ pub fn main() {
                 .long("voting-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .validator(is_keypair)
+                .validator(is_keypair_or_ask_keyword)
                 .help("File containing the authorized voting keypair.  Default is an ephemeral keypair, which may disable voting without --vote-account."),
         )
         .arg(
@@ -598,7 +585,7 @@ pub fn main() {
                 .long("storage-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .validator(is_keypair)
+                .validator(is_keypair_or_ask_keyword)
                 .help("File containing the storage account keypair.  Default is an ephemeral keypair"),
         )
         .arg(
@@ -854,28 +841,14 @@ pub fn main() {
         )
         .get_matches();
 
-    let identity_keypair = Arc::new(
-        keypair_input(&matches, "identity-keypair")
-            .unwrap_or_else(|err| {
-                eprintln!("Identity keypair input failed: {}", err);
-                exit(1);
-            })
-            .keypair,
-    );
-    let KeypairWithSource {
-        keypair: voting_keypair,
-        source: voting_keypair_source,
-    } = keypair_input(&matches, "voting-keypair").unwrap_or_else(|err| {
-        eprintln!("Voting keypair input failed: {}", err);
-        exit(1);
-    });
-    let ephemeral_voting_keypair = voting_keypair_source == keypair::Source::Generated;
-    let storage_keypair = keypair_input(&matches, "storage-keypair")
-        .unwrap_or_else(|err| {
-            eprintln!("Storage keypair input failed: {}", err);
-            exit(1);
-        })
-        .keypair;
+    let identity_keypair =
+        Arc::new(keypair_of(&matches, "identity_keypair").unwrap_or_else(Keypair::new));
+
+    let (voting_keypair, ephemeral_voting_keypair) = keypair_of(&matches, "voting_keypair")
+        .map(|keypair| (keypair, false))
+        .unwrap_or_else(|| (Keypair::new(), true));
+
+    let storage_keypair = keypair_of(&matches, "storage_keypair").unwrap_or_else(Keypair::new);
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let entrypoint = matches.value_of("entrypoint");
