@@ -34,7 +34,7 @@ longer be displayed.
 
 If you encounter the following error:
 
-```
+```text
 Traceback (most recent call last):
  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.7/lib/python3.7/runpy.py", line 193, in _run_module_as_main
   "__main__", mod_spec)
