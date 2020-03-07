@@ -3332,8 +3332,22 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
+        // CreateAddressWithSeed
+        let from_pubkey = Pubkey::new_rand();
+        config.signers = vec![];
+        config.command = CliCommand::CreateAddressWithSeed {
+            from_pubkey: Some(from_pubkey),
+            seed: "seed".to_string(),
+            program_id: solana_stake_program::id(),
+        };
+        let address = process_command(&config);
+        let expected_address =
+            create_address_with_seed(&from_pubkey, "seed", &solana_stake_program::id()).unwrap();
+        assert_eq!(address.unwrap(), expected_address.to_string());
+
         // Need airdrop cases
         let to = Pubkey::new_rand();
+        config.signers = vec![&keypair];
         config.command = CliCommand::Airdrop {
             faucet_host: None,
             faucet_port: 1234,
