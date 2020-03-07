@@ -9,13 +9,11 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
 };
-use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::{BTreeSet, HashSet},
     iter::Iterator,
     net::UdpSocket,
-    ops::Bound::{Included, Unbounded},
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
     thread::sleep,
@@ -26,9 +24,6 @@ use std::{
 pub const MAX_REPAIR_LENGTH: usize = 512;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_ORPHANS: usize = 5;
-
-const MAX_COMPLETED_SLOT_CACHE_LEN: usize = 256;
-const COMPLETED_SLOT_CACHE_FLUSH_TRIGGER: usize = 512;
 
 pub enum RepairStrategy {
     RepairRange(RepairSlotRange),
@@ -90,7 +85,6 @@ impl RepairService {
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let mut epoch_slots: BTreeSet<Slot> = BTreeSet::new();
-        let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
         if let RepairStrategy::RepairAll {
             ref epoch_schedule, ..
@@ -101,7 +95,6 @@ impl RepairService {
                 id,
                 blockstore,
                 &mut epoch_slots,
-                &old_incomplete_slots,
                 current_root,
                 epoch_schedule,
                 cluster_info,
@@ -131,10 +124,7 @@ impl RepairService {
                         let lowest_slot = blockstore.lowest_slot();
                         Self::update_epoch_slots(
                             id,
-                            new_root,
                             lowest_slot,
-                            &mut epoch_slots,
-                            &mut old_incomplete_slots,
                             &cluster_info,
                             completed_slots_receiver,
                         );
@@ -299,7 +289,6 @@ impl RepairService {
         id: Pubkey,
         blockstore: &Blockstore,
         slots_in_gossip: &mut BTreeSet<Slot>,
-        old_incomplete_slots: &BTreeSet<Slot>,
         root: Slot,
         epoch_schedule: &EpochSchedule,
         cluster_info: &RwLock<ClusterInfo>,
@@ -312,10 +301,7 @@ impl RepairService {
         // last_confirmed_epoch.
         cluster_info.write().unwrap().push_epoch_slots(
             id,
-            root,
             blockstore.lowest_slot(),
-            slots_in_gossip.clone(),
-            old_incomplete_slots,
         );
     }
 
@@ -323,85 +309,17 @@ impl RepairService {
     // for details.
     fn update_epoch_slots(
         id: Pubkey,
-        latest_known_root: Slot,
         lowest_slot: Slot,
-        completed_slot_cache: &mut BTreeSet<Slot>,
-        incomplete_slot_stash: &mut BTreeSet<Slot>,
         cluster_info: &RwLock<ClusterInfo>,
         completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
-        let mut should_update = false;
-        while let Ok(completed_slots) = completed_slots_receiver.try_recv() {
-            for slot in completed_slots {
-                let last_slot_in_stash = *incomplete_slot_stash.iter().next_back().unwrap_or(&0);
-                let removed_from_stash = incomplete_slot_stash.remove(&slot);
-                // If the newly completed slot was not being tracked in stash, and is > last
-                // slot being tracked in stash, add it to cache. Also, update gossip
-                if !removed_from_stash && slot >= last_slot_in_stash {
-                    should_update |= completed_slot_cache.insert(slot);
-                }
-                // If the slot was removed from stash, update gossip
-                should_update |= removed_from_stash;
-            }
+        //TBD: remove this once new EpochSlots are merged
+        while let Ok(_) = completed_slots_receiver.try_recv() {
         }
-
-        if should_update {
-            if completed_slot_cache.len() >= COMPLETED_SLOT_CACHE_FLUSH_TRIGGER {
-                Self::stash_old_incomplete_slots(completed_slot_cache, incomplete_slot_stash);
-                let lowest_completed_slot_in_cache =
-                    *completed_slot_cache.iter().next().unwrap_or(&0);
-                Self::prune_incomplete_slot_stash(
-                    incomplete_slot_stash,
-                    lowest_completed_slot_in_cache,
-                );
-            }
-
-            cluster_info.write().unwrap().push_epoch_slots(
-                id,
-                latest_known_root,
-                lowest_slot,
-                completed_slot_cache.clone(),
-                incomplete_slot_stash,
-            );
-        }
-    }
-
-    fn stash_old_incomplete_slots(cache: &mut BTreeSet<Slot>, stash: &mut BTreeSet<Slot>) {
-        if cache.len() > MAX_COMPLETED_SLOT_CACHE_LEN {
-            let mut prev = *cache.iter().next().expect("Expected to find some slot");
-            cache.remove(&prev);
-            while cache.len() >= MAX_COMPLETED_SLOT_CACHE_LEN {
-                let next = *cache.iter().next().expect("Expected to find some slot");
-                cache.remove(&next);
-                // Prev slot and next slot are not included in incomplete slot list.
-                (prev + 1..next).for_each(|slot| {
-                    stash.insert(slot);
-                });
-                prev = next;
-            }
-        }
-    }
-
-    fn prune_incomplete_slot_stash(
-        stash: &mut BTreeSet<Slot>,
-        lowest_completed_slot_in_cache: Slot,
-    ) {
-        if let Some(oldest_incomplete_slot) = stash.iter().next() {
-            // Prune old slots
-            // Prune in batches to reduce overhead. Pruning starts when oldest slot is 1.5 epochs
-            // earlier than the new root. But, we prune all the slots that are older than 1 epoch.
-            // So slots in a batch of half epoch are getting pruned
-            if oldest_incomplete_slot + DEFAULT_SLOTS_PER_EPOCH + DEFAULT_SLOTS_PER_EPOCH / 2
-                < lowest_completed_slot_in_cache
-            {
-                let oldest_slot_to_retain =
-                    lowest_completed_slot_in_cache.saturating_sub(DEFAULT_SLOTS_PER_EPOCH);
-                *stash = stash
-                    .range((Included(&oldest_slot_to_retain), Unbounded))
-                    .cloned()
-                    .collect();
-            }
-        }
+        cluster_info.write().unwrap().push_epoch_slots(
+            id,
+            lowest_slot,
+        );
     }
 
     #[allow(dead_code)]
@@ -427,15 +345,11 @@ impl RepairService {
 mod test {
     use super::*;
     use crate::cluster_info::Node;
-    use itertools::Itertools;
-    use rand::seq::SliceRandom;
-    use rand::{thread_rng, Rng};
     use solana_ledger::blockstore::{
         make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
     };
     use solana_ledger::shred::max_ticks_per_n_shreds;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-    use std::thread::Builder;
 
     #[test]
     pub fn test_repair_orphan() {
@@ -717,218 +631,19 @@ mod test {
 
     #[test]
     pub fn test_update_epoch_slots() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            // Create blockstore
-            let (blockstore, _, completed_slots_receiver) =
-                Blockstore::open_with_signal(&blockstore_path).unwrap();
-
-            let blockstore = Arc::new(blockstore);
-
-            let mut root = 0;
-            let num_slots = 100;
-            let entries_per_slot = 5;
-            let blockstore_ = blockstore.clone();
-
-            // Spin up thread to write to blockstore
-            let writer = Builder::new()
-                .name("writer".to_string())
-                .spawn(move || {
-                    let slots: Vec<_> = (1..num_slots + 1).collect();
-                    let mut shreds: Vec<_> = make_chaining_slot_entries(&slots, entries_per_slot)
-                        .into_iter()
-                        .flat_map(|(shreds, _)| shreds)
-                        .collect();
-                    shreds.shuffle(&mut thread_rng());
-                    let mut i = 0;
-                    let max_step = entries_per_slot * 4;
-                    let repair_interval_ms = 10;
-                    let mut rng = rand::thread_rng();
-                    let num_shreds = shreds.len();
-                    while i < num_shreds {
-                        let step = rng.gen_range(1, max_step + 1) as usize;
-                        let step = std::cmp::min(step, num_shreds - i);
-                        let shreds_to_insert = shreds.drain(..step).collect_vec();
-                        blockstore_
-                            .insert_shreds(shreds_to_insert, None, false)
-                            .unwrap();
-                        sleep(Duration::from_millis(repair_interval_ms));
-                        i += step;
-                    }
-                })
-                .unwrap();
-
-            let mut completed_slots = BTreeSet::new();
             let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
             let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
                 node_info.info.clone(),
             ));
-
-            let mut old_incomplete_slots: BTreeSet<Slot> = BTreeSet::new();
-            while completed_slots.len() < num_slots as usize {
-                RepairService::update_epoch_slots(
-                    Pubkey::default(),
-                    root,
-                    blockstore.lowest_slot(),
-                    &mut completed_slots,
-                    &mut old_incomplete_slots,
-                    &cluster_info,
-                    &completed_slots_receiver,
-                );
-            }
-
-            let mut expected: BTreeSet<_> = (1..num_slots + 1).collect();
-            assert_eq!(completed_slots, expected);
-
-            // Update with new root, should filter out the slots <= root
-            root = num_slots / 2;
-            let (shreds, _) = make_slot_entries(num_slots + 2, num_slots + 1, entries_per_slot);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            let (_, completed_slots_receiver) = std::sync::mpsc::sync_channel(1);
             RepairService::update_epoch_slots(
                 Pubkey::default(),
-                root,
-                0,
-                &mut completed_slots,
-                &mut old_incomplete_slots,
+                5,
                 &cluster_info,
                 &completed_slots_receiver,
             );
-            expected.insert(num_slots + 2);
-            assert_eq!(completed_slots, expected);
-            writer.join().unwrap();
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
-    fn test_stash_old_incomplete_slots() {
-        let mut cache: BTreeSet<Slot> = BTreeSet::new();
-        let mut stash: BTreeSet<Slot> = BTreeSet::new();
-
-        // When cache is empty.
-        RepairService::stash_old_incomplete_slots(&mut cache, &mut stash);
-        assert_eq!(stash.len(), 0);
-
-        // Insert some slots in cache ( < MAX_COMPLETED_SLOT_CACHE_LEN + 1)
-        cache.insert(101);
-        cache.insert(102);
-        cache.insert(104);
-        cache.insert(105);
-
-        // Not enough slots in cache. So stash should remain empty.
-        RepairService::stash_old_incomplete_slots(&mut cache, &mut stash);
-        assert_eq!(stash.len(), 0);
-        assert_eq!(cache.len(), 4);
-
-        // Insert slots in cache ( = MAX_COMPLETED_SLOT_CACHE_LEN)
-        let mut cache: BTreeSet<Slot> = BTreeSet::new();
-        (0..MAX_COMPLETED_SLOT_CACHE_LEN as u64)
-            .into_iter()
-            .for_each(|slot| {
-                cache.insert(slot);
-            });
-
-        // Not enough slots in cache. So stash should remain empty.
-        RepairService::stash_old_incomplete_slots(&mut cache, &mut stash);
-        assert_eq!(stash.len(), 0);
-        assert_eq!(cache.len(), MAX_COMPLETED_SLOT_CACHE_LEN);
-
-        // Insert 1 more to cross the threshold
-        cache.insert(MAX_COMPLETED_SLOT_CACHE_LEN as u64);
-        RepairService::stash_old_incomplete_slots(&mut cache, &mut stash);
-        // Stash is still empty, as no missing slots
-        assert_eq!(stash.len(), 0);
-        // It removed some entries from cache
-        assert_eq!(cache.len(), MAX_COMPLETED_SLOT_CACHE_LEN - 1);
-
-        // Insert more slots to create a missing slot
-        let mut cache: BTreeSet<Slot> = BTreeSet::new();
-        cache.insert(0);
-        (2..=MAX_COMPLETED_SLOT_CACHE_LEN as u64 + 2)
-            .into_iter()
-            .for_each(|slot| {
-                cache.insert(slot);
-            });
-        RepairService::stash_old_incomplete_slots(&mut cache, &mut stash);
-
-        // Stash is not empty
-        assert!(stash.contains(&1));
-        // It removed some entries from cache
-        assert_eq!(cache.len(), MAX_COMPLETED_SLOT_CACHE_LEN - 1);
-
-        // Test multiple missing slots at dispersed locations
-        let mut cache: BTreeSet<Slot> = BTreeSet::new();
-        (0..MAX_COMPLETED_SLOT_CACHE_LEN as u64 * 2)
-            .into_iter()
-            .for_each(|slot| {
-                cache.insert(slot);
-            });
-
-        cache.remove(&10);
-        cache.remove(&11);
-
-        cache.remove(&28);
-        cache.remove(&29);
-
-        cache.remove(&148);
-        cache.remove(&149);
-        cache.remove(&150);
-        cache.remove(&151);
-
-        RepairService::stash_old_incomplete_slots(&mut cache, &mut stash);
-
-        // Stash is not empty
-        assert!(stash.contains(&10));
-        assert!(stash.contains(&11));
-        assert!(stash.contains(&28));
-        assert!(stash.contains(&29));
-        assert!(stash.contains(&148));
-        assert!(stash.contains(&149));
-        assert!(stash.contains(&150));
-        assert!(stash.contains(&151));
-
-        assert!(!stash.contains(&147));
-        assert!(!stash.contains(&152));
-        // It removed some entries from cache
-        assert_eq!(cache.len(), MAX_COMPLETED_SLOT_CACHE_LEN - 1);
-        (MAX_COMPLETED_SLOT_CACHE_LEN + 1..MAX_COMPLETED_SLOT_CACHE_LEN * 2)
-            .into_iter()
-            .for_each(|slot| {
-                let slot: u64 = slot as u64;
-                assert!(cache.contains(&slot));
-            });
-    }
-
-    #[test]
-    fn test_prune_incomplete_slot_stash() {
-        // Prune empty stash
-        let mut stash: BTreeSet<Slot> = BTreeSet::new();
-        RepairService::prune_incomplete_slot_stash(&mut stash, 0);
-        assert!(stash.is_empty());
-
-        // Prune stash with slots < DEFAULT_SLOTS_PER_EPOCH
-        stash.insert(0);
-        stash.insert(10);
-        stash.insert(11);
-        stash.insert(50);
-        assert_eq!(stash.len(), 4);
-        RepairService::prune_incomplete_slot_stash(&mut stash, 100);
-        assert_eq!(stash.len(), 4);
-
-        // Prune stash with slots > DEFAULT_SLOTS_PER_EPOCH, but < 1.5 * DEFAULT_SLOTS_PER_EPOCH
-        stash.insert(DEFAULT_SLOTS_PER_EPOCH + 50);
-        assert_eq!(stash.len(), 5);
-        RepairService::prune_incomplete_slot_stash(&mut stash, DEFAULT_SLOTS_PER_EPOCH + 100);
-        assert_eq!(stash.len(), 5);
-
-        // Prune stash with slots > 1.5 * DEFAULT_SLOTS_PER_EPOCH
-        stash.insert(DEFAULT_SLOTS_PER_EPOCH + DEFAULT_SLOTS_PER_EPOCH / 2);
-        assert_eq!(stash.len(), 6);
-        RepairService::prune_incomplete_slot_stash(
-            &mut stash,
-            DEFAULT_SLOTS_PER_EPOCH + DEFAULT_SLOTS_PER_EPOCH / 2 + 1,
-        );
-        assert_eq!(stash.len(), 2);
+            let epoch = cluster_info.read().unwrap().get_epoch_state_for_node(&Pubkey::default(), None).unwrap().0.clone();
+            assert_eq!(epoch.lowest, 5);
     }
 
     #[test]
