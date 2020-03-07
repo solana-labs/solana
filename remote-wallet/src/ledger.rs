@@ -190,7 +190,9 @@ impl LedgerWallet {
         #[allow(clippy::match_overlapping_arm)]
         match status {
             // These need to be aligned with solana Ledger app error codes, and clippy allowance removed
-            0x6700 => Err(RemoteWalletError::Protocol("Incorrect length")),
+            0x6700 => Err(RemoteWalletError::Protocol(
+                "Solana app not open on Ledger device",
+            )),
             0x6802 => Err(RemoteWalletError::Protocol("Invalid parameter")),
             0x6803 => Err(RemoteWalletError::Protocol(
                 "Overflow: message longer than MAX_MESSAGE_LENGTH",
@@ -265,13 +267,18 @@ impl RemoteWallet for LedgerWallet {
             .serial_number
             .clone()
             .unwrap_or_else(|| "Unknown".to_owned());
-        self.get_pubkey(&DerivationPath::default(), false)
-            .map(|pubkey| RemoteWalletInfo {
-                model,
-                manufacturer,
-                serial,
-                pubkey,
-            })
+        let pubkey_result = self.get_pubkey(&DerivationPath::default(), false);
+        let (pubkey, error) = match pubkey_result {
+            Ok(pubkey) => (pubkey, None),
+            Err(err) => (Pubkey::default(), Some(err)),
+        };
+        Ok(RemoteWalletInfo {
+            model,
+            manufacturer,
+            serial,
+            pubkey,
+            error,
+        })
     }
 
     fn get_pubkey(
@@ -395,12 +402,24 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
 /// Choose a Ledger wallet based on matching info fields
 pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
+    keypair_name: &str,
     wallet_manager: &RemoteWalletManager,
 ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
     let devices = wallet_manager.list_devices();
-    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = devices
+    let mut matches = devices
         .iter()
-        .filter(|&device_info| device_info.matches(&info))
+        .filter(|&device_info| device_info.matches(&info));
+    if matches
+        .clone()
+        .all(|device_info| device_info.error.is_some())
+    {
+        let first_device = matches.next();
+        if let Some(device) = first_device {
+            return Err(device.error.clone().unwrap());
+        }
+    }
+    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = matches
+        .filter(|&device_info| device_info.error.is_none())
         .map(|device_info| (device_info.pubkey, device_info.get_pretty_path()))
         .unzip();
     if pubkeys.is_empty() {
@@ -408,7 +427,10 @@ pub fn get_ledger_from_info(
     }
     let wallet_base_pubkey = if pubkeys.len() > 1 {
         let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Multiple hardware wallets found. Please select a device")
+            .with_prompt(&format!(
+                "Multiple hardware wallets found. Please select a device for {:?}",
+                keypair_name
+            ))
             .default(0)
             .items(&device_paths[..])
             .interact()
