@@ -967,7 +967,7 @@ impl ReplayStage {
 
             Self::update_propagation_status(
                 progress,
-                &bank_slot,
+                bank_slot,
                 all_pubkeys,
                 bank_forks,
                 vote_tracker,
@@ -1009,15 +1009,12 @@ impl ReplayStage {
         let prev_leader_confirmed =
             // prev_leader_slot doesn't exist because already rooted
             // or this validator hasn't been scheudled as a leader
-            // yet. In both cases the latest leader iis vacuously
+            // yet. In both cases the latest leader is vacuously
             // confirmed
-            prev_leader_slot.is_none() || {
-                let prev_leader_progress = progress.get(&prev_leader_slot.unwrap());
-                 // prev_leader is rooted, so it's confirmed
-                prev_leader_progress.is_none() ||
-                // prev_leader is confirmed
-                prev_leader_progress.unwrap().propagated_stats.propagated_confirmation
-            };
+            prev_leader_slot.is_none() ||
+                // prev_leader isn't in the progress map, which means 
+                // it's rooted, so it's confirmed
+                progress.get(&prev_leader_slot.unwrap()).is_none();
 
         if prev_leader_confirmed {
             // If previous leader has been confirmed as propagated, then
@@ -1035,13 +1032,13 @@ impl ReplayStage {
 
     fn update_propagation_status(
         progress: &mut ProgressMap,
-        slot: &Slot,
+        slot: Slot,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
         bank_forks: &RwLock<BankForks>,
         vote_tracker: &VoteTracker,
     ) {
         // If propagation has already been confirmed, return
-        if Self::is_propagated(progress, *slot) {
+        if Self::is_propagated(progress, slot) {
             return;
         }
 
@@ -1064,7 +1061,7 @@ impl ReplayStage {
             );
 
         let (propagation_result, new_slot_vote_tracker) = {
-            let mut new_slot_vote_tracker = None;
+            let mut new_slot_vote_tracker = slot_vote_tracker;
             let mut prev_leader_progress = progress.get_mut(&prev_leader_slot).expect(
                 "If slot doesn't exist in Progress map, 
                 is_propagated() above should have returned true",
@@ -1080,13 +1077,13 @@ impl ReplayStage {
                         .expect("Entry in progress map must exist in BankForks")
                         .clone();
 
-                    if slot_vote_tracker.is_none() {
-                        new_slot_vote_tracker = vote_tracker.get_slot_vote_tracker(*slot);
+                    if new_slot_vote_tracker.is_none() {
+                        new_slot_vote_tracker = vote_tracker.get_slot_vote_tracker(slot);
                     }
 
-                    slot_vote_tracker.map(|slot_vote_tracker| {
+                    new_slot_vote_tracker.as_ref().map(|slot_vote_tracker| {
                         Self::update_propagated_threshold_from_votes(
-                            &slot_vote_tracker,
+                            slot_vote_tracker,
                             &prev_leader_bank,
                             &mut prev_leader_progress,
                             all_pubkeys,
@@ -2709,5 +2706,131 @@ pub(crate) mod tests {
                 .fork_weight;
             assert!(second >= first);
         }
+    }
+
+    #[test]
+    fn test_is_propagated() {
+        let mut progress_map = HashMap::new();
+
+        // Insert new ForkProgress for slot 10 and its
+        // previous leader slot 9, and the previous leader
+        // before that slot 8,
+        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), false));
+        progress_map.insert(9, ForkProgress::new(Hash::default(), Some(8), true));
+        progress_map.insert(8, ForkProgress::new(Hash::default(), Some(7), true));
+
+        // Insert new ForkProgress with no previous leader
+        progress_map.insert(3, ForkProgress::new(Hash::default(), None, true));
+
+        // None of these slot have parents which are confirmed
+        assert!(!ReplayStage::is_propagated(&mut progress_map, 9));
+        assert!(!ReplayStage::is_propagated(&mut progress_map, 10));
+
+        // The previous leader before 8, slot 7, does not exist in
+        // progress map, so is_propagated(8) should return true as
+        // this implies the parent is rooted
+        assert!(ReplayStage::is_propagated(&mut progress_map, 8));
+        assert!(
+            progress_map
+                .get(&8)
+                .unwrap()
+                .propagated_stats
+                .propagated_confirmation
+        );
+
+        // Slot 3 has no previous leader slot, so the is_propagated() check
+        // is vacuously true
+        assert!(ReplayStage::is_propagated(&mut progress_map, 3));
+        assert!(
+            progress_map
+                .get(&3)
+                .unwrap()
+                .propagated_stats
+                .propagated_confirmation
+        );
+
+        // If we set the propagated_confirmation = true, is_propagated should return true
+        progress_map
+            .get_mut(&9)
+            .unwrap()
+            .propagated_stats
+            .propagated_confirmation = true;
+        assert!(ReplayStage::is_propagated(&mut progress_map, 9), true);
+        assert!(
+            progress_map
+                .get(&9)
+                .unwrap()
+                .propagated_stats
+                .propagated_confirmation
+        );
+
+        // Slot 10 is still unconfirmed, even though its previous leader slot 9
+        // has been confirmed
+        assert!(!ReplayStage::is_propagated(&mut progress_map, 10), true);
+    }
+
+    #[test]
+    fn test_update_propagation_status() {
+        // Create genesis stakers
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let stake_keypair = Keypair::new();
+        let vote_pubkey = Arc::new(vote_keypair.pubkey());
+        let mut keypairs = HashMap::new();
+
+        keypairs.insert(
+            node_keypair.pubkey(),
+            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
+        );
+
+        let stake = 10_000;
+        let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, 10_000);
+
+        // Insert new ForkProgress for slot 10 and its
+        // previous leader slot 9
+        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), false));
+        progress_map.insert(9, ForkProgress::new(Hash::default(), Some(8), true));
+
+        let bank0 = bank_forks.get(0).unwrap().clone();
+        bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
+        let bank9 = bank_forks.get(9).unwrap().clone();
+        bank_forks.insert(Bank::new_from_parent(&bank9, &Pubkey::default(), 10));
+
+        // Make sure is_propagated == false so that the propagation logic
+        // runs in `update_propagation_status`
+        assert!(!ReplayStage::is_propagated(&mut progress_map, 10));
+
+        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        vote_tracker.insert_vote(10, vote_pubkey.clone());
+        ReplayStage::update_propagation_status(
+            &mut progress_map,
+            10,
+            &mut HashSet::new(),
+            &RwLock::new(bank_forks),
+            &vote_tracker,
+        );
+
+        let propagated_stats = &progress_map.get(&10).unwrap().propagated_stats;
+
+        // There should now be a cached reference to the VoteTracker for
+        // slot 10
+        assert!(propagated_stats.slot_vote_tracker.is_some());
+
+        // Updates should have been consumed
+        assert!(propagated_stats
+            .slot_vote_tracker
+            .as_ref()
+            .unwrap()
+            .write()
+            .unwrap()
+            .get_updates()
+            .is_none());
+
+        // The voter should be recorded
+        assert!(propagated_stats
+            .propagated_validators
+            .contains(&*vote_pubkey));
+
+        assert_eq!(propagated_stats.propagated_validators_stake, stake);
     }
 }
