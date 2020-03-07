@@ -590,7 +590,9 @@ pub fn parse_command(
             command: CliCommand::ClusterVersion,
             signers: vec![],
         }),
-        ("create-address-with-seed", Some(matches)) => parse_create_address_with_seed(matches, default_signer_path, wallet_manager),
+        ("create-address-with-seed", Some(matches)) => {
+            parse_create_address_with_seed(matches, default_signer_path, wallet_manager)
+        }
         ("fees", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::Fees,
             signers: vec![],
@@ -1039,7 +1041,7 @@ pub fn parse_create_address_with_seed(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let from_pubkey = pubkey_of(matches, "from");
+    let from_pubkey = pubkey_of_signer(matches, "from", wallet_manager)?;
     let signers = if from_pubkey.is_some() {
         vec![]
     } else {
