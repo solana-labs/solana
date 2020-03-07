@@ -2303,7 +2303,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(false)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("From (base) key, defaults to client keypair."),
                 ),
         )
