@@ -50,6 +50,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 #[derive(Debug, Default, Clone)]
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool,
+    pub enable_set_log_filter: bool,
     pub enable_get_confirmed_block: bool,
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
@@ -337,6 +338,13 @@ impl JsonRpcRequestProcessor {
             .map(|pubkey| pubkey.to_string())
             .collect();
         Ok(pubkeys)
+    }
+
+    pub fn set_log_filter(&self, filter: String) -> Result<()> {
+        if self.config.enable_set_log_filter {
+            solana_logger::setup_with(&filter);
+        }
+        Ok(())
     }
 
     pub fn validator_exit(&self) -> Result<bool> {
@@ -1133,9 +1141,11 @@ impl RpcSol for RpcSolImpl {
         })
     }
 
-    fn set_log_filter(&self, _meta: Self::Metadata, filter: String) -> Result<()> {
-        solana_logger::setup_with(&filter);
-        Ok(())
+    fn set_log_filter(&self, meta: Self::Metadata, filter: String) -> Result<()> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .set_log_filter(filter)
     }
 
     fn get_confirmed_block(

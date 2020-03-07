@@ -689,6 +689,12 @@ pub fn main() {
                 .help("Enable the JSON RPC 'validatorExit' API.  Only enable in a debug environment"),
         )
         .arg(
+            Arg::with_name("enable_rpc_set_log_filter")
+                .long("enable-rpc-set-log-filter")
+                .takes_value(false)
+                .help("Enable the JSON RPC 'setLogFilter' API.  Only enable in a debug environment"),
+        )
+        .arg(
             Arg::with_name("enable_rpc_get_confirmed_block")
                 .long("enable-rpc-get-confirmed-block")
                 .takes_value(false)
@@ -919,6 +925,7 @@ pub fn main() {
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
+            enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_get_confirmed_block: matches.is_present("enable_rpc_get_confirmed_block"),
             identity_pubkey: identity_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
