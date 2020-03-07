@@ -480,7 +480,10 @@ impl Tower {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::replay_stage::{ForkProgress, HeaviestForkFailures, ReplayStage};
+    use crate::{
+        cluster_info_vote_listener::VoteTracker,
+        replay_stage::{ForkProgress, HeaviestForkFailures, ReplayStage},
+    };
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
         bank::Bank,
@@ -560,9 +563,9 @@ pub mod test {
                     .expect("parent bank must exist")
                     .clone();
                 info!("parent of {} is {}", missing_slot, parent_bank.slot(),);
-                progress
-                    .entry(missing_slot)
-                    .or_insert_with(|| ForkProgress::new(parent_bank.last_blockhash()));
+                progress.entry(missing_slot).or_insert_with(|| {
+                    ForkProgress::new(parent_bank.last_blockhash(), None, false)
+                });
 
                 // Create the missing bank
                 let new_bank =
@@ -607,6 +610,9 @@ pub mod test {
                 &mut frozen_banks,
                 tower,
                 progress,
+                &VoteTracker::default(),
+                bank_forks,
+                &mut HashSet::new(),
             );
 
             let bank = bank_forks
@@ -703,7 +709,7 @@ pub mod test {
 
         bank0.freeze();
         let mut progress = HashMap::new();
-        progress.insert(0, ForkProgress::new(bank0.last_blockhash()));
+        progress.insert(0, ForkProgress::new(bank0.last_blockhash(), None, false));
         (BankForks::new(0, bank0), progress)
     }
 
