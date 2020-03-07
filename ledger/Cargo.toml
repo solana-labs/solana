@@ -18,7 +18,7 @@ dir-diff = "0.3.2"
 sha2 = "0.8.1"
 fs_extra = "1.1.0"
 itertools = "0.8.2"
-libc = "0.2.66"
+libc = "0.2.67"
 log = { version = "0.4.8" }
 rand = "0.6.5"
 rand_chacha = "0.1.1"
