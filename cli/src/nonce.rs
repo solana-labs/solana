@@ -25,14 +25,22 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::sync::Arc;
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CliNonceError {
+    #[error("invalid account owner")]
     InvalidAccountOwner,
+    #[error("invalid account data")]
     InvalidAccountData,
+    #[error("query hash does not match stored hash")]
     InvalidHash,
+    #[error("query authority does not match account authority")]
     InvalidAuthority,
-    InvalidState,
+    #[error("invalid state for requested operation")]
+    InvalidStateForOperation,
+    #[error("client error: {0}")]
+    Client(String),
 }
 
 pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
@@ -376,7 +384,9 @@ pub fn check_nonce_account(
                 Ok(())
             }
         }
-        State::Uninitialized => Err(CliError::InvalidNonce(CliNonceError::InvalidState).into()),
+        State::Uninitialized => {
+            Err(CliError::InvalidNonce(CliNonceError::InvalidStateForOperation).into())
+        }
     }
 }
 
@@ -962,7 +972,7 @@ mod tests {
         assert_eq!(
             check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash),
             Err(Box::new(CliError::InvalidNonce(
-                CliNonceError::InvalidState
+                CliNonceError::InvalidStateForOperation
             ))),
         );
     }

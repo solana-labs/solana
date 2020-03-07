@@ -409,7 +409,7 @@ pub struct CliCommandInfo {
     pub signers: CliSigners,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum CliError {
     BadParameter(String),
     CommandNotRecognized(String),
@@ -440,6 +440,17 @@ impl error::Error for CliError {
 impl From<Box<dyn error::Error>> for CliError {
     fn from(error: Box<dyn error::Error>) -> Self {
         CliError::DynamicProgramError(format!("{:?}", error))
+    }
+}
+
+impl From<CliNonceError> for CliError {
+    fn from(error: CliNonceError) -> Self {
+        match error {
+            CliNonceError::Client(client_error) => {
+                Self::RpcRequestError(format!("{:?}", client_error))
+            }
+            _ => Self::InvalidNonce(error),
+        }
     }
 }
 
