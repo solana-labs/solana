@@ -84,17 +84,17 @@ impl RepairService {
         repair_strategy: RepairStrategy,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let mut epoch_slots: BTreeSet<Slot> = BTreeSet::new();
+        let mut lowest_slot: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
         if let RepairStrategy::RepairAll {
             ref epoch_schedule, ..
         } = repair_strategy
         {
             let current_root = blockstore.last_root();
-            Self::initialize_epoch_slots(
+            Self::initialize_lowest_slot(
                 id,
                 blockstore,
-                &mut epoch_slots,
+                &mut lowest_slot,
                 current_root,
                 epoch_schedule,
                 cluster_info,
@@ -122,7 +122,7 @@ impl RepairService {
                     } => {
                         let new_root = blockstore.last_root();
                         let lowest_slot = blockstore.lowest_slot();
-                        Self::update_epoch_slots(
+                        Self::update_lowest_slot(
                             id,
                             lowest_slot,
                             &cluster_info,
@@ -285,7 +285,7 @@ impl RepairService {
         }
     }
 
-    fn initialize_epoch_slots(
+    fn initialize_lowest_slot(
         id: Pubkey,
         blockstore: &Blockstore,
         slots_in_gossip: &mut BTreeSet<Slot>,
@@ -299,7 +299,7 @@ impl RepairService {
         // also be updated with the latest root (done in blockstore_processor) and thus
         // will provide a schedule to window_service for any incoming shreds up to the
         // last_confirmed_epoch.
-        cluster_info.write().unwrap().push_epoch_slots(
+        cluster_info.write().unwrap().push_lowest_slot(
             id,
             blockstore.lowest_slot(),
         );
@@ -307,7 +307,7 @@ impl RepairService {
 
     // Update the gossiped structure used for the "Repairmen" repair protocol. See docs
     // for details.
-    fn update_epoch_slots(
+    fn update_lowest_slot(
         id: Pubkey,
         lowest_slot: Slot,
         cluster_info: &RwLock<ClusterInfo>,
@@ -316,7 +316,7 @@ impl RepairService {
         //TBD: remove this once new EpochSlots are merged
         while let Ok(_) = completed_slots_receiver.try_recv() {
         }
-        cluster_info.write().unwrap().push_epoch_slots(
+        cluster_info.write().unwrap().push_lowest_slot(
             id,
             lowest_slot,
         );
@@ -630,20 +630,20 @@ mod test {
     }
 
     #[test]
-    pub fn test_update_epoch_slots() {
+    pub fn test_update_lowest_slot() {
             let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
             let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
                 node_info.info.clone(),
             ));
             let (_, completed_slots_receiver) = std::sync::mpsc::sync_channel(1);
-            RepairService::update_epoch_slots(
+            RepairService::update_lowest_slot(
                 Pubkey::default(),
                 5,
                 &cluster_info,
                 &completed_slots_receiver,
             );
-            let epoch = cluster_info.read().unwrap().get_epoch_state_for_node(&Pubkey::default(), None).unwrap().0.clone();
-            assert_eq!(epoch.lowest, 5);
+            let lowest = cluster_info.read().unwrap().get_lowest_slot_for_node(&Pubkey::default(), None).unwrap().0.clone();
+            assert_eq!(lowest.lowest, 5);
     }
 
     #[test]
