@@ -9,7 +9,7 @@ use solana_sdk::{
 };
 use std::{
     borrow::{Borrow, Cow},
-    collections::{HashSet},
+    collections::HashSet,
     fmt,
 };
 
@@ -108,11 +108,7 @@ pub struct LowestSlot {
 }
 
 impl LowestSlot {
-    pub fn new(
-        from: Pubkey,
-        lowest: Slot,
-        wallclock: u64,
-    ) -> Self {
+    pub fn new(from: Pubkey, lowest: Slot, wallclock: u64) -> Self {
         Self {
             from,
             lowest,
@@ -326,9 +322,11 @@ mod test {
         let key = v.clone().vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(0, key));
 
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
-            LowestSlot::new(Pubkey::default(), 0, 0),
-        ));
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot::new(
+            Pubkey::default(),
+            0,
+            0,
+        )));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().lowest_slot().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::LowestSlot(key));
@@ -348,9 +346,11 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
-            LowestSlot::new(keypair.pubkey(), 0, timestamp()),
-        ));
+        v = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot::new(
+            keypair.pubkey(),
+            0,
+            timestamp(),
+        )));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
 

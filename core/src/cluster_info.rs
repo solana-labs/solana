@@ -322,24 +322,18 @@ impl ClusterInfo {
         )
     }
 
-    pub fn push_lowest_slot(
-        &mut self,
-        id: Pubkey,
-        min: Slot,
-    ) {
+    pub fn push_lowest_slot(&mut self, id: Pubkey, min: Slot) {
         let now = timestamp();
         let last = self
-                    .gossip
-                    .crds
-                    .lookup(&CrdsValueLabel::LowestSlot(self.id()))
-                    .and_then(|x| x.lowest_slot())
-                    .map(|x| x.lowest)
-                    .unwrap_or(0);
+            .gossip
+            .crds
+            .lookup(&CrdsValueLabel::LowestSlot(self.id()))
+            .and_then(|x| x.lowest_slot())
+            .map(|x| x.lowest)
+            .unwrap_or(0);
         if min > last {
             let entry = CrdsValue::new_signed(
-                CrdsData::LowestSlot(
-                    LowestSlot::new(id, min, now),
-                ),
+                CrdsData::LowestSlot(LowestSlot::new(id, min, now)),
                 &self.keypair,
             );
             self.gossip
@@ -2237,13 +2231,11 @@ mod tests {
 
     #[test]
     fn test_split_messages_large() {
-        let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
-            LowestSlot {
-                from: Pubkey::default(),
-                lowest: 0,
-                wallclock: 0,
-            },
-        ));
+        let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot {
+            from: Pubkey::default(),
+            lowest: 0,
+            wallclock: 0,
+        }));
         test_split_messages(value);
     }
 
@@ -2254,23 +2246,19 @@ mod tests {
         let payload: Vec<CrdsValue> = vec![];
         let vec_size = serialized_size(&payload).unwrap();
         let desired_size = MAX_PROTOCOL_PAYLOAD_SIZE - vec_size;
-        let mut value = CrdsValue::new_unsigned(CrdsData::SnapshotHash(
-            SnapshotHash {
-                from: Pubkey::default(),
-                hashes: vec![],
-                wallclock: 0,
-            },
-        ));
+        let mut value = CrdsValue::new_unsigned(CrdsData::SnapshotHash(SnapshotHash {
+            from: Pubkey::default(),
+            hashes: vec![],
+            wallclock: 0,
+        }));
 
         let mut i = 0;
         while value.size() <= desired_size {
-            value.data = CrdsData::SnapshotHash(
-                SnapshotHash {
-                    from: Pubkey::default(),
-                    hashes: vec![(0, Hash::default()); i],
-                    wallclock: 0,
-                },
-            );
+            value.data = CrdsData::SnapshotHash(SnapshotHash {
+                from: Pubkey::default(),
+                hashes: vec![(0, Hash::default()); i],
+                wallclock: 0,
+            });
             i += 1;
         }
         let split = ClusterInfo::split_gossip_messages(vec![value.clone()]);
@@ -2408,13 +2396,11 @@ mod tests {
             let other_node_pubkey = Pubkey::new_rand();
             let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
             cluster_info.insert_info(other_node.clone());
-            let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
-                LowestSlot::new(
-                    other_node_pubkey,
-                    peer_lowest,
-                    timestamp(),
-                ),
-            ));
+            let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot::new(
+                other_node_pubkey,
+                peer_lowest,
+                timestamp(),
+            )));
             let _ = cluster_info.gossip.crds.insert(value, timestamp());
         }
         // only half the visible peers should be eligible to serve this repair
