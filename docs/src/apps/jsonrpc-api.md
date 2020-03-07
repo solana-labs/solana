@@ -24,6 +24,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
+* [getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash)
 * [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
 * [getIdentity](jsonrpc-api.md#getidentity)
@@ -403,6 +404,30 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"firstNormalEpoch":8,"firstNormalSlot":8160,"leaderScheduleSlotOffset":8192,"slotsPerEpoch":8192,"warmup":true},"id":1}
+```
+
+### getFeeCalculatorForBlockhash
+
+Returns the fee calculator associated with the query blockhash, or `null` if the blockhash has expired
+
+#### Parameters:
+
+* `blockhash: <string>`, query blockhash as a Base58 encoded string
+
+#### Results:
+
+The `result` field will be `null` if the query blockhash has expired, otherwise an `object` with the following fields:
+
+* `feeCalculator: <object>`, `FeeCalculator` object describing the cluster fee rate at the queried blockhash
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFeeCalculatorForBlockhash", "params":["GJxqhuxcgfn5Tcj6y3f8X4FeCDd2RQ6SnEMo1AAxrPRZ"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":221},"value":{"feeCalculator":{"lamportsPerSignature":5000}}},"id":1}
 ```
 
 ### getFeeRateGovernor

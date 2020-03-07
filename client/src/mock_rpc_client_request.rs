@@ -71,6 +71,17 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                     serde_json::to_value(FeeCalculator::default()).unwrap(),
                 ),
             })?,
+            RpcRequest::GetFeeCalculatorForBlockhash => {
+                let value = if self.url == "blockhash_expired" {
+                    Value::Null
+                } else {
+                    serde_json::to_value(Some(FeeCalculator::default())).unwrap()
+                };
+                serde_json::to_value(Response {
+                    context: RpcResponseContext { slot: 1 },
+                    value,
+                })?
+            }
             RpcRequest::GetFeeRateGovernor => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),

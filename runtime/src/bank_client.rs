@@ -137,6 +137,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.last_blockhash_with_fee_calculator())
     }
 
+    fn get_fee_calculator_for_blockhash(&self, blockhash: &Hash) -> Result<Option<FeeCalculator>> {
+        Ok(self.bank.get_fee_calculator(blockhash))
+    }
+
     fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor> {
         Ok(self.bank.get_fee_rate_governor().clone())
     }
