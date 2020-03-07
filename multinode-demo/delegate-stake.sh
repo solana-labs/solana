@@ -61,6 +61,7 @@ while [[ -n $1 ]]; do
       usage "$@"
     else
       echo "Unknown argument: $1"
+      usage
       exit 1
     fi
   else
