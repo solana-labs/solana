@@ -16,8 +16,6 @@ use std::{
 pub type VoteIndex = u8;
 pub const MAX_VOTES: VoteIndex = 32;
 
-pub type EpochSlotIndex = u8;
-
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CrdsValue {
@@ -61,7 +59,7 @@ impl Signable for CrdsValue {
 pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
-    EpochSlots(EpochSlots),
+    LowestSlot(LowestSlot),
     SnapshotHash(SnapshotHash),
 }
 
@@ -103,13 +101,13 @@ impl SnapshotHash {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct EpochSlots {
+pub struct LowestSlot {
     pub from: Pubkey,
     pub lowest: Slot,
     pub wallclock: u64,
 }
 
-impl EpochSlots {
+impl LowestSlot {
     pub fn new(
         from: Pubkey,
         lowest: Slot,
@@ -146,7 +144,7 @@ impl Vote {
 pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
     Vote(VoteIndex, Pubkey),
-    EpochSlots(Pubkey),
+    LowestSlot(Pubkey),
     SnapshotHash(Pubkey),
 }
 
@@ -155,7 +153,7 @@ impl fmt::Display for CrdsValueLabel {
         match self {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
-            CrdsValueLabel::EpochSlots(_) => write!(f, "EpochSlots({})", self.pubkey()),
+            CrdsValueLabel::LowestSlot(_) => write!(f, "LowestSlot({})", self.pubkey()),
             CrdsValueLabel::SnapshotHash(_) => write!(f, "SnapshotHash({})", self.pubkey()),
         }
     }
@@ -166,7 +164,7 @@ impl CrdsValueLabel {
         match self {
             CrdsValueLabel::ContactInfo(p) => *p,
             CrdsValueLabel::Vote(_, p) => *p,
-            CrdsValueLabel::EpochSlots(p) => *p,
+            CrdsValueLabel::LowestSlot(p) => *p,
             CrdsValueLabel::SnapshotHash(p) => *p,
         }
     }
@@ -192,7 +190,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
-            CrdsData::EpochSlots(obj) => obj.wallclock,
+            CrdsData::LowestSlot(obj) => obj.wallclock,
             CrdsData::SnapshotHash(hash) => hash.wallclock,
         }
     }
@@ -200,7 +198,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
-            CrdsData::EpochSlots(slots) => slots.from,
+            CrdsData::LowestSlot(slots) => slots.from,
             CrdsData::SnapshotHash(hash) => hash.from,
         }
     }
@@ -208,7 +206,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
-            CrdsData::EpochSlots(_) => CrdsValueLabel::EpochSlots(self.pubkey()),
+            CrdsData::LowestSlot(_) => CrdsValueLabel::LowestSlot(self.pubkey()),
             CrdsData::SnapshotHash(_) => CrdsValueLabel::SnapshotHash(self.pubkey()),
         }
     }
@@ -232,9 +230,9 @@ impl CrdsValue {
         }
     }
 
-    pub fn epoch_slots(&self) -> Option<&EpochSlots> {
+    pub fn epoch_slots(&self) -> Option<&LowestSlot> {
         match &self.data {
-            CrdsData::EpochSlots(slots) => Some(slots),
+            CrdsData::LowestSlot(slots) => Some(slots),
             _ => None,
         }
     }
@@ -250,7 +248,7 @@ impl CrdsValue {
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
-            CrdsValueLabel::EpochSlots(*key),
+            CrdsValueLabel::LowestSlot(*key),
             CrdsValueLabel::SnapshotHash(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
@@ -306,7 +304,7 @@ mod test {
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
-                CrdsValueLabel::EpochSlots(_) => hits[1] = true,
+                CrdsValueLabel::LowestSlot(_) => hits[1] = true,
                 CrdsValueLabel::SnapshotHash(_) => hits[2] = true,
                 CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 3] = true,
             }
@@ -328,12 +326,12 @@ mod test {
         let key = v.clone().vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(0, key));
 
-        let v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-            EpochSlots::new(Pubkey::default(), 0, 0),
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
+            LowestSlot::new(Pubkey::default(), 0, 0),
         ));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
-        assert_eq!(v.label(), CrdsValueLabel::EpochSlots(key));
+        assert_eq!(v.label(), CrdsValueLabel::LowestSlot(key));
     }
 
     #[test]
@@ -350,8 +348,8 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-            EpochSlots::new(keypair.pubkey(), 0, timestamp()),
+        v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
+            LowestSlot::new(keypair.pubkey(), 0, timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
