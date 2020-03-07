@@ -322,7 +322,7 @@ impl ClusterInfo {
         )
     }
 
-    pub fn push_epoch_slots(
+    pub fn push_lowest_slot(
         &mut self,
         id: Pubkey,
         min: Slot,
@@ -332,7 +332,7 @@ impl ClusterInfo {
                     .gossip
                     .crds
                     .lookup(&CrdsValueLabel::LowestSlot(self.id()))
-                    .and_then(|x| x.epoch_slots())
+                    .and_then(|x| x.lowest_slot())
                     .map(|x| x.lowest)
                     .unwrap_or(0);
         if min > last {
@@ -430,7 +430,7 @@ impl ClusterInfo {
             .map(|x| &x.value.snapshot_hash().unwrap().hashes)
     }
 
-    pub fn get_epoch_state_for_node(
+    pub fn get_lowest_slot_for_node(
         &self,
         pubkey: &Pubkey,
         since: Option<u64>,
@@ -444,7 +444,7 @@ impl ClusterInfo {
                     .map(|since| x.insert_timestamp > since)
                     .unwrap_or(true)
             })
-            .map(|x| (x.value.epoch_slots().unwrap(), x.insert_timestamp))
+            .map(|x| (x.value.lowest_slot().unwrap(), x.insert_timestamp))
     }
 
     pub fn get_contact_info_for_node(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
@@ -588,8 +588,8 @@ impl ClusterInfo {
                     && x.shred_version == me.shred_version
                     && ContactInfo::is_valid_address(&x.serve_repair)
                     && {
-                        self.get_epoch_state_for_node(&x.id, None)
-                            .map(|(epoch_slots, _)| epoch_slots.lowest <= slot)
+                        self.get_lowest_slot_for_node(&x.id, None)
+                            .map(|(lowest_slot, _)| lowest_slot.lowest <= slot)
                             .unwrap_or_else(|| /* fallback to legacy behavior */ true)
                     }
             })

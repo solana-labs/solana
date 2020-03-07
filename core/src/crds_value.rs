@@ -230,7 +230,7 @@ impl CrdsValue {
         }
     }
 
-    pub fn epoch_slots(&self) -> Option<&LowestSlot> {
+    pub fn lowest_slot(&self) -> Option<&LowestSlot> {
         match &self.data {
             CrdsData::LowestSlot(slots) => Some(slots),
             _ => None,
@@ -330,7 +330,7 @@ mod test {
             LowestSlot::new(Pubkey::default(), 0, 0),
         ));
         assert_eq!(v.wallclock(), 0);
-        let key = v.clone().epoch_slots().unwrap().from;
+        let key = v.clone().lowest_slot().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::LowestSlot(key));
     }
 
