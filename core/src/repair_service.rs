@@ -88,6 +88,46 @@ impl RepairService {
         RepairService { t_repair }
     }
 
+    fn generate_repair_all(
+        self_id: &Pubkey,
+        blockstore: &Blockstore,
+        bank_forks: &RwLock<BankForks>,
+        cluster_info: &RwLock<ClusterInfo>,
+        cluster_slots: &mut ClusterSlots,
+        completed_slots_receiver: &CompletedSlotsReceiver,
+    ) -> Result<Vec<RepairType>> {
+        let new_root = blockstore.last_root();
+        let mut full: Vec<_> = Self::find_completed_slots(blockstore, new_root)
+            .into_iter()
+            .collect();
+        let partial: Vec<_> = Self::find_incomplete_slots(blockstore, new_root)
+            .into_iter()
+            .collect();
+        let mut received_completed = Self::recv_completed(completed_slots_receiver);
+        full.append(&mut received_completed);
+        Self::update_cluster_info_epoch_slots(
+            self_id,
+            cluster_info,
+            cluster_slots,
+            &full,
+            &partial,
+        );
+        cluster_slots.update(new_root, &cluster_info, &bank_forks);
+        let mut orphans =
+            cluster_slots.generate_repairs_for_missing_slots(&self_id, new_root);
+        orphans.shuffle(&mut thread_rng());
+        let mut repairs = Self::generate_repairs(
+            blockstore,
+            new_root,
+            &partial,
+            MAX_REPAIR_LENGTH,
+        )?;
+        repairs.shuffle(&mut thread_rng());
+        repairs.append(&mut orphans);
+        repairs.truncate(MAX_REPAIR_LENGTH);
+        Ok(repairs)
+    }
+
     fn run(
         blockstore: &Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
@@ -131,38 +171,12 @@ impl RepairService {
                         ref bank_forks,
                         ..
                     } => {
-                        let new_root = blockstore.last_root();
-                        let mut full: Vec<_> = Self::find_completed_slots(blockstore, new_root)
-                            .into_iter()
-                            .collect();
-                        let partial: Vec<_> = Self::find_incomplete_slots(blockstore, new_root)
-                            .into_iter()
-                            .collect();
-                        let mut received_completed = Self::recv_completed(completed_slots_receiver);
-                        full.append(&mut received_completed);
-                        Self::update_cluster_info_epoch_slots(
-                            &self_id,
-                            &cluster_info,
-                            &cluster_slots,
-                            &full,
-                            &partial,
-                        );
-                        cluster_slots.update(new_root, &cluster_info, &bank_forks);
-                        let repairs =
-                            cluster_slots.generate_repairs_for_missing_slots(&self_id, new_root);
-                        Self::generate_repairs(
-                            repairs,
-                            blockstore,
-                            new_root,
-                            &partial,
-                            MAX_REPAIR_LENGTH,
-                        )
+                        Self::generate_repair_all(&self_id, &blockstore, bank_forks, &cluster_info, &mut cluster_slots, completed_slots_receiver)
                     }
                 }
             };
 
-            if let Ok(mut repairs) = repairs {
-                repairs.shuffle(&mut thread_rng());
+            if let Ok(repairs) = repairs {
                 debug!("{}:CLUSTER_SLOTS REPAIRS: {:?}", self_id, repairs);
                 let reqs: Vec<((SocketAddr, Vec<u8>), RepairType)> = repairs
                     .into_iter()
@@ -255,7 +269,7 @@ impl RepairService {
     }
     #[cfg(test)]
     fn test_generate_repairs(
-        repairs: Vec<RepairType>,
+        mut repairs: Vec<RepairType>,
         blockstore: &Blockstore,
         root: Slot,
         max_repairs: usize,
@@ -263,18 +277,19 @@ impl RepairService {
         let incomplete: Vec<_> = Self::find_incomplete_slots(blockstore, root)
             .into_iter()
             .collect();
-        let mut vec = Self::generate_repairs(repairs, blockstore, root, &incomplete, max_repairs)?;
+        let mut vec = Self::generate_repairs(blockstore, root, &incomplete, max_repairs)?;
+        vec.append(&mut repairs);
         Self::sort_repairs(&mut vec);
         Ok(vec)
     }
 
     fn generate_repairs(
-        mut repairs: Vec<RepairType>,
         blockstore: &Blockstore,
         root: Slot,
         incomplete: &[Slot],
         max_repairs: usize,
     ) -> Result<Vec<RepairType>> {
+        let mut repairs = vec![];
         // Slot height and shred indexes for shreds we want to repair
         Self::generate_repairs_for_fork(blockstore, &mut repairs, max_repairs, incomplete);
 
