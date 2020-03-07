@@ -9,7 +9,7 @@ use solana_sdk::{
 };
 use std::{
     borrow::{Borrow, Cow},
-    collections::{BTreeSet, HashSet},
+    collections::{HashSet},
     fmt,
 };
 
@@ -61,7 +61,7 @@ impl Signable for CrdsValue {
 pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
-    EpochSlots(EpochSlotIndex, EpochSlots),
+    EpochSlots(EpochSlots),
     SnapshotHash(SnapshotHash),
 }
 
@@ -105,28 +105,19 @@ impl SnapshotHash {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EpochSlots {
     pub from: Pubkey,
-    pub root: Slot,
     pub lowest: Slot,
-    pub slots: BTreeSet<Slot>,
-    pub stash: Vec<EpochIncompleteSlots>,
     pub wallclock: u64,
 }
 
 impl EpochSlots {
     pub fn new(
         from: Pubkey,
-        root: Slot,
         lowest: Slot,
-        slots: BTreeSet<Slot>,
-        stash: Vec<EpochIncompleteSlots>,
         wallclock: u64,
     ) -> Self {
         Self {
             from,
-            root,
             lowest,
-            slots,
-            stash,
             wallclock,
         }
     }
@@ -201,7 +192,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
-            CrdsData::EpochSlots(_, vote) => vote.wallclock,
+            CrdsData::EpochSlots(obj) => obj.wallclock,
             CrdsData::SnapshotHash(hash) => hash.wallclock,
         }
     }
@@ -209,7 +200,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
-            CrdsData::EpochSlots(_, slots) => slots.from,
+            CrdsData::EpochSlots(slots) => slots.from,
             CrdsData::SnapshotHash(hash) => hash.from,
         }
     }
@@ -217,7 +208,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
-            CrdsData::EpochSlots(_, _) => CrdsValueLabel::EpochSlots(self.pubkey()),
+            CrdsData::EpochSlots(_) => CrdsValueLabel::EpochSlots(self.pubkey()),
             CrdsData::SnapshotHash(_) => CrdsValueLabel::SnapshotHash(self.pubkey()),
         }
     }
@@ -243,7 +234,7 @@ impl CrdsValue {
 
     pub fn epoch_slots(&self) -> Option<&EpochSlots> {
         match &self.data {
-            CrdsData::EpochSlots(_, slots) => Some(slots),
+            CrdsData::EpochSlots(slots) => Some(slots),
             _ => None,
         }
     }
@@ -338,8 +329,7 @@ mod test {
         assert_eq!(v.label(), CrdsValueLabel::Vote(0, key));
 
         let v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-            0,
-            EpochSlots::new(Pubkey::default(), 0, 0, BTreeSet::new(), vec![], 0),
+            EpochSlots::new(Pubkey::default(), 0, 0),
         ));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
@@ -360,10 +350,8 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        let btreeset: BTreeSet<Slot> = vec![1, 2, 3, 6, 8].into_iter().collect();
         v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-            0,
-            EpochSlots::new(keypair.pubkey(), 0, 0, btreeset, vec![], timestamp()),
+            EpochSlots::new(keypair.pubkey(), 0, timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
