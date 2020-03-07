@@ -299,10 +299,10 @@ impl RepairService {
         // also be updated with the latest root (done in blockstore_processor) and thus
         // will provide a schedule to window_service for any incoming shreds up to the
         // last_confirmed_epoch.
-        cluster_info.write().unwrap().push_lowest_slot(
-            id,
-            blockstore.lowest_slot(),
-        );
+        cluster_info
+            .write()
+            .unwrap()
+            .push_lowest_slot(id, blockstore.lowest_slot());
     }
 
     // Update the gossiped structure used for the "Repairmen" repair protocol. See docs
@@ -314,12 +314,11 @@ impl RepairService {
         completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
         //TBD: remove this once new EpochSlots are merged
-        while let Ok(_) = completed_slots_receiver.try_recv() {
-        }
-        cluster_info.write().unwrap().push_lowest_slot(
-            id,
-            lowest_slot,
-        );
+        while let Ok(_) = completed_slots_receiver.try_recv() {}
+        cluster_info
+            .write()
+            .unwrap()
+            .push_lowest_slot(id, lowest_slot);
     }
 
     #[allow(dead_code)]
@@ -631,19 +630,25 @@ mod test {
 
     #[test]
     pub fn test_update_lowest_slot() {
-            let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
-            let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
-                node_info.info.clone(),
-            ));
-            let (_, completed_slots_receiver) = std::sync::mpsc::sync_channel(1);
-            RepairService::update_lowest_slot(
-                Pubkey::default(),
-                5,
-                &cluster_info,
-                &completed_slots_receiver,
-            );
-            let lowest = cluster_info.read().unwrap().get_lowest_slot_for_node(&Pubkey::default(), None).unwrap().0.clone();
-            assert_eq!(lowest.lowest, 5);
+        let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
+        let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            node_info.info.clone(),
+        ));
+        let (_, completed_slots_receiver) = std::sync::mpsc::sync_channel(1);
+        RepairService::update_lowest_slot(
+            Pubkey::default(),
+            5,
+            &cluster_info,
+            &completed_slots_receiver,
+        );
+        let lowest = cluster_info
+            .read()
+            .unwrap()
+            .get_lowest_slot_for_node(&Pubkey::default(), None)
+            .unwrap()
+            .0
+            .clone();
+        assert_eq!(lowest.lowest, 5);
     }
 
     #[test]
