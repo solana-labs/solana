@@ -72,6 +72,10 @@ pub trait SyncClient {
         commitment_config: CommitmentConfig,
     ) -> Result<(Hash, FeeCalculator)>;
 
+    /// Get `Some(FeeCalculator)` associated with `blockhash` if it is still in
+    /// the BlockhashQueue`, otherwise `None`
+    fn get_fee_calculator_for_blockhash(&self, blockhash: &Hash) -> Result<Option<FeeCalculator>>;
+
     /// Get recent fee rate governor
     fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor>;
 

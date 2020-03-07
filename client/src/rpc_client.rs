@@ -6,8 +6,8 @@ use crate::{
     rpc_request::RpcRequest,
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-        RpcEpochInfo, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount, RpcLeaderSchedule,
-        RpcResponse, RpcVersionInfo, RpcVoteAccountStatus,
+        RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
+        RpcLeaderSchedule, RpcResponse, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -837,6 +837,35 @@ impl RpcClient {
             context,
             value: (blockhash, fee_calculator),
         })
+    }
+
+    pub fn get_fee_calculator_for_blockhash(
+        &self,
+        blockhash: &Hash,
+    ) -> io::Result<Option<FeeCalculator>> {
+        let response = self
+            .client
+            .send(
+                &RpcRequest::GetFeeCalculatorForBlockhash,
+                json!([blockhash.to_string()]),
+                0,
+            )
+            .map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetFeeCalculatorForBlockhash request failure: {:?}", e),
+                )
+            })?;
+        let Response { value, .. } = serde_json::from_value::<Response<Option<RpcFeeCalculator>>>(
+            response,
+        )
+        .map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetFeeCalculatorForBlockhash parse failure: {:?}", e),
+            )
+        })?;
+        Ok(value.map(|rf| rf.fee_calculator))
     }
 
     pub fn get_fee_rate_governor(&self) -> RpcResponse<FeeRateGovernor> {

@@ -21,6 +21,7 @@ pub enum RpcRequest {
     GetNumBlocksSinceSignatureConfirmation,
     GetProgramAccounts,
     GetRecentBlockhash,
+    GetFeeCalculatorForBlockhash,
     GetFeeRateGovernor,
     GetSignatureStatus,
     GetSlot,
@@ -64,6 +65,7 @@ impl RpcRequest {
             }
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
+            RpcRequest::GetFeeCalculatorForBlockhash => "getFeeCalculatorForBlockhash",
             RpcRequest::GetFeeRateGovernor => "getFeeRateGovernor",
             RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetSlot => "getSlot",
@@ -127,7 +129,7 @@ mod tests {
         assert_eq!(request["params"], json!([addr]));
 
         let test_request = RpcRequest::GetBalance;
-        let request = test_request.build_request_json(1, json!([addr]));
+        let request = test_request.build_request_json(1, json!([addr.clone()]));
         assert_eq!(request["method"], "getBalance");
 
         let test_request = RpcRequest::GetEpochInfo;
@@ -141,6 +143,10 @@ mod tests {
         let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getRecentBlockhash");
+
+        let test_request = RpcRequest::GetFeeCalculatorForBlockhash;
+        let request = test_request.build_request_json(1, json!([addr.clone()]));
+        assert_eq!(request["method"], "getFeeCalculatorForBlockhash");
 
         let test_request = RpcRequest::GetFeeRateGovernor;
         let request = test_request.build_request_json(1, Value::Null);

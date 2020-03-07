@@ -9,9 +9,10 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::{
     Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
-    RpcContactInfo, RpcEpochInfo, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
-    RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation, RpcStorageTurn,
-    RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
+    RpcContactInfo, RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity,
+    RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
+    RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
+    RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -33,6 +34,7 @@ use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     collections::HashMap,
     net::{SocketAddr, UdpSocket},
+    str::FromStr,
     sync::{Arc, RwLock},
     thread::sleep,
     time::{Duration, Instant},
@@ -162,6 +164,18 @@ impl JsonRpcRequestProcessor {
                 blockhash: blockhash.to_string(),
                 fee_calculator,
             },
+        )
+    }
+
+    fn get_fee_calculator_for_blockhash(
+        &self,
+        blockhash: &Hash,
+    ) -> RpcResponse<Option<RpcFeeCalculator>> {
+        let bank = &*self.bank(None);
+        let fee_calculator = bank.get_fee_calculator(blockhash);
+        new_response(
+            bank,
+            fee_calculator.map(|fee_calculator| RpcFeeCalculator { fee_calculator }),
         )
     }
 
@@ -503,6 +517,13 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator>;
 
+    #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
+    fn get_fee_calculator_for_blockhash(
+        &self,
+        meta: Self::Metadata,
+        blockhash: String,
+    ) -> RpcResponse<Option<RpcFeeCalculator>>;
+
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
 
@@ -829,6 +850,20 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_recent_blockhash(commitment)
+    }
+
+    fn get_fee_calculator_for_blockhash(
+        &self,
+        meta: Self::Metadata,
+        blockhash: String,
+    ) -> RpcResponse<Option<RpcFeeCalculator>> {
+        debug!("get_fee_calculator_for_blockhash rpc request received");
+        let blockhash =
+            Hash::from_str(&blockhash).map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_fee_calculator_for_blockhash(&blockhash)
     }
 
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor> {
@@ -1812,6 +1847,54 @@ pub mod tests {
                     "lamportsPerSignature": 0,
                 }
             }},
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_fee_calculator_for_blockhash() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
+        let fee_calculator = RpcFeeCalculator { fee_calculator };
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{:?}"]}}"#,
+            blockhash
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":fee_calculator,
+            },
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Expired (non-existent) blockhash
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{:?}"]}}"#,
+            Hash::default()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context":{"slot":0},
+                "value":Value::Null,
+            },
             "id": 1
         });
         let expected: Response =
