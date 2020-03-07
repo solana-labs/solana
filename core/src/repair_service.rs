@@ -122,7 +122,6 @@ impl RepairService {
             &partial,
             MAX_REPAIR_LENGTH,
         )?;
-        repairs.shuffle(&mut thread_rng());
         repairs.append(&mut orphans);
         repairs.truncate(MAX_REPAIR_LENGTH);
         Ok(repairs)
