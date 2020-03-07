@@ -19,7 +19,7 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Vote},
+    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, LowestSlot, SnapshotHash, Vote},
     packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
@@ -331,14 +331,14 @@ impl ClusterInfo {
         let last = self
                     .gossip
                     .crds
-                    .lookup(&CrdsValueLabel::EpochSlots(self.id()))
+                    .lookup(&CrdsValueLabel::LowestSlot(self.id()))
                     .and_then(|x| x.epoch_slots())
                     .map(|x| x.lowest)
                     .unwrap_or(0);
         if min > last {
             let entry = CrdsValue::new_signed(
-                CrdsData::EpochSlots(
-                    EpochSlots::new(id, min, now),
+                CrdsData::LowestSlot(
+                    LowestSlot::new(id, min, now),
                 ),
                 &self.keypair,
             );
@@ -434,11 +434,11 @@ impl ClusterInfo {
         &self,
         pubkey: &Pubkey,
         since: Option<u64>,
-    ) -> Option<(&EpochSlots, u64)> {
+    ) -> Option<(&LowestSlot, u64)> {
         self.gossip
             .crds
             .table
-            .get(&CrdsValueLabel::EpochSlots(*pubkey))
+            .get(&CrdsValueLabel::LowestSlot(*pubkey))
             .filter(|x| {
                 since
                     .map(|since| x.insert_timestamp > since)
@@ -2237,8 +2237,8 @@ mod tests {
 
     #[test]
     fn test_split_messages_large() {
-        let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-            EpochSlots {
+        let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
+            LowestSlot {
                 from: Pubkey::default(),
                 lowest: 0,
                 wallclock: 0,
@@ -2408,8 +2408,8 @@ mod tests {
             let other_node_pubkey = Pubkey::new_rand();
             let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
             cluster_info.insert_info(other_node.clone());
-            let value = CrdsValue::new_unsigned(CrdsData::EpochSlots(
-                EpochSlots::new(
+            let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
+                LowestSlot::new(
                     other_node_pubkey,
                     peer_lowest,
                     timestamp(),
