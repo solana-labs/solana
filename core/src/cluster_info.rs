@@ -2231,11 +2231,10 @@ mod tests {
 
     #[test]
     fn test_split_messages_large() {
-        let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot {
-            from: Pubkey::default(),
-            lowest: 0,
-            wallclock: 0,
-        }));
+        let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
+            0,
+            LowestSlot::new(Pubkey::default(), 0, 0),
+        ));
         test_split_messages(value);
     }
 
@@ -2396,11 +2395,10 @@ mod tests {
             let other_node_pubkey = Pubkey::new_rand();
             let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
             cluster_info.insert_info(other_node.clone());
-            let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot::new(
-                other_node_pubkey,
-                peer_lowest,
-                timestamp(),
-            )));
+            let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
+                0,
+                LowestSlot::new(other_node_pubkey, peer_lowest, timestamp()),
+            ));
             let _ = cluster_info.gossip.crds.insert(value, timestamp());
         }
         // only half the visible peers should be eligible to serve this repair
