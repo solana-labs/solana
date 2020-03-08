@@ -718,6 +718,24 @@ fn main() {
                     .required(true)
                     .help("The location of the YAML file with a list of rollback slot heights and hashes"),
             )
+        ).subcommand(
+            SubCommand::with_name("purge")
+            .about("Purge the ledger at the block height")
+            .arg(
+                Arg::with_name("start_slot")
+                    .index(1)
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .required(true)
+                    .help("Start slot to purge from."),
+            )
+            .arg(
+                Arg::with_name("end_slot")
+                    .index(2)
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .help("Optional ending slot to stop purging."),
+            )
         )
         .subcommand(
             SubCommand::with_name("list-roots")
@@ -997,6 +1015,13 @@ fn main() {
                     exit(1);
                 }
             }
+        }
+        ("purge", Some(arg_matches)) => {
+            let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
+            let end_slot = value_t!(arg_matches, "end_slot", Slot);
+            let end_slot = end_slot.map_or(None, Some);
+            let blockstore = open_blockstore(&ledger_path);
+            blockstore.purge_slots(start_slot, end_slot);
         }
         ("prune", Some(arg_matches)) => {
             if let Some(prune_file_path) = arg_matches.value_of("slot_list") {
