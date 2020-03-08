@@ -9,7 +9,7 @@ use solana_sdk::{
 };
 use std::{
     borrow::{Borrow, Cow},
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     fmt,
 };
 
@@ -54,15 +54,17 @@ impl Signable for CrdsValue {
 
 /// CrdsData that defines the different types of items CrdsValues can hold
 /// * Merge Strategy - Latest wallclock is picked
+/// * LowestSlot index is deprecated
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
-    LowestSlot(LowestSlot),
+    LowestSlot(u8, LowestSlot),
     SnapshotHash(SnapshotHash),
 }
 
+/// deprecated
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum CompressionType {
     Uncompressed,
@@ -76,6 +78,7 @@ impl Default for CompressionType {
     }
 }
 
+/// deprecated
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct EpochIncompleteSlots {
     pub first: Slot,
@@ -99,11 +102,17 @@ impl SnapshotHash {
         }
     }
 }
-
+/// deprecated fields
+/// * root
+/// * slots
+/// * stash
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LowestSlot {
     pub from: Pubkey,
+    pub root: Slot,
     pub lowest: Slot,
+    pub slots: BTreeSet<Slot>,
+    pub stash: Vec<EpochIncompleteSlots>,
     pub wallclock: u64,
 }
 
@@ -111,7 +120,10 @@ impl LowestSlot {
     pub fn new(from: Pubkey, lowest: Slot, wallclock: u64) -> Self {
         Self {
             from,
+            root: 0,
             lowest,
+            slots: BTreeSet::new(),
+            stash: vec![],
             wallclock,
         }
     }
@@ -186,7 +198,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
-            CrdsData::LowestSlot(obj) => obj.wallclock,
+            CrdsData::LowestSlot(_, obj) => obj.wallclock,
             CrdsData::SnapshotHash(hash) => hash.wallclock,
         }
     }
@@ -194,7 +206,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
-            CrdsData::LowestSlot(slots) => slots.from,
+            CrdsData::LowestSlot(_, slots) => slots.from,
             CrdsData::SnapshotHash(hash) => hash.from,
         }
     }
@@ -202,7 +214,7 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
-            CrdsData::LowestSlot(_) => CrdsValueLabel::LowestSlot(self.pubkey()),
+            CrdsData::LowestSlot(_, _) => CrdsValueLabel::LowestSlot(self.pubkey()),
             CrdsData::SnapshotHash(_) => CrdsValueLabel::SnapshotHash(self.pubkey()),
         }
     }
@@ -228,7 +240,7 @@ impl CrdsValue {
 
     pub fn lowest_slot(&self) -> Option<&LowestSlot> {
         match &self.data {
-            CrdsData::LowestSlot(slots) => Some(slots),
+            CrdsData::LowestSlot(_, slots) => Some(slots),
             _ => None,
         }
     }
@@ -322,11 +334,10 @@ mod test {
         let key = v.clone().vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(0, key));
 
-        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot::new(
-            Pubkey::default(),
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
             0,
-            0,
-        )));
+            LowestSlot::new(Pubkey::default(), 0, 0),
+        ));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().lowest_slot().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::LowestSlot(key));
@@ -346,11 +357,10 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        v = CrdsValue::new_unsigned(CrdsData::LowestSlot(LowestSlot::new(
-            keypair.pubkey(),
+        v = CrdsValue::new_unsigned(CrdsData::LowestSlot(
             0,
-            timestamp(),
-        )));
+            LowestSlot::new(keypair.pubkey(), 0, timestamp()),
+        ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
 
