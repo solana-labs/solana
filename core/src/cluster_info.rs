@@ -333,7 +333,7 @@ impl ClusterInfo {
             .unwrap_or(0);
         if min > last {
             let entry = CrdsValue::new_signed(
-                CrdsData::LowestSlot(LowestSlot::new(id, min, now)),
+                CrdsData::LowestSlot(0, LowestSlot::new(id, min, now)),
                 &self.keypair,
             );
             self.gossip
