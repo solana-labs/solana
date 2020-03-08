@@ -1,4 +1,5 @@
 use crate::contact_info::ContactInfo;
+use crate::deprecated;
 use bincode::{serialize, serialized_size};
 use solana_sdk::{
     clock::Slot,
@@ -64,28 +65,6 @@ pub enum CrdsData {
     SnapshotHash(SnapshotHash),
 }
 
-/// deprecated
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum CompressionType {
-    Uncompressed,
-    GZip,
-    BZip2,
-}
-
-impl Default for CompressionType {
-    fn default() -> Self {
-        Self::Uncompressed
-    }
-}
-
-/// deprecated
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-pub struct EpochIncompleteSlots {
-    pub first: Slot,
-    pub compression: CompressionType,
-    pub compressed_list: Vec<u8>,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SnapshotHash {
     pub from: Pubkey,
@@ -102,17 +81,13 @@ impl SnapshotHash {
         }
     }
 }
-/// deprecated fields
-/// * root
-/// * slots
-/// * stash
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LowestSlot {
     pub from: Pubkey,
-    pub root: Slot,
+    root: Slot, //deprecated
     pub lowest: Slot,
-    pub slots: BTreeSet<Slot>,
-    pub stash: Vec<EpochIncompleteSlots>,
+    slots: BTreeSet<Slot>,                        //deprecated
+    stash: Vec<deprecated::EpochIncompleteSlots>, //deprecated
     pub wallclock: u64,
 }
 
