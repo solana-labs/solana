@@ -22,12 +22,12 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     let config = Config::load(config_file).unwrap_or_default();
 
                     let (url_setting_type, json_rpc_url) =
-                        CliConfig::compute_json_rpc_url_setting("", &config.url);
+                        CliConfig::compute_json_rpc_url_setting("", &config.json_rpc_url);
                     let (ws_setting_type, websocket_url) = CliConfig::compute_websocket_url_setting(
                         "",
                         &config.websocket_url,
                         "",
-                        &config.url,
+                        &config.json_rpc_url,
                     );
                     let (keypair_setting_type, keypair_path) =
                         CliConfig::compute_keypair_path_setting("", &config.keypair_path);
@@ -58,7 +58,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                 if let Some(config_file) = matches.value_of("config_file") {
                     let mut config = Config::load(config_file).unwrap_or_default();
                     if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
-                        config.url = url.to_string();
+                        config.json_rpc_url = url.to_string();
                     }
                     if let Some(url) = subcommand_matches.value_of("websocket_url") {
                         config.websocket_url = url.to_string();
@@ -69,12 +69,12 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     config.save(config_file)?;
 
                     let (url_setting_type, json_rpc_url) =
-                        CliConfig::compute_json_rpc_url_setting("", &config.url);
+                        CliConfig::compute_json_rpc_url_setting("", &config.json_rpc_url);
                     let (ws_setting_type, websocket_url) = CliConfig::compute_websocket_url_setting(
                         "",
                         &config.websocket_url,
                         "",
-                        &config.url,
+                        &config.json_rpc_url,
                     );
                     let (keypair_setting_type, keypair_path) =
                         CliConfig::compute_keypair_path_setting("", &config.keypair_path);
@@ -109,13 +109,13 @@ pub fn parse_args<'a>(
     };
     let (_, json_rpc_url) = CliConfig::compute_json_rpc_url_setting(
         matches.value_of("json_rpc_url").unwrap_or(""),
-        &config.url,
+        &config.json_rpc_url,
     );
     let (_, websocket_url) = CliConfig::compute_websocket_url_setting(
         matches.value_of("websocket_url").unwrap_or(""),
         &config.websocket_url,
         matches.value_of("json_rpc_url").unwrap_or(""),
-        &config.url,
+        &config.json_rpc_url,
     );
     let (_, default_signer_path) = CliConfig::compute_keypair_path_setting(
         matches.value_of("keypair").unwrap_or(""),
