@@ -46,7 +46,7 @@
   * [Monitor a Validator](running-validator/validator-monitor.md)
   * [Publish Validator Info](running-validator/validator-info.md)
   * [Troubleshoot](running-validator/validator-troubleshoot.md)
-* [Benchmark a Cluster](bench-tps.md)
+* [Benchmark a Cluster](cluster/bench-tps.md)
   * [Performance Metrics](cluster/performance-metrics.md)
 * [Solana's Architecture](cluster/README.md)
   * [Synchronization](cluster/synchronization.md)
