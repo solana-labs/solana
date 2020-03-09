@@ -12,7 +12,7 @@ use solana_clap_utils::{
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
 };
-use solana_cli_config::config::{Config, CONFIG_FILE};
+use solana_cli_config::{Config, CONFIG_FILE};
 use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},

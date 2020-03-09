@@ -462,42 +462,15 @@ pub struct CliConfig<'a> {
 
 impl CliConfig<'_> {
     fn default_keypair_path() -> String {
-        let mut keypair_path = dirs::home_dir().expect("home directory");
-        keypair_path.extend(&[".config", "solana", "id.json"]);
-        keypair_path.to_str().unwrap().to_string()
+        solana_cli_config::Config::default().keypair_path
     }
 
     fn default_json_rpc_url() -> String {
-        "http://127.0.0.1:8899".to_string()
+        solana_cli_config::Config::default().json_rpc_url
     }
 
     fn default_websocket_url() -> String {
-        Self::compute_ws_url(&Self::default_json_rpc_url())
-    }
-
-    fn compute_ws_url(rpc_url: &str) -> String {
-        let rpc_url: Option<Url> = rpc_url.parse().ok();
-        if rpc_url.is_none() {
-            return "".to_string();
-        }
-        let rpc_url = rpc_url.unwrap();
-        let is_secure = rpc_url.scheme().to_ascii_lowercase() == "https";
-        let mut ws_url = rpc_url.clone();
-        ws_url
-            .set_scheme(if is_secure { "wss" } else { "ws" })
-            .expect("unable to set scheme");
-        let ws_port = match rpc_url.port() {
-            Some(port) => port + 1,
-            None => {
-                if is_secure {
-                    8901
-                } else {
-                    8900
-                }
-            }
-        };
-        ws_url.set_port(Some(ws_port)).expect("unable to set port");
-        ws_url.to_string()
+        solana_cli_config::Config::default().websocket_url
     }
 
     fn first_nonempty_setting(
@@ -520,11 +493,11 @@ impl CliConfig<'_> {
             (SettingType::Explicit, websocket_cfg_url.to_string()),
             (
                 SettingType::Computed,
-                Self::compute_ws_url(json_rpc_cmd_url),
+                solana_cli_config::Config::compute_websocket_url(json_rpc_cmd_url),
             ),
             (
                 SettingType::Computed,
-                Self::compute_ws_url(json_rpc_cfg_url),
+                solana_cli_config::Config::compute_websocket_url(json_rpc_cfg_url),
             ),
             (SettingType::SystemDefault, Self::default_websocket_url()),
         ])
@@ -1981,7 +1954,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => {
             let faucet_addr = SocketAddr::new(
                 faucet_host.unwrap_or_else(|| {
-                    let faucet_host = url::Url::parse(&config.json_rpc_url)
+                    let faucet_host = Url::parse(&config.json_rpc_url)
                         .unwrap()
                         .host()
                         .unwrap()

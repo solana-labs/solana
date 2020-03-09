@@ -1,4 +1,5 @@
 #[macro_use]
 extern crate lazy_static;
 
-pub mod config;
+mod config;
+pub use config::{Config, CONFIG_FILE};
