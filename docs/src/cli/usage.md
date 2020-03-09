@@ -167,5 +167,3 @@ $ solana send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 // Return
 <TX_SIGNATURE>
 ```
-
-## Usage
