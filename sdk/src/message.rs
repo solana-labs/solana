@@ -7,6 +7,7 @@ use crate::{
     short_vec, system_instruction,
 };
 use itertools::Itertools;
+use std::convert::TryFrom;
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
@@ -231,6 +232,17 @@ impl Message {
             .iter()
             .map(|ix| &self.account_keys[ix.program_id_index as usize])
             .collect()
+    }
+
+    pub fn is_key_passed_to_program(&self, index: usize) -> bool {
+        if let Ok(index) = u8::try_from(index) {
+            for ix in self.instructions.iter() {
+                if ix.accounts.contains(&index) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn program_position(&self, index: usize) -> Option<usize> {

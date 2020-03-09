@@ -336,9 +336,6 @@ impl MessageProcessor {
                 .ok_or(TransactionError::InvalidAccountIndex)?;
             let executable_accounts = &loaders[executable_index];
 
-            // TODO: panics on an index out of bounds if an executable
-            // account is also included as a regular account for an instruction, because the
-            // executable account is not passed in as part of the accounts slice
             let program_accounts: Vec<_> = instruction
                 .accounts
                 .iter()
