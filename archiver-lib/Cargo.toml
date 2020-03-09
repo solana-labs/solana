@@ -33,7 +33,7 @@ solana-archiver-utils = { path = "../archiver-utils", version = "1.1.0" }
 solana-metrics = { path = "../metrics", version = "1.1.0" }
 
 [dev-dependencies]
-hex = "0.4.0"
+hex = "0.4.2"
 
 [lib]
 name = "solana_archiver_lib"

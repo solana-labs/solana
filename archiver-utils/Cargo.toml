@@ -19,7 +19,7 @@ solana-perf = { path = "../perf", version = "1.1.0" }
 solana-sdk = { path = "../sdk", version = "1.1.0" }
 
 [dev-dependencies]
-hex = "0.4.0"
+hex = "0.4.2"
 
 [lib]
 name = "solana_archiver_utils"
