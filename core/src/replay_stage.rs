@@ -136,7 +136,7 @@ pub(crate) struct ForkStats {
 pub(crate) struct PropagatedStats {
     pub(crate) propagated_validators: HashSet<Rc<Pubkey>>,
     pub(crate) propagated_validators_stake: u64,
-    pub(crate) propagated_confirmation: bool,
+    pub(crate) is_propagated: bool,
     is_leader_slot: bool,
     prev_leader_slot: Option<Slot>,
     slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
@@ -995,7 +995,7 @@ impl ReplayStage {
             .get(&slot)
             .expect("All frozen banks must exist in the Progress map")
             .propagated_stats
-            .propagated_confirmation
+            .is_propagated
         {
             return true;
         }
@@ -1023,7 +1023,7 @@ impl ReplayStage {
                 .get_mut(&slot)
                 .expect("All frozen banks must exist in the Progress map")
                 .propagated_stats
-                .propagated_confirmation = true;
+                .is_propagated = true;
             return true;
         }
 
@@ -1050,49 +1050,78 @@ impl ReplayStage {
             .slot_vote_tracker
             .clone();
 
-        let prev_leader_slot = progress
-            .get(&slot)
-            .expect("All frozen banks must exist in the Progress map")
-            .propagated_stats
-            .prev_leader_slot
-            .expect(
-                "If prev_leader_slot is None, 
-                is_propagated() above should have returned true",
-            );
+        let new_slot_vote_tracker = {
+            if slot_vote_tracker.is_none() {
+                vote_tracker.get_slot_vote_tracker(slot)
+            } else {
+                slot_vote_tracker
+            }
+        };
 
-        let (propagation_result, new_slot_vote_tracker) = {
-            let mut new_slot_vote_tracker = slot_vote_tracker;
-            let mut prev_leader_progress = progress.get_mut(&prev_leader_slot).expect(
+        let mut newly_voted_pubkeys = new_slot_vote_tracker
+            .as_ref()
+            .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
+            .unwrap_or(vec![]);
+
+        let mut leader_propagated_stats = &mut progress
+            .get_mut(&slot)
+            .expect(
                 "If slot doesn't exist in Progress map, 
                 is_propagated() above should have returned true",
-            );
-            // `get_mut` should only return None if prev_leader_slot < current root,
-            // in which case we know it's confirmed and can skip this propagation check
-            (
-                {
-                    let prev_leader_bank = bank_forks
-                        .read()
-                        .unwrap()
-                        .get(prev_leader_slot)
-                        .expect("Entry in progress map must exist in BankForks")
-                        .clone();
-
-                    if new_slot_vote_tracker.is_none() {
-                        new_slot_vote_tracker = vote_tracker.get_slot_vote_tracker(slot);
-                    }
-
-                    new_slot_vote_tracker.as_ref().map(|slot_vote_tracker| {
-                        Self::update_propagated_threshold_from_votes(
-                            slot_vote_tracker,
-                            &prev_leader_bank,
-                            &mut prev_leader_progress,
-                            all_pubkeys,
-                        )
-                    })
-                },
-                new_slot_vote_tracker,
             )
-        };
+            .propagated_stats;
+        let mut prev_leader_slot = leader_propagated_stats.prev_leader_slot;
+        let mut did_newly_reach_threshold = false;
+        let root = bank_forks.read().unwrap().root();
+
+        loop {
+            println!("prev leader slot: {:?}", prev_leader_slot);
+            // If a descendant has reached propagation threshold, then
+            // all its ancestor banks have alsso reached propagation
+            // threshold as well (Validators can't have voted for a
+            // descendant without also getting the ancestor block)
+            if leader_propagated_stats.is_propagated ||
+                // If there's no new validators to record, and there's no
+                // newly achieved threshold, then there's no further
+                // information to propagate backwards to past leader blocks
+                (newly_voted_pubkeys.is_empty() && !did_newly_reach_threshold)
+            {
+                break;
+            }
+
+            if leader_propagated_stats.is_leader_slot {
+                let leader_bank = bank_forks
+                    .read()
+                    .unwrap()
+                    .get(slot)
+                    .expect("Entry in progress map must exist in BankForks")
+                    .clone();
+
+                did_newly_reach_threshold = Self::update_propagated_threshold_from_votes(
+                    &mut newly_voted_pubkeys,
+                    &leader_bank,
+                    &mut leader_propagated_stats,
+                    all_pubkeys,
+                    did_newly_reach_threshold,
+                );
+            }
+
+            // These cases mean confirmation of propagation on any earlier
+            // leader blocks must have been reached
+            if prev_leader_slot == None || prev_leader_slot.unwrap() < root {
+                break;
+            }
+
+            leader_propagated_stats = &mut progress
+                .get_mut(&prev_leader_slot.expect("guaranteed to be `Some` by check above"))
+                .expect(
+                    "current_slot >= root (guaranteed from check abve) so must exist in
+                    progress map",
+                )
+                .propagated_stats;
+
+            prev_leader_slot = leader_propagated_stats.prev_leader_slot;
+        }
 
         if new_slot_vote_tracker.is_some() {
             progress
@@ -1100,18 +1129,6 @@ impl ReplayStage {
                 .expect("All frozen banks must exist in the Progress map")
                 .propagated_stats
                 .slot_vote_tracker = new_slot_vote_tracker;
-        }
-
-        // Propagate the new votes to previous leader slots on this fork
-        // to check if any of them may have reached the threshold
-        if let Some((new_completed_validators, did_newly_reach_threshold)) = propagation_result {
-            Self::update_prev_leader_slots(
-                new_completed_validators,
-                did_newly_reach_threshold,
-                prev_leader_slot,
-                progress,
-                bank_forks,
-            );
         }
     }
 
@@ -1292,13 +1309,13 @@ impl ReplayStage {
         };
 
         if let Some(bank) = selected_fork {
-            let (is_locked_out, vote_threshold, propagated_confirmation, fork_weight) = {
+            let (is_locked_out, vote_threshold, is_propagated, fork_weight) = {
                 let fork_stats = &progress.get(&bank.slot()).unwrap().fork_stats;
                 let propagated_stats = &progress.get(&bank.slot()).unwrap().propagated_stats;
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
-                    propagated_stats.propagated_confirmation,
+                    propagated_stats.is_propagated,
                     fork_stats.weight,
                 )
             };
@@ -1308,11 +1325,11 @@ impl ReplayStage {
             if !vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
             }
-            if !propagated_confirmation {
+            if !is_propagated {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
             }
 
-            if !is_locked_out && vote_threshold && propagated_confirmation {
+            if !is_locked_out && vote_threshold && is_propagated {
                 info!("voting: {} {}", bank.slot(), fork_weight);
                 (
                     selected_fork.clone(),
@@ -1328,147 +1345,64 @@ impl ReplayStage {
     }
 
     fn update_propagated_threshold_from_votes(
-        slot_vote_tracker: &RwLock<SlotVoteTracker>,
-        prev_leader_bank: &Bank,
-        prev_leader_slot_progress: &mut ForkProgress,
+        newly_voted_pubkeys: &mut Vec<Arc<Pubkey>>,
+        leader_bank: &Bank,
+        leader_propagated_stats: &mut PropagatedStats,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
-    ) -> (HashSet<Rc<Pubkey>>, bool) {
-        let mut new_votes = HashSet::new();
-        let mut newly_reached_threshold = false;
-        // Compute the threshold
-        let updates = slot_vote_tracker.write().unwrap().get_updates();
-        if let Some(updates) = updates {
-            let prev_leader_slot_received_validators = &mut prev_leader_slot_progress
-                .propagated_stats
-                .propagated_validators;
-
-            for voting_pubkey in updates {
-                if !prev_leader_slot_received_validators.contains(&*voting_pubkey) {
-                    let mut cached_pubkey: Option<Rc<Pubkey>> =
-                        all_pubkeys.get(&*voting_pubkey).cloned();
-                    if cached_pubkey.is_none() {
-                        let new_pubkey = Rc::new(*voting_pubkey);
-                        all_pubkeys.insert(new_pubkey.clone());
-                        cached_pubkey = Some(new_pubkey);
-                    }
-                    let voting_pubkey = cached_pubkey.unwrap();
-                    prev_leader_slot_received_validators.insert(voting_pubkey.clone());
-                    new_votes.insert(voting_pubkey.clone());
-                    prev_leader_slot_progress
-                        .propagated_stats
-                        .propagated_validators_stake += *prev_leader_bank
-                        .epoch_vote_accounts(prev_leader_bank.epoch())
-                        .expect(
-                            "Bank epoch vote accounts must contain entry for the bank's own epoch",
-                        )
-                        .get(&voting_pubkey)
-                        .map(|(stake, _)| stake)
-                        .unwrap_or(&0);
-                    if prev_leader_slot_progress
-                        .propagated_stats
-                        .propagated_validators_stake as f64
-                        / prev_leader_bank.total_epoch_stake() as f64
-                        > SUPERMINORITY_THRESHOLD
-                    {
-                        prev_leader_slot_progress
-                            .propagated_stats
-                            .propagated_confirmation = true;
-                        newly_reached_threshold = true
-                    }
-                }
-            }
-        }
-
-        (new_votes, newly_reached_threshold)
-    }
-
-    fn update_prev_leader_slots(
-        mut new_completed_validators: HashSet<Rc<Pubkey>>,
         mut did_newly_reach_threshold: bool,
-        slot: Slot,
-        progress: &mut ProgressMap,
-        bank_forks: &RwLock<BankForks>,
-    ) {
-        if !new_completed_validators.is_empty() || did_newly_reach_threshold {
-            let root = bank_forks.read().unwrap().root();
-            loop {
-                let prev_leader_slot = progress
-                    .get(&slot)
-                    .expect(
-                        "If there was an update on this slot, it must exist in the progress map",
-                    )
-                    .propagated_stats
-                    .prev_leader_slot;
-
-                // These cases mean confirmation of propagation on any earlier
-                // leader blocks must have been reached
-                if prev_leader_slot == None || prev_leader_slot.unwrap() < root {
-                    break;
-                }
-
-                let prev_leader_slot = prev_leader_slot.unwrap();
-                let prev_leader_stats = &mut progress
-                    .get_mut(&prev_leader_slot)
-                    .expect(
-                        "If there was an update on this slot, it must exist in the progress map",
-                    )
-                    .propagated_stats;
-
-                if prev_leader_stats.propagated_confirmation {
-                    break;
-                } else if did_newly_reach_threshold {
-                    // If a descendant has reached propagation threshold, then
-                    // its ancestor bank has reached propagation threshold as well
-                    // (Validators can't have voted for a descendant without also
-                    // getting the ancestor block)
-                    prev_leader_stats.propagated_confirmation = true;
-                } else {
-                    let prev_leader_bank = bank_forks
-                        .read()
-                        .unwrap()
-                        .get(prev_leader_slot)
-                        .unwrap()
-                        .clone();
-                    // Remove the valdators that we already know voted for `prev_leader_slot`
-                    // Those validators are safe to drop because they don't to be ported back any
-                    // further because parents must have:
-                    // 1) Also recorded this validator already, or
-                    // 2) Already reached the propagation threshold, in which case
-                    //    they no longer need to track the set of propagated validators
-                    new_completed_validators.retain(|validator| {
-                        if !prev_leader_stats.propagated_validators.contains(validator) {
-                            prev_leader_stats
-                                .propagated_validators
-                                .insert(validator.clone());
-                            prev_leader_stats.propagated_validators_stake += prev_leader_bank
-                                .epoch_vote_accounts(prev_leader_bank.epoch())
-                                .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
-                                .get(&validator)
-                                .map(|(stake, _)| stake)
-                                .unwrap_or(&0);
-
-                            if prev_leader_stats.propagated_validators_stake as f64
-                                / prev_leader_bank.total_epoch_stake() as f64
-                                > SUPERMINORITY_THRESHOLD
-                            {
-                                prev_leader_stats.propagated_confirmation = true;
-                                did_newly_reach_threshold = true
-                            }
-                            true
-                        } else {
-                            false
-                        }
-                    });
-                }
-
-                // If there's no new validators to record, and there's no
-                // newly achieved threshold, then there's no further
-                // information to propagate backwards to past leader blocks
-                if new_completed_validators.is_empty() && !did_newly_reach_threshold {
-                    break;
-                }
-            }
+    ) -> bool {
+        if did_newly_reach_threshold {
+            leader_propagated_stats.is_propagated = true;
+            return did_newly_reach_threshold;
         }
+
+        println!("newly_voted_pubkeys: {:?}", newly_voted_pubkeys);
+        // Remove the valdators that we already know voted for this slot
+        // Those validators are safe to drop because they don't to be ported back any
+        // further because parents must have:
+        // 1) Also recorded this validator already, or
+        // 2) Already reached the propagation threshold, in which case
+        //    they no longer need to track the set of propagated validators
+        newly_voted_pubkeys.retain(|voting_pubkey| {
+            if !leader_propagated_stats
+                .propagated_validators
+                .contains(&**voting_pubkey)
+            {
+                let mut cached_pubkey: Option<Rc<Pubkey>> =
+                    all_pubkeys.get(&**voting_pubkey).cloned();
+                if cached_pubkey.is_none() {
+                    let new_pubkey = Rc::new(**voting_pubkey);
+                    all_pubkeys.insert(new_pubkey.clone());
+                    cached_pubkey = Some(new_pubkey);
+                }
+                let voting_pubkey = cached_pubkey.unwrap();
+                leader_propagated_stats
+                    .propagated_validators
+                    .insert(voting_pubkey.clone());
+                leader_propagated_stats.propagated_validators_stake += *leader_bank
+                    .epoch_vote_accounts(leader_bank.epoch())
+                    .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
+                    .get(&voting_pubkey)
+                    .map(|(stake, _)| stake)
+                    .unwrap_or(&0);
+                println!(
+                    "received: {:?}",
+                    leader_propagated_stats.propagated_validators
+                );
+                if leader_propagated_stats.propagated_validators_stake as f64
+                    / leader_bank.total_epoch_stake() as f64
+                    > SUPERMINORITY_THRESHOLD
+                {
+                    leader_propagated_stats.is_propagated = true;
+                    did_newly_reach_threshold = true
+                }
+                true
+            } else {
+                false
+            }
+        });
+
+        did_newly_reach_threshold
     }
 
     fn confirm_forks(
@@ -2730,39 +2664,21 @@ pub(crate) mod tests {
         // progress map, so is_propagated(8) should return true as
         // this implies the parent is rooted
         assert!(ReplayStage::is_propagated(&mut progress_map, 8));
-        assert!(
-            progress_map
-                .get(&8)
-                .unwrap()
-                .propagated_stats
-                .propagated_confirmation
-        );
+        assert!(progress_map.get(&8).unwrap().propagated_stats.is_propagated);
 
         // Slot 3 has no previous leader slot, so the is_propagated() check
         // is vacuously true
         assert!(ReplayStage::is_propagated(&mut progress_map, 3));
-        assert!(
-            progress_map
-                .get(&3)
-                .unwrap()
-                .propagated_stats
-                .propagated_confirmation
-        );
+        assert!(progress_map.get(&3).unwrap().propagated_stats.is_propagated);
 
-        // If we set the propagated_confirmation = true, is_propagated should return true
+        // If we set the is_propagated = true, is_propagated should return true
         progress_map
             .get_mut(&9)
             .unwrap()
             .propagated_stats
-            .propagated_confirmation = true;
+            .is_propagated = true;
         assert!(ReplayStage::is_propagated(&mut progress_map, 9), true);
-        assert!(
-            progress_map
-                .get(&9)
-                .unwrap()
-                .propagated_stats
-                .propagated_confirmation
-        );
+        assert!(progress_map.get(&9).unwrap().propagated_stats.is_propagated);
 
         // Slot 10 is still unconfirmed, even though its previous leader slot 9
         // has been confirmed
@@ -2788,13 +2704,14 @@ pub(crate) mod tests {
 
         // Insert new ForkProgress for slot 10 and its
         // previous leader slot 9
-        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), false));
+        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), true));
         progress_map.insert(9, ForkProgress::new(Hash::default(), Some(8), true));
 
         let bank0 = bank_forks.get(0).unwrap().clone();
         bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
         let bank9 = bank_forks.get(9).unwrap().clone();
         bank_forks.insert(Bank::new_from_parent(&bank9, &Pubkey::default(), 10));
+        bank_forks.set_root(9, &None);
 
         // Make sure is_propagated == false so that the propagation logic
         // runs in `update_propagation_status`
@@ -2827,6 +2744,7 @@ pub(crate) mod tests {
             .is_none());
 
         // The voter should be recorded
+        println!("ddd: {:?}", propagated_stats.propagated_validators);
         assert!(propagated_stats
             .propagated_validators
             .contains(&*vote_pubkey));
