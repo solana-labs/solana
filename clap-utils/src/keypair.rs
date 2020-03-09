@@ -75,7 +75,14 @@ pub fn signer_from_path(
                 false,
             )?))
         }
-        KeypairUrl::Filepath(path) => Ok(Box::new(read_keypair_file(&path)?)),
+        KeypairUrl::Filepath(path) => match read_keypair_file(&path) {
+            Err(e) => Err(Error::with_description(
+                &format!("Couldn't find keypair file: {:?} error: {:?}", path, e),
+                ErrorKind::InvalidValue,
+            )
+            .into()),
+            Ok(file) => Ok(Box::new(file)),
+        },
         KeypairUrl::Stdin => {
             let mut stdin = std::io::stdin();
             Ok(Box::new(read_keypair(&mut stdin)?))
