@@ -27,7 +27,12 @@ pub struct Stakes {
 }
 
 impl Stakes {
+    pub fn total_stake(&self) -> u64 {
+        self.vote_accounts.iter().map(|(_, (stake, _))| stake).sum()
+    }
+
     pub fn history(&self) -> &StakeHistory {
+        println!("history: {} {:?}", self.epoch, self.stake_history);
         &self.stake_history
     }
     pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {

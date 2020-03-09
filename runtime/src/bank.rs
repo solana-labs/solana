@@ -1719,16 +1719,6 @@ impl Bank {
         }
     }
 
-    pub fn total_epoch_stake(&self) -> u64 {
-        self.epoch_stakes
-            .get(&self.epoch)
-            .expect("Epoch stakes for bank's own epoch must exist")
-            .history()
-            .get(&self.epoch)
-            .expect("Stake history for bank's own epoch must exist")
-            .effective
-    }
-
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account(pubkey) {
             Some(mut account) => {
