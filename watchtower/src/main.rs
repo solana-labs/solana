@@ -3,12 +3,13 @@
 mod notifier;
 
 use crate::notifier::Notifier;
-use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_pubkey_or_keypair, is_url},
 };
+use solana_cli_config::{Config, CONFIG_FILE};
 use solana_client::rpc_client::RpcClient;
 use solana_metrics::{datapoint_error, datapoint_info};
 use std::{error, io, thread::sleep, time::Duration};
@@ -17,12 +18,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
+        .arg({
+            let arg = Arg::with_name("config_file")
+                .short("C")
+                .long("config")
+                .value_name("PATH")
+                .takes_value(true)
+                .global(true)
+                .help("Configuration file to use");
+            if let Some(ref config_file) = *CONFIG_FILE {
+                arg.default_value(&config_file)
+            } else {
+                arg
+            }
+        })
         .arg(
             Arg::with_name("json_rpc_url")
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
-                .required(true)
                 .validator(is_url)
                 .help("JSON RPC URL for the cluster"),
         )
@@ -50,14 +64,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .get_matches();
 
+    let config = if let Some(config_file) = matches.value_of("config_file") {
+        Config::load(config_file).unwrap_or_default()
+    } else {
+        Config::default()
+    };
+
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
-    let json_rpc_url = value_t_or_exit!(matches, "json_rpc_url", String);
+    let json_rpc_url =
+        value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url);
     let validator_identity = pubkey_of(&matches, "validator_identity").map(|i| i.to_string());
     let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
 
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
 
+    info!("RPC URL: {}", json_rpc_url);
     let rpc_client = RpcClient::new(json_rpc_url);
 
     let notifier = Notifier::new();
