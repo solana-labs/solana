@@ -19,7 +19,9 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{self, EpochSlotsIndex, CrdsData, CrdsValue, CrdsValueLabel, LowestSlot, SnapshotHash, Vote},
+    crds_value::{
+        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash, Vote,
+    },
     epoch_slots::EpochSlots,
     packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},

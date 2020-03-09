@@ -302,7 +302,7 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 3 + MAX_VOTES as usize];
+        let mut hits = [false; 3 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
