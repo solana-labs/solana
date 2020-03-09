@@ -544,49 +544,16 @@ declare module '@solana/web3.js' {
   export class SystemProgram {
     static programId: PublicKey;
 
-    static createAccount(
-      from: PublicKey,
-      newAccount: PublicKey,
-      lamports: number,
-      space: number,
-      programId: PublicKey,
-    ): Transaction;
-    static transfer(
-      from: PublicKey,
-      to: PublicKey,
-      amount: number,
-    ): Transaction;
-    static assign(from: PublicKey, programId: PublicKey): Transaction;
+    static createAccount(params: CreateAccountParams): Transaction;
+    static transfer(params: TransferParams): Transaction;
+    static assign(params: AssignParams): Transaction;
     static createAccountWithSeed(
-      from: PublicKey,
-      newAccount: PublicKey,
-      base: PublicKey,
-      seed: string,
-      lamports: number,
-      space: number,
-      programId: PublicKey,
+      params: CreateAccountWithSeedParams,
     ): Transaction;
-    static createNonceAccount(
-      from: PublicKey,
-      nonceAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      lamports: number,
-    ): Transaction;
-    static nonceAdvance(
-      nonceAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-    ): TransactionInstruction;
-    static nonceWithdraw(
-      nonceAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      to: PublicKey,
-      lamports: number,
-    ): Transaction;
-    static nonceAuthorize(
-      nonceAccount: PublicKey,
-      authorizedPubkey: PublicKey,
-      newAuthorized: PublicKey,
-    ): Transaction;
+    static createNonceAccount(params: CreateNonceAccountParams): Transaction;
+    static nonceAdvance(params: AdvanceNonceParams): TransactionInstruction;
+    static nonceWithdraw(params: WithdrawNonceParams): Transaction;
+    static nonceAuthorize(params: AuthorizeNonceParams): Transaction;
   }
 
   export type SystemInstructionType =

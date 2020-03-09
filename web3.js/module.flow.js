@@ -251,6 +251,126 @@ declare module '@solana/web3.js' {
     feeCalculator: FeeCalculator;
   }
 
+  // === src/validator-info.js ===
+  declare export var VALIDATOR_INFO_KEY;
+  declare export type Info = {|
+    name: string,
+    website?: string,
+    details?: string,
+    keybaseUsername?: string,
+  |};
+
+  declare export class ValidatorInfo {
+    key: PublicKey;
+    info: Info;
+
+    constructor(key: PublicKey, info: Info): ValidatorInfo;
+    static fromConfigData(
+      buffer: Buffer | Uint8Array | Array<number>,
+    ): ValidatorInfo | null;
+  }
+
+  // === src/sysvar.js ===
+  declare export var SYSVAR_CLOCK_PUBKEY;
+  declare export var SYSVAR_RENT_PUBKEY;
+  declare export var SYSVAR_REWARDS_PUBKEY;
+  declare export var SYSVAR_STAKE_HISTORY_PUBKEY;
+
+  // === src/vote-account.js ===
+  declare export var VOTE_PROGRAM_ID;
+  declare export type Lockout = {|
+    slot: number,
+    confirmationCount: number,
+  |};
+
+  declare export type EpochCredits = {|
+    epoch: number,
+    credits: number,
+    prevCredits: number,
+  |};
+
+  declare export class VoteAccount {
+    votes: Array<Lockout>;
+    nodePubkey: PublicKey;
+    authorizedVoterPubkey: PublicKey;
+    commission: number;
+    rootSlot: number | null;
+    epoch: number;
+    credits: number;
+    lastEpochCredits: number;
+    epochCredits: Array<EpochCredits>;
+    static fromAccountData(
+      buffer: Buffer | Uint8Array | Array<number>,
+    ): VoteAccount;
+  }
+
+  // === src/instruction.js ===
+  declare export type InstructionType = {|
+    index: number,
+    layout: typeof BufferLayout,
+  |};
+
+  declare export function encodeData(
+    type: InstructionType,
+    fields: Object,
+  ): Buffer;
+
+  // === src/transaction.js ===
+  declare export type TransactionSignature = string;
+
+  declare type TransactionInstructionCtorFields = {|
+    keys: ?Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>,
+    programId?: PublicKey,
+    data?: Buffer,
+  |};
+
+  declare export class TransactionInstruction {
+    keys: Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>;
+    programId: PublicKey;
+    data: Buffer;
+
+    constructor(
+      opts?: TransactionInstructionCtorFields,
+    ): TransactionInstruction;
+  }
+
+  declare type SignaturePubkeyPair = {|
+    signature: Buffer | null,
+    publicKey: PublicKey,
+  |};
+
+  declare type NonceInformation = {|
+    nonce: Blockhash,
+    nonceInstruction: TransactionInstruction,
+  |};
+
+  declare type TransactionCtorFields = {|
+    recentBlockhash?: Blockhash,
+    nonceInfo?: NonceInformation,
+    signatures?: Array<SignaturePubkeyPair>,
+  |};
+
+  declare export class Transaction {
+    signatures: Array<SignaturePubkeyPair>;
+    signature: ?Buffer;
+    instructions: Array<TransactionInstruction>;
+    recentBlockhash: ?Blockhash;
+    nonceInfo: ?NonceInformation;
+
+    constructor(opts?: TransactionCtorFields): Transaction;
+    static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
+    add(
+      ...items: Array<
+        Transaction | TransactionInstruction | TransactionInstructionCtorFields,
+      >
+    ): Transaction;
+    sign(...signers: Array<Account>): void;
+    signPartial(...partialSigners: Array<PublicKey | Account>): void;
+    addSigner(signer: Account): void;
+    verifySignatures(): boolean;
+    serialize(): Buffer;
+  }
+
   // === src/stake-program.js ===
   declare export type StakeAuthorizationType = {|
     index: number,
@@ -467,6 +587,9 @@ declare module '@solana/web3.js' {
   };
 
   declare export class SystemInstruction {
+    static decodeInstructionType(
+      instruction: TransactionInstruction,
+    ): SystemInstructionType;
     static decodeCreateAccount(
       instruction: TransactionInstruction,
     ): CreateAccountParams;
@@ -487,126 +610,6 @@ declare module '@solana/web3.js' {
     static decodeNonceAuthorize(
       instruction: TransactionInstruction,
     ): AuthorizeNonceParams;
-  }
-
-  // === src/validator-info.js ===
-  declare export var VALIDATOR_INFO_KEY;
-  declare export type Info = {|
-    name: string,
-    website?: string,
-    details?: string,
-    keybaseUsername?: string,
-  |};
-
-  declare export class ValidatorInfo {
-    key: PublicKey;
-    info: Info;
-
-    constructor(key: PublicKey, info: Info): ValidatorInfo;
-    static fromConfigData(
-      buffer: Buffer | Uint8Array | Array<number>,
-    ): ValidatorInfo | null;
-  }
-
-  // === src/sysvar.js ===
-  declare export var SYSVAR_CLOCK_PUBKEY;
-  declare export var SYSVAR_RENT_PUBKEY;
-  declare export var SYSVAR_REWARDS_PUBKEY;
-  declare export var SYSVAR_STAKE_HISTORY_PUBKEY;
-
-  // === src/vote-account.js ===
-  declare export var VOTE_PROGRAM_ID;
-  declare export type Lockout = {|
-    slot: number,
-    confirmationCount: number,
-  |};
-
-  declare export type EpochCredits = {|
-    epoch: number,
-    credits: number,
-    prevCredits: number,
-  |};
-
-  declare export class VoteAccount {
-    votes: Array<Lockout>;
-    nodePubkey: PublicKey;
-    authorizedVoterPubkey: PublicKey;
-    commission: number;
-    rootSlot: number | null;
-    epoch: number;
-    credits: number;
-    lastEpochCredits: number;
-    epochCredits: Array<EpochCredits>;
-    static fromAccountData(
-      buffer: Buffer | Uint8Array | Array<number>,
-    ): VoteAccount;
-  }
-
-  // === src/instruction.js ===
-  declare export type InstructionType = {|
-    index: number,
-    layout: typeof BufferLayout,
-  |};
-
-  declare export function encodeData(
-    type: InstructionType,
-    fields: Object,
-  ): Buffer;
-
-  // === src/transaction.js ===
-  declare export type TransactionSignature = string;
-
-  declare type TransactionInstructionCtorFields = {|
-    keys: ?Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>,
-    programId?: PublicKey,
-    data?: Buffer,
-  |};
-
-  declare export class TransactionInstruction {
-    keys: Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>;
-    programId: PublicKey;
-    data: Buffer;
-
-    constructor(
-      opts?: TransactionInstructionCtorFields,
-    ): TransactionInstruction;
-  }
-
-  declare type SignaturePubkeyPair = {|
-    signature: Buffer | null,
-    publicKey: PublicKey,
-  |};
-
-  declare type NonceInformation = {|
-    nonce: Blockhash,
-    nonceInstruction: TransactionInstruction,
-  |};
-
-  declare type TransactionCtorFields = {|
-    recentBlockhash?: Blockhash,
-    nonceInfo?: NonceInformation,
-    signatures?: Array<SignaturePubkeyPair>,
-  |};
-
-  declare export class Transaction {
-    signatures: Array<SignaturePubkeyPair>;
-    signature: ?Buffer;
-    instructions: Array<TransactionInstruction>;
-    recentBlockhash: ?Blockhash;
-    nonceInfo: ?NonceInformation;
-
-    constructor(opts?: TransactionCtorFields): Transaction;
-    static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
-    add(
-      ...items: Array<
-        Transaction | TransactionInstruction | TransactionInstructionCtorFields,
-      >
-    ): Transaction;
-    sign(...signers: Array<Account>): void;
-    signPartial(...partialSigners: Array<PublicKey | Account>): void;
-    addSigner(signer: Account): void;
-    verifySignatures(): boolean;
-    serialize(): Buffer;
   }
 
   // === src/loader.js ===
