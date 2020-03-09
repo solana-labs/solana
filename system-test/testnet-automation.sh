@@ -136,6 +136,7 @@ function launchTestnet() {
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
+        --self-destruct-hours 0 \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     ec2)
