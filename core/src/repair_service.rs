@@ -11,7 +11,6 @@ use solana_ledger::{
 };
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
-    collections::{BTreeSet, HashSet},
     iter::Iterator,
     net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
@@ -84,21 +83,9 @@ impl RepairService {
         repair_strategy: RepairStrategy,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let mut lowest_slot: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
-        if let RepairStrategy::RepairAll {
-            ref epoch_schedule, ..
-        } = repair_strategy
-        {
-            let current_root = blockstore.last_root();
-            Self::initialize_lowest_slot(
-                id,
-                blockstore,
-                &mut lowest_slot,
-                current_root,
-                epoch_schedule,
-                cluster_info,
-            );
+        if let RepairStrategy::RepairAll { .. } = repair_strategy {
+            Self::initialize_lowest_slot(id, blockstore, cluster_info);
         }
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -262,39 +249,11 @@ impl RepairService {
         }
     }
 
-    fn get_completed_slots_past_root(
-        blockstore: &Blockstore,
-        slots_in_gossip: &mut BTreeSet<Slot>,
-        root: Slot,
-        epoch_schedule: &EpochSchedule,
-    ) {
-        let last_confirmed_epoch = epoch_schedule.get_leader_schedule_epoch(root);
-        let last_epoch_slot = epoch_schedule.get_last_slot_in_epoch(last_confirmed_epoch);
-
-        let meta_iter = blockstore
-            .slot_meta_iterator(root + 1)
-            .expect("Couldn't get db iterator");
-
-        for (current_slot, meta) in meta_iter {
-            if current_slot > last_epoch_slot {
-                break;
-            }
-            if meta.is_full() {
-                slots_in_gossip.insert(current_slot);
-            }
-        }
-    }
-
     fn initialize_lowest_slot(
         id: Pubkey,
         blockstore: &Blockstore,
-        slots_in_gossip: &mut BTreeSet<Slot>,
-        root: Slot,
-        epoch_schedule: &EpochSchedule,
         cluster_info: &RwLock<ClusterInfo>,
     ) {
-        Self::get_completed_slots_past_root(blockstore, slots_in_gossip, root, epoch_schedule);
-
         // Safe to set into gossip because by this time, the leader schedule cache should
         // also be updated with the latest root (done in blockstore_processor) and thus
         // will provide a schedule to window_service for any incoming shreds up to the
@@ -319,20 +278,6 @@ impl RepairService {
             .write()
             .unwrap()
             .push_lowest_slot(id, lowest_slot);
-    }
-
-    #[allow(dead_code)]
-    fn find_incomplete_slots(blockstore: &Blockstore, root: Slot) -> HashSet<Slot> {
-        blockstore
-            .live_slots_iterator(root)
-            .filter_map(|(slot, slot_meta)| {
-                if !slot_meta.is_full() {
-                    Some(slot)
-                } else {
-                    None
-                }
-            })
-            .collect()
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -564,71 +509,6 @@ mod test {
     }
 
     #[test]
-    pub fn test_get_completed_slots_past_root() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            let num_entries_per_slot = 10;
-            let root = 10;
-
-            let fork1 = vec![5, 7, root, 15, 20, 21];
-            let fork1_shreds: Vec<_> = make_chaining_slot_entries(&fork1, num_entries_per_slot)
-                .into_iter()
-                .flat_map(|(shreds, _)| shreds)
-                .collect();
-            let fork2 = vec![8, 12];
-            let fork2_shreds = make_chaining_slot_entries(&fork2, num_entries_per_slot);
-
-            // Remove the last shred from each slot to make an incomplete slot
-            let fork2_incomplete_shreds: Vec<_> = fork2_shreds
-                .into_iter()
-                .flat_map(|(mut shreds, _)| {
-                    shreds.pop();
-                    shreds
-                })
-                .collect();
-            let mut full_slots = BTreeSet::new();
-
-            blockstore.insert_shreds(fork1_shreds, None, false).unwrap();
-            blockstore
-                .insert_shreds(fork2_incomplete_shreds, None, false)
-                .unwrap();
-
-            // Test that only slots > root from fork1 were included
-            let epoch_schedule = EpochSchedule::custom(32, 32, false);
-
-            RepairService::get_completed_slots_past_root(
-                &blockstore,
-                &mut full_slots,
-                root,
-                &epoch_schedule,
-            );
-
-            let mut expected: BTreeSet<_> = fork1.into_iter().filter(|x| *x > root).collect();
-            assert_eq!(full_slots, expected);
-
-            // Test that slots past the last confirmed epoch boundary don't get included
-            let last_epoch = epoch_schedule.get_leader_schedule_epoch(root);
-            let last_slot = epoch_schedule.get_last_slot_in_epoch(last_epoch);
-            let fork3 = vec![last_slot, last_slot + 1];
-            let fork3_shreds: Vec<_> = make_chaining_slot_entries(&fork3, num_entries_per_slot)
-                .into_iter()
-                .flat_map(|(shreds, _)| shreds)
-                .collect();
-            blockstore.insert_shreds(fork3_shreds, None, false).unwrap();
-            RepairService::get_completed_slots_past_root(
-                &blockstore,
-                &mut full_slots,
-                root,
-                &epoch_schedule,
-            );
-            expected.insert(last_slot);
-            assert_eq!(full_slots, expected);
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
     pub fn test_update_lowest_slot() {
         let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
         let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
@@ -649,64 +529,5 @@ mod test {
             .0
             .clone();
         assert_eq!(lowest.lowest, 5);
-    }
-
-    #[test]
-    fn test_find_incomplete_slots() {
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            let num_entries_per_slot = 100;
-            let (mut shreds, _) = make_slot_entries(0, 0, num_entries_per_slot);
-            assert!(shreds.len() > 1);
-            let (shreds4, _) = make_slot_entries(4, 0, num_entries_per_slot);
-            shreds.extend(shreds4);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-
-            // Nothing is incomplete
-            assert!(RepairService::find_incomplete_slots(&blockstore, 0).is_empty());
-
-            // Insert a slot 5 that chains to an incomplete orphan slot 3
-            let (shreds5, _) = make_slot_entries(5, 3, num_entries_per_slot);
-            blockstore.insert_shreds(shreds5, None, false).unwrap();
-            assert_eq!(
-                RepairService::find_incomplete_slots(&blockstore, 0),
-                vec![3].into_iter().collect()
-            );
-
-            // Insert another incomplete orphan slot 2 that is the parent of slot 3.
-            // Both should be incomplete
-            let (shreds3, _) = make_slot_entries(3, 2, num_entries_per_slot);
-            blockstore
-                .insert_shreds(shreds3[1..].to_vec(), None, false)
-                .unwrap();
-            assert_eq!(
-                RepairService::find_incomplete_slots(&blockstore, 0),
-                vec![2, 3].into_iter().collect()
-            );
-
-            // Insert a incomplete slot 6 that chains to the root 0,
-            // should also be incomplete
-            let (shreds6, _) = make_slot_entries(6, 0, num_entries_per_slot);
-            blockstore
-                .insert_shreds(shreds6[1..].to_vec(), None, false)
-                .unwrap();
-            assert_eq!(
-                RepairService::find_incomplete_slots(&blockstore, 0),
-                vec![2, 3, 6].into_iter().collect()
-            );
-
-            // Complete slot 3, should no longer be marked incomplete
-            blockstore
-                .insert_shreds(shreds3[..].to_vec(), None, false)
-                .unwrap();
-
-            assert_eq!(
-                RepairService::find_incomplete_slots(&blockstore, 0),
-                vec![2, 6].into_iter().collect()
-            );
-        }
-
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
