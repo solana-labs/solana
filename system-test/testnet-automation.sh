@@ -188,27 +188,33 @@ function launchTestnet() {
     net/net.sh stop
   fi
 
-  execution_step "Start ${NUMBER_OF_VALIDATOR_NODES} node test"
+  execution_step "Starting bootstrap node and ${NUMBER_OF_VALIDATOR_NODES} validator nodes"
   if [[ -n $CHANNEL ]]; then
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
     net/net.sh start -t "$CHANNEL" \
-      "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
-      --gpu-mode $startGpuMode --client-delay-start $CLIENT_DELAY_START
+      -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
+      --gpu-mode $startGpuMode
   else
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
     net/net.sh start -T solana-release*.tar.bz2 \
-      "$maybeClientOptions" "$CLIENT_OPTIONS" $maybeStartAllowBootFailures \
-      --gpu-mode $startGpuMode --client-delay-start $CLIENT_DELAY_START
+      -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
+      --gpu-mode $startGpuMode
   fi
 
+  execution_step "Waiting for bootstrap validator's stake to fall below ${BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD}%"
+  wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
+
+  if [[ $NUMBER_OF_CLIENT_NODES -gt 0 ]]; then
+    execution_step "Starting ${NUMBER_OF_CLIENT_NODES} client nodes"
+    net/net.sh startclients "$maybeClientOptions" "$CLIENT_OPTIONS"
+  fi
+
+  SECONDS=0
   START_SLOT=$(get_slot)
   SLOT_COUNT_START_SECONDS=$SECONDS
-  execution_step "Slot: $START_SLOT, Seconds: $SLOT_COUNT_START_SECONDS"
-
-  execution_step "Waiting for bootstrap validator's stake percentage to fall below $BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD %"
-  wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
+  execution_step "Marking beginning of slot rate test - Slot: $START_SLOT, Seconds: $SLOT_COUNT_START_SECONDS"
 
   if [[ -n $TEST_DURATION_SECONDS ]]; then
     execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
@@ -232,11 +238,12 @@ function launchTestnet() {
   else
     # We should never get here
     echo Test duration and partition config not defined
+    exit 1
   fi
 
   END_SLOT=$(get_slot)
   SLOT_COUNT_END_SECONDS=$SECONDS
-  execution_step "Slot: $END_SLOT, Seconds: $SLOT_COUNT_END_SECONDS"
+  execution_step "Marking end of slot rate test - Slot: $END_SLOT, Seconds: $SLOT_COUNT_END_SECONDS"
 
   SLOTS_PER_SECOND="$(bc <<< "scale=3; ($END_SLOT - $START_SLOT)/($SLOT_COUNT_END_SECONDS - $SLOT_COUNT_START_SECONDS)")"
   execution_step "Average slot rate: $SLOTS_PER_SECOND slots/second over $((SLOT_COUNT_END_SECONDS - SLOT_COUNT_START_SECONDS)) seconds"
