@@ -1,5 +1,6 @@
 use crate::keypair::{
-    keypair_from_seed_phrase, signer_from_path, ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
+    keypair_from_seed_phrase, pubkey_from_path, signer_from_path, ASK_KEYWORD,
+    SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use chrono::DateTime;
 use clap::ArgMatches;
@@ -108,6 +109,23 @@ pub fn signer_of(
         Ok((Some(signer), Some(signer_pubkey)))
     } else {
         Ok((None, None))
+    }
+}
+
+pub fn pubkey_of_signer(
+    matches: &ArgMatches<'_>,
+    name: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<Option<Pubkey>, Box<dyn std::error::Error>> {
+    if let Some(location) = matches.value_of(name) {
+        Ok(Some(pubkey_from_path(
+            matches,
+            location,
+            name,
+            wallet_manager,
+        )?))
+    } else {
+        Ok(None)
     }
 }
 
