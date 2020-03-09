@@ -40,7 +40,7 @@ rayon = "1.2.0"
 regex = "1.3.4"
 serde = "1.0.104"
 serde_derive = "1.0.103"
-serde_json = "1.0.46"
+serde_json = "1.0.48"
 solana-budget-program = { path = "../programs/budget", version = "1.1.0" }
 solana-clap-utils = { path = "../clap-utils", version = "1.1.0" }
 solana-client = { path = "../client", version = "1.1.0" }

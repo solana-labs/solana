@@ -46,7 +46,7 @@ rand_chacha = { version = "0.1.1", optional = true }
 serde = "1.0.104"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
-serde_json = { version = "1.0.46", optional = true }
+serde_json = { version = "1.0.48", optional = true }
 sha2 = "0.8.1"
 thiserror = "1.0"
 ed25519-dalek = { version = "=1.0.0-pre.1", optional = true }
