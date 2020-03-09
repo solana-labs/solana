@@ -13,7 +13,7 @@ solana-sdk = { path = "../sdk", version = "1.1.0" }
 fast-math = "0.1"
 
 [dev-dependencies]
-hex = "0.4.0"
+hex = "0.4.2"
 
 [lib]
 crate-type = ["lib"]
