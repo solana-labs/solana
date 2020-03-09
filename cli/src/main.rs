@@ -10,7 +10,7 @@ use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
     display::{println_name_value, println_name_value_or},
 };
-use solana_cli_config::config::{Config, CONFIG_FILE};
+use solana_cli_config::{Config, CONFIG_FILE};
 use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
 use std::{error, sync::Arc};
 
