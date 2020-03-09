@@ -6,12 +6,13 @@ use crate::notifier::Notifier;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use solana_clap_utils::{
-    input_parsers::pubkey_of,
+    input_parsers::pubkeys_of,
     input_validators::{is_pubkey_or_keypair, is_url},
 };
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_client::rpc_client::RpcClient;
 use solana_metrics::{datapoint_error, datapoint_info};
+use solana_sdk::native_token::lamports_to_sol;
 use std::{error, io, thread::sleep, time::Duration};
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -49,11 +50,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Wait interval seconds between checking the cluster"),
         )
         .arg(
-            Arg::with_name("validator_identity")
+            Arg::with_name("validator_identitys")
                 .long("validator-identity")
                 .value_name("VALIDATOR IDENTITY PUBKEY")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
+                .multiple(true)
                 .help("Monitor a specific validator only instead of the entire cluster"),
         )
         .arg(
@@ -73,13 +75,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let json_rpc_url =
         value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url);
-    let validator_identity = pubkey_of(&matches, "validator_identity").map(|i| i.to_string());
+    let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identitys")
+        .unwrap_or_else(|| vec![])
+        .into_iter()
+        .map(|i| i.to_string())
+        .collect();
+
     let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
 
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
 
     info!("RPC URL: {}", json_rpc_url);
+    if !validator_identity_pubkeys.is_empty() {
+        info!("Monitored validators: {:?}", validator_identity_pubkeys);
+    }
+
     let rpc_client = RpcClient::new(json_rpc_url);
 
     let notifier = Notifier::new();
@@ -137,48 +148,63 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             && rpc_client
                 .get_vote_accounts()
                 .and_then(|vote_accounts| {
+
+                    let total_current_stake = vote_accounts
+                        .current
+                        .iter()
+                        .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
+                    let total_delinquent_stake = vote_accounts
+                        .delinquent
+                        .iter()
+                        .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
+
+                    let total_stake = total_current_stake + total_delinquent_stake;
+                    let current_stake_percent = total_current_stake * 100 / total_stake;
+                    info!(
+                        "Current stake: {}% | Total stake: {} SOL, current stake: {} SOL, delinquent: {} SOL",
+                        current_stake_percent,
+                        lamports_to_sol(total_stake),
+                        lamports_to_sol(total_current_stake),
+                        lamports_to_sol(total_delinquent_stake)
+                    );
+
                     info!("Current validator count: {}", vote_accounts.current.len());
                     info!(
                         "Delinquent validator count: {}",
                         vote_accounts.delinquent.len()
                     );
 
-                    match validator_identity.as_ref() {
-                        Some(validator_identity) => {
+                    if validator_identity_pubkeys.is_empty() {
+                        if vote_accounts.delinquent.is_empty() {
+                            Ok(true)
+                        } else {
+                            Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("{} delinquent validators", vote_accounts.delinquent.len()),
+                            ))
+                        }
+                    } else {
+                        let mut errors = vec![];
+                        for validator_identity in validator_identity_pubkeys.iter() {
                             if vote_accounts
-                                .current
-                                .iter()
-                                .any(|vai| vai.node_pubkey == *validator_identity)
-                            {
-                                Ok(true)
-                            } else if vote_accounts
                                 .delinquent
                                 .iter()
                                 .any(|vai| vai.node_pubkey == *validator_identity)
                             {
-                                Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    format!("Validator {} is delinquent", validator_identity),
-                                ))
-                            } else {
-                                Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    format!("Validator {} is missing", validator_identity),
-                                ))
+                                errors.push(format!("{} delinquent", validator_identity));
+                            } else if !vote_accounts
+                                .current
+                                .iter()
+                                .any(|vai| vai.node_pubkey == *validator_identity)
+                            {
+                                errors.push(format!("{} missing", validator_identity));
                             }
                         }
-                        None => {
-                            if vote_accounts.delinquent.is_empty() {
-                                Ok(true)
-                            } else {
-                                Err(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    format!(
-                                        "{} delinquent validators",
-                                        vote_accounts.delinquent.len()
-                                    ),
-                                ))
-                            }
+
+                        if errors.is_empty() {
+                            Ok(true)
+                        } else {
+                            Err(io::Error::new(io::ErrorKind::Other, errors.join(",")))
                         }
                     }
                 })
