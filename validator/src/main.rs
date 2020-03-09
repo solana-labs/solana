@@ -631,7 +631,6 @@ pub fn main() {
             Arg::with_name("no_untrusted_rpc")
                 .long("no-untrusted-rpc")
                 .takes_value(false)
-                .requires("trusted_validators")
                 .help("Use the RPC service of trusted validators only")
         )
         .arg(
