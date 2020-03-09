@@ -5566,8 +5566,6 @@ mod tests {
         assert_eq!(bank.get_balance(&from_pubkey), 80);
         assert_eq!(bank.get_balance(&to_pubkey), 20);
     }
-<<<<<<< HEAD
-=======
 
     #[test]
     fn test_transaction_with_program_ids_passed_to_programs() {
@@ -5610,5 +5608,4 @@ mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(result, Ok(()));
     }
->>>>>>> 97c5fb814... Allow passing of program_ids to programs (#8639)
 }
