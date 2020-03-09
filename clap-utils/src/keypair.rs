@@ -117,6 +117,18 @@ pub fn signer_from_path(
     }
 }
 
+pub fn pubkey_from_path(
+    matches: &ArgMatches,
+    path: &str,
+    keypair_name: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<Pubkey, Box<dyn error::Error>> {
+    match parse_keypair_path(path) {
+        KeypairUrl::Pubkey(pubkey) => Ok(pubkey),
+        _ => Ok(signer_from_path(matches, path, keypair_name, wallet_manager)?.pubkey()),
+    }
+}
+
 // Keyword used to indicate that the user should be asked for a keypair seed phrase
 pub const ASK_KEYWORD: &str = "ASK";
 
