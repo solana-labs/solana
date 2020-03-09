@@ -590,7 +590,9 @@ pub fn parse_command(
             command: CliCommand::ClusterVersion,
             signers: vec![],
         }),
-        ("create-address-with-seed", Some(matches)) => parse_create_address_with_seed(matches),
+        ("create-address-with-seed", Some(matches)) => {
+            parse_create_address_with_seed(matches, default_signer_path, wallet_manager)
+        }
         ("fees", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::Fees,
             signers: vec![],
@@ -1036,8 +1038,20 @@ pub fn return_signers(tx: &Transaction) -> ProcessResult {
 
 pub fn parse_create_address_with_seed(
     matches: &ArgMatches<'_>,
+    default_signer_path: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let from_pubkey = pubkey_of(matches, "from");
+    let from_pubkey = pubkey_of_signer(matches, "from", wallet_manager)?;
+    let signers = if from_pubkey.is_some() {
+        vec![]
+    } else {
+        vec![signer_from_path(
+            matches,
+            default_signer_path,
+            "keypair",
+            wallet_manager,
+        )?]
+    };
 
     let program_id = match matches.value_of("program_id").unwrap() {
         "STAKE" => solana_stake_program::id(),
@@ -1060,7 +1074,7 @@ pub fn parse_create_address_with_seed(
             seed,
             program_id,
         },
-        signers: vec![],
+        signers,
     })
 }
 
@@ -1070,9 +1084,12 @@ fn process_create_address_with_seed(
     seed: &str,
     program_id: &Pubkey,
 ) -> ProcessResult {
-    let config_pubkey = config.pubkey()?;
-    let from_pubkey = from_pubkey.unwrap_or(&config_pubkey);
-    let address = create_address_with_seed(from_pubkey, seed, program_id)?;
+    let from_pubkey = if let Some(pubkey) = from_pubkey {
+        *pubkey
+    } else {
+        config.pubkey()?
+    };
+    let address = create_address_with_seed(&from_pubkey, seed, program_id)?;
     Ok(address.to_string())
 }
 
@@ -2288,7 +2305,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(false)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("From (base) key, defaults to client keypair."),
                 ),
         )
@@ -2721,14 +2738,14 @@ mod tests {
             "STAKE",
         ]);
         assert_eq!(
-            parse_command(&test_create_address_with_seed, "", None).unwrap(),
+            parse_command(&test_create_address_with_seed, &keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateAddressWithSeed {
                     from_pubkey: None,
                     seed: "seed".to_string(),
                     program_id: solana_stake_program::id(),
                 },
-                signers: vec![],
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
@@ -3332,8 +3349,22 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
+        // CreateAddressWithSeed
+        let from_pubkey = Pubkey::new_rand();
+        config.signers = vec![];
+        config.command = CliCommand::CreateAddressWithSeed {
+            from_pubkey: Some(from_pubkey),
+            seed: "seed".to_string(),
+            program_id: solana_stake_program::id(),
+        };
+        let address = process_command(&config);
+        let expected_address =
+            create_address_with_seed(&from_pubkey, "seed", &solana_stake_program::id()).unwrap();
+        assert_eq!(address.unwrap(), expected_address.to_string());
+
         // Need airdrop cases
         let to = Pubkey::new_rand();
+        config.signers = vec![&keypair];
         config.command = CliCommand::Airdrop {
             faucet_host: None,
             faucet_port: 1234,
