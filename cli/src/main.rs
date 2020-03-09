@@ -1,11 +1,7 @@
 use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 
-use solana_clap_utils::{
-    input_parsers::derivation_of,
-    input_validators::{is_derivation, is_url},
-    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
-};
+use solana_clap_utils::{input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG};
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
     display::{println_name_value, println_name_value_or},
@@ -132,7 +128,6 @@ pub fn parse_args<'a>(
             websocket_url,
             signers: vec![],
             keypair_path: default_signer_path,
-            derivation_path: derivation_of(matches, "derivation_path"),
             rpc_client: None,
             verbose: matches.is_present("verbose"),
         },
@@ -188,15 +183,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .global(true)
             .takes_value(true)
             .help("/path/to/id.json or usb://remote/wallet/path"),
-    )
-    .arg(
-        Arg::with_name("derivation_path")
-            .long("derivation-path")
-            .value_name("ACCOUNT or ACCOUNT/CHANGE")
-            .global(true)
-            .takes_value(true)
-            .validator(is_derivation)
-            .help("Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'")
     )
     .arg(
         Arg::with_name("verbose")
