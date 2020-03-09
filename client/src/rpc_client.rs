@@ -164,6 +164,32 @@ impl RpcClient {
         })
     }
 
+    pub fn total_supply(&self) -> io::Result<u64> {
+        self.total_supply_with_commitment(CommitmentConfig::default())
+    }
+
+    pub fn total_supply_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> io::Result<u64> {
+        let response = self
+            .client
+            .send(&RpcRequest::GetTotalSupply, json!([commitment_config]), 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetTotalSupply request failure: {:?}", err),
+                )
+            })?;
+
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetTotalSupply parse failure: {}", err),
+            )
+        })
+    }
+
     pub fn get_vote_accounts(&self) -> io::Result<RpcVoteAccountStatus> {
         self.get_vote_accounts_with_commitment(CommitmentConfig::default())
     }

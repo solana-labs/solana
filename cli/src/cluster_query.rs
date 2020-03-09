@@ -23,6 +23,7 @@ use solana_sdk::{
     epoch_schedule::Epoch,
     hash::Hash,
     message::Message,
+    native_token::lamports_to_sol,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction,
@@ -115,6 +116,17 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .takes_value(false)
                     .help(
                         "Return slot at maximum-lockout commitment level",
+                    ),
+            ),
+        )
+        .subcommand(
+            SubCommand::with_name("total-supply").about("Get total number of SOL")
+            .arg(
+                Arg::with_name("confirmed")
+                    .long("confirmed")
+                    .takes_value(false)
+                    .help(
+                        "Return count at maximum-lockout commitment level",
                     ),
             ),
         )
@@ -319,6 +331,18 @@ pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliErr
     };
     Ok(CliCommandInfo {
         command: CliCommand::GetSlot { commitment_config },
+        signers: vec![],
+    })
+}
+
+pub fn parse_total_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
+    Ok(CliCommandInfo {
+        command: CliCommand::TotalSupply { commitment_config },
         signers: vec![],
     })
 }
@@ -754,6 +778,14 @@ pub fn process_show_block_production(
         );
     }
     Ok("".to_string())
+}
+
+pub fn process_total_supply(
+    rpc_client: &RpcClient,
+    commitment_config: CommitmentConfig,
+) -> ProcessResult {
+    let total_supply = rpc_client.total_supply_with_commitment(commitment_config.clone())?;
+    Ok(format!("{} SOL", lamports_to_sol(total_supply)))
 }
 
 pub fn process_get_transaction_count(
@@ -1274,6 +1306,19 @@ mod tests {
             parse_command(&test_get_slot, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetSlot {
+                    commitment_config: CommitmentConfig::recent(),
+                },
+                signers: vec![],
+            }
+        );
+
+        let test_total_supply = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "total-supply"]);
+        assert_eq!(
+            parse_command(&test_total_supply, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::TotalSupply {
                     commitment_config: CommitmentConfig::recent(),
                 },
                 signers: vec![],
