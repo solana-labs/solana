@@ -227,7 +227,7 @@ impl LedgerWallet {
         data: &[u8],
     ) -> Result<Vec<u8>, RemoteWalletError> {
         self.write(command, p1, p2, data)?;
-        if p1 == P1_CONFIRM {
+        if p1 == P1_CONFIRM && is_last_part(p2) {
             println!("Waiting for remote wallet to approve...");
         }
         self.read()
@@ -441,4 +441,38 @@ pub fn get_ledger_from_info(
         pubkeys[0]
     };
     wallet_manager.get_ledger(&wallet_base_pubkey)
+}
+
+//
+fn is_last_part(p2: u8) -> bool {
+    p2 & P2_MORE == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_last_part() {
+        // Bytes with bit-2 set to 0 should return true
+        assert!(is_last_part(0b00));
+        assert!(is_last_part(0b01));
+        assert!(is_last_part(0b101));
+        assert!(is_last_part(0b1001));
+        assert!(is_last_part(0b1101));
+
+        // Bytes with bit-2 set to 1 should return false
+        assert!(!is_last_part(0b10));
+        assert!(!is_last_part(0b11));
+        assert!(!is_last_part(0b110));
+        assert!(!is_last_part(0b111));
+        assert!(!is_last_part(0b1010));
+
+        // Test implementation-specific uses
+        let p2 = 0;
+        assert!(is_last_part(p2));
+        let p2 = P2_EXTEND | P2_MORE;
+        assert!(!is_last_part(p2));
+        assert!(is_last_part(p2 & !P2_MORE));
+    }
 }
