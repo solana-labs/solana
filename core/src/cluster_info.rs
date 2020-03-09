@@ -19,7 +19,8 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, LowestSlot, SnapshotHash, Vote},
+    crds_value::{self, EpochSlotsIndex, CrdsData, CrdsValue, CrdsValueLabel, LowestSlot, SnapshotHash, Vote},
+    epoch_slots::EpochSlots,
     packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
@@ -68,7 +69,8 @@ pub const DATA_PLANE_FANOUT: usize = 200;
 /// milliseconds we sleep for between gossip requests
 pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// The maximum size of a bloom filter
-pub const MAX_BLOOM_SIZE: usize = 1018;
+pub const MAX_BLOOM_SIZE: usize = MAX_CRDS_OBJECT_SIZE;
+pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
 /// The maximum size of a protocol payload
 const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
 /// The largest protocol header size
@@ -248,6 +250,16 @@ impl ClusterInfo {
         self.lookup(&self.id()).cloned().unwrap()
     }
 
+    pub fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
+        let entry = CrdsValueLabel::EpochSlots(ix, self.id());
+        self.gossip
+            .crds
+            .lookup(&entry)
+            .and_then(CrdsValue::epoch_slots)
+            .cloned()
+            .unwrap_or_else(|| EpochSlots::new(self.id(), timestamp()))
+    }
+
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
@@ -341,6 +353,44 @@ impl ClusterInfo {
         }
     }
 
+    pub fn push_epoch_slots(&mut self, update: &[Slot]) {
+        let mut num = 0;
+        let mut current_slots: Vec<_> = (0..crds_value::MAX_EPOCH_SLOTS)
+            .filter_map(|ix| {
+                Some((
+                    self.gossip
+                        .crds
+                        .lookup(&CrdsValueLabel::Vote(ix, self.id()))
+                        .and_then(CrdsValue::epoch_slots)
+                        .map(|x| x.wallclock)?,
+                    ix,
+                ))
+            })
+            .collect();
+        current_slots.sort();
+        let mut reset = false;
+        let mut epoch_slot_index = current_slots.last().map(|(_, x)| *x).unwrap_or(0);
+        while num < update.len() {
+            let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
+            let now = timestamp();
+            let mut slots = if !reset {
+                self.lookup_epoch_slots(ix)
+            } else {
+                EpochSlots::new(self.id(), now)
+            };
+            let n = slots.fill(&update[num..], now);
+            if n > 0 {
+                let entry = CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.keypair);
+                self.gossip
+                    .process_push_message(&self.id(), vec![entry], now);
+            }
+            num += n;
+            if num < update.len() {
+                epoch_slot_index += 1;
+                reset = true;
+            }
+        }
+    }
     pub fn push_snapshot_hashes(&mut self, snapshot_hashes: Vec<(Slot, Hash)>) {
         if snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
             warn!(
@@ -439,6 +489,24 @@ impl ClusterInfo {
                     .unwrap_or(true)
             })
             .map(|x| (x.value.lowest_slot().unwrap(), x.insert_timestamp))
+    }
+
+    pub fn get_epoch_slots_since(&self, since: Option<u64>) -> (Vec<EpochSlots>, Option<u64>) {
+        let vals: Vec<_> = self
+            .gossip
+            .crds
+            .table
+            .values()
+            .filter(|x| {
+                since
+                    .map(|since| x.insert_timestamp > since)
+                    .unwrap_or(true)
+            })
+            .filter_map(|x| Some((x.value.epoch_slots()?, x.insert_timestamp)))
+            .collect();
+        let max = vals.iter().map(|x| x.1).max().or(since);
+        let vec = vals.into_iter().map(|x| x.0).cloned().collect();
+        (vec, max)
     }
 
     pub fn get_contact_info_for_node(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
@@ -2179,6 +2247,29 @@ mod tests {
     }
 
     #[test]
+    fn test_push_epoch_slots() {
+        let keys = Keypair::new();
+        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        assert!(slots.is_empty());
+        assert!(since.is_none());
+        cluster_info.push_epoch_slots(&[0]);
+
+        let (slots, since) = cluster_info.get_epoch_slots_since(Some(std::u64::MAX));
+        assert!(slots.is_empty());
+        assert_eq!(since, Some(std::u64::MAX));
+
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        assert_eq!(slots.len(), 1);
+        assert!(since.is_some());
+
+        let (slots, since2) = cluster_info.get_epoch_slots_since(since.clone());
+        assert!(slots.is_empty());
+        assert_eq!(since2, since);
+    }
+
+    #[test]
     fn test_add_entrypoint() {
         let node_keypair = Arc::new(Keypair::new());
         let mut cluster_info = ClusterInfo::new(
@@ -2407,7 +2498,8 @@ mod tests {
 
     #[test]
     fn test_max_bloom_size() {
-        assert_eq!(MAX_BLOOM_SIZE, max_bloom_size());
+        // check that the constant fits into the dynamic size
+        assert!(MAX_BLOOM_SIZE <= max_bloom_size());
     }
 
     #[test]
@@ -2457,5 +2549,26 @@ mod tests {
         let protocol_size =
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
         PACKET_DATA_SIZE - (protocol_size - filter_size)
+    }
+
+    #[test]
+    fn test_push_epoch_slots_large() {
+        use rand::Rng;
+        let node_keypair = Arc::new(Keypair::new());
+        let mut cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            node_keypair,
+        );
+        let mut range: Vec<Slot> = vec![];
+        //random should be hard to compress
+        for _ in 0..32000 {
+            let last = *range.last().unwrap_or(&0);
+            range.push(last + rand::thread_rng().gen_range(1, 32));
+        }
+        cluster_info.push_epoch_slots(&range);
+        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
+        assert_eq!(slots, range);
+        assert!(since.is_some());
     }
 }

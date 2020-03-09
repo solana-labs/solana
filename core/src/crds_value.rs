@@ -1,5 +1,6 @@
 use crate::contact_info::ContactInfo;
 use crate::deprecated;
+use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
 use solana_sdk::{
     clock::Slot,
@@ -16,6 +17,9 @@ use std::{
 
 pub type VoteIndex = u8;
 pub const MAX_VOTES: VoteIndex = 32;
+
+pub type EpochSlotsIndex = u8;
+pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -47,6 +51,7 @@ impl Signable for CrdsValue {
             .verify(&self.pubkey().as_ref(), self.signable_data().borrow());
         let data_check = match &self.data {
             CrdsData::Vote(ix, _) => *ix < MAX_VOTES,
+            CrdsData::EpochSlots(ix, _) => *ix < MAX_EPOCH_SLOTS,
             _ => true,
         };
         sig_check && data_check
@@ -63,6 +68,7 @@ pub enum CrdsData {
     Vote(VoteIndex, Vote),
     LowestSlot(u8, LowestSlot),
     SnapshotHash(SnapshotHash),
+    EpochSlots(EpochSlotsIndex, EpochSlots),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -129,6 +135,7 @@ pub enum CrdsValueLabel {
     Vote(VoteIndex, Pubkey),
     LowestSlot(Pubkey),
     SnapshotHash(Pubkey),
+    EpochSlots(EpochSlotsIndex, Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -138,6 +145,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::LowestSlot(_) => write!(f, "LowestSlot({})", self.pubkey()),
             CrdsValueLabel::SnapshotHash(_) => write!(f, "SnapshotHash({})", self.pubkey()),
+            CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
         }
     }
 }
@@ -149,6 +157,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::Vote(_, p) => *p,
             CrdsValueLabel::LowestSlot(p) => *p,
             CrdsValueLabel::SnapshotHash(p) => *p,
+            CrdsValueLabel::EpochSlots(_, p) => *p,
         }
     }
 }
@@ -175,6 +184,7 @@ impl CrdsValue {
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::LowestSlot(_, obj) => obj.wallclock,
             CrdsData::SnapshotHash(hash) => hash.wallclock,
+            CrdsData::EpochSlots(_, p) => p.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -183,6 +193,7 @@ impl CrdsValue {
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::LowestSlot(_, slots) => slots.from,
             CrdsData::SnapshotHash(hash) => hash.from,
+            CrdsData::EpochSlots(_, p) => p.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -191,6 +202,7 @@ impl CrdsValue {
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::LowestSlot(_, _) => CrdsValueLabel::LowestSlot(self.pubkey()),
             CrdsData::SnapshotHash(_) => CrdsValueLabel::SnapshotHash(self.pubkey()),
+            CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -227,6 +239,13 @@ impl CrdsValue {
         }
     }
 
+    pub fn epoch_slots(&self) -> Option<&EpochSlots> {
+        match &self.data {
+            CrdsData::EpochSlots(_, slots) => Some(slots),
+            _ => None,
+        }
+    }
+
     /// Return all the possible labels for a record identified by Pubkey.
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
@@ -235,6 +254,7 @@ impl CrdsValue {
             CrdsValueLabel::SnapshotHash(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
+        labels.extend((0..MAX_EPOCH_SLOTS).map(|ix| CrdsValueLabel::EpochSlots(ix, *key)));
         labels
     }
 
@@ -290,6 +310,9 @@ mod test {
                 CrdsValueLabel::LowestSlot(_) => hits[1] = true,
                 CrdsValueLabel::SnapshotHash(_) => hits[2] = true,
                 CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 3] = true,
+                CrdsValueLabel::EpochSlots(ix, _) => {
+                    hits[*ix as usize + MAX_VOTES as usize + 3] = true
+                }
             }
         }
         assert!(hits.iter().all(|x| *x));
@@ -352,6 +375,18 @@ mod test {
         assert!(!vote.verify());
     }
 
+    #[test]
+    fn test_max_epoch_slots_index() {
+        let keypair = Keypair::new();
+        let item = CrdsValue::new_signed(
+            CrdsData::EpochSlots(
+                MAX_EPOCH_SLOTS,
+                EpochSlots::new(keypair.pubkey(), timestamp()),
+            ),
+            &keypair,
+        );
+        assert!(!item.verify());
+    }
     #[test]
     fn test_compute_vote_index_empty() {
         for i in 0..MAX_VOTES {
