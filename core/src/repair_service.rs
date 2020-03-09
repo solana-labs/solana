@@ -84,8 +84,8 @@ impl RepairService {
         repair_strategy: RepairStrategy,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let mut lowest_slot: BTreeSet<Slot> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
+        let mut cluster_slots = ClusterSlots::default();
         if let RepairStrategy::RepairAll {
             ref epoch_schedule, ..
         } = repair_strategy
@@ -94,9 +94,6 @@ impl RepairService {
             Self::initialize_lowest_slot(
                 id,
                 blockstore,
-                &mut lowest_slot,
-                current_root,
-                epoch_schedule,
                 cluster_info,
             );
         }
@@ -128,7 +125,7 @@ impl RepairService {
                             &cluster_info,
                             completed_slots_receiver,
                         );
-                        Self::generate_repairs(blockstore, new_root, MAX_REPAIR_LENGTH)
+                        Self::generate_repairs(blockstore, cluster_slots, new_root, MAX_REPAIR_LENGTH)
                     }
                 }
             };
@@ -190,6 +187,7 @@ impl RepairService {
 
     fn generate_repairs(
         blockstore: &Blockstore,
+        cluster_slots: &ClusterSlots,
         root: Slot,
         max_repairs: usize,
     ) -> Result<Vec<RepairType>> {
@@ -202,6 +200,7 @@ impl RepairService {
         // Try to resolve orphans in blockstore
         let orphans = blockstore.orphans_iterator(root + 1).unwrap();
         Self::generate_repairs_for_orphans(orphans, &mut repairs);
+        Self::generate_repairs_for_missing_slots(cluster_slots, root, &mut repairs);
         Ok(repairs)
     }
 
@@ -236,6 +235,17 @@ impl RepairService {
         repairs.extend(orphans.take(MAX_ORPHANS).map(RepairType::Orphan));
     }
 
+    fn generate_repairs_for_missing_slots(
+        cluster_slots: &ClusterSlots,
+        new_root: Slot,
+        repairs: &mut Vec<RepairType>,
+    ) {
+        let mut more = cluster_slots.generate_repairs_for_missing_slots(&self_id, new_root);
+        more.truncate(MAX_ORPHANS);
+        repairs.append(&mut more);
+    }
+
+
     /// Repairs any fork starting at the input slot
     fn generate_repairs_for_fork(
         blockstore: &Blockstore,
@@ -261,40 +271,26 @@ impl RepairService {
             }
         }
     }
-
     fn get_completed_slots_past_root(
         blockstore: &Blockstore,
-        slots_in_gossip: &mut BTreeSet<Slot>,
         root: Slot,
         epoch_schedule: &EpochSchedule,
-    ) {
+    ) -> Vec<Slot> {
         let last_confirmed_epoch = epoch_schedule.get_leader_schedule_epoch(root);
         let last_epoch_slot = epoch_schedule.get_last_slot_in_epoch(last_confirmed_epoch);
-
-        let meta_iter = blockstore
-            .slot_meta_iterator(root + 1)
-            .expect("Couldn't get db iterator");
-
-        for (current_slot, meta) in meta_iter {
-            if current_slot > last_epoch_slot {
-                break;
-            }
-            if meta.is_full() {
-                slots_in_gossip.insert(current_slot);
-            }
-        }
+        let mut new_slots = Self::find_completed_slots(blockstore, root);
+        new_slots.retain(|x| *x <= last_epoch_slot);
+        new_slots.remove(&root);
+        let mut rv: Vec<_> = new_slots.into_iter().collect();
+        rv.sort();
+        rv
     }
 
     fn initialize_lowest_slot(
         id: Pubkey,
         blockstore: &Blockstore,
-        slots_in_gossip: &mut BTreeSet<Slot>,
-        root: Slot,
-        epoch_schedule: &EpochSchedule,
         cluster_info: &RwLock<ClusterInfo>,
     ) {
-        Self::get_completed_slots_past_root(blockstore, slots_in_gossip, root, epoch_schedule);
-
         // Safe to set into gossip because by this time, the leader schedule cache should
         // also be updated with the latest root (done in blockstore_processor) and thus
         // will provide a schedule to window_service for any incoming shreds up to the
@@ -319,6 +315,19 @@ impl RepairService {
             .write()
             .unwrap()
             .push_lowest_slot(id, lowest_slot);
+    }
+
+    fn find_completed_slots(blockstore: &Blockstore, root: Slot) -> HashSet<Slot> {
+        blockstore
+            .live_slots_iterator(root)
+            .filter_map(|(slot, slot_meta)| {
+                if slot_meta.is_full() {
+                    Some(slot)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     #[allow(dead_code)]
