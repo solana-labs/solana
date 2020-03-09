@@ -86,7 +86,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount of send to the vote account, in SOL")
+                        .help("The amount to send to the stake account, in SOL")
                 )
                 .arg(
                     Arg::with_name("custodian")

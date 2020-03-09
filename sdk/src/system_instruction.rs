@@ -12,15 +12,15 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
-    #[error("an account with the same addreess already exists")]
+    #[error("an account with the same address already exists")]
     AccountAlreadyInUse,
-    #[error("account does not have enought lamports to perform the operation")]
+    #[error("account does not have enough lamports to perform the operation")]
     ResultWithNegativeLamports,
     #[error("cannot assign account to this program id")]
     InvalidProgramId,
     #[error("cannot allocate account data of this length")]
     InvalidAccountDataLength,
-    #[error("length of requsted seed is too long")]
+    #[error("length of requested seed is too long")]
     MaxSeedLengthExceeded,
     #[error("provided address does not match addressed derived from seed")]
     AddressWithSeedMismatch,
