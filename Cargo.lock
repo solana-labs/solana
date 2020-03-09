@@ -4589,6 +4589,7 @@ dependencies = [
  "reqwest 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.46 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-clap-utils 1.1.0",
+ "solana-cli-config 1.1.0",
  "solana-client 1.1.0",
  "solana-logger 1.1.0",
  "solana-metrics 1.1.0",
