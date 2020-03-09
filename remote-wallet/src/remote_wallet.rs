@@ -94,21 +94,20 @@ impl RemoteWalletManager {
     pub fn update_devices(&self) -> Result<usize, RemoteWalletError> {
         let mut usb = self.usb.lock();
         usb.refresh_devices()?;
-        let devices = usb.devices();
+        let devices = usb.device_list();
         let num_prev_devices = self.devices.read().len();
 
         let detected_devices = devices
-            .iter()
             .filter(|&device_info| {
-                is_valid_hid_device(device_info.usage_page, device_info.interface_number)
+                is_valid_hid_device(device_info.usage_page(), device_info.interface_number())
             })
             .fold(Vec::new(), |mut v, device_info| {
-                if is_valid_ledger(device_info.vendor_id, device_info.product_id) {
-                    match usb.open_path(&device_info.path) {
+                if is_valid_ledger(device_info.vendor_id(), device_info.product_id()) {
+                    match usb.open_path(&device_info.path()) {
                         Ok(device) => {
                             let ledger = LedgerWallet::new(device);
                             if let Ok(info) = ledger.read_device(&device_info) {
-                                let path = device_info.path.to_str().unwrap().to_string();
+                                let path = device_info.path().to_str().unwrap().to_string();
                                 trace!("Found device: {:?}", info);
                                 v.push(Device {
                                     path,
@@ -176,7 +175,7 @@ pub trait RemoteWallet {
     /// Parse device info and get device base pubkey
     fn read_device(
         &self,
-        dev_info: &hidapi::HidDeviceInfo,
+        dev_info: &hidapi::DeviceInfo,
     ) -> Result<RemoteWalletInfo, RemoteWalletError>;
 
     /// Get solana pubkey from a RemoteWallet

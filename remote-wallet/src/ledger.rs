@@ -249,24 +249,25 @@ impl LedgerWallet {
 impl RemoteWallet for LedgerWallet {
     fn read_device(
         &self,
-        dev_info: &hidapi::HidDeviceInfo,
+        dev_info: &hidapi::DeviceInfo,
     ) -> Result<RemoteWalletInfo, RemoteWalletError> {
         let manufacturer = dev_info
-            .manufacturer_string
+            .manufacturer_string()
             .clone()
-            .unwrap_or_else(|| "Unknown".to_owned())
+            .unwrap_or("Unknown")
             .to_lowercase()
             .replace(" ", "-");
         let model = dev_info
-            .product_string
+            .product_string()
             .clone()
-            .unwrap_or_else(|| "Unknown".to_owned())
+            .unwrap_or("Unknown")
             .to_lowercase()
             .replace(" ", "-");
         let serial = dev_info
-            .serial_number
+            .serial_number()
             .clone()
-            .unwrap_or_else(|| "Unknown".to_owned());
+            .unwrap_or("Unknown")
+            .to_string();
         let pubkey_result = self.get_pubkey(&DerivationPath::default(), false);
         let (pubkey, error) = match pubkey_result {
             Ok(pubkey) => (pubkey, None),
