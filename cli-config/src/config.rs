@@ -5,6 +5,7 @@ use std::{
     io::{self, Write},
     path::Path,
 };
+use url::Url;
 
 lazy_static! {
     pub static ref CONFIG_FILE: Option<String> = {
@@ -15,22 +16,32 @@ lazy_static! {
     };
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Config {
     pub json_rpc_url: String,
     pub websocket_url: String,
     pub keypair_path: String,
 }
 
-impl Config {
-    pub fn new(json_rpc_url: &str, websocket_url: &str, keypair_path: &str) -> Self {
+impl Default for Config {
+    fn default() -> Self {
+        let keypair_path = {
+            let mut keypair_path = dirs::home_dir().expect("home directory");
+            keypair_path.extend(&[".config", "solana", "id.json"]);
+            keypair_path.to_str().unwrap().to_string()
+        };
+        let json_rpc_url = "http://127.0.0.1:8899".to_string();
+        let websocket_url = Self::compute_websocket_url(&json_rpc_url);
+
         Self {
-            json_rpc_url: json_rpc_url.to_string(),
-            websocket_url: websocket_url.to_string(),
-            keypair_path: keypair_path.to_string(),
+            json_rpc_url,
+            websocket_url,
+            keypair_path,
         }
     }
+}
 
+impl Config {
     pub fn load(config_file: &str) -> Result<Self, io::Error> {
         let file = File::open(config_file.to_string())?;
         let config = serde_yaml::from_reader(file)
@@ -49,5 +60,30 @@ impl Config {
         file.write_all(&serialized.into_bytes())?;
 
         Ok(())
+    }
+
+    pub fn compute_websocket_url(json_rpc_url: &str) -> String {
+        let json_rpc_url: Option<Url> = json_rpc_url.parse().ok();
+        if json_rpc_url.is_none() {
+            return "".to_string();
+        }
+        let json_rpc_url = json_rpc_url.unwrap();
+        let is_secure = json_rpc_url.scheme().to_ascii_lowercase() == "https";
+        let mut ws_url = json_rpc_url.clone();
+        ws_url
+            .set_scheme(if is_secure { "wss" } else { "ws" })
+            .expect("unable to set scheme");
+        let ws_port = match json_rpc_url.port() {
+            Some(port) => port + 1,
+            None => {
+                if is_secure {
+                    8901
+                } else {
+                    8900
+                }
+            }
+        };
+        ws_url.set_port(Some(ws_port)).expect("unable to set port");
+        ws_url.to_string()
     }
 }
