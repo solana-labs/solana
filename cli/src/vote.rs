@@ -184,7 +184,7 @@ impl VoteSubCommands for App<'_, '_> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("vote-account-withdraw")
+            SubCommand::with_name("withdraw-from-vote-account")
                 .about("Withdraw lamports from a vote account into a specified account")
                 .arg(
                     Arg::with_name("vote_account_pubkey")
@@ -193,35 +193,33 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Vote account pubkey"),
+                        .help("Vote account to withdraw from"),
                 )
                 .arg(
-                    Arg::with_name("withdrawer_account_pubkey")
+                    Arg::with_name("amount")
                         .index(2)
-                        .value_name("WITHDRAWER ACCOUNT PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Withdrawer account pubkey"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .index(3)
-                        .long("lamports")
-                        .value_name("TRANSFER AMOUNT")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
-                        .help("Number of lamports to transfer"),
+                        .help("The amount to withdraw, in SOL"),
                 )
                 .arg(
-                    Arg::with_name("to_account_pubkey")
-                        .index(4)
-                        .value_name("TO ACCOUNT PUBKEY")
+                    Arg::with_name("destination_account_pubkey")
+                        .index(3)
+                        .value_name("DESTINATION ACCOUNT")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("To account pubkey"),
+                        .help("The account to which the SOL should be transferred"),
+                )
+                .arg(
+                    Arg::with_name("authorized_withdrawer")
+                        .long("authorized-withdrawer")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey_or_keypair)
+                        .help("Public key of the authorized withdrawer (defaults to cli config pubkey)"),
                 )
         )
     }
@@ -332,30 +330,30 @@ pub fn parse_vote_get_account_command(
     })
 }
 
-pub fn parse_vote_account_withdraw_command(
+pub fn parse_vote_account_withdraw(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    let withdrawer_account_pubkey = pubkey_of(matches, "withdrawer_account_pubkey").unwrap();
-    let lamports: u64 = matches.value_of("lamports").unwrap().parse().unwrap();
-    let to_account_pubkey = pubkey_of(matches, "to_account_pubkey").unwrap();
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
+    let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer");
 
-    let withdrawer_signer = None;
+    let authorized_withdrawer_provided = None;
     let CliSignerInfo { signers } = generate_unique_signers(
-        vec![withdrawer_signer],
+        vec![authorized_withdrawer_provided],
         matches,
         default_signer_path,
         wallet_manager,
     )?;
 
     Ok(CliCommandInfo {
-        command: CliCommand::VoteAccountWithdraw {
+        command: CliCommand::WithdrawFromVoteAccount {
             vote_account_pubkey,
-            withdrawer_account_pubkey,
+            authorized_withdrawer,
             lamports,
-            to_account_pubkey,
+            destination_account_pubkey,
         },
         signers,
     })
@@ -591,35 +589,29 @@ pub fn process_vote_account_withdraw(
     rpc_client: &RpcClient,
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
-    withdrawer_account_pubkey: &Pubkey,
+    authorized_withdrawer: &Option<Pubkey>,
     lamports: u64,
-    to_account_pubkey: &Pubkey,
+    destination_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    println!("Vote Account: {}", vote_account_pubkey.to_string());
-    println!(
-        "Withdrawer Account: {}",
-        withdrawer_account_pubkey.to_string()
-    );
-    println!("Amount (in lamports): {}", lamports);
-    println!("To Account: {}", to_account_pubkey.to_string());
-
-    let ixs = withdraw(
+    let instructions = vec![withdraw(
         &vote_account_pubkey,
-        &withdrawer_account_pubkey,
+        &authorized_withdrawer.unwrap_or(config.signers[0].pubkey()),
         lamports,
-        &to_account_pubkey,
-    );
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+        &destination_account_pubkey,
+    )];
 
-    let message = Message::new(vec![ixs]);
-    let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
-
-    Ok(format!(
-        "{:?}",
-        log_instruction_custom_error::<SystemError>(result)
-    ))
+    let message = Message::new_with_payer(instructions, Some(&config.signers[0].pubkey()));
+    let mut transaction = Transaction::new_unsigned(message);
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    transaction.try_sign(&config.signers, recent_blockhash)?;
+    check_account_for_fee(
+        rpc_client,
+        &config.signers[0].pubkey(),
+        &fee_calculator,
+        &transaction.message,
+    )?;
+    let result = rpc_client.send_and_confirm_transaction(&mut transaction, &config.signers);
+    log_instruction_custom_error::<VoteError>(result)
 }
 
 #[cfg(test)]

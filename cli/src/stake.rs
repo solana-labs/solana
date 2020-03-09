@@ -279,7 +279,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to move into the new stake account, in unit SOL")
+                        .help("The amount to move into the new stake account, in SOL")
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -296,7 +296,7 @@ impl StakeSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
-                .about("Withdraw the unstaked lamports from the stake account")
+                .about("Withdraw the unstaked SOL from the stake account")
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
@@ -313,7 +313,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("The account to which the lamports should be transferred")
+                        .help("The account to which the SOL should be transferred")
                 )
                 .arg(
                     Arg::with_name("amount")
