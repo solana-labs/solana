@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.1"
-chrono = { version = "0.4.10", features = ["serde"] }
+chrono = { version = "0.4.11", features = ["serde"] }
 log = "0.4.8"
 serde = "1.0.104"
 serde_derive = "1.0.103"
