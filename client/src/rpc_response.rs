@@ -1,6 +1,5 @@
 use crate::rpc_request::RpcError;
 use bincode::serialize;
-use jsonrpc_core::Result as JsonResult;
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
@@ -11,7 +10,6 @@ use solana_sdk::{
 };
 use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
 
-pub type RpcResponseIn<T> = JsonResult<Response<T>>;
 pub type RpcResponse<T> = io::Result<Response<T>>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
