@@ -1,0 +1,5 @@
+steps:
+  - command: "system-test/stake-operations-testcases/stake_test_automation.sh"
+    label: "Running Offline Stake Operations Tests"
+    agents:
+      - "queue=colo-deploy"

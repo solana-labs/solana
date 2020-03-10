@@ -12,7 +12,7 @@ if [[ -n "$1" ]]; then
 fi
 
 if [[ -z "$url" ]]; then
-  echo Provide complete URL, ex: "$0" http://testnet.solana.com:8899
+  echo Provide complete URL, ex: "$0" http://devnet.solana.com:8899
   exit 1
 fi
 solana config set --url $url

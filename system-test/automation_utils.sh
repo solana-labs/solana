@@ -85,6 +85,12 @@ function get_slot {
   ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana slot'
 }
 
+function get_bootstrap_validator_ip_address {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  echo ${validatorIpList[0]}
+}
+
 function upload_results_to_slack() {
   echo --- Uploading results to Slack Performance Results App
 
