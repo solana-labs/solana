@@ -229,8 +229,12 @@ impl LedgerWallet {
         self.write(command, p1, p2, data)?;
         if p1 == P1_CONFIRM && is_last_part(p2) {
             println!("Waiting for remote wallet to approve...");
+            let result = self.read()?;
+            println!("Approved");
+            Ok(result)
+        } else {
+            self.read()
         }
-        self.read()
     }
 
     fn _get_firmware_version(&self) -> Result<FirmwareVersion, RemoteWalletError> {
