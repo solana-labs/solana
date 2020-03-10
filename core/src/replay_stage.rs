@@ -563,6 +563,66 @@ impl ReplayStage {
         current_leader.replace(new_leader.to_owned());
     }
 
+    fn check_propagation_for_start_leader(
+        poh_slot: Slot,
+        parent_slot: Slot,
+        root: Slot,
+        progress_map: &ProgressMap,
+    ) -> bool {
+        // Check if the last leader slot reached the propagation threshold
+        let prev_leader_slot = {
+            let parent_propagated_stats = &progress_map
+                .get(&parent_slot)
+                .expect("All banks in BankForks must exist in the Progress map")
+                .propagated_stats;
+            if parent_propagated_stats.is_leader_slot {
+                Some(parent_slot)
+            } else {
+                parent_propagated_stats.prev_leader_slot
+            }
+        };
+
+        let is_consecutive_leader =
+            prev_leader_slot == Some(parent_slot) && parent_slot == poh_slot - 1;
+
+        let leader_propagated_confirmed = prev_leader_slot
+            .map(|prev_leader_slot| {
+                // If the last leader was rooted, the slot won't exist
+                // in the progress map, but it must have been confirmed
+                if prev_leader_slot <= root {
+                    true
+                } else {
+                    progress_map
+                        .get(&prev_leader_slot)
+                        .expect("All banks > root must exist in the Progress map")
+                        .propagated_stats
+                        .is_propagated
+                }
+            })
+            // If there's no previous leader slot, then vacuously it's true
+            // that propagation has been confirmedd
+            .unwrap_or(true);
+
+        if !leader_propagated_confirmed {
+            // TODO: Retransmit
+
+            // If slot is not a consecutive leader slot, and the previous
+            // leader block hasn't been propagated, don't generate another
+            // block
+            if !is_consecutive_leader {
+                info!(
+                    "skipping starting bank for {}, parent: {}, propagation not confirmed",
+                    poh_slot, parent_slot
+                );
+                false
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
+
     fn maybe_start_leader(
         my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -627,47 +687,13 @@ impl ReplayStage {
 
             let root_slot = bank_forks.read().unwrap().root();
 
-            // Check if the last leader slot reached the propagation threshold
-            let prev_leader_slot = {
-                let parent_propagated_stats = &progress_map
-                    .get(&parent_slot)
-                    .expect("All banks in BankForks must exist in the Progress map")
-                    .propagated_stats;
-                if parent_propagated_stats.is_leader_slot {
-                    Some(parent_slot)
-                } else {
-                    parent_propagated_stats.prev_leader_slot
-                }
-            };
-
-            let is_consecutive_leader =
-                prev_leader_slot == Some(parent_slot) && parent_slot == poh_slot - 1;
-
-            let leader_propagated_confirmed = prev_leader_slot
-                .map(|prev_leader_slot| {
-                    // If the last leader was rooted, you won't find the slot
-                    // in the progress map, but it must have been confirmed
-                    if prev_leader_slot <= root_slot {
-                        true
-                    } else {
-                        progress_map
-                            .get(&prev_leader_slot)
-                            .expect("All banks > root must exist in the Progress map")
-                            .propagated_stats
-                            .is_propagated
-                    }
-                })
-                .unwrap_or(false);
-
-            if !leader_propagated_confirmed {
-                // Retransmit
-
-                // If it's not a consecutive leader slot, and the previous
-                // leader block hasn't been propagated, don't generate another
-                // block
-                if !is_consecutive_leader {
-                    return;
-                }
+            if !Self::check_propagation_for_start_leader(
+                poh_slot,
+                parent_slot,
+                root_slot,
+                progress_map,
+            ) {
+                return;
             }
 
             info!(
@@ -2790,11 +2816,131 @@ pub(crate) mod tests {
             .is_none());
 
         // The voter should be recorded
-        println!("ddd: {:?}", propagated_stats.propagated_validators);
         assert!(propagated_stats
             .propagated_validators
             .contains(&*vote_pubkey));
 
         assert_eq!(propagated_stats.propagated_validators_stake, stake);
+    }
+
+    #[test]
+    fn test_check_propagation_for_start_leader() {
+        let mut progress_map = HashMap::new();
+        let poh_slot = 5;
+        let parent_slot = 3;
+
+        // If there is no previous leader slot (previous leader slot is None),
+        // should succeed
+        progress_map.insert(3, ForkProgress::new(Hash::default(), None, false));
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
+
+        // If the parent was itself the leader, then requires propagation confirmation
+        progress_map.insert(3, ForkProgress::new(Hash::default(), None, true));
+        assert!(!ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
+        progress_map
+            .get_mut(&3)
+            .unwrap()
+            .propagated_stats
+            .is_propagated = true;
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
+
+        // Now, set up the progress map to show that the previous leader slot of 5 is
+        // 2 (even though the parent is 3), so 2 needs to see propagation confirmation
+        // before we can start a leader for block 5
+        progress_map.insert(3, ForkProgress::new(Hash::default(), Some(2), false));
+        progress_map.insert(2, ForkProgress::new(Hash::default(), None, true));
+
+        // Last leader slot has not seen propagation threshold, so should fail
+        assert!(!ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
+
+        // If the root is >= the last leader slot, implies confirmation so
+        // should succeed
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            parent_slot,
+            &progress_map,
+        ));
+
+        // If we set the is_propagated = true for the last leader slot, should
+        // allow the block to be generated
+        progress_map
+            .get_mut(&2)
+            .unwrap()
+            .propagated_stats
+            .is_propagated = true;
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
+    }
+
+    #[test]
+    fn test_check_propagation_for_consecutive_start_leader() {
+        let mut progress_map = HashMap::new();
+        let poh_slot = 4;
+        let mut parent_slot = 3;
+
+        // Set up the progress map to show that the last leader slot of 4 is 3,
+        // which means 3 and 4 are consecutiive leader slots
+        progress_map.insert(3, ForkProgress::new(Hash::default(), None, true));
+        progress_map.insert(2, ForkProgress::new(Hash::default(), None, true));
+
+        // If the last leader slot has not seen propagation threshold, but
+        // was the direct parent (implying consecutive leader slots), create
+        // the block regardless
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
+
+        // If propagation threshold was achieved on parent, block should
+        // also be created
+        progress_map
+            .get_mut(&3)
+            .unwrap()
+            .propagated_stats
+            .is_propagated = true;
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
+
+        parent_slot = 2;
+
+        // Even thought 2 is also a leader slot, because it's not consecutive
+        // we still have to respect the propagation threshold check
+        assert!(!ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            0,
+            &progress_map,
+        ));
     }
 }
