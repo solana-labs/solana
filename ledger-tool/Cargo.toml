@@ -12,7 +12,7 @@ homepage = "https://solana.com/"
 bs58 = "0.3.0"
 clap = "2.33.0"
 histogram = "*"
-serde_json = "1.0.46"
+serde_json = "1.0.48"
 serde_yaml = "0.8.11"
 solana-clap-utils = { path = "../clap-utils", version = "1.1.0" }
 solana-ledger = { path = "../ledger", version = "1.1.0" }
