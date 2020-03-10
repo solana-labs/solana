@@ -2567,7 +2567,8 @@ mod tests {
             let last = *range.last().unwrap_or(&0);
             range.push(last + rand::thread_rng().gen_range(1, 32));
         }
-        cluster_info.push_epoch_slots(&range);
+        cluster_info.push_epoch_slots(&range[..16000]);
+        cluster_info.push_epoch_slots(&range[16000..]);
         let (slots, since) = cluster_info.get_epoch_slots_since(None);
         let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
         assert_eq!(slots, range);
