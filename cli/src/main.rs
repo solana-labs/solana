@@ -55,6 +55,9 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     let mut config = Config::load(config_file).unwrap_or_default();
                     if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
                         config.json_rpc_url = url.to_string();
+                        // Revert to a computed `websocket_url` value when `json_rpc_url` is
+                        // changed
+                        config.websocket_url = "".to_string();
                     }
                     if let Some(url) = subcommand_matches.value_of("websocket_url") {
                         config.websocket_url = url.to_string();
