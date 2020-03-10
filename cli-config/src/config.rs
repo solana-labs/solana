@@ -31,7 +31,10 @@ impl Default for Config {
             keypair_path.to_str().unwrap().to_string()
         };
         let json_rpc_url = "http://127.0.0.1:8899".to_string();
-        let websocket_url = Self::compute_websocket_url(&json_rpc_url);
+
+        // Empty websocket_url string indicates the client should
+        // `Config::compute_websocket_url(&json_rpc_url)`
+        let websocket_url = "".to_string();
 
         Self {
             json_rpc_url,
