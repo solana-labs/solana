@@ -300,10 +300,7 @@ impl RepairService {
         }
     }
 
-    // Update the gossiped structure used for the "Repairmen" repair protocol. See docs
-    // for details.
     fn update_lowest_slot(id: &Pubkey, lowest_slot: Slot, cluster_info: &RwLock<ClusterInfo>) {
-        //TBD: remove this once new EpochSlots are merged
         cluster_info
             .write()
             .unwrap()
