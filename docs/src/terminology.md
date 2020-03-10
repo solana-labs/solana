@@ -306,7 +306,7 @@ A reward tally for validators. A vote credit is awarded to a validator in its vo
 
 ## wallet
 
-A collection of one or more [keypairs](terminology.md#keypair).
+A collection of [keypairs](terminology.md#keypair).
 
 ## warmup period
 
