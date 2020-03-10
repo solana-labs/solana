@@ -571,7 +571,7 @@ impl SyncClient for ThinClient {
 }
 
 impl AsyncClient for ThinClient {
-    fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
+    fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
         let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
         let mut wr = std::io::Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &transaction)
@@ -586,7 +586,7 @@ impl AsyncClient for ThinClient {
         keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         let transaction = Transaction::new(keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
@@ -595,7 +595,7 @@ impl AsyncClient for ThinClient {
         keypair: &Keypair,
         instruction: Instruction,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         let message = Message::new(&[instruction]);
         self.async_send_message(&[keypair], message, recent_blockhash)
     }
@@ -605,7 +605,7 @@ impl AsyncClient for ThinClient {
         keypair: &Keypair,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
         self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)
