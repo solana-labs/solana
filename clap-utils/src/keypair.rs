@@ -1,8 +1,4 @@
-use crate::{
-    input_parsers::{derivation_of, pubkeys_sigs_of},
-    offline::SIGNER_ARG,
-    ArgConstant,
-};
+use crate::{input_parsers::pubkeys_sigs_of, offline::SIGNER_ARG, ArgConstant};
 use bip39::{Language, Mnemonic, Seed};
 use clap::{ArgMatches, Error, ErrorKind};
 use rpassword::prompt_password_stderr;
@@ -91,7 +87,6 @@ pub fn signer_from_path(
             if let Some(wallet_manager) = wallet_manager {
                 Ok(Box::new(generate_remote_keypair(
                     path,
-                    derivation_of(matches, "derivation_path"),
                     wallet_manager,
                     matches.is_present("confirm_key"),
                     keypair_name,

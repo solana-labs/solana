@@ -23,7 +23,7 @@ use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
 use solana_faucet::faucet_mock::request_airdrop_transaction;
-use solana_remote_wallet::remote_wallet::{DerivationPath, RemoteWalletManager};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     bpf_loader,
     clock::{Epoch, Slot},
@@ -455,7 +455,6 @@ pub struct CliConfig<'a> {
     pub websocket_url: String,
     pub signers: Vec<&'a dyn Signer>,
     pub keypair_path: String,
-    pub derivation_path: Option<DerivationPath>,
     pub rpc_client: Option<RpcClient>,
     pub verbose: bool,
 }
@@ -547,7 +546,6 @@ impl Default for CliConfig<'_> {
             websocket_url: Self::default_websocket_url(),
             signers: Vec::new(),
             keypair_path: Self::default_keypair_path(),
-            derivation_path: None,
             rpc_client: None,
             verbose: false,
         }

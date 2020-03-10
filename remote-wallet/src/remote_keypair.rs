@@ -50,15 +50,11 @@ impl Signer for RemoteKeypair {
 
 pub fn generate_remote_keypair(
     path: String,
-    explicit_derivation_path: Option<DerivationPath>,
     wallet_manager: &RemoteWalletManager,
     confirm_key: bool,
     keypair_name: &str,
 ) -> Result<RemoteKeypair, RemoteWalletError> {
-    let (remote_wallet_info, mut derivation_path) = RemoteWalletInfo::parse_path(path)?;
-    if let Some(derivation) = explicit_derivation_path {
-        derivation_path = derivation;
-    }
+    let (remote_wallet_info, derivation_path) = RemoteWalletInfo::parse_path(path)?;
     if remote_wallet_info.manufacturer == "ledger" {
         let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
         Ok(RemoteKeypair::new(
