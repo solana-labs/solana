@@ -3,15 +3,15 @@ use serde_json::Value;
 use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
+    nonce,
     offline::{parse_sign_only_reply_string, BlockhashQuery},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
-    account_utils::StateMut,
     fee_calculator::FeeCalculator,
-    nonce,
+    nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -377,7 +377,7 @@ fn test_nonced_pay_tx() {
     config.signers = vec![&default_signer];
 
     let minimum_nonce_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(nonce::State::size())
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
 
     request_and_confirm_airdrop(
@@ -408,14 +408,10 @@ fn test_nonced_pay_tx() {
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
-    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
-        .convert_to_current();
-    let nonce_hash = match nonce_state {
-        nonce::State::Initialized(ref data) => data.blockhash,
-        _ => panic!("Nonce is not initialized"),
-    };
+        .blockhash;
 
     let bob_pubkey = Pubkey::new_rand();
     config.signers = vec![&default_signer];
@@ -432,14 +428,11 @@ fn test_nonced_pay_tx() {
     check_balance(10, &rpc_client, &bob_pubkey);
 
     // Verify that nonce has been used
-    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+    let nonce_hash2 = nonce::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
-        .convert_to_current();
-    match nonce_state {
-        nonce::State::Initialized(ref data) => assert_ne!(data.blockhash, nonce_hash),
-        _ => assert!(false, "Nonce is not initialized"),
-    }
+        .blockhash;
+    assert_ne!(nonce_hash, nonce_hash2);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
