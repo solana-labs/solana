@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-chrono = { version = "0.4.10", features = ["serde"] }
+chrono = { version = "0.4.11", features = ["serde"] }
 console = "0.9.2"
 log = "0.4.8"
 rand = "0.6.5"
