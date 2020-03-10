@@ -362,7 +362,7 @@ impl ClusterInfo {
                 Some((
                     self.gossip
                         .crds
-                        .lookup(&CrdsValueLabel::Vote(ix, self.id()))
+                        .lookup(&CrdsValueLabel::EpochSlots(ix, self.id()))
                         .and_then(CrdsValue::epoch_slots)
                         .map(|x| x.wallclock)?,
                     ix,
