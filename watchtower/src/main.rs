@@ -3,27 +3,27 @@
 mod notifier;
 
 use crate::notifier::Notifier;
-use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
+use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use solana_clap_utils::{
     input_parsers::pubkeys_of,
     input_validators::{is_pubkey_or_keypair, is_url},
 };
-use solana_cli_config::{Config, CONFIG_FILE};
 use solana_client::{rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol};
 use std::{error, io, thread::sleep, time::Duration};
 
-fn get_cluster_info(rpc_client: &RpcClient) -> io::Result<(u64, Hash, RpcVoteAccountStatus)> {
-    let transaction_count = rpc_client.get_transaction_count()?;
-    let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
-    let vote_accounts = rpc_client.get_vote_accounts()?;
-    Ok((transaction_count, recent_blockhash, vote_accounts))
+struct Config {
+    interval: Duration,
+    json_rpc_url: String,
+    validator_identity_pubkeys: Vec<String>,
+    no_duplicate_notifications: bool,
+    monitor_active_stake: bool,
 }
 
-fn get_matches() -> ArgMatches<'static> {
-    App::new(crate_name!())
+fn get_config() -> Config {
+    let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
         .arg({
@@ -34,7 +34,7 @@ fn get_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use");
-            if let Some(ref config_file) = *CONFIG_FILE {
+            if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
                 arg.default_value(&config_file)
             } else {
                 arg
@@ -77,16 +77,12 @@ fn get_matches() -> ArgMatches<'static> {
                 .takes_value(false)
                 .help("Alert when the current stake for the cluster drops below 80%"),
         )
-        .get_matches()
-}
-
-fn main() -> Result<(), Box<dyn error::Error>> {
-    let matches = get_matches();
+        .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
-        Config::load(config_file).unwrap_or_default()
+        solana_cli_config::Config::load(config_file).unwrap_or_default()
     } else {
-        Config::default()
+        solana_cli_config::Config::default()
     };
 
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
@@ -101,15 +97,37 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
     let monitor_active_stake = matches.is_present("monitor_active_stake");
 
+    Config {
+        interval,
+        json_rpc_url,
+        validator_identity_pubkeys,
+        no_duplicate_notifications,
+        monitor_active_stake,
+    }
+}
+
+fn get_cluster_info(rpc_client: &RpcClient) -> io::Result<(u64, Hash, RpcVoteAccountStatus)> {
+    let transaction_count = rpc_client.get_transaction_count()?;
+    let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
+    let vote_accounts = rpc_client.get_vote_accounts()?;
+    Ok((transaction_count, recent_blockhash, vote_accounts))
+}
+
+fn main() -> Result<(), Box<dyn error::Error>> {
+    let config = get_config();
+
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
 
-    info!("RPC URL: {}", json_rpc_url);
-    if !validator_identity_pubkeys.is_empty() {
-        info!("Monitored validators: {:?}", validator_identity_pubkeys);
+    info!("RPC URL: {}", config.json_rpc_url);
+    if !config.validator_identity_pubkeys.is_empty() {
+        info!(
+            "Monitored validators: {:?}",
+            config.validator_identity_pubkeys
+        );
     }
 
-    let rpc_client = RpcClient::new(json_rpc_url);
+    let rpc_client = RpcClient::new(config.json_rpc_url);
 
     let notifier = Notifier::new();
     let mut last_transaction_count = 0;
@@ -169,14 +187,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ));
                 }
 
-                if monitor_active_stake && current_stake_percent < 80 {
+                if config.monitor_active_stake && current_stake_percent < 80 {
                     failures.push((
                         "current-stake",
                         format!("Current stake is {}%", current_stake_percent),
                     ));
                 }
 
-                if validator_identity_pubkeys.is_empty() {
+                if config.validator_identity_pubkeys.is_empty() {
                     if !vote_accounts.delinquent.is_empty() {
                         failures.push((
                             "delinquent",
@@ -185,7 +203,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     }
                 } else {
                     let mut errors = vec![];
-                    for validator_identity in validator_identity_pubkeys.iter() {
+                    for validator_identity in config.validator_identity_pubkeys.iter() {
                         if vote_accounts
                             .delinquent
                             .iter()
@@ -217,7 +235,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 "solana-watchtower: Error: {}: {}",
                 failure_test_name, failure_error_message
             );
-            if !no_duplicate_notifications || last_notification_msg != notification_msg {
+            if !config.no_duplicate_notifications || last_notification_msg != notification_msg {
                 notifier.send(&notification_msg);
             }
             datapoint_error!(
@@ -233,6 +251,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
             last_notification_msg = "".into();
         }
-        sleep(interval);
+        sleep(config.interval);
     }
 }
