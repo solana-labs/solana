@@ -3,7 +3,7 @@
 mod notifier;
 
 use crate::notifier::Notifier;
-use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use log::*;
 use solana_clap_utils::{
     input_parsers::pubkeys_of,
@@ -22,8 +22,8 @@ fn get_cluster_info(rpc_client: &RpcClient) -> io::Result<(u64, Hash, RpcVoteAcc
     Ok((transaction_count, recent_blockhash, vote_accounts))
 }
 
-fn main() -> Result<(), Box<dyn error::Error>> {
-    let matches = App::new(crate_name!())
+fn get_matches() -> ArgMatches<'static> {
+    App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
         .arg({
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Wait interval seconds between checking the cluster"),
         )
         .arg(
-            Arg::with_name("validator_identitys")
+            Arg::with_name("validator_identities")
                 .long("validator-identity")
                 .value_name("VALIDATOR IDENTITY PUBKEY")
                 .takes_value(true)
@@ -71,7 +71,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(false)
                 .help("Subsequent identical notifications will be suppressed"),
         )
-        .get_matches();
+        .arg(
+            Arg::with_name("monitor_active_stake")
+                .long("monitor-active-stake")
+                .takes_value(false)
+                .help("Alert when the current stake for the cluster drops below 80%"),
+        )
+        .get_matches()
+}
+
+fn main() -> Result<(), Box<dyn error::Error>> {
+    let matches = get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
@@ -82,13 +92,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let interval = Duration::from_secs(value_t_or_exit!(matches, "interval", u64));
     let json_rpc_url =
         value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url);
-    let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identitys")
+    let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
         .unwrap_or_else(|| vec![])
         .into_iter()
         .map(|i| i.to_string())
         .collect();
 
     let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
+    let monitor_active_stake = matches.is_present("monitor_active_stake");
 
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
@@ -155,6 +166,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     failures.push((
                         "recent-blockhash",
                         format!("Unable to get new blockhash: {}", recent_blockhash),
+                    ));
+                }
+
+                if monitor_active_stake && current_stake_percent < 80 {
+                    failures.push((
+                        "current-stake",
+                        format!("Current stake is {}%", current_stake_percent),
                     ));
                 }
 
