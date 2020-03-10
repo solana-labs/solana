@@ -1,4 +1,4 @@
-# Installing Solana
+# Install the Solana Tool Suite
 
 Install the Solana release
 [v1.1.0](https://github.com/solana-labs/solana/releases/tag/v1.1.0) on your

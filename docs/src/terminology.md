@@ -304,6 +304,10 @@ See [ledger vote](terminology.md#ledger-vote).
 
 A reward tally for validators. A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
 
+## wallet
+
+A collection of [keypairs](terminology.md#keypair).
+
 ## warmup period
 
 Some number of epochs after stake has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
