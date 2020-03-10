@@ -162,11 +162,11 @@ Manage testnet instances
    -P               - Use public network IP addresses (default: $publicNetwork)
 
  delete-specific options:
-   --clear-preemptible-reservations
-                    - If set, clears all reservations on colo nodes that were not created with --dedicated.
+   --reclaim-preemptible-reservations
+                    - If set, reclaims all reservations on colo nodes that were not created with --dedicated.
                       This behavior does not filter by testnet name or owner.  Only implemented on colo.
-   --clear-all-reservations
-                    - If set, clears all reservations on all colo nodes, regardless of owner, pre-emptibility, or creator.
+   --reclaim-all-reservations
+                    - If set, reclaims all reservations on all colo nodes, regardless of owner, pre-emptibility, or creator.
 
  info-specific options:
    --eval           - Output in a form that can be eval-ed by a shell: eval $(gce.sh info)
@@ -219,11 +219,11 @@ while [[ -n $1 ]]; do
         usage 1
       fi
       shift 2
-    elif [[ $1 == --clear-preemptible-reservations ]]; then
-      clearOnlyPreemptibleReservations=true
+    elif [[ $1 == --reclaim-preemptible-reservations ]]; then
+      reclaimOnlyPreemptibleReservations=true
       shift
-    elif [[ $1 == --clear-all-reservations ]]; then
-      clearAllReservations=true
+    elif [[ $1 == --reclaim-all-reservations ]]; then
+      reclaimAllReservations=true
       shift
     else
       usage "Unknown long option: $1"
@@ -330,11 +330,11 @@ case $cloudProvider in
     ;;
 esac
 
-if [[ $clearOnlyPreemptibleReservations == "true" && $clearAllReservations == "true" ]]; then
-  usage "Cannot set both --clear-preemptible-reservations and --clear-all-reservations.  Set one or none"
+if [[ $reclaimOnlyPreemptibleReservations == "true" && $reclaimAllReservations == "true" ]]; then
+  usage "Cannot set both --reclaim-preemptible-reservations and --reclaim-all-reservations.  Set one or none"
 fi
 
-if [[ -n $clearAllReservations || -n $clearOnlyPreemptibleReservations ]]; then
+if [[ -n $reclaimAllReservations || -n $reclaimOnlyPreemptibleReservations ]]; then
   forceDelete="true"
 fi
 
@@ -642,7 +642,7 @@ delete() {
   esac
 
   echo "Searching for instances: $filter"
-  cloud_FindInstances "$filter" "$clearOnlyPreemptibleReservations"
+  cloud_FindInstances "$filter" "$reclaimOnlyPreemptibleReservations"
 
   if [[ ${#instances[@]} -eq 0 ]]; then
     echo "No instances found matching '$filter'"

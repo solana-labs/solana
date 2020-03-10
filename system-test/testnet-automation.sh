@@ -159,9 +159,9 @@ function launchTestnet() {
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
+      net/colo.sh delete --reclaim-preemptible-reservations
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-      net/colo.sh delete --clear-preemptible-reservations
       net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybePublicIpAddresses \
