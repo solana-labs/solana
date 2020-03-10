@@ -486,6 +486,7 @@ impl ReplayStage {
                             &leader_schedule_cache,
                             &subscriptions,
                             rewards_recorder_sender.clone(),
+                            &progress,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -569,6 +570,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
+        progress_map: &ProgressMap,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -624,6 +626,50 @@ impl ReplayStage {
             );
 
             let root_slot = bank_forks.read().unwrap().root();
+
+            // Check if the last leader slot reached the propagation threshold
+            let prev_leader_slot = {
+                let parent_propagated_stats = &progress_map
+                    .get(&parent_slot)
+                    .expect("All banks in BankForks must exist in the Progress map")
+                    .propagated_stats;
+                if parent_propagated_stats.is_leader_slot {
+                    Some(parent_slot)
+                } else {
+                    parent_propagated_stats.prev_leader_slot
+                }
+            };
+
+            let is_consecutive_leader =
+                prev_leader_slot == Some(parent_slot) && parent_slot == poh_slot - 1;
+
+            let leader_propagated_confirmed = prev_leader_slot
+                .map(|prev_leader_slot| {
+                    // If the last leader was rooted, you won't find the slot
+                    // in the progress map, but it must have been confirmed
+                    if prev_leader_slot <= root_slot {
+                        true
+                    } else {
+                        progress_map
+                            .get(&prev_leader_slot)
+                            .expect("All banks > root must exist in the Progress map")
+                            .propagated_stats
+                            .is_propagated
+                    }
+                })
+                .unwrap_or(false);
+
+            if !leader_propagated_confirmed {
+                // Retransmit
+
+                // If it's not a consecutive leader slot, and the previous
+                // leader block hasn't been propagated, don't generate another
+                // block
+                if !is_consecutive_leader {
+                    return;
+                }
+            }
+
             info!(
                 "new fork:{} parent:{} (leader) root:{}",
                 poh_slot, parent_slot, root_slot

@@ -704,7 +704,7 @@ pub mod test {
         let bank0 = Bank::new(&genesis_config);
 
         for pubkey in validator_keypairs_map.keys() {
-            bank0.transfer(stake, &mint_keypair, pubkey).unwrap();
+            bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
         }
 
         bank0.freeze();
