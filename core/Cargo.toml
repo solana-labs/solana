@@ -23,7 +23,7 @@ core_affinity = "0.5.10"
 crossbeam-channel = "0.4"
 fs_extra = "1.1.0"
 indexmap = "1.3"
-itertools = "0.8.2"
+itertools = "0.9.0"
 jsonrpc-core = "14.0.5"
 jsonrpc-core-client = { version = "14.0.5", features = ["ws"] }
 jsonrpc-derive = "14.0.5"

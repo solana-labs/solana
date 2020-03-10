@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 clap = "2.32.0"
-itertools = "0.8.2"
+itertools = "0.9.0"
 log = "0.4.8"
 num-derive = "0.3"
 num-traits = "0.2"
