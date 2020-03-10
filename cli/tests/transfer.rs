@@ -1,15 +1,15 @@
 use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    nonce,
     offline::{parse_sign_only_reply_string, BlockhashQuery},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
-    account_utils::StateMut,
     fee_calculator::FeeCalculator,
-    nonce,
+    nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
 };
@@ -120,7 +120,7 @@ fn test_transfer() {
     // Create nonce account
     let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap();
     let minimum_nonce_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(nonce::State::size())
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
     config.signers = vec![&default_signer, &nonce_account];
     config.command = CliCommand::CreateNonceAccount {
@@ -133,14 +133,10 @@ fn test_transfer() {
     check_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
-    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
-        .convert_to_current();
-    let nonce_hash = match nonce_state {
-        nonce::State::Initialized(ref data) => data.blockhash,
-        _ => panic!("Nonce is not initialized"),
-    };
+        .blockhash;
 
     // Nonced transfer
     config.signers = vec![&default_signer];
@@ -157,14 +153,10 @@ fn test_transfer() {
     process_command(&config).unwrap();
     check_balance(49_976 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
     check_balance(30, &rpc_client, &recipient_pubkey);
-    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+    let new_nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
-        .convert_to_current();
-    let new_nonce_hash = match nonce_state {
-        nonce::State::Initialized(ref data) => data.blockhash,
-        _ => panic!("Nonce is not initialized"),
-    };
+        .blockhash;
     assert_ne!(nonce_hash, new_nonce_hash);
 
     // Assign nonce authority to offline
@@ -178,14 +170,10 @@ fn test_transfer() {
     check_balance(49_975 - minimum_nonce_balance, &rpc_client, &sender_pubkey);
 
     // Fetch nonce hash
-    let account = rpc_client.get_account(&nonce_account.pubkey()).unwrap();
-    let nonce_state = StateMut::<nonce::state::Versions>::state(&account)
+    let nonce_hash = nonce::get_account(&rpc_client, &nonce_account.pubkey())
+        .and_then(|ref a| nonce::data_from_account(a))
         .unwrap()
-        .convert_to_current();
-    let nonce_hash = match nonce_state {
-        nonce::State::Initialized(ref data) => data.blockhash,
-        _ => panic!("Nonce is not initialized"),
-    };
+        .blockhash;
 
     // Offline, nonced transfer
     offline.signers = vec![&default_offline_signer];

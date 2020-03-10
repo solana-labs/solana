@@ -14,7 +14,11 @@ use solana_sdk::{
     account_utils::StateMut,
     hash::Hash,
     message::Message,
-    nonce::{self, state::Versions, State},
+    nonce::{
+        self,
+        state::{Data, Versions},
+        State,
+    },
     pubkey::Pubkey,
     system_instruction::{
         advance_nonce_account, authorize_nonce_account, create_address_with_seed,
@@ -25,14 +29,24 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::sync::Arc;
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CliNonceError {
+    #[error("invalid account owner")]
     InvalidAccountOwner,
+    #[error("invalid account data")]
     InvalidAccountData,
+    #[error("unexpected account data size")]
+    UnexpectedDataSize,
+    #[error("query hash does not match stored hash")]
     InvalidHash,
+    #[error("query authority does not match account authority")]
     InvalidAuthority,
-    InvalidState,
+    #[error("invalid state for requested operation")]
+    InvalidStateForOperation,
+    #[error("client error: {0}")]
+    Client(String),
 }
 
 pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
@@ -218,6 +232,48 @@ impl NonceSubCommands for App<'_, '_> {
     }
 }
 
+pub fn get_account(
+    rpc_client: &RpcClient,
+    nonce_pubkey: &Pubkey,
+) -> Result<Account, CliNonceError> {
+    rpc_client
+        .get_account(nonce_pubkey)
+        .map_err(|e| CliNonceError::Client(format!("{:?}", e)))
+        .and_then(|a| match account_identity_ok(&a) {
+            Ok(()) => Ok(a),
+            Err(e) => Err(e),
+        })
+}
+
+pub fn account_identity_ok(account: &Account) -> Result<(), CliNonceError> {
+    if account.owner != system_program::id() {
+        Err(CliNonceError::InvalidAccountOwner)
+    } else if account.data.is_empty() {
+        Err(CliNonceError::UnexpectedDataSize)
+    } else {
+        Ok(())
+    }
+}
+
+pub fn state_from_account(account: &Account) -> Result<State, CliNonceError> {
+    account_identity_ok(account)?;
+    StateMut::<Versions>::state(account)
+        .map_err(|_| CliNonceError::InvalidAccountData)
+        .map(|v| v.convert_to_current())
+}
+
+pub fn data_from_account(account: &Account) -> Result<Data, CliNonceError> {
+    account_identity_ok(account)?;
+    state_from_account(account).and_then(|ref s| data_from_state(s).map(|d| d.clone()))
+}
+
+pub fn data_from_state(state: &State) -> Result<&Data, CliNonceError> {
+    match state {
+        State::Uninitialized => Err(CliNonceError::InvalidStateForOperation),
+        State::Initialized(data) => Ok(data),
+    }
+}
+
 pub fn parse_authorize_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
@@ -359,24 +415,18 @@ pub fn check_nonce_account(
     nonce_account: &Account,
     nonce_authority: &Pubkey,
     nonce_hash: &Hash,
-) -> Result<(), Box<CliError>> {
-    if nonce_account.owner != system_program::ID {
-        return Err(CliError::InvalidNonce(CliNonceError::InvalidAccountOwner).into());
-    }
-    let nonce_state = StateMut::<Versions>::state(nonce_account)
-        .map(|v| v.convert_to_current())
-        .map_err(|_| Box::new(CliError::InvalidNonce(CliNonceError::InvalidAccountData)))?;
-    match nonce_state {
+) -> Result<(), CliError> {
+    match state_from_account(nonce_account)? {
         State::Initialized(ref data) => {
             if &data.blockhash != nonce_hash {
-                Err(CliError::InvalidNonce(CliNonceError::InvalidHash).into())
+                Err(CliNonceError::InvalidHash.into())
             } else if nonce_authority != &data.authority {
-                Err(CliError::InvalidNonce(CliNonceError::InvalidAuthority).into())
+                Err(CliNonceError::InvalidAuthority.into())
             } else {
                 Ok(())
             }
         }
-        State::Uninitialized => Err(CliError::InvalidNonce(CliNonceError::InvalidState).into()),
+        State::Uninitialized => Err(CliNonceError::InvalidStateForOperation.into()),
     }
 }
 
@@ -425,10 +475,8 @@ pub fn process_create_nonce_account(
         (&nonce_account_address, "nonce_account".to_string()),
     )?;
 
-    if let Ok(nonce_account) = rpc_client.get_account(&nonce_account_address) {
-        let err_msg = if nonce_account.owner == system_program::id()
-            && StateMut::<Versions>::state(&nonce_account).is_ok()
-        {
+    if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
+        let err_msg = if state_from_account(&nonce_account).is_ok() {
             format!("Nonce account {} already exists", nonce_account_address)
         } else {
             format!(
@@ -485,23 +533,9 @@ pub fn process_create_nonce_account(
 }
 
 pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) -> ProcessResult {
-    let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
-    if nonce_account.owner != system_program::id() {
-        return Err(CliError::RpcRequestError(format!(
-            "{:?} is not a nonce account",
-            nonce_account_pubkey
-        ))
-        .into());
-    }
-    let nonce_state = StateMut::<Versions>::state(&nonce_account).map(|v| v.convert_to_current());
-    match nonce_state {
-        Ok(State::Uninitialized) => Ok("Nonce account is uninitialized".to_string()),
-        Ok(State::Initialized(ref data)) => Ok(format!("{:?}", data.blockhash)),
-        Err(err) => Err(CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to nonce state: {:?}",
-            err
-        ))
-        .into()),
+    match get_account(rpc_client, nonce_account_pubkey).and_then(|ref a| state_from_account(a))? {
+        State::Uninitialized => Ok("Nonce account is uninitialized".to_string()),
+        State::Initialized(ref data) => Ok(format!("{:?}", data.blockhash)),
     }
 }
 
@@ -545,14 +579,7 @@ pub fn process_show_nonce_account(
     nonce_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let nonce_account = rpc_client.get_account(nonce_account_pubkey)?;
-    if nonce_account.owner != system_program::id() {
-        return Err(CliError::RpcRequestError(format!(
-            "{:?} is not a nonce account",
-            nonce_account_pubkey
-        ))
-        .into());
-    }
+    let nonce_account = get_account(rpc_client, nonce_account_pubkey)?;
     let print_account = |data: Option<&nonce::state::Data>| {
         println!(
             "Balance: {}",
@@ -583,15 +610,9 @@ pub fn process_show_nonce_account(
         }
         Ok("".to_string())
     };
-    let nonce_state = StateMut::<Versions>::state(&nonce_account).map(|v| v.convert_to_current());
-    match nonce_state {
-        Ok(State::Uninitialized) => print_account(None),
-        Ok(State::Initialized(ref data)) => print_account(Some(data)),
-        Err(err) => Err(CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to nonce state: {:?}",
-            err
-        ))
-        .into()),
+    match state_from_account(&nonce_account)? {
+        State::Uninitialized => print_account(None),
+        State::Initialized(ref data) => print_account(Some(data)),
     }
 }
 
@@ -920,17 +941,13 @@ mod tests {
         let invalid_owner = Account::new_data(1, &data, &Pubkey::new(&[1u8; 32]));
         assert_eq!(
             check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash),
-            Err(Box::new(CliError::InvalidNonce(
-                CliNonceError::InvalidAccountOwner
-            ))),
+            Err(CliNonceError::InvalidAccountOwner.into()),
         );
 
         let invalid_data = Account::new_data(1, &"invalid", &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_data.unwrap(), &nonce_pubkey, &blockhash),
-            Err(Box::new(CliError::InvalidNonce(
-                CliNonceError::InvalidAccountData
-            ))),
+            Err(CliNonceError::InvalidAccountData.into()),
         );
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
@@ -941,7 +958,7 @@ mod tests {
         let invalid_hash = Account::new_data(1, &data, &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash),
-            Err(Box::new(CliError::InvalidNonce(CliNonceError::InvalidHash))),
+            Err(CliNonceError::InvalidHash.into()),
         );
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
@@ -952,18 +969,84 @@ mod tests {
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash),
-            Err(Box::new(CliError::InvalidNonce(
-                CliNonceError::InvalidAuthority
-            ))),
+            Err(CliNonceError::InvalidAuthority.into()),
         );
 
         let data = Versions::new_current(State::Uninitialized);
         let invalid_state = Account::new_data(1, &data, &system_program::ID);
         assert_eq!(
             check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash),
-            Err(Box::new(CliError::InvalidNonce(
-                CliNonceError::InvalidState
-            ))),
+            Err(CliNonceError::InvalidStateForOperation.into()),
         );
+    }
+
+    #[test]
+    fn test_account_identity_ok() {
+        let nonce_account = nonce::create_account(1).into_inner();
+        assert_eq!(account_identity_ok(&nonce_account), Ok(()));
+
+        let system_account = Account::new(1, 0, &system_program::id());
+        assert_eq!(
+            account_identity_ok(&system_account),
+            Err(CliNonceError::UnexpectedDataSize),
+        );
+
+        let other_program = Pubkey::new(&[1u8; 32]);
+        let other_account_no_data = Account::new(1, 0, &other_program);
+        assert_eq!(
+            account_identity_ok(&other_account_no_data),
+            Err(CliNonceError::InvalidAccountOwner),
+        );
+    }
+
+    #[test]
+    fn test_state_from_account() {
+        let mut nonce_account = nonce::create_account(1).into_inner();
+        assert_eq!(state_from_account(&nonce_account), Ok(State::Uninitialized));
+
+        let data = nonce::state::Data {
+            authority: Pubkey::new(&[1u8; 32]),
+            blockhash: Hash::new(&[42u8; 32]),
+            fee_calculator: FeeCalculator::new(42),
+        };
+        nonce_account
+            .set_state(&Versions::new_current(State::Initialized(data.clone())))
+            .unwrap();
+        assert_eq!(
+            state_from_account(&nonce_account),
+            Ok(State::Initialized(data))
+        );
+
+        let wrong_data_size_account = Account::new(1, 1, &system_program::id());
+        assert_eq!(
+            state_from_account(&wrong_data_size_account),
+            Err(CliNonceError::InvalidAccountData),
+        );
+    }
+
+    #[test]
+    fn test_data_from_helpers() {
+        let mut nonce_account = nonce::create_account(1).into_inner();
+        let state = state_from_account(&nonce_account).unwrap();
+        assert_eq!(
+            data_from_state(&state),
+            Err(CliNonceError::InvalidStateForOperation)
+        );
+        assert_eq!(
+            data_from_account(&nonce_account),
+            Err(CliNonceError::InvalidStateForOperation)
+        );
+
+        let data = nonce::state::Data {
+            authority: Pubkey::new(&[1u8; 32]),
+            blockhash: Hash::new(&[42u8; 32]),
+            fee_calculator: FeeCalculator::new(42),
+        };
+        nonce_account
+            .set_state(&Versions::new_current(State::Initialized(data.clone())))
+            .unwrap();
+        let state = state_from_account(&nonce_account).unwrap();
+        assert_eq!(data_from_state(&state), Ok(&data));
+        assert_eq!(data_from_account(&nonce_account), Ok(data));
     }
 }
