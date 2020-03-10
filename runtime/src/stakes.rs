@@ -32,7 +32,6 @@ impl Stakes {
     }
 
     pub fn history(&self) -> &StakeHistory {
-        println!("history: {} {:?}", self.epoch, self.stake_history);
         &self.stake_history
     }
     pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {

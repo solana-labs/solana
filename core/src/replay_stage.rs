@@ -1133,7 +1133,7 @@ impl ReplayStage {
         let mut newly_voted_pubkeys = new_slot_vote_tracker
             .as_ref()
             .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
-            .unwrap_or(vec![]);
+            .unwrap_or_else(|| vec![]);
 
         let mut leader_propagated_stats = &mut progress
             .get_mut(&slot)
@@ -1147,7 +1147,6 @@ impl ReplayStage {
         let root = bank_forks.read().unwrap().root();
 
         loop {
-            println!("prev leader slot: {:?}", prev_leader_slot);
             // If a descendant has reached propagation threshold, then
             // all its ancestor banks have alsso reached propagation
             // threshold as well (Validators can't have voted for a
@@ -1423,7 +1422,6 @@ impl ReplayStage {
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
         did_child_reach_threshold: bool,
     ) -> bool {
-        println!("dnrt: {}", did_child_reach_threshold);
         // Track whether this slot newly confirm propagation
         // throughout the network (switched from is_propagated == false
         // to is_propagated == true)
@@ -1445,7 +1443,6 @@ impl ReplayStage {
             return false;
         }
 
-        println!("newly_voted_pubkeys: {:?}", newly_voted_pubkeys);
         // Remove the valdators that we already know voted for this slot
         // Those validators are safe to drop because they don't to be ported back any
         // further because parents must have:
@@ -1474,20 +1471,10 @@ impl ReplayStage {
                     .get(&voting_pubkey)
                     .map(|(stake, _)| stake)
                     .unwrap_or(&0);
-                println!(
-                    "received: {:?}",
-                    leader_propagated_stats.propagated_validators
-                );
-                println!("total stake: {}", leader_bank.total_epoch_stake());
-                println!(
-                    "propagated_stake: {}",
-                    leader_propagated_stats.propagated_validators_stake
-                );
                 if leader_propagated_stats.propagated_validators_stake as f64
                     / leader_bank.total_epoch_stake() as f64
                     > SUPERMINORITY_THRESHOLD
                 {
-                    println!("setting on {}", leader_bank.slot());
                     leader_propagated_stats.is_propagated = true;
                     did_newly_reach_threshold = true
                 }
@@ -3001,7 +2988,6 @@ pub(crate) mod tests {
         );
 
         for i in 1..=10 {
-            println!("i: {}", i);
             let propagated_stats = &progress_map.get(&i).unwrap().propagated_stats;
             // Only the even numbered ones were leader banks, so only
             // those should have been updated
@@ -3081,7 +3067,6 @@ pub(crate) mod tests {
 
         // Only the first 5 banks should have reached the threshold
         for i in 1..=10 {
-            println!("i: {}", i);
             let propagated_stats = &progress_map.get(&i).unwrap().propagated_stats;
             if i < 5 {
                 assert!(propagated_stats.is_propagated);
