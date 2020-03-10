@@ -1,5 +1,5 @@
 use crate::{
-    client_error::ClientError,
+    client_error::Result as ClientResult,
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
@@ -100,7 +100,7 @@ impl RpcClient {
         })
     }
 
-    pub fn send_transaction(&self, transaction: &Transaction) -> Result<String, ClientError> {
+    pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<String> {
         let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
         let signature =
             self.client
@@ -119,7 +119,7 @@ impl RpcClient {
     pub fn get_signature_status(
         &self,
         signature: &str,
-    ) -> Result<Option<transaction::Result<()>>, ClientError> {
+    ) -> ClientResult<Option<transaction::Result<()>>> {
         self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
     }
 
@@ -127,7 +127,7 @@ impl RpcClient {
         &self,
         signature: &str,
         commitment_config: CommitmentConfig,
-    ) -> Result<Option<transaction::Result<()>>, ClientError> {
+    ) -> ClientResult<Option<transaction::Result<()>>> {
         let signature_status = self.client.send(
             &RpcRequest::GetSignatureStatus,
             json!([signature.to_string(), commitment_config]),
@@ -445,7 +445,7 @@ impl RpcClient {
         &self,
         transaction: &mut Transaction,
         signer_keys: &T,
-    ) -> Result<String, ClientError> {
+    ) -> ClientResult<String> {
         let mut send_retries = 20;
         loop {
             let mut status_retries = 15;
@@ -564,7 +564,7 @@ impl RpcClient {
         &self,
         tx: &mut Transaction,
         signer_keys: &T,
-    ) -> Result<(), ClientError> {
+    ) -> ClientResult<()> {
         let (blockhash, _fee_calculator) =
             self.get_new_blockhash(&tx.message().recent_blockhash)?;
         tx.try_sign(signer_keys, blockhash)?;
@@ -1188,12 +1188,7 @@ impl RpcClient {
         })
     }
 
-    pub fn send(
-        &self,
-        request: &RpcRequest,
-        params: Value,
-        retries: usize,
-    ) -> Result<Value, ClientError> {
+    pub fn send(&self, request: &RpcRequest, params: Value, retries: usize) -> ClientResult<Value> {
         assert!(params.is_array() || params.is_null());
         self.client.send(request, params, retries)
     }
@@ -1210,7 +1205,10 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mock_rpc_client_request::{PUBKEY, SIGNATURE};
+    use crate::{
+        client_error::ClientError,
+        mock_rpc_client_request::{PUBKEY, SIGNATURE},
+    };
     use assert_matches::assert_matches;
     use jsonrpc_core::{Error, IoHandler, Params};
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};

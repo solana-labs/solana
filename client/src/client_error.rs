@@ -45,3 +45,5 @@ impl Into<TransportError> for ClientError {
         }
     }
 }
+
+pub type Result<T> = std::result::Result<T, ClientError>;

@@ -18,7 +18,10 @@ use solana_clap_utils::{
     input_parsers::*, input_validators::*, keypair::signer_from_path, offline::SIGN_ONLY_ARG,
     ArgConstant,
 };
-use solana_client::{client_error::ClientError, rpc_client::RpcClient};
+use solana_client::{
+    client_error::{ClientError, Result as ClientResult},
+    rpc_client::RpcClient,
+};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
@@ -2111,7 +2114,7 @@ pub fn request_and_confirm_airdrop(
     log_instruction_custom_error::<SystemError>(result)
 }
 
-pub fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
+pub fn log_instruction_custom_error<E>(result: ClientResult<String>) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
