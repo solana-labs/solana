@@ -14,7 +14,7 @@ pub struct ClusterSlots {
     cluster_slots: HashMap<Slot, HashMap<Rc<Pubkey>, u64>>,
     keys: HashSet<Rc<Pubkey>>,
     since: Option<u64>,
-    default_peers: HashMap<Rc<Pubkey>, u64>,
+    validator_stakes: HashMap<Rc<Pubkey>, u64>,
     epoch: Option<u64>,
     self_id: Pubkey,
 }
@@ -49,7 +49,7 @@ impl ClusterSlots {
                     self.keys.insert(pubkey.clone());
                 }
                 let from = self.keys.get(&pubkey).unwrap();
-                let balance = self.default_peers.get(from).cloned().unwrap_or(0);
+                let balance = self.validator_stakes.get(from).cloned().unwrap_or(0);
                 if self.self_id != **from {
                     debug!(
                         "CLUSTER_SLLOTS: {}: insert {} {} {}",
@@ -59,7 +59,7 @@ impl ClusterSlots {
                 self.cluster_slots
                     .entry(*slot)
                     .or_insert_with(HashMap::default)
-                    .insert(from.clone(), balance + 1);
+                    .insert(from.clone(), balance);
             }
         }
         self.cluster_slots.retain(|x, _| *x > root);
@@ -83,7 +83,7 @@ impl ClusterSlots {
 
         let weight: u64 = others.values().map(|x| **x).sum();
         let keys: Vec<Rc<Pubkey>> = others.keys().copied().cloned().collect();
-        let total: u64 = self.default_peers.values().copied().sum::<u64>() + 1u64;
+        let total: u64 = self.validator_stakes.values().copied().sum::<u64>() + 1u64;
         if !other_slots.is_empty() {
             debug!(
                 "{}: CLUSTER_SLOTS STATS {} {:?} {:?}",
@@ -119,7 +119,7 @@ impl ClusterSlots {
             .unwrap()
             .working_bank()
             .get_epoch_and_slot_index(root);
-        if self.epoch.is_none() || Some(epoch) != self.epoch {
+        if Some(epoch) != self.epoch {
             let stakes = staking_utils::staked_nodes_at_epoch(
                 &bank_forks.read().unwrap().working_bank(),
                 epoch,
@@ -128,21 +128,21 @@ impl ClusterSlots {
                 return;
             }
             let stakes = stakes.unwrap();
-            self.default_peers = HashMap::new();
+            self.validator_stakes = HashMap::new();
             for (from, bal) in stakes {
                 let pubkey = Rc::new(from);
                 if self.keys.get(&pubkey).is_none() {
                     self.keys.insert(pubkey.clone());
                 }
                 let from = self.keys.get(&pubkey).unwrap();
-                self.default_peers.insert(from.clone(), bal);
+                self.validator_stakes.insert(from.clone(), bal);
             }
             self.self_id = cluster_info.read().unwrap().id();
             self.epoch = Some(epoch);
         }
     }
     pub fn peers(&self, slot: Slot) -> Vec<(Rc<Pubkey>, u64)> {
-        let mut peers: HashMap<Rc<Pubkey>, u64> = self.default_peers.clone();
+        let mut peers: HashMap<Rc<Pubkey>, u64> = self.validator_stakes.clone();
         if let Some(slot_peers) = self.lookup(slot) {
             slot_peers
                 .iter()
@@ -223,7 +223,7 @@ mod tests {
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
         let map = vec![(Rc::new(Pubkey::default()), 1)].into_iter().collect();
-        cs.default_peers = map;
+        cs.validator_stakes = map;
         cs.update_internal(0, (vec![epoch_slot], None));
         assert!(cs.lookup(1).is_some());
         assert_eq!(cs.lookup(1).unwrap().get(&Pubkey::default()), Some(&2));
