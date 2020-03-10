@@ -7,4 +7,3 @@ known as the CLI. We use the command-line because it's the first place the
 Solana core team deploys new functionality. The command-line interface isn't
 necessarily the easiest to use, but it provides the most direct, flexible, and
 secure access to your Solana accounts.
-
