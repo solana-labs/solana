@@ -639,7 +639,14 @@ pub mod test {
             }
             let vote = tower.new_vote_from_bank(&bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
-                ReplayStage::handle_new_root(new_root, bank_forks, progress, &None, &mut 0);
+                ReplayStage::handle_new_root(
+                    new_root,
+                    bank_forks,
+                    progress,
+                    &None,
+                    &mut 0,
+                    &mut HashSet::new(),
+                );
             }
 
             // Mark the vote for this bank under this node's pubkey so it will be

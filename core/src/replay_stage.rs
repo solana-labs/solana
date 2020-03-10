@@ -395,6 +395,7 @@ impl ReplayStage {
                                 &accounts_hash_sender,
                                 &latest_root_senders,
                                 &mut earliest_vote_on_fork,
+                                &mut all_pubkeys,
                             )?;
 
                             ancestors
@@ -783,6 +784,7 @@ impl ReplayStage {
         accounts_hash_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
         earliest_vote_on_fork: &mut Slot,
+        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -814,6 +816,7 @@ impl ReplayStage {
                 progress,
                 accounts_hash_sender,
                 earliest_vote_on_fork,
+                all_pubkeys,
             );
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
@@ -1528,12 +1531,18 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         accounts_hash_sender: &Option<SnapshotPackageSender>,
         earliest_vote_on_fork: &mut u64,
+        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
     ) {
+        let old_epoch = bank_forks.read().unwrap().root_bank().epoch();
         bank_forks
             .write()
             .unwrap()
             .set_root(new_root, accounts_hash_sender);
         let r_bank_forks = bank_forks.read().unwrap();
+        let new_epoch = bank_forks.read().unwrap().root_bank().epoch();
+        if old_epoch != new_epoch {
+            all_pubkeys.retain(|x| Rc::strong_count(x) > 1);
+        }
         *earliest_vote_on_fork = std::cmp::max(new_root, *earliest_vote_on_fork);
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());
     }
@@ -2044,6 +2053,7 @@ pub(crate) mod tests {
             &mut progress,
             &None,
             &mut earliest_vote_on_fork,
+            &mut HashSet::new(),
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
@@ -2057,6 +2067,7 @@ pub(crate) mod tests {
             &mut progress,
             &None,
             &mut earliest_vote_on_fork,
+            &mut HashSet::new(),
         );
         assert_eq!(earliest_vote_on_fork, root + 1);
     }
