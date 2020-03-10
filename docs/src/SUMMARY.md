@@ -40,7 +40,6 @@
   * [Submit Bug Reports](tour-de-sol/submitting-bugs.md)
 * [Run a Validator](running-validator/README.md)
   * [Validator Requirements](running-validator/validator-reqs.md)
-  * [Choose a Testnet](running-validator/validator-testnet.md)
   * [Start a Validator](running-validator/validator-start.md)
   * [Stake](running-validator/validator-stake.md)
   * [Monitor a Validator](running-validator/validator-monitor.md)
