@@ -8,6 +8,8 @@ pub enum TransportError {
     IoError(#[from] io::Error),
     #[error("transport transaction error: {0}")]
     TransactionError(#[from] TransactionError),
+    #[error("transport custom error: {0}")]
+    Custom(String),
 }
 
 impl TransportError {
