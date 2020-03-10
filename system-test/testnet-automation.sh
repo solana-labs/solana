@@ -1,81 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-function execution_step {
-  # shellcheck disable=SC2124
-  STEP="$@"
-  echo --- "${STEP[@]}"
-}
-
-function collect_logs {
-  execution_step "Collect logs from remote nodes"
-  rm -rf net/log
-  net/net.sh logs
-  for logfile in net/log/*; do
-    (
-      new_log=net/log/"$TESTNET_TAG"_"$NUMBER_OF_VALIDATOR_NODES"-nodes_"$(basename "$logfile")"
-      cp "$logfile" "$new_log"
-      upload-ci-artifact "$new_log"
-    )
-  done
-}
-
-function analyze_packet_loss {
-  (
-    set -x
-    # shellcheck disable=SC1091
-    source net/config/config
-    mkdir -p iftop-logs
-    execution_step "Map private -> public IP addresses in iftop logs"
-    # shellcheck disable=SC2154
-    for i in "${!validatorIpList[@]}"; do
-      # shellcheck disable=SC2154
-      # shellcheck disable=SC2086
-      # shellcheck disable=SC2027
-      echo "{\"private\": \""${validatorIpListPrivate[$i]}""\", \"public\": \""${validatorIpList[$i]}""\"},"
-    done > ip_address_map.txt
-
-    for ip in "${validatorIpList[@]}"; do
-      net/scp.sh ip_address_map.txt solana@"$ip":~/solana/
-    done
-
-    execution_step "Remotely post-process iftop logs"
-    # shellcheck disable=SC2154
-    for ip in "${validatorIpList[@]}"; do
-      iftop_log=iftop-logs/$ip-iftop.log
-      # shellcheck disable=SC2016
-      net/ssh.sh solana@"$ip" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log ~solana/solana/ip_address_map.txt' > "$iftop_log"
-      upload-ci-artifact "$iftop_log"
-    done
-
-    execution_step "Analyzing Packet Loss"
-    solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
-  )
-}
-
-function wait_for_bootstrap_validator_stake_drop {
-  max_stake="$1"
-  source net/common.sh
-  loadConfigFile
-
-  while true; do
-    bootstrap_validator_validator_info="$(ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana validators | grep "$($HOME/.cargo/bin/solana-keygen pubkey ~/solana/config/bootstrap-validator/identity-keypair.json)"')"
-    bootstrap_validator_stake_percentage="$(echo "$bootstrap_validator_validator_info" | awk '{gsub(/[\(,\),\%]/,""); print $9}')"
-
-    if [[ $(echo "$bootstrap_validator_stake_percentage < $max_stake" | bc) -ne 0 ]]; then
-      echo "Bootstrap validator stake has fallen below $max_stake to $bootstrap_validator_stake_percentage"
-      break
-    fi
-    echo "Max bootstrap validator stake: $max_stake.  Current stake: $bootstrap_validator_stake_percentage.  Sleeping 30s for stake to distribute."
-    sleep 30
-  done
-}
-
-function get_slot {
-  source net/common.sh
-  loadConfigFile
-  ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana slot'
-}
+# shellcheck disable=SC1090
+# shellcheck disable=SC1091
+source "$(dirname "$0")"/automation_utils.sh
 
 function cleanup_testnet {
   RC=$?
@@ -88,6 +16,7 @@ Failure occured when running the following command:
 $(eval echo "$@")"
   fi
 
+# shellcheck disable=SC2034
   TESTNET_FINISH_UNIX_MSECS="$(($(date +%s%N)/1000000))"
   if [[ "$UPLOAD_RESULTS_TO_SLACK" = "true" ]]; then
     upload_results_to_slack
@@ -102,7 +31,7 @@ $(eval echo "$@")"
   (
     set +e
     execution_step "Stop Network Software"
-    net/net.sh stop
+    "${REPO_ROOT}"/net/net.sh stop
   )
 
   (
@@ -111,12 +40,12 @@ $(eval echo "$@")"
   )
 
   execution_step "Deleting Testnet"
-  net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
+  "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
 
 }
 trap 'cleanup_testnet $BASH_COMMAND' EXIT
 
-function launchTestnet() {
+function launch_testnet() {
   set -x
 
   # shellcheck disable=SC2068
@@ -130,7 +59,7 @@ function launchTestnet() {
       fi
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-      net/gce.sh create \
+      "${REPO_ROOT}"/net/gce.sh create \
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
@@ -142,7 +71,7 @@ function launchTestnet() {
     ec2)
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-      net/ec2.sh create \
+      "${REPO_ROOT}"/net/ec2.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
@@ -152,7 +81,7 @@ function launchTestnet() {
     azure)
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-      net/azure.sh create \
+      "${REPO_ROOT}"/net/azure.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
@@ -160,10 +89,10 @@ function launchTestnet() {
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
-      net/colo.sh delete --reclaim-preemptible-reservations
+      "${REPO_ROOT}"/net/colo.sh delete --reclaim-preemptible-reservations
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-      net/colo.sh create \
+      "${REPO_ROOT}"/net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
         -p "$TESTNET_TAG" $maybePublicIpAddresses --dedicated \
         ${ADDITIONAL_FLAGS[@]/#/" "}
@@ -174,33 +103,33 @@ function launchTestnet() {
     esac
 
   execution_step "Configure database"
-  net/init-metrics.sh -e
+  "${REPO_ROOT}"/net/init-metrics.sh -e
 
   execution_step "Fetch reusable testnet keypairs"
-  if [[ ! -d net/keypairs ]]; then
-    git clone git@github.com:solana-labs/testnet-keypairs.git net/keypairs
+  if [[ ! -d "${REPO_ROOT}"/net/keypairs ]]; then
+    git clone git@github.com:solana-labs/testnet-keypairs.git "${REPO_ROOT}"/net/keypairs
     # If we have provider-specific keys (CoLo*, GCE*, etc) use them instead of generic val*
-    if [[ -d net/keypairs/"${CLOUD_PROVIDER}" ]]; then
-      cp net/keypairs/"${CLOUD_PROVIDER}"/* net/keypairs/
+    if [[ -d "${REPO_ROOT}"/net/keypairs/"${CLOUD_PROVIDER}" ]]; then
+      cp "${REPO_ROOT}"/net/keypairs/"${CLOUD_PROVIDER}"/* "${REPO_ROOT}"/net/keypairs/
     fi
   fi
 
   if [[ "$CLOUD_PROVIDER" = "colo" ]]; then
     execution_step "Stopping Colo nodes before we start"
-    net/net.sh stop
+    "${REPO_ROOT}"/net/net.sh stop
   fi
 
   execution_step "Starting bootstrap node and ${NUMBER_OF_VALIDATOR_NODES} validator nodes"
   if [[ -n $CHANNEL ]]; then
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-    net/net.sh start -t "$CHANNEL" \
+    "${REPO_ROOT}"/net/net.sh start -t "$CHANNEL" \
       -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
       --gpu-mode $startGpuMode
   else
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-    net/net.sh start -T solana-release*.tar.bz2 \
+    "${REPO_ROOT}"/net/net.sh start -T solana-release*.tar.bz2 \
       -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
       --gpu-mode $startGpuMode
   fi
@@ -210,7 +139,7 @@ function launchTestnet() {
 
   if [[ $NUMBER_OF_CLIENT_NODES -gt 0 ]]; then
     execution_step "Starting ${NUMBER_OF_CLIENT_NODES} client nodes"
-    net/net.sh startclients "$maybeClientOptions" "$CLIENT_OPTIONS"
+    "${REPO_ROOT}"/net/net.sh startclients "$maybeClientOptions" "$CLIENT_OPTIONS"
   fi
 
   SECONDS=0
@@ -228,11 +157,11 @@ function launchTestnet() {
     for (( i=1; i<=PARTITION_ITERATION_COUNT; i++ )); do
       execution_step "Partition Iteration $i of $PARTITION_ITERATION_COUNT"
       execution_step "Applying netem config $NETEM_CONFIG_FILE for $PARTITION_ACTIVE_DURATION seconds"
-      net/net.sh netem --config-file "$NETEM_CONFIG_FILE"
+      "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE"
       sleep "$PARTITION_ACTIVE_DURATION"
 
       execution_step "Resolving partitions for $PARTITION_INACTIVE_DURATION seconds"
-      net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup
+      "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup
       sleep "$PARTITION_INACTIVE_DURATION"
     done
     STATS_FINISH_SECONDS=$SECONDS
@@ -302,7 +231,7 @@ function launchTestnet() {
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed;$q_last_tower_distance_observed" |
-    python system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
+    python "${REPO_ROOT}"/system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
 
   echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
 
@@ -311,11 +240,10 @@ function launchTestnet() {
   upload-ci-artifact "$RESULT_FILE"
 }
 
+# shellcheck disable=SC2034
 RESULT_DETAILS=
 STEP=
 execution_step "Initialize Environment"
-
-cd "$(dirname "$0")/.."
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
@@ -384,10 +312,6 @@ if [[ -z $CHANNEL ]]; then
   buildkite-agent artifact download "solana-release*.tar.bz2" .
 fi
 
-# shellcheck disable=SC1091
-source ci/upload-ci-artifact.sh
-source system-test/upload_results_to_slack.sh
-
 maybeClientOptions=${CLIENT_OPTIONS:+"-c"}
 maybeCustomMachineType=${VALIDATOR_NODE_MACHINE_TYPE:+"--custom-machine-type"}
 
@@ -422,6 +346,7 @@ for i in "${TEST_PARAMS_TO_DISPLAY[@]}"; do
   fi
 done
 
+# shellcheck disable=SC2034
 TESTNET_START_UNIX_MSECS="$(($(date +%s%N)/1000000))"
 
-launchTestnet
+launch_testnet
