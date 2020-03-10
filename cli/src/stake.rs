@@ -1041,13 +1041,16 @@ pub fn process_split_stake(
 ) -> ProcessResult {
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
-    check_unique_pubkeys(
-        (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
-        (
-            &split_stake_account.pubkey(),
-            "split_stake_account".to_string(),
-        ),
-    )?;
+
+    if split_stake_account_seed.is_none() {
+        check_unique_pubkeys(
+            (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
+            (
+                &split_stake_account.pubkey(),
+                "split_stake_account".to_string(),
+            ),
+        )?;
+    }
     check_unique_pubkeys(
         (&fee_payer.pubkey(), "fee-payer keypair".to_string()),
         (&stake_account_pubkey, "stake_account".to_string()),
