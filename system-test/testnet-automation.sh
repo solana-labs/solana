@@ -160,6 +160,7 @@ function launchTestnet() {
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     colo)
+      net/colo.sh delete --reclaim-preemptible-reservations
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
       net/colo.sh create \

@@ -39,6 +39,7 @@ cloud_RestartPreemptedInstances() {
 __cloud_FindInstances() {
   declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME INSTANCES_TEXT
   declare filter=${1}
+  declare onlyPreemptible=${2}
   instances=()
 
   if ! ${COLO_PARALLELIZE}; then
@@ -47,10 +48,14 @@ __cloud_FindInstances() {
   fi
   INSTANCES_TEXT="$(
     for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
-      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"${AVAIL}"
+      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME PREEMPTIBLE <<<"${AVAIL}"
       if [[ ${INSTNAME} =~ ${filter} ]]; then
-        printf "%-40s | publicIp=%-16s privateIp=%s zone=%s\n" "${INSTNAME}" "${IP}" "${PRIV_IP}" "${ZONE}" 1>&2
-        echo -e "${INSTNAME}:${IP}:${PRIV_IP}:${ZONE}"
+        if [[ -n $onlyPreemptible && $PREEMPTIBLE == "false" ]]; then
+          continue
+        else
+          printf "%-40s | publicIp=%-16s privateIp=%s zone=%s preemptible=%s\n" "${INSTNAME}" "${IP}" "${PRIV_IP}" "${ZONE}" "${PREEMPTIBLE}" 1>&2
+          echo -e "${INSTNAME}:${IP}:${PRIV_IP}:${ZONE}"
+        fi
       fi
     done | sort -t $'\v' -k1
   )"
@@ -77,7 +82,8 @@ __cloud_FindInstances() {
 #
 cloud_FindInstances() {
   declare filter="^${1}.*"
-  __cloud_FindInstances "${filter}"
+  declare onlyPreemptible="${2}"
+  __cloud_FindInstances "${filter}" "${onlyPreemptible}"
 }
 
 #
@@ -96,7 +102,8 @@ cloud_FindInstances() {
 #
 cloud_FindInstance() {
   declare name="^${1}$"
-  __cloud_FindInstances "${name}"
+  declare onlyPreemptible="${2}"
+  __cloud_FindInstances "${name}" "${onlyPreemptible}"
 }
 
 #
@@ -155,7 +162,7 @@ cloud_CreateInstances() {
   #declare optionalAddress="${9}" # unused
   #declare optionalBootDiskType="${10}" # unused
   #declare optionalAdditionalDiskSize="${11}" # unused
-  #declare optionalPreemptible="${12}" # unused
+  declare optionalPreemptible="${12}"
   declare sshPrivateKey="${13}"
 
   declare -a nodes
@@ -213,7 +220,7 @@ cloud_CreateInstances() {
       RES_MACH="${COLO_RES_MACHINE[${RI}]}"
       IP="${COLO_RES_IP[${RI}]}"
       if colo_machine_types_compatible "${RES_MACH}" "${machineType}"; then
-        if colo_node_requisition "${IP}" "${node}" "${sshPrivateKey}" >/dev/null; then
+        if colo_node_requisition "${IP}" "${node}" "${sshPrivateKey}" "${optionalPreemptible}" >/dev/null; then
           NI=$((NI+1))
         fi
       fi
@@ -228,10 +235,11 @@ cloud_CreateInstances() {
 # Deletes all the instances listed in the `instances` array
 #
 cloud_DeleteInstances() {
+  declare forceDelete="${1}"
   declare _ IP _ _
   for instance in "${instances[@]}"; do
     IFS=':' read -r _ IP _ _ <<< "${instance}"
-    colo_node_free "${IP}" >/dev/null
+    colo_node_free "${IP}" "${forceDelete}" >/dev/null
   done
 }
 
@@ -270,13 +278,13 @@ cloud_FetchFile() {
 }
 
 cloud_StatusAll() {
-  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME
+  declare HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME PREEMPTIBLE
   if ! ${COLO_PARALLELIZE}; then
     colo_load_resources
     colo_load_availability false
   fi
   for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
-    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"${AVAIL}"
-    printf "%-30s | publicIp=%-16s privateIp=%s status=%s who=%s zone=%s inst=%s\n" "${HOST_NAME}" "${IP}" "${PRIV_IP}" "${STATUS}" "${LOCK_USER}" "${ZONE}" "${INSTNAME}"
+    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME PREEMPTIBLE <<<"${AVAIL}"
+    printf "%-30s | publicIp=%-16s privateIp=%s status=%s who=%s zone=%s inst=%s preemptible=%s\n" "${HOST_NAME}" "${IP}" "${PRIV_IP}" "${STATUS}" "${LOCK_USER}" "${ZONE}" "${INSTNAME}" "${PREEMPTIBLE}"
   done
 }

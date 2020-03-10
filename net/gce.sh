@@ -61,7 +61,6 @@ colo)
   ;;
 esac
 
-
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalValidatorCount=2
 clientNodeCount=0
@@ -154,6 +153,7 @@ Manage testnet instances
                       (by default preemptible instances are used to reduce
                       cost).  Note that the bootstrap validator, archiver,
                       blockstreamer and client nodes are always dedicated.
+                      Set this flag on colo to prevent your testnet from being pre-empted by nightly test automation.
    --self-destruct-hours [number]
                     - Specify lifetime of the allocated instances in hours. 0 to
                       disable. Only supported on GCE. (default: $selfDestructHours)
@@ -162,7 +162,11 @@ Manage testnet instances
    -P               - Use public network IP addresses (default: $publicNetwork)
 
  delete-specific options:
-   none
+   --reclaim-preemptible-reservations
+                    - If set, reclaims all reservations on colo nodes that were not created with --dedicated.
+                      This behavior does not filter by testnet name or owner.  Only implemented on colo.
+   --reclaim-all-reservations
+                    - If set, reclaims all reservations on all colo nodes, regardless of owner, pre-emptibility, or creator.
 
  info-specific options:
    --eval           - Output in a form that can be eval-ed by a shell: eval $(gce.sh info)
@@ -215,6 +219,12 @@ while [[ -n $1 ]]; do
         usage 1
       fi
       shift 2
+    elif [[ $1 == --reclaim-preemptible-reservations ]]; then
+      reclaimOnlyPreemptibleReservations=true
+      shift
+    elif [[ $1 == --reclaim-all-reservations ]]; then
+      reclaimAllReservations=true
+      shift
     else
       usage "Unknown long option: $1"
     fi
@@ -307,6 +317,26 @@ ec2|azure|colo)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
 esac
+
+case $cloudProvider in
+  gce | ec2 | azure)
+    maybePreemptible="never preemptible"
+    ;;
+  colo)
+    maybePreemptible=$preemptible
+    ;;
+  *)
+    echo "Error: Unknown cloud provider: $cloudProvider"
+    ;;
+esac
+
+if [[ $reclaimOnlyPreemptibleReservations == "true" && $reclaimAllReservations == "true" ]]; then
+  usage "Cannot set both --reclaim-preemptible-reservations and --reclaim-all-reservations.  Set one or none"
+fi
+
+if [[ -n $reclaimAllReservations || -n $reclaimOnlyPreemptibleReservations ]]; then
+  forceDelete="true"
+fi
 
 # cloud_ForEachInstance [cmd] [extra args to cmd]
 #
@@ -594,16 +624,30 @@ EOF
 delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
 
-  # Filter for all nodes
-  filter="$prefix-"
+  case $cloudProvider in
+    gce | ec2 | azure)
+      # Filter for all nodes
+      filter="$prefix-"
+      ;;
+    colo)
+      if [[ -n $forceDelete ]]; then
+        filter=".*-"
+      else
+        filter="$prefix-"
+      fi
+      ;;
+    *)
+      echo "Error: Unknown cloud provider: $cloudProvider"
+      ;;
+  esac
 
   echo "Searching for instances: $filter"
-  cloud_FindInstances "$filter"
+  cloud_FindInstances "$filter" "$reclaimOnlyPreemptibleReservations"
 
   if [[ ${#instances[@]} -eq 0 ]]; then
     echo "No instances found matching '$filter'"
   else
-    cloud_DeleteInstances true &
+    cloud_DeleteInstances $forceDelete
   fi
 
   wait
@@ -817,7 +861,7 @@ EOF
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-validator" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$validatorBootDiskSizeInGb" \
       "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$validatorAdditionalDiskSizeInGb" \
-      "never preemptible" "$sshPrivateKey"
+      "$maybePreemptible" "$sshPrivateKey"
   fi
 
   if [[ $additionalValidatorCount -gt 0 ]]; then
@@ -847,19 +891,19 @@ EOF
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType" "" "never preemptible" "$sshPrivateKey"
+      "$startupScript" "" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey"
   fi
 
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$validatorBootDiskSizeInGb" \
-      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$sshPrivateKey"
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey"
   fi
 
   if [[ $archiverNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-archiver" "$archiverNodeCount" \
       false "$archiverMachineType" "${zones[0]}" "$archiverBootDiskSizeInGb" \
-      "$startupScript" "" "" "" "never preemptible" "$sshPrivateKey"
+      "$startupScript" "" "" "" "$maybePreemptible" "$sshPrivateKey"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
