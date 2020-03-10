@@ -49,6 +49,7 @@ OSError: open failed
 ```
 
 To fix, check the following:
+
 1. Ensure your Ledger device is connected to USB
 2. Ensure your Ledger device is unlocked and not waiting for you to enter your pin
 3. Ensure the Ledger Live application is not open
