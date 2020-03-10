@@ -214,7 +214,7 @@ mod tests {
         assert_eq!(cs.since, Some(0));
         assert!(cs.lookup(0).is_none());
         assert!(cs.lookup(1).is_some());
-        assert_eq!(cs.lookup(1).unwrap().get(&Pubkey::default()), Some(&1));
+        assert_eq!(cs.lookup(1).unwrap().get(&Pubkey::default()), Some(&0));
     }
 
     #[test]
@@ -226,7 +226,7 @@ mod tests {
         cs.validator_stakes = map;
         cs.update_internal(0, (vec![epoch_slot], None));
         assert!(cs.lookup(1).is_some());
-        assert_eq!(cs.lookup(1).unwrap().get(&Pubkey::default()), Some(&2));
+        assert_eq!(cs.lookup(1).unwrap().get(&Pubkey::default()), Some(&1));
     }
 
     #[test]
