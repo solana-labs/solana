@@ -15,6 +15,7 @@ if [[ -n $CI_BRANCH ]]; then
     )
     # make a local commit for the svgs
     git add -A -f docs/src/.gitbook/assets/.
+    git add -f docs/src/cli/usage.md
     if ! git diff-index --quiet HEAD; then
       git config user.email maintainers@solana.com
       git config user.name "$me"
