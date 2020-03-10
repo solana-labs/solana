@@ -7,7 +7,7 @@ use crate::{
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
         RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
-        RpcLeaderSchedule, RpcResponse, RpcVersionInfo, RpcVoteAccountStatus,
+        RpcLeaderSchedule, RpcResult, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -77,7 +77,7 @@ impl RpcClient {
         &self,
         signature: &str,
         commitment_config: CommitmentConfig,
-    ) -> RpcResponse<bool> {
+    ) -> RpcResult<bool> {
         let response = self
             .client
             .send(
@@ -643,7 +643,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> RpcResponse<Option<Account>> {
+    ) -> RpcResult<Option<Account>> {
         let response = self.client.send(
             &RpcRequest::GetAccountInfo,
             json!([pubkey.to_string(), commitment_config]),
@@ -724,7 +724,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> RpcResponse<u64> {
+    ) -> RpcResult<u64> {
         let balance_json = self
             .client
             .send(
@@ -823,7 +823,7 @@ impl RpcClient {
     pub fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> RpcResponse<(Hash, FeeCalculator)> {
+    ) -> RpcResult<(Hash, FeeCalculator)> {
         let response = self
             .client
             .send(
@@ -894,7 +894,7 @@ impl RpcClient {
         Ok(value.map(|rf| rf.fee_calculator))
     }
 
-    pub fn get_fee_rate_governor(&self) -> RpcResponse<FeeRateGovernor> {
+    pub fn get_fee_rate_governor(&self) -> RpcResult<FeeRateGovernor> {
         let response = self
             .client
             .send(&RpcRequest::GetFeeRateGovernor, Value::Null, 0)

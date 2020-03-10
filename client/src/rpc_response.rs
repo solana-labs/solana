@@ -10,7 +10,7 @@ use solana_sdk::{
 };
 use std::{collections::HashMap, io, net::SocketAddr, str::FromStr};
 
-pub type RpcResponse<T> = io::Result<Response<T>>;
+pub type RpcResult<T> = io::Result<Response<T>>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RpcResponseContext {
