@@ -215,23 +215,23 @@ impl VoteTracker {
 
     // Given a set of validator node ids `N` and vote accounts `V`, removes the vote accounts
     // from `V` that belong to `N`
-    pub fn diff_vote_accounts(
-        &self,
-        node_ids: &[Pubkey],
-        vote_accounts: &mut HashSet<Pubkey>,
-        slot: Slot,
-    ) {
+    pub fn node_id_to_vote_accounts(&self, node_ids: &[Pubkey], slot: Slot) -> Vec<Arc<Pubkey>> {
         let epoch = self.epoch_schedule.get_epoch(slot);
         if let Some(node_id_to_vote_accounts) =
-            self.node_id_to_vote_accounts.write().unwrap().get(&epoch)
+            self.node_id_to_vote_accounts.read().unwrap().get(&epoch)
         {
-            for node_id in node_ids {
-                if let Some(node_vote_accounts) = node_id_to_vote_accounts.get(node_id) {
-                    for node_vote_account in node_vote_accounts {
-                        vote_accounts.remove(node_vote_account);
-                    }
-                };
-            }
+            node_ids
+                .iter()
+                .flat_map(|node_id| {
+                    node_id_to_vote_accounts
+                        .get(node_id)
+                        .cloned()
+                        .unwrap_or_else(|| vec![])
+                        .into_iter()
+                })
+                .collect()
+        } else {
+            vec![]
         }
     }
 
@@ -887,7 +887,7 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_vote_accounts() {
+    fn test_node_id_to_vote_accounts() {
         // Create some voters at genesis
         let validator_voting_keypairs: Vec<_> = (0..10)
             .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
@@ -907,29 +907,14 @@ mod tests {
             .iter()
             .map(|v| v.node_keypair.pubkey())
             .collect();
-        let mut vote_accounts = validator_voting_keypairs
+        let vote_accounts: Vec<_> = validator_voting_keypairs
             .iter()
-            .map(|v| v.vote_keypair.pubkey())
+            .map(|v| Arc::new(v.vote_keypair.pubkey()))
             .collect();
-        vote_tracker.diff_vote_accounts(&node_ids, &mut vote_accounts, bank.slot());
-        assert!(vote_accounts.is_empty());
-
-        // Given the later half of the node id's, should diff out
-        // the later half of the vote accounts
-        let node_ids: Vec<_> = validator_voting_keypairs[5..]
-            .iter()
-            .map(|v| v.node_keypair.pubkey())
-            .collect();
-        let mut vote_accounts = validator_voting_keypairs
-            .iter()
-            .map(|v| v.vote_keypair.pubkey())
-            .collect::<HashSet<_>>();
-        vote_tracker.diff_vote_accounts(&node_ids, &mut vote_accounts, bank.slot());
-        let expected = validator_voting_keypairs[0..5]
-            .iter()
-            .map(|v| v.vote_keypair.pubkey())
-            .collect::<HashSet<_>>();
-        assert_eq!(vote_accounts, expected);
+        assert_eq!(
+            vote_tracker.node_id_to_vote_accounts(&node_ids, bank.slot()),
+            vote_accounts
+        );
     }
 
     #[test]
