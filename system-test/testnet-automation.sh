@@ -165,7 +165,7 @@ function launchTestnet() {
     # shellcheck disable=SC2086
       net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybePublicIpAddresses \
+        -p "$TESTNET_TAG" $maybePublicIpAddresses --dedicated \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     *)
