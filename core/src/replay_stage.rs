@@ -3,11 +3,11 @@
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::SlotVoteTracker,
     cluster_info_vote_listener::VoteTracker,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
     consensus::{StakeLockout, Tower},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    progress_map::{ForkProgress, ForkStats, ProgressMap, PropagatedStats},
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -16,10 +16,7 @@ use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
     blockstore::Blockstore,
-    blockstore_processor::{
-        self, BlockstoreProcessorError, ConfirmationProgress, ConfirmationTiming,
-        TransactionStatusSender,
-    },
+    blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::SnapshotPackageSender,
@@ -51,8 +48,6 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
-
-pub(crate) type ProgressMap = HashMap<Slot, ForkProgress>;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -101,95 +96,6 @@ pub struct ReplayStage {
     commitment_service: AggregateCommitmentService,
 }
 
-#[derive(Default)]
-pub(crate) struct ReplaySlotStats(ConfirmationTiming);
-impl std::ops::Deref for ReplaySlotStats {
-    type Target = ConfirmationTiming;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl std::ops::DerefMut for ReplaySlotStats {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub(crate) struct ForkStats {
-    weight: u128,
-    fork_weight: u128,
-    total_staked: u64,
-    slot: Slot,
-    block_height: u64,
-    has_voted: bool,
-    is_recent: bool,
-    is_empty: bool,
-    pub(crate) vote_threshold: bool,
-    pub(crate) is_locked_out: bool,
-    pub(crate) stake_lockouts: HashMap<u64, StakeLockout>,
-    confirmation_reported: bool,
-    computed: bool,
-}
-
-#[derive(Clone, Default)]
-pub(crate) struct PropagatedStats {
-    pub(crate) propagated_validators: HashSet<Rc<Pubkey>>,
-    pub(crate) propagated_validators_stake: u64,
-    pub(crate) is_propagated: bool,
-    is_leader_slot: bool,
-    prev_leader_slot: Option<Slot>,
-    slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
-}
-
-impl ReplaySlotStats {
-    pub fn report_stats(&self, slot: Slot, num_entries: usize, num_shreds: u64) {
-        datapoint_info!(
-            "replay-slot-stats",
-            ("slot", slot as i64, i64),
-            ("fetch_entries_time", self.fetch_elapsed as i64, i64),
-            (
-                "fetch_entries_fail_time",
-                self.fetch_fail_elapsed as i64,
-                i64
-            ),
-            ("entry_verification_time", self.verify_elapsed as i64, i64),
-            ("replay_time", self.replay_elapsed as i64, i64),
-            (
-                "replay_total_elapsed",
-                self.started.elapsed().as_micros() as i64,
-                i64
-            ),
-            ("total_entries", num_entries as i64, i64),
-            ("total_shreds", num_shreds as i64, i64),
-        );
-    }
-}
-
-pub(crate) struct ForkProgress {
-    is_dead: bool,
-    pub(crate) fork_stats: ForkStats,
-    pub(crate) propagated_stats: PropagatedStats,
-    replay_stats: ReplaySlotStats,
-    replay_progress: ConfirmationProgress,
-}
-
-impl ForkProgress {
-    pub fn new(last_entry: Hash, prev_leader_slot: Option<Slot>, is_leader_slot: bool) -> Self {
-        Self {
-            is_dead: false,
-            fork_stats: ForkStats::default(),
-            replay_stats: ReplaySlotStats::default(),
-            replay_progress: ConfirmationProgress::new(last_entry),
-            propagated_stats: PropagatedStats {
-                prev_leader_slot,
-                is_leader_slot,
-                ..PropagatedStats::default()
-            },
-        }
-    }
-}
-
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
@@ -232,7 +138,7 @@ impl ReplayStage {
                 let mut all_pubkeys: HashSet<Rc<Pubkey>> = HashSet::new();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
-                let mut progress = HashMap::new();
+                let mut progress = ProgressMap::default();
                 let mut frozen_banks: Vec<_> = bank_forks
                     .read()
                     .unwrap()
@@ -245,7 +151,7 @@ impl ReplayStage {
 
                 // Initialize progress map with any root banks
                 for bank in frozen_banks {
-                    let prev_leader_slot = Self::get_prev_leader_slot(&progress, &bank);
+                    let prev_leader_slot = progress.get_prev_leader_slot(&bank);
                     progress.insert(
                         bank.slot(),
                         ForkProgress::new(
@@ -317,7 +223,7 @@ impl ReplayStage {
                         &mut all_pubkeys,
                     );
                     for slot in newly_computed_slot_stats {
-                        let fork_stats = &progress.get(&slot).unwrap().fork_stats;
+                        let fork_stats = progress.get_fork_stats(slot).unwrap();
                         let confirmed_forks = Self::confirm_forks(
                             &tower,
                             &fork_stats.stake_lockouts,
@@ -832,7 +738,7 @@ impl ReplayStage {
 
         Self::update_commitment_cache(
             bank.clone(),
-            progress.get(&bank.slot()).unwrap().fork_stats.total_staked,
+            progress.get_fork_stats(bank.slot()).unwrap().total_staked,
             lockouts_sender,
         );
 
@@ -925,7 +831,7 @@ impl ReplayStage {
             }
 
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
-            let prev_leader_slot = Self::get_prev_leader_slot(&progress, &bank);
+            let prev_leader_slot = progress.get_prev_leader_slot(&bank);
 
             // Insert a progress entry even for slots this node is the leader for, so that
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
@@ -1003,10 +909,9 @@ impl ReplayStage {
                 .unwrap_or(0);
 
             {
-                let stats = &mut progress
-                    .get_mut(&bank_slot)
-                    .expect("All frozen banks must exist in the Progress map")
-                    .fork_stats;
+                let stats = progress
+                    .get_fork_stats_mut(bank_slot)
+                    .expect("All frozen banks must exist in the Progress map");
 
                 if !stats.computed {
                     stats.slot = bank_slot;
@@ -1048,10 +953,10 @@ impl ReplayStage {
                 vote_tracker,
             );
 
-            let stats = &mut progress
-                .get_mut(&bank_slot)
-                .expect("All frozen banks must exist in the Progress map")
-                .fork_stats;
+            let stats = progress
+                .get_fork_stats_mut(bank_slot)
+                .expect("All frozen banks must exist in the Progress map");
+
             stats.vote_threshold = tower.check_vote_stake_threshold(
                 bank_slot,
                 &stats.stake_lockouts,
@@ -1064,47 +969,6 @@ impl ReplayStage {
         new_stats
     }
 
-    fn is_propagated(progress: &mut ProgressMap, slot: Slot) -> bool {
-        // If the confirmation has already been seen, just returns
-        if progress
-            .get(&slot)
-            .expect("All frozen banks must exist in the Progress map")
-            .propagated_stats
-            .is_propagated
-        {
-            return true;
-        }
-
-        let prev_leader_slot = progress
-            .get(&slot)
-            .expect("All frozen banks must exist in the Progress map")
-            .propagated_stats
-            .prev_leader_slot;
-
-        let prev_leader_confirmed =
-            // prev_leader_slot doesn't exist because already rooted
-            // or this validator hasn't been scheudled as a leader
-            // yet. In both cases the latest leader is vacuously
-            // confirmed
-            prev_leader_slot.is_none() ||
-                // prev_leader isn't in the progress map, which means 
-                // it's rooted, so it's confirmed
-                progress.get(&prev_leader_slot.unwrap()).is_none();
-
-        if prev_leader_confirmed {
-            // If previous leader has been confirmed as propagated, then
-            // this block is also confirmed as propagated
-            progress
-                .get_mut(&slot)
-                .expect("All frozen banks must exist in the Progress map")
-                .propagated_stats
-                .is_propagated = true;
-            return true;
-        }
-
-        false
-    }
-
     fn update_propagation_status(
         progress: &mut ProgressMap,
         slot: Slot,
@@ -1113,15 +977,14 @@ impl ReplayStage {
         vote_tracker: &VoteTracker,
     ) {
         // If propagation has already been confirmed, return
-        if Self::is_propagated(progress, slot) {
+        if progress.is_propagated(slot) {
             return;
         }
 
         // Otherwise we have to check the votes for confirmation
         let slot_vote_tracker = progress
-            .get(&slot)
+            .get_propagated_stats(slot)
             .expect("All frozen banks must exist in the Progress map")
-            .propagated_stats
             .slot_vote_tracker
             .clone();
 
@@ -1138,13 +1001,10 @@ impl ReplayStage {
             .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
             .unwrap_or_else(|| vec![]);
 
-        let mut leader_propagated_stats = &mut progress
-            .get_mut(&slot)
-            .expect(
-                "If slot doesn't exist in Progress map, 
+        let mut leader_propagated_stats = progress.get_propagated_stats_mut(slot).expect(
+            "If slot doesn't exist in Progress map,
                 is_propagated() above should have returned true",
-            )
-            .propagated_stats;
+        );
         let mut prev_leader_slot = leader_propagated_stats.prev_leader_slot;
         let mut did_newly_reach_threshold = false;
         let root = bank_forks.read().unwrap().root();
@@ -1186,22 +1046,22 @@ impl ReplayStage {
                 break;
             }
 
-            leader_propagated_stats = &mut progress
-                .get_mut(&prev_leader_slot.expect("guaranteed to be `Some` by check above"))
+            leader_propagated_stats = progress
+                .get_propagated_stats_mut(
+                    prev_leader_slot.expect("guaranteed to be `Some` by check above"),
+                )
                 .expect(
                     "current_slot >= root (guaranteed from check abve) so must exist in
                     progress map",
-                )
-                .propagated_stats;
+                );
 
             prev_leader_slot = leader_propagated_stats.prev_leader_slot;
         }
 
         if new_slot_vote_tracker.is_some() {
             progress
-                .get_mut(&slot)
+                .get_propagated_stats_mut(slot)
                 .expect("All frozen banks must exist in the Progress map")
-                .propagated_stats
                 .slot_vote_tracker = new_slot_vote_tracker;
         }
     }
@@ -1232,10 +1092,9 @@ impl ReplayStage {
                 // Only time progress map should be missing a bank slot
                 // is if this node was the leader for this slot as those banks
                 // are not replayed in replay_active_banks()
-                let stats = &progress
-                    .get(&bank.slot())
-                    .expect("All frozen banks must exist in the Progress map")
-                    .fork_stats;
+                let stats = progress
+                    .get_fork_stats(bank.slot())
+                    .expect("All frozen banks must exist in the Progress map");
 
                 if let Some(last_vote) = last_vote {
                     if ancestors
@@ -1350,7 +1209,7 @@ impl ReplayStage {
                 } else {
                     if !*switch_threshold {
                         let total_staked =
-                            progress.get(&bank.slot()).unwrap().fork_stats.total_staked;
+                            progress.get_fork_stats(bank.slot()).unwrap().total_staked;
                         *switch_threshold = tower.check_switch_threshold(
                             earliest_vote_on_fork,
                             &ancestors,
@@ -1384,8 +1243,8 @@ impl ReplayStage {
 
         if let Some(bank) = selected_fork {
             let (is_locked_out, vote_threshold, is_propagated, fork_weight) = {
-                let fork_stats = &progress.get(&bank.slot()).unwrap().fork_stats;
-                let propagated_stats = &progress.get(&bank.slot()).unwrap().propagated_stats;
+                let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
+                let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
@@ -1631,20 +1490,6 @@ impl ReplayStage {
         }
     }
 
-    fn get_prev_leader_slot(progress: &ProgressMap, bank: &Bank) -> Option<Slot> {
-        let parent_slot = bank.parent_slot();
-        progress
-            .get(&parent_slot)
-            .map(|b| {
-                if b.propagated_stats.is_leader_slot {
-                    Some(parent_slot)
-                } else {
-                    b.propagated_stats.prev_leader_slot
-                }
-            })
-            .unwrap_or(None)
-    }
-
     pub fn join(self) -> thread::Result<()> {
         self.commitment_service.join()?;
         self.t_replay.join().map(|_| ())
@@ -1799,7 +1644,7 @@ pub(crate) mod tests {
 
         let mut bank_forks = BankForks::new(neutral_fork.fork[0], Bank::new(&genesis_config));
 
-        let mut fork_progresses: Vec<HashMap<u64, ForkProgress>> = iter::repeat_with(HashMap::new)
+        let mut fork_progresses: Vec<ProgressMap> = iter::repeat_with(ProgressMap::default)
             .take(validators.len())
             .collect();
 
@@ -1911,7 +1756,7 @@ pub(crate) mod tests {
                     None
                 } else {
                     let bank = heaviest_bank.unwrap();
-                    let stats = &fork_progresses[i].get(&bank.slot()).unwrap().fork_stats;
+                    let stats = &fork_progresses[i].get_fork_stats(bank.slot()).unwrap();
                     Some(ForkSelectionResponse {
                         slot: stats.slot,
                         is_locked_out: stats.is_locked_out,
@@ -2042,7 +1887,7 @@ pub(crate) mod tests {
             root,
         );
         bank_forks.write().unwrap().insert(root_bank);
-        let mut progress = HashMap::new();
+        let mut progress = ProgressMap::default();
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default(), None, false));
         }
@@ -2298,7 +2143,7 @@ pub(crate) mod tests {
             } = create_genesis_config(1000);
             genesis_config.poh_config.hashes_per_tick = Some(2);
             let bank0 = Arc::new(Bank::new(&genesis_config));
-            let mut progress = HashMap::new();
+            let mut progress = ProgressMap::default();
             let last_blockhash = bank0.last_blockhash();
             let mut bank0_progress = progress
                 .entry(bank0.slot())
@@ -2721,61 +2566,10 @@ pub(crate) mod tests {
 
         frozen_banks.sort_by_key(|bank| bank.slot());
         for pair in frozen_banks.windows(2) {
-            let first = progress
-                .get(&pair[0].slot())
-                .unwrap()
-                .fork_stats
-                .fork_weight;
-            let second = progress
-                .get(&pair[1].slot())
-                .unwrap()
-                .fork_stats
-                .fork_weight;
+            let first = progress.get_fork_stats(pair[0].slot()).unwrap().fork_weight;
+            let second = progress.get_fork_stats(pair[1].slot()).unwrap().fork_weight;
             assert!(second >= first);
         }
-    }
-
-    #[test]
-    fn test_is_propagated() {
-        let mut progress_map = HashMap::new();
-
-        // Insert new ForkProgress for slot 10 and its
-        // previous leader slot 9, and the previous leader
-        // before that slot 8,
-        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), false));
-        progress_map.insert(9, ForkProgress::new(Hash::default(), Some(8), true));
-        progress_map.insert(8, ForkProgress::new(Hash::default(), Some(7), true));
-
-        // Insert new ForkProgress with no previous leader
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, true));
-
-        // None of these slot have parents which are confirmed
-        assert!(!ReplayStage::is_propagated(&mut progress_map, 9));
-        assert!(!ReplayStage::is_propagated(&mut progress_map, 10));
-
-        // The previous leader before 8, slot 7, does not exist in
-        // progress map, so is_propagated(8) should return true as
-        // this implies the parent is rooted
-        assert!(ReplayStage::is_propagated(&mut progress_map, 8));
-        assert!(progress_map.get(&8).unwrap().propagated_stats.is_propagated);
-
-        // Slot 3 has no previous leader slot, so the is_propagated() check
-        // is vacuously true
-        assert!(ReplayStage::is_propagated(&mut progress_map, 3));
-        assert!(progress_map.get(&3).unwrap().propagated_stats.is_propagated);
-
-        // If we set the is_propagated = true, is_propagated should return true
-        progress_map
-            .get_mut(&9)
-            .unwrap()
-            .propagated_stats
-            .is_propagated = true;
-        assert!(ReplayStage::is_propagated(&mut progress_map, 9), true);
-        assert!(progress_map.get(&9).unwrap().propagated_stats.is_propagated);
-
-        // Slot 10 is still unconfirmed, even though its previous leader slot 9
-        // has been confirmed
-        assert!(!ReplayStage::is_propagated(&mut progress_map, 10), true);
     }
 
     #[test]
@@ -2910,7 +2704,7 @@ pub(crate) mod tests {
 
         // Make sure is_propagated == false so that the propagation logic
         // runs in `update_propagation_status`
-        assert!(!ReplayStage::is_propagated(&mut progress_map, 10));
+        assert!(!progress_map.is_propagated(10));
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         vote_tracker.insert_vote(10, vote_pubkey.clone());
@@ -3089,7 +2883,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_propagation_for_start_leader() {
-        let mut progress_map = HashMap::new();
+        let mut progress_map = ProgressMap::default();
         let poh_slot = 5;
         let parent_slot = 3;
 
@@ -3163,7 +2957,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_propagation_for_consecutive_start_leader() {
-        let mut progress_map = HashMap::new();
+        let mut progress_map = ProgressMap::default();
         let poh_slot = 4;
         let mut parent_slot = 3;
 

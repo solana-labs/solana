@@ -32,6 +32,8 @@ pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
 pub mod poh_recorder;
 pub mod poh_service;
+pub mod progress_map;
+pub mod recvmmsg;
 pub mod repair_service;
 pub mod replay_stage;
 mod result;

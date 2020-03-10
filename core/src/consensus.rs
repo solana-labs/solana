@@ -1,4 +1,4 @@
-use crate::replay_stage::ProgressMap;
+use crate::progress_map::ProgressMap;
 use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -482,7 +482,8 @@ pub mod test {
     use super::*;
     use crate::{
         cluster_info_vote_listener::VoteTracker,
-        replay_stage::{ForkProgress, HeaviestForkFailures, ReplayStage},
+        progress_map::ForkProgress,
+        replay_stage::{HeaviestForkFailures, ReplayStage},
     };
     use solana_ledger::bank_forks::BankForks;
     use solana_runtime::{
@@ -526,7 +527,7 @@ pub mod test {
             cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
             validator_keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
             my_keypairs: &ValidatorVoteKeypairs,
-            progress: &mut HashMap<u64, ForkProgress>,
+            progress: &mut ProgressMap,
             tower: &mut Tower,
         ) -> Vec<HeaviestForkFailures> {
             let node = self
@@ -700,7 +701,7 @@ pub mod test {
     pub(crate) fn initialize_state(
         validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
         stake: u64,
-    ) -> (BankForks, HashMap<u64, ForkProgress>) {
+    ) -> (BankForks, ProgressMap) {
         let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
         let GenesisConfigInfo {
             genesis_config,
@@ -715,7 +716,7 @@ pub mod test {
         }
 
         bank0.freeze();
-        let mut progress = HashMap::new();
+        let mut progress = ProgressMap::default();
         progress.insert(0, ForkProgress::new(bank0.last_blockhash(), None, false));
         (BankForks::new(0, bank0), progress)
     }
@@ -748,7 +749,7 @@ pub mod test {
         bank_forks: &RwLock<BankForks>,
         cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
         keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
-        progress: &mut HashMap<u64, ForkProgress>,
+        progress: &mut ProgressMap,
     ) -> bool {
         // Check that within some reasonable time, validator can make a new
         // root on this fork
