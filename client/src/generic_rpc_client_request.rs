@@ -1,4 +1,4 @@
-use crate::{client_error::ClientError, rpc_request::RpcRequest};
+use crate::{client_error::Result, rpc_request::RpcRequest};
 
 pub(crate) trait GenericRpcClientRequest {
     fn send(
@@ -6,5 +6,5 @@ pub(crate) trait GenericRpcClientRequest {
         request: &RpcRequest,
         params: serde_json::Value,
         retries: usize,
-    ) -> Result<serde_json::Value, ClientError>;
+    ) -> Result<serde_json::Value>;
 }

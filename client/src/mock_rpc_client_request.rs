@@ -1,5 +1,5 @@
 use crate::{
-    client_error::ClientError,
+    client_error::Result,
     generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::RpcRequest,
     rpc_response::{Response, RpcResponseContext},
@@ -41,7 +41,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
         request: &RpcRequest,
         params: serde_json::Value,
         _retries: usize,
-    ) -> Result<serde_json::Value, ClientError> {
+    ) -> Result<serde_json::Value> {
         if let Some(value) = self.mocks.write().unwrap().remove(request) {
             return Ok(value);
         }
