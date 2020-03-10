@@ -58,11 +58,7 @@ pub enum BlockhashQuery {
 }
 
 impl BlockhashQuery {
-    pub fn new(
-        blockhash: Option<Hash>,
-        sign_only: bool,
-        nonce_account: Option<Pubkey>,
-    ) -> Self {
+    pub fn new(blockhash: Option<Hash>, sign_only: bool, nonce_account: Option<Pubkey>) -> Self {
         let source = nonce_account
             .map(Source::NonceAccount)
             .unwrap_or(Source::Cluster);
@@ -107,17 +103,16 @@ impl Default for BlockhashQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        nonce::nonce_arg,
-        offline::blockhash_query::BlockhashQuery,
-    };
+    use crate::{nonce::nonce_arg, offline::blockhash_query::BlockhashQuery};
     use clap::App;
     use serde_json::{self, json, Value};
     use solana_client::{
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcAccount, RpcFeeCalculator, RpcResponseContext},
     };
-    use solana_sdk::{account::Account, fee_calculator::FeeCalculator, hash::hash, nonce, system_program};
+    use solana_sdk::{
+        account::Account, fee_calculator::FeeCalculator, hash::hash, nonce, system_program,
+    };
     use std::collections::HashMap;
 
     #[test]
@@ -144,7 +139,10 @@ mod tests {
         );
         assert_eq!(
             BlockhashQuery::new(Some(blockhash), false, Some(nonce_pubkey)),
-            BlockhashQuery::FeeCalculator(blockhash_query::Source::NonceAccount(nonce_pubkey), blockhash),
+            BlockhashQuery::FeeCalculator(
+                blockhash_query::Source::NonceAccount(nonce_pubkey),
+                blockhash
+            ),
         );
         assert_eq!(
             BlockhashQuery::new(None, false, Some(nonce_pubkey)),
@@ -167,7 +165,9 @@ mod tests {
 
     #[test]
     fn test_blockhash_query_new_from_matches_ok() {
-        let test_commands = App::new("blockhash_query_test").arg(nonce_arg()).offline_args();
+        let test_commands = App::new("blockhash_query_test")
+            .arg(nonce_arg())
+            .offline_args();
         let blockhash = hash(&[1u8]);
         let blockhash_string = blockhash.to_string();
 
@@ -224,7 +224,10 @@ mod tests {
         ]);
         assert_eq!(
             BlockhashQuery::new_from_matches(&matches),
-            BlockhashQuery::FeeCalculator(blockhash_query::Source::NonceAccount(nonce_pubkey), blockhash),
+            BlockhashQuery::FeeCalculator(
+                blockhash_query::Source::NonceAccount(nonce_pubkey),
+                blockhash
+            ),
         );
     }
 
@@ -254,9 +257,12 @@ mod tests {
         let nonce_pubkey = Pubkey::new(&[1u8; 32]);
         let nonce_string = nonce_pubkey.to_string();
 
-        let matches = test_commands
-            .clone()
-            .get_matches_from(vec!["blockhash_query_test", "--sign-only", "--nonce", &nonce_string]);
+        let matches = test_commands.clone().get_matches_from(vec![
+            "blockhash_query_test",
+            "--sign-only",
+            "--nonce",
+            &nonce_string,
+        ]);
         BlockhashQuery::new_from_matches(&matches);
     }
 
@@ -335,7 +341,8 @@ mod tests {
             &nonce::state::Versions::new_current(nonce::State::Initialized(data)),
             nonce::State::size(),
             &system_program::id(),
-        ).unwrap();
+        )
+        .unwrap();
         let nonce_pubkey = Pubkey::new(&[4u8; 32]);
         let rpc_nonce_account = RpcAccount::encode(nonce_account);
         let get_account_response = json!(Response {
@@ -344,10 +351,7 @@ mod tests {
         });
 
         let mut mocks = HashMap::new();
-        mocks.insert(
-            RpcRequest::GetAccountInfo,
-            get_account_response.clone(),
-        );
+        mocks.insert(RpcRequest::GetAccountInfo, get_account_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(None, false, Some(nonce_pubkey))
@@ -356,10 +360,7 @@ mod tests {
             (nonce_blockhash, nonce_fee_calc.clone()),
         );
         let mut mocks = HashMap::new();
-        mocks.insert(
-            RpcRequest::GetAccountInfo,
-            get_account_response.clone(),
-        );
+        mocks.insert(RpcRequest::GetAccountInfo, get_account_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(Some(nonce_blockhash), false, Some(nonce_pubkey))
@@ -368,10 +369,7 @@ mod tests {
             (nonce_blockhash, nonce_fee_calc.clone()),
         );
         let mut mocks = HashMap::new();
-        mocks.insert(
-            RpcRequest::GetAccountInfo,
-            get_account_response.clone(),
-        );
+        mocks.insert(RpcRequest::GetAccountInfo, get_account_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert!(
             BlockhashQuery::new(Some(test_blockhash), false, Some(nonce_pubkey))
@@ -379,10 +377,7 @@ mod tests {
                 .is_err()
         );
         let mut mocks = HashMap::new();
-        mocks.insert(
-            RpcRequest::GetAccountInfo,
-            get_account_response.clone(),
-        );
+        mocks.insert(RpcRequest::GetAccountInfo, get_account_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(Some(nonce_blockhash), true, Some(nonce_pubkey))
@@ -395,6 +390,5 @@ mod tests {
         assert!(BlockhashQuery::new(None, false, Some(nonce_pubkey))
             .get_blockhash_fee_calculator(&rpc_client)
             .is_err());
-
     }
 }

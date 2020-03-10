@@ -68,4 +68,3 @@ pub fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signatur
         .collect();
     (blockhash, signers)
 }
-
