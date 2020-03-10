@@ -612,6 +612,7 @@ impl Archiver {
                         ErrorKind::Other,
                         "setup_mining_account: signature not found",
                     ),
+                    TransportError::Custom(e) => io::Error::new(ErrorKind::Other, e),
                 })?;
         }
         Ok(())
