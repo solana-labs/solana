@@ -22,7 +22,7 @@ libc = "0.2.67"
 log = { version = "0.4.8" }
 rand = "0.6.5"
 rand_chacha = "0.1.1"
-rayon = "1.2.0"
+rayon = "1.3.0"
 reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
 regex = "1.3.4"
 serde = "1.0.104"
