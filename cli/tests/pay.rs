@@ -323,7 +323,7 @@ fn test_offline_pay_tx() {
     config_offline.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
         sign_only: true,
         ..PayCommand::default()
     });
@@ -341,7 +341,7 @@ fn test_offline_pay_tx() {
     config_online.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        blockhash_query: BlockhashQuery::new(Some(blockhash), false, None),
         ..PayCommand::default()
     });
     process_command(&config_online).unwrap();
@@ -418,7 +418,7 @@ fn test_nonced_pay_tx() {
     config.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
+        blockhash_query: BlockhashQuery::new(Some(nonce_hash), false, Some(nonce_account.pubkey())),
         nonce_account: Some(nonce_account.pubkey()),
         ..PayCommand::default()
     });

@@ -2485,20 +2485,13 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
 mod tests {
     use super::*;
     use serde_json::Value;
-    use solana_client::{
-        mock_rpc_client_request::SIGNATURE,
-        rpc_request::RpcRequest,
-        rpc_response::{Response, RpcAccount, RpcResponseContext},
-    };
+    use solana_client::mock_rpc_client_request::SIGNATURE;
     use solana_sdk::{
-        account::Account,
-        nonce,
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Presigner},
-        system_program,
         transaction::TransactionError,
     };
-    use std::{collections::HashMap, path::PathBuf};
+    use std::path::PathBuf;
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
@@ -2855,7 +2848,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
-                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
                     sign_only: true,
                     ..PayCommand::default()
                 }),
@@ -2878,7 +2871,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), false, None),
                     ..PayCommand::default()
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
@@ -2904,7 +2897,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), false, Some(pubkey)),
                     nonce_account: Some(pubkey),
                     ..PayCommand::default()
                 }),
@@ -2934,7 +2927,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), false, Some(pubkey)),
                     nonce_account: Some(pubkey),
                     nonce_authority: 0,
                     ..PayCommand::default()
@@ -2969,7 +2962,7 @@ mod tests {
                 command: CliCommand::Pay(PayCommand {
                     lamports: 50_000_000_000,
                     to: pubkey,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), false, Some(pubkey)),
                     nonce_account: Some(pubkey),
                     nonce_authority: 0,
                     ..PayCommand::default()
@@ -3151,7 +3144,7 @@ mod tests {
             },
             lamports: 1234,
             sign_only: false,
-            blockhash_query: BlockhashQuery::All,
+            blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
             nonce_authority: 0,
             fee_payer: 0,
@@ -3169,7 +3162,7 @@ mod tests {
             lamports: 100,
             withdraw_authority: 0,
             sign_only: false,
-            blockhash_query: BlockhashQuery::All,
+            blockhash_query: BlockhashQuery::default(),
             nonce_account: None,
             nonce_authority: 0,
             fee_payer: 0,
@@ -3268,64 +3261,6 @@ mod tests {
                 .unwrap(),
             SIGNATURE.to_string()
         );
-
-        // Nonced pay
-        let blockhash = Hash::default();
-        let data =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: config.signers[0].pubkey(),
-                blockhash,
-                fee_calculator: FeeCalculator::default(),
-            }));
-        let nonce_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
-            value: json!(RpcAccount::encode(
-                Account::new_data(1, &data, &system_program::ID,).unwrap()
-            )),
-        });
-        let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetAccountInfo, nonce_response);
-        config.rpc_client = Some(RpcClient::new_mock_with_mocks("".to_string(), mocks));
-        config.command = CliCommand::Pay(PayCommand {
-            lamports: 10,
-            to: bob_pubkey,
-            nonce_account: Some(bob_pubkey),
-            blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-            ..PayCommand::default()
-        });
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
-
-        // Nonced pay w/ non-payer authority
-        let bob_keypair = Keypair::new();
-        let bob_pubkey = bob_keypair.pubkey();
-        let blockhash = Hash::default();
-        let data =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: bob_pubkey,
-                blockhash,
-                fee_calculator: FeeCalculator::default(),
-            }));
-        let nonce_authority_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
-            value: json!(RpcAccount::encode(
-                Account::new_data(1, &data, &system_program::ID,).unwrap()
-            )),
-        });
-        let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetAccountInfo, nonce_authority_response);
-        config.rpc_client = Some(RpcClient::new_mock_with_mocks("".to_string(), mocks));
-        config.command = CliCommand::Pay(PayCommand {
-            lamports: 10,
-            to: bob_pubkey,
-            blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
-            nonce_account: Some(bob_pubkey),
-            nonce_authority: 1,
-            ..PayCommand::default()
-        });
-        config.signers = vec![&keypair, &bob_keypair];
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let process_id = Pubkey::new_rand();
         config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
@@ -3528,7 +3463,7 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -3557,7 +3492,7 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: true,
-                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -3591,7 +3526,7 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::new(Some(blockhash), false, None),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -3626,7 +3561,11 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::new(
+                        Some(blockhash),
+                        false,
+                        Some(nonce_address)
+                    ),
                     nonce_account: Some(nonce_address.into()),
                     nonce_authority: 1,
                     fee_payer: 0,
