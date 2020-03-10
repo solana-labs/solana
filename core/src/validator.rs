@@ -3,6 +3,7 @@
 use crate::{
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
+    cluster_info_vote_listener::VoteTracker,
     commitment::BlockCommitmentCache,
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
@@ -378,6 +379,8 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
+        let vote_tracker = Arc::new({ VoteTracker::new(bank_forks.read().unwrap().root_bank()) });
+
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
@@ -426,6 +429,7 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             snapshot_package_sender,
+            vote_tracker.clone(),
         );
 
         if config.dev_sigverify_disabled {
@@ -445,6 +449,8 @@ impl Validator {
             &config.broadcast_stage_type,
             &exit,
             node.info.shred_version,
+            vote_tracker,
+            bank_forks,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

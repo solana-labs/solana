@@ -4,6 +4,7 @@
 use crate::{
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
+    cluster_info_vote_listener::VoteTracker,
     commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
@@ -88,6 +89,7 @@ impl Tvu {
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         snapshot_package_sender: Option<SnapshotPackageSender>,
+        vote_tracker: Arc<VoteTracker>,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -171,6 +173,7 @@ impl Tvu {
             cluster_info.clone(),
             ledger_signal_receiver,
             poh_recorder.clone(),
+            vote_tracker,
         );
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
@@ -302,6 +305,7 @@ pub mod tests {
             None,
             None,
             None,
+            Arc::new(VoteTracker::new(&bank)),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
