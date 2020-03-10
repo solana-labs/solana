@@ -46,17 +46,17 @@ declare COLO_RES_AVAILABILITY_CACHED=false
 declare -ax COLO_RES_AVAILABILITY
 colo_load_availability() {
   declare USE_CACHE=${1:-${COLO_RES_AVAILABILITY_CACHED}}
-  declare LINE PRIV_IP STATUS LOCK_USER I IP HOST_NAME ZONE INSTNAME
+  declare LINE PRIV_IP STATUS LOCK_USER I IP HOST_NAME ZONE INSTNAME PREEMPTIBLE
   if ! ${USE_CACHE}; then
     COLO_RES_AVAILABILITY=()
     COLO_RES_REQUISITIONED=()
     while read -r LINE; do
-      IFS=$'\v' read -r IP STATUS LOCK_USER INSTNAME <<< "${LINE}"
+      IFS=$'\v' read -r IP STATUS LOCK_USER INSTNAME PREEMPTIBLE <<< "${LINE}"
       I=$(colo_res_index_from_ip "${IP}")
       PRIV_IP="${COLO_RES_IP_PRIV[${I}]}"
       HOST_NAME="${COLO_RES_HOSTNAME[${I}]}"
       ZONE="${COLO_RES_ZONE[${I}]}"
-      COLO_RES_AVAILABILITY+=( "$(echo -e "${HOST_NAME}\v${IP}\v${PRIV_IP}\v${STATUS}\v${ZONE}\v${LOCK_USER}\v${INSTNAME}")" )
+      COLO_RES_AVAILABILITY+=( "$(echo -e "${HOST_NAME}\v${IP}\v${PRIV_IP}\v${STATUS}\v${ZONE}\v${LOCK_USER}\v${INSTNAME}\v${PREEMPTIBLE}")" )
     done < <(colo_node_status_all | sort -t $'\v' -k1)
     COLO_RES_AVAILABILITY_CACHED=true
   fi
@@ -142,15 +142,15 @@ __colo_node_status_script() {
                     # the time due to ${SOLANA_LOCK_FILE} not existing and is running from a
                     # subshell where normal redirection doesn't work
   exec 9<"${SOLANA_LOCK_FILE}" && flock -s 9 && . "${SOLANA_LOCK_FILE}" && exec 9>&-
-  echo -e "\${SOLANA_LOCK_USER}\\v\${SOLANA_LOCK_INSTANCENAME}\\vEOL"
+  echo -e "\${SOLANA_LOCK_USER}\\v\${SOLANA_LOCK_INSTANCENAME}\\v\${PREEMPTIBLE}\\vEOL"
   exec 2>&3 # Restore stderr
 EOF
 }
 
 __colo_node_status_result_normalize() {
-  declare IP RC US BY INSTNAME EOL
+  declare IP RC US BY INSTNAME PREEMPTIBLE EOL
   declare ST="DOWN"
-  IFS=$'\v' read -r IP RC US INSTNAME EOL <<< "${1}"
+  IFS=$'\v' read -r IP RC US INSTNAME PREEMPTIBLE EOL <<< "${1}"
   if [ "${RC}" -eq 0 ]; then
     [[ "${EOL}" = "EOL" ]] || echo "${FUNCNAME[0]}: Unexpected input \"${1}\"" 1>&2
     if [ -n "${US}" ]; then
@@ -163,7 +163,7 @@ __colo_node_status_result_normalize() {
       ST="FREE"
     fi
   fi
-  echo -e $"${IP}\v${ST}\v${BY}\v${INSTNAME}"
+  echo -e $"${IP}\v${ST}\v${BY}\v${INSTNAME}\v${PREEMPTIBLE}"
 }
 
 colo_node_status() {
@@ -188,6 +188,7 @@ colo_node_requisition() {
   declare INSTANCE_NAME=${2}
   # shellcheck disable=SC2034
   declare SSH_PRIVATE_KEY="${3}"
+  declare PREEMPTIBLE="${4}"
 
   declare INDEX
   INDEX=$(colo_res_index_from_ip "${IP}")
@@ -196,6 +197,7 @@ colo_node_requisition() {
   colo_instance_run "${IP}" "$(cat <<EOF
 SOLANA_LOCK_FILE="${SOLANA_LOCK_FILE}"
 INSTANCE_NAME="${INSTANCE_NAME}"
+PREEMPTIBLE="${PREEMPTIBLE}"
 SSH_AUTHORIZED_KEYS='$("${__colo_here}"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)'
 SSH_PRIVATE_KEY_TEXT="$(<"${SSH_PRIVATE_KEY}")"
 SSH_PUBLIC_KEY_TEXT="$(<"${SSH_PRIVATE_KEY}.pub")"
@@ -238,10 +240,12 @@ colo_machine_types_compatible() {
 
 colo_node_free() {
   declare IP=${1}
+  declare FORCE_DELETE=${2}
   colo_instance_run "${IP}" "$(cat <<EOF
 SOLANA_LOCK_FILE="${SOLANA_LOCK_FILE}"
 SECONDARY_DISK_MOUNT_POINT="${SECONDARY_DISK_MOUNT_POINT}"
 SSH_AUTHORIZED_KEYS='$("${__colo_here}"/add-datacenter-solana-user-authorized_keys.sh 2> /dev/null)'
+FORCE_DELETE="${FORCE_DELETE}"
 $(<"${__colo_here}"/colo-node-onfree.sh)
 EOF
   )"

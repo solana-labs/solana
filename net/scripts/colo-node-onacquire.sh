@@ -3,6 +3,7 @@
 # These variable must be set before the main body is called
 SOLANA_LOCK_FILE="${SOLANA_LOCK_FILE:?}"
 INSTANCE_NAME="${INSTANCE_NAME:?}"
+PREEMPTIBLE="${PREEMPTIBLE:?}"
 SSH_AUTHORIZED_KEYS="${SSH_AUTHORIZED_KEYS:?}"
 SSH_PRIVATE_KEY_TEXT="${SSH_PRIVATE_KEY_TEXT:?}"
 SSH_PUBLIC_KEY_TEXT="${SSH_PUBLIC_KEY_TEXT:?}"
@@ -16,6 +17,7 @@ if [[ ! -f "${SOLANA_LOCK_FILE}" ]]; then
   {
     echo "export SOLANA_LOCK_USER=${SOLANA_USER}"
     echo "export SOLANA_LOCK_INSTANCENAME=${INSTANCE_NAME}"
+    echo "export PREEMPTIBLE=${PREEMPTIBLE}"
     echo "[[ -v SSH_TTY && -f \"${HOME}/.solana-motd\" ]] && cat \"${HOME}/.solana-motd\" 1>&2"
   } >&9
   exec 9>&-
