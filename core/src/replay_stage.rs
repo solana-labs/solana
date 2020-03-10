@@ -1175,12 +1175,12 @@ impl ReplayStage {
                     &mut leader_propagated_stats,
                     all_pubkeys,
                     did_newly_reach_threshold,
-                );
+                ) || did_newly_reach_threshold;
             }
 
             // These cases mean confirmation of propagation on any earlier
             // leader blocks must have been reached
-            if prev_leader_slot == None || prev_leader_slot.unwrap() < root {
+            if prev_leader_slot == None || prev_leader_slot.unwrap() <= root {
                 break;
             }
 
@@ -1421,11 +1421,28 @@ impl ReplayStage {
         leader_bank: &Bank,
         leader_propagated_stats: &mut PropagatedStats,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
-        mut did_newly_reach_threshold: bool,
+        did_child_reach_threshold: bool,
     ) -> bool {
-        if did_newly_reach_threshold {
-            leader_propagated_stats.is_propagated = true;
-            return did_newly_reach_threshold;
+        println!("dnrt: {}", did_child_reach_threshold);
+        // Track whether this slot newly confirm propagation
+        // throughout the network (switched from is_propagated == false
+        // to is_propagated == true)
+        let mut did_newly_reach_threshold = false;
+
+        // If a child of this slot confirmed propagation, then
+        // we can return early as this implies this slot must also
+        // be propagated
+        if did_child_reach_threshold {
+            if !leader_propagated_stats.is_propagated {
+                leader_propagated_stats.is_propagated = true;
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        if leader_propagated_stats.is_propagated {
+            return false;
         }
 
         println!("newly_voted_pubkeys: {:?}", newly_voted_pubkeys);
@@ -1461,10 +1478,16 @@ impl ReplayStage {
                     "received: {:?}",
                     leader_propagated_stats.propagated_validators
                 );
+                println!("total stake: {}", leader_bank.total_epoch_stake());
+                println!(
+                    "propagated_stake: {}",
+                    leader_propagated_stats.propagated_validators_stake
+                );
                 if leader_propagated_stats.propagated_validators_stake as f64
                     / leader_bank.total_epoch_stake() as f64
                     > SUPERMINORITY_THRESHOLD
                 {
+                    println!("setting on {}", leader_bank.slot());
                     leader_propagated_stats.is_propagated = true;
                     did_newly_reach_threshold = true
                 }
@@ -2758,6 +2781,108 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_update_propagated_threshold_from_votes() {
+        let keypairs: HashMap<_, _> = iter::repeat_with(|| {
+            let node_keypair = Keypair::new();
+            let vote_keypair = Keypair::new();
+            let stake_keypair = Keypair::new();
+            let node_pubkey = node_keypair.pubkey();
+            (
+                node_pubkey,
+                ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
+            )
+        })
+        .take(10)
+        .collect();
+
+        let vote_pubkeys: Vec<_> = keypairs
+            .values()
+            .map(|keys| keys.vote_keypair.pubkey())
+            .collect();
+
+        let stake = 10_000;
+        let (bank_forks, _) = initialize_state(&keypairs, stake);
+        let root_bank = bank_forks.root_bank().clone();
+        let mut propagated_stats = PropagatedStats::default();
+        let mut all_pubkeys = HashSet::new();
+        let mut child_reached_threshold = false;
+        for i in 0..10 {
+            propagated_stats.is_propagated = false;
+            let mut newly_voted_pubkeys = vote_pubkeys[..i].iter().cloned().map(Arc::new).collect();
+            let did_newly_reach_threshold = ReplayStage::update_propagated_threshold_from_votes(
+                &mut newly_voted_pubkeys,
+                &root_bank,
+                &mut propagated_stats,
+                &mut all_pubkeys,
+                child_reached_threshold,
+            );
+
+            // Only the i'th voted pubkey should be new (everything else was
+            // inserted in previous iteration of the loop), so those redundant
+            // pubkeys should be filtered out
+            let added_pubkeys = {
+                if i == 0 {
+                    vec![]
+                } else {
+                    vec![Arc::new(vote_pubkeys[i - 1])]
+                }
+            };
+            assert_eq!(newly_voted_pubkeys, added_pubkeys);
+
+            // If we crossed the superminority threshold, then
+            // `did_newly_reach_threshold == true`, otherwise the
+            // threshold has not been reached
+            if i >= 4 {
+                assert!(propagated_stats.is_propagated);
+                assert!(did_newly_reach_threshold);
+            } else {
+                assert!(!propagated_stats.is_propagated);
+                assert!(!did_newly_reach_threshold);
+            }
+        }
+
+        // Simulate a child slot seeing threshold (`child_reached_threshold` = true),
+        // then the parent should also be marked as having reached threshold,
+        // even if there are no new pubkeys to add (`newly_voted_pubkeys.is_empty()`)
+        propagated_stats = PropagatedStats::default();
+        all_pubkeys = HashSet::new();
+        child_reached_threshold = true;
+        let mut newly_voted_pubkeys = vec![];
+
+        assert!(ReplayStage::update_propagated_threshold_from_votes(
+            &mut newly_voted_pubkeys,
+            &root_bank,
+            &mut propagated_stats,
+            &mut all_pubkeys,
+            child_reached_threshold,
+        ));
+
+        // If propagation already happened (propagated_stats.is_propagated = true),
+        // always returns false
+        propagated_stats = PropagatedStats::default();
+        propagated_stats.is_propagated = true;
+        all_pubkeys = HashSet::new();
+        child_reached_threshold = true;
+        newly_voted_pubkeys = vec![];
+        assert!(!ReplayStage::update_propagated_threshold_from_votes(
+            &mut newly_voted_pubkeys,
+            &root_bank,
+            &mut propagated_stats,
+            &mut all_pubkeys,
+            child_reached_threshold,
+        ));
+
+        child_reached_threshold = false;
+        assert!(!ReplayStage::update_propagated_threshold_from_votes(
+            &mut newly_voted_pubkeys,
+            &root_bank,
+            &mut propagated_stats,
+            &mut all_pubkeys,
+            child_reached_threshold,
+        ));
+    }
+
+    #[test]
     fn test_update_propagation_status() {
         // Create genesis stakers
         let node_keypair = Keypair::new();
@@ -2772,7 +2897,7 @@ pub(crate) mod tests {
         );
 
         let stake = 10_000;
-        let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, 10_000);
+        let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake);
 
         // Insert new ForkProgress for slot 10 and its
         // previous leader slot 9
@@ -2821,6 +2946,149 @@ pub(crate) mod tests {
             .contains(&*vote_pubkey));
 
         assert_eq!(propagated_stats.propagated_validators_stake, stake);
+    }
+
+    #[test]
+    fn test_chain_update_propagation_status() {
+        let keypairs: HashMap<_, _> = iter::repeat_with(|| {
+            let node_keypair = Keypair::new();
+            let vote_keypair = Keypair::new();
+            let stake_keypair = Keypair::new();
+            let node_pubkey = node_keypair.pubkey();
+            (
+                node_pubkey,
+                ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
+            )
+        })
+        .take(10)
+        .collect();
+
+        let vote_pubkeys: Vec<_> = keypairs
+            .values()
+            .map(|keys| keys.vote_keypair.pubkey())
+            .collect();
+
+        let stake_per_validator = 10_000;
+        let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake_per_validator);
+        bank_forks.set_root(0, &None);
+
+        // Insert new ForkProgress representing a slot for all slots 1..=num_banks. Only
+        // make even numbered ones leader slots
+        for i in 1..=10 {
+            let parent_bank = bank_forks.get(i - 1).unwrap().clone();
+            let prev_leader_slot = ((i - 1) / 2) * 2;
+            bank_forks.insert(Bank::new_from_parent(&parent_bank, &Pubkey::default(), i));
+            progress_map.insert(
+                i,
+                ForkProgress::new(Hash::default(), Some(prev_leader_slot), i % 2 == 0),
+            );
+        }
+
+        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        for vote_pubkey in &vote_pubkeys {
+            // Insert a vote for the last bank for each voter
+            vote_tracker.insert_vote(10, Arc::new(vote_pubkey.clone()));
+        }
+
+        // The last bank should reach propagation threshold, and propagate it all
+        // the way back through earlier leader banks
+        ReplayStage::update_propagation_status(
+            &mut progress_map,
+            10,
+            &mut HashSet::new(),
+            &RwLock::new(bank_forks),
+            &vote_tracker,
+        );
+
+        for i in 1..=10 {
+            println!("i: {}", i);
+            let propagated_stats = &progress_map.get(&i).unwrap().propagated_stats;
+            // Only the even numbered ones were leader banks, so only
+            // those should have been updated
+            if i % 2 == 0 {
+                assert!(propagated_stats.is_propagated);
+            } else {
+                assert!(!propagated_stats.is_propagated);
+            }
+        }
+    }
+
+    #[test]
+    fn test_chain_update_propagation_status2() {
+        let keypairs: HashMap<_, _> = iter::repeat_with(|| {
+            let node_keypair = Keypair::new();
+            let vote_keypair = Keypair::new();
+            let stake_keypair = Keypair::new();
+            let node_pubkey = node_keypair.pubkey();
+            (
+                node_pubkey,
+                ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
+            )
+        })
+        .take(6)
+        .collect();
+
+        let vote_pubkeys: Vec<_> = keypairs
+            .values()
+            .map(|keys| keys.vote_keypair.pubkey())
+            .collect();
+
+        let stake_per_validator = 10_000;
+        let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake_per_validator);
+        bank_forks.set_root(0, &None);
+
+        // Insert new ForkProgress representing a slot for all slots 1..=num_banks. Only
+        // make even numbered ones leader slots
+        for i in 1..=10 {
+            let parent_bank = bank_forks.get(i - 1).unwrap().clone();
+            let prev_leader_slot = i - 1;
+            bank_forks.insert(Bank::new_from_parent(&parent_bank, &Pubkey::default(), i));
+            let mut fork_progress =
+                ForkProgress::new(Hash::default(), Some(prev_leader_slot), true);
+
+            let end_range = {
+                // The earlier slots are one pubkey away from reaching confirmation
+                if i < 5 {
+                    2
+                } else {
+                    // The later slots are two pubkeys away from reaching confirmation
+                    1
+                }
+            };
+            fork_progress.propagated_stats.propagated_validators = vote_pubkeys[0..end_range]
+                .iter()
+                .cloned()
+                .map(Rc::new)
+                .collect();
+            fork_progress.propagated_stats.propagated_validators_stake =
+                end_range as u64 * stake_per_validator;
+            progress_map.insert(i, fork_progress);
+        }
+
+        let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
+        // Insert a new vote
+        vote_tracker.insert_vote(10, Arc::new(vote_pubkeys[2].clone()));
+
+        // The last bank should reach propagation threshold, and propagate it all
+        // the way back through earlier leader banks
+        ReplayStage::update_propagation_status(
+            &mut progress_map,
+            10,
+            &mut HashSet::new(),
+            &RwLock::new(bank_forks),
+            &vote_tracker,
+        );
+
+        // Only the first 5 banks should have reached the threshold
+        for i in 1..=10 {
+            println!("i: {}", i);
+            let propagated_stats = &progress_map.get(&i).unwrap().propagated_stats;
+            if i < 5 {
+                assert!(propagated_stats.is_propagated);
+            } else {
+                assert!(!propagated_stats.is_propagated);
+            }
+        }
     }
 
     #[test]
