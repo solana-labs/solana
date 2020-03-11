@@ -157,7 +157,7 @@ impl ReplayStage {
                         ForkProgress::new_from_bank(
                             &bank,
                             &my_pubkey,
-                            my_vote_pubkey.clone(),
+                            my_vote_pubkey,
                             prev_leader_slot,
                             SUPERMINORITY_THRESHOLD,
                         ),
@@ -265,7 +265,7 @@ impl ReplayStage {
                         && tower.is_recent(heaviest_bank.as_ref().unwrap().slot())
                         && !failure_reasons.is_empty()
                     {
-                        println!(
+                        info!(
                             "Couldn't vote on heaviest fork: {:?}, failure_reasons: {:?}",
                             heaviest_bank.as_ref().map(|b| b.slot()),
                             failure_reasons
@@ -520,7 +520,7 @@ impl ReplayStage {
             // leader block hasn't been propagated, don't generate another
             // block
             if !is_consecutive_leader {
-                println!(
+                info!(
                     "skipping starting bank for {}, parent: {}, propagation not confirmed",
                     poh_slot, parent_slot
                 );
@@ -606,7 +606,7 @@ impl ReplayStage {
                 return;
             }
 
-            println!(
+            info!(
                 "new fork:{} parent:{} (leader) root:{}",
                 poh_slot, parent_slot, root_slot
             );
@@ -844,7 +844,7 @@ impl ReplayStage {
                 ForkProgress::new_from_bank(
                     &bank,
                     &my_pubkey,
-                    my_vote_pubkey.clone(),
+                    *my_vote_pubkey,
                     prev_leader_slot,
                     SUPERMINORITY_THRESHOLD,
                 )
@@ -1270,7 +1270,7 @@ impl ReplayStage {
             }
 
             if !is_locked_out && vote_threshold && is_propagated {
-                println!("voting: {} {}", bank.slot(), fork_weight);
+                info!("voting: {} {}", bank.slot(), fork_weight);
                 (
                     selected_fork.clone(),
                     selected_fork.clone(),
@@ -1443,7 +1443,7 @@ impl ReplayStage {
                 let leader = leader_schedule_cache
                     .slot_leader_at(child_slot, Some(&parent_bank))
                     .unwrap();
-                println!(
+                info!(
                     "new fork:{} parent:{} root:{}",
                     child_slot,
                     parent_slot,
@@ -2926,7 +2926,10 @@ pub(crate) mod tests {
         ));
 
         // If the parent was itself the leader, then requires propagation confirmation
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, None));
+        progress_map.insert(
+            3,
+            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+        );
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,

@@ -1895,7 +1895,7 @@ impl Bank {
             hash = extend_and_hash(&hash, &buf)
         }
 
-        println!(
+        info!(
             "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {}",
             self.slot(),
             hash,

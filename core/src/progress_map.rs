@@ -121,15 +121,18 @@ impl ForkProgress {
         propagation_threshold: f64,
     ) -> Self {
         let validator_fork_info = {
-            if bank.collector_id() == my_pubkey && voting_pubkey.is_some() {
-                let voting_pubkey = voting_pubkey.unwrap();
-                let stake = bank.vote_account_epoch_stake(&voting_pubkey);
-                Some(ValidatorStakeInfo::new(
-                    voting_pubkey,
-                    stake,
-                    bank.total_epoch_stake(),
-                    propagation_threshold,
-                ))
+            if bank.collector_id() == my_pubkey {
+                if let Some(voting_pubkey) = voting_pubkey {
+                    let stake = bank.vote_account_epoch_stake(&voting_pubkey);
+                    Some(ValidatorStakeInfo::new(
+                        voting_pubkey,
+                        stake,
+                        bank.total_epoch_stake(),
+                        propagation_threshold,
+                    ))
+                } else {
+                    None
+                }
             } else {
                 None
             }
