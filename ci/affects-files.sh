@@ -14,29 +14,29 @@
 set -e
 cd "$(dirname "$0")"/..
 
-if [[ -n $CI_PULL_REQUEST ]]; then
-  affectedFiles="$(buildkite-agent meta-data get affected_files)"
-  echo "Affected files in this PR: $affectedFiles"
-
-  IFS=':' read -ra files <<< "$affectedFiles"
-  for pattern in "$@"; do
-    if [[ ${pattern:0:1} = "!" ]]; then
-      for file in "${files[@]}"; do
-        if [[ ! $file =~ ${pattern:1} ]]; then
-          exit 0
-        fi
-      done
-    else
-      for file in "${files[@]}"; do
-        if [[ $file =~ $pattern ]]; then
-          exit 0
-        fi
-      done
-    fi
-  done
-
-  exit 1
-fi
+#if [[ -n $CI_PULL_REQUEST ]]; then
+#  affectedFiles="$(buildkite-agent meta-data get affected_files)"
+#  echo "Affected files in this PR: $affectedFiles"
+#
+#  IFS=':' read -ra files <<< "$affectedFiles"
+#  for pattern in "$@"; do
+#    if [[ ${pattern:0:1} = "!" ]]; then
+#      for file in "${files[@]}"; do
+#        if [[ ! $file =~ ${pattern:1} ]]; then
+#          exit 0
+#        fi
+#      done
+#    else
+#      for file in "${files[@]}"; do
+#        if [[ $file =~ $pattern ]]; then
+#          exit 0
+#        fi
+#      done
+#    fi
+#  done
+#
+#  exit 1
+#fi
 
 # affected_files metadata is not currently available for non-PR builds, so assume
 # the worse (affected)
