@@ -248,23 +248,20 @@ impl ProgressMap {
             propagated_stats.prev_leader_slot
         };
 
-        let prev_leader_confirmed =
-            // prev_leader_slot doesn't exist because already rooted
-            // or this validator hasn't been scheudled as a leader
-            // yet. In both cases the latest leader is vacuously
-            // confirmed
-            prev_leader_slot.is_none() ||
-                // prev_leader isn't in the progress map, which means   
-                // it's rooted, so it's confirmed
-                self.get_propagated_stats(prev_leader_slot.unwrap()).is_none();
-
-        if prev_leader_confirmed {
-            // If previous leader has been confirmed as propagated, then
-            // this block is also confirmed as propagated
-            return true;
-        }
-
-        false
+        // prev_leader_slot doesn't exist because already rooted
+        // or this validator hasn't been scheudled as a leader
+        // yet. In both cases the latest leader is vacuously
+        // confirmed
+        prev_leader_slot
+            .map(|prev_leader_slot| {
+                // If the previous leader's stats are None (isn't in the
+                // progress map), this means that prev_leader slot is
+                // rooted, so return true
+                self.get_propagated_stats(prev_leader_slot)
+                    .map(|stats| stats.is_propagated)
+                    .unwrap_or(true)
+            })
+            .unwrap_or(true)
     }
 
     pub fn get_prev_leader_slot(&self, slot: Slot) -> Option<Slot> {

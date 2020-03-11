@@ -278,10 +278,11 @@ impl ReplayStage {
                                         progress.get_propagated_stats(prev_leader_slot)
                                     {
                                         info!(
-                                            "total staked: {}, observed staked: {}, pubkeys: {:?}",
+                                            "total staked: {}, observed staked: {}, pubkeys: {:?}, prev_leader_slot: {}",
                                             stats.total_epoch_stake,
                                             stats.propagated_validators_stake,
                                             stats.propagated_validators,
+                                            prev_leader_slot,
                                         );
                                     }
                                 }
@@ -1270,7 +1271,7 @@ impl ReplayStage {
                 )
             };
 
-            let is_propagated = progress.is_propagated(bank.slot());
+            let propagation_confirmed = is_leader_slot || progress.is_propagated(bank.slot());
 
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
@@ -1278,11 +1279,11 @@ impl ReplayStage {
             if !vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
             }
-            if !is_propagated && !is_leader_slot {
+            if !propagation_confirmed {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
             }
 
-            if !is_locked_out && vote_threshold && is_propagated {
+            if !is_locked_out && vote_threshold && propagation_confirmed {
                 info!("voting: {} {}", bank.slot(), fork_weight);
                 (
                     selected_fork.clone(),
