@@ -368,7 +368,7 @@ impl SyncClient for ThinClient {
         keypair: &Keypair,
         instruction: Instruction,
     ) -> TransportResult<Signature> {
-        let message = Message::new(vec![instruction]);
+        let message = Message::new(&[instruction]);
         self.send_message(&[keypair], message)
     }
 
@@ -596,7 +596,7 @@ impl AsyncClient for ThinClient {
         instruction: Instruction,
         recent_blockhash: Hash,
     ) -> io::Result<Signature> {
-        let message = Message::new(vec![instruction]);
+        let message = Message::new(&[instruction]);
         self.async_send_message(&[keypair], message, recent_blockhash)
     }
     fn async_transfer(

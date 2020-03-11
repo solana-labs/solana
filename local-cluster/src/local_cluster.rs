@@ -614,7 +614,7 @@ impl LocalCluster {
             StorageAccountType::Validator
         };
         let message = Message::new_with_payer(
-            storage_instruction::create_storage_account(
+            &storage_instruction::create_storage_account(
                 &from_keypair.pubkey(),
                 &from_keypair.pubkey(),
                 &storage_keypair.pubkey(),

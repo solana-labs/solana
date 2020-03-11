@@ -111,7 +111,7 @@ pub(crate) mod tests {
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
-        let message = Message::new(storage_instruction::create_storage_account(
+        let message = Message::new(&storage_instruction::create_storage_account(
             &mint_pubkey,
             &Pubkey::default(),
             &archiver_pubkey,
@@ -122,7 +122,7 @@ pub(crate) mod tests {
             .send_message(&[&mint_keypair, &archiver_keypair], message)
             .unwrap();
 
-        let message = Message::new(storage_instruction::create_storage_account(
+        let message = Message::new(&storage_instruction::create_storage_account(
             &mint_pubkey,
             &Pubkey::default(),
             &validator_pubkey,

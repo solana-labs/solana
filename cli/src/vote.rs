@@ -359,7 +359,7 @@ pub fn process_create_vote_account(
     };
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let message = Message::new(ixs);
+    let message = Message::new(&ixs);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
@@ -391,7 +391,7 @@ pub fn process_vote_authorize(
         vote_authorize,              // vote or withdraw
     )];
 
-    let message = Message::new_with_payer(ixs, Some(&config.signers[0].pubkey()));
+    let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
@@ -422,7 +422,7 @@ pub fn process_vote_update_validator(
         new_identity_pubkey,
     )];
 
-    let message = Message::new_with_payer(ixs, Some(&config.signers[0].pubkey()));
+    let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(

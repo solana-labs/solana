@@ -244,7 +244,7 @@ fn store_update_manifest(
         update_manifest,
     );
 
-    let message = Message::new_with_payer(vec![instruction], Some(&from_keypair.pubkey()));
+    let message = Message::new_with_payer(&[instruction], Some(&from_keypair.pubkey()));
     let mut transaction = Transaction::new(&signers, message, recent_blockhash);
     rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
     Ok(())
