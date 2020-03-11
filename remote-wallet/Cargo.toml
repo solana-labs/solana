@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 base32 = "0.4.0"
-console = "0.9.2"
+console = "0.10.0"
 dialoguer = "0.5.0"
 hidapi = { version = "1.2.1", default-features = false }
 log = "0.4.8"
