@@ -1,0 +1,22 @@
+steps:
+  - command: "system-test/testnet-automation.sh"
+    label: "GCE - 2 even partitions with full loss"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+      CLOUD_PROVIDER: "gce"
+      TESTNET_TAG: "gce-perf-cpu-only"
+      NUMBER_OF_VALIDATOR_NODES: 5
+      ENABLE_GPU: "false"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      NUMBER_OF_CLIENT_NODES: 1
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 20000 --thread-batch-sleep-ms 250"
+      TESTNET_ZONES: "us-west1-a"
+      USE_PUBLIC_IP_ADDRESSES: "false"
+      ADDITIONAL_FLAGS: "--dedicated"
+      APPLY_PARTITIONS: "true"
+      NETEM_CONFIG_FILE: "system-test/netem-configs/complete-loss-two-partitions"
+      PARTITION_ACTIVE_DURATION: 60
+      PARTITION_INACTIVE_DURATION: 300
+      PARTITION_ITERATION_COUNT: 5
+    agents:
+      - "queue=gce-deploy"
