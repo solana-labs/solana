@@ -216,6 +216,7 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    #[ignore]
     pub fn test_recv_mmsg_batch_size() {
         let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = reader.local_addr().unwrap();
