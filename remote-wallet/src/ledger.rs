@@ -1,11 +1,14 @@
 use crate::remote_wallet::{
     DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
 };
+use console::Emoji;
 use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
 use semver::Version as FirmwareVersion;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::{cmp::min, fmt, sync::Arc};
+
+static CHECK_MARK: Emoji = Emoji("✅ ", "");
 
 const HARDENED_BIT: u32 = 1 << 31;
 
@@ -230,7 +233,7 @@ impl LedgerWallet {
         if p1 == P1_CONFIRM && is_last_part(p2) {
             println!("Waiting for remote wallet to approve...");
             let result = self.read()?;
-            println!("Approved");
+            println!("{}Approved", CHECK_MARK);
             Ok(result)
         } else {
             self.read()
