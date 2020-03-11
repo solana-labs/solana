@@ -1,4 +1,7 @@
-use crate::{cluster_info_vote_listener::SlotVoteTracker, consensus::StakeLockout};
+use crate::{
+    cluster_info_vote_listener::SlotVoteTracker, consensus::StakeLockout,
+    replay_stage::SUPERMINORITY_THRESHOLD,
+};
 use solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming};
 use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
@@ -46,26 +49,29 @@ impl ReplaySlotStats {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct ValidatorStakeInfo {
-    validator_vote_pubkey: Pubkey,
-    stake: u64,
-    total_stake: u64,
-    threshold: f64,
+    pub validator_vote_pubkey: Pubkey,
+    pub stake: u64,
+    pub total_epoch_stake: u64,
+}
+
+impl Default for ValidatorStakeInfo {
+    fn default() -> Self {
+        Self {
+            stake: 0,
+            validator_vote_pubkey: Pubkey::default(),
+            total_epoch_stake: 1,
+        }
+    }
 }
 
 impl ValidatorStakeInfo {
-    pub fn new(
-        validator_vote_pubkey: Pubkey,
-        stake: u64,
-        total_stake: u64,
-        threshold: f64,
-    ) -> Self {
+    pub fn new(validator_vote_pubkey: Pubkey, stake: u64, total_epoch_stake: u64) -> Self {
         Self {
             validator_vote_pubkey,
             stake,
-            total_stake,
-            threshold,
+            total_epoch_stake,
         }
     }
 }
@@ -84,19 +90,32 @@ impl ForkProgress {
         prev_leader_slot: Option<Slot>,
         validator_stake_info: Option<ValidatorStakeInfo>,
     ) -> Self {
-        let (is_leader_slot, propagated_validators_stake, propagated_validators, is_propagated) =
-            validator_stake_info
-                .map(|info| {
-                    (
-                        true,
-                        info.stake,
-                        vec![Rc::new(info.validator_vote_pubkey)]
-                            .into_iter()
-                            .collect(),
-                        info.stake as f64 / info.total_stake as f64 > info.threshold,
-                    )
-                })
-                .unwrap_or((false, 0, HashSet::new(), false));
+        let (
+            is_leader_slot,
+            propagated_validators_stake,
+            propagated_validators,
+            is_propagated,
+            total_epoch_stake,
+        ) = validator_stake_info
+            .map(|info| {
+                (
+                    true,
+                    info.stake,
+                    vec![Rc::new(info.validator_vote_pubkey)]
+                        .into_iter()
+                        .collect(),
+                    {
+                        if info.total_epoch_stake == 0 {
+                            true
+                        } else {
+                            info.stake as f64 / info.total_epoch_stake as f64
+                                > SUPERMINORITY_THRESHOLD
+                        }
+                    },
+                    info.total_epoch_stake,
+                )
+            })
+            .unwrap_or((false, 0, HashSet::new(), false, 0));
         Self {
             is_dead: false,
             fork_stats: ForkStats::default(),
@@ -108,6 +127,7 @@ impl ForkProgress {
                 propagated_validators_stake,
                 propagated_validators,
                 is_propagated,
+                total_epoch_stake,
                 ..PropagatedStats::default()
             },
         }
@@ -118,7 +138,6 @@ impl ForkProgress {
         my_pubkey: &Pubkey,
         voting_pubkey: Option<Pubkey>,
         prev_leader_slot: Option<Slot>,
-        propagation_threshold: f64,
     ) -> Self {
         let validator_fork_info = {
             if bank.collector_id() == my_pubkey {
@@ -128,7 +147,6 @@ impl ForkProgress {
                         voting_pubkey,
                         stake,
                         bank.total_epoch_stake(),
-                        propagation_threshold,
                     ))
                 } else {
                     None
@@ -167,6 +185,7 @@ pub(crate) struct PropagatedStats {
     pub(crate) is_leader_slot: bool,
     pub(crate) prev_leader_slot: Option<Slot>,
     pub(crate) slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
+    pub(crate) total_epoch_stake: u64,
 }
 
 #[derive(Default)]
@@ -216,7 +235,7 @@ impl ProgressMap {
             .map(|fork_progress| &mut fork_progress.fork_stats)
     }
 
-    pub fn is_propagated(&mut self, slot: Slot) -> bool {
+    pub fn is_propagated(&self, slot: Slot) -> bool {
         // If the confirmation has already been seen, just returns
         let prev_leader_slot = {
             let propagated_stats = self
@@ -242,16 +261,19 @@ impl ProgressMap {
         if prev_leader_confirmed {
             // If previous leader has been confirmed as propagated, then
             // this block is also confirmed as propagated
-            self.get_propagated_stats_mut(slot)
-                .expect("All frozen banks must exist in the Progress map")
-                .is_propagated = true;
             return true;
         }
 
         false
     }
 
-    pub fn get_prev_leader_slot(&self, bank: &Bank) -> Option<Slot> {
+    pub fn get_prev_leader_slot(&self, slot: Slot) -> Option<Slot> {
+        self.get_propagated_stats(slot)
+            .map(|stats| stats.prev_leader_slot)
+            .unwrap_or(None)
+    }
+
+    pub fn get_bank_prev_leader_slot(&self, bank: &Bank) -> Option<Slot> {
         let parent_slot = bank.parent_slot();
         self.get_propagated_stats(parent_slot)
             .map(|stats| {
@@ -268,6 +290,59 @@ impl ProgressMap {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_is_propagated_status_on_construction() {
+        // If the given ValidatorStakeInfo == None, then this is not
+        // a leader slot and is_propagated == false
+        let progress = ForkProgress::new(Hash::default(), Some(9), None);
+        assert!(!progress.propagated_stats.is_propagated);
+
+        // If the stake is zero, then threshold is always achieved
+        let progress = ForkProgress::new(
+            Hash::default(),
+            Some(9),
+            Some(ValidatorStakeInfo {
+                total_epoch_stake: 0,
+                ..ValidatorStakeInfo::default()
+            }),
+        );
+        assert!(progress.propagated_stats.is_propagated);
+
+        // If the stake is non zero, then threshold is not achieved unless
+        // validator has enough stake by itself to pass threshold
+        let progress = ForkProgress::new(
+            Hash::default(),
+            Some(9),
+            Some(ValidatorStakeInfo {
+                total_epoch_stake: 2,
+                ..ValidatorStakeInfo::default()
+            }),
+        );
+        assert!(!progress.propagated_stats.is_propagated);
+
+        // Give the validator enough stake by itself to pass threshold
+        let progress = ForkProgress::new(
+            Hash::default(),
+            Some(9),
+            Some(ValidatorStakeInfo {
+                stake: 1,
+                total_epoch_stake: 2,
+                ..ValidatorStakeInfo::default()
+            }),
+        );
+        assert!(progress.propagated_stats.is_propagated);
+
+        // Check that the default ValidatorStakeInfo::default() constructs a ForkProgress
+        // with is_propagated == false, otherwise propagation tests will fail to run
+        // the proper checks (most will auto-pass without checking anything)
+        let progress = ForkProgress::new(
+            Hash::default(),
+            Some(9),
+            Some(ValidatorStakeInfo::default()),
+        );
+        assert!(!progress.propagated_stats.is_propagated);
+    }
 
     #[test]
     fn test_is_propagated() {
@@ -308,12 +383,10 @@ mod test {
         // progress map, so is_propagated(8) should return true as
         // this implies the parent is rooted
         assert!(progress_map.is_propagated(8));
-        assert!(progress_map.get(&8).unwrap().propagated_stats.is_propagated);
 
         // Slot 3 has no previous leader slot, so the is_propagated() check
         // is vacuously true
         assert!(progress_map.is_propagated(3));
-        assert!(progress_map.get(&3).unwrap().propagated_stats.is_propagated);
 
         // If we set the is_propagated = true, is_propagated should return true
         progress_map

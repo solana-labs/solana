@@ -151,7 +151,7 @@ impl ReplayStage {
 
                 // Initialize progress map with any root banks
                 for bank in frozen_banks {
-                    let prev_leader_slot = progress.get_prev_leader_slot(&bank);
+                    let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
                     progress.insert(
                         bank.slot(),
                         ForkProgress::new_from_bank(
@@ -159,7 +159,6 @@ impl ReplayStage {
                             &my_pubkey,
                             my_vote_pubkey,
                             prev_leader_slot,
-                            SUPERMINORITY_THRESHOLD,
                         ),
                     );
                 }
@@ -270,6 +269,24 @@ impl ReplayStage {
                             heaviest_bank.as_ref().map(|b| b.slot()),
                             failure_reasons
                         );
+
+                        for r in failure_reasons {
+                            if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
+                                if let Some(prev_leader_slot) = progress.get_prev_leader_slot(slot)
+                                {
+                                    if let Some(stats) =
+                                        progress.get_propagated_stats(prev_leader_slot)
+                                    {
+                                        info!(
+                                            "total staked: {}, observed staked: {}, pubkeys: {:?}",
+                                            stats.total_epoch_stake,
+                                            stats.propagated_validators_stake,
+                                            stats.propagated_validators,
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     let start = allocated.get();
@@ -835,19 +852,13 @@ impl ReplayStage {
             }
 
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
-            let prev_leader_slot = progress.get_prev_leader_slot(&bank);
+            let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
 
             // Insert a progress entry even for slots this node is the leader for, so that
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
             // this bank in `select_forks()`
             let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
-                ForkProgress::new_from_bank(
-                    &bank,
-                    &my_pubkey,
-                    *my_vote_pubkey,
-                    prev_leader_slot,
-                    SUPERMINORITY_THRESHOLD,
-                )
+                ForkProgress::new_from_bank(&bank, &my_pubkey, *my_vote_pubkey, prev_leader_slot)
             });
             if bank.collector_id() != my_pubkey {
                 let replay_result = Self::replay_blockstore_into_bank(
@@ -1248,17 +1259,19 @@ impl ReplayStage {
         };
 
         if let Some(bank) = selected_fork {
-            let (is_locked_out, vote_threshold, is_propagated, is_leader_slot, fork_weight) = {
+            let (is_locked_out, vote_threshold, is_leader_slot, fork_weight) = {
                 let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
                 let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
-                    propagated_stats.is_propagated,
                     propagated_stats.is_leader_slot,
                     fork_stats.weight,
                 )
             };
+
+            let is_propagated = progress.is_propagated(bank.slot());
+
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
             }
@@ -1336,9 +1349,11 @@ impl ReplayStage {
                     .insert(voting_pubkey.clone());
                 leader_propagated_stats.propagated_validators_stake +=
                     leader_bank.vote_account_epoch_stake(&voting_pubkey);
-                if leader_propagated_stats.propagated_validators_stake as f64
-                    / leader_bank.total_epoch_stake() as f64
-                    > SUPERMINORITY_THRESHOLD
+
+                if leader_propagated_stats.total_epoch_stake == 0
+                    || leader_propagated_stats.propagated_validators_stake as f64
+                        / leader_propagated_stats.total_epoch_stake as f64
+                        > SUPERMINORITY_THRESHOLD
                 {
                     leader_propagated_stats.is_propagated = true;
                     did_newly_reach_threshold = true
@@ -2600,7 +2615,11 @@ pub(crate) mod tests {
         let stake = 10_000;
         let (bank_forks, _) = initialize_state(&keypairs, stake);
         let root_bank = bank_forks.root_bank().clone();
-        let mut propagated_stats = PropagatedStats::default();
+        let mut propagated_stats = PropagatedStats {
+            total_epoch_stake: stake * 10,
+            ..PropagatedStats::default()
+        };
+
         let mut all_pubkeys = HashSet::new();
         let mut child_reached_threshold = false;
         for i in 0..10 {
@@ -2641,7 +2660,11 @@ pub(crate) mod tests {
         // Simulate a child slot seeing threshold (`child_reached_threshold` = true),
         // then the parent should also be marked as having reached threshold,
         // even if there are no new pubkeys to add (`newly_voted_pubkeys.is_empty()`)
-        propagated_stats = PropagatedStats::default();
+        propagated_stats = PropagatedStats {
+            total_epoch_stake: stake * 10,
+            ..PropagatedStats::default()
+        };
+        propagated_stats.total_epoch_stake = stake * 10;
         all_pubkeys = HashSet::new();
         child_reached_threshold = true;
         let mut newly_voted_pubkeys = vec![];
@@ -2656,7 +2679,10 @@ pub(crate) mod tests {
 
         // If propagation already happened (propagated_stats.is_propagated = true),
         // always returns false
-        propagated_stats = PropagatedStats::default();
+        propagated_stats = PropagatedStats {
+            total_epoch_stake: stake * 10,
+            ..PropagatedStats::default()
+        };
         propagated_stats.is_propagated = true;
         all_pubkeys = HashSet::new();
         child_reached_threshold = true;
@@ -2696,6 +2722,13 @@ pub(crate) mod tests {
         let stake = 10_000;
         let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake);
 
+        let bank0 = bank_forks.get(0).unwrap().clone();
+        bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
+        let bank9 = bank_forks.get(9).unwrap().clone();
+        bank_forks.insert(Bank::new_from_parent(&bank9, &Pubkey::default(), 10));
+        bank_forks.set_root(9, &None);
+        let total_epoch_stake = bank0.total_epoch_stake();
+
         // Insert new ForkProgress for slot 10 and its
         // previous leader slot 9
         progress_map.insert(
@@ -2703,7 +2736,10 @@ pub(crate) mod tests {
             ForkProgress::new(
                 Hash::default(),
                 Some(9),
-                Some(ValidatorStakeInfo::default()),
+                Some(ValidatorStakeInfo {
+                    total_epoch_stake,
+                    ..ValidatorStakeInfo::default()
+                }),
             ),
         );
         progress_map.insert(
@@ -2711,15 +2747,12 @@ pub(crate) mod tests {
             ForkProgress::new(
                 Hash::default(),
                 Some(8),
-                Some(ValidatorStakeInfo::default()),
+                Some(ValidatorStakeInfo {
+                    total_epoch_stake,
+                    ..ValidatorStakeInfo::default()
+                }),
             ),
         );
-
-        let bank0 = bank_forks.get(0).unwrap().clone();
-        bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
-        let bank9 = bank_forks.get(9).unwrap().clone();
-        bank_forks.insert(Bank::new_from_parent(&bank9, &Pubkey::default(), 10));
-        bank_forks.set_root(9, &None);
 
         // Make sure is_propagated == false so that the propagation logic
         // runs in `update_propagation_status`
@@ -2782,6 +2815,7 @@ pub(crate) mod tests {
         let stake_per_validator = 10_000;
         let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake_per_validator);
         bank_forks.set_root(0, &None);
+        let total_epoch_stake = bank_forks.root_bank().total_epoch_stake();
 
         // Insert new ForkProgress representing a slot for all slots 1..=num_banks. Only
         // make even numbered ones leader slots
@@ -2793,7 +2827,10 @@ pub(crate) mod tests {
                 i,
                 ForkProgress::new(Hash::default(), Some(prev_leader_slot), {
                     if i % 2 == 0 {
-                        Some(ValidatorStakeInfo::default())
+                        Some(ValidatorStakeInfo {
+                            total_epoch_stake,
+                            ..ValidatorStakeInfo::default()
+                        })
                     } else {
                         None
                     }
@@ -2831,6 +2868,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_chain_update_propagation_status2() {
+        let num_validators = 6;
         let keypairs: HashMap<_, _> = iter::repeat_with(|| {
             let node_keypair = Keypair::new();
             let vote_keypair = Keypair::new();
@@ -2841,7 +2879,7 @@ pub(crate) mod tests {
                 ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
             )
         })
-        .take(6)
+        .take(num_validators)
         .collect();
 
         let vote_pubkeys: Vec<_> = keypairs
@@ -2853,6 +2891,8 @@ pub(crate) mod tests {
         let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake_per_validator);
         bank_forks.set_root(0, &None);
 
+        let total_epoch_stake = num_validators as u64 * stake_per_validator;
+
         // Insert new ForkProgress representing a slot for all slots 1..=num_banks. Only
         // make even numbered ones leader slots
         for i in 1..=10 {
@@ -2862,7 +2902,10 @@ pub(crate) mod tests {
             let mut fork_progress = ForkProgress::new(
                 Hash::default(),
                 Some(prev_leader_slot),
-                Some(ValidatorStakeInfo::default()),
+                Some(ValidatorStakeInfo {
+                    total_epoch_stake,
+                    ..ValidatorStakeInfo::default()
+                }),
             );
 
             let end_range = {
