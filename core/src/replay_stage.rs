@@ -1248,13 +1248,14 @@ impl ReplayStage {
         };
 
         if let Some(bank) = selected_fork {
-            let (is_locked_out, vote_threshold, is_propagated, fork_weight) = {
+            let (is_locked_out, vote_threshold, is_propagated, is_leader_slot, fork_weight) = {
                 let fork_stats = progress.get_fork_stats(bank.slot()).unwrap();
                 let propagated_stats = &progress.get_propagated_stats(bank.slot()).unwrap();
                 (
                     fork_stats.is_locked_out,
                     fork_stats.vote_threshold,
                     propagated_stats.is_propagated,
+                    propagated_stats.is_leader_slot,
                     fork_stats.weight,
                 )
             };
@@ -1264,7 +1265,7 @@ impl ReplayStage {
             if !vote_threshold {
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
             }
-            if !is_propagated {
+            if !is_propagated && !is_leader_slot {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
             }
 
