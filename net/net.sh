@@ -621,7 +621,7 @@ deploy() {
   $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
 
   echo
-  echo "+++ Deployment Successful"
+  echo "--- Deployment Successful"
   echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
   echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#archiverIpList[@]} archivers) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
