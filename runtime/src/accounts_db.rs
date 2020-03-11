@@ -1357,6 +1357,7 @@ impl AccountsDB {
     fn clean_dead_slots(&self, dead_slots: &mut HashSet<Slot>) {
         if !dead_slots.is_empty() {
             {
+               let mut measure = Measure::start("clean_dead_slots-ms");
                 let index = self.accounts_index.read().unwrap();
                 let storage = self.storage.read().unwrap();
                 for slot in dead_slots.iter() {
@@ -1367,6 +1368,8 @@ impl AccountsDB {
                     }
                 }
                 drop(index);
+                measure.stop();
+                inc_new_counter_info!("clean_dead_slots-unref-ms", measure.as_ms() as usize);
 
                 let mut index = self.accounts_index.write().unwrap();
                 for slot in dead_slots.iter() {
