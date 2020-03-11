@@ -34,9 +34,9 @@ const UNLOCKS_ALL_DAY_ZERO: UnlockInfo = UnlockInfo {
 pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "impossible pizza",
-        staker: "CDtJpwRSiPRDGeKrvymWQKM7JY9M3hU7iimEKBDxZyoP",
+        staker: "uE3TVEffRp69mrgknYr71M18GDqL7GxCNGYYRjb3oUt",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("59SLqk4ete5QttM1WmjfMA7uNJnJVFLQqXJSy9rvuj7c"),
     },
     StakerInfo {
         name: "nutritious examination",
@@ -46,15 +46,15 @@ pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "tidy impression",
-        staker: "6ne6Rbag4FAnop1KNgVdM1SEHnJEysHSWyqvRpFrzaig",
+        staker: "BU7LA4kYvicfPCp22EM2Tth3eaeWAXYo6yCgWXQFJ42z",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("5eKcGy7ZCPJdQSQGVnfmT7kGz6MKPMKaNaMEYJbmwhuT"),
     },
     StakerInfo {
         name: "dramatic treatment",
-        staker: "GTyawCMwt3kMb51AgDtfdp97mDot7jNwc8ifuS9qqANg",
+        staker: "BrNFrFeuev8TosKhRe2kvVZTYrcUuYaqCfptWutxs17B",
         lamports: 1_205_602 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("2pKqwFKfKj2nGrknPNDSP8vXGYrgAjd28fT6yLew8sT3"),
     },
     StakerInfo {
         name: "angry noise",
@@ -64,15 +64,15 @@ pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "hard cousin",
-        staker: "9MYDzj7QuAX9QAK7da1GhzPB4gA3qbPNWsW3MMSZobru",
+        staker: "AyZb3xrZE8wnS6gYBdsJg5v8CjyrX2ZGXU2zMakCFyYd",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("9j3WzBSZRHrD2DbzFTUVVi81QX6boVvUTpGWcSiMwD5W"),
     },
     StakerInfo {
         name: "lopsided skill",
-        staker: "8cV7zCTF5UMrZakZXiL2Jw5uY3ms2Wz4twzFXEY9Kge2",
+        staker: "7SbpY8LmZUb5XRqDbyoreUrSVVV9c39wkpEz81kEAXu5",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("EJyZGbQ1PmpcWxfqGME6SUNHfurh1zggDqCT7rV9xLzL"),
     },
     StakerInfo {
         name: "red snake",
@@ -82,21 +82,21 @@ pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "jolly year",
-        staker: "HBwFWNGPVZgkf3yqUKxuAds5aANGWX62LzUFvZVCWLdJ",
+        staker: "5WbxKiW7bghkr8JN6ZAv2TQt4PfJFvtuqNaN8gyQ5UzU",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("43XAfG3AFiF1ockdh7xp91fpFyZkbWSZq9ZFBCGUVV41"),
     },
     StakerInfo {
         name: "typical initiative",
-        staker: "3JMz3kaDUZEVK2JVjRqwERGMp7LbWbgUjAFBb42qxoHb",
+        staker: "Gc8XnHU6Nnriwt9RbEwi7PTosx4YanLyXak9GTbB8VaH",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("7s2GVwFo8VSrCwX9Tztt42ueiEaUtJ6zCEHU8XGvuf5E"),
     },
     StakerInfo {
         name: "deserted window",
-        staker: "XTeBBZextvHkoRqDF8yb4hihjcraKQDwTEXhzjd8fip",
+        staker: "AMmYEynkd78uNTZDFFrMw6NKjWTgqW7M8EFjvajk23VR",
         lamports: 3_655_292 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("23PJYLS1WFLqhXnXq2Hobc17DbvZaoinoTZYLyGRT8E2"),
     },
     StakerInfo {
         name: "eight nation",
@@ -106,21 +106,21 @@ pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "earsplitting meaning",
-        staker: "4ZemkSoE75RFE1SVLnnmHcaNWT4qN8KFrKP2wAYfv8CB",
+        staker: "GYitoBY53E9awc56NWHJ2kxMwj4do5GSmvTRowjGaRDw",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("jXMEkVQQpoqebVMGN7DfpvdRLwJDEkoVNrwPVphNm7i"),
     },
     StakerInfo {
         name: "alike cheese",
-        staker: "72BGEwYee5txFonmpEarTEKCZVN2UxcSUgdphdhcx3V",
+        staker: "Drg9uSvSEfjtn15jqmmrEQnA4pvU1ToYSGSa1Dv9C6Fk",
         lamports: 3_880_295 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("BxmwgfnyAqZnqRCJGdsEea35pcc92GFTcyGeSj4RNfJJ"),
     },
     StakerInfo {
         name: "noisy honey",
-        staker: "DRp1Scyn4yJZQfMAdQew2x8RtvRmsNELN37JTK5Xvzgn",
+        staker: "95HsPFFvwbWpk42MKzenauSoULNzk8Tg6fc6EiJhLsUZ",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("Aj3K933zdRQhYEJi2Yjz8hJWXN3Z3hrKJQtPtE8VmUnq"),
     },
 ];
 
@@ -157,9 +157,9 @@ pub const SERVICE_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "nice ghost",
-        staker: "FeumxB3gfzrVQzABBiha8AacKPY3Rf4BTFSh2aZWHqR8",
+        staker: "HtQS1CH3nsUHmnLpenj5W6KHzFWTf3mzCn1mTqK7LkB7",
         lamports: 650_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("4YnNnycEZXCkuVs2hDthdNxMD4E8wc7ZPgyAK7Lm1uZc"),
     },
 ];
 
