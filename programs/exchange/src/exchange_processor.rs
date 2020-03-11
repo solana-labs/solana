@@ -603,7 +603,7 @@ mod test {
         );
 
         client
-            .send_message(&[owner, &new], Message::new(vec![instruction]))
+            .send_message(&[owner, &new], Message::new(&[instruction]))
             .expect(&format!("{}:{}", line!(), file!()));
         new.pubkey()
     }

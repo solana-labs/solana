@@ -92,7 +92,7 @@ impl Transaction {
     }
 
     pub fn new_with_payer(instructions: Vec<Instruction>, payer: Option<&Pubkey>) -> Self {
-        let message = Message::new_with_payer(instructions, payer);
+        let message = Message::new_with_payer(&instructions, payer);
         Self::new_unsigned(message)
     }
 
@@ -102,7 +102,7 @@ impl Transaction {
         signing_keypairs: &T,
         recent_blockhash: Hash,
     ) -> Self {
-        let message = Message::new_with_payer(instructions, payer);
+        let message = Message::new_with_payer(&instructions, payer);
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
@@ -123,7 +123,7 @@ impl Transaction {
     }
 
     pub fn new_unsigned_instructions(instructions: Vec<Instruction>) -> Self {
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         Self::new_unsigned(message)
     }
 
@@ -142,7 +142,7 @@ impl Transaction {
         instructions: Vec<Instruction>,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         Self::new(from_keypairs, message, recent_blockhash)
     }
 
@@ -482,7 +482,7 @@ mod tests {
             AccountMeta::new(to, false),
         ];
         let instruction = Instruction::new(program_id, &(1u8, 2u8, 3u8), account_metas);
-        let message = Message::new(vec![instruction]);
+        let message = Message::new(&[instruction]);
         Transaction::new(&[&keypair], message, Hash::default())
     }
 
@@ -513,7 +513,7 @@ mod tests {
         let expected_instruction_size = 1 + 1 + ix.accounts.len() + 1 + expected_data_size;
         assert_eq!(expected_instruction_size, 17);
 
-        let message = Message::new(vec![ix]);
+        let message = Message::new(&[ix]);
         assert_eq!(
             serialized_size(&message.instructions[0]).unwrap() as usize,
             expected_instruction_size,

@@ -312,7 +312,7 @@ impl StorageStage {
         }
 
         let signer_keys = vec![keypair.as_ref(), storage_keypair.as_ref()];
-        let message = Message::new_with_payer(vec![instruction], Some(&signer_keys[0].pubkey()));
+        let message = Message::new_with_payer(&[instruction], Some(&signer_keys[0].pubkey()));
         let transaction = Transaction::new(&signer_keys, message, blockhash);
         // try sending the transaction upto 5 times
         for _ in 0..5 {

@@ -16,7 +16,7 @@ fn test_local_faucet() {
     let lamports = 50;
     let blockhash = Hash::new(&to.as_ref());
     let create_instruction = system_instruction::transfer(&keypair.pubkey(), &to, lamports);
-    let message = Message::new(vec![create_instruction]);
+    let message = Message::new(&[create_instruction]);
     let expected_tx = Transaction::new(&[&keypair], message, blockhash);
 
     let (sender, receiver) = channel();

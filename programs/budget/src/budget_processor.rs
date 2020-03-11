@@ -256,7 +256,7 @@ mod tests {
             budget_instruction::payment(&alice_pubkey, &bob_pubkey, &budget_pubkey, 1);
         instructions[1].accounts = vec![]; // <!-- Attack! Prevent accounts from being passed into processor.
 
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         assert_eq!(
             bank_client
                 .send_message(&[&alice_keypair, &budget_keypair], message)
@@ -276,7 +276,7 @@ mod tests {
         let budget_pubkey = budget_keypair.pubkey();
         let instructions =
             budget_instruction::payment(&alice_pubkey, &bob_pubkey, &budget_pubkey, 100);
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client
             .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
@@ -302,7 +302,7 @@ mod tests {
             None,
             1,
         );
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client
             .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
@@ -315,7 +315,7 @@ mod tests {
             .unwrap();
         let instruction =
             budget_instruction::apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
-        let mut message = Message::new(vec![instruction]);
+        let mut message = Message::new(&[instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         message.account_keys.insert(3, alice_pubkey);
@@ -352,7 +352,7 @@ mod tests {
             None,
             1,
         );
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client
             .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
@@ -365,7 +365,7 @@ mod tests {
             .unwrap();
         let instruction =
             budget_instruction::apply_timestamp(&mallory_pubkey, &budget_pubkey, &bob_pubkey, dt);
-        let mut message = Message::new(vec![instruction]);
+        let mut message = Message::new(&[instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         message.account_keys.insert(3, alice_pubkey);
@@ -402,7 +402,7 @@ mod tests {
             None,
             1,
         );
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client
             .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
@@ -472,7 +472,7 @@ mod tests {
             Some(alice_pubkey),
             1,
         );
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client
             .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
@@ -550,7 +550,7 @@ mod tests {
             game_hash,
             41,
         );
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client
             .send_message(&[&alice_keypair, &budget_keypair], message)
             .unwrap();
@@ -570,7 +570,7 @@ mod tests {
 
         // Anyone can sign the message, but presumably it's Bob, since he's the
         // one claiming the payout.
-        let message = Message::new_with_payer(vec![instruction], Some(&bob_pubkey));
+        let message = Message::new_with_payer(&[instruction], Some(&bob_pubkey));
         bank_client.send_message(&[&bob_keypair], message).unwrap();
 
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 0);
