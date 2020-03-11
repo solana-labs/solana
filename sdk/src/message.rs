@@ -193,10 +193,10 @@ impl Message {
             unsigned_keys,
             num_readonly_signed_accounts,
             num_readonly_unsigned_accounts,
-        } = get_keys(&instructions, payer);
+        } = get_keys(instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
-        let instructions = compile_instructions(&instructions, &signed_keys);
+        let instructions = compile_instructions(instructions, &signed_keys);
         Self::new_with_compiled_instructions(
             num_required_signatures,
             num_readonly_signed_accounts,
