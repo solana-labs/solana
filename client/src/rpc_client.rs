@@ -1260,7 +1260,7 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
 mod tests {
     use super::*;
     use crate::{
-        client_error::ClientError,
+        client_error::ClientErrorKind,
         mock_rpc_client_request::{PUBKEY, SIGNATURE},
     };
     use assert_matches::assert_matches;
@@ -1433,8 +1433,8 @@ mod tests {
         let rpc_client = RpcClient::new_mock("instruction_error".to_string());
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
         assert_matches!(
-            result.unwrap_err(),
-            ClientError::TransactionError(TransactionError::InstructionError(
+            result.unwrap_err().kind(),
+            ClientErrorKind::TransactionError(TransactionError::InstructionError(
                 0,
                 InstructionError::UninitializedAccount
             ))
@@ -1442,7 +1442,7 @@ mod tests {
 
         let rpc_client = RpcClient::new_mock("sig_not_found".to_string());
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
-        if let ClientError::Io(err) = result.unwrap_err() {
+        if let ClientErrorKind::Io(err) = result.unwrap_err().kind() {
             assert_eq!(err.kind(), io::ErrorKind::Other);
         }
     }
