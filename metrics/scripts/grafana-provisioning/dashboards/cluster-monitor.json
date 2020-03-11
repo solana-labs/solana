@@ -27,21 +27,21 @@
       "title": "Stable",
       "tooltip": "",
       "type": "link",
-      "url": "https://metrics.solana.com:3000/d/testnet/testnet-monitor"
+      "url": "https://metrics.solana.com:3000/d/monitor/cluster-telemetry"
     },
     {
       "icon": "dashboard",
       "tags": [],
       "title": "Beta",
       "type": "link",
-      "url": "https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta"
+      "url": "https://metrics.solana.com:3000/d/monitor-beta/cluster-telemetry-beta"
     },
     {
       "icon": "dashboard",
       "tags": [],
       "title": "Edge",
       "type": "link",
-      "url": "https://metrics.solana.com:3000/d/testnet-edge/testnet-monitor-edge"
+      "url": "https://metrics.solana.com:3000/d/monitor-edge/cluster-telemetry-edge"
     }
   ],
   "panels": [
@@ -4618,7 +4618,7 @@
       },
       "yaxes": [
         {
-          "format": "µs",
+          "format": "\u00b5s",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -5385,7 +5385,7 @@
       },
       "yaxes": [
         {
-          "format": "µs",
+          "format": "\u00b5s",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -5752,7 +5752,7 @@
       },
       "yaxes": [
         {
-          "format": "µs",
+          "format": "\u00b5s",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -6727,7 +6727,7 @@
       },
       "yaxes": [
         {
-          "format": "µs",
+          "format": "\u00b5s",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -10181,7 +10181,6 @@
     "list": [
       {
         "current": {
-          "selected": true,
           "text": "$datasource",
           "value": "$datasource"
         },
@@ -10197,9 +10196,8 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
-          "text": "testnet",
-          "value": "testnet"
+          "text": "Developer Testnet",
+          "value": "devnet"
         },
         "datasource": "$datasource",
         "hide": 1,
@@ -10210,7 +10208,7 @@
         "options": [],
         "query": "show databases",
         "refresh": 1,
-        "regex": "testnet.*",
+        "regex": "(devnet|cluster|tds|mainnet-beta|testnet.*)",
         "sort": 1,
         "tagValuesQuery": "",
         "tags": [],
@@ -10269,7 +10267,7 @@
     ]
   },
   "timezone": "",
-  "title": "Testnet Monitor (edge)",
-  "uid": "testnet-edge",
+  "title": "Cluster Telemetry (edge)",
+  "uid": "monitor-edge",
   "version": 2
 }
