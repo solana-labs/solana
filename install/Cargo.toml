@@ -20,7 +20,7 @@ dirs = "2.0.2"
 indicatif = "0.14.0"
 lazy_static = "1.4.0"
 nix = "0.17.0"
-reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.10.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = "1.0.104"
 serde_derive = "1.0.103"
 serde_yaml = "0.8.11"
