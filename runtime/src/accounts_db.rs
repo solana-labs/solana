@@ -1418,7 +1418,7 @@ impl AccountsDB {
         let mut update_index = Measure::start("store::update_index");
         let reclaims = self.update_index(slot_id, infos, accounts);
         update_index.stop();
-        trace!("reclaim: {:?}", reclaims);
+        trace!("reclaim: {}", reclaims.len());
 
         self.handle_reclaims(&reclaims);
     }

@@ -144,7 +144,7 @@ impl<T: Clone> AccountsIndex<T> {
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
         let locked_slot_vec = self.account_maps.get(pubkey);
         if let Some(slot_vec) = locked_slot_vec {
-            slot_vec.write().unwrap().0
+            slot_vec.read().unwrap().0
         } else {
             0
         }
