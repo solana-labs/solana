@@ -11,8 +11,8 @@ use solana_clap_utils::{
 };
 use solana_client::{rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus};
 use solana_metrics::{datapoint_error, datapoint_info};
-use solana_sdk::{hash::Hash, native_token::lamports_to_sol};
-use std::{error, io, thread::sleep, time::Duration};
+use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
+use std::{error, io, str::FromStr, thread::sleep, time::Duration};
 
 struct Config {
     interval: Duration,
@@ -97,13 +97,22 @@ fn get_config() -> Config {
     let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
     let monitor_active_stake = matches.is_present("monitor_active_stake");
 
-    Config {
+    let config = Config {
         interval,
         json_rpc_url,
         validator_identity_pubkeys,
         no_duplicate_notifications,
         monitor_active_stake,
+    };
+
+    info!("RPC URL: {}", config.json_rpc_url);
+    if !config.validator_identity_pubkeys.is_empty() {
+        info!(
+            "Monitored validators: {:?}",
+            config.validator_identity_pubkeys
+        );
     }
+    config
 }
 
 fn get_cluster_info(rpc_client: &RpcClient) -> io::Result<(u64, Hash, RpcVoteAccountStatus)> {
@@ -118,14 +127,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
-
-    info!("RPC URL: {}", config.json_rpc_url);
-    if !config.validator_identity_pubkeys.is_empty() {
-        info!(
-            "Monitored validators: {:?}",
-            config.validator_identity_pubkeys
-        );
-    }
 
     let rpc_client = RpcClient::new(config.json_rpc_url);
 
@@ -217,6 +218,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         {
                             errors.push(format!("{} missing", validator_identity));
                         }
+
+                        rpc_client
+                            .get_balance(&Pubkey::from_str(&validator_identity).unwrap_or_default())
+                            .map(lamports_to_sol)
+                            .map(|balance| {
+                                if balance < 1.0 {
+                                    failures.push((
+                                        "balance",
+                                        format!("{} has {} SOL", validator_identity, balance),
+                                    ));
+                                }
+                            })
+                            .unwrap_or_else(|err| {
+                                warn!("Failed to get balance of {}: {:?}", validator_identity, err);
+                            });
                     }
 
                     if !errors.is_empty() {
@@ -224,6 +240,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     }
                 }
 
+                for failure in failures.iter() {
+                    error!("{} sanity failure: {}", failure.0, failure.1);
+                }
                 failures.into_iter().next() // Only report the first failure if any
             }
             Err(err) => Some(("rpc", err.to_string())),
