@@ -2,7 +2,7 @@ use crate::rpc_request;
 use solana_sdk::{
     signature::SignerError, transaction::TransactionError, transport::TransportError,
 };
-use std::{fmt, io};
+use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -19,13 +19,8 @@ pub enum ClientErrorKind {
     SigningError(#[from] SignerError),
     #[error(transparent)]
     TransactionError(#[from] TransactionError),
+    #[error("Custom: {0}")]
     Custom(String),
-}
-
-impl fmt::Display for ClientErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "solana client error")
-    }
 }
 
 impl From<TransportError> for ClientErrorKind {
