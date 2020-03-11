@@ -13,7 +13,7 @@ fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
 }
 
-fn compile_instruction(ix: Instruction, keys: &[Pubkey]) -> CompiledInstruction {
+fn compile_instruction(ix: &Instruction, keys: &[Pubkey]) -> CompiledInstruction {
     let accounts: Vec<_> = ix
         .accounts
         .iter()
@@ -27,10 +27,8 @@ fn compile_instruction(ix: Instruction, keys: &[Pubkey]) -> CompiledInstruction 
     }
 }
 
-fn compile_instructions(ixs: Vec<Instruction>, keys: &[Pubkey]) -> Vec<CompiledInstruction> {
-    ixs.into_iter()
-        .map(|ix| compile_instruction(ix, keys))
-        .collect()
+fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledInstruction> {
+    ixs.iter().map(|ix| compile_instruction(ix, keys)).collect()
 }
 
 /// A helper struct to collect pubkeys referenced by a set of instructions and read-only counts
@@ -185,17 +183,17 @@ impl Message {
         }
     }
 
-    pub fn new(instructions: Vec<Instruction>) -> Self {
+    pub fn new(instructions: &[Instruction]) -> Self {
         Self::new_with_payer(instructions, None)
     }
 
-    pub fn new_with_payer(instructions: Vec<Instruction>, payer: Option<&Pubkey>) -> Self {
+    pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
         let InstructionKeys {
             mut signed_keys,
             unsigned_keys,
             num_readonly_signed_accounts,
             num_readonly_unsigned_accounts,
-        } = get_keys(&instructions, payer);
+        } = get_keys(instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys);
@@ -220,7 +218,7 @@ impl Message {
             &nonce_authority_pubkey,
         );
         instructions.insert(0, nonce_ix);
-        Self::new_with_payer(instructions, payer)
+        Self::new_with_payer(&instructions, payer)
     }
 
     pub fn serialize(&self) -> Vec<u8> {
@@ -430,11 +428,11 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
-        let message = Message::new(vec![ix]);
+        let message = Message::new(&[ix]);
         assert_eq!(message.header.num_required_signatures, 0);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        let message = Message::new(vec![ix]);
+        let message = Message::new(&[ix]);
         assert_eq!(message.header.num_required_signatures, 1);
     }
 
@@ -467,7 +465,7 @@ mod tests {
         let id0 = Pubkey::default();
         let keypair1 = Keypair::new();
         let id1 = keypair1.pubkey();
-        let message = Message::new(vec![
+        let message = Message::new(&[
             Instruction::new(program_id0, &0, vec![AccountMeta::new(id0, false)]),
             Instruction::new(program_id1, &0, vec![AccountMeta::new(id1, true)]),
             Instruction::new(program_id0, &0, vec![AccountMeta::new(id1, false)]),
@@ -493,11 +491,11 @@ mod tests {
         let id0 = Pubkey::default();
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
-        let message = Message::new_with_payer(vec![ix], Some(&payer));
+        let message = Message::new_with_payer(&[ix], Some(&payer));
         assert_eq!(message.header.num_required_signatures, 1);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        let message = Message::new_with_payer(vec![ix], Some(&payer));
+        let message = Message::new_with_payer(&[ix], Some(&payer));
         assert_eq!(message.header.num_required_signatures, 2);
 
         let ix = Instruction::new(
@@ -505,7 +503,7 @@ mod tests {
             &0,
             vec![AccountMeta::new(payer, true), AccountMeta::new(id0, true)],
         );
-        let message = Message::new_with_payer(vec![ix], Some(&payer));
+        let message = Message::new_with_payer(&[ix], Some(&payer));
         assert_eq!(message.header.num_required_signatures, 2);
     }
 
@@ -532,7 +530,7 @@ mod tests {
         let program_id0 = Pubkey::default();
         let program_id1 = Pubkey::new_rand();
         let id = Pubkey::new_rand();
-        let message = Message::new(vec![
+        let message = Message::new(&[
             Instruction::new(program_id0, &0, vec![AccountMeta::new(id, false)]),
             Instruction::new(program_id1, &0, vec![AccountMeta::new(id, true)]),
         ]);
@@ -575,7 +573,7 @@ mod tests {
         let id1 = Pubkey::new_rand();
         let id2 = Pubkey::new_rand();
         let id3 = Pubkey::new_rand();
-        let message = Message::new(vec![
+        let message = Message::new(&[
             Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
             Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
             Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id2, false)]),

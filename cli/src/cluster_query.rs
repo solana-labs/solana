@@ -828,7 +828,7 @@ pub fn process_ping(
         last_blockhash = recent_blockhash;
 
         let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
-        let message = Message::new(vec![ix]);
+        let message = Message::new(&[ix]);
         let mut transaction = Transaction::new_unsigned(message);
         transaction.try_sign(&config.signers, recent_blockhash)?;
         check_account_for_fee(

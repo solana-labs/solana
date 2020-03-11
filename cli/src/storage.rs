@@ -212,7 +212,7 @@ pub fn process_create_storage_account(
     );
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let message = Message::new(ixs);
+    let message = Message::new(&ixs);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
@@ -236,7 +236,7 @@ pub fn process_claim_storage_reward(
     let instruction =
         storage_instruction::claim_reward(node_account_pubkey, storage_account_pubkey);
     let signers = [config.signers[0]];
-    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+    let message = Message::new_with_payer(&[instruction], Some(&signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&signers, recent_blockhash)?;
     check_account_for_fee(

@@ -53,7 +53,7 @@ fn fill_epoch_with_votes(
         let parent = bank.parent().unwrap();
 
         let message = Message::new_with_payer(
-            vec![vote_instruction::vote(
+            &[vote_instruction::vote(
                 &vote_pubkey,
                 &vote_pubkey,
                 Vote::new(vec![parent.slot() as u64], parent.hash()),
@@ -121,7 +121,7 @@ fn test_stake_create_and_split_single_signature() {
     let lamports = 1_000_000;
 
     // Create stake account with seed
-    let message = Message::new(stake_instruction::create_account_with_seed(
+    let message = Message::new(&stake_instruction::create_account_with_seed(
         &staker_pubkey, // from
         &stake_address, // to
         &staker_pubkey, // base
@@ -141,7 +141,7 @@ fn test_stake_create_and_split_single_signature() {
         create_address_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
             .unwrap();
     // Test split
-    let message = Message::new(stake_instruction::split_with_seed(
+    let message = Message::new(&stake_instruction::split_with_seed(
         &stake_address, // original
         &staker_pubkey, // authorized
         lamports / 2,
@@ -179,7 +179,7 @@ fn test_stake_account_lifetime() {
     let bank_client = BankClient::new_shared(&bank);
 
     // Create Vote Account
-    let message = Message::new(vote_instruction::create_account(
+    let message = Message::new(&vote_instruction::create_account(
         &mint_pubkey,
         &vote_pubkey,
         &VoteInit {
@@ -196,7 +196,7 @@ fn test_stake_account_lifetime() {
 
     let authorized = stake_state::Authorized::auto(&stake_pubkey);
     // Create stake account and delegate to vote account
-    let message = Message::new(stake_instruction::create_account_and_delegate_stake(
+    let message = Message::new(&stake_instruction::create_account_and_delegate_stake(
         &mint_pubkey,
         &stake_pubkey,
         &vote_pubkey,
@@ -219,7 +219,7 @@ fn test_stake_account_lifetime() {
 
     // Test that we cannot withdraw anything until deactivation
     let message = Message::new_with_payer(
-        vec![stake_instruction::withdraw(
+        &[stake_instruction::withdraw(
             &stake_pubkey,
             &stake_pubkey,
             &Pubkey::new_rand(),
@@ -282,7 +282,7 @@ fn test_stake_account_lifetime() {
     let bank_client = BankClient::new_shared(&bank);
     // Test split
     let message = Message::new_with_payer(
-        stake_instruction::split(
+        &stake_instruction::split(
             &stake_pubkey,
             &stake_pubkey,
             lamports / 2,
@@ -299,7 +299,7 @@ fn test_stake_account_lifetime() {
 
     // Deactivate the split
     let message = Message::new_with_payer(
-        vec![stake_instruction::deactivate_stake(
+        &[stake_instruction::deactivate_stake(
             &split_stake_pubkey,
             &stake_pubkey,
         )],
@@ -313,7 +313,7 @@ fn test_stake_account_lifetime() {
 
     // Test that we cannot withdraw above what's staked
     let message = Message::new_with_payer(
-        vec![stake_instruction::withdraw(
+        &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
             &Pubkey::new_rand(),
@@ -334,7 +334,7 @@ fn test_stake_account_lifetime() {
 
     // withdrawal in cooldown
     let message = Message::new_with_payer(
-        vec![stake_instruction::withdraw(
+        &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
             &Pubkey::new_rand(),
@@ -349,7 +349,7 @@ fn test_stake_account_lifetime() {
 
     // but we can withdraw unstaked
     let message = Message::new_with_payer(
-        vec![stake_instruction::withdraw(
+        &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
             &Pubkey::new_rand(),
@@ -373,7 +373,7 @@ fn test_stake_account_lifetime() {
 
     // Test that we can withdraw everything else out of the split
     let message = Message::new_with_payer(
-        vec![stake_instruction::withdraw(
+        &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
             &Pubkey::new_rand(),
@@ -414,7 +414,7 @@ fn test_create_stake_account_from_seed() {
         create_address_with_seed(&mint_pubkey, seed, &solana_stake_program::id()).unwrap();
 
     // Create Vote Account
-    let message = Message::new(vote_instruction::create_account(
+    let message = Message::new(&vote_instruction::create_account(
         &mint_pubkey,
         &vote_pubkey,
         &VoteInit {
@@ -432,7 +432,7 @@ fn test_create_stake_account_from_seed() {
     let authorized = stake_state::Authorized::auto(&mint_pubkey);
     // Create stake account and delegate to vote account
     let message = Message::new(
-        stake_instruction::create_account_with_seed_and_delegate_stake(
+        &stake_instruction::create_account_with_seed_and_delegate_stake(
             &mint_pubkey,
             &stake_pubkey,
             &mint_pubkey,

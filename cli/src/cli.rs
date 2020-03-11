@@ -1207,7 +1207,7 @@ fn process_deploy(
         program_data.len() as u64,
         &bpf_loader::id(),
     );
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut create_account_tx = Transaction::new_unsigned(message);
     create_account_tx.try_sign(&[config.signers[0], &program_id], blockhash)?;
     messages.push(&create_account_tx.message);
@@ -1220,7 +1220,7 @@ fn process_deploy(
             (i * DATA_CHUNK_SIZE) as u32,
             chunk.to_vec(),
         );
-        let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+        let message = Message::new_with_payer(&[instruction], Some(&signers[0].pubkey()));
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&signers, blockhash)?;
         write_transactions.push(tx);
@@ -1230,7 +1230,7 @@ fn process_deploy(
     }
 
     let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
-    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+    let message = Message::new_with_payer(&[instruction], Some(&signers[0].pubkey()));
     let mut finalize_tx = Transaction::new_unsigned(message);
     finalize_tx.try_sign(&signers, blockhash)?;
     messages.push(&finalize_tx.message);
@@ -1298,7 +1298,7 @@ fn process_pay(
         let message = if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(vec![ix], None, nonce_account, &nonce_authority.pubkey())
         } else {
-            Message::new(vec![ix])
+            Message::new(&[ix])
         };
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&config.signers, blockhash)?;
@@ -1338,7 +1338,7 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let message = Message::new(ixs);
+        let message = Message::new(&ixs);
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
         if sign_only {
@@ -1381,7 +1381,7 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let message = Message::new(ixs);
+        let message = Message::new(&ixs);
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
         if sign_only {
@@ -1415,7 +1415,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
         pubkey,
         &config.signers[0].pubkey(),
     );
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
     check_account_for_fee(
@@ -1438,7 +1438,7 @@ fn process_time_elapsed(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_timestamp(&config.signers[0].pubkey(), pubkey, to, dt);
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
     check_account_for_fee(
@@ -1486,7 +1486,7 @@ fn process_transfer(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -1518,7 +1518,7 @@ fn process_witness(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_signature(&config.signers[0].pubkey(), pubkey, to);
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
     check_account_for_fee(
