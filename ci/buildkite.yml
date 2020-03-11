@@ -22,6 +22,8 @@ steps:
     name: "stable"
     timeout_in_minutes: 60
     artifact_paths: "log-*.txt"
+    agents:
+      - "queue=rpc-test-capable"
   - command: ". ci/rust-version.sh; ci/docker-run.sh $$rust_stable_docker_image ci/test-move.sh"
     name: "move"
     timeout_in_minutes: 20
@@ -32,6 +34,8 @@ steps:
   - command: ". ci/rust-version.sh; ci/docker-run.sh $$rust_nightly_docker_image ci/test-coverage.sh"
     name: "coverage"
     timeout_in_minutes: 30
+    agents:
+      - "queue=rpc-test-capable"
   - wait
   - trigger: "solana-secondary"
     branches: "!pull/*"
