@@ -4,7 +4,10 @@ use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
     nonce,
-    offline::{blockhash_query::BlockhashQuery, parse_sign_only_reply_string},
+    offline::{
+        blockhash_query::{self, BlockhashQuery},
+        parse_sign_only_reply_string,
+    },
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
@@ -322,7 +325,7 @@ fn test_offline_pay_tx() {
     config_offline.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(blockhash),
         sign_only: true,
         ..PayCommand::default()
     });
@@ -340,7 +343,7 @@ fn test_offline_pay_tx() {
     config_online.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         ..PayCommand::default()
     });
     process_command(&config_online).unwrap();
@@ -417,7 +420,10 @@ fn test_nonced_pay_tx() {
     config.command = CliCommand::Pay(PayCommand {
         lamports: 10,
         to: bob_pubkey,
-        blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
+        blockhash_query: BlockhashQuery::FeeCalculator(
+            blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
+            nonce_hash,
+        ),
         nonce_account: Some(nonce_account.pubkey()),
         ..PayCommand::default()
     });

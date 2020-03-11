@@ -1449,7 +1449,6 @@ mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
     use solana_sdk::{
-        fee_calculator::FeeCalculator,
         hash::Hash,
         signature::{
             keypair_from_seed, read_keypair_file, write_keypair, Keypair, Presigner, Signer,
@@ -1553,7 +1552,7 @@ mod tests {
                     stake_authorize,
                     authority: 0,
                     sign_only: true,
-                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+                    blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -1587,7 +1586,10 @@ mod tests {
                     stake_authorize,
                     authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
@@ -1631,7 +1633,10 @@ mod tests {
                     stake_authorize,
                     authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        blockhash
+                    ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
                     fee_payer: 1,
@@ -1661,7 +1666,10 @@ mod tests {
                     stake_authorize,
                     authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -1696,7 +1704,10 @@ mod tests {
                     stake_authorize,
                     authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account_pubkey),
+                        blockhash
+                    ),
                     nonce_account: Some(nonce_account_pubkey),
                     nonce_authority: 1,
                     fee_payer: 0,
@@ -1730,7 +1741,7 @@ mod tests {
                     stake_authorize,
                     authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
@@ -1765,7 +1776,10 @@ mod tests {
                     stake_authorize,
                     authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
@@ -1839,7 +1853,7 @@ mod tests {
                     },
                     lamports: 50_000_000_000,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -1876,7 +1890,7 @@ mod tests {
                     lockup: Lockup::default(),
                     lamports: 50_000_000_000,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -1929,7 +1943,10 @@ mod tests {
                     lockup: Lockup::default(),
                     lamports: 50_000_000_000,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        nonce_hash
+                    ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -2049,7 +2066,10 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -2076,7 +2096,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: true,
-                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+                    blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -2110,7 +2130,10 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
@@ -2153,7 +2176,10 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        blockhash
+                    ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
                     fee_payer: 1,
@@ -2187,7 +2213,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
@@ -2217,7 +2243,7 @@ mod tests {
                     lamports: 42_000_000_000,
                     withdraw_authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -2246,7 +2272,7 @@ mod tests {
                     lamports: 42_000_000_000,
                     withdraw_authority: 1,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -2290,7 +2316,10 @@ mod tests {
                     lamports: 42_000_000_000,
                     withdraw_authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        nonce_hash
+                    ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 1,
                     fee_payer: 1,
@@ -2372,7 +2401,10 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -2396,7 +2428,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: true,
-                    blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+                    blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
@@ -2427,7 +2459,10 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
@@ -2467,7 +2502,10 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        blockhash
+                    ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
                     fee_payer: 1,
@@ -2495,7 +2533,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::All,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
@@ -2590,7 +2628,10 @@ mod tests {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
                     stake_authority: 0,
                     sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        nonce_hash
+                    ),
                     nonce_account: Some(nonce_account.into()),
                     nonce_authority: 1,
                     split_stake_account: 2,

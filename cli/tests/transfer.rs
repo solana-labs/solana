@@ -2,7 +2,10 @@ use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     nonce,
-    offline::{blockhash_query::BlockhashQuery, parse_sign_only_reply_string},
+    offline::{
+        blockhash_query::{self, BlockhashQuery},
+        parse_sign_only_reply_string,
+    },
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
@@ -66,7 +69,7 @@ fn test_transfer() {
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
-        blockhash_query: BlockhashQuery::All,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
@@ -93,7 +96,7 @@ fn test_transfer() {
         to: recipient_pubkey,
         from: 0,
         sign_only: true,
-        blockhash_query: BlockhashQuery::None(blockhash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
@@ -107,7 +110,7 @@ fn test_transfer() {
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
-        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
@@ -144,7 +147,10 @@ fn test_transfer() {
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
-        blockhash_query: BlockhashQuery::FeeCalculator(nonce_hash),
+        blockhash_query: BlockhashQuery::FeeCalculator(
+            blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
+            nonce_hash,
+        ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
         fee_payer: 0,
@@ -181,7 +187,7 @@ fn test_transfer() {
         to: recipient_pubkey,
         from: 0,
         sign_only: true,
-        blockhash_query: BlockhashQuery::None(nonce_hash, FeeCalculator::default()),
+        blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
         fee_payer: 0,
@@ -195,7 +201,10 @@ fn test_transfer() {
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
-        blockhash_query: BlockhashQuery::FeeCalculator(blockhash),
+        blockhash_query: BlockhashQuery::FeeCalculator(
+            blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
+            blockhash,
+        ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
         fee_payer: 0,
