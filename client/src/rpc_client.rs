@@ -85,20 +85,10 @@ impl RpcClient {
                 json!([signature, commitment_config]),
                 0,
             )
-            .map_err(|err| {
-                Into::<ClientError>::into(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("ConfirmTransaction request failure {:?}", err),
-                ))
-            })?;
+            .map_err(|err| err.into_with_command("ConfirmTransaction"))?;
 
-        serde_json::from_value::<Response<bool>>(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Received result of an unexpected type {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value::<Response<bool>>(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "ConfirmTransaction"))
     }
 
     pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<String> {
@@ -150,20 +140,10 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::GetSlot, json!([commitment_config]), 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetSlot request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetSlot"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetSlot parse failure: {}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetSlot"))
     }
 
     pub fn total_supply(&self) -> ClientResult<u64> {
@@ -177,20 +157,10 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::GetTotalSupply, json!([commitment_config]), 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetTotalSupply request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetTotalSupply"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetTotalSupply parse failure: {}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetTotalSupply"))
     }
 
     pub fn get_vote_accounts(&self) -> ClientResult<RpcVoteAccountStatus> {
@@ -204,60 +174,30 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::GetVoteAccounts, json!([commitment_config]), 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetVoteAccounts request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetVoteAccounts"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetVoteAccounts parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetVoteAccounts"))
     }
 
     pub fn get_cluster_nodes(&self) -> ClientResult<Vec<RpcContactInfo>> {
         let response = self
             .client
             .send(&RpcRequest::GetClusterNodes, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetClusterNodes request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetClusterNodes"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetClusterNodes parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetClusterNodes"))
     }
 
     pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<RpcConfirmedBlock> {
         let response = self
             .client
             .send(&RpcRequest::GetConfirmedBlock, json!([slot]), 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetConfirmedBlock request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetConfirmedBlock"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetConfirmedBlock parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetConfirmedBlock"))
     }
 
     pub fn get_confirmed_blocks(
@@ -272,20 +212,10 @@ impl RpcClient {
                 json!([start_slot, end_slot]),
                 0,
             )
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetConfirmedBlocks request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetConfirmedBlocks"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetConfirmedBlocks parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetConfirmedBlocks"))
     }
 
     pub fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
@@ -302,16 +232,12 @@ impl RpcClient {
                     )
                     .into());
                 }
-                let result = serde_json::from_value(result_json)?;
+                let result = serde_json::from_value(result_json)
+                    .map_err(|err| ClientError::new_with_command(err.into(), "GetBlockTime"))?;
                 trace!("Response block timestamp {:?} {:?}", slot, result);
                 Ok(result)
             })
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetBlockTime request failure: {:?}", err),
-                )
-            })?
+            .map_err(|err| err.into_with_command("GetBlockTime"))?
     }
 
     pub fn get_epoch_info(&self) -> ClientResult<RpcEpochInfo> {
@@ -325,20 +251,10 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::GetEpochInfo, json!([commitment_config]), 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetEpochInfo request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetEpochInfo"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetEpochInfo parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetEpochInfo"))
     }
 
     pub fn get_leader_schedule(
@@ -360,61 +276,30 @@ impl RpcClient {
                 json!([slot, commitment_config]),
                 0,
             )
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetLeaderSchedule request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetLeaderSchedule"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetLeaderSchedule failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetLeaderSchedule"))
     }
 
     pub fn get_epoch_schedule(&self) -> ClientResult<EpochSchedule> {
         let response = self
             .client
             .send(&RpcRequest::GetEpochSchedule, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetEpochSchedule request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetEpochSchedule"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetEpochSchedule parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetEpochSchedule"))
     }
 
     pub fn get_identity(&self) -> ClientResult<Pubkey> {
         let response = self
             .client
             .send(&RpcRequest::GetIdentity, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetIdentity request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetIdentity"))?;
 
         serde_json::from_value(response)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetIdentity failure: {:?}", err),
-                )
-                .into()
-            })
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetIdentity"))
             .and_then(|rpc_identity: RpcIdentity| {
                 rpc_identity.identity.parse::<Pubkey>().map_err(|err| {
                     io::Error::new(
@@ -430,60 +315,30 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::GetInflation, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetInflation request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetInflation"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetInflation parse failure: {}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetInflation"))
     }
 
     pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {
         let response = self
             .client
             .send(&RpcRequest::GetVersion, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetVersion request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetVersion"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetVersion parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetVersion"))
     }
 
     pub fn minimum_ledger_slot(&self) -> ClientResult<Slot> {
         let response = self
             .client
             .send(&RpcRequest::MinimumLedgerSlot, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("MinimumLedgerSlot request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("MinimumLedgerSlot"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("MinimumLedgerSlot parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "MinimumLedgerSlot"))
     }
 
     pub fn send_and_confirm_transaction<T: Signers>(
@@ -628,21 +483,11 @@ impl RpcClient {
                 json!([pubkey.to_string()]),
                 retries,
             )
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("RetryGetBalance request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("RetryGetBalance"))?;
 
         Ok(Some(
             serde_json::from_value::<Response<u64>>(balance_json)
-                .map_err(|err| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("RetryGetBalance parse failure: {:?}", err),
-                    )
-                })?
+                .map_err(|err| ClientError::new_with_command(err.into(), "RetryGetBalance"))?
                 .value,
         ))
     }
@@ -710,21 +555,10 @@ impl RpcClient {
                 json!([data_len]),
                 0,
             )
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "GetMinimumBalanceForRentExemption request failure: {:?}",
-                        err
-                    ),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetMinimumBalanceForRentExemption"))?;
 
         let minimum_balance: u64 = serde_json::from_value(minimum_balance_json).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetMinimumBalanceForRentExemption parse failure: {:?}", err),
-            )
+            ClientError::new_with_command(err.into(), "GetMinimumBalanceForRentExemption")
         })?;
         trace!(
             "Response minimum balance {:?} {:?}",
@@ -753,20 +587,10 @@ impl RpcClient {
                 json!([pubkey.to_string(), commitment_config]),
                 0,
             )
-            .map_err(|err| {
-                Into::<ClientError>::into(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetBalance request failure: {:?}", err),
-                ))
-            })?;
+            .map_err(|err| err.into_with_command("GetBalance"))?;
 
-        serde_json::from_value::<Response<u64>>(balance_json).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetBalance parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value::<Response<u64>>(balance_json)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetBalance"))
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> ClientResult<Vec<(Pubkey, Account)>> {
@@ -785,12 +609,8 @@ impl RpcClient {
             })?;
 
         let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value::<Vec<RpcKeyedAccount>>(response).map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetProgramAccounts parse failure: {:?}", err),
-                )
-            })?;
+            serde_json::from_value::<Vec<RpcKeyedAccount>>(response)
+                .map_err(|err| ClientError::new_with_command(err.into(), "GetProgramAccounts"))?;
 
         let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
         for RpcKeyedAccount { pubkey, account } in accounts.into_iter() {
@@ -821,20 +641,10 @@ impl RpcClient {
                 json!([commitment_config]),
                 0,
             )
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetTransactionCount request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetTransactionCount"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetTransactionCount parse failure: {:?}", err),
-            )
-            .into()
-        })
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetTransactionCount"))
     }
 
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
@@ -854,12 +664,7 @@ impl RpcClient {
                 json!([commitment_config]),
                 0,
             )
-            .map_err(|err| {
-                Into::<ClientError>::into(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetRecentBlockhash request failure: {:?}", err),
-                ))
-            })?;
+            .map_err(|err| err.into_with_command("GetRecentBlockhash"))?;
 
         let Response {
             context,
@@ -868,14 +673,8 @@ impl RpcClient {
                     blockhash,
                     fee_calculator,
                 },
-        } = serde_json::from_value::<Response<RpcBlockhashFeeCalculator>>(response).map_err(
-            |err| {
-                Into::<ClientError>::into(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetRecentBlockhash parse failure: {:?}", err),
-                ))
-            },
-        )?;
+        } = serde_json::from_value::<Response<RpcBlockhashFeeCalculator>>(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetRecentBlockhash"))?;
         let blockhash = blockhash.parse().map_err(|err| {
             Into::<ClientError>::into(io::Error::new(
                 io::ErrorKind::Other,
@@ -899,21 +698,11 @@ impl RpcClient {
                 json!([blockhash.to_string()]),
                 0,
             )
-            .map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetFeeCalculatorForBlockhash request failure: {:?}", e),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetFeeCalculatorForBlockhash"))?;
         let Response { value, .. } = serde_json::from_value::<Response<Option<RpcFeeCalculator>>>(
             response,
         )
-        .map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetFeeCalculatorForBlockhash parse failure: {:?}", e),
-            )
-        })?;
+        .map_err(|e| ClientError::new_with_command(e.into(), "GetFeeCalculatorForBlockhash"))?;
         Ok(value.map(|rf| rf.fee_calculator))
     }
 
@@ -921,21 +710,12 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::GetFeeRateGovernor, Value::Null, 0)
-            .map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetFeeRateGovernor request failure: {:?}", e),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetFeeRateGovernor"))?;
         let Response {
             context,
             value: RpcFeeRateGovernor { fee_rate_governor },
-        } = serde_json::from_value::<Response<RpcFeeRateGovernor>>(response).map_err(|e| {
-            Into::<ClientError>::into(io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetFeeRateGovernor parse failure: {:?}", e),
-            ))
-        })?;
+        } = serde_json::from_value::<Response<RpcFeeRateGovernor>>(response)
+            .map_err(|e| ClientError::new_with_command(e.into(), "GetFeeRateGovernor"))?;
         Ok(Response {
             context,
             value: fee_rate_governor,
@@ -975,19 +755,10 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::GetGenesisHash, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetGenesisHash request failure: {:?}", err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetGenesisHash"))?;
 
-        let hash = serde_json::from_value::<String>(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetGenesisHash parse failure: {:?}", err),
-            )
-        })?;
+        let hash = serde_json::from_value::<String>(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetGenesisHash"))?;
 
         let hash = hash.parse().map_err(|err| {
             io::Error::new(
@@ -1202,24 +973,9 @@ impl RpcClient {
                 json!([signature.to_string(), CommitmentConfig::recent().ok()]),
                 1,
             )
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "GetNumBlocksSinceSignatureConfirmation request failure: {}",
-                        err
-                    ),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetNumBlocksSinceSignatureConfirmation"))?;
         serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "GetNumBlocksSinceSignatureConfirmation parse failure: {}",
-                    err
-                ),
-            )
-            .into()
+            ClientError::new_with_command(err.into(), "GetNumBlocksSinceSignatureConfirmation")
         })
     }
 
@@ -1227,19 +983,9 @@ impl RpcClient {
         let response = self
             .client
             .send(&RpcRequest::ValidatorExit, Value::Null, 0)
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("ValidatorExit request failure: {:?}", err),
-                )
-            })?;
-        serde_json::from_value(response).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("ValidatorExit parse failure: {:?}", err),
-            )
-            .into()
-        })
+            .map_err(|err| err.into_with_command("ValidatorExit"))?;
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "ValidatorExit"))
     }
 
     pub fn send(&self, request: &RpcRequest, params: Value, retries: usize) -> ClientResult<Value> {
