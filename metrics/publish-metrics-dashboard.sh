@@ -11,13 +11,13 @@ fi
 
 case $CHANNEL in
 edge)
-  DASHBOARD=testnet-monitor-edge
+  DASHBOARD=cluster-telemetry-edge
   ;;
 beta)
-  DASHBOARD=testnet-monitor-beta
+  DASHBOARD=cluster-telemetry-beta
   ;;
 stable)
-  DASHBOARD=testnet-monitor
+  DASHBOARD=cluster-telemetry
   ;;
 *)
   echo "Error: Invalid CHANNEL=$CHANNEL"
@@ -31,7 +31,7 @@ if [[ -z $GRAFANA_API_TOKEN ]]; then
   exit 1
 fi
 
-DASHBOARD_JSON=scripts/grafana-provisioning/dashboards/testnet-monitor.json
+DASHBOARD_JSON=scripts/grafana-provisioning/dashboards/cluster-monitor.json
 if [[ ! -r $DASHBOARD_JSON ]]; then
   echo Error: $DASHBOARD_JSON not found
 fi

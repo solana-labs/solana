@@ -4,13 +4,14 @@
 
 There are three versions of the testnet dashboard, corresponding to the three
 release channels:
-* https://metrics.solana.com:3000/d/testnet-edge/testnet-monitor-edge
-* https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta
-* https://metrics.solana.com:3000/d/testnet/testnet-monitor
+* https://metrics.solana.com:3000/d/monitor-edge/cluster-telemetry-edge
+* https://metrics.solana.com:3000/d/monitor-beta/cluster-telemetry-beta
+* https://metrics.solana.com:3000/d/monitor/cluster-telemetry
 
 The dashboard for each channel is defined from the
-`metrics/testnet-monitor.json` source file in the git branch associated with
-that channel, and deployed by automation running `ci/publish-metrics-dashboard.sh`.
+`metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json` source
+file in the git branch associated with that channel, and deployed by automation
+running `ci/publish-metrics-dashboard.sh`.
 
 A deploy can be triggered at any time via the `New Build` button of
 https://buildkite.com/solana-labs/publish-metrics-dashboard.
@@ -18,7 +19,7 @@ https://buildkite.com/solana-labs/publish-metrics-dashboard.
 ### Modifying a Dashboard
 
 Dashboard updates are accomplished by modifying
-`metrics/scripts/grafana-provisioning/dashboards/testnet-monitor.json`,
+`metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json`,
 **manual edits made directly in Grafana will be overwritten**.
 
 * Check out metrics to add at https://metrics.solana.com:8888/ in the data explorer.
@@ -32,13 +33,13 @@ Dashboard updates are accomplished by modifying
    `Settings` menu for the dashboard
 3. Edit dashboard as desired
 4. Extract the JSON Model by selecting `JSON Model` in the `Settings` menu.  Copy the JSON to the clipboard
-    and paste into `metrics/scripts/grafana-provisioning/dashboards/testnet-monitor.json`,
+    and paste into `metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json`,
 5. Delete your development dashboard: `Settings` => `Delete`
 
 ### Deploying a Dashboard Manually
 
 If you need to immediately deploy a dashboard using the contents of
-`testnet-monitor.json` in your local workspace,
+`cluster-monitor.json` in your local workspace,
 ```
 $ export GRAFANA_API_TOKEN="an API key from https://metrics.solana.com:3000/org/apikeys"
 $ metrics/publish-metrics-dashboard.sh (edge|beta|stable)
