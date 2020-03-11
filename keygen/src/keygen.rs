@@ -566,7 +566,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         ("verify", Some(matches)) => {
             let keypair = get_keypair_from_matches(matches, config, wallet_manager)?;
-            let simple_message = Message::new(vec![Instruction::new(
+            let simple_message = Message::new(&[Instruction::new(
                 Pubkey::default(),
                 &0,
                 vec![AccountMeta::new(keypair.pubkey(), true)],

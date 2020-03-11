@@ -379,8 +379,7 @@ impl Archiver {
                         &archiver_keypair.pubkey(),
                         &storage_keypair.pubkey(),
                     );
-                    let message =
-                        Message::new_with_payer(vec![ix], Some(&archiver_keypair.pubkey()));
+                    let message = Message::new_with_payer(&[ix], Some(&archiver_keypair.pubkey()));
                     if let Err(e) = client.send_message(&[archiver_keypair.as_ref()], message) {
                         error!("unable to redeem reward, tx failed: {:?}", e);
                     } else {
@@ -655,7 +654,7 @@ impl Archiver {
             Signature::new(&meta.signature.as_ref()),
             meta.blockhash,
         );
-        let message = Message::new_with_payer(vec![instruction], Some(&archiver_keypair.pubkey()));
+        let message = Message::new_with_payer(&[instruction], Some(&archiver_keypair.pubkey()));
         let mut transaction = Transaction::new(
             &[archiver_keypair.as_ref(), storage_keypair.as_ref()],
             message,

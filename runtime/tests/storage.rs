@@ -49,7 +49,7 @@ fn test_account_owner() {
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
-    let message = Message::new(storage_instruction::create_storage_account(
+    let message = Message::new(&storage_instruction::create_storage_account(
         &mint_pubkey,
         &account_owner,
         &validator_storage_pubkey,
@@ -69,7 +69,7 @@ fn test_account_owner() {
         assert!(false, "wrong account type found")
     }
 
-    let message = Message::new(storage_instruction::create_storage_account(
+    let message = Message::new(&storage_instruction::create_storage_account(
         &mint_pubkey,
         &account_owner,
         &archiver_storage_pubkey,
@@ -137,7 +137,7 @@ fn test_validate_mining() {
 
     // advertise for storage segment 1
     let message = Message::new_with_payer(
-        vec![storage_instruction::advertise_recent_blockhash(
+        &[storage_instruction::advertise_recent_blockhash(
             &validator_storage_id,
             Hash::default(),
             1,
@@ -172,7 +172,7 @@ fn test_validate_mining() {
             ));
     }
     let message = Message::new_with_payer(
-        vec![storage_instruction::advertise_recent_blockhash(
+        &[storage_instruction::advertise_recent_blockhash(
             &validator_storage_id,
             Hash::default(),
             2,
@@ -195,7 +195,7 @@ fn test_validate_mining() {
     );
 
     let message = Message::new_with_payer(
-        vec![storage_instruction::proof_validation(
+        &[storage_instruction::proof_validation(
             &validator_storage_id,
             proof_segment as u64,
             checked_proofs.into_iter().map(|entry| entry).collect(),
@@ -209,7 +209,7 @@ fn test_validate_mining() {
     );
 
     let message = Message::new_with_payer(
-        vec![storage_instruction::advertise_recent_blockhash(
+        &[storage_instruction::advertise_recent_blockhash(
             &validator_storage_id,
             Hash::default(),
             3,
@@ -244,7 +244,7 @@ fn test_validate_mining() {
         .map(|account| Rewards::from_account(&account).unwrap())
         .unwrap();
     let message = Message::new_with_payer(
-        vec![storage_instruction::claim_reward(
+        &[storage_instruction::claim_reward(
             &owner_pubkey,
             &validator_storage_id,
         )],
@@ -264,7 +264,7 @@ fn test_validate_mining() {
     assert_eq!(bank_client.get_balance(&archiver_1_storage_id).unwrap(), 10);
 
     let message = Message::new_with_payer(
-        vec![storage_instruction::claim_reward(
+        &[storage_instruction::claim_reward(
             &owner_pubkey,
             &archiver_1_storage_id,
         )],
@@ -278,7 +278,7 @@ fn test_validate_mining() {
     );
 
     let message = Message::new_with_payer(
-        vec![storage_instruction::claim_reward(
+        &[storage_instruction::claim_reward(
             &owner_pubkey,
             &archiver_2_storage_id,
         )],
@@ -328,7 +328,7 @@ fn init_storage_accounts(
             StorageAccountType::Archiver,
         ))
     });
-    let message = Message::new(ixs);
+    let message = Message::new(&ixs);
     client.send_message(&signers, message).unwrap();
 }
 
@@ -360,7 +360,7 @@ fn submit_proof(
 ) -> ProofStatus {
     let sha_state = Hash::new(Pubkey::new_rand().as_ref());
     let message = Message::new_with_payer(
-        vec![storage_instruction::mining_proof(
+        &[storage_instruction::mining_proof(
             &storage_keypair.pubkey(),
             sha_state,
             segment_index,
@@ -422,7 +422,7 @@ fn test_bank_storage() {
     let x2 = x * 2;
     let storage_blockhash = hash(&[x2]);
 
-    let message = Message::new(storage_instruction::create_storage_account(
+    let message = Message::new(&storage_instruction::create_storage_account(
         &mint_pubkey,
         &Pubkey::default(),
         &archiver_pubkey,
@@ -433,7 +433,7 @@ fn test_bank_storage() {
         .send_message(&[&mint_keypair, &archiver_keypair], message)
         .unwrap();
 
-    let message = Message::new(storage_instruction::create_storage_account(
+    let message = Message::new(&storage_instruction::create_storage_account(
         &mint_pubkey,
         &Pubkey::default(),
         &validator_pubkey,
@@ -445,7 +445,7 @@ fn test_bank_storage() {
         .unwrap();
 
     let message = Message::new_with_payer(
-        vec![storage_instruction::advertise_recent_blockhash(
+        &[storage_instruction::advertise_recent_blockhash(
             &validator_pubkey,
             storage_blockhash,
             1,
@@ -460,7 +460,7 @@ fn test_bank_storage() {
 
     let slot = 0;
     let message = Message::new_with_payer(
-        vec![storage_instruction::mining_proof(
+        &[storage_instruction::mining_proof(
             &archiver_pubkey,
             Hash::default(),
             slot,

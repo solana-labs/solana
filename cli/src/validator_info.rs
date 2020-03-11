@@ -339,7 +339,7 @@ pub fn process_set_validator_info(
             &validator_info,
         )]);
         let signers = vec![config.signers[0], &info_keypair];
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         (message, signers)
     } else {
         println!(
@@ -353,7 +353,7 @@ pub fn process_set_validator_info(
             keys,
             &validator_info,
         )];
-        let message = Message::new_with_payer(instructions, Some(&config.signers[0].pubkey()));
+        let message = Message::new_with_payer(&instructions, Some(&config.signers[0].pubkey()));
         let signers = vec![config.signers[0]];
         (message, signers)
     };

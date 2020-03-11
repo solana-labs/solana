@@ -827,7 +827,7 @@ pub fn process_create_stake_account(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -889,7 +889,7 @@ pub fn process_stake_authorize(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -942,7 +942,7 @@ pub fn process_deactivate_stake_account(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -1001,7 +1001,7 @@ pub fn process_withdraw_stake(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -1134,7 +1134,7 @@ pub fn process_split_stake(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -1190,7 +1190,7 @@ pub fn process_stake_set_lockup(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -1424,7 +1424,7 @@ pub fn process_delegate_stake(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
