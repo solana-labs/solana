@@ -1,5 +1,5 @@
 use crate::{
-    client_error::Result as ClientResult,
+    client_error::{ClientError, Result as ClientResult},
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
@@ -67,7 +67,7 @@ impl RpcClient {
         }
     }
 
-    pub fn confirm_transaction(&self, signature: &str) -> io::Result<bool> {
+    pub fn confirm_transaction(&self, signature: &str) -> ClientResult<bool> {
         Ok(self
             .confirm_transaction_with_commitment(signature, CommitmentConfig::default())?
             .value)
@@ -86,10 +86,10 @@ impl RpcClient {
                 0,
             )
             .map_err(|err| {
-                io::Error::new(
+                Into::<ClientError>::into(io::Error::new(
                     io::ErrorKind::Other,
                     format!("ConfirmTransaction request failure {:?}", err),
-                )
+                ))
             })?;
 
         serde_json::from_value::<Response<bool>>(response).map_err(|err| {
@@ -97,6 +97,7 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("Received result of an unexpected type {:?}", err),
             )
+            .into()
         })
     }
 
@@ -138,14 +139,14 @@ impl RpcClient {
         Ok(result)
     }
 
-    pub fn get_slot(&self) -> io::Result<Slot> {
+    pub fn get_slot(&self) -> ClientResult<Slot> {
         self.get_slot_with_commitment(CommitmentConfig::default())
     }
 
     pub fn get_slot_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<Slot> {
+    ) -> ClientResult<Slot> {
         let response = self
             .client
             .send(&RpcRequest::GetSlot, json!([commitment_config]), 0)
@@ -161,17 +162,18 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetSlot parse failure: {}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_vote_accounts(&self) -> io::Result<RpcVoteAccountStatus> {
+    pub fn get_vote_accounts(&self) -> ClientResult<RpcVoteAccountStatus> {
         self.get_vote_accounts_with_commitment(CommitmentConfig::default())
     }
 
     pub fn get_vote_accounts_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<RpcVoteAccountStatus> {
+    ) -> ClientResult<RpcVoteAccountStatus> {
         let response = self
             .client
             .send(&RpcRequest::GetVoteAccounts, json!([commitment_config]), 0)
@@ -187,10 +189,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetVoteAccounts parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_cluster_nodes(&self) -> io::Result<Vec<RpcContactInfo>> {
+    pub fn get_cluster_nodes(&self) -> ClientResult<Vec<RpcContactInfo>> {
         let response = self
             .client
             .send(&RpcRequest::GetClusterNodes, Value::Null, 0)
@@ -206,10 +209,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetClusterNodes parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_confirmed_block(&self, slot: Slot) -> io::Result<RpcConfirmedBlock> {
+    pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<RpcConfirmedBlock> {
         let response = self
             .client
             .send(&RpcRequest::GetConfirmedBlock, json!([slot]), 0)
@@ -225,6 +229,7 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetConfirmedBlock parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
@@ -232,7 +237,7 @@ impl RpcClient {
         &self,
         start_slot: Slot,
         end_slot: Option<Slot>,
-    ) -> io::Result<Vec<Slot>> {
+    ) -> ClientResult<Vec<Slot>> {
         let response = self
             .client
             .send(
@@ -252,10 +257,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetConfirmedBlocks parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_block_time(&self, slot: Slot) -> io::Result<UnixTimestamp> {
+    pub fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
         let response = self
             .client
             .send(&RpcRequest::GetBlockTime, json!([slot]), 0);
@@ -266,7 +272,8 @@ impl RpcClient {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!("Block Not Found: slot={}", slot),
-                    ));
+                    )
+                    .into());
                 }
                 let result = serde_json::from_value(result_json)?;
                 trace!("Response block timestamp {:?} {:?}", slot, result);
@@ -280,14 +287,14 @@ impl RpcClient {
             })?
     }
 
-    pub fn get_epoch_info(&self) -> io::Result<RpcEpochInfo> {
+    pub fn get_epoch_info(&self) -> ClientResult<RpcEpochInfo> {
         self.get_epoch_info_with_commitment(CommitmentConfig::default())
     }
 
     pub fn get_epoch_info_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<RpcEpochInfo> {
+    ) -> ClientResult<RpcEpochInfo> {
         let response = self
             .client
             .send(&RpcRequest::GetEpochInfo, json!([commitment_config]), 0)
@@ -303,10 +310,14 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetEpochInfo parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_leader_schedule(&self, slot: Option<Slot>) -> io::Result<Option<RpcLeaderSchedule>> {
+    pub fn get_leader_schedule(
+        &self,
+        slot: Option<Slot>,
+    ) -> ClientResult<Option<RpcLeaderSchedule>> {
         self.get_leader_schedule_with_commitment(slot, CommitmentConfig::default())
     }
 
@@ -314,7 +325,7 @@ impl RpcClient {
         &self,
         slot: Option<Slot>,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<Option<RpcLeaderSchedule>> {
+    ) -> ClientResult<Option<RpcLeaderSchedule>> {
         let response = self
             .client
             .send(
@@ -334,10 +345,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetLeaderSchedule failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_epoch_schedule(&self) -> io::Result<EpochSchedule> {
+    pub fn get_epoch_schedule(&self) -> ClientResult<EpochSchedule> {
         let response = self
             .client
             .send(&RpcRequest::GetEpochSchedule, Value::Null, 0)
@@ -353,10 +365,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetEpochSchedule parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_identity(&self) -> io::Result<Pubkey> {
+    pub fn get_identity(&self) -> ClientResult<Pubkey> {
         let response = self
             .client
             .send(&RpcRequest::GetIdentity, Value::Null, 0)
@@ -373,6 +386,7 @@ impl RpcClient {
                     io::ErrorKind::Other,
                     format!("GetIdentity failure: {:?}", err),
                 )
+                .into()
             })
             .and_then(|rpc_identity: RpcIdentity| {
                 rpc_identity.identity.parse::<Pubkey>().map_err(|err| {
@@ -380,11 +394,12 @@ impl RpcClient {
                         io::ErrorKind::Other,
                         format!("GetIdentity invalid pubkey failure: {:?}", err),
                     )
+                    .into()
                 })
             })
     }
 
-    pub fn get_inflation(&self) -> io::Result<Inflation> {
+    pub fn get_inflation(&self) -> ClientResult<Inflation> {
         let response = self
             .client
             .send(&RpcRequest::GetInflation, Value::Null, 0)
@@ -400,10 +415,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetInflation parse failure: {}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_version(&self) -> io::Result<RpcVersionInfo> {
+    pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {
         let response = self
             .client
             .send(&RpcRequest::GetVersion, Value::Null, 0)
@@ -419,10 +435,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetVersion parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn minimum_ledger_slot(&self) -> io::Result<Slot> {
+    pub fn minimum_ledger_slot(&self) -> ClientResult<Slot> {
         let response = self
             .client
             .send(&RpcRequest::MinimumLedgerSlot, Value::Null, 0)
@@ -438,6 +455,7 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("MinimumLedgerSlot parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
@@ -602,7 +620,7 @@ impl RpcClient {
         ))
     }
 
-    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
+    pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
         self.get_account_with_commitment(pubkey, CommitmentConfig::default())?
             .value
             .ok_or_else(|| {
@@ -610,6 +628,7 @@ impl RpcClient {
                     io::ErrorKind::Other,
                     format!("AccountNotFound: pubkey={}", pubkey),
                 )
+                .into()
             })
     }
 
@@ -630,7 +649,8 @@ impl RpcClient {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!("AccountNotFound: pubkey={}", pubkey),
-                    ));
+                    )
+                    .into());
                 }
                 let Response {
                     context,
@@ -644,18 +664,18 @@ impl RpcClient {
                 })
             })
             .map_err(|err| {
-                io::Error::new(
+                Into::<ClientError>::into(io::Error::new(
                     io::ErrorKind::Other,
                     format!("AccountNotFound: pubkey={}: {:?}", pubkey, err),
-                )
+                ))
             })?
     }
 
-    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
+    pub fn get_account_data(&self, pubkey: &Pubkey) -> ClientResult<Vec<u8>> {
         Ok(self.get_account(pubkey)?.data)
     }
 
-    pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> io::Result<u64> {
+    pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64> {
         let minimum_balance_json = self
             .client
             .send(
@@ -688,7 +708,7 @@ impl RpcClient {
     }
 
     /// Request the balance of the account `pubkey`.
-    pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
+    pub fn get_balance(&self, pubkey: &Pubkey) -> ClientResult<u64> {
         Ok(self
             .get_balance_with_commitment(pubkey, CommitmentConfig::default())?
             .value)
@@ -707,10 +727,10 @@ impl RpcClient {
                 0,
             )
             .map_err(|err| {
-                io::Error::new(
+                Into::<ClientError>::into(io::Error::new(
                     io::ErrorKind::Other,
                     format!("GetBalance request failure: {:?}", err),
-                )
+                ))
             })?;
 
         serde_json::from_value::<Response<u64>>(balance_json).map_err(|err| {
@@ -718,10 +738,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetBalance parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_program_accounts(&self, pubkey: &Pubkey) -> io::Result<Vec<(Pubkey, Account)>> {
+    pub fn get_program_accounts(&self, pubkey: &Pubkey) -> ClientResult<Vec<(Pubkey, Account)>> {
         let response = self
             .client
             .send(
@@ -758,14 +779,14 @@ impl RpcClient {
     }
 
     /// Request the transaction count.
-    pub fn get_transaction_count(&self) -> io::Result<u64> {
+    pub fn get_transaction_count(&self) -> ClientResult<u64> {
         self.get_transaction_count_with_commitment(CommitmentConfig::default())
     }
 
     pub fn get_transaction_count_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<u64> {
+    ) -> ClientResult<u64> {
         let response = self
             .client
             .send(
@@ -785,10 +806,11 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("GetTransactionCount parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
-    pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
+    pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
         Ok(self
             .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
             .value)
@@ -806,10 +828,10 @@ impl RpcClient {
                 0,
             )
             .map_err(|err| {
-                io::Error::new(
+                Into::<ClientError>::into(io::Error::new(
                     io::ErrorKind::Other,
                     format!("GetRecentBlockhash request failure: {:?}", err),
-                )
+                ))
             })?;
 
         let Response {
@@ -821,17 +843,17 @@ impl RpcClient {
                 },
         } = serde_json::from_value::<Response<RpcBlockhashFeeCalculator>>(response).map_err(
             |err| {
-                io::Error::new(
+                Into::<ClientError>::into(io::Error::new(
                     io::ErrorKind::Other,
                     format!("GetRecentBlockhash parse failure: {:?}", err),
-                )
+                ))
             },
         )?;
         let blockhash = blockhash.parse().map_err(|err| {
-            io::Error::new(
+            Into::<ClientError>::into(io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetRecentBlockhash hash parse failure: {:?}", err),
-            )
+            ))
         })?;
         Ok(Response {
             context,
@@ -842,7 +864,7 @@ impl RpcClient {
     pub fn get_fee_calculator_for_blockhash(
         &self,
         blockhash: &Hash,
-    ) -> io::Result<Option<FeeCalculator>> {
+    ) -> ClientResult<Option<FeeCalculator>> {
         let response = self
             .client
             .send(
@@ -882,10 +904,10 @@ impl RpcClient {
             context,
             value: RpcFeeRateGovernor { fee_rate_governor },
         } = serde_json::from_value::<Response<RpcFeeRateGovernor>>(response).map_err(|e| {
-            io::Error::new(
+            Into::<ClientError>::into(io::Error::new(
                 io::ErrorKind::Other,
                 format!("GetFeeRateGovernor parse failure: {:?}", e),
-            )
+            ))
         })?;
         Ok(Response {
             context,
@@ -893,7 +915,7 @@ impl RpcClient {
         })
     }
 
-    pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
+    pub fn get_new_blockhash(&self, blockhash: &Hash) -> ClientResult<(Hash, FeeCalculator)> {
         let mut num_retries = 0;
         let start = Instant::now();
         while start.elapsed().as_secs() < 5 {
@@ -918,10 +940,11 @@ impl RpcClient {
                 num_retries,
                 blockhash
             ),
-        ))
+        )
+        .into())
     }
 
-    pub fn get_genesis_hash(&self) -> io::Result<Hash> {
+    pub fn get_genesis_hash(&self) -> ClientResult<Hash> {
         let response = self
             .client
             .send(&RpcRequest::GetGenesisHash, Value::Null, 0)
@@ -954,7 +977,7 @@ impl RpcClient {
         polling_frequency: &Duration,
         timeout: &Duration,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<u64> {
+    ) -> ClientResult<u64> {
         let now = Instant::now();
         loop {
             match self.get_balance_with_commitment(&pubkey, commitment_config.clone()) {
@@ -975,7 +998,7 @@ impl RpcClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<u64> {
+    ) -> ClientResult<u64> {
         self.poll_balance_with_timeout_and_commitment(
             pubkey,
             &Duration::from_millis(100),
@@ -1014,7 +1037,7 @@ impl RpcClient {
     }
 
     /// Poll the server to confirm a transaction.
-    pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
+    pub fn poll_for_signature(&self, signature: &Signature) -> ClientResult<()> {
         self.poll_for_signature_with_commitment(signature, CommitmentConfig::default())
     }
 
@@ -1023,7 +1046,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<()> {
+    ) -> ClientResult<()> {
         let now = Instant::now();
         loop {
             if let Ok(Some(_)) = self.get_signature_status_with_commitment(
@@ -1039,7 +1062,8 @@ impl RpcClient {
                         "signature not found after {} seconds",
                         now.elapsed().as_secs()
                     ),
-                ));
+                )
+                .into());
             }
             sleep(Duration::from_millis(250));
         }
@@ -1088,7 +1112,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         min_confirmed_blocks: usize,
-    ) -> io::Result<usize> {
+    ) -> ClientResult<usize> {
         let mut now = Instant::now();
         let mut confirmed_blocks = 0;
         loop {
@@ -1131,7 +1155,8 @@ impl RpcClient {
                             "signature not found after {} seconds",
                             now.elapsed().as_secs()
                         ),
-                    ));
+                    )
+                    .into());
                 }
             }
             sleep(Duration::from_millis(250));
@@ -1142,7 +1167,7 @@ impl RpcClient {
     pub fn get_num_blocks_since_signature_confirmation(
         &self,
         signature: &Signature,
-    ) -> io::Result<usize> {
+    ) -> ClientResult<usize> {
         let response = self
             .client
             .send(
@@ -1167,10 +1192,11 @@ impl RpcClient {
                     err
                 ),
             )
+            .into()
         })
     }
 
-    pub fn validator_exit(&self) -> io::Result<bool> {
+    pub fn validator_exit(&self) -> ClientResult<bool> {
         let response = self
             .client
             .send(&RpcRequest::ValidatorExit, Value::Null, 0)
@@ -1185,6 +1211,7 @@ impl RpcClient {
                 io::ErrorKind::Other,
                 format!("ValidatorExit parse failure: {:?}", err),
             )
+            .into()
         })
     }
 
