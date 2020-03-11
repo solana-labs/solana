@@ -86,7 +86,7 @@ impl BlockhashQuery {
             BlockhashQuery::FeeCalculator(source, hash) => {
                 let fee_calculator = source
                     .get_fee_calculator(rpc_client, hash)?
-                    .ok_or(format!("Has has expired {:?}", hash))?;
+                    .ok_or(format!("Hash has expired {:?}", hash))?;
                 Ok((*hash, fee_calculator))
             }
             BlockhashQuery::All(source) => source.get_blockhash_fee_calculator(rpc_client),
