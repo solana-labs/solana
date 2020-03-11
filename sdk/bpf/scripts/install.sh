@@ -23,9 +23,16 @@ download() {
 }
 
 # Install or upgrade xargo
-cargo install cargo-update 2> /dev/null
-cargo install-update -i xargo
-xargo --version > xargo.md 2>&1
+(
+  cargo install cargo-update
+  set -e
+  cargo install-update -i xargo
+  xargo --version > xargo.md 2>&1
+)
+# shellcheck disable=SC2181
+if [[ $? -ne 0 ]]; then
+  exit 1
+fi
 
 # Install Criterion
 version=v2.3.2
