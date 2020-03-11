@@ -114,7 +114,7 @@ function upload_results_to_slack() {
   payLoad="$(cat <<EOF
 {
 "blocks": [
-  	{
+        {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
@@ -166,7 +166,7 @@ function upload_results_to_slack() {
 		{
 			"type": "divider"
 		},
-  	{
+                {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
