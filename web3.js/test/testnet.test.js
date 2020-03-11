@@ -7,17 +7,17 @@ test('invalid', () => {
   }).toThrow();
 });
 
-test('edge', () => {
-  expect(testnetChannelEndpoint('edge')).toEqual(
-    'https://edge.devnet.solana.com:8443',
+test('stable', () => {
+  expect(testnetChannelEndpoint('stable')).toEqual(
+    'https://devnet.solana.com',
   );
 
-  expect(testnetChannelEndpoint('edge', true)).toEqual(
-    'https://edge.devnet.solana.com:8443',
+  expect(testnetChannelEndpoint('stable', true)).toEqual(
+    'https://devnet.solana.com',
   );
 
-  expect(testnetChannelEndpoint('edge', false)).toEqual(
-    'http://edge.devnet.solana.com:8899',
+  expect(testnetChannelEndpoint('stable', false)).toEqual(
+    'http://devnet.solana.com',
   );
 });
 
