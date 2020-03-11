@@ -1895,7 +1895,7 @@ impl Bank {
             hash = extend_and_hash(&hash, &buf)
         }
 
-        info!(
+        println!(
             "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {}",
             self.slot(),
             hash,
@@ -2123,6 +2123,15 @@ impl Bank {
 
     /// Get the fixed stake of the given vote account for the current epoch
     pub fn epoch_vote_account_stake(&self, voting_pubkey: &Pubkey) -> u64 {
+        *self
+            .epoch_vote_accounts(self.epoch())
+            .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
+            .get(voting_pubkey)
+            .map(|(stake, _)| stake)
+            .unwrap_or(&0)
+    }
+
+    pub fn vote_account_epoch_stake(&self, voting_pubkey: &Pubkey) -> u64 {
         *self
             .epoch_vote_accounts(self.epoch())
             .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")

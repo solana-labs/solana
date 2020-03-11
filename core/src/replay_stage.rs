@@ -127,7 +127,6 @@ impl ReplayStage {
         let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
 
         // Start the replay stage loop
-
         let (lockouts_sender, commitment_service) =
             AggregateCommitmentService::new(&exit, block_commitment_cache);
 
@@ -135,6 +134,7 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
+                let my_vote_pubkey = voting_keypair.as_ref().map(|k| k.pubkey());
                 let mut all_pubkeys: HashSet<Rc<Pubkey>> = HashSet::new();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
@@ -154,10 +154,12 @@ impl ReplayStage {
                     let prev_leader_slot = progress.get_prev_leader_slot(&bank);
                     progress.insert(
                         bank.slot(),
-                        ForkProgress::new(
-                            bank.last_blockhash(),
+                        ForkProgress::new_from_bank(
+                            &bank,
+                            &my_pubkey,
+                            my_vote_pubkey.clone(),
                             prev_leader_slot,
-                            bank.collector_id() == &my_pubkey,
+                            SUPERMINORITY_THRESHOLD,
                         ),
                     );
                 }
@@ -196,6 +198,7 @@ impl ReplayStage {
                         &blockstore,
                         &bank_forks,
                         &my_pubkey,
+                        &my_vote_pubkey,
                         &mut progress,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
@@ -262,7 +265,7 @@ impl ReplayStage {
                         && tower.is_recent(heaviest_bank.as_ref().unwrap().slot())
                         && !failure_reasons.is_empty()
                     {
-                        info!(
+                        println!(
                             "Couldn't vote on heaviest fork: {:?}, failure_reasons: {:?}",
                             heaviest_bank.as_ref().map(|b| b.slot()),
                             failure_reasons
@@ -517,7 +520,7 @@ impl ReplayStage {
             // leader block hasn't been propagated, don't generate another
             // block
             if !is_consecutive_leader {
-                info!(
+                println!(
                     "skipping starting bank for {}, parent: {}, propagation not confirmed",
                     poh_slot, parent_slot
                 );
@@ -603,7 +606,7 @@ impl ReplayStage {
                 return;
             }
 
-            info!(
+            println!(
                 "new fork:{} parent:{} (leader) root:{}",
                 poh_slot, parent_slot, root_slot
             );
@@ -814,6 +817,7 @@ impl ReplayStage {
         blockstore: &Arc<Blockstore>,
         bank_forks: &Arc<RwLock<BankForks>>,
         my_pubkey: &Pubkey,
+        my_vote_pubkey: &Option<Pubkey>,
         progress: &mut ProgressMap,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
@@ -837,10 +841,12 @@ impl ReplayStage {
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
             // this bank in `select_forks()`
             let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
-                ForkProgress::new(
-                    bank.last_blockhash(),
+                ForkProgress::new_from_bank(
+                    &bank,
+                    &my_pubkey,
+                    my_vote_pubkey.clone(),
                     prev_leader_slot,
-                    bank.collector_id() == my_pubkey,
+                    SUPERMINORITY_THRESHOLD,
                 )
             });
             if bank.collector_id() != my_pubkey {
@@ -1263,7 +1269,7 @@ impl ReplayStage {
             }
 
             if !is_locked_out && vote_threshold && is_propagated {
-                info!("voting: {} {}", bank.slot(), fork_weight);
+                println!("voting: {} {}", bank.slot(), fork_weight);
                 (
                     selected_fork.clone(),
                     selected_fork.clone(),
@@ -1327,12 +1333,8 @@ impl ReplayStage {
                 leader_propagated_stats
                     .propagated_validators
                     .insert(voting_pubkey.clone());
-                leader_propagated_stats.propagated_validators_stake += *leader_bank
-                    .epoch_vote_accounts(leader_bank.epoch())
-                    .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
-                    .get(&voting_pubkey)
-                    .map(|(stake, _)| stake)
-                    .unwrap_or(&0);
+                leader_propagated_stats.propagated_validators_stake +=
+                    leader_bank.vote_account_epoch_stake(&voting_pubkey);
                 if leader_propagated_stats.propagated_validators_stake as f64
                     / leader_bank.total_epoch_stake() as f64
                     > SUPERMINORITY_THRESHOLD
@@ -1440,7 +1442,7 @@ impl ReplayStage {
                 let leader = leader_schedule_cache
                     .slot_leader_at(child_slot, Some(&parent_bank))
                     .unwrap();
-                info!(
+                println!(
                     "new fork:{} parent:{} root:{}",
                     child_slot,
                     parent_slot,
@@ -1503,6 +1505,8 @@ pub(crate) mod tests {
         commitment::BlockCommitment,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
+        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
+        progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
     };
@@ -1652,7 +1656,7 @@ pub(crate) mod tests {
             let bank = &bank_forks.banks[&0];
             fork_progress
                 .entry(neutral_fork.fork[0])
-                .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, false));
+                .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None));
         }
 
         for index in 1..neutral_fork.fork.len() {
@@ -1678,7 +1682,7 @@ pub(crate) mod tests {
                 let bank = &bank_forks.banks[&neutral_fork.fork[index]];
                 fork_progress
                     .entry(bank_forks.banks[&neutral_fork.fork[index]].slot())
-                    .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, false));
+                    .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None));
             }
         }
 
@@ -1718,7 +1722,7 @@ pub(crate) mod tests {
                     let bank = &bank_forks.banks[&fork_info.fork[index]];
                     fork_progress
                         .entry(bank_forks.banks[&fork_info.fork[index]].slot())
-                        .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, false));
+                        .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None));
                 }
             }
         }
@@ -1889,7 +1893,7 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(root_bank);
         let mut progress = ProgressMap::default();
         for i in 0..=root {
-            progress.insert(i, ForkProgress::new(Hash::default(), None, false));
+            progress.insert(i, ForkProgress::new(Hash::default(), None, None));
         }
         let mut earliest_vote_on_fork = root - 1;
         ReplayStage::handle_new_root(
@@ -2147,7 +2151,7 @@ pub(crate) mod tests {
             let last_blockhash = bank0.last_blockhash();
             let mut bank0_progress = progress
                 .entry(bank0.slot())
-                .or_insert_with(|| ForkProgress::new(last_blockhash, None, false));
+                .or_insert_with(|| ForkProgress::new(last_blockhash, None, None));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let res = ReplayStage::replay_blockstore_into_bank(
@@ -2454,7 +2458,7 @@ pub(crate) mod tests {
 
         // Insert the bank that contains a vote for slot 0, which confirms slot 0
         bank_forks.write().unwrap().insert(bank1);
-        progress.insert(1, ForkProgress::new(bank0.last_blockhash(), None, false));
+        progress.insert(1, ForkProgress::new(bank0.last_blockhash(), None, None));
         let ancestors = bank_forks.read().unwrap().ancestors();
         let mut frozen_banks: Vec<_> = bank_forks
             .read()
@@ -2693,8 +2697,22 @@ pub(crate) mod tests {
 
         // Insert new ForkProgress for slot 10 and its
         // previous leader slot 9
-        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), true));
-        progress_map.insert(9, ForkProgress::new(Hash::default(), Some(8), true));
+        progress_map.insert(
+            10,
+            ForkProgress::new(
+                Hash::default(),
+                Some(9),
+                Some(ValidatorStakeInfo::default()),
+            ),
+        );
+        progress_map.insert(
+            9,
+            ForkProgress::new(
+                Hash::default(),
+                Some(8),
+                Some(ValidatorStakeInfo::default()),
+            ),
+        );
 
         let bank0 = bank_forks.get(0).unwrap().clone();
         bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
@@ -2772,7 +2790,13 @@ pub(crate) mod tests {
             bank_forks.insert(Bank::new_from_parent(&parent_bank, &Pubkey::default(), i));
             progress_map.insert(
                 i,
-                ForkProgress::new(Hash::default(), Some(prev_leader_slot), i % 2 == 0),
+                ForkProgress::new(Hash::default(), Some(prev_leader_slot), {
+                    if i % 2 == 0 {
+                        Some(ValidatorStakeInfo::default())
+                    } else {
+                        None
+                    }
+                }),
             );
         }
 
@@ -2834,8 +2858,11 @@ pub(crate) mod tests {
             let parent_bank = bank_forks.get(i - 1).unwrap().clone();
             let prev_leader_slot = i - 1;
             bank_forks.insert(Bank::new_from_parent(&parent_bank, &Pubkey::default(), i));
-            let mut fork_progress =
-                ForkProgress::new(Hash::default(), Some(prev_leader_slot), true);
+            let mut fork_progress = ForkProgress::new(
+                Hash::default(),
+                Some(prev_leader_slot),
+                Some(ValidatorStakeInfo::default()),
+            );
 
             let end_range = {
                 // The earlier slots are one pubkey away from reaching confirmation
@@ -2889,7 +2916,7 @@ pub(crate) mod tests {
 
         // If there is no previous leader slot (previous leader slot is None),
         // should succeed
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, false));
+        progress_map.insert(3, ForkProgress::new(Hash::default(), None, None));
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
@@ -2898,7 +2925,7 @@ pub(crate) mod tests {
         ));
 
         // If the parent was itself the leader, then requires propagation confirmation
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, true));
+        progress_map.insert(3, ForkProgress::new(Hash::default(), None, None));
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
@@ -2920,8 +2947,11 @@ pub(crate) mod tests {
         // Now, set up the progress map to show that the previous leader slot of 5 is
         // 2 (even though the parent is 3), so 2 needs to see propagation confirmation
         // before we can start a leader for block 5
-        progress_map.insert(3, ForkProgress::new(Hash::default(), Some(2), false));
-        progress_map.insert(2, ForkProgress::new(Hash::default(), None, true));
+        progress_map.insert(3, ForkProgress::new(Hash::default(), Some(2), None));
+        progress_map.insert(
+            2,
+            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+        );
 
         // Last leader slot has not seen propagation threshold, so should fail
         assert!(!ReplayStage::check_propagation_for_start_leader(
@@ -2963,8 +2993,14 @@ pub(crate) mod tests {
 
         // Set up the progress map to show that the last leader slot of 4 is 3,
         // which means 3 and 4 are consecutiive leader slots
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, true));
-        progress_map.insert(2, ForkProgress::new(Hash::default(), None, true));
+        progress_map.insert(
+            3,
+            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+        );
+        progress_map.insert(
+            2,
+            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+        );
 
         // If the last leader slot has not seen propagation threshold, but
         // was the direct parent (implying consecutive leader slots), create

@@ -46,6 +46,30 @@ impl ReplaySlotStats {
     }
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct ValidatorStakeInfo {
+    validator_vote_pubkey: Pubkey,
+    stake: u64,
+    total_stake: u64,
+    threshold: f64,
+}
+
+impl ValidatorStakeInfo {
+    pub fn new(
+        validator_vote_pubkey: Pubkey,
+        stake: u64,
+        total_stake: u64,
+        threshold: f64,
+    ) -> Self {
+        Self {
+            validator_vote_pubkey,
+            stake,
+            total_stake,
+            threshold,
+        }
+    }
+}
+
 pub(crate) struct ForkProgress {
     pub(crate) is_dead: bool,
     pub(crate) fork_stats: ForkStats,
@@ -55,7 +79,24 @@ pub(crate) struct ForkProgress {
 }
 
 impl ForkProgress {
-    pub fn new(last_entry: Hash, prev_leader_slot: Option<Slot>, is_leader_slot: bool) -> Self {
+    pub fn new(
+        last_entry: Hash,
+        prev_leader_slot: Option<Slot>,
+        validator_stake_info: Option<ValidatorStakeInfo>,
+    ) -> Self {
+        let (is_leader_slot, propagated_validators_stake, propagated_validators, is_propagated) =
+            validator_stake_info
+                .map(|info| {
+                    (
+                        true,
+                        info.stake,
+                        vec![Rc::new(info.validator_vote_pubkey)]
+                            .into_iter()
+                            .collect(),
+                        info.stake as f64 / info.total_stake as f64 > info.threshold,
+                    )
+                })
+                .unwrap_or((false, 0, HashSet::new(), false));
         Self {
             is_dead: false,
             fork_stats: ForkStats::default(),
@@ -64,9 +105,37 @@ impl ForkProgress {
             propagated_stats: PropagatedStats {
                 prev_leader_slot,
                 is_leader_slot,
+                propagated_validators_stake,
+                propagated_validators,
+                is_propagated,
                 ..PropagatedStats::default()
             },
         }
+    }
+
+    pub fn new_from_bank(
+        bank: &Bank,
+        my_pubkey: &Pubkey,
+        voting_pubkey: Option<Pubkey>,
+        prev_leader_slot: Option<Slot>,
+        propagation_threshold: f64,
+    ) -> Self {
+        let validator_fork_info = {
+            if bank.collector_id() == my_pubkey && voting_pubkey.is_some() {
+                let voting_pubkey = voting_pubkey.unwrap();
+                let stake = bank.vote_account_epoch_stake(&voting_pubkey);
+                Some(ValidatorStakeInfo::new(
+                    voting_pubkey,
+                    stake,
+                    bank.total_epoch_stake(),
+                    propagation_threshold,
+                ))
+            } else {
+                None
+            }
+        };
+
+        Self::new(bank.last_blockhash(), prev_leader_slot, validator_fork_info)
     }
 }
 
@@ -163,7 +232,7 @@ impl ProgressMap {
             // yet. In both cases the latest leader is vacuously
             // confirmed
             prev_leader_slot.is_none() ||
-                // prev_leader isn't in the progress map, which means
+                // prev_leader isn't in the progress map, which means   
                 // it's rooted, so it's confirmed
                 self.get_propagated_stats(prev_leader_slot.unwrap()).is_none();
 
@@ -204,12 +273,29 @@ mod test {
         // Insert new ForkProgress for slot 10 and its
         // previous leader slot 9, and the previous leader
         // before that slot 8,
-        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), false));
-        progress_map.insert(9, ForkProgress::new(Hash::default(), Some(8), true));
-        progress_map.insert(8, ForkProgress::new(Hash::default(), Some(7), true));
+        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), None));
+        progress_map.insert(
+            9,
+            ForkProgress::new(
+                Hash::default(),
+                Some(8),
+                Some(ValidatorStakeInfo::default()),
+            ),
+        );
+        progress_map.insert(
+            8,
+            ForkProgress::new(
+                Hash::default(),
+                Some(7),
+                Some(ValidatorStakeInfo::default()),
+            ),
+        );
 
         // Insert new ForkProgress with no previous leader
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, true));
+        progress_map.insert(
+            3,
+            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+        );
 
         // None of these slot have parents which are confirmed
         assert!(!progress_map.is_propagated(9));

@@ -564,9 +564,9 @@ pub mod test {
                     .expect("parent bank must exist")
                     .clone();
                 info!("parent of {} is {}", missing_slot, parent_bank.slot(),);
-                progress.entry(missing_slot).or_insert_with(|| {
-                    ForkProgress::new(parent_bank.last_blockhash(), None, false)
-                });
+                progress
+                    .entry(missing_slot)
+                    .or_insert_with(|| ForkProgress::new(parent_bank.last_blockhash(), None, None));
 
                 // Create the missing bank
                 let new_bank =
@@ -717,7 +717,7 @@ pub mod test {
 
         bank0.freeze();
         let mut progress = ProgressMap::default();
-        progress.insert(0, ForkProgress::new(bank0.last_blockhash(), None, false));
+        progress.insert(0, ForkProgress::new(bank0.last_blockhash(), None, None));
         (BankForks::new(0, bank0), progress)
     }
 
