@@ -72,6 +72,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.1.0" }
 trees = "0.2.1"
 
 [dev-dependencies]
+anyhow = "1.0.26"
 matches = "0.1.6"
 reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serial_test = "0.3.2"

@@ -534,6 +534,7 @@ impl RpcSubscriptions {
 pub(crate) mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use anyhow::anyhow;
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_program;
@@ -542,7 +543,7 @@ pub(crate) mod tests {
         system_transaction,
     };
     use std::{fmt::Debug, sync::mpsc::channel, time::Instant};
-    use tokio::{prelude::FutureExt, runtime::Runtime, timer::Delay};
+    use tokio::{prelude::future, runtime::Runtime, timer::Delay, util::FutureExt};
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
         receiver: futures::sync::mpsc::Receiver<T>,
@@ -553,18 +554,35 @@ pub(crate) mod tests {
             let recv_timeout = receiver
                 .into_future()
                 .timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS))
-                .map(move |result| match result {
-                    (Some(value), _) => inner_sender.send(value).expect("send error"),
-                    (None, _) => panic!("unexpected end of stream"),
-                })
-                .map_err(|err| panic!("stream error {:?}", err));
+                .map_err(|err| {
+                    if err.is_timer() {
+                        anyhow!("timer error: {}", err.into_timer().unwrap())
+                    } else {
+                        anyhow!("unexpected stream error")
+                    }
+                });
 
             const INITIAL_DELAY_MS: u64 = RECEIVE_DELAY_MILLIS * 2;
             Delay::new(Instant::now() + Duration::from_millis(INITIAL_DELAY_MS))
+                .map_err(|err| anyhow!("timer error: {}", err))
                 .and_then(|_| recv_timeout)
-                .map_err(|err| panic!("timer error {:?}", err))
+                .then(|result| {
+                    futures::lazy(move || {
+                        let result = match result {
+                            Ok((Some(value), _)) => Ok(value),
+                            Ok((None, _)) => Err(anyhow!("unexpected end of stream")),
+                            Err(err) => Err(err),
+                        };
+                        inner_sender.send(result).expect("send error");
+                        future::ok(())
+                    })
+                })
         }));
-        inner_receiver.recv().expect("recv error")
+
+        inner_receiver
+            .recv()
+            .expect("recv error")
+            .expect("send failure")
     }
 
     #[test]
