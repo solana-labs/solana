@@ -9,12 +9,12 @@ const endpoint = {
   http: {
     edge: 'http://edge.devnet.solana.com:8899',
     beta: 'http://beta.devnet.solana.com:8899',
-    stable: 'http://devnet.solana.com:8899',
+    stable: 'http://devnet.solana.com',
   },
   https: {
     edge: 'https://edge.devnet.solana.com:8443',
     beta: 'https://beta.devnet.solana.com:8443',
-    stable: 'https://devnet.solana.com:8443',
+    stable: 'https://devnet.solana.com',
   },
 };
 
