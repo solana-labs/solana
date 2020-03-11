@@ -236,7 +236,7 @@ mod tests {
     fn test_blockhash_query_new_from_matches_without_nonce_fail() {
         let test_commands = App::new("blockhash_query_test")
             .arg(blockhash_arg())
-            // We can really only hit this case unless the arg requirements
+            // We can really only hit this case if the arg requirements
             // are broken, so unset the requires() to recreate that condition
             .arg(sign_only_arg().requires(""));
 
@@ -251,7 +251,7 @@ mod tests {
     fn test_blockhash_query_new_from_matches_with_nonce_fail() {
         let test_commands = App::new("blockhash_query_test")
             .arg(blockhash_arg())
-            // We can really only hit this case unless the arg requirements
+            // We can really only hit this case if the arg requirements
             // are broken, so unset the requires() to recreate that condition
             .arg(sign_only_arg().requires(""));
         let nonce_pubkey = Pubkey::new(&[1u8; 32]);
