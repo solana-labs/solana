@@ -21,7 +21,7 @@ with open(dashboard_json, 'r') as read_file:
     data = json.load(read_file)
 
 if channel == 'local':
-    data['title'] = 'Local Testnet Monitor'
+    data['title'] = 'Local Cluster Monitor'
     data['uid'] = 'local'
     data['links'] = []
     data['templating']['list'] = [{'current': {'text': '$datasource',
@@ -66,10 +66,9 @@ if channel == 'local':
                                     'useTags': False}]
 
 elif channel == 'stable':
-    # Stable dashboard only allows the user to select between the stable
-    # testnet databases
-    data['title'] = 'Testnet Monitor'
-    data['uid'] = 'testnet'
+    # Stable dashboard only allows the user to select between public clusters
+    data['title'] = 'Cluster Telemetry'
+    data['uid'] = 'monitor'
     data['templating']['list'] = [{'current': {'text': '$datasource',
                                                'value': '$datasource'},
                                    'hide': 1,
@@ -81,20 +80,26 @@ elif channel == 'stable':
                                    'regex': '',
                                    'type': 'datasource'},
                                   {'allValue': None,
-                                   'current': {'text': 'testnet',
-                                               'value': 'testnet'},
+                                   'current': {'text': 'Developer Testnet',
+                                               'value': 'devnet'},
                                    'hide': 1,
                                    'includeAll': False,
                                    'label': 'Testnet',
                                    'multi': False,
                                    'name': 'testnet',
-                                   'options': [{'selected': False,
-                                                'text': 'testnet',
-                                                'value': 'testnet'},
-                                               {'selected': True,
-                                                'text': 'testnet-perf',
-                                                'value': 'testnet-perf'}],
-                                   'query': 'testnet,testnet-perf',
+                                   'options': [{'selected': True,
+                                                'text': 'Developer Testnet',
+                                                'value': 'devnet'},
+                                               {'selected': False,
+                                                'text': 'Mainnet Beta',
+                                                'value': 'mainnet-beta'},
+                                               {'selected': False,
+                                                'text': 'Tour de SOL Testnet',
+                                                'value': 'tds'},
+                                               {'selected': False,
+                                                'text': 'Soft Launch Testnet',
+                                                'value': 'cluster'}],
+                                   'query': 'devnet,mainnet-beta,tds,cluster',
                                    'type': 'custom'},
                                    {'allValue': ".*",
                                     'datasource': '$datasource',
@@ -114,10 +119,9 @@ elif channel == 'stable':
                                     'type': 'query',
                                     'useTags': False}]
 else:
-    # Non-stable dashboard only allows the user to select between all testnet
-    # databases
-    data['title'] = 'Testnet Monitor ({})'.format(channel)
-    data['uid'] = 'testnet-' + channel
+    # Non-stable dashboard includes all the dev clusters
+    data['title'] = 'Cluster Telemetry ({})'.format(channel)
+    data['uid'] = 'monitor-' + channel
     data['templating']['list'] = [{'current': {'text': '$datasource',
                                                'value': '$datasource'},
                                    'hide': 1,
@@ -129,8 +133,8 @@ else:
                                    'regex': '',
                                    'type': 'datasource'},
                                    {'allValue': ".*",
-                                   'current': {'text': 'testnet',
-                                               'value': 'testnet'},
+                                   'current': {'text': 'Developer Testnet',
+                                               'value': 'devnet'},
                                    'datasource': '$datasource',
                                    'hide': 1,
                                    'includeAll': False,
@@ -140,7 +144,7 @@ else:
                                    'options': [],
                                    'query': 'show databases',
                                    'refresh': 1,
-                                   'regex': 'testnet.*',
+                                   'regex': '(devnet|cluster|tds|mainnet-beta|testnet.*)',
                                    'sort': 1,
                                    'tagValuesQuery': '',
                                    'tags': [],

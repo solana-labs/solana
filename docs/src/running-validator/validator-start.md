@@ -24,8 +24,8 @@ solana transaction-count
 Inspect the network explorer at
 [https://explorer.solana.com/](https://explorer.solana.com/) for activity.
 
-View the [metrics dashboard](https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta?var-testnet=testnet)
-for more detail on cluster activity.
+View the [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-telemetry) for more
+detail on cluster activity.
 
 ## Confirm your Installation
 
