@@ -1,10 +1,9 @@
 pub mod blockhash_query;
 
-use crate::nonce;
 use clap::{App, Arg, ArgMatches};
 use serde_json::Value;
 use solana_clap_utils::{
-    input_parsers::{pubkey_of, value_of},
+    input_parsers::value_of,
     input_validators::{is_hash, is_pubkey_sig},
     offline::{BLOCKHASH_ARG, SIGNER_ARG, SIGN_ONLY_ARG},
 };
