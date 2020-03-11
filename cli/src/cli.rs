@@ -990,7 +990,7 @@ pub fn check_unique_pubkeys(
     }
 }
 
-pub fn get_blockhash_fee_calculator(
+pub fn get_blockhash_and_fee_calculator(
     rpc_client: &RpcClient,
     sign_only: bool,
     blockhash: Option<Hash>,
@@ -1283,7 +1283,7 @@ fn process_pay(
         (to, "to".to_string()),
     )?;
 
-    let (blockhash, fee_calculator) = blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
+    let (blockhash, fee_calculator) = blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
 
     let cancelable = if cancelable {
         Some(config.signers[0].pubkey())
@@ -1471,7 +1471,7 @@ fn process_transfer(
     )?;
 
     let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_fee_calculator(rpc_client)?;
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
     let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
 
     let nonce_authority = config.signers[nonce_authority];

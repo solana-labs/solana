@@ -7,7 +7,7 @@ pub enum Source {
 }
 
 impl Source {
-    pub fn get_blockhash_fee_calculator(
+    pub fn get_blockhash_and_fee_calculator(
         &self,
         rpc_client: &RpcClient,
     ) -> Result<(Hash, FeeCalculator), Box<dyn std::error::Error>> {
@@ -77,7 +77,7 @@ impl BlockhashQuery {
         BlockhashQuery::new(blockhash, sign_only, nonce_account)
     }
 
-    pub fn get_blockhash_fee_calculator(
+    pub fn get_blockhash_and_fee_calculator(
         &self,
         rpc_client: &RpcClient,
     ) -> Result<(Hash, FeeCalculator), Box<dyn std::error::Error>> {
@@ -89,7 +89,7 @@ impl BlockhashQuery {
                     .ok_or(format!("Hash has expired {:?}", hash))?;
                 Ok((*hash, fee_calculator))
             }
-            BlockhashQuery::All(source) => source.get_blockhash_fee_calculator(rpc_client),
+            BlockhashQuery::All(source) => source.get_blockhash_and_fee_calculator(rpc_client),
         }
     }
 }
@@ -292,7 +292,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::default()
-                .get_blockhash_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
             (rpc_blockhash, rpc_fee_calc.clone()),
         );
@@ -308,7 +308,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(Some(test_blockhash), false, None)
-                .get_blockhash_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
             (test_blockhash, rpc_fee_calc.clone()),
         );
@@ -320,13 +320,13 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(Some(test_blockhash), true, None)
-                .get_blockhash_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
             (test_blockhash, FeeCalculator::default()),
         );
         let rpc_client = RpcClient::new_mock("fails".to_string());
         assert!(BlockhashQuery::default()
-            .get_blockhash_fee_calculator(&rpc_client)
+            .get_blockhash_and_fee_calculator(&rpc_client)
             .is_err());
 
         let nonce_blockhash = Hash::new(&[2u8; 32]);
@@ -355,7 +355,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(None, false, Some(nonce_pubkey))
-                .get_blockhash_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
             (nonce_blockhash, nonce_fee_calc.clone()),
         );
@@ -364,7 +364,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(Some(nonce_blockhash), false, Some(nonce_pubkey))
-                .get_blockhash_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
             (nonce_blockhash, nonce_fee_calc.clone()),
         );
@@ -373,7 +373,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert!(
             BlockhashQuery::new(Some(test_blockhash), false, Some(nonce_pubkey))
-                .get_blockhash_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client)
                 .is_err()
         );
         let mut mocks = HashMap::new();
@@ -381,14 +381,14 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::new(Some(nonce_blockhash), true, Some(nonce_pubkey))
-                .get_blockhash_fee_calculator(&rpc_client)
+                .get_blockhash_and_fee_calculator(&rpc_client)
                 .unwrap(),
             (nonce_blockhash, FeeCalculator::default()),
         );
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
         assert!(BlockhashQuery::new(None, false, Some(nonce_pubkey))
-            .get_blockhash_fee_calculator(&rpc_client)
+            .get_blockhash_and_fee_calculator(&rpc_client)
             .is_err());
     }
 }
