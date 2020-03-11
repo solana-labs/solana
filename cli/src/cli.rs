@@ -19,7 +19,7 @@ use solana_clap_utils::{
     ArgConstant,
 };
 use solana_client::{
-    client_error::{ClientError, Result as ClientResult},
+    client_error::{ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
 };
 #[cfg(not(test))]
@@ -2120,12 +2120,12 @@ where
 {
     match result {
         Err(err) => {
-            if let ClientError::TransactionError(TransactionError::InstructionError(
+            if let ClientErrorKind::TransactionError(TransactionError::InstructionError(
                 _,
                 InstructionError::CustomError(code),
-            )) = err
+            )) = err.kind()
             {
-                if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
+                if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
                     error!("{}::{:?}", E::type_of(), specific_error);
                     eprintln!(
                         "Program Error ({}::{:?}): {}",
