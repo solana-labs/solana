@@ -3,96 +3,124 @@
 use crate::{pubkey::Pubkey, short_vec, system_instruction::SystemError};
 use bincode::serialize;
 use serde::Serialize;
+use thiserror::Error;
 
 /// Reasons the runtime might have rejected an instruction.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, Error, PartialEq, Eq, Clone)]
 pub enum InstructionError {
     /// Deprecated! Use CustomError instead!
     /// The program instruction returned an error
+    #[error("generic instruction error")]
     GenericError,
 
     /// The arguments provided to a program instruction where invalid
+    #[error("invalid instruction argument")]
     InvalidArgument,
 
     /// An instruction's data contents was invalid
+    #[error("invalid instruction data")]
     InvalidInstructionData,
 
     /// An account's data contents was invalid
+    #[error("invalid account data for instruction")]
     InvalidAccountData,
 
     /// An account's data was too small
+    #[error("account data too small for instruction")]
     AccountDataTooSmall,
 
     /// An account's balance was too small to complete the instruction
+    #[error("insufficient funds for instruction")]
     InsufficientFunds,
 
     /// The account did not have the expected program id
+    #[error("incorrect program id for instruction")]
     IncorrectProgramId,
 
     /// A signature was required but not found
+    #[error("missing required signature for instruction")]
     MissingRequiredSignature,
 
     /// An initialize instruction was sent to an account that has already been initialized.
+    #[error("already initialized account for instruction")]
     AccountAlreadyInitialized,
 
     /// An attempt to operate on an account that hasn't been initialized.
+    #[error("uninitialized account for instruction")]
     UninitializedAccount,
 
     /// Program's instruction lamport balance does not equal the balance after the instruction
+    #[error("balance mismatch after instruction")]
     UnbalancedInstruction,
 
     /// Program modified an account's program id
+    #[error("instruction modified program id")]
     ModifiedProgramId,
 
     /// Program spent the lamports of an account that doesn't belong to it
+    #[error("instruction spent from account it does not own")]
     ExternalAccountLamportSpend,
 
     /// Program modified the data of an account that doesn't belong to it
+    #[error("instruction modified data of account it does not own")]
     ExternalAccountDataModified,
 
     /// Read-only account modified lamports
+    #[error("instruction changed balance of read-only account")]
     ReadonlyLamportChange,
 
     /// Read-only account modified data
+    #[error("instruction modified data of read-only account")]
     ReadonlyDataModified,
 
     /// An account was referenced more than once in a single instruction
     // Deprecated, instructions can now contain duplicate accounts
+    #[error("instruction contains duplicate accounts")]
     DuplicateAccountIndex,
 
     /// Executable bit on account changed, but shouldn't have
+    #[error("instrcution changed executable bit")]
     ExecutableModified,
 
     /// Rent_epoch account changed, but shouldn't have
+    #[error("instruction modified rent epoch")]
     RentEpochModified,
 
     /// The instruction expected additional account keys
+    #[error("Insufficient account keys for instruction")]
     NotEnoughAccountKeys,
 
     /// A non-system program changed the size of the account data
+    #[error("non-system instruction changed account size")]
     AccountDataSizeChanged,
 
     /// The instruction expected an executable account
+    #[error("instruction expected an executable account")]
     AccountNotExecutable,
 
     /// Failed to borrow a reference to account data, already borrowed
+    #[error("instruction attempted to borrow already borrowed account")]
     AccountBorrowFailed,
 
     /// Account data has an outstanding reference after a program's execution
+    #[error("instruction left account data with outstanding borrow")]
     AccountBorrowOutstanding,
 
     /// The same account was multiply passed to an on-chain program's entrypoint, but the program
     /// modified them differently.  A program can only modify one instance of the account because
     /// the runtime cannot determine which changes to pick or how to merge them if both are modified
+    #[error("instruction modifications of multiply-passed account differ")]
     DuplicateAccountOutOfSync,
 
     /// Allows on-chain programs to implement program-specific error types and see them returned
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
+    #[error("custom instruction error: {0}")]
     CustomError(u32),
 
     /// The return value from the program was invalid.  Valid errors are either a defined builtin
     /// error value or a user-defined error in the lower 32 bits.
+    #[error("instruction error is invalid")]
     InvalidError,
 }
 
