@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use std::{error, fmt};
+use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum RpcRequest {
@@ -95,26 +95,16 @@ impl RpcRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Error)]
 pub enum RpcError {
+    #[error("rpc reques error: {0}")]
     RpcRequestError(String),
-}
-
-impl fmt::Display for RpcError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid")
-    }
-}
-
-impl error::Error for RpcError {
-    fn description(&self) -> &str {
-        "invalid"
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
+    #[error("parse error: expected {0}")]
+    ParseError(String), /* "expected" */
+    // Anything in a `ForUser` needs to die.  The caller should be
+    // deciding what to tell their user
+    #[error("{0}")]
+    ForUser(String), /* "direct-to-user message" */
 }
 
 #[cfg(test)]
