@@ -374,7 +374,7 @@ impl RpcClient {
                     return Err(err.unwrap_err().into());
                 } else {
                     return Err(
-                        RpcError::ForUser(format!("Transaction {} failed", signature_str)).into(),
+                        RpcError::ForUser("unable to confirm transaction. This can happen in situations such as transaction expiration and insufficient fee-payer funds".to_string()).into(),
                     );
                 }
             }
