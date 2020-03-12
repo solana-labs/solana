@@ -145,9 +145,9 @@ pub const SERVICE_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "hellish money",
-        staker: "CqKdQ57mBj2mKcAbpjWc28Ls7yXzBXboxSTCRWocmUVj",
+        staker: "4DVkqvRP8y26JvzNwsnQEQuC7HASwpGs58GsAT9XJMVg",
         lamports: 200_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("ASJpWZAxY96kbciLqzb7sg45gsH32yPzGcxjn7HPcARn"),
     },
     StakerInfo {
         name: "full grape",
@@ -203,7 +203,7 @@ pub const COMMUNITY_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "legal gate",
         staker: "7KCzZCbZz6V1U1YXUpBNaqQzQCg2DKo8JsNhKASKtYxe",
-        lamports: 16_086_641 * LAMPORTS_PER_SOL,
+        lamports: 30_301_032 * LAMPORTS_PER_SOL,
         withdrawer: Some("92viKFftk1dJjqJwreFqT2qHXxjSUuEE9VyHvTdY1mpY"),
     },
     StakerInfo {
