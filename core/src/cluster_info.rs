@@ -382,6 +382,7 @@ impl ClusterInfo {
         if (total_slots / (1 + current_slots.len() as isize)) < expected_slots
             && crds_value::MAX_EPOCH_SLOTS as usize / 2 <= current_slots.len()
         {
+            inc_new_counter_warn!("cluster_info-epoch_slots-filled", 1);
             warn!(
                 "EPOCH_SLOTS are filling up FAST {}/{}",
                 total_slots,
