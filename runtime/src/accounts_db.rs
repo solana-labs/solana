@@ -2952,6 +2952,24 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_snapshot_storages_exclude_empty() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let base_slot = 0;
+        let after_slot = base_slot + 1;
+
+        db.store(base_slot, &[(&key, &account)]);
+        db.add_root(base_slot);
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+
+        let storage = db.storage.read().unwrap();
+        storage.0[&0].values().next().unwrap().remove_account();
+        assert!(db.get_snapshot_storages(after_slot).is_empty());
+    }
+
+    #[test]
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
         let accounts = AccountsDB::new(Vec::new());
