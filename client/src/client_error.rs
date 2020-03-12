@@ -48,7 +48,7 @@ impl Into<TransportError> for ClientErrorKind {
 }
 
 #[derive(Error, Debug)]
-#[error("client error: kind({kind})")]
+#[error("{kind}")]
 pub struct ClientError {
     command: Option<&'static str>,
     #[source]
