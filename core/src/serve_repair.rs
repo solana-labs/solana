@@ -64,6 +64,8 @@ pub struct ServeRepair {
     cluster_info: Arc<RwLock<ClusterInfo>>,
 }
 
+type RepairCache = HashMap<Slot, (Vec<ContactInfo>, Vec<(u64, usize)>)>;
+
 impl ServeRepair {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
@@ -276,7 +278,7 @@ impl ServeRepair {
         &self,
         cluster_slots: &ClusterSlots,
         repair_request: &RepairType,
-        cache: &mut HashMap<Slot, (Vec<ContactInfo>, Vec<(u64, usize)>)>,
+        cache: &mut RepairCache,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
