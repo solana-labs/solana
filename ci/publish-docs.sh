@@ -13,9 +13,8 @@ if [[ -n $CI_BRANCH ]]; then
       . ci/rust-version.sh stable
       ci/docker-run.sh "$rust_stable_docker_image" make -C docs
     )
-    # make a local commit for the svgs
-    git add -A -f docs/src/.gitbook/assets/.
-    git add -f docs/src/cli/usage.md
+    # make a local commit for the svgs and generated/updated markdown
+    git add -f docs/src
     if ! git diff-index --quiet HEAD; then
       git config user.email maintainers@solana.com
       git config user.name "$me"
