@@ -231,7 +231,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     .get_matches();
 
     if let Err(e) = do_main(&matches) {
-        eprintln!("error: {}", e);
+        use thiserror::Error;
+
+        #[derive(Error)]
+        #[error("")]
+        struct PrettyError(String);
+
+        impl std::fmt::Debug for PrettyError {
+            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(fmt, "{}", self.0)
+            }
+        }
+
+        return Err(PrettyError(e.to_string()).into());
     }
     Ok(())
 }
