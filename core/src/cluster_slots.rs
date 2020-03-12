@@ -1,6 +1,6 @@
 use crate::{
     cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
-    serve_repair::RepairType, weighted_shuffle::weighted_best,
+    serve_repair::RepairType,
 };
 
 use solana_ledger::{bank_forks::BankForks, staking_utils};
@@ -141,9 +141,9 @@ impl ClusterSlots {
         }
     }
 
-    pub fn best_peer(&self, slot: Slot, repair_peers: &[ContactInfo]) -> usize {
+    pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<(u64, usize)> {
         let slot_peers = self.lookup(slot);
-        let weights: Vec<(u64, usize)> = repair_peers
+        repair_peers
             .iter()
             .enumerate()
             .map(|(i, x)| {
@@ -153,8 +153,7 @@ impl ClusterSlots {
                     i,
                 )
             })
-            .collect();
-        weighted_best(&weights, Pubkey::new_rand().to_bytes())
+            .collect()
     }
 
     pub fn generate_repairs_for_missing_slots(
@@ -224,10 +223,10 @@ mod tests {
     }
 
     #[test]
-    fn test_best_peer() {
+    fn test_compute_weights() {
         let cs = ClusterSlots::default();
         let ci = ContactInfo::default();
-        assert_eq!(cs.best_peer(0, &[ci]), 0);
+        assert_eq!(cs.compute_weights(0, &[ci]), vec![(1, 0)]);
     }
 
     #[test]
@@ -243,7 +242,10 @@ mod tests {
         cs.cluster_slots.insert(0, map);
         c1.id = k1;
         c2.id = k2;
-        assert_eq!(cs.best_peer(0, &[c2, c1]), 1);
+        assert_eq!(
+            cs.compute_weights(0, &[c1, c2]),
+            vec![(std::u64::MAX / 2 + 1, 1), (1, 0)]
+        );
     }
 
     #[test]
@@ -261,7 +263,10 @@ mod tests {
             .insert(Rc::new(k1.clone()), std::u64::MAX / 2);
         c1.id = k1;
         c2.id = k2;
-        assert_eq!(cs.best_peer(0, &[c2, c1]), 1);
+        assert_eq!(
+            cs.compute_weights(0, &[c1, c2]),
+            vec![(std::u64::MAX / 2 + 1, 1), (1, 0)]
+        );
     }
 
     #[test]
