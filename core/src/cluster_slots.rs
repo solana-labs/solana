@@ -224,6 +224,47 @@ mod tests {
     }
 
     #[test]
+    fn test_best_peer() {
+        let cs = ClusterSlots::default();
+        let ci = ContactInfo::default();
+        assert_eq!(cs.best_peer(0, &[ci]), 0);
+    }
+
+    #[test]
+    fn test_best_peer_2() {
+        let mut cs = ClusterSlots::default();
+        let mut c1 = ContactInfo::default();
+        let mut c2 = ContactInfo::default();
+        let mut map = HashMap::new();
+        let k1 = Pubkey::new_rand();
+        let k2 = Pubkey::new_rand();
+        map.insert(Rc::new(k1.clone()), std::u64::MAX / 2);
+        map.insert(Rc::new(k2.clone()), 0);
+        cs.cluster_slots.insert(0, map);
+        c1.id = k1;
+        c2.id = k2;
+        assert_eq!(cs.best_peer(0, &[c2, c1]), 1);
+    }
+
+    #[test]
+    fn test_best_peer_3() {
+        let mut cs = ClusterSlots::default();
+        let mut c1 = ContactInfo::default();
+        let mut c2 = ContactInfo::default();
+        let mut map = HashMap::new();
+        let k1 = Pubkey::new_rand();
+        let k2 = Pubkey::new_rand();
+        map.insert(Rc::new(k2.clone()), 0);
+        cs.cluster_slots.insert(0, map);
+        //make sure default weights are used as well
+        cs.validator_stakes
+            .insert(Rc::new(k1.clone()), std::u64::MAX / 2);
+        c1.id = k1;
+        c2.id = k2;
+        assert_eq!(cs.best_peer(0, &[c2, c1]), 1);
+    }
+
+    #[test]
     fn test_update_new_staked_slot() {
         let mut cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
