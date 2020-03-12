@@ -244,7 +244,7 @@ mod tests {
         c2.id = k2;
         assert_eq!(
             cs.compute_weights(0, &[c1, c2]),
-            vec![(std::u64::MAX / 2 + 1, 1), (1, 0)]
+            vec![(std::u64::MAX / 2 + 1, 0), (1, 1)]
         );
     }
 
@@ -265,7 +265,7 @@ mod tests {
         c2.id = k2;
         assert_eq!(
             cs.compute_weights(0, &[c1, c2]),
-            vec![(std::u64::MAX / 2 + 1, 1), (1, 0)]
+            vec![(std::u64::MAX / 2 + 1, 0), (1, 1)]
         );
     }
 
