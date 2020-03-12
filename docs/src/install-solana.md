@@ -1,14 +1,14 @@
 # Install the Solana Tool Suite
 
 Install the Solana release
-[v1.1.0](https://github.com/solana-labs/solana/releases/tag/v1.1.0) on your
+[LATEST_SOLANA_RELEASE_VERSION](https://github.com/solana-labs/solana/releases/tag/LATEST_SOLANA_RELEASE_VERSION) on your
 machine by running:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.1.0/install/solana-install-init.sh | sh -s - 1.1.0
+curl -sSf https://raw.githubusercontent.com/solana-labs/solana/LATEST_SOLANA_RELEASE_VERSION/install/solana-install-init.sh | sh -s - LATEST_SOLANA_RELEASE_VERSION
 ```
 
-If you are connecting to a different testnet, you can replace `1.1.0` with the
+If you are connecting to a different testnet, you can replace `LATEST_SOLANA_RELEASE_VERSION` with the
 release tag matching the software version of your desired testnet, or replace it
 with the named channel `stable`, `beta`, or `edge`.
 
@@ -16,11 +16,11 @@ The following output indicates a successful update:
 
 ```text
 looking for latest release
-downloading v1.1.0 installer
+downloading LATEST_SOLANA_RELEASE_VERSION installer
 Configuration: /home/solana/.config/solana/install/config.yml
 Active release directory: /home/solana/.local/share/solana/install/active_release
-* Release version: 1.1.0
-* Release URL: https://github.com/solana-labs/solana/releases/download/v1.1.0/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+* Release version: LATEST_SOLANA_RELEASE_VERSION
+* Release URL: https://github.com/solana-labs/solana/releases/download/LATEST_SOLANA_RELEASE_VERSION/solana-release-x86_64-unknown-linux-gnu.tar.bz2
 Update successful
 ```
 
