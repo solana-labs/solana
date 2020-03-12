@@ -211,26 +211,6 @@ impl MessageProcessor {
         )
     }
 
-    /// Visit each unique instruction account index once
-    pub fn visit_instruction_accounts_once(
-        instruction: &CompiledInstruction,
-        work: &mut dyn FnMut(usize, usize) -> Result<(), InstructionError>,
-    ) -> Result<(), InstructionError> {
-        let mut unique_index = 0;
-        'root: for (i, account_index) in instruction.accounts.iter().enumerate() {
-            // Note: This is an O(n^2) algorithm,
-            // but performed on a very small slice and requires no heap allocations
-            for account_index_before in instruction.accounts[..i].iter() {
-                if account_index_before == account_index {
-                    continue 'root; // skip dups
-                }
-            }
-            work(unique_index, *account_index as usize)?;
-            unique_index += 1;
-        }
-        Ok(())
-    }
-
     /// Record the initial state of the accounts so that they can be compared
     /// after the instruction is processed
     pub fn create_pre_accounts(
@@ -247,7 +227,7 @@ impl MessageProcessor {
                 pre_accounts.push(PreAccount::new(&account, is_writable, program_id));
                 Ok(())
             };
-            let _ = Self::visit_instruction_accounts_once(instruction, &mut work);
+            let _ = instruction.visit_each_account(&mut work);
         }
         pre_accounts
     }
@@ -292,7 +272,7 @@ impl MessageProcessor {
                 post_sum += u128::from(account.lamports);
                 Ok(())
             };
-            Self::visit_instruction_accounts_once(instruction, &mut work)?;
+            instruction.visit_each_account(&mut work)?;
         }
 
         // Verify that the total sum of all the lamports did not change
