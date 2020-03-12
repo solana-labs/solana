@@ -52,9 +52,9 @@ touch \
 
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
 
-for i in {50..1}
+for i in {5..1}
 do
-RUST_BACKTRACE=full RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" -- rpc_subscriptions 2> target/cov/coverage-stderr.log
+RUST_BACKTRACE=full RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log
 done
 
 echo "--- grcov"
