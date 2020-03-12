@@ -230,6 +230,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .get_matches();
 
+    if let Err(e) = do_main(&matches) {
+        eprintln!("error: {}", e);
+    }
+    Ok(())
+}
+
+fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
     if parse_settings(&matches)? {
         let wallet_manager = maybe_wallet_manager()?;
 
