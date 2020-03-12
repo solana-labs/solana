@@ -8,6 +8,7 @@ TARGET=html/index.html
 TEST_STAMP=src/tests.ok
 
 all: $(TARGET)
+	./set-solana-release-tag.sh
 
 svg: $(SVG_IMGS)
 
