@@ -139,9 +139,9 @@ pub const SERVICE_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "inexpensive uncle",
-        staker: "E4DLNkmdL34ejA48ApfPDoFVuD9XWAFqi8bXzBGRhKst",
+        staker: "AkJ7yssRqS3X4UWLUsPTxbP6LfVgdPYBWH4Jgk5EETgZ",
         lamports: 300_000 * LAMPORTS_PER_SOL,
-        withdrawer: Some("DPKFTXCAiBFywmGfoUsjrhi4Dxmhdsr8AMXDtRi4Ea1n"),
+        withdrawer: Some("6mudxxoe5VyXXNXsJ3NSGSTGESfG2t86PBCQGbouHpXX"),
     },
     StakerInfo {
         name: "hellish money",
