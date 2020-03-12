@@ -227,7 +227,7 @@ impl MessageProcessor {
                 pre_accounts.push(PreAccount::new(&account, is_writable, program_id));
                 Ok(())
             };
-            let _ = instruction.visit_instruction_accounts_once(&mut work);
+            let _ = instruction.visit_each_account(&mut work);
         }
         pre_accounts
     }
@@ -272,7 +272,7 @@ impl MessageProcessor {
                 post_sum += u128::from(account.lamports);
                 Ok(())
             };
-            instruction.visit_instruction_accounts_once(&mut work)?;
+            instruction.visit_each_account(&mut work)?;
         }
 
         // Verify that the total sum of all the lamports did not change

@@ -203,7 +203,7 @@ impl CompiledInstruction {
     }
 
     /// Visit each unique instruction account index once
-    pub fn visit_instruction_accounts_once(
+    pub fn visit_each_account(
         &self,
         work: &mut dyn FnMut(usize, usize) -> Result<(), InstructionError>,
     ) -> Result<(), InstructionError> {
@@ -258,7 +258,7 @@ mod test {
     }
 
     #[test]
-    fn test_visit_instruction_accounts_once() {
+    fn test_visit_each_account() {
         let do_work = |accounts: &[u8]| -> (usize, usize) {
             let mut unique_total = 0;
             let mut account_total = 0;
@@ -268,9 +268,7 @@ mod test {
                 Ok(())
             };
             let instruction = CompiledInstruction::new(0, &[0], accounts.to_vec());
-            instruction
-                .visit_instruction_accounts_once(&mut work)
-                .unwrap();
+            instruction.visit_each_account(&mut work).unwrap();
 
             (unique_total, account_total)
         };
