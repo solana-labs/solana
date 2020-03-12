@@ -1,4 +1,7 @@
-use crate::{cluster_info::ClusterInfo, epoch_slots::EpochSlots, serve_repair::RepairType};
+use crate::{
+    cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
+    serve_repair::RepairType, weighted_shuffle::weighted_best,
+};
 
 use solana_ledger::{bank_forks::BankForks, staking_utils};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
@@ -108,11 +111,7 @@ impl ClusterSlots {
             .collect()
     }
 
-    pub fn update_peers(
-        &mut self,
-        cluster_info: &RwLock<ClusterInfo>,
-        bank_forks: &RwLock<BankForks>,
-    ) {
+    fn update_peers(&mut self, cluster_info: &RwLock<ClusterInfo>, bank_forks: &RwLock<BankForks>) {
         let root = bank_forks.read().unwrap().root();
         let (epoch, _) = bank_forks
             .read()
@@ -141,14 +140,21 @@ impl ClusterSlots {
             self.epoch = Some(epoch);
         }
     }
-    pub fn peers(&self, slot: Slot) -> Vec<(Rc<Pubkey>, u64)> {
-        let mut peers: HashMap<Rc<Pubkey>, u64> = self.validator_stakes.clone();
-        if let Some(slot_peers) = self.lookup(slot) {
-            slot_peers
-                .iter()
-                .for_each(|(x, y)| *peers.entry(x.clone()).or_insert(0) += *y);
-        }
-        peers.into_iter().filter(|x| *x.0 != self.self_id).collect()
+
+    pub fn best_peer(&self, slot: Slot, repair_peers: &[ContactInfo]) -> usize {
+        let slot_peers = self.lookup(slot);
+        let weights: Vec<(u64, usize)> = repair_peers
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                (
+                    1 + slot_peers.and_then(|v| v.get(&x.id)).cloned().unwrap_or(0)
+                        + self.validator_stakes.get(&x.id).cloned().unwrap_or(0),
+                    i,
+                )
+            })
+            .collect();
+        weighted_best(&weights, Pubkey::new_rand().to_bytes())
     }
 
     pub fn generate_repairs_for_missing_slots(

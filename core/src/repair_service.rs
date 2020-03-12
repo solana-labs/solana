@@ -133,7 +133,7 @@ impl RepairService {
                     .into_iter()
                     .filter_map(|repair_request| {
                         serve_repair
-                            .repair_request(&repair_request)
+                            .repair_request(&cluster_slots, &repair_request)
                             .map(|result| (result, repair_request))
                             .ok()
                     })
