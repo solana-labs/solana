@@ -193,7 +193,19 @@ fn grind_parse_args(
 fn main() -> Result<(), Box<dyn error::Error>> {
     let result = do_main().err();
     if let Some(err) = result {
-        eprintln!("hi! {}", err);
+        use thiserror::Error;
+
+        #[derive(Error)]
+        #[error("")]
+        struct PrettyError(String);
+
+        impl std::fmt::Debug for PrettyError {
+            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(fmt, "{}", self.0)
+            }
+        }
+
+        return Err(PrettyError(err.to_string()).into());
     }
     Ok(())
 }
