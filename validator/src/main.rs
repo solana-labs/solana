@@ -505,7 +505,7 @@ pub fn main() {
             Arg::with_name("enable_rpc_transaction_history")
                 .long("enable-rpc-transaction-history")
                 .takes_value(false)
-                .help("Enable historical transaction info over JSON RPC, including the 'getConfirmedBlock' and 'getSignatureStatus' APIs.  This will cause an increase in disk usage and IOPS"),
+                .help("Enable historical transaction info over JSON RPC, including the 'getConfirmedBlock' API.  This will cause an increase in disk usage and IOPS"),
         )
         .arg(
             Arg::with_name("rpc_faucet_addr")
