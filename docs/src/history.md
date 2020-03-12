@@ -56,4 +56,3 @@ processing an _average_ of 200 thousand transactions per second with bursts
 over 500 thousand. The project was also extended to support on-chain programs
 written in the C programming language and run concurrently in a safe execution
 environment called BPF.
-
