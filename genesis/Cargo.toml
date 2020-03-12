@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-base64 = "0.11.0"
+base64 = "0.12.0"
 clap = "2.33.0"
 chrono = "0.4"
 serde = "1.0.104"
