@@ -3,7 +3,7 @@ use crate::{
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
-    rpc_request::RpcRequest,
+    rpc_request::{RpcError, RpcRequest},
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
         RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
@@ -27,7 +27,7 @@ use solana_sdk::{
     transaction::{self, Transaction, TransactionError},
 };
 use std::{
-    error, io,
+    error,
     net::SocketAddr,
     thread::sleep,
     time::{Duration, Instant},
@@ -97,11 +97,7 @@ impl RpcClient {
             self.client
                 .send(&RpcRequest::SendTransaction, json!([serialized_encoded]), 5)?;
         if signature.as_str().is_none() {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Received result of an unexpected type",
-            )
-            .into())
+            Err(RpcError::ForUser("Received result of an unexpected type".to_string()).into())
         } else {
             Ok(signature.as_str().unwrap().to_string())
         }
@@ -209,11 +205,7 @@ impl RpcClient {
         response
             .map(|result_json| {
                 if result_json.is_null() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Block Not Found: slot={}", slot),
-                    )
-                    .into());
+                    return Err(RpcError::ForUser(format!("Block Not Found: slot={}", slot)).into());
                 }
                 let result = serde_json::from_value(result_json)
                     .map_err(|err| ClientError::new_with_command(err.into(), "GetBlockTime"))?;
@@ -284,12 +276,11 @@ impl RpcClient {
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_command(err.into(), "GetIdentity"))
             .and_then(|rpc_identity: RpcIdentity| {
-                rpc_identity.identity.parse::<Pubkey>().map_err(|err| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("GetIdentity invalid pubkey failure: {:?}", err),
+                rpc_identity.identity.parse::<Pubkey>().map_err(|_| {
+                    ClientError::new_with_command(
+                        RpcError::ParseError("Pubkey".to_string()).into(),
+                        "GetIdentity",
                     )
-                    .into()
                 })
             })
     }
@@ -365,11 +356,9 @@ impl RpcClient {
                 if let Some(err) = status {
                     return Err(err.unwrap_err().into());
                 } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Transaction {:?} failed: {:?}", signature_str, status),
-                    )
-                    .into());
+                    return Err(
+                        RpcError::ForUser(format!("Transaction {} failed", signature_str)).into(),
+                    );
                 }
             }
         }
@@ -428,7 +417,7 @@ impl RpcClient {
             }
 
             if send_retries == 0 {
-                return Err(io::Error::new(io::ErrorKind::Other, "Transactions failed").into());
+                return Err(RpcError::ForUser("Transactions failed".to_string()).into());
             }
             send_retries -= 1;
 
@@ -478,13 +467,7 @@ impl RpcClient {
     pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
         self.get_account_with_commitment(pubkey, CommitmentConfig::default())?
             .value
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("AccountNotFound: pubkey={}", pubkey),
-                )
-                .into()
-            })
+            .ok_or_else(|| RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into())
     }
 
     pub fn get_account_with_commitment(
@@ -501,11 +484,9 @@ impl RpcClient {
         response
             .map(|result_json| {
                 if result_json.is_null() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("AccountNotFound: pubkey={}", pubkey),
-                    )
-                    .into());
+                    return Err(
+                        RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into(),
+                    );
                 }
                 let Response {
                     context,
@@ -519,10 +500,10 @@ impl RpcClient {
                 })
             })
             .map_err(|err| {
-                Into::<ClientError>::into(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("AccountNotFound: pubkey={}: {:?}", pubkey, err),
-                ))
+                Into::<ClientError>::into(RpcError::ForUser(format!(
+                    "AccountNotFound: pubkey={}: {}",
+                    pubkey, err
+                )))
             })?
     }
 
@@ -584,12 +565,7 @@ impl RpcClient {
                 json!([pubkey.to_string()]),
                 0,
             )
-            .map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("AccountNotFound: pubkey={}: {:?}", pubkey, err),
-                )
-            })?;
+            .map_err(|err| err.into_with_command("GetProgramAccounts"))?;
 
         let accounts: Vec<RpcKeyedAccount> =
             serde_json::from_value::<Vec<RpcKeyedAccount>>(response)
@@ -597,10 +573,10 @@ impl RpcClient {
 
         let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
         for RpcKeyedAccount { pubkey, account } in accounts.into_iter() {
-            let pubkey = pubkey.parse().map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("GetProgramAccounts parse failure: {:?}", err),
+            let pubkey = pubkey.parse().map_err(|_| {
+                ClientError::new_with_command(
+                    RpcError::ParseError("Pubkey".to_string()).into(),
+                    "GetProgramAccounts",
                 )
             })?;
             pubkey_accounts.push((pubkey, account.decode().unwrap()));
@@ -658,11 +634,11 @@ impl RpcClient {
                 },
         } = serde_json::from_value::<Response<RpcBlockhashFeeCalculator>>(response)
             .map_err(|err| ClientError::new_with_command(err.into(), "GetRecentBlockhash"))?;
-        let blockhash = blockhash.parse().map_err(|err| {
-            Into::<ClientError>::into(io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetRecentBlockhash hash parse failure: {:?}", err),
-            ))
+        let blockhash = blockhash.parse().map_err(|_| {
+            ClientError::new_with_command(
+                RpcError::ParseError("Hash".to_string()).into(),
+                "GetRecentBlockhash",
+            )
         })?;
         Ok(Response {
             context,
@@ -722,15 +698,12 @@ impl RpcClient {
             ));
             num_retries += 1;
         }
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
-                start.elapsed().as_millis(),
-                num_retries,
-                blockhash
-            ),
-        )
+        Err(RpcError::ForUser(format!(
+            "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
+            start.elapsed().as_millis(),
+            num_retries,
+            blockhash
+        ))
         .into())
     }
 
@@ -743,10 +716,10 @@ impl RpcClient {
         let hash = serde_json::from_value::<String>(response)
             .map_err(|err| ClientError::new_with_command(err.into(), "GetGenesisHash"))?;
 
-        let hash = hash.parse().map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("GetGenesisHash hash parse failure: {:?}", err),
+        let hash = hash.parse().map_err(|_| {
+            ClientError::new_with_command(
+                RpcError::ParseError("Hash".to_string()).into(),
+                "GetGenesisHash",
             )
         })?;
         Ok(hash)
@@ -837,13 +810,10 @@ impl RpcClient {
                 break;
             }
             if now.elapsed().as_secs() > 15 {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "signature not found after {} seconds",
-                        now.elapsed().as_secs()
-                    ),
-                )
+                return Err(RpcError::ForUser(format!(
+                    "signature not found after {} seconds",
+                    now.elapsed().as_secs()
+                ))
                 .into());
             }
             sleep(Duration::from_millis(250));
@@ -930,13 +900,10 @@ impl RpcClient {
                 if confirmed_blocks > 0 {
                     return Ok(confirmed_blocks);
                 } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!(
-                            "signature not found after {} seconds",
-                            now.elapsed().as_secs()
-                        ),
-                    )
+                    return Err(RpcError::ForUser(format!(
+                        "signature not found after {} seconds",
+                        now.elapsed().as_secs()
+                    ))
                     .into());
                 }
             }
@@ -1001,7 +968,7 @@ mod tests {
         instruction::InstructionError, signature::Keypair, system_transaction,
         transaction::TransactionError,
     };
-    use std::{sync::mpsc::channel, thread};
+    use std::{io, sync::mpsc::channel, thread};
 
     #[test]
     fn test_send() {
