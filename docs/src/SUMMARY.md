@@ -63,6 +63,7 @@
   * [Gossip Service](validator/gossip.md)
   * [The Runtime](validator/runtime.md)
 * [Terminology](terminology.md)
+* [History](history.md)
 * [Implemented Design Proposals](implemented-proposals/README.md)
   * [Cluster Software Installation and Updates](implemented-proposals/installer.md)
   * [Cluster Economics](implemented-proposals/ed_overview/README.md)
