@@ -224,6 +224,11 @@ impl EpochSlots {
         let len_slot = serialized_size(&CompressedSlots::default()).unwrap();
         MAX_CRDS_OBJECT_SIZE as isize - (len_header + len_slot) as isize
     }
+
+    pub fn first_slot(&self) -> Option<Slot> {
+        self.slots.iter().map(|s| s.first_slot()).min()
+    }
+
     pub fn to_slots(&self, min_slot: Slot) -> Vec<Slot> {
         self.slots
             .iter()

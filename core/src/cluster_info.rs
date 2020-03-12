@@ -364,12 +364,30 @@ impl ClusterInfo {
                         .crds
                         .lookup(&CrdsValueLabel::EpochSlots(ix, self.id()))
                         .and_then(CrdsValue::epoch_slots)
-                        .map(|x| x.wallclock)?,
+                        .and_then(|x| Some((x.wallclock, x.first_slot()?)))?,
                     ix,
                 ))
             })
             .collect();
         current_slots.sort();
+        let min_slot: Slot = current_slots
+            .iter()
+            .map(|((_, s), _)| *s)
+            .min()
+            .unwrap_or(0);
+        let max_slot: Slot = update.iter().max().cloned().unwrap_or(0);
+        let total_slots = max_slot as isize - min_slot as isize;
+        //should be roughly 4k
+        let expected_slots = (MAX_CRDS_OBJECT_SIZE as isize * 8) / 2;
+        if (total_slots / (1 + current_slots.len() as isize)) < expected_slots
+            && crds_value::MAX_EPOCH_SLOTS as usize / 2 <= current_slots.len()
+        {
+            warn!(
+                "EPOCH_SLOTS are filling up FAST {}/{}",
+                total_slots,
+                current_slots.len()
+            );
+        }
         let mut reset = false;
         let mut epoch_slot_index = current_slots.last().map(|(_, x)| *x).unwrap_or(0);
         while num < update.len() {
