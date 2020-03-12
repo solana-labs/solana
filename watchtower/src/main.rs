@@ -14,7 +14,7 @@ use solana_client::{
 };
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
-use std::{error, io, str::FromStr, thread::sleep, time::Duration};
+use std::{error, str::FromStr, thread::sleep, time::Duration};
 
 struct Config {
     interval: Duration,
