@@ -50,14 +50,15 @@ use solana_stake_program::{
 use solana_storage_program::storage_instruction::StorageAccountType;
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
+    error,
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
     sync::Arc,
     thread::sleep,
     time::Duration,
-    {error, fmt},
 };
+use thiserror::Error;
 use url::Url;
 
 pub type CliSigners = Vec<Box<dyn Signer>>;
@@ -409,32 +410,22 @@ pub struct CliCommandInfo {
     pub signers: CliSigners,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CliError {
+    #[error("bad parameter: {0}")]
     BadParameter(String),
+    #[error("command not recognized: {0}")]
     CommandNotRecognized(String),
+    #[error("insuficient funds for fee")]
     InsufficientFundsForFee,
+    #[error(transparent)]
     InvalidNonce(CliNonceError),
+    #[error("dynamic program error: {0}")]
     DynamicProgramError(String),
+    #[error("rpc request error: {0}")]
     RpcRequestError(String),
+    #[error("keypair file not found: {0}")]
     KeypairFileNotFound(String),
-}
-
-impl fmt::Display for CliError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid")
-    }
-}
-
-impl error::Error for CliError {
-    fn description(&self) -> &str {
-        "invalid"
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
 }
 
 impl From<Box<dyn error::Error>> for CliError {
