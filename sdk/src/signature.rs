@@ -107,9 +107,11 @@ impl Into<[u8; 64]> for Signature {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ParseSignatureError {
+    #[error("string decoded to wrong size for signature")]
     WrongSize,
+    #[error("failed to decode string to signature")]
     Invalid,
 }
 
