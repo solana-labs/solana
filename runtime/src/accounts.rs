@@ -555,10 +555,6 @@ impl Accounts {
             .for_each(|(tx, result)| self.unlock_account(tx, result, &mut account_locks));
     }
 
-    pub fn has_accounts(&self, slot: Slot) -> bool {
-        self.accounts_db.has_accounts(slot)
-    }
-
     /// Store the accounts into the DB
     pub fn store_accounts(
         &self,
