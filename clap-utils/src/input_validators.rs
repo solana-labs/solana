@@ -12,7 +12,7 @@ use std::str::FromStr;
 pub fn is_pubkey(string: String) -> Result<(), String> {
     match string.parse::<Pubkey>() {
         Ok(_) => Ok(()),
-        Err(err) => Err(format!("{:?}", err)),
+        Err(err) => Err(format!("{}", err)),
     }
 }
 
@@ -20,7 +20,7 @@ pub fn is_pubkey(string: String) -> Result<(), String> {
 pub fn is_hash(string: String) -> Result<(), String> {
     match string.parse::<Hash>() {
         Ok(_) => Ok(()),
-        Err(err) => Err(format!("{:?}", err)),
+        Err(err) => Err(format!("{}", err)),
     }
 }
 
@@ -28,7 +28,7 @@ pub fn is_hash(string: String) -> Result<(), String> {
 pub fn is_keypair(string: String) -> Result<(), String> {
     read_keypair_file(&string)
         .map(|_| ())
-        .map_err(|err| format!("{:?}", err))
+        .map_err(|err| format!("{}", err))
 }
 
 // Return an error if a keypair file cannot be parsed
@@ -38,7 +38,7 @@ pub fn is_keypair_or_ask_keyword(string: String) -> Result<(), String> {
     }
     read_keypair_file(&string)
         .map(|_| ())
-        .map_err(|err| format!("{:?}", err))
+        .map_err(|err| format!("{}", err))
 }
 
 // Return an error if string cannot be parsed as pubkey string or keypair file location
@@ -73,10 +73,10 @@ pub fn is_pubkey_sig(string: String) -> Result<(), String> {
                     .ok_or_else(|| "Malformed signer string".to_string())?,
             ) {
                 Ok(_) => Ok(()),
-                Err(err) => Err(format!("{:?}", err)),
+                Err(err) => Err(format!("{}", err)),
             }
         }
-        Err(err) => Err(format!("{:?}", err)),
+        Err(err) => Err(format!("{}", err)),
     }
 }
 
@@ -90,20 +90,20 @@ pub fn is_url(string: String) -> Result<(), String> {
                 Err("no host provided".to_string())
             }
         }
-        Err(err) => Err(format!("{:?}", err)),
+        Err(err) => Err(format!("{}", err)),
     }
 }
 
 pub fn is_slot(slot: String) -> Result<(), String> {
     slot.parse::<Slot>()
         .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+        .map_err(|e| format!("{}", e))
 }
 
 pub fn is_port(port: String) -> Result<(), String> {
     port.parse::<u16>()
         .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+        .map_err(|e| format!("{}", e))
 }
 
 pub fn is_valid_percentage(percentage: String) -> Result<(), String> {
@@ -111,7 +111,7 @@ pub fn is_valid_percentage(percentage: String) -> Result<(), String> {
         .parse::<u8>()
         .map_err(|e| {
             format!(
-                "Unable to parse input percentage, provided: {}, err: {:?}",
+                "Unable to parse input percentage, provided: {}, err: {}",
                 percentage, e
             )
         })
@@ -141,7 +141,7 @@ pub fn is_amount(amount: String) -> Result<(), String> {
 pub fn is_rfc3339_datetime(value: String) -> Result<(), String> {
     DateTime::parse_from_rfc3339(&value)
         .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+        .map_err(|e| format!("{}", e))
 }
 
 pub fn is_derivation(value: String) -> Result<(), String> {
@@ -152,7 +152,7 @@ pub fn is_derivation(value: String) -> Result<(), String> {
         .parse::<u32>()
         .map_err(|e| {
             format!(
-                "Unable to parse derivation, provided: {}, err: {:?}",
+                "Unable to parse derivation, provided: {}, err: {}",
                 account, e
             )
         })
@@ -160,7 +160,7 @@ pub fn is_derivation(value: String) -> Result<(), String> {
             if let Some(change) = parts.next() {
                 change.parse::<u32>().map_err(|e| {
                     format!(
-                        "Unable to parse derivation, provided: {}, err: {:?}",
+                        "Unable to parse derivation, provided: {}, err: {}",
                         change, e
                     )
                 })
