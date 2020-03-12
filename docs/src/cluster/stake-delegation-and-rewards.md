@@ -166,14 +166,14 @@ Rewards are paid against the "effective" portion of the stake for that epoch.
 
 #### Warmup example
 
-Consider the situation of a single stake of 1.0.6 activated at epoch N, with network warmup rate of 20%, and a quiescent total network stake at epoch N of 2,000.
+Consider the situation of a single stake of 1000 activated at epoch N, with network warmup rate of 20%, and a quiescent total network stake at epoch N of 2,000.
 
 At epoch N+1, the amount available to be activated for the network is 400 \(20% of 200\), and at epoch N, this example stake is the only stake activating, and so is entitled to all of the warmup room available.
 
 | epoch | effective | activating | total effective | total activating |
 | :--- | ---: | ---: | ---: | ---: |
 | N-1 |  |  | 2,000 | 0 |
-| N | 0 | 1.0.6 | 2,000 | 1.0.6 |
+| N | 0 | 1000 | 2,000 | 1000 |
 | N+1 | 400 | 600 | 2,400 | 600 |
 | N+2 | 880 | 120 | 2,880 | 120 |
 | N+3 | 1000 | 0 | 3,000 | 0 |
@@ -183,7 +183,7 @@ Were 2 stakes \(X and Y\) to activate at epoch N, they would be awarded a portio
 | epoch | X eff | X act | Y eff | Y act | total effective | total activating |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | N-1 |  |  |  |  | 2,000 | 0 |
-| N | 0 | 1.0.6 | 0 | 200 | 2,000 | 1,200 |
+| N | 0 | 1000 | 0 | 200 | 2,000 | 1,200 |
 | N+1 | 333 | 667 | 67 | 133 | 2,400 | 800 |
 | N+2 | 733 | 267 | 146 | 54 | 2,880 | 321 |
 | N+3 | 1000 | 0 | 200 | 0 | 3,200 | 0 |

@@ -36,7 +36,7 @@ Here are our recommendations for low, medium, and high end machine specification
 * See [Installing Solana](../install-solana.md) for the current Solana software release.
 
 Be sure to ensure that the machine used is not behind a residential NAT to avoid
-NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 1.0.6 are not blocked for Internet inbound and outbound traffic.**
+NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
 For more information on port forwarding with regards to residential networks,
 see [this document](http://www.mcs.sdsmt.edu/lpyeatt/courses/314/PortForwardingSetup.pdf).
 

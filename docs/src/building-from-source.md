@@ -52,7 +52,7 @@ $ NDEBUG=1 ./multinode-demo/faucet.sh
 
 ### Singlenode Testnet
 
-Before you start a validator, make sure you know the IP address of the machine you want to be the bootstrap validator for the demo, and make sure that udp ports 8000-1.0.6 are open on all the machines you want to test with.
+Before you start a validator, make sure you know the IP address of the machine you want to be the bootstrap validator for the demo, and make sure that udp ports 8000-10000 are open on all the machines you want to test with.
 
 Now start the bootstrap validator in a separate shell:
 
@@ -151,7 +151,7 @@ The stream will output a series of JSON objects:
 
 ## Public Testnet
 
-In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-1.0.6`.
+In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 
 ```bash
 $ NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint devnet.solana.com:8001 --faucet devnet.solana.com:9900 --duration 60 --tx_count 50

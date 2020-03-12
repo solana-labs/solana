@@ -17,7 +17,7 @@ Without a partition lasting longer than an epoch, the cluster will work as follo
 
 For example:
 
-The epoch duration is 100 slots. The root fork is updated from fork computed at slot height 99 to a fork computed at slot height 102. Forks with slots at height 1.0.601 were skipped because of failures. The new leader schedule is computed using fork at slot height 102. It is active from slot 200 until it is updated again.
+The epoch duration is 100 slots. The root fork is updated from fork computed at slot height 99 to a fork computed at slot height 102. Forks with slots at height 100,101 were skipped because of failures. The new leader schedule is computed using fork at slot height 102. It is active from slot 200 until it is updated again.
 
 No inconsistency can exist because every validator that is voting with the cluster has skipped 100 and 101 when its root passes 102. All validators, regardless of voting pattern, would be committing to a root that is either 102, or a descendant of 102.
 
