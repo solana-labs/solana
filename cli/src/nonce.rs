@@ -238,7 +238,7 @@ pub fn get_account(
 ) -> Result<Account, CliNonceError> {
     rpc_client
         .get_account(nonce_pubkey)
-        .map_err(|e| CliNonceError::Client(format!("{:?}", e)))
+        .map_err(|e| CliNonceError::Client(format!("{}", e)))
         .and_then(|a| match account_identity_ok(&a) {
             Ok(()) => Ok(a),
             Err(e) => Err(e),
