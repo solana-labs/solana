@@ -58,9 +58,9 @@ pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "angry noise",
-        staker: "Fqxs9MhqjKuMq6YwjBG4ktEapuZQ3kj19mpuHLZKtkg9",
+        staker: "34HCVh8Yx4jNkaeLUQEKibFKUZDPQMjWzkXy8qUfdhS4",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("Hw3sP6PreBtFCnwXbNvUypMhty62GXibjfiZ1zHBXFk6"),
     },
     StakerInfo {
         name: "hard cousin",
@@ -100,9 +100,9 @@ pub const CREATOR_STAKER_INFOS: &[StakerInfo] = &[
     },
     StakerInfo {
         name: "eight nation",
-        staker: "E5bSU5ywqPiz3ije89ef5gaEC7jy81BAc72Zeb9MqeHY",
+        staker: "4qWoqt71p7h6siSDS6osu4oVWpw8R7E6uYYiY7Z6oJbH",
         lamports: 103_519 * LAMPORTS_PER_SOL,
-        withdrawer: Some("BEH58KnvhU8WNyFto21ZXQMfkHKHY2vK7CiTLLCR1MWJ"),
+        withdrawer: Some("6bFjx3egMjVsGKFb445564a4bwgibwbUB2tVFsJcdPv7"),
     },
     StakerInfo {
         name: "earsplitting meaning",
@@ -166,30 +166,30 @@ pub const SERVICE_STAKER_INFOS: &[StakerInfo] = &[
 pub const FOUNDATION_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "lyrical supermarket",
-        staker: "GRZwoJGisLTszcxtWpeREJ98EGg8pZewhbtcrikoU7b3",
+        staker: "4xh7vtQCTim3vgpQ1dQQWjtKrBSkbtL3s15FimXVJAAP",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("C7WS9ic7KN9XNcLsNoMvzTvbzURM3rFGDEQN7qJMWNLn"),
     },
     StakerInfo {
         name: "frequent description",
-        staker: "J51tinoLdmEdUR27LUVymrb2LB3xQo1aSHSgmbSGdj58",
+        staker: "95Nf8XfoecteSXU9nbcvzkrFQdu6FqPaH3EvhwLaC83t",
         lamports: 57_500_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("FdGYQdiRky8NZzN9wZtczTBcWLYYRXrJ3LMDhqDPn5rM"),
     },
 ];
 
 pub const GRANTS_STAKER_INFOS: &[StakerInfo] = &[
     StakerInfo {
         name: "rightful agreement",
-        staker: "DNaKiBwwbbqk1wVoC5AQxWQbuDhvaDVbAtXzsVos9mrc",
+        staker: "8w5cgUQfXAZZWyVgenPHpQ1uABXUVLnymqXbuZPx7yqt",
         lamports: 5_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("EDwSQShtUWQtmFfN9SpUUd6hgonL7tRdxngAsNKv9Pe6"),
     },
     StakerInfo {
         name: "tasty location",
-        staker: "HvXQPXAijjG1vnQs6HXVtUUtFVzi5HNgXV9LGnHvYF85",
+        staker: "9eyXtP43dCp59oyvWG2R7WQCeJ2bA6TWoLzXg1KTDfQQ",
         lamports: 15_000_000 * LAMPORTS_PER_SOL,
-        withdrawer: None,
+        withdrawer: Some("9BgvWHerNACjnx6ZpK51k2LEsnwBP3gFwWDzhKkHKH1m"),
     },
 ];
 
