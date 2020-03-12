@@ -1532,6 +1532,27 @@ impl Blockstore {
             .collect())
     }
 
+    /// Returns a transaction status if it was processed in a root or pending slot
+    pub fn get_transaction_status(
+        &self,
+        signature: Signature,
+        root: Slot,
+    ) -> Result<Option<(Slot, RpcTransactionStatus)>> {
+        let mut transaction_iter = self.transaction_status_cf.iter(IteratorMode::End)?;
+        let status = transaction_iter
+            .find(|((_, sig), _)| sig == &signature)
+            .and_then(|((slot, _), status_data)| {
+                // If a slot is older than the root from bank_forks but not a root itself, it is a
+                // dead fork and will never be rooted
+                if slot <= root && !self.is_root(slot) {
+                    None
+                } else {
+                    Some((slot, deserialize(&status_data).unwrap()))
+                }
+            });
+        Ok(status)
+    }
+
     /// Returns the entry vector for the slot starting with `shred_start_index`
     pub fn get_slot_entries(
         &self,

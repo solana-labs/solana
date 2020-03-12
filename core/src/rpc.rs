@@ -11,8 +11,8 @@ use solana_client::rpc_response::{
     Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
     RpcContactInfo, RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity,
     RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
-    RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
-    RpcVoteAccountStatus,
+    RpcStorageTurn, RpcTransactionEncoding, RpcTransactionStatus, RpcVersionInfo,
+    RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
@@ -414,6 +414,27 @@ impl JsonRpcRequestProcessor {
             .ok()
             .unwrap_or(None))
     }
+
+    pub fn get_transaction_status_history(
+        &self,
+        signature: Signature,
+    ) -> Result<Option<RpcTransactionStatus>> {
+        let root = self.bank_forks.read().unwrap().root();
+        self.blockstore
+            .get_transaction_status(signature, root)
+            .map_err(|_| Error::internal_error())
+            .map(|result| {
+                result.and_then(|(slot, status)| {
+                    // If a slot is newer than the root in bank_forks, but not present in
+                    // bank_forks, it is a dead fork that will never be rooted
+                    if slot > root && !self.bank_forks.read().unwrap().banks.contains_key(&slot) {
+                        None
+                    } else {
+                        Some(status)
+                    }
+                })
+            })
+    }
 }
 
 fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
@@ -652,6 +673,13 @@ pub trait RpcSol {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>>;
+
+    #[rpc(meta, name = "getStatusHistory")]
+    fn get_transaction_status_history(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+    ) -> Result<Option<RpcTransactionStatus>>;
 }
 
 pub struct RpcSolImpl;
@@ -1175,6 +1203,18 @@ impl RpcSol for RpcSolImpl {
 
     fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>> {
         meta.request_processor.read().unwrap().get_block_time(slot)
+    }
+
+    fn get_transaction_status_history(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+    ) -> Result<Option<RpcTransactionStatus>> {
+        let signature = verify_signature(&signature_str)?;
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_transaction_status_history(signature)
     }
 }
 
