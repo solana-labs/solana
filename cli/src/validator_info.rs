@@ -274,7 +274,7 @@ pub fn process_set_validator_info(
                 println!("--force supplied, ignoring: {:?}", result);
             } else {
                 result.map_err(|err| {
-                    CliError::BadParameter(format!("Invalid validator keybase username: {:?}", err))
+                    CliError::BadParameter(format!("Invalid validator keybase username: {}", err))
                 })?;
             }
         }

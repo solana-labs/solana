@@ -1011,7 +1011,7 @@ pub fn process_live_slots(url: &str) -> ProcessResult {
                 current = Some(new_info);
             }
             Err(err) => {
-                eprintln!("disconnected: {:?}", err);
+                eprintln!("disconnected: {}", err);
                 break;
             }
         }

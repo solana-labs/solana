@@ -1300,7 +1300,7 @@ pub fn process_show_stake_account(
             Ok("".to_string())
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to stake state: {:?}",
+            "Account data could not be deserialized to stake state: {}",
             err
         ))
         .into()),
@@ -1396,11 +1396,11 @@ pub fn process_delegate_stake(
             }
         };
 
-        if sanity_check_result.is_err() {
+        if let Err(err) = &sanity_check_result {
             if !force {
                 sanity_check_result?;
             } else {
-                println!("--force supplied, ignoring: {:?}", sanity_check_result);
+                println!("--force supplied, ignoring: {}", err);
             }
         }
     }

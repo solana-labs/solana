@@ -266,7 +266,7 @@ pub fn process_show_storage_account(
 
     use solana_storage_program::storage_contract::StorageContract;
     let storage_contract: StorageContract = account.state().map_err(|err| {
-        CliError::RpcRequestError(format!("Unable to deserialize storage account: {:?}", err))
+        CliError::RpcRequestError(format!("Unable to deserialize storage account: {}", err))
     })?;
     println!("{:#?}", storage_contract);
     println!("Account Lamports: {}", account.lamports);

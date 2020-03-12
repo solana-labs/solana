@@ -433,16 +433,14 @@ pub enum CliError {
 
 impl From<Box<dyn error::Error>> for CliError {
     fn from(error: Box<dyn error::Error>) -> Self {
-        CliError::DynamicProgramError(format!("{:?}", error))
+        CliError::DynamicProgramError(error.to_string())
     }
 }
 
 impl From<CliNonceError> for CliError {
     fn from(error: CliNonceError) -> Self {
         match error {
-            CliNonceError::Client(client_error) => {
-                Self::RpcRequestError(format!("{:?}", client_error))
-            }
+            CliNonceError::Client(client_error) => Self::RpcRequestError(client_error),
             _ => Self::InvalidNonce(error),
         }
     }
@@ -715,7 +713,7 @@ pub fn parse_command(
                 .parse()
                 .or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid faucet port: {:?}",
+                        "Invalid faucet port: {}",
                         err
                     )))
                 })?;
@@ -723,7 +721,7 @@ pub fn parse_command(
             let faucet_host = if let Some(faucet_host) = matches.value_of("faucet_host") {
                 Some(solana_net_utils::parse_host(faucet_host).or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid faucet host: {:?}",
+                        "Invalid faucet host: {}",
                         err
                     )))
                 })?)
@@ -1135,13 +1133,13 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
             if let Some(result) = status {
                 match result {
                     Ok(_) => Ok("Confirmed".to_string()),
-                    Err(err) => Ok(format!("Transaction failed with error {:?}", err)),
+                    Err(err) => Ok(format!("Transaction failed with error: {}", err)),
                 }
             } else {
                 Ok("Not found".to_string())
             }
         }
-        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {:?}", err)).into()),
+        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
     }
 }
 
@@ -3326,7 +3324,7 @@ mod tests {
         assert_eq!(
             process_command(&config).unwrap(),
             format!(
-                "Transaction failed with error {:?}",
+                "Transaction failed with error: {}",
                 TransactionError::AccountInUse
             )
         );
