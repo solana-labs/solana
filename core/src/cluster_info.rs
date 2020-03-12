@@ -46,7 +46,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing::duration_as_s;
 use solana_sdk::{
-    clock::{Slot, DEFAULT_MS_PER_SLOT},
+    clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
     pubkey::Pubkey,
     signature::{Keypair, Signable, Signature},
     timing::{duration_as_ms, timestamp},
@@ -377,10 +377,9 @@ impl ClusterInfo {
             .unwrap_or(0);
         let max_slot: Slot = update.iter().max().cloned().unwrap_or(0);
         let total_slots = max_slot as isize - min_slot as isize;
-        //should be roughly 4k
-        let expected_slots = (MAX_CRDS_OBJECT_SIZE as isize * 8) / 2;
-        if (total_slots / (1 + current_slots.len() as isize)) < expected_slots
-            && crds_value::MAX_EPOCH_SLOTS as usize / 2 <= current_slots.len()
+        // WARN if CRDS is not storing at least a full epoch worth of slots
+        if DEFAULT_SLOTS_PER_EPOCH as isize > total_slots
+            && crds_value::MAX_EPOCH_SLOTS as usize <= current_slots.len()
         {
             inc_new_counter_warn!("cluster_info-epoch_slots-filled", 1);
             warn!(
