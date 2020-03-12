@@ -191,6 +191,14 @@ fn grind_parse_args(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
+    let result = do_main().err();
+    if let Some(err) = result {
+        eprintln!("hi! {}", err);
+    }
+    Ok(())
+}
+
+fn do_main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
