@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-# shellcheck disable=SC2034
+# shellcheck disable=SC1090
 # shellcheck disable=SC1091
 source "$(dirname "$0")"/automation_utils.sh
 

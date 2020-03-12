@@ -112,11 +112,7 @@ function upload_results_to_slack() {
     BUILDKITE_BUILD_URL="https://buildkite.com/solana-labs/"
   fi
 
-<<<<<<< HEAD
   GRAFANA_URL="https://metrics.solana.com:3000/d/monitor-${CHANNEL:-edge}/cluster-telemetry-${CHANNEL:-edge}?var-testnet=${TESTNET_TAG:-testnet-automation}&from=${TESTNET_START_UNIX_MSECS:-0}&to=${TESTNET_FINISH_UNIX_MSECS:-0}"
-=======
-  GRAFANA_URL="https://metrics.solana.com:3000/d/testnet-${CHANNEL:-edge}/testnet-monitor-${CHANNEL:-edge}?var-testnet=${TESTNET_TAG:-testnet-automation}&from=${TESTNET_START_UNIX_MSECS:-0}&to=${TESTNET_FINISH_UNIX_MSECS:-0}"
->>>>>>> Refactor automation utilities
 
   [[ -n $RESULT_DETAILS ]] || RESULT_DETAILS="Undefined"
   [[ -n $TEST_CONFIGURATION ]] || TEST_CONFIGURATION="Undefined"
@@ -124,11 +120,7 @@ function upload_results_to_slack() {
   payLoad="$(cat <<EOF
 {
 "blocks": [
-<<<<<<< HEAD
         {
-=======
-  	{
->>>>>>> Refactor automation utilities
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
@@ -180,11 +172,7 @@ function upload_results_to_slack() {
 		{
 			"type": "divider"
 		},
-<<<<<<< HEAD
-                {
-=======
-  	{
->>>>>>> Refactor automation utilities
+    {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
