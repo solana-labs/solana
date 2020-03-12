@@ -450,23 +450,23 @@ impl ClusterInfo {
     /// since. This allows the bank to query for new votes only.
     ///
     /// * return - The votes, and the max timestamp from the new set.
-    pub fn get_votes(&self, since: u64) -> (Vec<Transaction>, u64) {
-        let votes: Vec<_> = self
+    pub fn get_votes(&self, since: u64) -> (Vec<CrdsValueLabel>, Vec<Transaction>, u64) {
+        let mut max_ts = since;
+        let (labels, txs): (Vec<CrdsValueLabel>, Vec<Transaction>) = self
             .gossip
             .crds
             .table
-            .values()
-            .filter(|x| x.insert_timestamp > since)
-            .filter_map(|x| {
+            .iter()
+            .filter(|(_, x)| x.insert_timestamp > since)
+            .filter_map(|(label, x)| {
+                max_ts = std::cmp::max(x.insert_timestamp, max_ts);
                 x.value
                     .vote()
-                    .map(|v| (x.insert_timestamp, v.transaction.clone()))
+                    .map(|v| (label.clone(), v.transaction.clone()))
             })
-            .collect();
-        let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
-        let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+            .unzip();
         inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
-        (txs, max_ts)
+        (labels, txs, max_ts)
     }
 
     pub fn get_snapshot_hash(&self, slot: Slot) -> Vec<(Pubkey, Hash)> {
@@ -2242,26 +2242,35 @@ mod tests {
     #[test]
     fn test_push_vote() {
         let keys = Keypair::new();
-        let now = timestamp();
         let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
 
         // make sure empty crds is handled correctly
-        let (votes, max_ts) = cluster_info.get_votes(now);
+        let now = timestamp();
+        let (_, votes, max_ts) = cluster_info.get_votes(now);
         assert_eq!(votes, vec![]);
         assert_eq!(max_ts, now);
 
         // add a vote
         let tx = test_tx();
-        cluster_info.push_vote(0, tx.clone());
+        let index = 1;
+        cluster_info.push_vote(index, tx.clone());
 
         // -1 to make sure that the clock is strictly lower then when insert occurred
-        let (votes, max_ts) = cluster_info.get_votes(now - 1);
+        let (labels, votes, max_ts) = cluster_info.get_votes(now - 1);
         assert_eq!(votes, vec![tx]);
+        assert_eq!(labels.len(), 1);
+        match labels[0] {
+            CrdsValueLabel::Vote(_, pubkey) => {
+                assert_eq!(pubkey, keys.pubkey());
+            }
+
+            _ => panic!("Bad match"),
+        }
         assert!(max_ts >= now - 1);
 
         // make sure timestamp filter works
-        let (votes, new_max_ts) = cluster_info.get_votes(max_ts);
+        let (_, votes, new_max_ts) = cluster_info.get_votes(max_ts);
         assert_eq!(votes, vec![]);
         assert_eq!(max_ts, new_max_ts);
     }
