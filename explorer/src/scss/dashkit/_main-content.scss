@@ -1,0 +1,70 @@
+//
+// main-content.scss
+// Dashkit component
+//
+
+// Main content
+//
+// General styles
+
+.navbar-vertical:not([style*="display: none"]) ~  .main-content,
+.navbar-vertical-sm:not([style*="display: none"]) ~  .main-content {
+  
+  .container,
+  .container-fluid {
+
+    @include media-breakpoint-up(md) {
+      padding-left: ($main-content-padding-x + $grid-gutter-width / 2) !important;
+      padding-right: ($main-content-padding-x + $grid-gutter-width / 2) !important; 
+    }
+  }
+}
+
+
+// Main content offset
+//
+// Offsets the main content depending on the sidebar positioning
+
+.navbar-vertical.navbar-expand {
+  
+  @each $breakpoint, $value in $grid-breakpoints {
+    &-#{$breakpoint} {
+      @include media-breakpoint-up(#{$breakpoint}) {
+
+        // Left
+
+        &.fixed-left:not([style*="display: none"]) ~ .main-content {
+          margin-left: $navbar-vertical-width;
+        }
+
+        // Right
+
+        &.fixed-right:not([style*="display: none"]) ~ .main-content {
+          margin-right: $navbar-vertical-width;
+        }
+      }
+    }
+  }
+}
+
+.navbar-vertical-sm.navbar-expand {
+  
+  @each $breakpoint, $value in $grid-breakpoints {
+    &-#{$breakpoint} {
+      @include media-breakpoint-up(#{$breakpoint}) {
+
+        // Left
+
+        &.fixed-left:not([style*="display: none"]) ~ .main-content {
+          margin-left: $navbar-vertical-width-sm;
+        }
+
+        // Right
+
+        &.fixed-right:not([style*="display: none"]) ~ .main-content {
+          margin-right: $navbar-vertical-width-sm;
+        }
+      }
+    }
+  }
+}

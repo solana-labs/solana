@@ -1,0 +1,53 @@
+// 
+// list-group.scss
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+// Contextual variants
+//
+// Changing the Bootstrap color modifier classes to be full opacity background with yiq calculated font color
+
+@each $color, $value in $theme-colors {
+  @include list-group-item-variant($color, $value, color-yiq($value));
+}
+
+
+// List group large
+
+.list-group-lg .list-group-item {
+  padding-top: $list-group-item-padding-y-lg;
+  padding-bottom: $list-group-item-padding-y-lg;
+}
+
+
+// List group flush
+
+.list-group-flush > .list-group-item {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+
+//
+// Dashkit ===================================
+//
+
+
+// Activity
+
+.list-group-activity .list-group-item {
+  border: 0;
+}
+
+.list-group-activity .list-group-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: $list-group-item-padding-y;
+  left: $avatar-size-sm / 2;
+  height: 100%;
+  border-left: $border-width solid $border-color;
+}

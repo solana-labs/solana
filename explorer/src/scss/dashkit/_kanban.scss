@@ -1,0 +1,68 @@
+//
+// kanban.scss
+// Dashkit component
+//
+
+// Container
+
+.container-fluid.kanban-container {
+  min-height: calc(100vh - 129px);
+}
+
+.container.kanban-container {
+  min-height: calc(100vh - 129px - 69px);
+}
+
+.kanban-container {
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+
+.kanban-container > .row {
+  flex-wrap: nowrap;
+}
+
+.kanban-container > .row > [class*="col"] {
+  max-width: $kanban-col-width;
+}
+
+
+// Category
+
+.kanban-category {
+  min-height: 1rem;
+}
+
+
+// Item
+
+.kanban-item {
+  outline: none;
+  user-select: none;
+}
+
+.kanban-item.draggable-source--is-dragging {
+  opacity: .2;
+}
+
+.kanban-item.draggable-mirror {
+  z-index: $zindex-fixed;
+}
+
+.card-body .kanban-item.draggable-mirror > .card {
+  transform: rotateZ(-3deg);
+}
+
+
+// Card
+
+.kanban-item > .card[data-toggle="modal"] {
+  cursor: pointer;
+}
+
+
+// Add form
+
+.kanban-add-form .form-control[data-toggle="flatpickr"] {
+  width: 12ch; // there is no CSS way to set input's width to auto so hardcoding this value
+}

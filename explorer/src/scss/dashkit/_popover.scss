@@ -1,0 +1,101 @@
+// 
+// popover.scss
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+.popover {
+  padding: $popover-padding-y $popover-padding-x;
+
+  &:hover {
+    visibility: visible !important;
+  }
+}
+
+.popover-header {
+  margin-bottom: $popover-header-margin-bottom;
+  border-bottom: 0;
+}
+
+.popover-body-label {
+  margin-left: .25rem;
+}
+
+.popover-body-value {
+  margin-left: .25rem;
+}
+
+.popover-body-indicator {
+  display: inline-block;
+  width: .5rem;
+  height: .5rem;
+  border-radius: 50%;
+}
+
+
+// Large 
+
+.popover-lg {
+  max-width: $popover-lg-max-width;
+}
+
+
+// Dark
+
+.popover-dark {
+  background-color: $popover-dark-bg;
+  border-color: $popover-dark-border-color;
+}
+
+.popover-dark .popover-header {
+  font-weight: $font-weight-normal;
+  background-color: $popover-dark-header-bg;
+  color: $popover-dark-header-color;
+}
+
+.popover-dark.bs-popover-top .arrow {
+
+  &::before {
+    border-top-color: $popover-dark-border-color;
+  }
+
+  &::after {
+    border-top-color: $popover-dark-bg;
+  }
+}
+
+.popover-dark.bs-popover-right .arrow {
+
+  &::before {
+    border-right-color: $popover-dark-border-color;
+  }
+
+  &::after {
+    border-right-color: $popover-dark-bg;
+  }
+}
+
+.popover-dark.bs-popover-bottom .arrow {
+
+  &::before {
+    border-bottom-color: $popover-dark-border-color;
+  }
+
+  &::after {
+    border-bottom-color: $popover-dark-bg;
+  }
+}
+
+.popover-dark.bs-popover-left .arrow {
+
+  &::before {
+    border-left-color: $popover-dark-border-color;
+  }
+
+  &::after {
+    border-left-color: $popover-dark-bg;
+  }
+}

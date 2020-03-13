@@ -1,0 +1,80 @@
+//
+// background.scss
+//
+
+
+// Fixed at the bottom
+
+.bg-fixed-bottom {
+  background-repeat: no-repeat;
+  background-position: right bottom;
+  background-size: 100% auto;
+  background-attachment: fixed;
+}
+
+// Calculate the width of the main container because 
+// the background-attachment property will use 100vw instead
+
+.navbar-vertical ~ .main-content.bg-fixed-bottom {
+  background-size: 100%;
+
+  @include media-breakpoint-up(md) {
+    background-size: calc(100% - #{$navbar-vertical-width});
+  }
+}
+
+
+// Cover
+
+.bg-cover {
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+}
+
+
+// Auth
+
+.bg-auth {
+  background-color: $auth-bg;
+}
+
+
+// Ellipses
+
+@each $color, $value in $theme-colors {
+
+  .bg-ellipses.bg-#{$color} {
+    background-color: transparent !important;
+    background-repeat: no-repeat;
+    background-image: radial-gradient(#{$value}, #{$value} 70%, transparent 70.1%);
+    background-size: 200% 150%;
+    background-position: center bottom;
+  }
+}
+
+
+// Hero
+
+.bg-hero {
+  background-image: linear-gradient(to bottom, fade-out($black, .15), fade-out($black, .15)), url(../#{$path-to-img}/covers/header-cover.jpg);
+  background-repeat: no-repeat, no-repeat;
+  background-position: center center, center center;
+  background-size: cover, cover;
+}
+
+
+// Colors
+
+.bg-lighter {
+  background-color: $lighter !important;
+}
+
+
+// Soft colors
+
+@each $color, $value in $theme-colors {
+  .bg-#{$color}-soft {
+    background-color: theme-color-level($color, $bg-soft-level) !important;
+  }
+}

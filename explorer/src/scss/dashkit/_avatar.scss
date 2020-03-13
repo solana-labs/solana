@@ -1,0 +1,197 @@
+//
+// avatar.scss
+// Dashkit component
+//
+
+// General
+
+.avatar {
+  position: relative;
+  display: inline-block;
+  width: $avatar-size-base;
+  height: $avatar-size-base;
+  font-size: $avatar-size-base / 3;
+
+  // Loads mask images so they don't lag on hover
+
+  &:after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    background-image: url(#{$path-to-img}/masks/avatar-status.svg),
+    url(#{$path-to-img}/masks/avatar-group.svg),
+    url(#{$path-to-img}/masks/avatar-group-hover.svg),
+    url(#{$path-to-img}/masks/avatar-group-hover-last.svg);
+  }
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 0;
+  background-color: $avatar-title-bg;
+  color: $avatar-title-color;
+}
+
+
+// Status
+
+.avatar-online,
+.avatar-offline {
+
+  &::before {
+    content: '';
+    position: absolute;
+    bottom: 5%;
+    right: 5%;
+    width: 20%;
+    height: 20%;
+    border-radius: 50%;
+  }
+
+  .avatar-img {
+    mask-image: url(#{$path-to-img}/masks/avatar-status.svg);
+    mask-size: 100% 100%;
+  }
+}
+
+.avatar-online::before {
+  background-color: $success;
+}
+
+.avatar-offline::before {
+  background-color: $gray-500;
+}
+
+
+// Sizing
+
+.avatar-xs {
+  width: $avatar-size-xs;
+  height: $avatar-size-xs;
+  font-size: $avatar-size-xs / 3;
+}
+
+.avatar-sm {
+  width: $avatar-size-sm;
+  height: $avatar-size-sm;
+  font-size: $avatar-size-sm / 3;
+}
+
+.avatar-lg {
+  width: $avatar-size-lg;
+  height: $avatar-size-lg;
+  font-size: $avatar-size-lg / 3;
+}
+
+.avatar-xl {
+  width: $avatar-size-xl;
+  height: $avatar-size-xl;
+  font-size: $avatar-size-xl / 3;
+}
+
+.avatar-xxl {
+  width: $avatar-size-xl;
+  height: $avatar-size-xl;
+  font-size: $avatar-size-xl / 3;
+
+  @include media-breakpoint-up(md) {
+    width: $avatar-size-xxl;
+    height: $avatar-size-xxl;
+    font-size: $avatar-size-xxl / 3;
+  }
+}
+
+
+// Ratio
+
+.avatar.avatar-4by3 {
+  width: $avatar-size-base * 4 / 3;
+}
+
+.avatar-xs.avatar-4by3 {
+  width: $avatar-size-xs * 4 / 3;
+}
+
+.avatar-sm.avatar-4by3 {
+  width: $avatar-size-sm * 4 / 3;
+}
+
+.avatar-lg.avatar-4by3 {
+  width: $avatar-size-lg * 4 / 3;
+}
+
+.avatar-xl.avatar-4by3 {
+  width: $avatar-size-xl * 4 / 3;
+}
+
+.avatar-xxl.avatar-4by3 {
+  width: $avatar-size-xxl * 4 / 3;
+}
+
+
+// Group
+
+.avatar-group {
+  display: inline-flex;
+
+  // Shift every next avatar left
+
+  .avatar + .avatar {
+    margin-left: -$avatar-size-base / 4;
+  }
+
+  .avatar-xs + .avatar-xs {
+    margin-left: -$avatar-size-xs / 4;
+  }
+
+  .avatar-sm + .avatar-sm {
+    margin-left: -$avatar-size-sm / 4;
+  }
+
+  .avatar-lg + .avatar-lg {
+    margin-left: -$avatar-size-lg / 4;
+  }
+
+  .avatar-xl + .avatar-xl {
+    margin-left: -$avatar-size-xl / 4;
+  }
+
+  .avatar-xxl + .avatar-xxl {
+    margin-left: -$avatar-size-xxl / 4;
+  }
+
+  // Add some spacing between avatars
+
+  .avatar:not(:last-child) {
+    mask-image: url(#{$path-to-img}/masks/avatar-group.svg);
+    mask-size: 100% 100%;
+  }
+
+  // Bring an avatar to front on hover
+
+  .avatar:hover {
+    mask-image: none;
+    z-index: 1;
+
+    + .avatar {
+      mask-image: url(#{$path-to-img}/masks/avatar-group-hover.svg);
+      mask-size: 100% 100%;
+
+      &:last-child {
+        mask-image: url(#{$path-to-img}/masks/avatar-group-hover-last.svg);
+      }
+    }
+  }
+
+}

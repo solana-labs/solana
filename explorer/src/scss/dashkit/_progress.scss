@@ -1,0 +1,27 @@
+// 
+// progress.scss
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+// Rounds the progress bar, even for "multiple bar" progress bars
+.progress-bar:first-child {
+  border-top-left-radius: $progress-border-radius;
+  border-bottom-left-radius: $progress-border-radius;
+}
+.progress-bar:last-child {
+  border-top-right-radius: $progress-border-radius;
+  border-bottom-right-radius: $progress-border-radius;
+}
+
+
+//
+// Dashkit ===================================
+//
+
+.progress-sm {
+  height: $progress-height-sm;
+}

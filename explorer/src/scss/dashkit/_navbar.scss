@@ -1,0 +1,722 @@
+//
+// navbar.scss
+// Extended from Bootstrap
+//
+
+
+//
+// Bootstrap Overrides =======================
+//
+
+.navbar {
+  border-width: 0 0 $border-width 0;
+  border-style: solid;
+}
+
+
+// Navbar dark
+
+.navbar-dark {
+  background-color: $navbar-dark-bg;
+  border-color: $navbar-dark-border-color;
+}
+
+.navbar-dark .navbar-heading {
+  color: $navbar-dark-heading-color;
+}
+
+.navbar-dark .navbar-divider {
+  border-color: $navbar-dark-divider-color;
+}
+
+.navbar-dark .navbar-user {
+  border-top-color: $navbar-dark-divider-color;
+}
+
+.navbar-dark .navbar-user-link {
+  color: $navbar-dark-color;
+
+  @include hover-focus {
+    color: $navbar-dark-hover-color;
+  }
+}
+
+.navbar-dark .navbar-brand {
+  filter: $navbar-dark-brand-filter;
+}
+
+.navbar-dark .navbar-collapse::before {
+  border-top-color: $navbar-dark-divider-color;
+}
+
+.navbar-dark.navbar-expand {
+
+  @each $breakpoint, $value in $grid-breakpoints {
+    $prev: breakpoint-prev($breakpoint, $grid-breakpoints);
+
+    &-#{$breakpoint} {
+
+      @include media-breakpoint-down(#{$prev}) {
+
+        .navbar-nav .dropdown-item {
+          color: $navbar-dark-color;
+
+          @include hover-focus {
+            color: $navbar-dark-hover-color;
+          }
+        }
+
+        .navbar-nav .show > .nav-link,
+        .navbar-nav .dropdown-item.active,
+        .navbar-nav .dropdown-item:active {
+          color: $navbar-dark-active-color;
+        }
+      }
+    }
+  }
+}
+
+
+// Navbar vibrant
+
+.navbar-dark.navbar-vibrant {
+  background-image: linear-gradient(to bottom right, fade-out(#126FEB, .1), fade-out(#7203E1, .1)), url(#{$path-to-img}/covers/sidebar-cover.jpg);
+  background-repeat: no-repeat, no-repeat;
+  background-position: center center, center center;
+  background-size: cover, cover;
+  background-origin: border-box;
+  border-color: $navbar-vibrant-border-color;
+
+  @include media-breakpoint-down(sm) {
+    background-attachment: fixed, fixed;
+  }
+}
+
+.navbar-dark.navbar-vibrant .nav-link {
+  color: $navbar-vibrant-color;
+
+  @include hover-focus {
+    color: $navbar-vibrant-hover-color;
+  }
+}
+
+.navbar-dark.navbar-vibrant .nav-item.active .nav-link,
+.navbar-dark.navbar-vibrant .nav-item .nav-link.active {
+  color: $navbar-vibrant-active-color;
+}
+
+.navbar-dark.navbar-vibrant .navbar-heading {
+  color: $navbar-vibrant-heading-color;
+}
+
+.navbar-dark.navbar-vibrant .navbar-divider {
+  border-color: $navbar-vibrant-divider-color;
+}
+
+.navbar-dark.navbar-vibrant .navbar-user {
+  border-top-color: $navbar-vibrant-divider-color;
+}
+
+.navbar-dark.navbar-vibrant .navbar-user-link {
+  color: $navbar-vibrant-color;
+
+  @include hover-focus {
+    color: $navbar-vibrant-hover-color;
+  }
+}
+
+.navbar-dark.navbar-vibrant .navbar-brand {
+  filter: $navbar-vibrant-brand-filter;
+}
+
+.navbar-dark.navbar-vibrant .navbar-collapse::before {
+  border-top-color: $navbar-vibrant-divider-color;
+}
+
+.navbar-dark.navbar-vibrant .navbar-nav .nav-link.active::before {
+  border-color: $white;
+}
+
+.navbar-dark.navbar-vibrant.navbar-expand {
+
+  @each $breakpoint, $value in $grid-breakpoints {
+    $prev: breakpoint-prev($breakpoint, $grid-breakpoints);
+
+    &-#{$breakpoint} {
+
+      @include media-breakpoint-down(#{$prev}) {
+
+        .navbar-nav .dropdown-item {
+          color: $navbar-vibrant-color;
+
+          @include hover-focus {
+            color: $navbar-vibrant-hover-color;
+          }
+        }
+
+        .navbar-nav .show > .nav-link,
+        .navbar-nav .dropdown-item.active,
+        .navbar-nav .dropdown-item:active {
+          color: $navbar-vibrant-active-color;
+        }
+
+      }
+    }
+  }
+}
+
+.navbar-dark.navbar-vibrant .navbar-toggler-icon {
+  background-image: $navbar-vibrant-toggler-icon-bg;
+}
+
+
+// Navbar light
+
+.navbar-light {
+  background-color: $navbar-light-bg;
+  border-color: $navbar-light-border-color;
+}
+
+.navbar-light .navbar-heading {
+  color: $navbar-light-heading-color;
+}
+
+.navbar-light .navbar-divider {
+  border-color: $navbar-light-divider-color;
+}
+
+.navbar-light .navbar-user {
+  border-top-color: $navbar-light-divider-color;
+}
+
+.navbar-light .navbar-user-link {
+  color: $navbar-light-color;
+
+  @include hover-focus {
+    color: $navbar-light-hover-color;
+  }
+}
+
+.navbar-light .navbar-brand {
+  filter: $navbar-light-brand-filter;
+}
+
+.navbar-light .navbar-collapse::before {
+  border-top-color: $navbar-light-divider-color;
+}
+
+
+// Navbar brand
+
+.navbar-brand {
+  margin-right: 0;
+}
+
+.navbar-brand-img,
+.navbar-brand > img {
+  max-width: 100%;
+  max-height: 1.5rem;
+}
+
+
+// Navbar collapse
+
+.navbar-collapse {
+  margin-left: -$navbar-padding-x;
+  margin-right: -$navbar-padding-x;
+  padding-left: $navbar-padding-x;
+  padding-right: $navbar-padding-x;
+
+  // Spacer to replace margin / padding as those
+  // cause .navbar-collapse to "jump" when collapsing
+  &:before {
+    content: '';
+    display: block;
+    border-top-width: $border-width;
+    border-top-style: solid;
+    margin: $navbar-padding-y (-$navbar-padding-x);
+  }
+}
+
+
+// Navbar navigaton
+
+.navbar-nav {
+  margin-left: -$navbar-padding-x;
+  margin-right: -$navbar-padding-x;
+}
+
+.navbar-nav .nav-link {
+  padding-left: $navbar-padding-x;
+  padding-right: $navbar-padding-x;
+
+  &.active {
+    position: relative;
+
+    &:before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: $nav-link-padding-y;
+      bottom: $nav-link-padding-y;
+      border-left: 2px solid $primary;
+    }
+  }
+}
+
+
+// Navbar icons
+
+.navbar-nav .nav-link > .fe {
+  min-width: $navbar-icon-min-width;
+  padding-bottom: .125em;
+  font-size: $font-size-lg;
+  line-height: ($font-size-base * $line-height-base);
+}
+
+
+// Navbar dropdowns
+
+.navbar-nav .dropdown-menu {
+  border: none;
+}
+
+.navbar-nav .dropdown-menu .dropdown-menu {
+  margin-left: $dropdown-item-padding-x / 2;
+}
+
+.navbar-expand {
+
+  @each $breakpoint, $value in $grid-breakpoints {
+    $prev: breakpoint-prev($breakpoint, $grid-breakpoints);
+
+    &-#{$breakpoint} {
+
+      @include media-breakpoint-down(#{$prev}) {
+
+        .navbar-nav .dropdown-menu {
+          background-color: transparent;
+        }
+      }
+    }
+  }
+}
+
+
+// Expanded
+// 
+// Expanded navbar specific styles
+
+.navbar-expand {
+
+  @each $breakpoint, $value in $grid-breakpoints {
+
+    &-#{$breakpoint} {
+
+      @include media-breakpoint-up(#{$breakpoint}) {
+        padding-left: 0;
+        padding-right: 0;
+
+        > [class*="container"] {
+          padding-left: 0;
+          padding-right: 0;
+        }
+
+        .navbar-collapse {
+          flex-grow: inherit;
+
+          &:before {
+            display: none;
+          }
+        }
+
+        .navbar-nav {
+          margin-left: 0;
+          margin-right: 0;
+        }
+
+        .navbar-nav .nav-link {
+
+          // Increase $nav-link-padding-y value to align the underline
+          // with the bottom of the navbar
+          padding: .625rem $navbar-nav-link-padding-x;
+
+          &.active {
+            position: relative;
+
+            &:before {
+              top: auto;
+              bottom: calc(-#{$navbar-padding-y} - #{$border-width});
+              right: $navbar-nav-link-padding-x;
+              left: $navbar-nav-link-padding-x;
+              border-left: 0;
+              border-bottom: 1px solid $primary;
+            }
+          }
+        }
+
+        // Toggle dropdown on hover
+        @if ($navbar-dropdown-toggle-on-hover) {
+          .dropup, .dropright, .dropdown, .dropleft {
+
+            @include hover {
+
+              > .dropdown-menu {
+                display: block;
+              }
+            }
+          }
+        }
+
+        .navbar-nav .dropdown-menu {
+          border: $dropdown-border-width solid $dropdown-border-color;
+        }
+
+        .navbar-nav .dropdown-menu .dropdown-menu {
+          margin-left: 0;
+        }
+      }
+    }
+  }
+}
+
+
+//
+// Dashkit ===================================
+//
+
+// Navbar fixed
+//
+// Adds special zindex to custom fixed-left and fixed-right classes
+
+.navbar[class*="fixed-"] {
+  z-index: $zindex-fixed;
+}
+
+
+// Navbar overflow
+//
+// Allows the navbar navigation overflow its parent container
+// horizontally
+
+.navbar-overflow {
+  display: flex;
+  flex-grow: 1;
+  flex-basis: 0;
+  margin-bottom: -$navbar-padding-y;
+  overflow-x: auto;
+
+  // Hide scrollbar
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.navbar-overflow .navbar-nav {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  margin-left: -$navbar-nav-link-padding-x;
+  margin-right: -$navbar-nav-link-padding-x;
+}
+
+.navbar-overflow .navbar-nav .nav-link {
+  padding-bottom: ($nav-link-padding-y + $navbar-padding-y);
+
+  &.active {
+
+    &:before {
+      bottom: 0;
+    }
+  }
+}
+
+
+// Navbar breadcrumb
+//
+// Applies special paddings to the navbar breadcrumb
+
+.navbar-breadcrumb {
+  padding: $navbar-breadcrumb-padding-y $navbar-breadcrumb-padding-x;
+}
+
+
+// Navbar user
+//
+// Navbar user notification area
+
+.navbar-user {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.navbar-user .dropdown-toggle {
+
+  // Remove the default dropdown arrow
+  &:after {
+    display: none;
+  }
+}
+
+
+// Navbar link icon
+
+.navbar-nav .nav-link > .fe {
+  display: inline-block;
+  min-width: $navbar-icon-min-width;
+}
+
+
+// Vertical
+//
+// Creates a vertically aligned version of the navbar
+
+.navbar-vertical {
+
+  .navbar-nav .nav-link {
+    display: flex;
+    align-items: center;
+  }
+
+  .navbar-nav .nav-link[data-toggle="collapse"] {
+
+    &:after {
+      display: block;
+      content: '\e92e';
+      font-family: 'Feather';
+      margin-left: auto;
+      transition: transform .2s;
+    }
+
+    // Expanded
+    &[aria-expanded="true"] {
+
+      &:after {
+        transform: rotate(-180deg);
+      }
+    }
+  }
+
+  .navbar-nav .nav .nav-link {
+    padding-left: $navbar-padding-x + $navbar-icon-min-width;
+  }
+
+  .navbar-nav .nav .nav .nav-link {
+    padding-left: $navbar-padding-x * 1.5 + $navbar-icon-min-width;
+  }
+
+  .navbar-nav .nav .nav .nav .nav-link {
+    padding-left: $navbar-padding-x * 2 + $navbar-icon-min-width;
+  }
+
+  .navbar-heading {
+    padding-top: $nav-link-padding-y;
+    padding-bottom: $nav-link-padding-y;
+    font-size: $font-size-xs;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+
+  // Expanded
+  // 
+  // Expanded navbar specific styles
+
+  &.navbar-expand {
+
+    @each $breakpoint, $value in $grid-breakpoints {
+
+      &-#{$breakpoint} {
+
+        @include media-breakpoint-up(#{$breakpoint}) {
+          display: block;
+          position: fixed;
+          top: 0;
+          bottom: 0;
+          width: 100%;
+          max-width: $navbar-vertical-width;
+          padding-left: $navbar-vertical-padding-x;
+          padding-right: $navbar-vertical-padding-x;
+          overflow-y: auto;
+
+          > [class*="container"] {
+            flex-direction: column;
+            align-items: stretch;
+            min-height: 100%;
+            padding-left: 0;
+            padding-right: 0;
+
+            // Target IE 10 & 11
+            @media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {
+              min-height: none;
+              height: 100%;
+            }
+          }
+
+          &.fixed-left {
+            left: 0;
+            border-width: 0 1px 0 0;
+          }
+
+          &.fixed-right {
+            right: 0;
+            border-width: 0 0 0 1px;
+          }
+
+          .navbar-collapse {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            margin-left: -$navbar-vertical-padding-x;
+            margin-right: -$navbar-vertical-padding-x;
+            padding-left: $navbar-vertical-padding-x;
+            padding-right: $navbar-vertical-padding-x;
+
+            > * {
+              min-width: 100%;
+            }
+          }
+
+          .navbar-nav {
+            flex-direction: column;
+            margin-left: -$navbar-vertical-padding-x;
+            margin-right: -$navbar-vertical-padding-x;
+          }
+
+          .navbar-nav .nav-link {
+            padding: $nav-link-padding-y $navbar-vertical-padding-x;
+
+            &.active {
+
+              &:before {
+                top: $nav-link-padding-y;
+                bottom: $nav-link-padding-y;
+                left: 0;
+                right: auto;
+                border-left: 2px solid $primary;
+                border-bottom: 0;
+              }
+            }
+          }
+
+          .navbar-nav .nav .nav-link {
+            padding-left: $navbar-vertical-padding-x + $navbar-icon-min-width;
+          }
+
+          .navbar-nav .nav .nav .nav-link {
+            padding-left: $navbar-vertical-padding-x * 1.5 + $navbar-icon-min-width;
+          }
+
+          .navbar-nav .nav .nav .nav .nav-link {
+            padding-left: $navbar-vertical-padding-x * 2 + $navbar-icon-min-width;
+          }
+
+          .navbar-brand {
+            display: block;
+            text-align: center;
+            padding-top: (2rem - $navbar-padding-y);
+            padding-bottom: (2rem - $navbar-padding-y);
+          }
+
+          .navbar-brand-img {
+            max-height: 3rem;
+          }
+
+          .navbar-user {
+            margin-left: -$navbar-vertical-padding-x;
+            margin-right: -$navbar-vertical-padding-x;
+            padding-top: $spacer;
+            padding-bottom: $spacer - $navbar-padding-y;
+            padding-left: $navbar-vertical-padding-x;
+            padding-right: $navbar-vertical-padding-x;
+            border-top-width: 1px;
+            border-top-style: solid;
+
+            .dropup .dropdown-menu {
+              left: 50%;
+              transform: translateX(-50%);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+// Vertical small
+//
+// Creates a small vertion of the vertical navbar
+
+.navbar-vertical-sm {
+
+  // Expanded
+  // 
+  // Expanded navbar specific styles
+
+  &.navbar-expand {
+
+    @each $breakpoint, $value in $grid-breakpoints {
+
+      &-#{$breakpoint} {
+
+        @include media-breakpoint-up(#{$breakpoint}) {
+          max-width: $navbar-vertical-width-sm;
+          padding-left: $navbar-vertical-padding-x-sm;
+          padding-right: $navbar-vertical-padding-x-sm;
+          overflow: visible;
+
+          .navbar-brand {
+            padding-top: ($nav-link-padding-y * 2 + $font-size-base * $line-height-base) / 2 - $navbar-padding-y;
+            padding-bottom: ($nav-link-padding-y * 2 + $font-size-base * $line-height-base) / 2;
+          }
+
+          .navbar-brand-img {
+            width: auto;
+            max-height: 1.5rem;
+          }
+
+          .navbar-collapse {
+            margin-left: -$navbar-vertical-padding-x-sm;
+            margin-right: -$navbar-vertical-padding-x-sm;
+            padding-left: $navbar-vertical-padding-x-sm;
+            padding-right: $navbar-vertical-padding-x-sm;
+          }
+
+          .navbar-nav {
+            margin-left: -$navbar-vertical-padding-x-sm;
+            margin-right: -$navbar-vertical-padding-x-sm;
+          }
+
+          .navbar-nav > .nav-item > .nav-link {
+            justify-content: center;
+            padding-left: $navbar-vertical-padding-x-sm;
+            padding-right: $navbar-vertical-padding-x-sm;
+            text-align: center;
+          }
+
+          .navbar-nav > .nav-item > .dropdown-toggle {
+
+            &::after {
+              display: none;
+            }
+          }
+
+          .navbar-user {
+            margin-left: -$navbar-vertical-padding-x-sm;
+            margin-right: -$navbar-vertical-padding-x-sm;
+            padding-left: $navbar-vertical-padding-x-sm;
+            padding-right: $navbar-vertical-padding-x-sm;
+          }
+
+          .navbar-user .dropright .dropdown-menu {
+            top: auto;
+            bottom: 0;
+          }
+        }
+      }
+    }
+  }
+}
