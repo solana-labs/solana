@@ -12,6 +12,7 @@ use solana_ledger::{
 };
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
+    collections::HashMap,
     iter::Iterator,
     net::SocketAddr,
     net::UdpSocket,
@@ -129,11 +130,12 @@ impl RepairService {
             };
 
             if let Ok(repairs) = repairs {
+                let mut cache = HashMap::new();
                 let reqs: Vec<((SocketAddr, Vec<u8>), RepairType)> = repairs
                     .into_iter()
                     .filter_map(|repair_request| {
                         serve_repair
-                            .repair_request(&repair_request)
+                            .repair_request(&cluster_slots, &repair_request, &mut cache)
                             .map(|result| (result, repair_request))
                             .ok()
                     })

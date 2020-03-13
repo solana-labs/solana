@@ -2,22 +2,25 @@ use crate::packet::limited_deserialize;
 use crate::streamer::{PacketReceiver, PacketSender};
 use crate::{
     cluster_info::{ClusterInfo, ClusterInfoError},
+    cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     packet::Packet,
     result::{Error, Result},
+    weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
-use rand::{thread_rng, Rng};
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug};
 use solana_perf::packet::{Packets, PacketsRecycler};
 use solana_sdk::{
     clock::Slot,
+    pubkey::Pubkey,
     signature::{Keypair, Signer},
     timing::duration_as_ms,
 };
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -60,6 +63,8 @@ pub struct ServeRepair {
     my_info: ContactInfo,
     cluster_info: Arc<RwLock<ClusterInfo>>,
 }
+
+type RepairCache = HashMap<Slot, (Vec<ContactInfo>, Vec<(u64, usize)>)>;
 
 impl ServeRepair {
     /// Without a valid keypair gossip will not function. Only useful for tests.
@@ -269,21 +274,30 @@ impl ServeRepair {
         Ok(out)
     }
 
-    pub fn repair_request(&self, repair_request: &RepairType) -> Result<(SocketAddr, Vec<u8>)> {
+    pub fn repair_request(
+        &self,
+        cluster_slots: &ClusterSlots,
+        repair_request: &RepairType,
+        cache: &mut RepairCache,
+    ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
-        let valid: Vec<_> = self
-            .cluster_info
-            .read()
-            .unwrap()
-            .repair_peers(repair_request.slot());
-        if valid.is_empty() {
-            return Err(ClusterInfoError::NoPeers.into());
+        if cache.get(&repair_request.slot()).is_none() {
+            let repair_peers: Vec<_> = self
+                .cluster_info
+                .read()
+                .unwrap()
+                .repair_peers(repair_request.slot());
+            if repair_peers.is_empty() {
+                return Err(ClusterInfoError::NoPeers.into());
+            }
+            let weights = cluster_slots.compute_weights(repair_request.slot(), &repair_peers);
+            cache.insert(repair_request.slot(), (repair_peers, weights));
         }
-        let n = thread_rng().gen::<usize>() % valid.len();
-        let addr = valid[n].serve_repair; // send the request to the peer's serve_repair port
+        let (repair_peers, weights) = cache.get(&repair_request.slot()).unwrap();
+        let n = weighted_best(&weights, Pubkey::new_rand().to_bytes());
+        let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
         let out = self.map_repair_request(repair_request)?;
-
         Ok((addr, out))
     }
 
@@ -563,10 +577,15 @@ mod tests {
 
     #[test]
     fn window_index_request() {
+        let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(me)));
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let rv = serve_repair.repair_request(&RepairType::Shred(0, 0));
+        let rv = serve_repair.repair_request(
+            &cluster_slots,
+            &RepairType::Shred(0, 0),
+            &mut HashMap::new(),
+        );
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
@@ -587,7 +606,11 @@ mod tests {
         };
         cluster_info.write().unwrap().insert_info(nxt.clone());
         let rv = serve_repair
-            .repair_request(&RepairType::Shred(0, 0))
+            .repair_request(
+                &cluster_slots,
+                &RepairType::Shred(0, 0),
+                &mut HashMap::new(),
+            )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
         assert_eq!(rv.0, nxt.serve_repair);
@@ -614,7 +637,11 @@ mod tests {
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
             let rv = serve_repair
-                .repair_request(&RepairType::Shred(0, 0))
+                .repair_request(
+                    &cluster_slots,
+                    &RepairType::Shred(0, 0),
+                    &mut HashMap::new(),
+                )
                 .unwrap();
             if rv.0 == serve_repair_addr {
                 one = true;

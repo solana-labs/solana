@@ -1,4 +1,7 @@
-use crate::{cluster_info::ClusterInfo, epoch_slots::EpochSlots, serve_repair::RepairType};
+use crate::{
+    cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
+    serve_repair::RepairType,
+};
 
 use solana_ledger::{bank_forks::BankForks, staking_utils};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
@@ -108,11 +111,7 @@ impl ClusterSlots {
             .collect()
     }
 
-    pub fn update_peers(
-        &mut self,
-        cluster_info: &RwLock<ClusterInfo>,
-        bank_forks: &RwLock<BankForks>,
-    ) {
+    fn update_peers(&mut self, cluster_info: &RwLock<ClusterInfo>, bank_forks: &RwLock<BankForks>) {
         let root = bank_forks.read().unwrap().root();
         let (epoch, _) = bank_forks
             .read()
@@ -141,14 +140,20 @@ impl ClusterSlots {
             self.epoch = Some(epoch);
         }
     }
-    pub fn peers(&self, slot: Slot) -> Vec<(Rc<Pubkey>, u64)> {
-        let mut peers: HashMap<Rc<Pubkey>, u64> = self.validator_stakes.clone();
-        if let Some(slot_peers) = self.lookup(slot) {
-            slot_peers
-                .iter()
-                .for_each(|(x, y)| *peers.entry(x.clone()).or_insert(0) += *y);
-        }
-        peers.into_iter().filter(|x| *x.0 != self.self_id).collect()
+
+    pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<(u64, usize)> {
+        let slot_peers = self.lookup(slot);
+        repair_peers
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                (
+                    1 + slot_peers.and_then(|v| v.get(&x.id)).cloned().unwrap_or(0)
+                        + self.validator_stakes.get(&x.id).cloned().unwrap_or(0),
+                    i,
+                )
+            })
+            .collect()
     }
 
     pub fn generate_repairs_for_missing_slots(
@@ -215,6 +220,53 @@ mod tests {
         assert!(cs.lookup(0).is_none());
         assert!(cs.lookup(1).is_some());
         assert_eq!(cs.lookup(1).unwrap().get(&Pubkey::default()), Some(&0));
+    }
+
+    #[test]
+    fn test_compute_weights() {
+        let cs = ClusterSlots::default();
+        let ci = ContactInfo::default();
+        assert_eq!(cs.compute_weights(0, &[ci]), vec![(1, 0)]);
+    }
+
+    #[test]
+    fn test_best_peer_2() {
+        let mut cs = ClusterSlots::default();
+        let mut c1 = ContactInfo::default();
+        let mut c2 = ContactInfo::default();
+        let mut map = HashMap::new();
+        let k1 = Pubkey::new_rand();
+        let k2 = Pubkey::new_rand();
+        map.insert(Rc::new(k1.clone()), std::u64::MAX / 2);
+        map.insert(Rc::new(k2.clone()), 0);
+        cs.cluster_slots.insert(0, map);
+        c1.id = k1;
+        c2.id = k2;
+        assert_eq!(
+            cs.compute_weights(0, &[c1, c2]),
+            vec![(std::u64::MAX / 2 + 1, 0), (1, 1)]
+        );
+    }
+
+    #[test]
+    fn test_best_peer_3() {
+        let mut cs = ClusterSlots::default();
+        let mut c1 = ContactInfo::default();
+        let mut c2 = ContactInfo::default();
+        let mut map = HashMap::new();
+        let k1 = Pubkey::new_rand();
+        let k2 = Pubkey::new_rand();
+        map.insert(Rc::new(k2.clone()), 0);
+        cs.cluster_slots.insert(0, map);
+        //make sure default weights are used as well
+        cs.validator_stakes
+            .insert(Rc::new(k1.clone()), std::u64::MAX / 2);
+        c1.id = k1;
+        c2.id = k2;
+        assert_eq!(
+            cs.compute_weights(0, &[c1, c2]),
+            vec![(std::u64::MAX / 2 + 1, 0), (1, 1)]
+        );
     }
 
     #[test]
