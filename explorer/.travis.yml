@@ -5,5 +5,5 @@ cache:
   directories:
     - node_modules
 script:
-  - yarn run build
-  - yarn run format
+  - npm run build
+  - npm run format
