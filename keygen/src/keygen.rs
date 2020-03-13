@@ -11,6 +11,7 @@ use solana_clap_utils::{
         keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
+    DisplayError,
 };
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
@@ -191,26 +192,6 @@ fn grind_parse_args(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let result = do_main().err();
-    if let Some(err) = result {
-        use thiserror::Error;
-
-        #[derive(Error)]
-        #[error("")]
-        struct PrettyError(String);
-
-        impl std::fmt::Debug for PrettyError {
-            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(fmt, "{}", self.0)
-            }
-        }
-
-        return Err(PrettyError(err.to_string()).into());
-    }
-    Ok(())
-}
-
-fn do_main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
@@ -398,6 +379,11 @@ fn do_main() -> Result<(), Box<dyn error::Error>> {
 
         )
         .get_matches();
+
+    do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
+}
+
+fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
     } else {

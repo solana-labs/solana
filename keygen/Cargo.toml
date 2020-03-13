@@ -17,7 +17,6 @@ solana-clap-utils = { path = "../clap-utils", version = "1.0.6" }
 solana-cli-config = { path = "../cli-config", version = "1.0.6" }
 solana-remote-wallet = { path = "../remote-wallet", version = "1.0.6" }
 solana-sdk = { path = "../sdk", version = "1.0.6" }
-thiserror = "1.0.11"
 tiny-bip39 = "0.7.0"
 
 [[bin]]

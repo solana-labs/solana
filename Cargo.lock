@@ -3812,6 +3812,7 @@ dependencies = [
  "rpassword 4.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-remote-wallet 1.0.6",
  "solana-sdk 1.0.6",
+ "thiserror 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-bip39 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -4135,7 +4136,6 @@ dependencies = [
  "solana-cli-config 1.0.6",
  "solana-remote-wallet 1.0.6",
  "solana-sdk 1.0.6",
- "thiserror 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-bip39 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
