@@ -241,7 +241,8 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
         let (mut config, signers) = parse_args(&matches, wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
-        process_command(&config)?;
+        let result = process_command(&config)?;
+        println!("{}", result);
     };
     Ok(())
 }
