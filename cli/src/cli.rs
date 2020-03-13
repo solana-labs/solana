@@ -364,6 +364,12 @@ pub enum CliCommand {
         use_lamports_unit: bool,
         commitment_config: CommitmentConfig,
     },
+    WithdrawFromVoteAccount {
+        vote_account_pubkey: Pubkey,
+        destination_account_pubkey: Pubkey,
+        withdraw_authority: SignerIndex,
+        lamports: u64,
+    },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
         new_authorized_pubkey: Pubkey,
@@ -696,6 +702,9 @@ pub fn parse_command(
             VoteAuthorize::Withdrawer,
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("withdraw-from-vote-account", Some(matches)) => {
+            parse_withdraw_from_vote_account(matches, default_signer_path, wallet_manager)
+        }
         // Wallet Commands
         ("address", Some(matches)) => Ok(CliCommandInfo {
             command: CliCommand::Address,
@@ -1924,6 +1933,19 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *use_lamports_unit,
             *commitment_config,
         ),
+        CliCommand::WithdrawFromVoteAccount {
+            vote_account_pubkey,
+            withdraw_authority,
+            lamports,
+            destination_account_pubkey,
+        } => process_withdraw_from_vote_account(
+            &rpc_client,
+            config,
+            vote_account_pubkey,
+            *withdraw_authority,
+            *lamports,
+            destination_account_pubkey,
+        ),
         CliCommand::VoteAuthorize {
             vote_account_pubkey,
             new_authorized_pubkey,
@@ -2288,7 +2310,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(false)
                         .validator(is_valid_signer)
-                        .help("From (base) key, defaults to client keypair."),
+                        .help("From (base) key, [default: cli config keypair]"),
                 ),
         )
         .subcommand(
