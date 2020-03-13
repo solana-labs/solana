@@ -1,0 +1,24 @@
+/**
+ * Dashkit
+ *
+ * Custom variables followed by Dashkit variables followed by Bootstrap variables
+ * to ensure cascade of styles.
+ */
+
+// Bootstrap functions
+@import '~bootstrap/scss/functions.scss';
+
+// Custom variables
+@import 'solana-variables';
+
+// Dashkit variables
+@import 'dashkit/variables';
+
+// Bootstrap core
+@import '~bootstrap/scss/bootstrap.scss';
+
+// Dashkit core
+@import 'dashkit/dashkit';
+
+// Custom core
+@import 'solana';

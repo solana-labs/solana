@@ -1,24 +1,24 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="main-content">
+      <div className="header">
+        <div className="container-fluid">
+          <div className="header-body">
+            <div className="row align-items-end">
+              <div className="col">
+                <h6 className="header-pretitle">
+                  Beta
+                </h6>
+                <h1 className="header-title">
+                  Solana Explorer
+                </h1>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
