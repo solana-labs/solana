@@ -12,6 +12,7 @@
     "@types/react-dom": "^16.9.0",
     "bootstrap": "^4.4.1",
     "node-sass": "^4.13.1",
+    "prettier": "^1.19.1",
     "react": "^16.13.0",
     "react-dom": "^16.13.0",
     "react-scripts": "3.4.0",
@@ -39,8 +40,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "prettier": "^1.19.1"
   }
 }
