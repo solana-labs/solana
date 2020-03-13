@@ -6,10 +6,12 @@ use std::{
 
 pub type Slot = u64;
 type SlotList<T> = Vec<(Slot, T)>;
+pub type RefCount = u64;
+type AccountMapEntry<T> = (RefCount, SlotList<T>);
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: HashMap<Pubkey, RwLock<SlotList<T>>>,
+    pub account_maps: HashMap<Pubkey, RwLock<AccountMapEntry<T>>>,
 
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
@@ -22,7 +24,7 @@ impl<T: Clone> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)) -> (),
     {
         for (pubkey, list) in self.account_maps.iter() {
-            let list_r = list.read().unwrap();
+            let list_r = &list.read().unwrap().1;
             if let Some(index) = self.latest_slot(ancestors, &list_r) {
                 func(pubkey, (&list_r[index].1, list_r[index].0));
             }
@@ -37,14 +39,14 @@ impl<T: Clone> AccountsIndex<T> {
     }
 
     pub fn would_purge(&self, pubkey: &Pubkey) -> Vec<(Slot, T)> {
-        let list = self.account_maps.get(&pubkey).unwrap().read().unwrap();
+        let list = &self.account_maps.get(&pubkey).unwrap().read().unwrap().1;
         self.get_rooted_entries(&list)
     }
 
     // filter any rooted entries and return them along with a bool that indicates
     // if this account has no more entries.
     pub fn purge(&self, pubkey: &Pubkey) -> (Vec<(Slot, T)>, bool) {
-        let mut list = self.account_maps.get(&pubkey).unwrap().write().unwrap();
+        let list = &mut self.account_maps.get(&pubkey).unwrap().write().unwrap().1;
         let reclaims = self.get_rooted_entries(&list);
         list.retain(|(slot, _)| !self.is_root(*slot));
         (reclaims, list.is_empty())
@@ -70,11 +72,12 @@ impl<T: Clone> AccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         ancestors: &HashMap<Slot, usize>,
-    ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
+    ) -> Option<(RwLockReadGuard<AccountMapEntry<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
-            let lock = list.read().unwrap();
+            let list_r = list.read().unwrap();
+            let lock = &list_r.1;
             let found_index = self.latest_slot(ancestors, &lock)?;
-            Some((lock, found_index))
+            Some((list_r, found_index))
         })
     }
 
@@ -98,7 +101,7 @@ impl<T: Clone> AccountsIndex<T> {
         let _slot_vec = self
             .account_maps
             .entry(*pubkey)
-            .or_insert_with(|| RwLock::new(Vec::with_capacity(32)));
+            .or_insert_with(|| RwLock::new((0 as RefCount, Vec::with_capacity(32))));
         self.update(slot, pubkey, account_info, reclaims);
     }
 
@@ -114,18 +117,36 @@ impl<T: Clone> AccountsIndex<T> {
         reclaims: &mut Vec<(Slot, T)>,
     ) -> Option<T> {
         if let Some(lock) = self.account_maps.get(pubkey) {
-            let mut slot_vec = lock.write().unwrap();
+            let slot_vec = &mut lock.write().unwrap();
             // filter out other dirty entries
-            reclaims.extend(slot_vec.iter().filter(|(f, _)| *f == slot).cloned());
-            slot_vec.retain(|(f, _)| *f != slot);
+            reclaims.extend(slot_vec.1.iter().filter(|(f, _)| *f == slot).cloned());
+            slot_vec.1.retain(|(f, _)| *f != slot);
 
-            slot_vec.push((slot, account_info));
+            slot_vec.0 += 1 as RefCount;
+            slot_vec.1.push((slot, account_info));
             // now, do lazy clean
-            self.purge_older_root_entries(&mut slot_vec, reclaims);
+            self.purge_older_root_entries(&mut slot_vec.1, reclaims);
 
             None
         } else {
             Some(account_info)
+        }
+    }
+
+    pub fn unref_from_storage(&self, pubkey: &Pubkey) {
+        let locked_slot_vec = self.account_maps.get(pubkey);
+        if let Some(slot_vec) = locked_slot_vec {
+            let mut slot_vec = slot_vec.write().unwrap();
+            slot_vec.0 -= 1 as RefCount;
+        }
+    }
+
+    pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
+        let locked_slot_vec = self.account_maps.get(pubkey);
+        if let Some(slot_vec) = locked_slot_vec {
+            slot_vec.read().unwrap().0
+        } else {
+            0
         }
     }
 
@@ -150,7 +171,7 @@ impl<T: Clone> AccountsIndex<T> {
     pub fn clean_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut Vec<(Slot, T)>) {
         if let Some(lock) = self.account_maps.get(pubkey) {
             let mut slot_vec = lock.write().unwrap();
-            self.purge_older_root_entries(&mut slot_vec, reclaims);
+            self.purge_older_root_entries(&mut slot_vec.1, reclaims);
         }
     }
 
@@ -158,8 +179,8 @@ impl<T: Clone> AccountsIndex<T> {
         let entry = self
             .account_maps
             .entry(*pubkey)
-            .or_insert_with(|| RwLock::new(vec![]));
-        entry.write().unwrap().push((slot, account_info));
+            .or_insert_with(|| RwLock::new((1 as RefCount, vec![])));
+        entry.write().unwrap().1.push((slot, account_info));
     }
 
     pub fn can_purge(max_root: Slot, slot: Slot) -> bool {
@@ -241,7 +262,7 @@ mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
-        assert_eq!(list[idx], (0, true));
+        assert_eq!(list.1[idx], (0, true));
 
         let mut num = 0;
         let mut found_key = false;
@@ -274,7 +295,7 @@ mod tests {
         let ancestors = vec![].into_iter().collect();
         index.add_root(0);
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
-        assert_eq!(list[idx], (0, true));
+        assert_eq!(list.1[idx], (0, true));
     }
 
     #[test]
@@ -317,14 +338,14 @@ mod tests {
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
-        assert_eq!(list[idx], (0, true));
+        assert_eq!(list.1[idx], (0, true));
         drop(list);
 
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), false, &mut gc);
         assert_eq!(gc, vec![(0, true)]);
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
-        assert_eq!(list[idx], (0, false));
+        assert_eq!(list.1[idx], (0, false));
     }
 
     #[test]
@@ -339,10 +360,10 @@ mod tests {
         index.insert(1, &key.pubkey(), false, &mut gc);
         assert!(gc.is_empty());
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
-        assert_eq!(list[idx], (0, true));
+        assert_eq!(list.1[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
-        assert_eq!(list[idx], (1, false));
+        assert_eq!(list.1[idx], (1, false));
     }
 
     #[test]
@@ -362,7 +383,7 @@ mod tests {
         assert_eq!(gc, vec![(0, true), (1, false), (2, true)]);
         let ancestors = vec![].into_iter().collect();
         let (list, idx) = index.get(&key.pubkey(), &ancestors).unwrap();
-        assert_eq!(list[idx], (3, true));
+        assert_eq!(list.1[idx], (3, true));
 
         let mut num = 0;
         let mut found_key = false;

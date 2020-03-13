@@ -736,13 +736,17 @@ impl AccountsDB {
 
         // Only keep purges where the entire history of the account in the root set
         // can be purged. All AppendVecs for those updates are dead.
-        purges.retain(|_pubkey, account_infos| {
+        purges.retain(|pubkey, account_infos| {
+            let mut would_unref_count = 0;
             for (_slot_id, account_info) in account_infos {
-                if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                if *store_counts.get(&account_info.store_id).unwrap() == 0 {
+                    would_unref_count += 1;
+                } else {
                     return false;
                 }
             }
-            true
+
+            would_unref_count == accounts_index.ref_count_from_storage(&pubkey)
         });
 
         // Recalculate reclaims with new purge set
@@ -872,10 +876,10 @@ impl AccountsDB {
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
         let (lock, index) = accounts_index.get(pubkey, ancestors)?;
-        let slot = lock[index].0;
+        let slot = lock.1[index].0;
         //TODO: thread this as a ref
         if let Some(slot_storage) = storage.0.get(&slot) {
-            let info = &lock[index].1;
+            let info = &lock.1[index].1;
             slot_storage
                 .get(&info.store_id)
                 .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
@@ -1178,7 +1182,7 @@ impl AccountsDB {
             .par_iter()
             .filter_map(|pubkey| {
                 if let Some((list, index)) = accounts_index.get(pubkey, ancestors) {
-                    let (slot, account_info) = &list[index];
+                    let (slot, account_info) = &list.1[index];
                     if account_info.lamports != 0 {
                         storage
                             .0
@@ -1353,6 +1357,20 @@ impl AccountsDB {
     fn clean_dead_slots(&self, dead_slots: &mut HashSet<Slot>) {
         if !dead_slots.is_empty() {
             {
+                let mut measure = Measure::start("clean_dead_slots-ms");
+                let index = self.accounts_index.read().unwrap();
+                let storage = self.storage.read().unwrap();
+                for slot in dead_slots.iter() {
+                    for store in storage.0.get(slot).unwrap().values() {
+                        for account in store.accounts.accounts(0) {
+                            index.unref_from_storage(&account.meta.pubkey);
+                        }
+                    }
+                }
+                drop(index);
+                measure.stop();
+                inc_new_counter_info!("clean_dead_slots-unref-ms", measure.as_ms() as usize);
+
                 let mut index = self.accounts_index.write().unwrap();
                 for slot in dead_slots.iter() {
                     index.clean_dead_slot(*slot);
@@ -1499,7 +1517,7 @@ impl AccountsDB {
 
         let mut counts = HashMap::new();
         for slot_list in accounts_index.account_maps.values() {
-            for (_slot, account_entry) in slot_list.read().unwrap().iter() {
+            for (_slot, account_entry) in slot_list.read().unwrap().1.iter() {
                 *counts.entry(account_entry.store_id).or_insert(0) += 1;
             }
         }
@@ -1526,6 +1544,7 @@ impl AccountsDB {
 pub mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
+    use crate::accounts_index::RefCount;
     use crate::append_vec::AccountMeta;
     use assert_matches::assert_matches;
     use bincode::serialize_into;
@@ -1988,7 +2007,7 @@ pub mod tests {
         let id = {
             let index = accounts.accounts_index.read().unwrap();
             let (list, idx) = index.get(&pubkey, &ancestors).unwrap();
-            list[idx].1.store_id
+            list.1[idx].1.store_id
         };
         accounts.add_root(1);
 
@@ -2016,6 +2035,13 @@ pub mod tests {
             } else {
                 0
             }
+        }
+
+        fn ref_count_for_pubkey(&self, pubkey: &Pubkey) -> RefCount {
+            self.accounts_index
+                .read()
+                .unwrap()
+                .ref_count_from_storage(&pubkey)
         }
 
         fn uncleaned_root_count(&self) -> usize {
@@ -2288,6 +2314,11 @@ pub mod tests {
         assert_eq!((account.lamports, slot), (expected_lamports, slot));
     }
 
+    fn assert_not_load_account(accounts: &AccountsDB, slot: Slot, pubkey: Pubkey) {
+        let ancestors = vec![(slot, 0)].into_iter().collect();
+        assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
+    }
+
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDB, slot: Slot) -> AccountsDB {
         let mut writer = Cursor::new(vec![]);
         let snapshot_storages = accounts.get_snapshot_storages(slot);
@@ -2372,6 +2403,7 @@ pub mod tests {
                 .unwrap()
                 .read()
                 .unwrap()
+                .1
                 .len(),
             2
         );
@@ -3025,5 +3057,95 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, pubkey, latest_lamport);
         assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
         assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
+    }
+
+    #[test]
+    fn test_accounts_clean_after_snapshot_restore_then_old_revives() {
+        solana_logger::setup();
+        let old_lamport = 223;
+        let zero_lamport = 0;
+        let no_data = 0;
+        let dummy_lamport = 999999;
+        let owner = Account::default().owner;
+
+        let account = Account::new(old_lamport, no_data, &owner);
+        let account2 = Account::new(old_lamport + 100_001, no_data, &owner);
+        let account3 = Account::new(old_lamport + 100_002, no_data, &owner);
+        let dummy_account = Account::new(dummy_lamport, no_data, &owner);
+        let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
+
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+        let dummy_pubkey = Pubkey::new_rand();
+
+        let mut current_slot = 0;
+        let accounts = AccountsDB::new_single();
+
+        // A: Initialize AccountsDB with pubkey1 and pubkey2
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey1, &account)]);
+        accounts.store(current_slot, &[(&pubkey2, &account)]);
+        accounts.add_root(current_slot);
+
+        // B: Test multiple updates to pubkey1 in a single slot/storage
+        current_slot += 1;
+        assert_eq!(0, accounts.store_count_for_slot(current_slot));
+        assert_eq!(1, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.store(current_slot, &[(&pubkey1, &account2)]);
+        accounts.store(current_slot, &[(&pubkey1, &account2)]);
+        assert_eq!(1, accounts.store_count_for_slot(current_slot));
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.add_root(current_slot);
+
+        // C: Yet more update to trigger lazy clean of step A
+        current_slot += 1;
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.store(current_slot, &[(&pubkey1, &account3)]);
+        assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.add_root(current_slot);
+
+        // D: Make pubkey1 0-lamport; also triggers clean of step B
+        current_slot += 1;
+        assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
+        accounts.store(current_slot, &[(&pubkey1, &zero_lamport_account)]);
+        assert_eq!(
+            3, /* == 4 - 2 + 1 */
+            accounts.ref_count_for_pubkey(&pubkey1)
+        );
+        accounts.add_root(current_slot);
+
+        // E: Avoid missing bank hash error
+        current_slot += 1;
+        accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
+        accounts.add_root(current_slot);
+
+        assert_load_account(&accounts, current_slot, pubkey1, zero_lamport);
+        assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
+        assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+
+        // At this point, there is no index entries for A and B
+        // If step C and step D should be purged, snapshot restore would cause
+        // pubkey1 to be revived as the state of step A.
+        // So, prevent that from happening by introducing refcount
+        accounts.clean_accounts();
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        accounts.clean_accounts();
+
+        assert_load_account(&accounts, current_slot, pubkey1, zero_lamport);
+        assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
+        assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+
+        // F: Finally, make Step A cleanable
+        current_slot += 1;
+        accounts.store(current_slot, &[(&pubkey2, &account)]);
+        accounts.add_root(current_slot);
+
+        // Do clean
+        accounts.clean_accounts();
+
+        // Ensure pubkey2 is cleaned from the index finally
+        assert_not_load_account(&accounts, current_slot, pubkey1);
+        assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
+        assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
     }
 }
