@@ -34,13 +34,13 @@ use std::{ops::Deref, sync::Arc};
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
     long: "stake-authority",
-    help: "Authorized staker (defaults to cli config keypair)",
+    help: "Authorized staker [default: cli config keypair]",
 };
 
 pub const WITHDRAW_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "withdraw_authority",
     long: "withdraw-authority",
-    help: "Authorized withdrawer (defaults to cli config keypair)",
+    help: "Authorized withdrawer [default: cli config keypair]",
 };
 
 fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -374,7 +374,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
                         .validator(is_valid_signer)
-                        .help("Public key of signing custodian (defaults to cli config pubkey)")
+                        .help("Public key of signing custodian [default: cli config pubkey]")
                 )
                 .offline_args()
                 .arg(nonce_arg())

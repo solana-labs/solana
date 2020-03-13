@@ -2310,7 +2310,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(false)
                         .validator(is_valid_signer)
-                        .help("From (base) key, defaults to client keypair."),
+                        .help("From (base) key, [default: cli config keypair]"),
                 ),
         )
         .subcommand(

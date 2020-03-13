@@ -62,7 +62,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized voter (defaults to vote account)"),
+                        .help("Public key of the authorized voter [default: vote account]"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -70,7 +70,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to cli config pubkey)"),
+                        .help("Public key of the authorized withdrawer [default: cli config pubkey]"),
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -219,7 +219,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
                         .takes_value(true)
                         .validator(is_valid_signer)
-                        .help("Authorized withdrawer (defaults to cli config keypair)"),
+                        .help("Authorized withdrawer [default: cli config keypair]"),
                 )
         )
     }
