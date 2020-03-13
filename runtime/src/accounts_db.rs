@@ -249,6 +249,10 @@ impl AccountStorageEntry {
         self.count_and_status.read().unwrap().0
     }
 
+    pub fn has_accounts(&self) -> bool {
+        self.count() > 0
+    }
+
     pub fn slot_id(&self) -> Slot {
         self.slot_id
     }
@@ -625,17 +629,6 @@ impl AccountsDB {
             self.next_id.fetch_add(1, Ordering::Relaxed),
             size,
         )
-    }
-
-    pub fn has_accounts(&self, slot: Slot) -> bool {
-        if let Some(storage_slots) = self.storage.read().unwrap().0.get(&slot) {
-            for x in storage_slots.values() {
-                if x.count() > 0 {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     // Reclaim older states of rooted non-zero lamport accounts as a general
@@ -1433,10 +1426,17 @@ impl AccountsDB {
         r_storage
             .0
             .iter()
-            .filter(|(slot, storage)| {
-                **slot <= snapshot_slot && !storage.is_empty() && accounts_index.is_root(**slot)
+            .filter(|(slot, _slot_stores)| {
+                **slot <= snapshot_slot && accounts_index.is_root(**slot)
             })
-            .map(|(_, slot_store)| slot_store.values().cloned().collect())
+            .map(|(_slot, slot_stores)| {
+                slot_stores
+                    .values()
+                    .filter(|x| x.has_accounts())
+                    .cloned()
+                    .collect()
+            })
+            .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
             .collect()
     }
 
@@ -1512,7 +1512,7 @@ impl AccountsDB {
         }
         // Need to add these last, otherwise older updates will be cleaned
         for slot_id in slots {
-            accounts_index.roots.insert(slot_id);
+            accounts_index.add_root(slot_id);
         }
 
         let mut counts = HashMap::new();
@@ -2582,12 +2582,12 @@ pub mod tests {
 
         print_accounts("post_f", &accounts);
 
-        accounts.verify_bank_hash(4, &HashMap::default()).unwrap();
-
         assert_load_account(&accounts, current_slot, pubkey, some_lamport);
         assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
         assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+
+        accounts.verify_bank_hash(4, &HashMap::default()).unwrap();
     }
 
     #[test]
@@ -2984,6 +2984,24 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_snapshot_storages_exclude_empty() {
+        let db = AccountsDB::new(Vec::new());
+
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, &key);
+        let base_slot = 0;
+        let after_slot = base_slot + 1;
+
+        db.store(base_slot, &[(&key, &account)]);
+        db.add_root(base_slot);
+        assert_eq!(1, db.get_snapshot_storages(after_slot).len());
+
+        let storage = db.storage.read().unwrap();
+        storage.0[&0].values().next().unwrap().remove_account();
+        assert!(db.get_snapshot_storages(after_slot).is_empty());
+    }
+
+    #[test]
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
         let accounts = AccountsDB::new(Vec::new());
@@ -2997,10 +3015,9 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accounts_purge_chained_purge_after_snapshot_restore_complex() {
+    fn test_accounts_purge_long_chained_after_snapshot_restore() {
         solana_logger::setup();
         let old_lamport = 223;
-        let latest_lamport = 777;
         let zero_lamport = 0;
         let no_data = 0;
         let owner = Account::default().owner;
@@ -3009,11 +3026,9 @@ pub mod tests {
         let account2 = Account::new(old_lamport + 100_001, no_data, &owner);
         let account3 = Account::new(old_lamport + 100_002, no_data, &owner);
         let dummy_account = Account::new(99999999, no_data, &owner);
-        let latest_account = Account::new(latest_lamport, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
         let pubkey = Pubkey::new_rand();
-        let zero_lamport_pubkey = Pubkey::new_rand();
         let dummy_pubkey = Pubkey::new_rand();
         let purged_pubkey1 = Pubkey::new_rand();
         let purged_pubkey2 = Pubkey::new_rand();
@@ -3021,12 +3036,18 @@ pub mod tests {
         let mut current_slot = 0;
         let accounts = AccountsDB::new_single();
 
+        // create intermidiate updates to purged_pubkey1 so that
+        // generate_index must add slots as root last at once
         current_slot += 1;
         accounts.store(current_slot, &[(&pubkey, &account)]);
-        accounts.store(
-            current_slot,
-            &[(&zero_lamport_pubkey, &zero_lamport_account)],
-        );
+        accounts.store(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        accounts.store(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
         accounts.store(current_slot, &[(&purged_pubkey1, &account2)]);
         accounts.add_root(current_slot);
 
@@ -3040,12 +3061,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         current_slot += 1;
-        accounts.store(current_slot, &[(&pubkey, &latest_account)]);
         accounts.store(current_slot, &[(&dummy_pubkey, &dummy_account)]);
-        accounts.add_root(current_slot);
-
-        current_slot += 1;
-        accounts.store(current_slot, &[(&pubkey, &latest_account)]);
         accounts.add_root(current_slot);
 
         print_count_and_status("before reconstruct", &accounts);
@@ -3054,7 +3070,7 @@ pub mod tests {
         accounts.clean_accounts();
         print_count_and_status("after purge zero", &accounts);
 
-        assert_load_account(&accounts, current_slot, pubkey, latest_lamport);
+        assert_load_account(&accounts, current_slot, pubkey, old_lamport);
         assert_load_account(&accounts, current_slot, purged_pubkey1, 0);
         assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
     }
