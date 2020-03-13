@@ -269,7 +269,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("SPLIT STAKE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair_or_ask_keyword)
+                        .validator(is_valid_signer)
                         .help("Keypair of the new stake account to split funds into")
                 )
                 .arg(

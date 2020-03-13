@@ -1,6 +1,7 @@
 use crate::cli::{
-    check_account_for_fee, check_unique_pubkeys, log_instruction_custom_error, CliCommand,
-    CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex,
+    check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
+    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    SignerIndex,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_from_path};
@@ -36,7 +37,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair_or_ask_keyword),
+                        .validator(is_valid_signer),
                 ),
         )
         .subcommand(
@@ -56,7 +57,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("STORAGE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair_or_ask_keyword),
+                        .validator(is_valid_signer),
                 ),
         )
         .subcommand(
@@ -104,17 +105,24 @@ pub fn parse_storage_create_archiver_account(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
-    let storage_account = keypair_of(matches, "storage_account").unwrap();
+    let (storage_account, storage_account_pubkey) =
+        signer_of(matches, "storage_account", wallet_manager)?;
+
+    let payer_provided = None;
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, storage_account],
+        matches,
+        default_signer_path,
+        wallet_manager,
+    )?;
+
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account: 1,
+            storage_account: signer_info.index_of(storage_account_pubkey).unwrap(),
             account_type: StorageAccountType::Archiver,
         },
-        signers: vec![
-            signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?,
-            storage_account.into(),
-        ],
+        signers: signer_info.signers,
     })
 }
 
@@ -124,17 +132,24 @@ pub fn parse_storage_create_validator_account(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
-    let storage_account = keypair_of(matches, "storage_account").unwrap();
+    let (storage_account, storage_account_pubkey) =
+        signer_of(matches, "storage_account", wallet_manager)?;
+
+    let payer_provided = None;
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, storage_account],
+        matches,
+        default_signer_path,
+        wallet_manager,
+    )?;
+
     Ok(CliCommandInfo {
         command: CliCommand::CreateStorageAccount {
             account_owner,
-            storage_account: 1,
+            storage_account: signer_info.index_of(storage_account_pubkey).unwrap(),
             account_type: StorageAccountType::Validator,
         },
-        signers: vec![
-            signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?,
-            storage_account.into(),
-        ],
+        signers: signer_info.signers,
     })
 }
 
