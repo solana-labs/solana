@@ -78,6 +78,7 @@ pub struct ValidatorConfig {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
+    pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
 }
 
 impl Default for ValidatorConfig {
@@ -102,6 +103,7 @@ impl Default for ValidatorConfig {
             new_hard_forks: None,
             trusted_validators: None,
             halt_on_trusted_validators_accounts_hash_mismatch: false,
+            accounts_hash_fault_injection_slots: 0,
         }
     }
 }
@@ -436,6 +438,7 @@ impl Validator {
                     .halt_on_trusted_validators_accounts_hash_mismatch,
                 shred_version: node.info.shred_version,
                 trusted_validators: config.trusted_validators.clone(),
+                accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
             },
         );
 

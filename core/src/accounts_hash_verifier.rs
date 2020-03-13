@@ -1,3 +1,9 @@
+// Service to verify accounts hashes with other trusted validator nodes.
+//
+// Each interval, publish the snapshat hash which is the full accounts state
+// hash on gossip. Monitor gossip for messages from validators in the --trusted-validators
+// set and halt the node if a mismatch is detected.
+
 use crate::cluster_info::ClusterInfo;
 use solana_ledger::{
     snapshot_package::SnapshotPackage, snapshot_package::SnapshotPackageReceiver,
@@ -27,6 +33,7 @@ impl AccountsHashVerifier {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         trusted_validators: Option<HashSet<Pubkey>>,
         halt_on_trusted_validators_accounts_hash_mismatch: bool,
+        fault_injection_rate_slots: u64,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -48,6 +55,8 @@ impl AccountsHashVerifier {
                                 halt_on_trusted_validators_accounts_hash_mismatch,
                                 &snapshot_package_sender,
                                 &mut hashes,
+                                &exit,
+                                fault_injection_rate_slots,
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -68,20 +77,36 @@ impl AccountsHashVerifier {
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
         hashes: &mut Vec<(Slot, Hash)>,
+        exit: &Arc<AtomicBool>,
+        fault_injection_rate_slots: u64,
     ) {
-        hashes.push((snapshot_package.root, snapshot_package.hash));
+        if fault_injection_rate_slots != 0
+            && snapshot_package.root % fault_injection_rate_slots == 0
+        {
+            // For testing, publish an invalid hash to gossip.
+            use rand::{thread_rng, Rng};
+            use solana_sdk::hash::extend_and_hash;
+            warn!("inserting fault at slot: {}", snapshot_package.root);
+            let rand = thread_rng().gen_range(0, 10);
+            let hash = extend_and_hash(&snapshot_package.hash, &[rand]);
+            hashes.push((snapshot_package.root, hash));
+        } else {
+            hashes.push((snapshot_package.root, snapshot_package.hash));
+        }
+
         if halt_on_trusted_validator_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
             for (slot, hash) in hashes.iter() {
                 slot_to_hash.insert(*slot, *hash);
             }
             if Self::should_halt(&cluster_info, trusted_validators, &mut slot_to_hash) {
-                std::process::exit(1);
+                exit.store(true, Ordering::Relaxed);
             }
         }
         if let Some(sender) = snapshot_package_sender.as_ref() {
             if sender.send(snapshot_package).is_err() {}
         }
+
         cluster_info
             .write()
             .unwrap()

@@ -67,6 +67,7 @@ pub struct TvuConfig {
     pub shred_version: u16,
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub trusted_validators: Option<HashSet<Pubkey>>,
+    pub accounts_hash_fault_injection_slots: u64,
 }
 
 impl Tvu {
@@ -169,6 +170,7 @@ impl Tvu {
             cluster_info,
             tvu_config.trusted_validators.clone(),
             tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
+            tvu_config.accounts_hash_fault_injection_slots,
         );
 
         let replay_stage_config = ReplayStageConfig {
