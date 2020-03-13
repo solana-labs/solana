@@ -1,16 +1,15 @@
 @font-face {
-  font-family: 'Feather';
-  src:
-    url('fonts/Feather.ttf?sdxovp') format('truetype'),
-    url('fonts/Feather.woff?sdxovp') format('woff'),
-    url('fonts/Feather.svg?sdxovp#Feather') format('svg');
+  font-family: "Feather";
+  src: url("fonts/Feather.ttf?sdxovp") format("truetype"),
+    url("fonts/Feather.woff?sdxovp") format("woff"),
+    url("fonts/Feather.svg?sdxovp#Feather") format("svg");
   font-weight: normal;
   font-style: normal;
 }
 
 .fe {
   /* use !important to prevent issues with browser extensions that change fonts */
-  font-family: 'Feather' !important;
+  font-family: "Feather" !important;
   speak: none;
   font-style: normal;
   font-weight: normal;

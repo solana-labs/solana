@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 function App() {
   return (
@@ -8,12 +8,8 @@ function App() {
           <div className="header-body">
             <div className="row align-items-end">
               <div className="col">
-                <h6 className="header-pretitle">
-                  Beta
-                </h6>
-                <h1 className="header-title">
-                  Solana Explorer
-                </h1>
+                <h6 className="header-pretitle">Beta</h6>
+                <h1 className="header-title">Solana Explorer</h1>
               </div>
             </div>
           </div>
