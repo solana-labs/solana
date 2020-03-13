@@ -1,9 +1,10 @@
 language: node_js
 node_js:
   - "node"
-cache:
-  directories:
-    - node_modules
+branches:
+  only:
+    - master
 script:
-  - npm run build
+  # temporary until hasha dependency warning is fixed
+  - CI=false npm run build
   - npm run format
