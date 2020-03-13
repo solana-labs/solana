@@ -137,16 +137,16 @@ Read more about the [difference between SOL and lamports here](../introduction.m
 
 If you haven’t already done so, create a vote-account keypair and create the
 vote account on the network. If you have completed this step, you should see the
-“validator-vote-keypair.json” in your Solana runtime directory:
+“vote-account-keypair.json” in your Solana runtime directory:
 
 ```bash
-solana-keygen new -o ~/validator-vote-keypair.json
+solana-keygen new -o ~/vote-account-keypair.json
 ```
 
 Create your vote account on the blockchain:
 
 ```bash
-solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json
+solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
 
 ## Connect Your Validator
@@ -154,7 +154,7 @@ solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.jso
 Connect to a testnet cluster by running:
 
 ```bash
-solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json \
+solana-validator --identity ~/validator-keypair.json --vote-account ~/vote-account-keypair.json \
     --ledger ~/validator-ledger --rpc-port 8899 --entrypoint devnet.solana.com:8001 \
     --limit-ledger-size
 ```
