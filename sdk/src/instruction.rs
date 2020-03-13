@@ -13,11 +13,11 @@ pub enum InstructionError {
     #[error("generic instruction error")]
     GenericError,
 
-    /// The arguments provided to a program instruction where invalid
-    #[error("invalid instruction argument")]
+    /// The arguments provided to a program were invalid
+    #[error("invalid program argument")]
     InvalidArgument,
 
-    /// An instruction's data contents was invalid
+    /// An instruction's data contents were invalid
     #[error("invalid instruction data")]
     InvalidInstructionData,
 
@@ -42,35 +42,35 @@ pub enum InstructionError {
     MissingRequiredSignature,
 
     /// An initialize instruction was sent to an account that has already been initialized.
-    #[error("already initialized account for instruction")]
+    #[error("instruction requires an uninitialized account")]
     AccountAlreadyInitialized,
 
     /// An attempt to operate on an account that hasn't been initialized.
-    #[error("uninitialized account for instruction")]
+    #[error("instruction requires an initialized account")]
     UninitializedAccount,
 
     /// Program's instruction lamport balance does not equal the balance after the instruction
-    #[error("balance mismatch after instruction")]
+    #[error("sum of account balances before and after instruction do not match")]
     UnbalancedInstruction,
 
     /// Program modified an account's program id
-    #[error("instruction modified program id")]
+    #[error("instruction modified the program id of an account")]
     ModifiedProgramId,
 
     /// Program spent the lamports of an account that doesn't belong to it
-    #[error("instruction spent from account it does not own")]
+    #[error("instruction spent from the balance of an account it does not own")]
     ExternalAccountLamportSpend,
 
     /// Program modified the data of an account that doesn't belong to it
-    #[error("instruction modified data of account it does not own")]
+    #[error("instruction modified data of an account it does not own")]
     ExternalAccountDataModified,
 
     /// Read-only account modified lamports
-    #[error("instruction changed balance of read-only account")]
+    #[error("instruction changed balance of a read-only account")]
     ReadonlyLamportChange,
 
     /// Read-only account modified data
-    #[error("instruction modified data of read-only account")]
+    #[error("instruction modified data of a read-only account")]
     ReadonlyDataModified,
 
     /// An account was referenced more than once in a single instruction
@@ -79,15 +79,15 @@ pub enum InstructionError {
     DuplicateAccountIndex,
 
     /// Executable bit on account changed, but shouldn't have
-    #[error("instrcution changed executable bit")]
+    #[error("instruction changed executable bit of an account")]
     ExecutableModified,
 
     /// Rent_epoch account changed, but shouldn't have
-    #[error("instruction modified rent epoch")]
+    #[error("instruction modified rent epoch of an account")]
     RentEpochModified,
 
     /// The instruction expected additional account keys
-    #[error("Insufficient account keys for instruction")]
+    #[error("insufficient account key count for instruction")]
     NotEnoughAccountKeys,
 
     /// A non-system program changed the size of the account data
@@ -99,11 +99,11 @@ pub enum InstructionError {
     AccountNotExecutable,
 
     /// Failed to borrow a reference to account data, already borrowed
-    #[error("instruction attempted to borrow already borrowed account")]
+    #[error("instruction tries to borrow reference for an account which is already borrowed")]
     AccountBorrowFailed,
 
     /// Account data has an outstanding reference after a program's execution
-    #[error("instruction left account data with outstanding borrow")]
+    #[error("instruction left account with an outstanding reference borrowed")]
     AccountBorrowOutstanding,
 
     /// The same account was multiply passed to an on-chain program's entrypoint, but the program
@@ -115,12 +115,12 @@ pub enum InstructionError {
     /// Allows on-chain programs to implement program-specific error types and see them returned
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
-    #[error("custom instruction error: {0}")]
+    #[error("program error: {0}")]
     CustomError(u32),
 
     /// The return value from the program was invalid.  Valid errors are either a defined builtin
     /// error value or a user-defined error in the lower 32 bits.
-    #[error("instruction error is invalid")]
+    #[error("program returned invalid error code")]
     InvalidError,
 }
 
