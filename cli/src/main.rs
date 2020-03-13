@@ -1,7 +1,9 @@
 use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 
-use solana_clap_utils::{input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG};
+use solana_clap_utils::{
+    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
+};
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
     display::{println_name_value, println_name_value_or},
@@ -230,22 +232,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .get_matches();
 
-    if let Err(e) = do_main(&matches) {
-        use thiserror::Error;
-
-        #[derive(Error)]
-        #[error("")]
-        struct PrettyError(String);
-
-        impl std::fmt::Debug for PrettyError {
-            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(fmt, "{}", self.0)
-            }
-        }
-
-        return Err(PrettyError(e.to_string()).into());
-    }
-    Ok(())
+    do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
 fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
@@ -254,8 +241,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
         let (mut config, signers) = parse_args(&matches, wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
-        let result = process_command(&config)?;
-        println!("{}", result);
-    }
+        process_command(&config)?;
+    };
     Ok(())
 }
