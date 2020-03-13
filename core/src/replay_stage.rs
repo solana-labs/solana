@@ -445,7 +445,8 @@ impl ReplayStage {
                             rewards_recorder_sender.clone(),
                         );
 
-                        if let Some(bank) = poh_recorder.lock().unwrap().bank() {
+                        let poh_bank = poh_recorder.lock().unwrap().bank();
+                        if let Some(bank) = poh_bank {
                             Self::log_leader_change(
                                 &my_pubkey,
                                 bank.slot(),

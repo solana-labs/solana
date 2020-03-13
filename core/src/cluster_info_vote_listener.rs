@@ -325,7 +325,8 @@ impl ClusterInfoVoteListener {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Some(bank) = poh_recorder.lock().unwrap().bank() {
+            let poh_bank = poh_recorder.lock().unwrap().bank();
+            if let Some(bank) = poh_bank {
                 let last_ts = bank.last_vote_sync.load(Ordering::Relaxed);
                 let (votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
                 bank.last_vote_sync
