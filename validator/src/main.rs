@@ -359,6 +359,7 @@ pub fn main() {
             Arg::with_name("blockstream_unix_socket")
                 .long("blockstream")
                 .takes_value(true)
+                .hidden(true) // Don't document this argument to discourage its use
                 .value_name("UNIX DOMAIN SOCKET")
                 .help("Stream entries to this unix domain socket path")
         )
@@ -368,21 +369,21 @@ pub fn main() {
                 .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
         )
         .arg(
-            Arg::with_name("identity_keypair")
+            Arg::with_name("identity")
                 .short("i")
-                .long("identity-keypair")
+                .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
-                .help("File containing the identity keypair for the validator"),
+                .help("Validator identity keypair"),
         )
         .arg(
-            Arg::with_name("voting_keypair")
-                .long("voting-keypair")
+            Arg::with_name("authorized_voter")
+                .long("authorized-voter")
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
-                .help("File containing the authorized voting keypair.  Default is an ephemeral keypair, which may disable voting without --vote-account."),
+                .help("Authorized voter keypair [default: value of --identity]"),
         )
         .arg(
             Arg::with_name("vote_account")
@@ -390,12 +391,13 @@ pub fn main() {
                 .value_name("PUBKEY")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
-                .help("Public key of the vote account to vote with.  Default is the public key of --voting-keypair"),
+                .help("Validator vote account public key.  If unspecified voting will be disabled")
         )
         .arg(
             Arg::with_name("storage_keypair")
                 .long("storage-keypair")
                 .value_name("PATH")
+                .hidden(true) // Don't document this argument to discourage its use
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .help("File containing the storage account keypair.  Default is an ephemeral keypair"),
@@ -652,17 +654,15 @@ pub fn main() {
         )
         .get_matches();
 
-    let identity_keypair =
-        Arc::new(keypair_of(&matches, "identity_keypair").unwrap_or_else(Keypair::new));
+    let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
 
-    let (voting_keypair, ephemeral_voting_keypair) = keypair_of(&matches, "voting_keypair")
-        .map(|keypair| (keypair, false))
-        .unwrap_or_else(|| (Keypair::new(), true));
+    let authorized_voter = keypair_of(&matches, "authorized_voter")
+        .map(Arc::new)
+        .unwrap_or_else(|| identity_keypair.clone());
 
     let storage_keypair = keypair_of(&matches, "storage_keypair").unwrap_or_else(Keypair::new);
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
-    let entrypoint = matches.value_of("entrypoint");
     let init_complete_file = matches.value_of("init_complete_file");
     let skip_poh_verify = matches.is_present("skip_poh_verify");
     let cuda = matches.is_present("cuda");
@@ -838,13 +838,9 @@ pub fn main() {
     info!("Starting validator with: {:#?}", std::env::args_os());
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
-        // Disable voting because normal (=not bootstrapping) validator rejects
-        // non-voting accounts (= ephemeral keypairs).
-        if ephemeral_voting_keypair && entrypoint.is_some() {
-            warn!("Disabled voting due to the use of ephemeral key for vote account");
-            validator_config.voting_disabled = true;
-        };
-        voting_keypair.pubkey()
+        warn!("--vote-account not specified, validator will not vote");
+        validator_config.voting_disabled = true;
+        Keypair::new().pubkey()
     });
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
@@ -1014,7 +1010,7 @@ pub fn main() {
                         check_vote_account(
                             &rpc_client,
                             &vote_account,
-                            &voting_keypair.pubkey(),
+                            &authorized_voter.pubkey(),
                             &identity_keypair.pubkey(),
                         )
                     } else {
@@ -1057,7 +1053,7 @@ pub fn main() {
         &identity_keypair,
         &ledger_path,
         &vote_account,
-        &Arc::new(voting_keypair),
+        &authorized_voter,
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
         !skip_poh_verify,

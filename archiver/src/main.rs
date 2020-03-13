@@ -28,7 +28,7 @@ fn main() {
         .arg(
             Arg::with_name("identity_keypair")
                 .short("i")
-                .long("identity-keypair")
+                .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)

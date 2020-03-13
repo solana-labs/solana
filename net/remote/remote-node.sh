@@ -256,7 +256,7 @@ EOF
 
     if [[ $skipSetup != true ]]; then
       solana --url http://"$entrypointIp":8899 \
-        --keypair ~/solana/config/bootstrap-validator/identity-keypair.json \
+        --keypair ~/solana/config/bootstrap-validator/identity.json \
         validator-info publish "$(hostname)" -n team/solana --force || true
     fi
     ;;
@@ -301,7 +301,7 @@ EOF
     if [[ ! -f config/validator-identity.json ]]; then
       solana-keygen new --no-passphrase -so config/validator-identity.json
     fi
-    args+=(--identity-keypair config/validator-identity.json)
+    args+=(--identity config/validator-identity.json)
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
@@ -411,7 +411,7 @@ EOF
     )
 
     if [[ $airdropsEnabled != true ]]; then
-      # If this ever becomes a problem, we need to provide the `--identity-keypair`
+      # If this ever becomes a problem, we need to provide the `--identity`
       # argument to an existing system account with lamports in it
       echo "Error: archivers not supported without airdrops"
       exit 1

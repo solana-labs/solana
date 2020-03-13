@@ -4,16 +4,16 @@
 
 Once you’ve confirmed the network is running, it’s time to connect your validator to the network.
 
-If you haven’t already done so, create a vote-account keypair and create the vote account on the network. If you have completed this step, you should see the “validator-vote-keypair.json” in your Solana runtime directory:
+If you haven’t already done so, create a vote-account keypair and create the vote account on the network. If you have completed this step, you should see the “vote-account-keypair.json” in your Solana runtime directory:
 
 ```bash
-solana-keygen new -o ~/validator-vote-keypair.json
+solana-keygen new -o ~/vote-account-keypair.json
 ```
 
 Create your vote account on the blockchain:
 
 ```bash
-solana create-vote-account ~/validator-vote-keypair.json ~/validator-keypair.json
+solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
 
 ## Connect Your Validator
@@ -25,7 +25,7 @@ export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=tds_
 ```
 
 ```bash
-solana-validator --identity-keypair ~/validator-keypair.json --voting-keypair ~/validator-vote-keypair.json \
+solana-validator --identity ~/validator-keypair.json --vote-account ~/vote-account-keypair.json \
     --ledger ~/validator-ledger --rpc-port 8899 --entrypoint tds.solana.com:8001 \
     --limit-ledger-size
 ```

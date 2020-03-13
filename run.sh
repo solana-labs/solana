@@ -97,8 +97,8 @@ solana-faucet --keypair "$dataDir"/faucet-keypair.json &
 faucet=$!
 
 args=(
-  --identity-keypair "$dataDir"/leader-keypair.json
-  --voting-keypair "$dataDir"/leader-vote-account-keypair.json
+  --identity "$dataDir"/leader-keypair.json
+  --vote-account "$dataDir"/leader-vote-account-keypair.json
   --ledger "$ledgerDir"
   --gossip-port 8001
   --rpc-port 8899

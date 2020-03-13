@@ -233,25 +233,25 @@ done < public_keys.txt
 
 In order to run a validator, you will need to specify an "identity keypair"
 which will be used to fund all of the vote transactions signed by your validator.
-Rather than specifying a path with `--identity-keypair <PATH>` you can pass
+Rather than specifying a path with `--identity <PATH>` you can pass
 `ASK` to securely input the funding keypair.
 
 ```bash
-solana-validator --identity-keypair ASK --ledger ...
+solana-validator --identity ASK --ledger ...
 
-[identity-keypair] seed phrase: 🔒
-[identity-keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
+[identity] seed phrase: 🔒
+[identity] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
 ```
 
 You can use this input method for your voting keypair as well:
 
 ```bash
-solana-validator --identity-keypair ASK --voting-keypair ASK --ledger ...
+solana-validator --identity ASK --authorized-voter ASK --ledger ...
 
-[identity-keypair] seed phrase: 🔒
-[identity-keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-[voting-keypair] seed phrase: 🔒
-[voting-keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
+[identity] seed phrase: 🔒
+[identity] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
+[authorized-voter] seed phrase: 🔒
+[authorized-voter] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
 ```
 
 Refer to the following page for a comprehensive guide on running a validator:
