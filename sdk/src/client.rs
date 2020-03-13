@@ -21,7 +21,6 @@ use crate::{
     transaction,
     transport::Result,
 };
-use std::io;
 
 pub trait Client: SyncClient + AsyncClient {
     fn tpu_addr(&self) -> String;
@@ -122,10 +121,7 @@ pub trait SyncClient {
 
 pub trait AsyncClient {
     /// Send a signed transaction, but don't wait to see if the server accepted it.
-    fn async_send_transaction(
-        &self,
-        transaction: transaction::Transaction,
-    ) -> io::Result<Signature>;
+    fn async_send_transaction(&self, transaction: transaction::Transaction) -> Result<Signature>;
 
     /// Create a transaction from the given message, and send it to the
     /// server, but don't wait for to see if the server accepted it.
@@ -134,7 +130,7 @@ pub trait AsyncClient {
         keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature>;
+    ) -> Result<Signature>;
 
     /// Create a transaction from a single instruction that only requires
     /// a single signer. Then send it to the server, but don't wait for a reply.
@@ -143,7 +139,7 @@ pub trait AsyncClient {
         keypair: &Keypair,
         instruction: Instruction,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature>;
+    ) -> Result<Signature>;
 
     /// Attempt to transfer lamports from `keypair` to `pubkey`, but don't wait to confirm.
     fn async_transfer(
@@ -152,5 +148,5 @@ pub trait AsyncClient {
         keypair: &Keypair,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature>;
+    ) -> Result<Signature>;
 }

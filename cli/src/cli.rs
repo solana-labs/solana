@@ -18,7 +18,10 @@ use solana_clap_utils::{
     input_parsers::*, input_validators::*, keypair::signer_from_path, offline::SIGN_ONLY_ARG,
     ArgConstant,
 };
-use solana_client::{client_error::ClientError, rpc_client::RpcClient};
+use solana_client::{
+    client_error::{ClientErrorKind, Result as ClientResult},
+    rpc_client::RpcClient,
+};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
@@ -47,14 +50,15 @@ use solana_stake_program::{
 use solana_storage_program::storage_instruction::StorageAccountType;
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
+    error,
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
     sync::Arc,
     thread::sleep,
     time::Duration,
-    {error, fmt},
 };
+use thiserror::Error;
 use url::Url;
 
 pub type CliSigners = Vec<Box<dyn Signer>>;
@@ -406,46 +410,34 @@ pub struct CliCommandInfo {
     pub signers: CliSigners,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CliError {
+    #[error("bad parameter: {0}")]
     BadParameter(String),
+    #[error("command not recognized: {0}")]
     CommandNotRecognized(String),
+    #[error("insuficient funds for fee")]
     InsufficientFundsForFee,
+    #[error(transparent)]
     InvalidNonce(CliNonceError),
+    #[error("dynamic program error: {0}")]
     DynamicProgramError(String),
+    #[error("rpc request error: {0}")]
     RpcRequestError(String),
+    #[error("keypair file not found: {0}")]
     KeypairFileNotFound(String),
-}
-
-impl fmt::Display for CliError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid")
-    }
-}
-
-impl error::Error for CliError {
-    fn description(&self) -> &str {
-        "invalid"
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
 }
 
 impl From<Box<dyn error::Error>> for CliError {
     fn from(error: Box<dyn error::Error>) -> Self {
-        CliError::DynamicProgramError(format!("{:?}", error))
+        CliError::DynamicProgramError(error.to_string())
     }
 }
 
 impl From<CliNonceError> for CliError {
     fn from(error: CliNonceError) -> Self {
         match error {
-            CliNonceError::Client(client_error) => {
-                Self::RpcRequestError(format!("{:?}", client_error))
-            }
+            CliNonceError::Client(client_error) => Self::RpcRequestError(client_error),
             _ => Self::InvalidNonce(error),
         }
     }
@@ -717,7 +709,7 @@ pub fn parse_command(
                 .parse()
                 .or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid faucet port: {:?}",
+                        "Invalid faucet port: {}",
                         err
                     )))
                 })?;
@@ -725,7 +717,7 @@ pub fn parse_command(
             let faucet_host = if let Some(faucet_host) = matches.value_of("faucet_host") {
                 Some(solana_net_utils::parse_host(faucet_host).or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid faucet host: {:?}",
+                        "Invalid faucet host: {}",
                         err
                     )))
                 })?)
@@ -1137,13 +1129,13 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
             if let Some(result) = status {
                 match result {
                     Ok(_) => Ok("Confirmed".to_string()),
-                    Err(err) => Ok(format!("Transaction failed with error {:?}", err)),
+                    Err(err) => Ok(format!("Transaction failed with error: {}", err)),
                 }
             } else {
                 Ok("Not found".to_string())
             }
         }
-        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {:?}", err)).into()),
+        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
     }
 }
 
@@ -1203,7 +1195,7 @@ fn process_deploy(
         program_data.len() as u64,
         &bpf_loader::id(),
     );
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut create_account_tx = Transaction::new_unsigned(message);
     create_account_tx.try_sign(&[config.signers[0], &program_id], blockhash)?;
     messages.push(&create_account_tx.message);
@@ -1216,7 +1208,7 @@ fn process_deploy(
             (i * DATA_CHUNK_SIZE) as u32,
             chunk.to_vec(),
         );
-        let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+        let message = Message::new_with_payer(&[instruction], Some(&signers[0].pubkey()));
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&signers, blockhash)?;
         write_transactions.push(tx);
@@ -1226,7 +1218,7 @@ fn process_deploy(
     }
 
     let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
-    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+    let message = Message::new_with_payer(&[instruction], Some(&signers[0].pubkey()));
     let mut finalize_tx = Transaction::new_unsigned(message);
     finalize_tx.try_sign(&signers, blockhash)?;
     messages.push(&finalize_tx.message);
@@ -1294,7 +1286,7 @@ fn process_pay(
         let message = if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(vec![ix], None, nonce_account, &nonce_authority.pubkey())
         } else {
-            Message::new(vec![ix])
+            Message::new(&[ix])
         };
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&config.signers, blockhash)?;
@@ -1334,7 +1326,7 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let message = Message::new(ixs);
+        let message = Message::new(&ixs);
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
         if sign_only {
@@ -1377,7 +1369,7 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let message = Message::new(ixs);
+        let message = Message::new(&ixs);
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
         if sign_only {
@@ -1411,7 +1403,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
         pubkey,
         &config.signers[0].pubkey(),
     );
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
     check_account_for_fee(
@@ -1434,7 +1426,7 @@ fn process_time_elapsed(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_timestamp(&config.signers[0].pubkey(), pubkey, to, dt);
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
     check_account_for_fee(
@@ -1482,7 +1474,7 @@ fn process_transfer(
             &nonce_authority.pubkey(),
         )
     } else {
-        Message::new_with_payer(ixs, Some(&fee_payer.pubkey()))
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -1514,7 +1506,7 @@ fn process_witness(
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_signature(&config.signers[0].pubkey(), pubkey, to);
-    let message = Message::new(vec![ix]);
+    let message = Message::new(&[ix]);
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, blockhash)?;
     check_account_for_fee(
@@ -2111,18 +2103,18 @@ pub fn request_and_confirm_airdrop(
     log_instruction_custom_error::<SystemError>(result)
 }
 
-pub fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
+pub fn log_instruction_custom_error<E>(result: ClientResult<String>) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
     match result {
         Err(err) => {
-            if let ClientError::TransactionError(TransactionError::InstructionError(
+            if let ClientErrorKind::TransactionError(TransactionError::InstructionError(
                 _,
                 InstructionError::CustomError(code),
-            )) = err
+            )) = err.kind()
             {
-                if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
+                if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
                     error!("{}::{:?}", E::type_of(), specific_error);
                     eprintln!(
                         "Program Error ({}::{:?}): {}",
@@ -3325,7 +3317,7 @@ mod tests {
         assert_eq!(
             process_command(&config).unwrap(),
             format!(
-                "Transaction failed with error {:?}",
+                "Transaction failed with error: {}",
                 TransactionError::AccountInUse
             )
         );

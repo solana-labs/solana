@@ -1,7 +1,9 @@
 use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand};
 use console::style;
 
-use solana_clap_utils::{input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG};
+use solana_clap_utils::{
+    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
+};
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
     display::{println_name_value, println_name_value_or},
@@ -230,6 +232,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .get_matches();
 
+    do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
+}
+
+fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
     if parse_settings(&matches)? {
         let wallet_manager = maybe_wallet_manager()?;
 
@@ -237,6 +243,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
         let result = process_command(&config)?;
         println!("{}", result);
-    }
+    };
     Ok(())
 }

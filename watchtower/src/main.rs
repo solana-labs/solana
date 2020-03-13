@@ -9,10 +9,12 @@ use solana_clap_utils::{
     input_parsers::pubkeys_of,
     input_validators::{is_pubkey_or_keypair, is_url},
 };
-use solana_client::{rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus};
+use solana_client::{
+    client_error::Result as ClientResult, rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus,
+};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
-use std::{error, io, str::FromStr, thread::sleep, time::Duration};
+use std::{error, str::FromStr, thread::sleep, time::Duration};
 
 struct Config {
     interval: Duration,
@@ -115,7 +117,7 @@ fn get_config() -> Config {
     config
 }
 
-fn get_cluster_info(rpc_client: &RpcClient) -> io::Result<(u64, Hash, RpcVoteAccountStatus)> {
+fn get_cluster_info(rpc_client: &RpcClient) -> ClientResult<(u64, Hash, RpcVoteAccountStatus)> {
     let transaction_count = rpc_client.get_transaction_count()?;
     let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
     let vote_accounts = rpc_client.get_vote_accounts()?;

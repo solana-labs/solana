@@ -262,7 +262,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 );
                 match sig {
                     Err(e) => {
-                        result = Err(TransportError::IoError(e));
+                        result = Err(e);
                         continue;
                     }
 

@@ -120,7 +120,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let message = Message::new_with_payer(vec![mining_proof_ix], Some(&mint_keypair.pubkey()));
+        let message = Message::new_with_payer(&[mining_proof_ix], Some(&mint_keypair.pubkey()));
         let mining_proof_tx = Transaction::new(
             &[&mint_keypair, archiver_keypair.as_ref()],
             message,

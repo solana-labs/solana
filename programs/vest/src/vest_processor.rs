@@ -187,7 +187,7 @@ mod tests {
             date_instruction::create_account(&payer_keypair.pubkey(), &date_pubkey, 1);
         instructions.push(date_instruction::store(&date_pubkey, date));
 
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client.send_message(&[payer_keypair, date_keypair], message)
     }
 
@@ -199,7 +199,7 @@ mod tests {
     ) -> Result<Signature> {
         let date_pubkey = date_keypair.pubkey();
         let instruction = date_instruction::store(&date_pubkey, date);
-        let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
+        let message = Message::new_with_payer(&[instruction], Some(&payer_keypair.pubkey()));
         bank_client.send_message(&[payer_keypair, date_keypair], message)
     }
 
@@ -222,7 +222,7 @@ mod tests {
             &date_pubkey,
             lamports,
         );
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         bank_client.send_message(&[payer_keypair, contract_keypair], message)
     }
 
@@ -257,7 +257,7 @@ mod tests {
     ) -> Result<Signature> {
         let instruction =
             vest_instruction::redeem_tokens(&contract_pubkey, &date_pubkey, &payee_pubkey);
-        let message = Message::new_with_payer(vec![instruction], Some(&payer_keypair.pubkey()));
+        let message = Message::new_with_payer(&[instruction], Some(&payer_keypair.pubkey()));
         bank_client.send_message(&[payer_keypair], message)
     }
 
@@ -353,7 +353,7 @@ mod tests {
         );
         instructions[1].accounts = vec![]; // <!-- Attack! Prevent accounts from being passed into processor.
 
-        let message = Message::new(instructions);
+        let message = Message::new(&instructions);
         assert_eq!(
             bank_client
                 .send_message(&[&alice_keypair, &contract_keypair], message)

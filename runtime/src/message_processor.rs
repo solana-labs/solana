@@ -800,7 +800,7 @@ mod tests {
             AccountMeta::new(from_pubkey, true),
             AccountMeta::new_readonly(to_pubkey, false),
         ];
-        let message = Message::new(vec![Instruction::new(
+        let message = Message::new(&[Instruction::new(
             mock_system_program_id,
             &MockSystemInstruction::Correct,
             account_metas.clone(),
@@ -811,7 +811,7 @@ mod tests {
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
 
-        let message = Message::new(vec![Instruction::new(
+        let message = Message::new(&[Instruction::new(
             mock_system_program_id,
             &MockSystemInstruction::AttemptCredit { lamports: 50 },
             account_metas.clone(),
@@ -826,7 +826,7 @@ mod tests {
             ))
         );
 
-        let message = Message::new(vec![Instruction::new(
+        let message = Message::new(&[Instruction::new(
             mock_system_program_id,
             &MockSystemInstruction::AttemptDataChange { data: 50 },
             account_metas,
@@ -923,7 +923,7 @@ mod tests {
         ];
 
         // Try to borrow mut the same account
-        let message = Message::new(vec![Instruction::new(
+        let message = Message::new(&[Instruction::new(
             mock_program_id,
             &MockSystemInstruction::BorrowFail,
             account_metas.clone(),
@@ -938,7 +938,7 @@ mod tests {
         );
 
         // Try to borrow mut the same account in a safe way
-        let message = Message::new(vec![Instruction::new(
+        let message = Message::new(&[Instruction::new(
             mock_program_id,
             &MockSystemInstruction::MultiBorrowMut,
             account_metas.clone(),
@@ -947,7 +947,7 @@ mod tests {
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
-        let message = Message::new(vec![Instruction::new(
+        let message = Message::new(&[Instruction::new(
             mock_program_id,
             &MockSystemInstruction::DoWork {
                 lamports: 10,
