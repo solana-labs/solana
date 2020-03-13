@@ -678,10 +678,10 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
 }
 
-// utility function, used by Bank, tests
-pub fn create_account(
-    vote_pubkey: &Pubkey,
+pub fn create_account_with_authorized(
     node_pubkey: &Pubkey,
+    authorized_voter: &Pubkey,
+    authorized_withdrawer: &Pubkey,
     commission: u8,
     lamports: u64,
 ) -> Account {
@@ -690,8 +690,8 @@ pub fn create_account(
     let vote_state = VoteState::new(
         &VoteInit {
             node_pubkey: *node_pubkey,
-            authorized_voter: *vote_pubkey,
-            authorized_withdrawer: *vote_pubkey,
+            authorized_voter: *authorized_voter,
+            authorized_withdrawer: *authorized_withdrawer,
             commission,
         },
         &Clock::default(),
@@ -701,6 +701,16 @@ pub fn create_account(
     VoteState::to(&versioned, &mut vote_account).unwrap();
 
     vote_account
+}
+
+// create_account() should be removed, use create_account_with_authorized() instead
+pub fn create_account(
+    vote_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
+    commission: u8,
+    lamports: u64,
+) -> Account {
+    create_account_with_authorized(node_pubkey, vote_pubkey, vote_pubkey, commission, lamports)
 }
 
 #[cfg(test)]

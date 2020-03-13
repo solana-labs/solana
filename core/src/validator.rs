@@ -144,7 +144,7 @@ impl Validator {
         keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
-        voting_keypair: &Arc<Keypair>,
+        authorized_voter: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
         poh_verify: bool,
@@ -153,8 +153,9 @@ impl Validator {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        warn!("identity pubkey: {:?}", id);
-        warn!("vote pubkey: {:?}", vote_account);
+        warn!("identity: {}", id);
+        warn!("vote account: {}", vote_account);
+        warn!("authorized voter: {}", authorized_voter.pubkey());
         report_target_features();
 
         info!("entrypoint: {:?}", entrypoint_info_option);
@@ -366,12 +367,6 @@ impl Validator {
 
         wait_for_supermajority(config, &bank, &cluster_info);
 
-        let voting_keypair = if config.voting_disabled {
-            None
-        } else {
-            Some(voting_keypair.clone())
-        };
-
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
             blockstore.new_shreds_signals.len(),
@@ -383,7 +378,11 @@ impl Validator {
 
         let tvu = Tvu::new(
             vote_account,
-            voting_keypair,
+            if config.voting_disabled {
+                None
+            } else {
+                Some(authorized_voter.clone())
+            },
             storage_keypair,
             &bank_forks,
             &cluster_info,

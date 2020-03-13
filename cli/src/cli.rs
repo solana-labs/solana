@@ -684,7 +684,7 @@ pub fn parse_command(
         },
         // Vote Commands
         ("create-vote-account", Some(matches)) => {
-            parse_vote_create_account(matches, default_signer_path, wallet_manager)
+            parse_create_vote_account(matches, default_signer_path, wallet_manager)
         }
         ("vote-update-validator", Some(matches)) => {
             parse_vote_update_validator(matches, default_signer_path, wallet_manager)

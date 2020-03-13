@@ -467,8 +467,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Account::new(bootstrap_validator_lamports, 0, &system_program::id()),
         );
 
-        let vote_account = vote_state::create_account(
-            &vote_pubkey,
+        let vote_account = vote_state::create_account_with_authorized(
+            &identity_pubkey,
+            &identity_pubkey,
             &identity_pubkey,
             100,
             VoteState::get_rent_exempt_reserve(&rent).max(1),

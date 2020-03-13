@@ -18,10 +18,10 @@ while [[ -n $1 ]]; do
       entrypoint=$2
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --identity-keypair ]]; then
-      identity_keypair=$2
-      [[ -r $identity_keypair ]] || {
-        echo "$identity_keypair does not exist"
+    elif [[ $1 = --identity ]]; then
+      identity=$2
+      [[ -r $identity ]] || {
+        echo "$identity does not exist"
         exit 1
       }
       args+=("$1" "$2")
@@ -52,29 +52,29 @@ while [[ -n $1 ]]; do
   fi
 done
 
-: "${identity_keypair:="$SOLANA_ROOT"/farf/archiver-identity-keypair"$label".json}"
+: "${identity:="$SOLANA_ROOT"/farf/archiver-identity"$label".json}"
 : "${storage_keypair:="$SOLANA_ROOT"/farf/archiver-storage-keypair"$label".json}"
 ledger="$SOLANA_ROOT"/farf/archiver-ledger"$label"
 
 rpc_url=$($solana_gossip rpc-url --entrypoint "$entrypoint")
 
-if [[ ! -r $identity_keypair ]]; then
-  $solana_keygen new --no-passphrase -so "$identity_keypair"
+if [[ ! -r $identity ]]; then
+  $solana_keygen new --no-passphrase -so "$identity"
 
   # See https://github.com/solana-labs/solana/issues/4344
-  $solana_cli --keypair "$identity_keypair" --url "$rpc_url" airdrop 1
+  $solana_cli --keypair "$identity" --url "$rpc_url" airdrop 1
 fi
-identity_pubkey=$($solana_keygen pubkey "$identity_keypair")
+identity_pubkey=$($solana_keygen pubkey "$identity")
 
 if [[ ! -r $storage_keypair ]]; then
   $solana_keygen new --no-passphrase -so "$storage_keypair"
 
-  $solana_cli --keypair "$identity_keypair" --url "$rpc_url" \
+  $solana_cli --keypair "$identity" --url "$rpc_url" \
     create-archiver-storage-account "$identity_pubkey" "$storage_keypair"
 fi
 
 default_arg --entrypoint "$entrypoint"
-default_arg --identity-keypair "$identity_keypair"
+default_arg --identity "$identity"
 default_arg --storage-keypair "$storage_keypair"
 default_arg --ledger "$ledger"
 

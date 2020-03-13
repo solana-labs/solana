@@ -10,8 +10,8 @@ args=()
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 label=
-identity_keypair_path=
-voting_keypair_path=
+identity=
+vote_account=
 no_restart=0
 gossip_entrypoint=
 ledger_dir=
@@ -69,19 +69,19 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --expected-shred-version ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --identity-keypair ]]; then
-      identity_keypair_path=$2
+    elif [[ $1 = --identity ]]; then
+      identity=$2
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --voting-keypair ]]; then
-      voting_keypair_path=$2
+    elif [[ $1 = --authorized-voter ]]; then
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --vote-account ]]; then
+      vote_account=$2
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --storage-keypair ]]; then
-      storage_keypair_path=$2
+      storage_keypair=$2
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --init-complete-file ]]; then
@@ -174,11 +174,11 @@ if [[ -n $REQUIRE_LEDGER_DIR ]]; then
 fi
 
 if [[ -n $REQUIRE_KEYPAIRS ]]; then
-  if [[ -z $identity_keypair_path ]]; then
-    usage "Error: --identity-keypair not specified"
+  if [[ -z $identity ]]; then
+    usage "Error: --identity not specified"
   fi
-  if [[ -z $voting_keypair_path ]]; then
-    usage "Error: --voting-keypair not specified"
+  if [[ -z $vote_account ]]; then
+    usage "Error: --vote-account not specified"
   fi
 fi
 
@@ -205,18 +205,18 @@ fi
 
 faucet_address="${gossip_entrypoint%:*}":9900
 
-: "${identity_keypair_path:=$ledger_dir/identity-keypair.json}"
-: "${voting_keypair_path:=$ledger_dir/vote-keypair.json}"
-: "${storage_keypair_path:=$ledger_dir/storage-keypair.json}"
+: "${identity:=$ledger_dir/identity.json}"
+: "${vote_account:=$ledger_dir/vote-account.json}"
+: "${storage_keypair:=$ledger_dir/storage-keypair.json}"
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
   default_arg --rpc-faucet-address "$faucet_address"
 fi
 
-default_arg --identity-keypair "$identity_keypair_path"
-default_arg --voting-keypair "$voting_keypair_path"
-default_arg --storage-keypair "$storage_keypair_path"
+default_arg --identity "$identity"
+default_arg --vote-account "$vote_account"
+default_arg --storage-keypair "$storage_keypair"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
 default_arg --enable-rpc-exit
@@ -254,27 +254,27 @@ trap 'kill_node_and_exit' INT TERM ERR
 wallet() {
   (
     set -x
-    $solana_cli --keypair "$identity_keypair_path" --url "$rpc_url" "$@"
+    $solana_cli --keypair "$identity" --url "$rpc_url" "$@"
   )
 }
 
 setup_validator_accounts() {
   declare node_sol=$1
 
-  if ! wallet vote-account "$voting_keypair_path"; then
+  if ! wallet vote-account "$vote_account"; then
     if ((airdrops_enabled)); then
       echo "Adding $node_sol to validator identity account:"
       wallet airdrop "$node_sol" || return $?
     fi
 
     echo "Creating validator vote account"
-    wallet create-vote-account "$voting_keypair_path" "$identity_keypair_path" || return $?
+    wallet create-vote-account "$vote_account" "$identity" || return $?
   fi
   echo "Validator vote account configured"
 
-  if ! wallet storage-account "$storage_keypair_path"; then
+  if ! wallet storage-account "$storage_keypair"; then
     echo "Creating validator storage account"
-    wallet create-validator-storage-account "$identity_keypair_path" "$storage_keypair_path" || return $?
+    wallet create-validator-storage-account "$identity" "$storage_keypair" || return $?
   fi
   echo "Validator storage account configured"
 
@@ -286,9 +286,9 @@ setup_validator_accounts() {
 
 rpc_url=$($solana_gossip rpc-url --entrypoint "$gossip_entrypoint" --any)
 
-[[ -r "$identity_keypair_path" ]] || $solana_keygen new --no-passphrase -so "$identity_keypair_path"
-[[ -r "$voting_keypair_path" ]] || $solana_keygen new --no-passphrase -so "$voting_keypair_path"
-[[ -r "$storage_keypair_path" ]] || $solana_keygen new --no-passphrase -so "$storage_keypair_path"
+[[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
+[[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"
+[[ -r "$storage_keypair" ]] || $solana_keygen new --no-passphrase -so "$storage_keypair"
 
 setup_validator_accounts "$node_sol"
 
