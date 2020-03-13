@@ -1005,7 +1005,7 @@ impl Bank {
         let results = self
             .rc
             .accounts
-            .lock_accounts(txs, iteration_order.as_ref().map(|v| v.as_slice()));
+            .lock_accounts(txs, iteration_order.as_deref());
         TransactionBatch::new(results, &self, txs, iteration_order)
     }
 

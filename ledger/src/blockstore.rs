@@ -3947,7 +3947,7 @@ pub mod tests {
                     .flat_map(|k| {
                         let begin = k * gap + 1;
                         let end = (k + 1) * gap;
-                        (begin..end)
+                        begin..end
                     })
                     .collect();
                 assert_eq!(
