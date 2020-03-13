@@ -1,20 +1,15 @@
 use crate::transaction::TransactionError;
-use std::{error, fmt, io};
+use std::io;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum TransportError {
-    IoError(io::Error),
-    TransactionError(TransactionError),
-}
-
-impl error::Error for TransportError {}
-impl fmt::Display for TransportError {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TransportError::IoError(err) => write!(formatter, "{:?}", err),
-            TransportError::TransactionError(err) => write!(formatter, "{:?}", err),
-        }
-    }
+    #[error("transport io error: {0}")]
+    IoError(#[from] io::Error),
+    #[error("transport transaction error: {0}")]
+    TransactionError(#[from] TransactionError),
+    #[error("transport custom error: {0}")]
+    Custom(String),
 }
 
 impl TransportError {
@@ -24,18 +19,6 @@ impl TransportError {
         } else {
             panic!("unexpected transport error")
         }
-    }
-}
-
-impl From<io::Error> for TransportError {
-    fn from(err: io::Error) -> TransportError {
-        TransportError::IoError(err)
-    }
-}
-
-impl From<TransactionError> for TransportError {
-    fn from(err: TransactionError) -> TransportError {
-        TransportError::TransactionError(err)
     }
 }
 

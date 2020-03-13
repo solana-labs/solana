@@ -11,6 +11,7 @@ use solana_clap_utils::{
         keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
+    DisplayError,
 };
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
@@ -378,6 +379,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         )
         .get_matches();
+
+    do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
+}
+
+fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
     } else {

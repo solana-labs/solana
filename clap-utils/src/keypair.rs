@@ -1,6 +1,6 @@
 use crate::{input_parsers::pubkeys_sigs_of, offline::SIGNER_ARG, ArgConstant};
 use bip39::{Language, Mnemonic, Seed};
-use clap::{ArgMatches, Error, ErrorKind};
+use clap::ArgMatches;
 use rpassword::prompt_password_stderr;
 use solana_remote_wallet::{
     remote_keypair::generate_remote_keypair,
@@ -72,9 +72,9 @@ pub fn signer_from_path(
             )?))
         }
         KeypairUrl::Filepath(path) => match read_keypair_file(&path) {
-            Err(e) => Err(Error::with_description(
-                &format!("Couldn't find keypair file: {:?} error: {:?}", path, e),
-                ErrorKind::InvalidValue,
+            Err(e) => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("could not find keypair file: {} error: {}", path, e),
             )
             .into()),
             Ok(file) => Ok(Box::new(file)),
@@ -102,9 +102,9 @@ pub fn signer_from_path(
             if let Some(presigner) = presigner {
                 Ok(Box::new(presigner))
             } else {
-                Err(Error::with_description(
-                    "Missing signature for supplied pubkey",
-                    ErrorKind::MissingRequiredArgument,
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "missing signature for supplied pubkey".to_string(),
                 )
                 .into())
             }

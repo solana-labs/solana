@@ -23,6 +23,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_transaction,
     transaction::Transaction,
+    transport::Result as TransportResult,
 };
 use solana_stake_program::{
     config as stake_config, stake_instruction,
@@ -607,7 +608,7 @@ impl LocalCluster {
         storage_keypair: &Keypair,
         from_keypair: &Arc<Keypair>,
         archiver: bool,
-    ) -> Result<()> {
+    ) -> TransportResult<()> {
         let storage_account_type = if archiver {
             StorageAccountType::Archiver
         } else {

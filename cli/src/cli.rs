@@ -18,7 +18,10 @@ use solana_clap_utils::{
     input_parsers::*, input_validators::*, keypair::signer_from_path, offline::SIGN_ONLY_ARG,
     ArgConstant,
 };
-use solana_client::{client_error::ClientError, rpc_client::RpcClient};
+use solana_client::{
+    client_error::{ClientErrorKind, Result as ClientResult},
+    rpc_client::RpcClient,
+};
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
@@ -47,14 +50,15 @@ use solana_stake_program::{
 use solana_storage_program::storage_instruction::StorageAccountType;
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
+    error,
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
     sync::Arc,
     thread::sleep,
     time::Duration,
-    {error, fmt},
 };
+use thiserror::Error;
 use url::Url;
 
 pub type CliSigners = Vec<Box<dyn Signer>>;
@@ -409,46 +413,34 @@ pub struct CliCommandInfo {
     pub signers: CliSigners,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CliError {
+    #[error("bad parameter: {0}")]
     BadParameter(String),
+    #[error("command not recognized: {0}")]
     CommandNotRecognized(String),
+    #[error("insuficient funds for fee")]
     InsufficientFundsForFee,
+    #[error(transparent)]
     InvalidNonce(CliNonceError),
+    #[error("dynamic program error: {0}")]
     DynamicProgramError(String),
+    #[error("rpc request error: {0}")]
     RpcRequestError(String),
+    #[error("keypair file not found: {0}")]
     KeypairFileNotFound(String),
-}
-
-impl fmt::Display for CliError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid")
-    }
-}
-
-impl error::Error for CliError {
-    fn description(&self) -> &str {
-        "invalid"
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
 }
 
 impl From<Box<dyn error::Error>> for CliError {
     fn from(error: Box<dyn error::Error>) -> Self {
-        CliError::DynamicProgramError(format!("{:?}", error))
+        CliError::DynamicProgramError(error.to_string())
     }
 }
 
 impl From<CliNonceError> for CliError {
     fn from(error: CliNonceError) -> Self {
         match error {
-            CliNonceError::Client(client_error) => {
-                Self::RpcRequestError(format!("{:?}", client_error))
-            }
+            CliNonceError::Client(client_error) => Self::RpcRequestError(client_error),
             _ => Self::InvalidNonce(error),
         }
     }
@@ -721,7 +713,7 @@ pub fn parse_command(
                 .parse()
                 .or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid faucet port: {:?}",
+                        "Invalid faucet port: {}",
                         err
                     )))
                 })?;
@@ -729,7 +721,7 @@ pub fn parse_command(
             let faucet_host = if let Some(faucet_host) = matches.value_of("faucet_host") {
                 Some(solana_net_utils::parse_host(faucet_host).or_else(|err| {
                     Err(CliError::BadParameter(format!(
-                        "Invalid faucet host: {:?}",
+                        "Invalid faucet host: {}",
                         err
                     )))
                 })?)
@@ -1141,13 +1133,13 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
             if let Some(result) = status {
                 match result {
                     Ok(_) => Ok("Confirmed".to_string()),
-                    Err(err) => Ok(format!("Transaction failed with error {:?}", err)),
+                    Err(err) => Ok(format!("Transaction failed with error: {}", err)),
                 }
             } else {
                 Ok("Not found".to_string())
             }
         }
-        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {:?}", err)).into()),
+        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
     }
 }
 
@@ -2118,18 +2110,18 @@ pub fn request_and_confirm_airdrop(
     log_instruction_custom_error::<SystemError>(result)
 }
 
-pub fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
+pub fn log_instruction_custom_error<E>(result: ClientResult<String>) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
     match result {
         Err(err) => {
-            if let ClientError::TransactionError(TransactionError::InstructionError(
+            if let ClientErrorKind::TransactionError(TransactionError::InstructionError(
                 _,
                 InstructionError::CustomError(code),
-            )) = err
+            )) = err.kind()
             {
-                if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
+                if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
                     error!("{}::{:?}", E::type_of(), specific_error);
                     eprintln!(
                         "Program Error ({}::{:?}): {}",
@@ -3332,7 +3324,7 @@ mod tests {
         assert_eq!(
             process_command(&config).unwrap(),
             format!(
-                "Transaction failed with error {:?}",
+                "Transaction failed with error: {}",
                 TransactionError::AccountInUse
             )
         );

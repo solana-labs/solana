@@ -2,6 +2,7 @@
 
 use sha2::{Digest, Sha256};
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
+use thiserror::Error;
 
 pub const HASH_BYTES: usize = 32;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -47,9 +48,11 @@ impl fmt::Display for Hash {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ParseHashError {
+    #[error("string decoded to wrong size for hash")]
     WrongSize,
+    #[error("failed to decoded string to hash")]
     Invalid,
 }
 

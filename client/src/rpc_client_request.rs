@@ -1,5 +1,5 @@
 use crate::{
-    client_error::ClientError,
+    client_error::Result,
     generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::{RpcError, RpcRequest},
 };
@@ -34,7 +34,7 @@ impl GenericRpcClientRequest for RpcClientRequest {
         request: &RpcRequest,
         params: serde_json::Value,
         mut retries: usize,
-    ) -> Result<serde_json::Value, ClientError> {
+    ) -> Result<serde_json::Value> {
         // Concurrent requests are not supported so reuse the same request id for all requests
         let request_id = 1;
 

@@ -36,7 +36,7 @@ impl Client for BankClient {
 }
 
 impl AsyncClient for BankClient {
-    fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
+    fn async_send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         let transaction_sender = self.transaction_sender.lock().unwrap();
         transaction_sender.send(transaction).unwrap();
@@ -48,7 +48,7 @@ impl AsyncClient for BankClient {
         keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> Result<Signature> {
         let transaction = Transaction::new(keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
@@ -58,7 +58,7 @@ impl AsyncClient for BankClient {
         keypair: &Keypair,
         instruction: Instruction,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> Result<Signature> {
         let message = Message::new(&[instruction]);
         self.async_send_message(&[keypair], message, recent_blockhash)
     }
@@ -70,7 +70,7 @@ impl AsyncClient for BankClient {
         keypair: &Keypair,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> Result<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
         self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)

@@ -188,7 +188,7 @@ impl ThinClient {
         transaction: &mut Transaction,
         tries: usize,
         min_confirmed_blocks: usize,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         self.send_and_confirm_transaction(&[keypair], transaction, tries, min_confirmed_blocks)
     }
 
@@ -198,7 +198,7 @@ impl ThinClient {
         keypair: &Keypair,
         transaction: &mut Transaction,
         tries: usize,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         self.send_and_confirm_transaction(&[keypair], transaction, tries, 0)
     }
 
@@ -209,7 +209,7 @@ impl ThinClient {
         transaction: &mut Transaction,
         tries: usize,
         pending_confirmations: usize,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         for x in 0..tries {
             let now = Instant::now();
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
@@ -243,13 +243,14 @@ impl ThinClient {
                 }
             }
             info!("{} tries failed transfer to {}", x, self.tpu_addr());
-            let (blockhash, _fee_calculator) = self.rpc_client().get_recent_blockhash()?;
+            let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
             transaction.sign(keypairs, blockhash);
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
             format!("retry_transfer failed in {} retries", tries),
-        ))
+        )
+        .into())
     }
 
     pub fn poll_balance_with_timeout_and_commitment(
@@ -258,13 +259,15 @@ impl ThinClient {
         polling_frequency: &Duration,
         timeout: &Duration,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<u64> {
-        self.rpc_client().poll_balance_with_timeout_and_commitment(
-            pubkey,
-            polling_frequency,
-            timeout,
-            commitment_config,
-        )
+    ) -> TransportResult<u64> {
+        self.rpc_client()
+            .poll_balance_with_timeout_and_commitment(
+                pubkey,
+                polling_frequency,
+                timeout,
+                commitment_config,
+            )
+            .map_err(|e| e.into())
     }
 
     pub fn poll_balance_with_timeout(
@@ -272,8 +275,8 @@ impl ThinClient {
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
-    ) -> io::Result<u64> {
-        self.rpc_client().poll_balance_with_timeout_and_commitment(
+    ) -> TransportResult<u64> {
+        self.poll_balance_with_timeout_and_commitment(
             pubkey,
             polling_frequency,
             timeout,
@@ -281,18 +284,18 @@ impl ThinClient {
         )
     }
 
-    pub fn poll_get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.rpc_client()
-            .poll_get_balance_with_commitment(pubkey, CommitmentConfig::default())
+    pub fn poll_get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
+        self.poll_get_balance_with_commitment(pubkey, CommitmentConfig::default())
     }
 
     pub fn poll_get_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> io::Result<u64> {
+    ) -> TransportResult<u64> {
         self.rpc_client()
             .poll_get_balance_with_commitment(pubkey, commitment_config)
+            .map_err(|e| e.into())
     }
 
     pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
@@ -321,9 +324,9 @@ impl ThinClient {
         signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<()> {
-        Ok(self
-            .rpc_client()
-            .poll_for_signature_with_commitment(signature, commitment_config)?)
+        self.rpc_client()
+            .poll_for_signature_with_commitment(signature, commitment_config)
+            .map_err(|e| e.into())
     }
 
     /// Check a signature in the bank. This method blocks
@@ -332,16 +335,17 @@ impl ThinClient {
         self.rpc_client().check_signature(signature)
     }
 
-    pub fn validator_exit(&self) -> io::Result<bool> {
-        self.rpc_client().validator_exit()
+    pub fn validator_exit(&self) -> TransportResult<bool> {
+        self.rpc_client().validator_exit().map_err(|e| e.into())
     }
 
     pub fn get_num_blocks_since_signature_confirmation(
         &mut self,
         sig: &Signature,
-    ) -> io::Result<usize> {
+    ) -> TransportResult<usize> {
         self.rpc_client()
             .get_num_blocks_since_signature_confirmation(sig)
+            .map_err(|e| e.into())
     }
 }
 
@@ -400,14 +404,14 @@ impl SyncClient for ThinClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<Option<Account>> {
-        Ok(self
-            .rpc_client()
-            .get_account_with_commitment(pubkey, commitment_config)?
-            .value)
+        self.rpc_client()
+            .get_account_with_commitment(pubkey, commitment_config)
+            .map_err(|e| e.into())
+            .map(|r| r.value)
     }
 
     fn get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
-        Ok(self.rpc_client().get_balance(pubkey)?)
+        self.rpc_client().get_balance(pubkey).map_err(|e| e.into())
     }
 
     fn get_balance_with_commitment(
@@ -415,10 +419,10 @@ impl SyncClient for ThinClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<u64> {
-        let balance = self
-            .rpc_client()
-            .get_balance_with_commitment(pubkey, commitment_config)?;
-        Ok(balance.value)
+        self.rpc_client()
+            .get_balance_with_commitment(pubkey, commitment_config)
+            .map_err(|e| e.into())
+            .map(|r| r.value)
     }
 
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
@@ -449,15 +453,16 @@ impl SyncClient for ThinClient {
         &self,
         blockhash: &Hash,
     ) -> TransportResult<Option<FeeCalculator>> {
-        let fee_calculator = self
-            .rpc_client()
-            .get_fee_calculator_for_blockhash(blockhash)?;
-        Ok(fee_calculator)
+        self.rpc_client()
+            .get_fee_calculator_for_blockhash(blockhash)
+            .map_err(|e| e.into())
     }
 
     fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor> {
-        let fee_rate_governor = self.rpc_client().get_fee_rate_governor()?;
-        Ok(fee_rate_governor.value)
+        self.rpc_client()
+            .get_fee_rate_governor()
+            .map_err(|e| e.into())
+            .map(|r| r.value)
     }
 
     fn get_signature_status(
@@ -555,23 +560,26 @@ impl SyncClient for ThinClient {
         signature: &Signature,
         min_confirmed_blocks: usize,
     ) -> TransportResult<usize> {
-        Ok(self
-            .rpc_client()
-            .poll_for_signature_confirmation(signature, min_confirmed_blocks)?)
+        self.rpc_client()
+            .poll_for_signature_confirmation(signature, min_confirmed_blocks)
+            .map_err(|e| e.into())
     }
 
     fn poll_for_signature(&self, signature: &Signature) -> TransportResult<()> {
-        Ok(self.rpc_client().poll_for_signature(signature)?)
+        self.rpc_client()
+            .poll_for_signature(signature)
+            .map_err(|e| e.into())
     }
 
     fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<(Hash, FeeCalculator)> {
-        let new_blockhash = self.rpc_client().get_new_blockhash(blockhash)?;
-        Ok(new_blockhash)
+        self.rpc_client()
+            .get_new_blockhash(blockhash)
+            .map_err(|e| e.into())
     }
 }
 
 impl AsyncClient for ThinClient {
-    fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
+    fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
         let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
         let mut wr = std::io::Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &transaction)
@@ -586,7 +594,7 @@ impl AsyncClient for ThinClient {
         keypairs: &T,
         message: Message,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         let transaction = Transaction::new(keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
@@ -595,7 +603,7 @@ impl AsyncClient for ThinClient {
         keypair: &Keypair,
         instruction: Instruction,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         let message = Message::new(&[instruction]);
         self.async_send_message(&[keypair], message, recent_blockhash)
     }
@@ -605,7 +613,7 @@ impl AsyncClient for ThinClient {
         keypair: &Keypair,
         pubkey: &Pubkey,
         recent_blockhash: Hash,
-    ) -> io::Result<Signature> {
+    ) -> TransportResult<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
         self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)
