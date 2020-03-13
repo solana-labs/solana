@@ -104,7 +104,7 @@ pub fn signer_from_path(
             } else {
                 Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    "missing signature for supplied pubkey".to_string(),
+                    format!("missing signature for supplied pubkey: {}", pubkey),
                 )
                 .into())
             }
