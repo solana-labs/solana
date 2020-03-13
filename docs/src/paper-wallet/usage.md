@@ -203,7 +203,7 @@ networked machine.
 Next, configure the `solana` CLI tool to connect to a particular cluster:
 
 ```bash
-solana config set --url <CLUSTER URL> # (i.e. http://devnet.solana.com:8899)
+solana config set --url <CLUSTER URL> # (i.e. http://devnet.solana.com)
 ```
 
 Finally, to check the balance, run the following command:

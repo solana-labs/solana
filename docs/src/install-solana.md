@@ -110,7 +110,7 @@ Use the `solana config set` command to target a different cluster.
 For example, for Devnet, use:
 
 ```bash
-solana config set --url http://devnet.solana.com:8899
+solana config set --url http://devnet.solana.com
 ```
 
 ## Ensure Versions Match
