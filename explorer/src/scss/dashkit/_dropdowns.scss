@@ -1,0 +1,124 @@
+//
+// dropdowns.scss
+// Extended from Bootstrap
+// 
+
+//
+// Bootstrap overrides ==================================
+//
+
+// Dropdown arrows
+//
+// Replace original arrows with Feather icons
+
+.dropdown-toggle {
+
+  &::after {
+    width: auto;
+    height: auto;
+    border: none !important;
+    vertical-align: middle;
+    font-family: 'Feather';
+  }
+
+  &::after {
+    content: '\e92e';
+  }
+}
+
+.dropup > .dropdown-toggle {
+
+  &::after {
+    content: '\e931';
+  }
+}
+
+.dropright > .dropdown-toggle {
+
+  &::after {
+    content: '\e930';
+  }
+}
+
+.dropleft > .dropdown-toggle {
+
+  &::before {
+    content: '\e92f';
+    width: auto;
+    height: auto;
+    border: none !important;
+    vertical-align: middle;
+    font-family: 'Feather';
+  }
+}
+
+
+// Dropdown toggle
+//
+// Right align arrows
+
+.dropdown-item.dropdown-toggle {
+  display: flex;
+  justify-content: space-between;
+}
+
+
+// Dropdown menu animation
+//
+// Animate dropdown menu appearance
+
+.dropdown-menu {
+  animation: dropdownMenu .15s;
+}
+
+@keyframes dropdownMenu {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+
+
+//
+// Dashkit ===================================
+//
+
+
+// Dropdown ellipses
+//
+// Styles the ellipses icon and removes the dropdown arrow
+
+.dropdown-ellipses {
+  font-size: $font-size-lg;
+  color: $gray-400;
+}
+
+.dropdown-ellipses::after {
+  display: none;
+}
+
+
+// Dropdown card
+//
+// Makes the dropdown menu act like a card
+
+.dropdown-menu-card {
+  min-width: $dropdown-card-min-width;
+  padding-top: 0;
+  padding-bottom: 0;
+  background-color: $card-bg;
+  border-color: $dropdown-card-border-color;
+
+  .card-header {
+    min-height: $dropdown-card-header-min-height;
+  }
+
+  .card-body {
+    max-height: $dropdown-card-body-max-height;
+    overflow-y: auto;
+  }
+}

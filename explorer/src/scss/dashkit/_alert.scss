@@ -1,0 +1,28 @@
+//
+// alerts
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+// Allow for a text-decoration since links are the same color as the alert text.
+
+.alert-link {
+  text-decoration: $alert-link-text-decoration;
+}
+
+// Color variants
+//
+// Using Bootstrap's core alert-variant mixin to generate solid background color + yiq colorized text (and making close/links match those colors)
+
+@each $color, $value in $theme-colors {
+  .alert-#{$color} {
+    @include alert-variant(theme-color-level($color, $alert-bg-level), theme-color-level($color, $alert-border-level), color-yiq(theme-color-level($color, $alert-bg-level)));
+    .close,
+    .alert-link {
+      color: color-yiq(theme-color-level($color, $alert-bg-level));
+    }
+  }
+}

@@ -1,0 +1,28 @@
+// 
+// badge.scss
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+.badge {
+  vertical-align: middle;
+}
+
+// Quick fix for badges in buttons
+.btn .badge {
+  top: -2px;
+}
+
+// 
+// Dashkit =====================================
+//
+
+// Creates the "soft" badge variant
+@each $color, $value in $theme-colors {
+  .badge-soft-#{$color} {
+    @include badge-variant-soft(theme-color-level($color, $badge-soft-bg-level), $value);
+  }
+}

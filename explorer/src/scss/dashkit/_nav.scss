@@ -1,0 +1,112 @@
+// 
+// nav.scss
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+// Changing nav tabs to be bottom highlight style
+
+.nav-tabs {
+
+  .nav-item {
+    margin-left: $nav-tabs-link-margin-x;
+    margin-right: $nav-tabs-link-margin-x;
+  }
+
+  .nav-link {
+    padding: $nav-tabs-link-padding-y 0;
+    border-bottom: $nav-tabs-link-active-border-width solid transparent;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    
+    &:not(.active) {
+      color: $gray-600;
+
+      &:hover {
+        color: $gray-700;
+      }
+    }
+
+  }
+
+  .nav-item:first-child {
+    margin-left: 0;
+  }
+
+  .nav-item:last-child {
+    margin-right: 0;
+  }
+
+  // Removes the primary color underline from dropdowns in .nav-tabs
+  .nav-item.show .nav-link {
+    border-color: transparent;
+  }
+
+}
+
+
+// 
+// Dashkit =====================================
+//
+
+// Nav overflow
+//
+// Allow links to overflow and make horizontally scrollable
+
+.nav-overflow {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 1px; // to prevent active links border bottom from hiding
+
+  // Hide scrollbar
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
+// Creates a small version of the .nav-tabs
+
+.nav-tabs-sm {
+  font-size: $nav-tabs-sm-font-size;
+
+  .nav-item {
+    margin-left: $nav-tabs-sm-link-margin-x;
+    margin-right: $nav-tabs-sm-link-margin-x;
+  }
+  
+  .nav-link {
+    // Calculates the exact padding necessary to vertically fill the .card-header
+    padding-top: (($font-size-base / $nav-tabs-sm-font-size) * $nav-tabs-link-padding-y);
+    padding-bottom: (($font-size-base / $nav-tabs-sm-font-size) * $nav-tabs-link-padding-y);
+  }
+}
+
+// Creates a small version of the .nab
+
+.nav-sm {
+
+  .nav-link {
+    font-size: $font-size-sm;
+  }
+}
+
+
+// Nav + button group
+//
+// Change the look of .btn-white when .active
+
+.nav.btn-group {
+
+  .btn-white.active {
+    background-color: $primary;
+    border-color: $primary;
+    color: $white;
+  }
+}

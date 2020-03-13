@@ -1,0 +1,48 @@
+//
+// borders.scss
+//
+
+
+// Sizing
+
+$border-sizing: () !default;
+$border-sizing: map-merge((
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5
+), $border-sizing);
+
+@each $size, $value in $border-sizing {
+
+  .border-#{$size} {
+    border-width: $border-width * $value !important;
+  }
+
+  .border-top-#{$size} {
+    border-top-width: $border-width * $value !important;
+  }
+
+  .border-right-#{$size} {
+    border-right-width: $border-width * $value !important;
+  }
+
+  .border-bottom-#{$size} {
+    border-bottom-width: $border-width * $value !important;
+  }
+
+  .border-left-#{$size} {
+    border-left-width: $border-width * $value !important;
+  } 
+}
+
+
+// Contextual classes
+
+.border-body {
+  border-color: $body-bg !important;
+}
+
+.border-card {
+  border-color: $card-bg !important;
+}

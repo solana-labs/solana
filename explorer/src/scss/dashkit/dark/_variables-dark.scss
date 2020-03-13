@@ -1,0 +1,219 @@
+// 
+// variables-dark.scss
+// Dashkit dark version
+//
+
+// 
+// Bootstrap Overrides ===================================
+//
+
+
+//
+// Color system
+//
+
+$white: #FFFFFF !default;
+$gray-300: #E3EBF6 !default;
+$gray-600: #95AAC9 !default;
+$gray-700: #6E84A3 !default;
+$gray-900: #283E59 !default;
+$black: #12263F !default;
+
+$gray-600-dark: #244166 !default;
+$gray-700-dark: #1E3A5C !default;
+$gray-800-dark: #152E4D !default;
+$gray-900-dark: #132A46 !default;
+$black-dark: #12263F !default;
+
+$light: $gray-800-dark !default;
+$lighter: $gray-900-dark !default;
+
+
+// Body
+//
+// Settings for the `<body>` element.
+
+$body-bg: $black-dark !default;
+$body-color: $white !default;
+
+
+// Components
+//
+// Define common padding and border radius sizes and more.
+
+$border-color: $gray-700-dark !default;
+
+
+// Fonts
+//
+// Font, line-height, and color for body text, headings, and more.
+
+$text-muted: $gray-700 !default;
+
+
+// Tables
+//
+// Customizes the `.table` component with basic values, each used across all table variations.
+
+$table-border-color: $border-color !default;
+
+$table-head-bg: $black-dark !default;
+
+$table-accent-bg: $gray-900-dark !default;
+$table-hover-bg: $gray-900-dark !default;
+$table-active-bg: $gray-900-dark !default;
+
+$table-bg-level: 0 !default;
+$table-border-level: 0 !default;
+
+
+// Forms
+
+$input-bg: $gray-700-dark !default;
+
+$input-color: $white !default;
+$input-border-color: $black-dark !default;
+
+$input-placeholder-color: $gray-600 !default;
+
+$custom-control-indicator-bg: $gray-600-dark !default;
+
+
+// Dropdowns
+//
+// Dropdown menu container and contents.
+
+$dropdown-bg: $gray-800-dark !default;
+$dropdown-border-color: $black !default;
+$dropdown-divider-bg: $black !default;
+
+$dropdown-link-color: $text-muted !default;
+$dropdown-link-hover-color: $white !default;
+
+
+// Navbar
+
+$navbar-dark-color: $gray-700 !default;
+$navbar-dark-hover-color: $black !default;
+$navbar-dark-active-color: $black !default;
+$navbar-dark-toggler-border-color: transparent !default;
+
+$navbar-dark-bg: $white !default;
+$navbar-dark-border-color: $white !default;
+$navbar-dark-heading-color: $text-muted !default;
+$navbar-dark-divider-color: $gray-300 !default;
+$navbar-dark-brand-filter: none;
+
+$navbar-dark-input-bg: $input-bg !default;
+$navbar-dark-input-border-color: $input-border-color !default;
+
+$navbar-light-hover-color: $white !default;
+$navbar-light-active-color: $white !default;
+$navbar-light-input-bg: $gray-700-dark !default;
+$navbar-light-input-border-color: $black-dark !default;
+
+
+// Pagination
+
+$pagination-color: $white !default;
+$pagination-bg: $gray-800-dark !default;
+$pagination-border-color: $gray-600-dark !default;
+
+$pagination-hover-color: $white !default;
+$pagination-hover-bg: $gray-900-dark !default;
+$pagination-hover-border-color: $gray-700-dark !default;
+
+$pagination-disabled-bg: $gray-900-dark !default;
+$pagination-disabled-border-color: $gray-700-dark !default;
+
+
+// Jumbotron
+
+$jumbotron-bg: $gray-800-dark !default;
+
+
+// Cards
+
+$card-bg: $gray-800-dark !default;
+$card-border-color: $border-color !default;
+
+
+// Tooltips
+
+$tooltip-bg: $gray-800-dark !default;
+$tooltip-color: $white !default;
+
+
+// Popovers
+
+$popover-bg: $gray-800-dark !default;
+$popover-border-color: $black !default;
+
+
+// Toasts
+
+$toast-background-color: $gray-800-dark !default;
+;
+
+
+// Modals
+
+$modal-content-bg: $gray-800-dark !default;
+$modal-content-border-color: $black !default;
+
+
+// Progress bars
+
+$progress-bg: $gray-600-dark !default;
+
+
+// 
+// Dashkit =====================================
+//
+
+// Auth
+
+$auth-bg: $body-bg !default;
+
+
+// Avatar
+
+$avatar-title-bg: $gray-600-dark !default;
+
+
+// Badges
+
+$badge-soft-bg-level: 10 !default;
+
+
+// Cards
+
+$card-outline-color: $gray-800-dark !default;
+$card-box-shadow: 0 .75rem 1.5rem transparentize($black-dark, .5) !default;
+
+
+// Comment
+
+$comment-body-bg: $gray-700-dark;
+
+
+// Header
+
+$header-body-border-color-dark: $border-color !default;
+
+
+// Navbar
+
+$navbar-light-bg: $gray-800-dark !default;
+$navbar-light-border-color: $gray-800-dark !default;
+
+
+// Switch
+
+$custom-switch-indicator-bg: $gray-800-dark !default;
+$custom-switch-indicator-active-bg: $white !default;
+
+
+// Backgrounds
+
+$bg-soft-level: 10 !default;

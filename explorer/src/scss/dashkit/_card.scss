@@ -1,0 +1,298 @@
+// 
+// card.scss
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+.card {
+  margin-bottom: $card-margin-bottom;
+  border-color: $card-outline-color;
+  box-shadow: $card-box-shadow;
+}
+
+.card > * {
+  flex-shrink: 0;
+}
+
+// Header
+
+.card-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: $card-header-height;
+  padding-top: $card-spacer-y / 2;
+  padding-bottom: $card-spacer-y / 2;
+
+  > *:first-child {
+    flex: 1;
+  }
+}
+
+// Title
+
+.card-title {
+  margin-bottom: $card-spacer-y / 2;
+}
+
+
+//
+// Dashkit ===================================
+//
+
+// Card header
+//
+// Make sure the card header is always the same height with its content
+// centered vertically
+
+.card-header-title {
+  margin-bottom: 0;
+}
+
+.card-header-tabs {
+  margin-top: -$card-spacer-y / 2;
+  margin-bottom: -$card-spacer-y / 2;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.card-header-tabs .nav-link {
+  padding-top: calc((#{$card-header-height} - 1em * #{$line-height-base}) / 2) !important;
+  padding-bottom: calc((#{$card-header-height} - 1em * #{$line-height-base}) / 2) !important;
+}
+
+
+// Card table
+//
+// Make sure the card table content is aligned with the rest of the card content
+
+.card-table {
+  margin-bottom: 0;
+}
+
+.card-table thead th {
+  border-top-width: 0;
+}
+
+.card-table thead th,
+.card-table tbody td {
+
+  &:first-child {
+    padding-left: $card-spacer-x !important;
+  }
+
+  &:last-child {
+    padding-right: $card-spacer-x !important;
+  }
+}
+
+.card > .card-table:first-child,
+.card > .table-responsive:first-child > .card-table {
+
+  > thead, > tbody, > tfoot {
+
+    &:first-child {
+
+      > tr:first-child {
+
+        > th, > td {
+
+          &:first-child {
+            border-top-left-radius: $card-border-radius;
+          }
+
+          &:last-child {
+            border-top-right-radius: $card-border-radius;
+          }
+        }
+      }
+    }
+  }
+}
+
+
+// Card avatar
+//
+// Moves card avatar up by 50%
+
+.card-avatar {
+  display: block !important;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: $card-spacer-y;
+}
+
+.card-avatar-top {
+  margin-top: -($card-spacer-x + $avatar-size-base / 2);
+}
+
+.card-avatar-top.avatar-xs {
+  margin-top: -($card-spacer-x + $avatar-size-xs / 2);
+}
+
+.card-avatar-top.avatar-sm {
+  margin-top: -($card-spacer-x + $avatar-size-sm / 2);
+}
+
+.card-avatar-top.avatar-lg {
+  margin-top: -($card-spacer-x + $avatar-size-lg / 2);
+}
+
+.card-avatar-top.avatar-xl {
+  margin-top: -($card-spacer-x + $avatar-size-xl / 2);
+}
+
+.card-avatar-top.avatar-xxl {
+  margin-top: -($card-spacer-x + $avatar-size-xxl / 2);
+}
+
+
+// Card dropdown
+//
+// Places dropdowns in the top right corner
+
+.card-dropdown {
+  position: absolute;
+  top: $card-spacer-x;
+  right: $card-spacer-x;
+}
+
+
+// Card inactive
+//
+// Adds dashed border and removes background
+
+.card-inactive {
+  border-color: $border-color;
+  border-style: dashed;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+
+// Card flush
+//
+// Removes borders and background
+
+.card-flush {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+
+// Card sizing
+//
+// Affects card padding
+
+.card-sm .card-body,
+.card-sm .card-footer-boxed {
+  padding: $card-spacer-x-sm;
+}
+
+
+// Card header flush
+//
+// Removes border between card header and body and adjusts spacing
+
+.card-header-flush {
+  border-bottom: 0;
+}
+
+.card-header-flush + .card-body {
+  padding-top: 0;
+}
+
+
+// Card fill
+//
+// Fills the whole available space to fit the height of the neighboring card
+
+.card-fill {
+  height: calc(100% - #{$card-margin-bottom});
+}
+
+.card-fill .card-body {
+  flex-grow: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+// Responsive
+
+.card-fill {
+
+  @each $breakpoint, $value in $grid-breakpoints {
+
+    &-#{$breakpoint} {
+
+      @include media-breakpoint-up(#{$breakpoint}) {
+        height: calc(100% - #{$card-margin-bottom});
+
+        .card-body {
+          flex-grow: 0;
+          margin-top: auto;
+          margin-bottom: auto;
+        }
+      }
+    }
+  }
+}
+
+
+// Card adjust
+//
+// Limits the height to the height of the neighboring card and adds a scrollbar to the card body
+
+.card-adjust {
+  height: 0;
+  min-height: 100%;
+}
+
+.card-adjust .card {
+  height: calc(100% - #{$card-margin-bottom});
+}
+
+.card-adjust .card-body {
+  height: calc(100% - #{$card-header-height});
+  overflow-y: auto;
+}
+
+// Responsive
+
+.card-adjust {
+
+  @each $breakpoint, $value in $grid-breakpoints {
+
+    &-#{$breakpoint} {
+
+      @include media-breakpoint-up(#{$breakpoint}) {
+        height: 0;
+        min-height: 100%;
+
+        .card {
+          height: calc(100% - #{$card-margin-bottom});
+        }
+
+        .card-body {
+          height: calc(100% - #{$card-header-height});
+          overflow-y: auto;
+        }
+      }
+    }
+  }
+}
+
+
+// Card footer boxed
+
+.card-footer-boxed {
+  padding-right: 0;
+  padding-bottom: $card-spacer-x;
+  padding-left: 0;
+  margin-left: $card-spacer-x;
+  margin-right: $card-spacer-x;
+}

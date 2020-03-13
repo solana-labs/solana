@@ -1,0 +1,36 @@
+//
+// checklist.scss
+// Dashkit component
+//
+
+.checklist {
+  outline: none;
+}
+
+.checklist-control {
+  display: flex;
+  flex-wrap: nowrap;
+  outline: none;
+  user-select: none;
+}
+
+.checklist-control .custom-control-input:checked ~ .custom-control-caption {
+  text-decoration: line-through;
+  color: $checklist-control-checked-color;
+}
+
+.checklist-control + .checklist-control {
+  margin-top: $checklist-control-spacer;
+}
+
+.checklist-control:first-child[style*="display: none"] + .checklist-control {
+  margin-top: 0;
+}
+
+.checklist-control.draggable-mirror {
+  z-index: $zindex-fixed;
+}
+
+.checklist-control.draggable-source--is-dragging {
+  opacity: .2;
+}

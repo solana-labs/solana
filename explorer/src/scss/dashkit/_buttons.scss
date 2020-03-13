@@ -1,0 +1,68 @@
+// 
+// buttons.scss
+// Extended from Bootstrap
+//
+
+
+//
+// Dashkit ===================================
+//
+
+// Button white
+
+.btn-white {
+  border-color: $gray-300;
+
+  @include hover-focus {
+    background-color: $gray-100;
+    border-color: $gray-400;
+  }
+}
+
+.btn-group-toggle .btn-white:not(:disabled):not(.disabled):active, 
+.btn-group-toggle .btn-white:not(:disabled):not(.disabled).active {
+  background-color: $input-bg;
+  border-color: $input-focus-border-color;
+  color: $primary;
+}
+
+.btn-group-toggle .btn-white:focus,
+.btn-group-toggle .btn-white.focus {
+  box-shadow: none;
+}
+
+
+// Button outline secondary
+
+.btn-outline-secondary {
+  &:not(:hover):not([aria-expanded="true"]):not([aria-pressed="true"]){
+    border-color: $gray-400;
+  }
+}
+
+
+// Button rounded
+//
+// Creates circle button variations
+
+.btn-rounded-circle {
+  width: calc(1em * #{$btn-line-height} + #{$input-btn-padding-y * 2 } + #{$btn-border-width} * 2);
+  padding-left: 0;
+  padding-right: 0;
+  border-radius: 50%;
+}
+.btn-rounded-circle.btn-lg {
+  width: calc(1em * #{$btn-line-height-lg} + #{$input-btn-padding-y-lg * 2 } + #{$btn-border-width} * 2);
+}
+.btn-rounded-circle.btn-sm {
+  width: calc(1em * #{$btn-line-height-sm} + #{$input-btn-padding-y-sm * 2 } + #{$btn-border-width} * 2);
+}
+
+
+// Button group
+//
+// Prevent buttons from jittering on hover
+
+.btn-group .btn + .btn {
+  margin-left: 0;
+}

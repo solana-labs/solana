@@ -1,0 +1,76 @@
+// 
+// tables.scss
+// Extended from Bootstrap
+//
+
+// 
+// Bootstrap Overrides =====================================
+//
+
+.table {
+
+  thead th {
+    background-color: $table-head-bg;
+    text-transform: uppercase;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-bold;
+    letter-spacing: .08em;
+    color: $table-head-color;
+    border-bottom-width: $table-border-width;
+  }
+
+  thead th, tbody th, tbody td {
+    vertical-align: middle;
+  }
+}
+
+.table-sm {
+  font-size: $font-size-sm;
+
+  thead th {
+    font-size: $font-size-xs;
+  }
+}
+
+
+//
+// Dashkit =====================================
+//
+
+// No wrap
+//
+// Prevents table content from wrapping to the next line
+
+.table-nowrap {
+
+  th, td {
+    white-space: nowrap;
+  }
+}
+
+
+// Sort
+//
+// Adds sorting icons
+
+.table [data-sort] {
+  white-space: nowrap;
+
+  &::after {
+    content: str-replace(url("data:image/svg+xml;utf8,<svg width='6' height='10' viewBox='0 0 6 10' fill='none' xmlns='http://www.w3.org/2000/svg'><path fill-rule='evenodd' clip-rule='evenodd' d='M3 0L6 4H0L3 0ZM3 10L0 6H6L3 10Z' fill='#{$text-muted}'/></svg>"), "#", "%23");
+    margin-left: .25rem;
+  }
+}
+
+
+// Table checkbox
+
+.table-checkbox {
+  min-height: 0;
+}
+
+.table-checkbox .custom-control-label::before,
+.table-checkbox .custom-control-label::after {
+  top: 50%;
+  transform: translateY(-50%);
+}
