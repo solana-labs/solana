@@ -47,6 +47,8 @@ use std::{
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
+pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
+
 pub(crate) type ProgressMap = HashMap<Slot, ForkProgress>;
 
 #[derive(PartialEq, Debug)]

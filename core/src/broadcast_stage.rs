@@ -1,29 +1,36 @@
 //! A stage to broadcast data from a leader node to validators
-use self::broadcast_fake_shreds_run::BroadcastFakeShredsRun;
-use self::fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun;
-use self::standard_broadcast_run::StandardBroadcastRun;
-use crate::cluster_info::{ClusterInfo, ClusterInfoError};
-use crate::poh_recorder::WorkingBankEntry;
-use crate::result::{Error, Result};
-use solana_ledger::blockstore::Blockstore;
-use solana_ledger::shred::Shred;
-use solana_ledger::staking_utils;
+use self::{
+    broadcast_fake_shreds_run::BroadcastFakeShredsRun,
+    fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
+    standard_broadcast_run::StandardBroadcastRun,
+};
+use crate::{
+    cluster_info::{ClusterInfo, ClusterInfoError},
+    poh_recorder::WorkingBankEntry,
+    replay_stage::MAX_UNCONFIRMED_SLOTS,
+    result::{Error, Result},
+};
+use solana_ledger::{blockstore::Blockstore, shred::Shred, staking_utils};
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Instant;
+use std::{
+    collections::HashMap,
+    net::UdpSocket,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
+    sync::{Arc, Mutex, RwLock},
+    thread::{self, Builder, JoinHandle},
+    time::Instant,
+};
 
 pub const NUM_INSERT_THREADS: usize = 2;
 
 mod broadcast_fake_shreds_run;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
+mod slot_transmit_shreds_cache;
 mod standard_broadcast_run;
+
+use slot_transmit_shreds_cache::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -79,7 +86,6 @@ impl BroadcastStageType {
     }
 }
 
-type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 trait BroadcastRun {
     fn run(
         &mut self,
@@ -238,7 +244,23 @@ impl BroadcastStage {
             thread_hdls.push(t);
         }
 
+        let retransmit_thread = Builder::new()
+            .name("solana-broadcaster-retransmit".to_string())
+            .spawn(move || loop {
+                let slot_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+                let res = Self::retransmit();
+                let res = Self::handle_error(res);
+                if let Some(res) = res {
+                    return res;
+                }
+            })
+            .unwrap();
+
         Self { thread_hdls }
+    }
+
+    pub fn retransmit() -> Result<()> {
+        Ok(())
     }
 
     pub fn join(self) -> thread::Result<BroadcastStageReturnType> {
@@ -252,20 +274,28 @@ impl BroadcastStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cluster_info::{ClusterInfo, Node};
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_ledger::entry::create_ticks;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use crate::{
+        cluster_info::{ClusterInfo, Node},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    };
+    use solana_ledger::{
+        entry::create_ticks,
+        {blockstore::Blockstore, get_tmp_ledger_path},
+    };
     use solana_runtime::bank::Bank;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, Signer};
-    use std::path::Path;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
-    use std::time::Duration;
+    use solana_sdk::{
+        hash::Hash,
+        solana_sdk::pubkey::Pubkey,
+        solana_sdk::signature::{Keypair, Signer},
+    };
+    use std::{
+        path::Path,
+        sync::atomic::AtomicBool,
+        sync::mpsc::channel,
+        sync::{Arc, RwLock},
+        thread::sleep,
+        time::Duration,
+    };
 
     struct MockBroadcastStage {
         blockstore: Arc<Blockstore>,
