@@ -110,7 +110,7 @@
 }
 
 .select2-search--inline .select2-search__field {
-  height: calc(1em * $input-line-height);
+  height: calc(1em * #{$input-line-height});
   padding-bottom: .25rem;
   background-color: transparent;
   border: 0;
