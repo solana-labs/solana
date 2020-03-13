@@ -1,7 +1,7 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
     log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, CliSignerInfo,
-    ProcessResult,
+    ProcessResult, SignerIndex,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
@@ -193,20 +193,11 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Vote account to withdraw from"),
-                )
-                .arg(
-                    Arg::with_name("amount")
-                        .index(2)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_amount)
-                        .help("The amount to withdraw, in SOL"),
+                        .help("Vote account from which to withdraw"),
                 )
                 .arg(
                     Arg::with_name("destination_account_pubkey")
-                        .index(3)
+                        .index(2)
                         .value_name("DESTINATION ACCOUNT")
                         .takes_value(true)
                         .required(true)
@@ -214,12 +205,21 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("The account to which the SOL should be transferred"),
                 )
                 .arg(
+                    Arg::with_name("amount")
+                        .index(3)
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_amount)
+                        .help("The amount to withdraw, in SOL"),
+                )
+                .arg(
                     Arg::with_name("authorized_withdrawer")
                         .long("authorized-withdrawer")
-                        .value_name("PUBKEY")
+                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer (defaults to cli config pubkey)"),
+                        .validator(is_valid_signer)
+                        .help("Authorized withdrawer (defaults to cli config keypair)"),
                 )
         )
     }
@@ -330,19 +330,20 @@ pub fn parse_vote_get_account_command(
     })
 }
 
-pub fn parse_vote_account_withdraw(
+pub fn parse_withdraw_from_vote_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
-    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
-    let authorized_withdrawer = pubkey_of(matches, "authorized_withdrawer");
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let (withdraw_authority, withdraw_authority_pubkey) =
+        signer_of(matches, "authorized_withdrawer", wallet_manager)?;
 
-    let authorized_withdrawer_provided = None;
-    let CliSignerInfo { signers } = generate_unique_signers(
-        vec![authorized_withdrawer_provided],
+    let payer_provided = None;
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, withdraw_authority],
         matches,
         default_signer_path,
         wallet_manager,
@@ -351,11 +352,11 @@ pub fn parse_vote_account_withdraw(
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawFromVoteAccount {
             vote_account_pubkey,
-            authorized_withdrawer,
-            lamports,
             destination_account_pubkey,
+            withdraw_authority: signer_info.index_of(withdraw_authority_pubkey).unwrap(),
+            lamports,
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -585,24 +586,26 @@ pub fn process_show_vote_account(
     Ok("".to_string())
 }
 
-pub fn process_vote_account_withdraw(
+pub fn process_withdraw_from_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
-    authorized_withdrawer: &Option<Pubkey>,
+    withdraw_authority: SignerIndex,
     lamports: u64,
     destination_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let instructions = vec![withdraw(
-        &vote_account_pubkey,
-        &authorized_withdrawer.unwrap_or(config.signers[0].pubkey()),
-        lamports,
-        &destination_account_pubkey,
-    )];
-
-    let message = Message::new_with_payer(instructions, Some(&config.signers[0].pubkey()));
-    let mut transaction = Transaction::new_unsigned(message);
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let withdraw_authority = config.signers[withdraw_authority];
+
+    let ix = withdraw(
+        vote_account_pubkey,
+        &withdraw_authority.pubkey(),
+        lamports,
+        destination_account_pubkey,
+    );
+
+    let message = Message::new_with_payer(&[ix], Some(&config.signers[0].pubkey()));
+    let mut transaction = Transaction::new_unsigned(message);
     transaction.try_sign(&config.signers, recent_blockhash)?;
     check_account_for_fee(
         rpc_client,
@@ -793,6 +796,66 @@ mod tests {
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     Box::new(read_keypair_file(&keypair_file).unwrap())
+                ],
+            }
+        );
+
+        // Test WithdrawFromVoteAccount subcommand
+        let test_withdraw_from_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-from-vote-account",
+            &keypair_file,
+            &pubkey_string,
+            "42",
+        ]);
+        assert_eq!(
+            parse_command(
+                &test_withdraw_from_vote_account,
+                &default_keypair_file,
+                None
+            )
+            .unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawFromVoteAccount {
+                    vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 0,
+                    lamports: 42_000_000_000
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test WithdrawFromVoteAccount subcommand with authority
+        let withdraw_authority = Keypair::new();
+        let (withdraw_authority_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&withdraw_authority, tmp_file.as_file_mut()).unwrap();
+        let test_withdraw_from_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-from-vote-account",
+            &keypair_file,
+            &pubkey_string,
+            "42",
+            "--authorized-withdrawer",
+            &withdraw_authority_file,
+        ]);
+        assert_eq!(
+            parse_command(
+                &test_withdraw_from_vote_account,
+                &default_keypair_file,
+                None
+            )
+            .unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawFromVoteAccount {
+                    vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 1,
+                    lamports: 42_000_000_000
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&withdraw_authority_file).unwrap().into()
                 ],
             }
         );

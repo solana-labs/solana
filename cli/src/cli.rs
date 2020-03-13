@@ -366,9 +366,9 @@ pub enum CliCommand {
     },
     WithdrawFromVoteAccount {
         vote_account_pubkey: Pubkey,
-        authorized_withdrawer: Option<Pubkey>,
-        lamports: u64,
         destination_account_pubkey: Pubkey,
+        withdraw_authority: SignerIndex,
+        lamports: u64,
     },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
@@ -703,7 +703,7 @@ pub fn parse_command(
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches),
         ("withdraw-from-vote-account", Some(matches)) => {
-            parse_vote_account_withdraw(matches, default_signer_path, wallet_manager)
+            parse_withdraw_from_vote_account(matches, default_signer_path, wallet_manager)
         }
         // Wallet Commands
         ("address", Some(matches)) => Ok(CliCommandInfo {
@@ -1935,14 +1935,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
         CliCommand::WithdrawFromVoteAccount {
             vote_account_pubkey,
-            authorized_withdrawer,
+            withdraw_authority,
             lamports,
             destination_account_pubkey,
-        } => process_vote_account_withdraw(
+        } => process_withdraw_from_vote_account(
             &rpc_client,
             config,
             vote_account_pubkey,
-            authorized_withdrawer,
+            *withdraw_authority,
             *lamports,
             destination_account_pubkey,
         ),

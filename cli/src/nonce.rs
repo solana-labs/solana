@@ -869,31 +869,6 @@ mod tests {
             }
         );
 
-        let test_withdraw_from_nonce_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "withdraw-from-nonce-account",
-            &keypair_file,
-            &nonce_account_string,
-            "42",
-        ]);
-        assert_eq!(
-            parse_command(
-                &test_withdraw_from_nonce_account,
-                &default_keypair_file,
-                None
-            )
-            .unwrap(),
-            CliCommandInfo {
-                command: CliCommand::WithdrawFromNonceAccount {
-                    nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: 0,
-                    destination_account_pubkey: nonce_account_pubkey,
-                    lamports: 42000000000
-                },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
-            }
-        );
-
         // Test WithdrawFromNonceAccount Subcommand with authority
         let test_withdraw_from_nonce_account = test_commands.clone().get_matches_from(vec![
             "test",

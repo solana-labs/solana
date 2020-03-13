@@ -34,13 +34,13 @@ use std::{ops::Deref, sync::Arc};
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
     long: "stake-authority",
-    help: "Public key of authorized staker (defaults to cli config pubkey)",
+    help: "Authorized staker (defaults to cli config keypair)",
 };
 
 pub const WITHDRAW_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "withdraw_authority",
     long: "withdraw-authority",
-    help: "Public key of authorized withdrawer (defaults to cli config pubkey)",
+    help: "Authorized withdrawer (defaults to cli config keypair)",
 };
 
 fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
