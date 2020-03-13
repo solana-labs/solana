@@ -39,7 +39,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     }
 
     pub fn iteration_order(&self) -> Option<&[usize]> {
-        self.iteration_order.as_ref().map(|v| v.as_slice())
+        self.iteration_order.as_deref()
     }
     pub fn bank(&self) -> &Bank {
         self.bank
