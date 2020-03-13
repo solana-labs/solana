@@ -199,7 +199,7 @@ impl NonceSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("withdraw-from-nonce-account")
-                .about("Withdraw lamports from the nonce account")
+                .about("Withdraw SOL from the nonce account")
                 .arg(
                     Arg::with_name("nonce_account_keypair")
                         .index(1)
@@ -207,7 +207,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_keypair_or_ask_keyword)
-                        .help("Nonce account from to withdraw from"),
+                        .help("Nonce account to withdraw from"),
                 )
                 .arg(
                     Arg::with_name("destination_account_pubkey")
@@ -216,7 +216,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("The account to which the lamports should be transferred"),
+                        .help("The account to which the SOL should be transferred"),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -864,31 +864,6 @@ mod tests {
                     nonce_authority: 0,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42_000_000_000
-                },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
-            }
-        );
-
-        let test_withdraw_from_nonce_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "withdraw-from-nonce-account",
-            &keypair_file,
-            &nonce_account_string,
-            "42",
-        ]);
-        assert_eq!(
-            parse_command(
-                &test_withdraw_from_nonce_account,
-                &default_keypair_file,
-                None
-            )
-            .unwrap(),
-            CliCommandInfo {
-                command: CliCommand::WithdrawFromNonceAccount {
-                    nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
-                    nonce_authority: 0,
-                    destination_account_pubkey: nonce_account_pubkey,
-                    lamports: 42000000000
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }

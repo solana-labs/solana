@@ -34,13 +34,13 @@ use std::{ops::Deref, sync::Arc};
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
     long: "stake-authority",
-    help: "Public key of authorized staker (defaults to cli config pubkey)",
+    help: "Authorized staker [default: cli config keypair]",
 };
 
 pub const WITHDRAW_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "withdraw_authority",
     long: "withdraw-authority",
-    help: "Public key of authorized withdrawer (defaults to cli config pubkey)",
+    help: "Authorized withdrawer [default: cli config keypair]",
 };
 
 fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -279,7 +279,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to move into the new stake account, in unit SOL")
+                        .help("The amount to move into the new stake account, in SOL")
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -296,7 +296,7 @@ impl StakeSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
-                .about("Withdraw the unstaked lamports from the stake account")
+                .about("Withdraw the unstaked SOL from the stake account")
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
@@ -313,7 +313,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("The account to which the lamports should be transferred")
+                        .help("The account to which the SOL should be transferred")
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -374,7 +374,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
                         .validator(is_valid_signer)
-                        .help("Public key of signing custodian (defaults to cli config pubkey)")
+                        .help("Public key of signing custodian [default: cli config pubkey]")
                 )
                 .offline_args()
                 .arg(nonce_arg())
