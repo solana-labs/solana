@@ -21,7 +21,7 @@ TAG=$2
 OS=${3:-linux}
 
 if [[ -z $URL || -z $TAG ]]; then
-  echo "Usage: $0 [edge|beta|stable|localhost|RPC URL] [edge|beta|release tag] [linux|osx|windows]"
+  echo "Usage: $0 [stable|localhost|RPC URL] [edge|beta|release tag] [linux|osx|windows]"
   exit 0
 fi
 
@@ -45,11 +45,8 @@ windows)
 esac
 
 case $URL in
-edge|beta)
-  URL=http://$URL.devnet.solana.com:8899
-  ;;
 stable)
-  URL=http://devnet.solana.com:8899
+  URL=http://devnet.solana.com
   ;;
 localhost)
   URL=http://localhost:8899
