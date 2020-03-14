@@ -884,10 +884,10 @@ impl AccountsDB {
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
         let (lock, index) = accounts_index.get(pubkey, ancestors)?;
-        let slot = lock.1[index].0;
+        let slot = lock[index].0;
         //TODO: thread this as a ref
         if let Some(slot_storage) = storage.0.get(&slot) {
-            let info = &lock.1[index].1;
+            let info = &lock[index].1;
             slot_storage
                 .get(&info.store_id)
                 .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
@@ -1197,7 +1197,7 @@ impl AccountsDB {
             .par_iter()
             .filter_map(|pubkey| {
                 if let Some((list, index)) = accounts_index.get(pubkey, ancestors) {
-                    let (slot, account_info) = &list.1[index];
+                    let (slot, account_info) = &list[index];
                     if account_info.lamports != 0 {
                         storage
                             .0
@@ -1594,7 +1594,7 @@ impl AccountsDB {
 
         let mut counts = HashMap::new();
         for slot_list in accounts_index.account_maps.values() {
-            for (_slot, account_entry) in slot_list.read().unwrap().1.iter() {
+            for (_slot, account_entry) in slot_list.1.read().unwrap().iter() {
                 *counts.entry(account_entry.store_id).or_insert(0) += 1;
             }
         }
@@ -2084,7 +2084,7 @@ pub mod tests {
         let id = {
             let index = accounts.accounts_index.read().unwrap();
             let (list, idx) = index.get(&pubkey, &ancestors).unwrap();
-            list.1[idx].1.store_id
+            list[idx].1.store_id
         };
         accounts.add_root(1);
 
@@ -2270,7 +2270,7 @@ pub mod tests {
         info!("{}: accounts.accounts_index roots: {:?}", label, roots,);
         for (pubkey, list) in &accounts.accounts_index.read().unwrap().account_maps {
             info!("  key: {}", pubkey);
-            info!("      slots: {:?}", *list.read().unwrap());
+            info!("      slots: {:?}", *list.1.read().unwrap());
         }
     }
 
@@ -2477,9 +2477,9 @@ pub mod tests {
                 .account_maps
                 .get(&pubkey)
                 .unwrap()
+                .1
                 .read()
                 .unwrap()
-                .1
                 .len(),
             2
         );
