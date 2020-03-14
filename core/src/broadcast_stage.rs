@@ -10,7 +10,10 @@ use crate::{
     replay_stage::MAX_UNCONFIRMED_SLOTS,
     result::{Error, Result},
 };
-use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use crossbeam_channel::{
+    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
+    Sender as CrossbeamSender,
+};
 use slot_transmit_shreds_cache::*;
 use solana_ledger::{blockstore::Blockstore, shred::Shred, staking_utils};
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
@@ -158,25 +161,27 @@ impl BroadcastStage {
                 blockstore_sender,
                 retransmit_cache_sender,
             );
-            let res = Self::handle_error(res);
+            let res = Self::handle_error(res, "run");
             if let Some(res) = res {
                 return res;
             }
         }
     }
-    fn handle_error(r: Result<()>) -> Option<BroadcastStageReturnType> {
+    fn handle_error(r: Result<()>, name: &str) -> Option<BroadcastStageReturnType> {
         if let Err(e) = r {
             match e {
                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected)
                 | Error::SendError
-                | Error::RecvError(RecvError) => {
+                | Error::RecvError(RecvError)
+                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Disconnected) => {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
-                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                Error::RecvTimeoutError(RecvTimeoutError::Timeout)
+                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Disconnected) => (),
                 Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
-                    error!("broadcaster error: {:?}", e);
+                    error!("{} broadcaster error: {:?}", name, e);
                 }
             }
         }
@@ -240,7 +245,7 @@ impl BroadcastStage {
                 .name("solana-broadcaster-transmit".to_string())
                 .spawn(move || loop {
                     let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock);
-                    let res = Self::handle_error(res);
+                    let res = Self::handle_error(res, "solana-broadcaster-transmit");
                     if let Some(res) = res {
                         return res;
                     }
@@ -257,7 +262,7 @@ impl BroadcastStage {
                 .name("solana-broadcaster-record".to_string())
                 .spawn(move || loop {
                     let res = bs_record.record(&blockstore_receiver, &btree);
-                    let res = Self::handle_error(res);
+                    let res = Self::handle_error(res, "solana-broadcaster-record");
                     if let Some(res) = res {
                         return res;
                     }
@@ -278,7 +283,7 @@ impl BroadcastStage {
                     &retransmit_slots_receiver,
                     &socket_sender,
                 );
-                let res = Self::handle_error(res);
+                let res = Self::handle_error(res, "solana-broadcaster-retransmit");
                 if let Some(res) = res {
                     return res;
                 }
