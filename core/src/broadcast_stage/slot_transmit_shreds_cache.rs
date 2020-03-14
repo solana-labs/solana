@@ -71,8 +71,10 @@ impl SlotTransmitShredsCache {
                 // slot has already been purged from the cache, so dump it.
                 return;
             }
-            let old_slot = self.insertion_order.pop_front();
-            self.cache.remove(&slot).unwrap();
+            if self.insertion_order.len() == self.insertion_order.capacity() {
+                let old_slot = self.insertion_order.pop_front().unwrap();
+                self.cache.remove(&old_slot).unwrap();
+            }
             self.insertion_order.push_back(slot);
             let new_slot_cache = SlotCachedTransmitShreds {
                 stakes: transmit_shreds
@@ -118,6 +120,7 @@ impl SlotTransmitShredsCache {
                 } else {
                     break;
                 }
+                current_index += 1;
             }
 
             // Add the data shreds to the cache
@@ -136,6 +139,7 @@ impl SlotTransmitShredsCache {
                 } else {
                     break;
                 }
+                current_index += 1;
             }
 
             // Add the coding shreds to the cache
@@ -146,5 +150,21 @@ impl SlotTransmitShredsCache {
         } else {
             self.cache.get(&bank.slot()).unwrap()
         }
+    }
+
+    pub fn update_retransmit_cache(
+        &mut self,
+        retransmit_cache_receiver: &RetransmitCacheReceiver,
+    ) -> Result<()> {
+        let timer = Duration::from_millis(100);
+        let (slot, transmit_shreds) = retransmit_cache_receiver.recv_timeout(timer)?;
+
+        // Update the cache with shreds from latest leader slot
+        self.push(slot, transmit_shreds);
+        while let Ok((slot, transmit_shreds)) = retransmit_cache_receiver.try_recv() {
+            self.push(slot, transmit_shreds);
+        }
+
+        Ok(())
     }
 }

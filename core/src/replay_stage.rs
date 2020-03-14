@@ -228,6 +228,7 @@ impl ReplayStage {
                     slots.last().cloned().unwrap_or(0)
                 };
                 let mut switch_threshold = false;
+                let mut last_retransmit_poh_slot = 0;
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 

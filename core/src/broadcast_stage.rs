@@ -177,7 +177,7 @@ impl BroadcastStage {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
                 Error::RecvTimeoutError(RecvTimeoutError::Timeout)
-                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Disconnected) => (),
+                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Timeout) => (),
                 Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
@@ -276,10 +276,14 @@ impl BroadcastStage {
             .name("solana-broadcaster-retransmit".to_string())
             .spawn(move || loop {
                 let mut slot_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
-                let res = Self::retransmit(
+                let res = slot_cache.update_retransmit_cache(&retransmit_cache_receiver);
+                let res = Self::handle_error(res, "solana-broadcaster-retransmit");
+                if let Some(res) = res {
+                    return res;
+                }
+                let res = Self::check_retransmit_signals(
                     &mut slot_cache,
                     &blockstore,
-                    &retransmit_cache_receiver,
                     &retransmit_slots_receiver,
                     &socket_sender,
                 );
@@ -294,24 +298,13 @@ impl BroadcastStage {
         Self { thread_hdls }
     }
 
-    pub fn retransmit(
+    pub fn check_retransmit_signals(
         transmit_shreds_cache: &mut SlotTransmitShredsCache,
         blockstore: &Blockstore,
-        retransmit_cache_receiver: &RetransmitCacheReceiver,
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
         socket_sender: &Sender<TransmitShreds>,
     ) -> Result<()> {
         let timer = Duration::from_millis(100);
-        let transmit_shreds = retransmit_cache_receiver.recv_timeout(timer);
-
-        // Update the cache with shreds from latest leader slot
-        if let Ok((slot, transmit_shreds)) = transmit_shreds {
-            transmit_shreds_cache.push(slot, transmit_shreds);
-            while let Ok((slot, transmit_shreds)) = retransmit_cache_receiver.try_recv() {
-                transmit_shreds_cache.push(slot, transmit_shreds);
-            }
-        }
-
         // Check for a retransmit signal
         let mut retransmit_slots = retransmit_slots_receiver.recv_timeout(timer)?;
         while let Ok(new_retransmit_slots) = retransmit_slots_receiver.try_recv() {
@@ -433,6 +426,7 @@ mod test {
             let max_tick_height;
             let ticks_per_slot;
             let slot;
+            println!("here");
             {
                 let bank = broadcast_service.bank.clone();
                 start_tick_height = bank.tick_height();
@@ -446,6 +440,8 @@ mod test {
                         .expect("Expect successful send to broadcast service");
                 }
             }
+
+            println!("sleeping");
             sleep(Duration::from_millis(2000));
 
             trace!(
@@ -462,6 +458,7 @@ mod test {
             assert_eq!(entries.len(), max_tick_height as usize);
 
             drop(entry_sender);
+            println!("joining");
             broadcast_service
                 .broadcast_service
                 .join()
