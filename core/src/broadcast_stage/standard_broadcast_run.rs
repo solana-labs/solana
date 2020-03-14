@@ -221,6 +221,7 @@ impl StandardBroadcastRun {
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
         socket_sender.send((stakes, coding_shreds))?;
+        blockstore_sender.send(coding_shreds.clone())?;
         self.update_broadcast_stats(BroadcastStats {
             shredding_elapsed: duration_as_us(&to_shreds_elapsed),
             receive_elapsed: duration_as_us(&receive_elapsed),
