@@ -145,6 +145,7 @@ impl StandardBroadcastRun {
             &retransmit_cache_sender,
             receive_results,
         )?;
+
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
         //data
@@ -220,7 +221,17 @@ impl StandardBroadcastRun {
         blockstore_sender.send(data_shreds.clone())?;
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
-        socket_sender.send((stakes, coding_shreds))?;
+        if data_shreds
+            .last()
+            .map(|s| s.last_in_slot())
+            .unwrap_or(false)
+        {
+            assert!(coding_shreds
+                .last()
+                .map(|s| s.is_last_coding_in_set())
+                .unwrap_or(true));
+        }
+        socket_sender.send((stakes, coding_shreds.clone()))?;
         blockstore_sender.send(coding_shreds.clone())?;
         self.update_broadcast_stats(BroadcastStats {
             shredding_elapsed: duration_as_us(&to_shreds_elapsed),

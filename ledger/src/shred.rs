@@ -359,6 +359,14 @@ impl Shred {
         }
     }
 
+    pub fn is_last_coding_in_set(&self) -> bool {
+        if self.is_code() {
+            self.coding_header.position == self.coding_header.num_coding_shreds - 1
+        } else {
+            false
+        }
+    }
+
     /// This is not a safe function. It only changes the meta information.
     /// Use this only for test code which doesn't care about actual shred
     pub fn set_last_in_slot(&mut self) {
