@@ -235,7 +235,10 @@ impl LedgerWallet {
     ) -> Result<Vec<u8>, RemoteWalletError> {
         self.write(command, p1, p2, data)?;
         if p1 == P1_CONFIRM && is_last_part(p2) {
-            println!("Waiting for remote wallet to approve...");
+            println!(
+                "Waiting for approval from remote wallet {}",
+                self.pretty_path
+            );
             let result = self.read()?;
             println!("{}Approved", CHECK_MARK);
             Ok(result)
