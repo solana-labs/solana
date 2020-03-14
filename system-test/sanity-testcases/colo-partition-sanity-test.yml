@@ -1,6 +1,6 @@
 steps:
   - command: "system-test/testnet-automation.sh"
-    label: "Colo - CPU Only - Partial Loss 3 Partitions"
+    label: "SANITY TEST - Colo - CPU Only - Partial Loss 3 Partitions"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "colo"
