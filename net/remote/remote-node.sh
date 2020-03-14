@@ -310,13 +310,13 @@ EOF
     set -x
     # Add the faucet keypair to validators for convenient access from tools
     # like bench-tps and add to blocktreamers to run a faucet
-    scp "$entrypointIp":~/solana/config/faucet-keypair.json config/
+    scp "$entrypointIp":~/solana/config/faucet.json config/
     if [[ $nodeType = blockstreamer ]]; then
       # Run another faucet with the same keypair on the blockstreamer node.
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
-      scp "$entrypointIp":~/solana/config/faucet-keypair.json config/
+      scp "$entrypointIp":~/solana/config/faucet.json config/
       if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
         multinode-demo/faucet.sh > faucet.log 2>&1 &

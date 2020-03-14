@@ -64,7 +64,7 @@ if [[ -e $leader_stake_account_keypair ]]; then
 else
   solana-keygen new --no-passphrase -so "$leader_stake_account_keypair"
 fi
-faucet_keypair="$dataDir"/faucet-keypair.json
+faucet_keypair="$dataDir"/faucet.json
 if [[ -e $faucet_keypair ]]; then
   echo "Use existing faucet keypair"
 else
@@ -76,7 +76,7 @@ if [[ -e "$ledgerDir"/genesis.bin ]]; then
 else
   solana-genesis \
     --hashes-per-tick sleep \
-    --faucet-pubkey "$dataDir"/faucet-keypair.json \
+    --faucet-pubkey "$dataDir"/faucet.json \
     --faucet-lamports 500000000000000000 \
     --bootstrap-validator \
       "$dataDir"/leader-keypair.json \
@@ -93,7 +93,7 @@ abort() {
 }
 trap abort INT TERM EXIT
 
-solana-faucet --keypair "$dataDir"/faucet-keypair.json &
+solana-faucet --keypair "$dataDir"/faucet.json &
 faucet=$!
 
 args=(
