@@ -190,6 +190,19 @@ function launch_testnet() {
     echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
   fi
 
+  sleep 10
+  ALIVE_SLOT=$(get_slot)
+  execution_step "Checking if root slot is still advancing - Slot: $END_SLOT, Slot after 10 seconds: $ALIVE_SLOT"
+
+  if [[ "$(bc <<< "scale=0; ($ALIVE_SLOT - $END_SLOT)")" -gt 0 ]]; then
+    SURVIVAL_STATUS_STRING="Root slot still advancing at test's end.  Cluster survived."
+  else
+    SURVIVAL_STATUS_STRING="Root slot has stopped advancing.  Cluster is DEAD!"
+  fi
+  execution_step "$SURVIVAL_STATUS_STRING"
+  echo "$SURVIVAL_STATUS_STRING" >>"$RESULT_FILE"
+
+  execution_step "Writing test results to ${RESULT_FILE}"
   RESULT_DETAILS=$(<"$RESULT_FILE")
   upload-ci-artifact "$RESULT_FILE"
 }
