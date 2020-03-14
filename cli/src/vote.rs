@@ -62,7 +62,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized voter [default: vote account]"),
+                        .help("Public key of the authorized voter [default: validator identity pubkey]"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -70,7 +70,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
-                        .help("Public key of the authorized withdrawer [default: cli config pubkey]"),
+                        .help("Public key of the authorized withdrawer [default: validator identity pubkey]"),
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -225,7 +225,7 @@ impl VoteSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_vote_create_account(
+pub fn parse_create_vote_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
@@ -404,8 +404,8 @@ pub fn process_create_vote_account(
 
     let vote_init = VoteInit {
         node_pubkey: *identity_pubkey,
-        authorized_voter: authorized_voter.unwrap_or(vote_account_pubkey),
-        authorized_withdrawer: authorized_withdrawer.unwrap_or(vote_account_pubkey),
+        authorized_voter: authorized_voter.unwrap_or(*identity_pubkey),
+        authorized_withdrawer: authorized_withdrawer.unwrap_or(*identity_pubkey),
         commission,
     };
 

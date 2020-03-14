@@ -64,8 +64,8 @@ while [[ -n $1 ]]; do
 done
 
 # These keypairs are created by ./setup.sh and included in the genesis config
-identity_keypair=$SOLANA_CONFIG_DIR/bootstrap-validator/identity-keypair.json
-vote_keypair="$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-keypair.json
+identity=$SOLANA_CONFIG_DIR/bootstrap-validator/identity.json
+vote_account="$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-account.json
 
 ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 [[ -d "$ledger_dir" ]] || {
@@ -81,8 +81,8 @@ args+=(
   --ledger "$ledger_dir"
   --rpc-port 8899
   --snapshot-interval-slots 100
-  --identity-keypair "$identity_keypair"
-  --voting-keypair "$vote_keypair"
+  --identity "$identity"
+  --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
 )
 default_arg --gossip-port 8001
