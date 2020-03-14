@@ -194,7 +194,7 @@ function launch_testnet() {
   ALIVE_SLOT=$(get_slot)
   execution_step "Checking if root slot is still advancing - Slot: $END_SLOT, Slot after 10 seconds: $ALIVE_SLOT"
 
-  if [[ "$(bc <<< "scale=0; ($ALIVE_SLOT - $END_SLOT)")" -gt 0 ]]; then
+  if [[ $ALIVE_SLOT -gt $END_SLOT ]]; then
     SURVIVAL_STATUS_STRING="Root slot still advancing at test's end.  Cluster survived."
   else
     SURVIVAL_STATUS_STRING="Root slot has stopped advancing.  Cluster is DEAD!"
