@@ -10,8 +10,11 @@ use crate::{
     replay_stage::MAX_UNCONFIRMED_SLOTS,
     result::{Error, Result},
 };
+use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use slot_transmit_shreds_cache::*;
 use solana_ledger::{blockstore::Blockstore, shred::Shred, staking_utils};
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_sdk::clock::Slot;
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -19,10 +22,8 @@ use std::{
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
     sync::{Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
-    time::Instant,
+    time::{Duration, Instant},
 };
-
-pub const NUM_INSERT_THREADS: usize = 2;
 
 mod broadcast_fake_shreds_run;
 pub(crate) mod broadcast_utils;
@@ -30,7 +31,9 @@ mod fail_entry_verification_broadcast_run;
 mod slot_transmit_shreds_cache;
 mod standard_broadcast_run;
 
-use slot_transmit_shreds_cache::*;
+pub const NUM_INSERT_THREADS: usize = 2;
+pub type RetransmitCacheSender = CrossbeamSender<(Slot, TransmitShreds)>;
+pub type RetransmitCacheReceiver = CrossbeamReceiver<(Slot, TransmitShreds)>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -93,6 +96,7 @@ trait BroadcastRun {
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        retransmit_cache_sender: &RetransmitCacheSender,
     ) -> Result<()>;
     fn transmit(
         &self,
@@ -136,11 +140,17 @@ impl BroadcastStage {
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        retransmit_cache_sender: &RetransmitCacheSender,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
-            let res =
-                broadcast_stage_run.run(blockstore, receiver, socket_sender, blockstore_sender);
+            let res = broadcast_stage_run.run(
+                blockstore,
+                receiver,
+                socket_sender,
+                blockstore_sender,
+                retransmit_cache_sender,
+            );
             let res = Self::handle_error(res);
             if let Some(res) = res {
                 return res;
@@ -194,7 +204,10 @@ impl BroadcastStage {
         let exit = exit_sender.clone();
         let (socket_sender, socket_receiver) = channel();
         let (blockstore_sender, blockstore_receiver) = channel();
+        let (retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
         let bs_run = broadcast_stage_run.clone();
+
+        let socket_sender_ = socket_sender.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -202,8 +215,9 @@ impl BroadcastStage {
                 Self::run(
                     &btree,
                     &receiver,
-                    &socket_sender,
+                    &socket_sender_,
                     &blockstore_sender,
+                    &retransmit_cache_sender,
                     bs_run,
                 )
             })
@@ -244,11 +258,17 @@ impl BroadcastStage {
             thread_hdls.push(t);
         }
 
+        let blockstore = blockstore.clone();
         let retransmit_thread = Builder::new()
             .name("solana-broadcaster-retransmit".to_string())
             .spawn(move || loop {
-                let slot_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
-                let res = Self::retransmit();
+                let mut slot_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+                let res = Self::retransmit(
+                    &mut slot_cache,
+                    &blockstore,
+                    &retransmit_cache_receiver,
+                    &socket_sender,
+                );
                 let res = Self::handle_error(res);
                 if let Some(res) = res {
                     return res;
@@ -259,7 +279,22 @@ impl BroadcastStage {
         Self { thread_hdls }
     }
 
-    pub fn retransmit() -> Result<()> {
+    pub fn retransmit(
+        transmit_shreds_cache: &mut SlotTransmitShredsCache,
+        blockstore: &Blockstore,
+        retransmit_cache_receiver: &RetransmitCacheReceiver,
+        //retransmit_receiver: CrossbeamReceiver<Slot>,
+        socket_sender: &Sender<TransmitShreds>,
+    ) -> Result<()> {
+        let timer = Duration::from_millis(200);
+        let transmit_shreds = retransmit_cache_receiver.recv_timeout(timer);
+        if let Ok((slot, transmit_shreds)) = transmit_shreds {
+            transmit_shreds_cache.push(slot, transmit_shreds);
+            while let Ok((slot, transmit_shreds)) = retransmit_cache_receiver.try_recv() {
+                transmit_shreds_cache.push(slot, transmit_shreds);
+            }
+        }
+
         Ok(())
     }
 
@@ -294,7 +329,6 @@ mod test {
         sync::mpsc::channel,
         sync::{Arc, RwLock},
         thread::sleep,
-        time::Duration,
     };
 
     struct MockBroadcastStage {

@@ -43,4 +43,8 @@ impl SlotTransmitShredsCache {
         let slot_cache = self.cache.get_mut(&slot).unwrap();
         slot_cache.shreds.push(transmit_shreds.1);
     }
+
+    pub fn get(&self, slot: Slot) -> Option<&SlotCachedTransmitShreds> {
+        self.cache.get(&slot)
+    }
 }

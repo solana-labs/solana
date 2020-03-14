@@ -25,6 +25,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        _retransmit_cache_sender: &RetransmitCacheSender,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;

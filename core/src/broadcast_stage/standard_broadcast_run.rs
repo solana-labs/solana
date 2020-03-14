@@ -1,11 +1,11 @@
 use super::broadcast_utils::{self, ReceiveResults};
 use super::*;
 use crate::broadcast_stage::broadcast_utils::UnfinishedSlotInfo;
-use solana_ledger::entry::Entry;
-use solana_ledger::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE, SHRED_TICK_REFERENCE_MASK};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
-use solana_sdk::timing::duration_as_us;
+use solana_ledger::{
+    entry::Entry,
+    shred::{Shred, Shredder, RECOMMENDED_FEC_RATE, SHRED_TICK_REFERENCE_MASK},
+};
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, timing::duration_as_us};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -137,7 +137,14 @@ impl StandardBroadcastRun {
     ) -> Result<()> {
         let (bsend, brecv) = channel();
         let (ssend, srecv) = channel();
-        self.process_receive_results(&blockstore, &ssend, &bsend, receive_results)?;
+        let (retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        self.process_receive_results(
+            &blockstore,
+            &ssend,
+            &bsend,
+            &retransmit_cache_sender,
+            receive_results,
+        )?;
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
         //data
@@ -153,6 +160,7 @@ impl StandardBroadcastRun {
         blockstore: &Arc<Blockstore>,
         socket_sender: &Sender<TransmitShreds>,
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        retransmit_cache_sender: &RetransmitCacheSender,
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
@@ -321,12 +329,14 @@ impl BroadcastRun for StandardBroadcastRun {
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        retransmit_cache_sender: &RetransmitCacheSender,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         self.process_receive_results(
             blockstore,
             socket_sender,
             blockstore_sender,
+            retransmit_cache_sender,
             receive_results,
         )
     }
@@ -360,7 +370,6 @@ mod test {
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::{
-        clock::Slot,
         genesis_config::GenesisConfig,
         signature::{Keypair, Signer},
     };
