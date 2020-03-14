@@ -34,6 +34,7 @@ jsonrpc-ws-server = "14.0.6"
 libc = "0.2.67"
 log = "0.4.8"
 nix = "0.17.0"
+num_cpus = "1.0.0"
 num-traits = "0.2"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
@@ -62,7 +63,6 @@ solana-storage-program = { path = "../programs/storage", version = "1.1.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.1.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.1.0" }
 solana-sys-tuner = { path = "../sys-tuner", version = "1.1.0" }
-sys-info = "0.5.10"
 tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = "0.1"
