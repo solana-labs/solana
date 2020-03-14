@@ -1,6 +1,5 @@
 use super::*;
 use solana_ledger::shred::Shred;
-use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::VecDeque;
 
@@ -9,29 +8,41 @@ pub type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 #[derive(Default)]
 pub struct SlotCachedTransmitShreds {
     pub stakes: Arc<HashMap<Pubkey, u64>>,
-    pub data_shreds: Vec<Arc<Vec<Shred>>>,
-    pub coding_shreds: Vec<Arc<Vec<Shred>>>,
+    pub data_shred_batches: Vec<Arc<Vec<Shred>>>,
+    pub coding_shred_batches: Vec<Arc<Vec<Shred>>>,
 }
 
 impl SlotCachedTransmitShreds {
     pub fn contains_all_shreds(&self) -> bool {
-        self.data_shreds
+        self.data_shred_batches
             .last()
-            .and_then(|last_shred_vec| {
-                last_shred_vec
+            .and_then(|last_shred_batch| {
+                last_shred_batch
                     .last()
                     .and_then(|shred| Some(shred.last_in_slot()))
             })
             .unwrap_or(false)
             && self
-                .coding_shreds
+                .coding_shred_batches
                 .last()
-                .and_then(|last_shred_vec| {
-                    last_shred_vec
+                .and_then(|last_shred_batch| {
+                    last_shred_batch
                         .last()
                         .and_then(|shred| Some(shred.is_last_coding_in_set()))
                 })
                 .unwrap_or(false)
+    }
+
+    pub fn to_transmit_shreds(&self) -> Vec<TransmitShreds> {
+        self.data_shred_batches
+            .iter()
+            .map(|data_shred_batch| (Some(self.stakes.clone()), data_shred_batch.clone()))
+            .chain(
+                self.coding_shred_batches
+                    .iter()
+                    .map(|code_shred_batch| (Some(self.stakes.clone()), code_shred_batch.clone())),
+            )
+            .collect()
     }
 }
 
@@ -67,8 +78,8 @@ impl SlotTransmitShredsCache {
                 stakes: transmit_shreds
                     .0
                     .expect("TransmitShreds for a slot must contain stakes"),
-                data_shreds: vec![],
-                coding_shreds: vec![],
+                data_shred_batches: vec![],
+                coding_shred_batches: vec![],
             };
             self.cache.insert(slot, new_slot_cache);
         }
@@ -78,10 +89,10 @@ impl SlotTransmitShredsCache {
         // Transmit shreds must be all of one type or another
         if transmit_shreds.1[0].is_data() {
             assert!(transmit_shreds.1.iter().all(|s| s.is_data()));
-            slot_cache.data_shreds.push(transmit_shreds.1);
+            slot_cache.data_shred_batches.push(transmit_shreds.1);
         } else {
             assert!(transmit_shreds.1.iter().all(|s| !s.is_data()));
-            slot_cache.coding_shreds.push(transmit_shreds.1);
+            slot_cache.coding_shred_batches.push(transmit_shreds.1);
         }
     }
 

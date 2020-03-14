@@ -14,9 +14,10 @@ use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as Cros
 use slot_transmit_shreds_cache::*;
 use solana_ledger::{blockstore::Blockstore, shred::Shred, staking_utils};
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
@@ -34,6 +35,8 @@ mod standard_broadcast_run;
 pub const NUM_INSERT_THREADS: usize = 2;
 pub type RetransmitCacheSender = CrossbeamSender<(Slot, TransmitShreds)>;
 pub type RetransmitCacheReceiver = CrossbeamReceiver<(Slot, TransmitShreds)>;
+pub type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
+pub type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -53,6 +56,7 @@ impl BroadcastStageType {
         sock: Vec<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
+        retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         shred_version: u16,
@@ -63,6 +67,7 @@ impl BroadcastStageType {
                 sock,
                 cluster_info,
                 receiver,
+                retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
                 StandardBroadcastRun::new(keypair, shred_version),
@@ -72,6 +77,7 @@ impl BroadcastStageType {
                 sock,
                 cluster_info,
                 receiver,
+                retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
                 FailEntryVerificationBroadcastRun::new(keypair, shred_version),
@@ -81,6 +87,7 @@ impl BroadcastStageType {
                 sock,
                 cluster_info,
                 receiver,
+                retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
                 BroadcastFakeShredsRun::new(keypair, 0, shred_version),
@@ -196,6 +203,7 @@ impl BroadcastStage {
         socks: Vec<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntry>,
+        retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
@@ -267,6 +275,7 @@ impl BroadcastStage {
                     &mut slot_cache,
                     &blockstore,
                     &retransmit_cache_receiver,
+                    &retransmit_slots_receiver,
                     &socket_sender,
                 );
                 let res = Self::handle_error(res);
@@ -283,15 +292,30 @@ impl BroadcastStage {
         transmit_shreds_cache: &mut SlotTransmitShredsCache,
         blockstore: &Blockstore,
         retransmit_cache_receiver: &RetransmitCacheReceiver,
-        //retransmit_receiver: CrossbeamReceiver<Slot>,
+        retransmit_slots_receiver: &RetransmitSlotsReceiver,
         socket_sender: &Sender<TransmitShreds>,
     ) -> Result<()> {
-        let timer = Duration::from_millis(200);
+        let timer = Duration::from_millis(100);
         let transmit_shreds = retransmit_cache_receiver.recv_timeout(timer);
+
+        // Update the cache with shreds from latest leader slot
         if let Ok((slot, transmit_shreds)) = transmit_shreds {
             transmit_shreds_cache.push(slot, transmit_shreds);
             while let Ok((slot, transmit_shreds)) = retransmit_cache_receiver.try_recv() {
                 transmit_shreds_cache.push(slot, transmit_shreds);
+            }
+        }
+
+        // Check for a retransmit signal
+        let mut retransmit_slots = retransmit_slots_receiver.recv_timeout(timer)?;
+        while let Ok(new_retransmit_slots) = retransmit_slots_receiver.try_recv() {
+            retransmit_slots.extend(new_retransmit_slots);
+        }
+
+        for (_, bank) in retransmit_slots.iter() {
+            let cached_shreds = transmit_shreds_cache.get(bank, blockstore);
+            for transmit_shreds in cached_shreds.to_transmit_shreds() {
+                socket_sender.send(transmit_shreds);
             }
         }
 
