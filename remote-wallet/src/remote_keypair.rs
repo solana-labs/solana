@@ -14,6 +14,7 @@ pub struct RemoteKeypair {
     pub wallet_type: RemoteWalletType,
     pub derivation_path: DerivationPath,
     pub pubkey: Pubkey,
+    pub path: String,
 }
 
 impl RemoteKeypair {
@@ -21,6 +22,7 @@ impl RemoteKeypair {
         wallet_type: RemoteWalletType,
         derivation_path: DerivationPath,
         confirm_key: bool,
+        path: String,
     ) -> Result<Self, RemoteWalletError> {
         let pubkey = match &wallet_type {
             RemoteWalletType::Ledger(wallet) => wallet.get_pubkey(&derivation_path, confirm_key)?,
@@ -30,6 +32,7 @@ impl RemoteKeypair {
             wallet_type,
             derivation_path,
             pubkey,
+            path,
         })
     }
 }
@@ -57,10 +60,12 @@ pub fn generate_remote_keypair(
     let (remote_wallet_info, derivation_path) = RemoteWalletInfo::parse_path(path)?;
     if remote_wallet_info.manufacturer == "ledger" {
         let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
+        let path = format!("{}{}", ledger.pretty_path, derivation_path.get_query());
         Ok(RemoteKeypair::new(
             RemoteWalletType::Ledger(ledger),
             derivation_path,
             confirm_key,
+            path,
         )?)
     } else {
         Err(RemoteWalletError::DeviceTypeMismatch)

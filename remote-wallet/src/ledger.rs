@@ -55,6 +55,7 @@ mod commands {
 /// Ledger Wallet device
 pub struct LedgerWallet {
     pub device: hidapi::HidDevice,
+    pub pretty_path: String,
 }
 
 impl fmt::Debug for LedgerWallet {
@@ -65,7 +66,10 @@ impl fmt::Debug for LedgerWallet {
 
 impl LedgerWallet {
     pub fn new(device: hidapi::HidDevice) -> Self {
-        Self { device }
+        Self {
+            device,
+            pretty_path: String::default(),
+        }
     }
 
     // Transport Protocol:
