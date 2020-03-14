@@ -206,7 +206,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("NONCE ACCOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_keypair_or_ask_keyword)
+                        .validator(is_valid_signer)
                         .help("Nonce account to withdraw from"),
                 )
                 .arg(
