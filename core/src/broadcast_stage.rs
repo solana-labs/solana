@@ -285,6 +285,7 @@ impl BroadcastStage {
             })
             .unwrap();
 
+        thread_hdls.push(retransmit_thread);
         Self { thread_hdls }
     }
 
@@ -315,7 +316,7 @@ impl BroadcastStage {
         for (_, bank) in retransmit_slots.iter() {
             let cached_shreds = transmit_shreds_cache.get(bank, blockstore);
             for transmit_shreds in cached_shreds.to_transmit_shreds() {
-                socket_sender.send(transmit_shreds);
+                socket_sender.send(transmit_shreds)?;
             }
         }
 
@@ -344,8 +345,8 @@ mod test {
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         hash::Hash,
-        solana_sdk::pubkey::Pubkey,
-        solana_sdk::signature::{Keypair, Signer},
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
     };
     use std::{
         path::Path,
@@ -365,6 +366,7 @@ mod test {
         leader_pubkey: &Pubkey,
         ledger_path: &Path,
         entry_receiver: Receiver<WorkingBankEntry>,
+        retransmit_slots_receiver: RetransmitSlotsReceiver,
     ) -> MockBroadcastStage {
         // Make the database ledger
         let blockstore = Arc::new(Blockstore::open(ledger_path).unwrap());
@@ -392,6 +394,7 @@ mod test {
             leader_info.sockets.broadcast,
             cluster_info,
             entry_receiver,
+            retransmit_slots_receiver,
             &exit_sender,
             &blockstore,
             StandardBroadcastRun::new(leader_keypair, 0),
@@ -414,10 +417,12 @@ mod test {
             let leader_keypair = Keypair::new();
 
             let (entry_sender, entry_receiver) = channel();
+            let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
             let broadcast_service = setup_dummy_broadcast_service(
                 &leader_keypair.pubkey(),
                 &ledger_path,
                 entry_receiver,
+                retransmit_slots_receiver,
             );
             let start_tick_height;
             let max_tick_height;
