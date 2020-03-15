@@ -4,7 +4,7 @@ The [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/a/solana.com/file
 
 ## Is registration mandatory?
 
-Yes. Registration is mandatory. If you do not register before Stage 1 of the Tour de Sol, you cannot participate in the Tour de Sol. [Registration information lives here](how-to-register.md).
+Yes. Registration is mandatory. Registration is rolling, we host month-long Tour de SOL stages on a monthly basis and new participants will need to wait until the start of the next stage to be on-boarded. [Registration information lives here](how-to-register.md).
 
 ## Who’s eligible to participate?
 
