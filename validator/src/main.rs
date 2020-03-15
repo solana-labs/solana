@@ -120,13 +120,14 @@ fn get_trusted_snapshot_hashes(
     }
 }
 
-fn start_gossip_spy(
+fn start_gossip_node(
     identity_keypair: &Arc<Keypair>,
     entrypoint_gossip: &SocketAddr,
+    gossip_addr: &SocketAddr,
     gossip_socket: UdpSocket,
 ) -> (Arc<RwLock<ClusterInfo>>, Arc<AtomicBool>, GossipService) {
     let mut cluster_info = ClusterInfo::new(
-        ClusterInfo::spy_contact_info(&identity_keypair.pubkey()),
+        ClusterInfo::gossip_contact_info(&identity_keypair.pubkey(), *gossip_addr),
         identity_keypair.clone(),
     );
     cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint_gossip));
@@ -859,13 +860,19 @@ pub fn main() {
     });
 
     let gossip_host = if let Some(entrypoint_addr) = entrypoint_addr {
-        solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-            eprintln!(
-                "Failed to contact cluster entrypoint {}: {}",
-                entrypoint_addr, err
-            );
-            exit(1);
-        })
+        let ip_addr =
+            solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to contact cluster entrypoint {}: {}",
+                    entrypoint_addr, err
+                );
+                exit(1);
+            });
+        info!(
+            "{} reports the IP address for this machine as {}",
+            entrypoint_addr, ip_addr
+        );
+        ip_addr
     } else {
         solana_net_utils::parse_host(matches.value_of("gossip_host").unwrap_or("127.0.0.1"))
             .unwrap_or_else(|err| {
@@ -935,9 +942,10 @@ pub fn main() {
         );
 
         if !no_genesis_fetch {
-            let (cluster_info, gossip_exit_flag, gossip_service) = start_gossip_spy(
+            let (cluster_info, gossip_exit_flag, gossip_service) = start_gossip_node(
                 &identity_keypair,
                 &cluster_entrypoint.gossip,
+                &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
             );
 
