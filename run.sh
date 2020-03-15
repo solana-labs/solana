@@ -97,7 +97,7 @@ solana-faucet --keypair "$dataDir"/faucet.json &
 faucet=$!
 
 args=(
-  --identity "$dataDir"/leader-keypair.json
+  --identity-keypair "$dataDir"/leader-keypair.json
   --vote-account "$dataDir"/leader-vote-account-keypair.json
   --ledger "$ledgerDir"
   --gossip-port 8001
