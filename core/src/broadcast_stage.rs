@@ -276,13 +276,32 @@ impl BroadcastStage {
             .name("solana-broadcaster-retransmit".to_string())
             .spawn(move || loop {
                 let mut slot_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
-                let res = slot_cache.update_retransmit_cache(&retransmit_cache_receiver);
+                let mut unfinished_slots_cache =
+                    SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+                let mut updated_slots = HashSet::new();
+                let res = slot_cache
+                    .update_retransmit_cache(&retransmit_cache_receiver, &mut updated_slots);
                 let res = Self::handle_error(res, "solana-broadcaster-retransmit");
                 if let Some(res) = res {
                     return res;
                 }
+
+                // Keep the unfinished slots cache in sync with the slot cache
+                for updated_slot in updated_slots {
+                    if slot_cache.contains_slot(updated_slot) {
+                        if unfinished_slots_cache.contains_slot(updated_slot) {
+                            let cached_entry = slot_cache.get(updated_slot).clone().unwrap();
+                            unfinished_slots_cache.remove_slot(updated_slot);
+                            for transmit_slots in cached_entry.to_transmit_shreds() {
+                                unfinished_slots_cache.push(updated_slot, transmit_slots);
+                            }
+                        }
+                    }
+                }
+
                 let res = Self::check_retransmit_signals(
                     &mut slot_cache,
+                    &mut unfinished_slots_cache,
                     &blockstore,
                     &retransmit_slots_receiver,
                     &socket_sender,
@@ -300,11 +319,33 @@ impl BroadcastStage {
 
     pub fn check_retransmit_signals(
         transmit_shreds_cache: &mut SlotTransmitShredsCache,
+        unfinished_slots_cache: &mut SlotTransmitShredsCache,
         blockstore: &Blockstore,
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
         socket_sender: &Sender<TransmitShreds>,
     ) -> Result<()> {
+        let updates = unfinished_slots_cache.update_cache_from_blockstore(blockstore);
+        for (slot, cached_updates) in updates {
+            // If we got all the shreds, remove this slot's entries
+            // from the "unfinished cache".
+            if cached_updates.contains_last_shreds() {
+                unfinished_slots_cache.remove_slot(slot);
+            }
+            let all_transmit_shreds = cached_updates.to_transmit_shreds();
+
+            for transmit_shreds in all_transmit_shreds {
+                if transmit_shreds_cache.contains_slot(slot) {
+                    // If the main cache still contains this slot,
+                    // then update the main cache as well in case
+                    // we get another signal to retransmit this slot.
+                    transmit_shreds_cache.push(slot, transmit_shreds.clone());
+                }
+                socket_sender.send(transmit_shreds)?;
+            }
+        }
+
         let timer = Duration::from_millis(100);
+
         // Check for a retransmit signal
         let mut retransmit_slots = retransmit_slots_receiver.recv_timeout(timer)?;
         while let Ok(new_retransmit_slots) = retransmit_slots_receiver.try_recv() {
@@ -312,8 +353,14 @@ impl BroadcastStage {
         }
 
         for (_, bank) in retransmit_slots.iter() {
-            let cached_shreds = transmit_shreds_cache.get(bank, blockstore);
-            for transmit_shreds in cached_shreds.to_transmit_shreds() {
+            let cached_shreds = transmit_shreds_cache.get_or_update(bank, blockstore);
+            let all_transmit_shreds = cached_shreds.to_transmit_shreds();
+            for transmit_shreds in all_transmit_shreds {
+                // If the cached shreds are misssing any shreds (broadcast
+                // hasn't written them to blockstore yet)
+                if !cached_shreds.contains_last_shreds() {
+                    unfinished_slots_cache.push(bank.slot(), transmit_shreds.clone());
+                }
                 socket_sender.send(transmit_shreds)?;
             }
         }
