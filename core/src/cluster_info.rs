@@ -1601,7 +1601,7 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr) -> ContactInfo {
+    pub fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr) -> ContactInfo {
         ContactInfo {
             id: *id,
             gossip,
