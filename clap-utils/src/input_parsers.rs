@@ -1,6 +1,6 @@
 use crate::keypair::{
-    keypair_from_seed_phrase, pubkey_from_path, signer_from_path, ASK_KEYWORD,
-    SKIP_SEED_PHRASE_VALIDATION_ARG,
+    keypair_from_seed_phrase, pubkey_from_path, resolve_signer_from_path, signer_from_path,
+    ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use chrono::DateTime;
 use clap::ArgMatches;
@@ -127,6 +127,19 @@ pub fn pubkey_of_signer(
     } else {
         Ok(None)
     }
+}
+
+pub fn resolve_signer(
+    matches: &ArgMatches<'_>,
+    name: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    Ok(resolve_signer_from_path(
+        matches,
+        matches.value_of(name).unwrap(),
+        name,
+        wallet_manager,
+    )?)
 }
 
 pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {
