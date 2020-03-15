@@ -272,17 +272,18 @@ impl ReplayStage {
 
                         for r in failure_reasons {
                             if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
-                                if let Some(prev_leader_slot) = progress.get_prev_leader_slot(slot)
+                                if let Some(latest_leader_slot) = progress.get_latest_leader_slot(slot)
                                 {
                                     if let Some(stats) =
-                                        progress.get_propagated_stats(prev_leader_slot)
+                                        progress.get_propagated_stats(latest_leader_slot)
                                     {
                                         info!(
-                                            "total staked: {}, observed staked: {}, pubkeys: {:?}, prev_leader_slot: {}",
+                                            "total staked: {}, observed staked: {}, pubkeys: {:?}, latest_leader_slot: {}, epoch: {:?}",
                                             stats.total_epoch_stake,
                                             stats.propagated_validators_stake,
                                             stats.propagated_validators,
-                                            prev_leader_slot,
+                                            latest_leader_slot,
+                                            bank_forks.read().unwrap().get(latest_leader_slot).map(|x| x.epoch()),
                                         );
                                     }
                                 }
@@ -574,9 +575,10 @@ impl ReplayStage {
             );
 
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
+                let latest_leader_slot = progress_map.get_latest_leader_slot(parent_slot);
                 error!(
-                    "skipping starting bank for {}, parent: {}, propagation not confirmed",
-                    poh_slot, parent_slot
+                    "skipping starting bank for {}, parent: {}, latest_leader: {:?}, propagation not confirmed",
+                    poh_slot, parent_slot, latest_leader_slot
                 );
                 return;
             }

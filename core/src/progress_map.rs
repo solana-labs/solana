@@ -239,17 +239,7 @@ impl ProgressMap {
     }
 
     pub fn is_propagated(&self, slot: Slot) -> bool {
-        let leader_slot_to_check = {
-            let propagated_stats = self
-                .get_propagated_stats(slot)
-                .expect("All frozen banks must exist in the Progress map");
-
-            if propagated_stats.is_leader_slot {
-                Some(slot)
-            } else {
-                propagated_stats.prev_leader_slot
-            }
-        };
+        let leader_slot_to_check = self.get_latest_leader_slot(slot);
 
         // prev_leader_slot doesn't exist because already rooted
         // or this validator hasn't been scheduled as a leader
@@ -267,10 +257,16 @@ impl ProgressMap {
             .unwrap_or(true)
     }
 
-    pub fn get_prev_leader_slot(&self, slot: Slot) -> Option<Slot> {
-        self.get_propagated_stats(slot)
-            .map(|stats| stats.prev_leader_slot)
-            .unwrap_or(None)
+    pub fn get_latest_leader_slot(&self, slot: Slot) -> Option<Slot> {
+        let propagated_stats = self
+            .get_propagated_stats(slot)
+            .expect("All frozen banks must exist in the Progress map");
+
+        if propagated_stats.is_leader_slot {
+            Some(slot)
+        } else {
+            propagated_stats.prev_leader_slot
+        }
     }
 
     pub fn get_bank_prev_leader_slot(&self, bank: &Bank) -> Option<Slot> {
