@@ -494,61 +494,21 @@ impl ReplayStage {
     fn check_propagation_for_start_leader(
         poh_slot: Slot,
         parent_slot: Slot,
-        root: Slot,
         progress_map: &ProgressMap,
     ) -> bool {
-        // Check if the last leader slot reached the propagation threshold
-        let prev_leader_slot = {
-            let parent_propagated_stats = &progress_map
-                .get(&parent_slot)
-                .expect("All banks in BankForks must exist in the Progress map")
-                .propagated_stats;
-            if parent_propagated_stats.is_leader_slot {
-                Some(parent_slot)
-            } else {
-                parent_propagated_stats.prev_leader_slot
-            }
-        };
+        // Check if the next leader slot is part of a consecutive block, in
+        // which case ignore the propagation check
+        let is_consecutive_leader = progress_map
+            .get_propagated_stats(parent_slot)
+            .unwrap()
+            .is_leader_slot
+            && parent_slot == poh_slot - 1;
 
-        let is_consecutive_leader =
-            prev_leader_slot == Some(parent_slot) && parent_slot == poh_slot - 1;
-
-        let leader_propagated_confirmed = prev_leader_slot
-            .map(|prev_leader_slot| {
-                // If the last leader was rooted, the slot won't exist
-                // in the progress map, but it must have been confirmed
-                if prev_leader_slot <= root {
-                    true
-                } else {
-                    progress_map
-                        .get(&prev_leader_slot)
-                        .expect("All banks > root must exist in the Progress map")
-                        .propagated_stats
-                        .is_propagated
-                }
-            })
-            // If there's no previous leader slot, then vacuously it's true
-            // that propagation has been confirmedd
-            .unwrap_or(true);
-
-        if !leader_propagated_confirmed {
-            // TODO: Retransmit
-
-            // If slot is not a consecutive leader slot, and the previous
-            // leader block hasn't been propagated, don't generate another
-            // block
-            if !is_consecutive_leader {
-                info!(
-                    "skipping starting bank for {}, parent: {}, propagation not confirmed",
-                    poh_slot, parent_slot
-                );
-                false
-            } else {
-                true
-            }
-        } else {
-            true
+        if is_consecutive_leader {
+            return true;
         }
+
+        progress_map.is_propagated(parent_slot)
     }
 
     fn maybe_start_leader(
@@ -613,17 +573,15 @@ impl ReplayStage {
                 ("leader", next_leader.to_string(), String),
             );
 
-            let root_slot = bank_forks.read().unwrap().root();
-
-            if !Self::check_propagation_for_start_leader(
-                poh_slot,
-                parent_slot,
-                root_slot,
-                progress_map,
-            ) {
+            if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
+                error!(
+                    "skipping starting bank for {}, parent: {}, propagation not confirmed",
+                    poh_slot, parent_slot
+                );
                 return;
             }
 
+            let root_slot = bank_forks.read().unwrap().root();
             info!(
                 "new fork:{} parent:{} (leader) root:{}",
                 poh_slot, parent_slot, root_slot
@@ -1422,7 +1380,7 @@ impl ReplayStage {
             all_pubkeys.retain(|x| Rc::strong_count(x) > 1);
         }
         *earliest_vote_on_fork = std::cmp::max(new_root, *earliest_vote_on_fork);
-        progress.retain(|k, _| r_bank_forks.get(*k).is_some());
+        progress.handle_new_root(&r_bank_forks);
     }
 
     fn generate_new_bank_forks(
@@ -1543,6 +1501,7 @@ pub(crate) mod tests {
     use solana_runtime::genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs};
     use solana_sdk::{
         account::Account,
+        genesis_config,
         hash::{hash, Hash},
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
@@ -2965,7 +2924,6 @@ pub(crate) mod tests {
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
-            0,
             &progress_map,
         ));
 
@@ -2977,7 +2935,6 @@ pub(crate) mod tests {
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
-            0,
             &progress_map,
         ));
         progress_map
@@ -2988,10 +2945,8 @@ pub(crate) mod tests {
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
-            0,
             &progress_map,
         ));
-
         // Now, set up the progress map to show that the previous leader slot of 5 is
         // 2 (even though the parent is 3), so 2 needs to see propagation confirmation
         // before we can start a leader for block 5
@@ -3004,16 +2959,6 @@ pub(crate) mod tests {
         // Last leader slot has not seen propagation threshold, so should fail
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
-            parent_slot,
-            0,
-            &progress_map,
-        ));
-
-        // If the root is >= the last leader slot, implies confirmation so
-        // should succeed
-        assert!(ReplayStage::check_propagation_for_start_leader(
-            poh_slot,
-            parent_slot,
             parent_slot,
             &progress_map,
         ));
@@ -3028,7 +2973,25 @@ pub(crate) mod tests {
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
-            0,
+            &progress_map,
+        ));
+
+        // If the root is 3, this filters out slot 2 from the progress map,
+        // which implies confirmation
+        let mut bank_forks = BankForks::new(
+            3,
+            Bank::new(&genesis_config::create_genesis_config(10000).0),
+        );
+        let bank5 = Bank::new_from_parent(bank_forks.get(3).unwrap(), &Pubkey::default(), 5);
+        bank_forks.insert(bank5);
+
+        // Should purge only slot 2 from the progress map
+        progress_map.handle_new_root(&bank_forks);
+
+        // Should succeed
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
             &progress_map,
         ));
     }
@@ -3056,7 +3019,6 @@ pub(crate) mod tests {
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
-            0,
             &progress_map,
         ));
 
@@ -3070,7 +3032,6 @@ pub(crate) mod tests {
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
-            0,
             &progress_map,
         ));
 
@@ -3081,7 +3042,6 @@ pub(crate) mod tests {
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
-            0,
             &progress_map,
         ));
     }
