@@ -1,6 +1,6 @@
 steps:
   - command: "system-test/testnet-automation.sh"
-    label: "Colo - CPU Only - Partial Loss 3 Partitions"
+    label: "SANITY TEST - Colo - CPU Only - Partial Loss 3 Partitions"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "colo"
@@ -15,5 +15,6 @@ steps:
       PARTITION_ACTIVE_DURATION: 30
       PARTITION_INACTIVE_DURATION: 30
       PARTITION_ITERATION_COUNT: 2
+      BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 100
     agents:
       - "queue=colo-deploy"
