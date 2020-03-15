@@ -394,6 +394,7 @@ pub enum CliCommand {
     Cancel(Pubkey),
     Confirm(Signature),
     Pay(PayCommand),
+    ResolveSigner(Option<String>),
     ShowAccount {
         pubkey: Pubkey,
         output_file: Option<String>,
@@ -860,6 +861,13 @@ pub fn parse_command(
                     output_file: output_file.map(ToString::to_string),
                     use_lamports_unit,
                 },
+                signers: vec![],
+            })
+        }
+        ("resolve-signer", Some(matches)) => {
+            let signer_path = resolve_signer(matches, "signer", wallet_manager)?;
+            Ok(CliCommandInfo {
+                command: CliCommand::ResolveSigner(signer_path),
                 signers: vec![],
             })
         }
@@ -2027,6 +2035,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_account,
             *nonce_authority,
         ),
+        CliCommand::ResolveSigner(path) => {
+            if let Some(path) = path {
+                Ok(path.to_string())
+            } else {
+                Ok("Signer is valid".to_string())
+            }
+        }
         CliCommand::ShowAccount {
             pubkey,
             output_file,
@@ -2380,6 +2395,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .offline_args()
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("resolve-signer")
+                .about("Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg. usb://ledger")
+                .arg(
+                    Arg::with_name("signer")
+                        .index(1)
+                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("The signer path to resolve")
+                )
         )
         .subcommand(
             SubCommand::with_name("send-signature")
@@ -2756,6 +2784,31 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Deploy("/Users/test/program.o".to_string()),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test ResolveSigner Subcommand, KeypairUrl::Filepath
+        let test_resolve_signer =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "resolve-signer", &keypair_file]);
+        assert_eq!(
+            parse_command(&test_resolve_signer, "", None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ResolveSigner(Some(keypair_file.clone())),
+                signers: vec![],
+            }
+        );
+        // Test ResolveSigner Subcommand, KeypairUrl::Pubkey (Presigner)
+        let test_resolve_signer =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "resolve-signer", &pubkey_string]);
+        assert_eq!(
+            parse_command(&test_resolve_signer, "", None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ResolveSigner(Some(pubkey.to_string())),
+                signers: vec![],
             }
         );
 

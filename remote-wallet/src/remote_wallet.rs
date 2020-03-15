@@ -105,8 +105,9 @@ impl RemoteWalletManager {
                 if is_valid_ledger(device_info.vendor_id(), device_info.product_id()) {
                     match usb.open_path(&device_info.path()) {
                         Ok(device) => {
-                            let ledger = LedgerWallet::new(device);
+                            let mut ledger = LedgerWallet::new(device);
                             if let Ok(info) = ledger.read_device(&device_info) {
+                                ledger.pretty_path = info.get_pretty_path();
                                 let path = device_info.path().to_str().unwrap().to_string();
                                 trace!("Found device: {:?}", info);
                                 v.push(Device {
@@ -328,6 +329,20 @@ impl fmt::Debug for DerivationPath {
     }
 }
 
+impl DerivationPath {
+    pub fn get_query(&self) -> String {
+        if let Some(account) = self.account {
+            if let Some(change) = self.change {
+                format!("?key={}/{}", account, change)
+            } else {
+                format!("?key={}", account)
+            }
+        } else {
+            "".to_string()
+        }
+    }
+}
+
 /// Helper to determine if a device is a valid HID
 pub fn is_valid_hid_device(usage_page: u16, interface_number: i32) -> bool {
     usage_page == HID_GLOBAL_USAGE_PAGE || interface_number == HID_USB_DEVICE_CLASS as i32
@@ -518,5 +533,41 @@ mod tests {
         assert!(!info.matches(&test_info));
         test_info.pubkey = pubkey;
         assert!(info.matches(&test_info));
+    }
+
+    #[test]
+    fn test_get_pretty_path() {
+        let pubkey = Pubkey::new_rand();
+        let pubkey_str = pubkey.to_string();
+        let remote_wallet_info = RemoteWalletInfo {
+            model: "nano-s".to_string(),
+            manufacturer: "ledger".to_string(),
+            serial: "".to_string(),
+            pubkey,
+            error: None,
+        };
+        assert_eq!(
+            remote_wallet_info.get_pretty_path(),
+            format!("usb://ledger/nano-s/{}", pubkey_str)
+        );
+    }
+
+    #[test]
+    fn test_get_query() {
+        let derivation_path = DerivationPath {
+            account: None,
+            change: None,
+        };
+        assert_eq!(derivation_path.get_query(), "".to_string());
+        let derivation_path = DerivationPath {
+            account: Some(1),
+            change: None,
+        };
+        assert_eq!(derivation_path.get_query(), "?key=1".to_string());
+        let derivation_path = DerivationPath {
+            account: Some(1),
+            change: Some(2),
+        };
+        assert_eq!(derivation_path.get_query(), "?key=1/2".to_string());
     }
 }
