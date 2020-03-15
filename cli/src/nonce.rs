@@ -82,7 +82,7 @@ pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(NONCE_AUTHORITY_ARG.name)
         .long(NONCE_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .value_name("KEYPAIR")
         .validator(is_valid_signer)
         .help(NONCE_AUTHORITY_ARG.help)
 }
@@ -95,16 +95,16 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_keypair")
                         .index(1)
-                        .value_name("NONCE_ACCOUNT")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("Address of the nonce account"),
                 )
                 .arg(
                     Arg::with_name("new_authority")
                         .index(2)
-                        .value_name("NEW_AUTHORITY_PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -113,7 +113,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
-                        .value_name("SEED STRING")
+                        .value_name("STRING")
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
                 )
@@ -125,7 +125,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_keypair")
                         .index(1)
-                        .value_name("NONCE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -134,7 +134,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
@@ -144,7 +144,7 @@ impl NonceSubCommands for App<'_, '_> {
                     Arg::with_name(NONCE_AUTHORITY_ARG.name)
                         .long(NONCE_AUTHORITY_ARG.long)
                         .takes_value(true)
-                        .value_name("BASE58_PUBKEY")
+                        .value_name("PUBKEY")
                         .validator(is_pubkey_or_keypair)
                         .help("Assign noncing authority to another entity"),
                 ),
@@ -156,7 +156,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("NONCE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -169,7 +169,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_keypair")
                         .index(1)
-                        .value_name("NONCE ACCOUNT")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -184,7 +184,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("NONCE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -203,7 +203,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_keypair")
                         .index(1)
-                        .value_name("NONCE ACCOUNT")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -212,7 +212,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
-                        .value_name("DESTINATION ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -221,7 +221,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)

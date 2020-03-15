@@ -33,7 +33,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account")
                         .index(1)
-                        .value_name("VOTE ACCOUNT KEYPAIR")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -42,7 +42,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("identity_pubkey")
                         .index(2)
-                        .value_name("VALIDATOR IDENTITY PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -51,7 +51,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("commission")
                         .long("commission")
-                        .value_name("NUM")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .default_value("100")
                         .help("The commission taken on reward redemption (0-100)"),
@@ -75,7 +75,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
-                        .value_name("SEED STRING")
+                        .value_name("STRING")
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account will be at a derived address of the VOTE ACCOUNT pubkey")
                 ),
@@ -86,7 +86,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -95,7 +95,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("new_identity_pubkey")
                         .index(2)
-                        .value_name("NEW VALIDATOR IDENTITY PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -104,7 +104,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("authorized_voter")
                         .index(3)
-                        .value_name("AUTHORIZED VOTER KEYPAIR")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -117,7 +117,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -126,7 +126,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("new_authorized_pubkey")
                         .index(2)
-                        .value_name("NEW VOTER PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -139,7 +139,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -148,7 +148,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("new_authorized_pubkey")
                         .index(2)
-                        .value_name("NEW WITHDRAWER PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -170,7 +170,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -189,7 +189,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -198,7 +198,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
-                        .value_name("DESTINATION ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -207,7 +207,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
@@ -216,7 +216,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("authorized_withdrawer")
                         .long("authorized-withdrawer")
-                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
                         .help("Authorized withdrawer [default: cli config keypair]"),
