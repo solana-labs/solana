@@ -46,29 +46,29 @@ dataDir=$PWD/config/"$(basename "$0" .sh)"
 ledgerDir=$PWD/config/ledger
 
 set -x
-leader_keypair="$dataDir/leader-keypair.json"
-if [[ -e $leader_keypair ]]; then
-  echo "Use existing leader keypair"
+validator_identity="$dataDir/validator-identity.json"
+if [[ -e $validator_identity ]]; then
+  echo "Use existing validator keypair"
 else
-  solana-keygen new --no-passphrase -so "$leader_keypair"
+  solana-keygen new --no-passphrase -so "$validator_identity"
 fi
-leader_vote_account_keypair="$dataDir/leader-vote-account-keypair.json"
-if [[ -e $leader_vote_account_keypair ]]; then
-  echo "Use existing leader vote account keypair"
+validator_vote_account="$dataDir/validator-vote-account.json"
+if [[ -e $validator_vote_account ]]; then
+  echo "Use existing validator vote account keypair"
 else
-  solana-keygen new --no-passphrase -so "$leader_vote_account_keypair"
+  solana-keygen new --no-passphrase -so "$validator_vote_account"
 fi
-leader_stake_account_keypair="$dataDir/leader-stake-account-keypair.json"
-if [[ -e $leader_stake_account_keypair ]]; then
-  echo "Use existing leader stake account keypair"
+validator_stake_account="$dataDir/validator-stake-account.json"
+if [[ -e $validator_stake_account ]]; then
+  echo "Use existing validator stake account keypair"
 else
-  solana-keygen new --no-passphrase -so "$leader_stake_account_keypair"
+  solana-keygen new --no-passphrase -so "$validator_stake_account"
 fi
-faucet_keypair="$dataDir"/faucet.json
-if [[ -e $faucet_keypair ]]; then
+faucet="$dataDir"/faucet.json
+if [[ -e $faucet ]]; then
   echo "Use existing faucet keypair"
 else
-  solana-keygen new --no-passphrase -fso "$faucet_keypair"
+  solana-keygen new --no-passphrase -fso "$faucet"
 fi
 
 if [[ -e "$ledgerDir"/genesis.bin ]]; then
@@ -79,9 +79,9 @@ else
     --faucet-pubkey "$dataDir"/faucet.json \
     --faucet-lamports 500000000000000000 \
     --bootstrap-validator \
-      "$dataDir"/leader-keypair.json \
-      "$dataDir"/leader-vote-account-keypair.json \
-      "$dataDir"/leader-stake-account-keypair.json \
+      "$dataDir"/validator-identity.json \
+      "$dataDir"/validator-vote-account.json \
+      "$dataDir"/validator-stake-account.json \
     --ledger "$ledgerDir" \
     --operating-mode development
 fi
@@ -93,12 +93,12 @@ abort() {
 }
 trap abort INT TERM EXIT
 
-solana-faucet --keypair "$dataDir"/faucet.json &
+solana-faucet - "$dataDir"/faucet.json &
 faucet=$!
 
 args=(
-  --identity "$dataDir"/leader-keypair.json
-  --vote-account "$dataDir"/leader-vote-account-keypair.json
+  --identity "$dataDir"/validator-identity.json
+  --vote-account "$dataDir"/validator-vote-account.json
   --ledger "$ledgerDir"
   --gossip-port 8001
   --rpc-port 8899
