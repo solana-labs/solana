@@ -373,6 +373,7 @@ pub fn main() {
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
+                .alias("identity-keypair") // --identity-keypair is legacy for <= v1.0.6 users
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
@@ -385,6 +386,15 @@ pub fn main() {
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .help("Authorized voter keypair [default: value of --identity]"),
+        )
+        .arg(
+            Arg::with_name("deprecated_voting_keypair")
+                .long("voting-keypair")
+                .value_name("PATH")
+                .takes_value(true)
+                .hidden(true) // Don't document this argument, it's legacy for <= v1.0.6 users
+                .conflicts_with_all(&["authorized_voter", "vote_account"])
+                .validator(is_keypair_or_ask_keyword),
         )
         .arg(
             Arg::with_name("vote_account")
@@ -658,6 +668,10 @@ pub fn main() {
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
 
     let authorized_voter = keypair_of(&matches, "authorized_voter")
+        .or_else(|| {
+            // Legacy v1.0.6 argument support
+            keypair_of(&matches, "deprecated_voting_keypair")
+        })
         .map(Arc::new)
         .unwrap_or_else(|| identity_keypair.clone());
 
@@ -725,6 +739,19 @@ pub fn main() {
         trusted_validators,
         ..ValidatorConfig::default()
     };
+
+    let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
+        if matches.is_present("deprecated_voting_keypair") {
+            // Legacy v1.0.6 behaviour of using `--voting-keypair` as `--vote-account`
+            keypair_of(&matches, "deprecated_voting_keypair")
+                .unwrap()
+                .pubkey()
+        } else {
+            warn!("--vote-account not specified, validator will not vote");
+            validator_config.voting_disabled = true;
+            Keypair::new().pubkey()
+        }
+    });
 
     let dynamic_port_range =
         solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
@@ -837,12 +864,6 @@ pub fn main() {
 
     info!("{} {}", crate_name!(), solana_clap_utils::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
-
-    let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
-        warn!("--vote-account not specified, validator will not vote");
-        validator_config.voting_disabled = true;
-        Keypair::new().pubkey()
-    });
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
