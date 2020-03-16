@@ -630,10 +630,7 @@ impl ReplayStage {
             // errors related to the slot being purged
             let slot = bank.slot();
             warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            if matches!(
-                err,
-                BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount)
-            ) {
+            if let BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) = err {
                 datapoint_info!(
                     "replay-stage-mark_dead_slot",
                     ("error", format!("error: {:?}", err), String),
