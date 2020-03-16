@@ -569,7 +569,7 @@ pub fn parse_command(
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Cluster Query Commands
-        ("catchup", Some(matches)) => parse_catchup(matches),
+        ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
         ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ClusterVersion,
             signers: vec![],
@@ -604,7 +604,7 @@ pub fn parse_command(
             command: CliCommand::ShowGossip,
             signers: vec![],
         }),
-        ("stakes", Some(matches)) => parse_show_stakes(matches),
+        ("stakes", Some(matches)) => parse_show_stakes(matches, wallet_manager),
         ("validators", Some(matches)) => parse_show_validators(matches),
         // Nonce Commands
         ("authorize-nonce-account", Some(matches)) => {
