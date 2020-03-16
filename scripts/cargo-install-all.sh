@@ -87,6 +87,7 @@ else
     solana
     solana-bench-exchange
     solana-bench-tps
+    solana-dos
     solana-faucet
     solana-gossip
     solana-install

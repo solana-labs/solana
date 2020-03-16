@@ -11,6 +11,7 @@ members = [
     "cli-config",
     "client",
     "core",
+    "dos",
     "download-utils",
     "faucet",
     "perf",
