@@ -613,11 +613,11 @@ pub fn parse_command(
         ("create-nonce-account", Some(matches)) => {
             parse_nonce_create_account(matches, default_signer_path, wallet_manager)
         }
-        ("nonce", Some(matches)) => parse_get_nonce(matches),
+        ("nonce", Some(matches)) => parse_get_nonce(matches, wallet_manager),
         ("new-nonce", Some(matches)) => {
             parse_new_nonce(matches, default_signer_path, wallet_manager)
         }
-        ("nonce-account", Some(matches)) => parse_show_nonce_account(matches),
+        ("nonce-account", Some(matches)) => parse_show_nonce_account(matches, wallet_manager),
         ("withdraw-from-nonce-account", Some(matches)) => {
             parse_withdraw_from_nonce_account(matches, default_signer_path, wallet_manager)
         }
