@@ -1,11 +1,16 @@
-use crate::cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS};
-use crate::packet::Packets;
-use crate::poh_recorder::PohRecorder;
-use crate::result::{Error, Result};
-use crate::{packet, sigverify};
+use crate::{
+    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
+    crds_value::CrdsValueLabel,
+    packet::{self, Packets},
+    poh_recorder::PohRecorder,
+    result::{Error, Result},
+    sigverify,
+    verified_vote_packets::VerifiedVotePackets,
+};
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
 };
+use itertools::izip;
 use log::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::inc_new_counter_debug;
@@ -19,15 +24,23 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        {Arc, Mutex, RwLock},
+    },
+    thread::{self, sleep, Builder, JoinHandle},
+    time::{Duration, Instant},
+};
 
 // Map from a vote account to the authorized voter for an epoch
 pub type EpochAuthorizedVoters = HashMap<Arc<Pubkey>, Arc<Pubkey>>;
 pub type NodeIdToVoteAccounts = HashMap<Pubkey, Vec<Arc<Pubkey>>>;
+pub type VerifiedVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Packets)>>;
+pub type VerifiedVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
+pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
+pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 
 pub struct SlotVoteTracker {
     voted: HashSet<Arc<Pubkey>>,
@@ -276,8 +289,9 @@ impl ClusterInfoVoteListener {
         bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
         let exit_ = exit.clone();
-        let poh_recorder = poh_recorder.clone();
-        let (vote_txs_sender, vote_txs_receiver) = unbounded();
+
+        let (verified_vote_packets_sender, verified_vote_packets_receiver) = unbounded();
+        let (verified_vote_transactions_sender, verified_vote_transactions_receiver) = unbounded();
         let listen_thread = Builder::new()
             .name("solana-cluster_info_vote_listener".to_string())
             .spawn(move || {
@@ -285,9 +299,22 @@ impl ClusterInfoVoteListener {
                     exit_,
                     &cluster_info,
                     sigverify_disabled,
-                    &sender,
-                    vote_txs_sender,
+                    verified_vote_packets_sender,
+                    verified_vote_transactions_sender,
+                );
+            })
+            .unwrap();
+
+        let exit_ = exit.clone();
+        let poh_recorder = poh_recorder.clone();
+        let bank_send_thread = Builder::new()
+            .name("solana-cluster_info_bank_send".to_string())
+            .spawn(move || {
+                let _ = Self::bank_send_loop(
+                    exit_,
+                    verified_vote_packets_receiver,
                     poh_recorder,
+                    &sender,
                 );
             })
             .unwrap();
@@ -296,13 +323,17 @@ impl ClusterInfoVoteListener {
         let send_thread = Builder::new()
             .name("solana-cluster_info_process_votes".to_string())
             .spawn(move || {
-                let _ =
-                    Self::process_votes_loop(exit_, vote_txs_receiver, vote_tracker, &bank_forks);
+                let _ = Self::process_votes_loop(
+                    exit_,
+                    verified_vote_transactions_receiver,
+                    vote_tracker,
+                    &bank_forks,
+                );
             })
             .unwrap();
 
         Self {
-            thread_hdls: vec![listen_thread, send_thread],
+            thread_hdls: vec![listen_thread, send_thread, bank_send_thread],
         }
     }
 
@@ -317,57 +348,104 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sigverify_disabled: bool,
-        packets_sender: &CrossbeamSender<Vec<Packets>>,
-        vote_txs_sender: CrossbeamSender<Vec<Transaction>>,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        verified_vote_packets_sender: VerifiedVotePacketsSender,
+        verified_vote_transactions_sender: VerifiedVoteTransactionsSender,
     ) -> Result<()> {
+        let mut last_ts = 0;
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            let poh_bank = poh_recorder.lock().unwrap().bank();
-            if let Some(bank) = poh_bank {
-                let last_ts = bank.last_vote_sync.load(Ordering::Relaxed);
-                let (votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
-                bank.last_vote_sync
-                    .compare_and_swap(last_ts, new_ts, Ordering::Relaxed);
-                inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
-                let mut msgs = packet::to_packets(&votes);
-                if !msgs.is_empty() {
-                    let r = if sigverify_disabled {
-                        sigverify::ed25519_verify_disabled(&msgs)
+            let (labels, votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
+            inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
+
+            last_ts = new_ts;
+            let msgs = packet::to_packets(&votes);
+            if !msgs.is_empty() {
+                let r = if sigverify_disabled {
+                    sigverify::ed25519_verify_disabled(&msgs)
+                } else {
+                    sigverify::ed25519_verify_cpu(&msgs)
+                };
+
+                assert_eq!(
+                    r.iter()
+                        .map(|packets_results| packets_results.len())
+                        .sum::<usize>(),
+                    votes.len()
+                );
+
+                let (vote_txs, packets) = izip!(
+                    labels.into_iter(),
+                    votes.into_iter(),
+                    r.iter().flatten(),
+                    msgs
+                )
+                .filter_map(|(label, vote, verify_result, packet)| {
+                    if *verify_result != 0 {
+                        Some((vote, (label, packet)))
                     } else {
-                        sigverify::ed25519_verify_cpu(&msgs)
-                    };
-                    assert_eq!(
-                        r.iter()
-                            .map(|packets_results| packets_results.len())
-                            .sum::<usize>(),
-                        votes.len()
-                    );
-                    let valid_votes: Vec<_> = votes
-                        .into_iter()
-                        .zip(r.iter().flatten())
-                        .filter_map(|(vote, verify_result)| {
-                            if *verify_result != 0 {
-                                Some(vote)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    vote_txs_sender.send(valid_votes)?;
-                    sigverify::mark_disabled(&mut msgs, &r);
-                    packets_sender.send(msgs)?;
+                        None
+                    }
+                })
+                .unzip();
+
+                verified_vote_transactions_sender.send(vote_txs)?;
+                verified_vote_packets_sender.send(packets)?;
+            }
+
+            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
+        }
+    }
+
+    fn bank_send_loop(
+        exit: Arc<AtomicBool>,
+        verified_vote_packets_receiver: VerifiedVotePacketsReceiver,
+        poh_recorder: Arc<Mutex<PohRecorder>>,
+        packets_sender: &CrossbeamSender<Vec<Packets>>,
+    ) -> Result<()> {
+        let mut verified_vote_packets = VerifiedVotePackets::default();
+        let mut time_since_lock = Instant::now();
+        let mut update_version = 0;
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+
+            if let Err(e) = verified_vote_packets
+                .get_and_process_vote_packets(&verified_vote_packets_receiver, &mut update_version)
+            {
+                match e {
+                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
+                        return Ok(());
+                    }
+                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                    _ => {
+                        error!("thread {:?} error {:?}", thread::current().name(), e);
+                    }
                 }
             }
-            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
+
+            if time_since_lock.elapsed().as_millis() > GOSSIP_SLEEP_MILLIS as u128 {
+                let bank = poh_recorder.lock().unwrap().bank();
+                if let Some(bank) = bank {
+                    let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
+                    let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
+                    packets_sender.send(msgs)?;
+                    bank.last_vote_sync.compare_and_swap(
+                        last_version,
+                        new_version,
+                        Ordering::Relaxed,
+                    );
+                    time_since_lock = Instant::now();
+                }
+            }
         }
     }
 
     fn process_votes_loop(
         exit: Arc<AtomicBool>,
-        vote_txs_receiver: CrossbeamReceiver<Vec<Transaction>>,
+        vote_txs_receiver: VerifiedVoteTransactionsReceiver,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
@@ -425,7 +503,7 @@ impl ClusterInfoVoteListener {
     }
 
     fn get_and_process_votes(
-        vote_txs_receiver: &CrossbeamReceiver<Vec<Transaction>>,
+        vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
         vote_tracker: &Arc<VoteTracker>,
         last_root: Slot,
     ) -> Result<()> {
@@ -434,7 +512,6 @@ impl ClusterInfoVoteListener {
         while let Ok(new_txs) = vote_txs_receiver.try_recv() {
             vote_txs.extend(new_txs);
         }
-
         Self::process_votes(vote_tracker, vote_txs, last_root);
         Ok(())
     }
