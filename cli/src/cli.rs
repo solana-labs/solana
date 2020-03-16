@@ -569,7 +569,7 @@ pub fn parse_command(
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Cluster Query Commands
-        ("catchup", Some(matches)) => parse_catchup(matches),
+        ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
         ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ClusterVersion,
             signers: vec![],
@@ -604,7 +604,7 @@ pub fn parse_command(
             command: CliCommand::ShowGossip,
             signers: vec![],
         }),
-        ("stakes", Some(matches)) => parse_show_stakes(matches),
+        ("stakes", Some(matches)) => parse_show_stakes(matches, wallet_manager),
         ("validators", Some(matches)) => parse_show_validators(matches),
         // Nonce Commands
         ("authorize-nonce-account", Some(matches)) => {
@@ -613,11 +613,11 @@ pub fn parse_command(
         ("create-nonce-account", Some(matches)) => {
             parse_nonce_create_account(matches, default_signer_path, wallet_manager)
         }
-        ("nonce", Some(matches)) => parse_get_nonce(matches),
+        ("nonce", Some(matches)) => parse_get_nonce(matches, wallet_manager),
         ("new-nonce", Some(matches)) => {
             parse_new_nonce(matches, default_signer_path, wallet_manager)
         }
-        ("nonce-account", Some(matches)) => parse_show_nonce_account(matches),
+        ("nonce-account", Some(matches)) => parse_show_nonce_account(matches, wallet_manager),
         ("withdraw-from-nonce-account", Some(matches)) => {
             parse_withdraw_from_nonce_account(matches, default_signer_path, wallet_manager)
         }
@@ -662,7 +662,7 @@ pub fn parse_command(
         ("stake-set-lockup", Some(matches)) => {
             parse_stake_set_lockup(matches, default_signer_path, wallet_manager)
         }
-        ("stake-account", Some(matches)) => parse_show_stake_account(matches),
+        ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Storage Commands
         ("create-archiver-storage-account", Some(matches)) => {
@@ -674,7 +674,9 @@ pub fn parse_command(
         ("claim-storage-reward", Some(matches)) => {
             parse_storage_claim_reward(matches, default_signer_path, wallet_manager)
         }
-        ("storage-account", Some(matches)) => parse_storage_get_account_command(matches),
+        ("storage-account", Some(matches)) => {
+            parse_storage_get_account_command(matches, wallet_manager)
+        }
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => {
@@ -702,7 +704,7 @@ pub fn parse_command(
             wallet_manager,
             VoteAuthorize::Withdrawer,
         ),
-        ("vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
             parse_withdraw_from_vote_account(matches, default_signer_path, wallet_manager)
         }
@@ -738,7 +740,7 @@ pub fn parse_command(
             } else {
                 None
             };
-            let pubkey = pubkey_of(matches, "to");
+            let pubkey = pubkey_of_signer(matches, "to", wallet_manager)?;
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -761,7 +763,7 @@ pub fn parse_command(
             })
         }
         ("balance", Some(matches)) => {
-            let pubkey = pubkey_of(matches, "pubkey");
+            let pubkey = pubkey_of_signer(matches, "pubkey", wallet_manager)?;
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -802,7 +804,7 @@ pub fn parse_command(
         },
         ("pay", Some(matches)) => {
             let lamports = lamports_of_sol(matches, "amount").unwrap();
-            let to = pubkey_of(matches, "to").unwrap();
+            let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
                 let date_string = if !matches.value_of("timestamp").unwrap().contains('Z') {
@@ -819,7 +821,7 @@ pub fn parse_command(
             let cancelable = matches.is_present("cancelable");
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
-            let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+            let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
             let (nonce_authority, nonce_authority_pubkey) =
                 signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
@@ -852,7 +854,8 @@ pub fn parse_command(
             })
         }
         ("account", Some(matches)) => {
-            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
+            let account_pubkey =
+                pubkey_of_signer(matches, "account_pubkey", wallet_manager)?.unwrap();
             let output_file = matches.value_of("output_file");
             let use_lamports_unit = matches.is_present("lamports");
             Ok(CliCommandInfo {
@@ -907,10 +910,10 @@ pub fn parse_command(
         }
         ("transfer", Some(matches)) => {
             let lamports = lamports_of_sol(matches, "amount").unwrap();
-            let to = pubkey_of(matches, "to").unwrap();
+            let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
-            let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+            let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
             let (nonce_authority, nonce_authority_pubkey) =
                 signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
             let (fee_payer, fee_payer_pubkey) =
@@ -2249,7 +2252,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(2)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("The pubkey of airdrop recipient"),
                 ),
         )
@@ -2261,7 +2264,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The public key of the balance to check"),
                 )
                 .arg(
@@ -2324,7 +2327,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(false)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("From (base) key, [default: cli config keypair]"),
                 ),
         )
@@ -2349,7 +2352,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -2467,7 +2470,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -2502,7 +2505,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Account pubkey"),
                 )
                 .arg(

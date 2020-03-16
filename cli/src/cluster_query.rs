@@ -58,7 +58,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .index(1)
                         .takes_value(true)
                         .value_name("PUBKEY")
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .required(true)
                         .help("Identity pubkey of the validator"),
                 )
@@ -224,7 +224,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .value_name("VOTE ACCOUNT PUBKEYS")
                         .takes_value(true)
                         .multiple(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Only show stake accounts delegated to the provided vote accounts"),
                 )
                 .arg(
@@ -256,8 +256,11 @@ impl ClusterQuerySubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_catchup(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
+pub fn parse_catchup(
+    matches: &ArgMatches<'_>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?.unwrap();
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
     Ok(CliCommandInfo {
         command: CliCommand::Catchup {
@@ -359,9 +362,13 @@ pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliComman
     })
 }
 
-pub fn parse_show_stakes(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_show_stakes(
+    matches: &ArgMatches<'_>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
-    let vote_account_pubkeys = pubkeys_of(matches, "vote_account_pubkeys");
+    let vote_account_pubkeys =
+        pubkeys_of_multiple_signers(matches, "vote_account_pubkeys", wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::ShowStakes {

@@ -93,7 +93,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("custodian")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Identity of the custodian (can withdraw before lockup expires)")
                 )
                 .arg(
@@ -123,7 +123,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long(STAKE_AUTHORITY_ARG.long)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help(STAKE_AUTHORITY_ARG.help)
                 )
                 .arg(
@@ -131,7 +131,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long(WITHDRAW_AUTHORITY_ARG.long)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help(WITHDRAW_AUTHORITY_ARG.help)
                 )
                 .arg(
@@ -163,7 +163,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Stake account to delegate")
                 )
                 .arg(
@@ -172,7 +172,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("The vote account to which the stake will be delegated")
                 )
                 .arg(stake_authority_arg())
@@ -190,7 +190,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Stake account in which to set the authorized staker")
                 )
                 .arg(
@@ -199,7 +199,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("New authorized staker")
                 )
                 .arg(stake_authority_arg())
@@ -217,7 +217,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Stake account in which to set the authorized withdrawer")
                 )
                 .arg(
@@ -226,7 +226,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("New authorized withdrawer")
                 )
                 .arg(withdraw_authority_arg())
@@ -244,6 +244,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_valid_pubkey)
                         .help("Stake account to be deactivated.")
                 )
                 .arg(stake_authority_arg())
@@ -261,6 +262,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_valid_pubkey)
                         .help("Stake account to be split")
                 )
                 .arg(
@@ -303,7 +305,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Stake account from which to withdraw")
                 )
                 .arg(
@@ -312,7 +314,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("The account to which the SOL should be transferred")
                 )
                 .arg(
@@ -339,7 +341,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Stake account for which to set Lockup")
                 )
                 .arg(
@@ -362,7 +364,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("new-custodian")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Identity of the new lockup custodian (can withdraw before lockup expires)")
                 )
                 .group(ArgGroup::with_name("lockup_details")
@@ -391,7 +393,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Address of the stake account to display")
                 )
                 .arg(
@@ -423,13 +425,13 @@ pub fn parse_stake_create_account(
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
-    let custodian = pubkey_of(matches, "custodian").unwrap_or_default();
-    let staker = pubkey_of(matches, STAKE_AUTHORITY_ARG.name);
-    let withdrawer = pubkey_of(matches, WITHDRAW_AUTHORITY_ARG.name);
+    let custodian = pubkey_of_signer(matches, "custodian", wallet_manager)?.unwrap_or_default();
+    let staker = pubkey_of_signer(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
+    let withdrawer = pubkey_of_signer(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
@@ -472,8 +474,10 @@ pub fn parse_stake_delegate_stake(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let vote_account_pubkey = pubkey_of(matches, "vote_account_pubkey").unwrap();
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
+    let vote_account_pubkey =
+        pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let force = matches.is_present("force");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
@@ -513,8 +517,10 @@ pub fn parse_stake_authorize(
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
     stake_authorize: StakeAuthorize,
 ) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let new_authorized_pubkey = pubkey_of(matches, "authorized_pubkey").unwrap();
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
+    let new_authorized_pubkey =
+        pubkey_of_signer(matches, "authorized_pubkey", wallet_manager)?.unwrap();
     let authority_flag = match stake_authorize {
         StakeAuthorize::Staker => STAKE_AUTHORITY_ARG.name,
         StakeAuthorize::Withdrawer => WITHDRAW_AUTHORITY_ARG.name,
@@ -555,7 +561,8 @@ pub fn parse_split_stake(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let (split_stake_account, split_stake_account_pubkey) =
         signer_of(matches, "split_stake_account", wallet_manager)?;
     let lamports = lamports_of_sol(matches, "amount").unwrap();
@@ -599,7 +606,8 @@ pub fn parse_stake_deactivate_stake(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
@@ -635,8 +643,10 @@ pub fn parse_stake_withdraw_stake(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
-    let destination_account_pubkey = pubkey_of(matches, "destination_account_pubkey").unwrap();
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
+    let destination_account_pubkey =
+        pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
@@ -675,10 +685,11 @@ pub fn parse_stake_set_lockup(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let epoch = value_of(matches, "lockup_epoch");
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date");
-    let new_custodian = pubkey_of(matches, "new_custodian");
+    let new_custodian = pubkey_of_signer(matches, "new_custodian", wallet_manager)?;
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
@@ -715,8 +726,12 @@ pub fn parse_stake_set_lockup(
     })
 }
 
-pub fn parse_show_stake_account(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let stake_account_pubkey = pubkey_of(matches, "stake_account_pubkey").unwrap();
+pub fn parse_show_stake_account(
+    matches: &ArgMatches<'_>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let stake_account_pubkey =
+        pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
     Ok(CliCommandInfo {
         command: CliCommand::ShowStakeAccount {
