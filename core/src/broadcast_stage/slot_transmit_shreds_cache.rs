@@ -14,6 +14,11 @@ pub struct SlotCachedTransmitShreds {
 
 impl SlotCachedTransmitShreds {
     pub fn contains_last_shreds(&self) -> bool {
+        let x = self.last_data_shred().map(|shred| shred.last_in_slot());
+        let y = self
+            .last_coding_shred()
+            .map(|shred| shred.is_last_coding_in_set());
+        println!("x: {:?}, y: {:?}", x, y);
         self.last_data_shred()
             .map(|shred| shred.last_in_slot())
             .unwrap_or(false)
@@ -61,15 +66,6 @@ impl SlotTransmitShredsCache {
             insertion_order: VecDeque::with_capacity(capacity),
             capacity,
         }
-    }
-
-    pub fn remove_slot(&mut self, slot: Slot) -> Option<SlotCachedTransmitShreds> {
-        self.insertion_order.retain(|x| *x != slot);
-        self.cache.remove(&slot)
-    }
-
-    pub fn contains_slot(&self, slot: Slot) -> bool {
-        self.cache.contains_key(&slot)
     }
 
     pub fn push(&mut self, slot: Slot, transmit_shreds: TransmitShreds) {
@@ -184,21 +180,33 @@ impl SlotTransmitShredsCache {
         updates
             .into_iter()
             .map(|(slot, stakes, new_data_shreds, new_coding_shreds)| {
-                let data_transmit_shreds = (stakes.clone(), new_data_shreds.clone());
-                let coding_transmit_shreds = (stakes.clone(), new_coding_shreds.clone());
-
-                // Add the data shreds to the cache
-                self.push(slot, data_transmit_shreds);
-
-                // Add the coding shreds to the cache
-                self.push(slot, coding_transmit_shreds);
+                let data_shred_batches = {
+                    if !new_data_shreds.is_empty() {
+                        let data_transmit_shreds = (stakes.clone(), new_data_shreds.clone());
+                        // Add the data shreds to the cache
+                        self.push(slot, data_transmit_shreds);
+                        vec![new_data_shreds]
+                    } else {
+                        vec![]
+                    }
+                };
+                let coding_shred_batches = {
+                    if !new_coding_shreds.is_empty() {
+                        let coding_transmit_shreds = (stakes.clone(), new_coding_shreds.clone());
+                        // Add the coding shreds to the cache
+                        self.push(slot, coding_transmit_shreds);
+                        vec![new_coding_shreds]
+                    } else {
+                        vec![]
+                    }
+                };
 
                 (
                     slot,
                     SlotCachedTransmitShreds {
                         stakes,
-                        data_shred_batches: vec![new_data_shreds],
-                        coding_shred_batches: vec![new_coding_shreds],
+                        data_shred_batches,
+                        coding_shred_batches,
                     },
                 )
             })

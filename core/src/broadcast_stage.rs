@@ -274,7 +274,7 @@ impl BroadcastStage {
         let blockstore = blockstore.clone();
         let retransmit_thread = Builder::new()
             .name("solana-broadcaster-retransmit".to_string())
-            .spawn(move || loop {
+            .spawn(move || {
                 // Cache of most recently transmitted MAX_UNCONFIRMED_SLOTS number of
                 // leader blocks
                 let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
@@ -284,46 +284,17 @@ impl BroadcastStage {
                 // arbitrary latency between the broadcast thread and the thread
                 // writing to blockstore.
                 let mut unfinished_retransmit_slots = HashSet::new();
-                let mut updates = HashMap::new();
-
-                // Update the cache with the newest shreds
-                let res = Self::handle_error(
-                    transmit_shreds_cache
-                        .update_retransmit_cache(&retransmit_cache_receiver, &mut updates),
-                    "solana-broadcaster-retransmit-update_retransmit_cache",
-                );
-                if let Some(res) = res {
-                    return res;
-                }
-
-                // Retry any unfinished retransmits
-                let res = Self::handle_error(
-                    Self::retry_unfinished_retransmit_slots(
+                loop {
+                    if let Some(res) = Self::run_retransmit(
                         &blockstore,
-                        updates,
                         &mut transmit_shreds_cache,
                         &mut unfinished_retransmit_slots,
-                        &socket_sender,
-                    ),
-                    "solana-broadcaster-retransmit-retry_unfinished_retransmit_slots",
-                );
-                if let Some(res) = res {
-                    return res;
-                }
-
-                // Check for new retransmit signals from ReplayStage
-                let res = Self::handle_error(
-                    Self::check_retransmit_signals(
-                        &mut transmit_shreds_cache,
-                        &mut unfinished_retransmit_slots,
-                        &blockstore,
+                        &retransmit_cache_receiver,
                         &retransmit_slots_receiver,
                         &socket_sender,
-                    ),
-                    "solana-broadcaster-retransmit-check_retransmit_signals",
-                );
-                if let Some(res) = res {
-                    return res;
+                    ) {
+                        return res;
+                    }
                 }
             })
             .unwrap();
@@ -332,14 +303,67 @@ impl BroadcastStage {
         Self { thread_hdls }
     }
 
-    pub fn retry_unfinished_retransmit_slots(
+    fn run_retransmit(
+        blockstore: &Blockstore,
+        transmit_shreds_cache: &mut SlotTransmitShredsCache,
+        unfinished_retransmit_slots: &mut HashSet<Slot>,
+        retransmit_cache_receiver: &RetransmitCacheReceiver,
+        retransmit_slots_receiver: &RetransmitSlotsReceiver,
+        socket_sender: &Sender<TransmitShreds>,
+    ) -> Option<BroadcastStageReturnType> {
+        let mut new_updates = HashMap::new();
+        // Update the cache with the newest shreds
+        let res = Self::handle_error(
+            transmit_shreds_cache
+                .update_retransmit_cache(retransmit_cache_receiver, &mut new_updates),
+            "solana-broadcaster-retransmit-update_retransmit_cache",
+        );
+
+        if res.is_some() {
+            return res;
+        }
+
+        // Retry any unfinished retransmits
+        let res = Self::handle_error(
+            Self::retry_unfinished_retransmit_slots(
+                blockstore,
+                new_updates,
+                transmit_shreds_cache,
+                unfinished_retransmit_slots,
+                socket_sender,
+            ),
+            "solana-broadcaster-retransmit-retry_unfinished_retransmit_slots",
+        );
+        if res.is_some() {
+            return res;
+        }
+
+        // Check for new retransmit signals from ReplayStage
+        let res = Self::handle_error(
+            Self::check_retransmit_signals(
+                transmit_shreds_cache,
+                unfinished_retransmit_slots,
+                blockstore,
+                retransmit_slots_receiver,
+                socket_sender,
+            ),
+            "solana-broadcaster-retransmit-check_retransmit_signals",
+        );
+        if res.is_some() {
+            return res;
+        }
+
+        None
+    }
+
+    fn retry_unfinished_retransmit_slots(
         blockstore: &Blockstore,
         updates: HashMap<Slot, Vec<TransmitShreds>>,
         transmit_shreds_cache: &mut SlotTransmitShredsCache,
         unfinished_retransmit_slots: &mut HashSet<Slot>,
         socket_sender: &Sender<TransmitShreds>,
     ) -> Result<()> {
-        for (updated_slot, all_transmit_shreds) in updates {
+        for (updated_slot, all_data_transmit_shreds) in updates {
             // If there's been no signal to retransmit this slot,
             // then continue
             if !unfinished_retransmit_slots.contains(&updated_slot) {
@@ -351,16 +375,18 @@ impl BroadcastStage {
             // so remove it from the `unfinished_retransmit_slots` set
             let slot_cached_shreds = transmit_shreds_cache.get(updated_slot);
             if slot_cached_shreds.is_none() {
+                println!("aborting");
                 unfinished_retransmit_slots.remove(&updated_slot);
                 continue;
             }
 
             let slot_cached_shreds = slot_cached_shreds.unwrap();
-            for transmit_shreds in all_transmit_shreds {
+            println!("len: {}", all_data_transmit_shreds.len());
+            for transmit_shreds in all_data_transmit_shreds {
                 if transmit_shreds.1.is_empty() {
                     continue;
                 }
-
+                println!("Sending");
                 socket_sender.send(transmit_shreds)?;
             }
 
@@ -382,12 +408,16 @@ impl BroadcastStage {
             // If we got all the shreds, remove this slot's entries
             // from `unfinished_retransmit_slots`, as we now have all
             // the shreds needed for retransmit
-            if cached_updates.contains_last_shreds() {
+            if transmit_shreds_cache
+                .get(slot)
+                .map(|cache_entry| cache_entry.contains_last_shreds())
+                .unwrap_or(false)
+            {
                 unfinished_retransmit_slots.remove(&slot);
             }
-            let all_transmit_shreds = cached_updates.to_transmit_shreds();
+            let all_data_transmit_shreds = cached_updates.to_transmit_shreds();
 
-            for transmit_shreds in all_transmit_shreds {
+            for transmit_shreds in all_data_transmit_shreds {
                 socket_sender.send(transmit_shreds)?;
             }
         }
@@ -395,7 +425,7 @@ impl BroadcastStage {
         Ok(())
     }
 
-    pub fn check_retransmit_signals(
+    fn check_retransmit_signals(
         transmit_shreds_cache: &mut SlotTransmitShredsCache,
         unfinished_retransmit_slots: &mut HashSet<Slot>,
         blockstore: &Blockstore,
@@ -413,9 +443,9 @@ impl BroadcastStage {
         for (_, bank) in retransmit_slots.iter() {
             unfinished_retransmit_slots.remove(&bank.slot());
             let cached_shreds = transmit_shreds_cache.get_or_update(bank, blockstore);
-            let all_transmit_shreds = cached_shreds.to_transmit_shreds();
-            for transmit_shreds in all_transmit_shreds {
-                // If the cached shreds are misssing any shreds (broadcast
+            let all_data_transmit_shreds = cached_shreds.to_transmit_shreds();
+            for transmit_shreds in all_data_transmit_shreds {
+                // If the cached shreds are missing any shreds (broadcast
                 // hasn't written them to blockstore yet), addd this slot
                 // to the `unfinished_retransmit_slots` so we can retry broadcasting
                 // the missing shreds later.
@@ -448,7 +478,7 @@ mod test {
         blockstore::{make_slot_entries, Blockstore},
         entry::create_ticks,
         get_tmp_ledger_path,
-        shred::max_ticks_per_n_shreds,
+        shred::{max_ticks_per_n_shreds, Shredder, RECOMMENDED_FEC_RATE},
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::{
@@ -464,17 +494,463 @@ mod test {
         thread::sleep,
     };
 
-    fn make_transmit_shreds() -> (Vec<Shred>, Vec<TransmitShreds>) {
-        let num_shreds = 10;
-        let num_entries = max_ticks_per_n_shreds(num_shreds);
-        let (shreds, _) = make_slot_entries(0, 0, num_entries);
+    fn make_transmit_shreds(
+        slot: Slot,
+        num: u64,
+    ) -> (
+        Vec<Shred>,
+        Vec<Shred>,
+        Vec<TransmitShreds>,
+        Vec<TransmitShreds>,
+    ) {
+        let num_entries = max_ticks_per_n_shreds(num);
+        let (data_shreds, _) = make_slot_entries(slot, 0, num_entries);
+        let keypair = Arc::new(Keypair::new());
+        let shredder = Shredder::new(slot, 0, RECOMMENDED_FEC_RATE, keypair, 0, 0)
+            .expect("Expected to create a new shredder");
+
+        let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..]);
         (
-            shreds.clone(),
-            shreds
+            data_shreds.clone(),
+            coding_shreds.clone(),
+            data_shreds
+                .into_iter()
+                .map(|s| (None, Arc::new(vec![s])))
+                .collect(),
+            coding_shreds
                 .into_iter()
                 .map(|s| (None, Arc::new(vec![s])))
                 .collect(),
         )
+    }
+
+    fn check_all_shreds_received(
+        transmit_receiver: &Receiver<TransmitShreds>,
+        mut data_index: u64,
+        mut coding_index: u64,
+        num_expected_data_shreds: u64,
+        num_expected_coding_shreds: u64,
+    ) {
+        while let Ok(new_retransmit_slots) = transmit_receiver.try_recv() {
+            if new_retransmit_slots.1[0].is_data() {
+                for data_shred in new_retransmit_slots.1.iter() {
+                    assert_eq!(data_shred.index() as u64, data_index);
+                    data_index += 1;
+                }
+            } else {
+                assert_eq!(new_retransmit_slots.1[0].index() as u64, coding_index);
+                for coding_shred in new_retransmit_slots.1.iter() {
+                    assert_eq!(coding_shred.index() as u64, coding_index);
+                    coding_index += 1;
+                }
+            }
+        }
+
+        assert_eq!(num_expected_data_shreds, data_index);
+        assert_eq!(num_expected_coding_shreds, coding_index);
+    }
+
+    #[test]
+    fn test_all_updated() {
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+        let mut unfinished_retransmit_slots = HashSet::new();
+        let (transmit_sender, transmit_receiver) = channel();
+        let (retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Make some shreds
+        let updated_slot = 0;
+        let (
+            all_data_shreds,
+            all_coding_shreds,
+            all_data_transmit_shreds,
+            all_coding_transmit_shreds,
+        ) = make_transmit_shreds(updated_slot, 10);
+        let num_data_shreds = all_data_shreds.len();
+        let num_coding_shreds = all_coding_shreds.len();
+        assert!(num_data_shreds >= 10);
+
+        // Insert all the shreds
+        blockstore
+            .insert_shreds(all_data_shreds, None, true)
+            .unwrap();
+        blockstore
+            .insert_shreds(all_coding_shreds, None, true)
+            .unwrap();
+        for data_transmit_shred in all_data_transmit_shreds {
+            retransmit_cache_sender
+                .send((updated_slot, data_transmit_shred))
+                .unwrap();
+        }
+        for data_transmit_shred in all_coding_transmit_shreds {
+            retransmit_cache_sender
+                .send((updated_slot, data_transmit_shred))
+                .unwrap();
+        }
+
+        // Signal for retransmit
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+        check_all_shreds_received(
+            &transmit_receiver,
+            0,
+            0,
+            num_data_shreds as u64,
+            num_coding_shreds as u64,
+        );
+    }
+
+    #[test]
+    fn test_duplicate_retransmit_signal() {
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+        let mut unfinished_retransmit_slots = HashSet::new();
+        let (transmit_sender, transmit_receiver) = channel();
+        let (_retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Make some shreds
+        let updated_slot = 0;
+        let (all_data_shreds, all_coding_shreds, _, _all_coding_transmit_shreds) =
+            make_transmit_shreds(updated_slot, 10);
+        let num_data_shreds = all_data_shreds.len();
+        let num_coding_shreds = all_coding_shreds.len();
+        assert!(num_data_shreds >= 10);
+
+        // Insert all the shreds
+        blockstore
+            .insert_shreds(all_data_shreds, None, true)
+            .unwrap();
+        blockstore
+            .insert_shreds(all_coding_shreds, None, true)
+            .unwrap();
+
+        // Insert duplicate retransmit signal, blocks should
+        // only be retransmitted once
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+        // Check all the data shreds were received only once
+        check_all_shreds_received(
+            &transmit_receiver,
+            0,
+            0,
+            num_data_shreds as u64,
+            num_coding_shreds as u64,
+        );
+    }
+
+    #[test]
+    fn test_run_retransmit_blockstore_updates() {
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+        let mut unfinished_retransmit_slots = HashSet::new();
+        let (transmit_sender, transmit_receiver) = channel();
+        let (_retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Make some shreds
+        let updated_slot = 0;
+        let (all_data_shreds, all_coding_shreds, _, _all_coding_transmit_shreds) =
+            make_transmit_shreds(updated_slot, 10);
+        let num_data_shreds = all_data_shreds.len();
+        let num_coding_shreds = all_coding_shreds.len();
+        assert!(num_data_shreds >= 10);
+
+        // Write the data shreds to blockstore for slot 10, and then a retransmit signal
+        // for slot `updated_slot`. The cache should attempt to fill from blockstore, and find it's
+        // missing the coding shreds, so `unfinished_retransmit_slots` should contain `updated_slot`.
+        blockstore
+            .insert_shreds(all_data_shreds, None, true)
+            .unwrap();
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+        assert!(unfinished_retransmit_slots.contains(&updated_slot));
+        // Check all the data shreds were received
+        check_all_shreds_received(&transmit_receiver, 0, 0, num_data_shreds as u64, 0);
+
+        // Now write all missing coding shreds to blockstore, the updates should
+        // be picked up and broadcasted, the `updated_slot` should be removed
+        // from `unfinished_retransmit_slots`
+        blockstore
+            .insert_shreds(all_coding_shreds, None, true)
+            .unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+
+        assert!(unfinished_retransmit_slots.is_empty());
+        // Check all the coding shreds were received
+        check_all_shreds_received(
+            &transmit_receiver,
+            num_data_shreds as u64,
+            0,
+            num_data_shreds as u64,
+            num_coding_shreds as u64,
+        );
+    }
+
+    #[test]
+    fn test_interleaved_blockstore_updates() {
+        struct BankShreds {
+            bank: Arc<Bank>,
+            data_shreds: Vec<Shred>,
+            coding_shreds: Vec<Shred>,
+            data_transmit_shreds: Vec<TransmitShreds>,
+            coding_transmit_shreds: Vec<TransmitShreds>,
+        }
+
+        impl BankShreds {
+            fn new(bank: Arc<Bank>) -> Self {
+                let (data_shreds, coding_shreds, data_transmit_shreds, coding_transmit_shreds) =
+                    make_transmit_shreds(bank.slot(), 10);
+
+                BankShreds {
+                    bank,
+                    data_shreds,
+                    data_transmit_shreds,
+                    coding_shreds,
+                    coding_transmit_shreds,
+                }
+            }
+        }
+
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+        let mut unfinished_retransmit_slots = HashSet::new();
+        let (transmit_sender, transmit_receiver) = channel();
+        let (retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+
+        // Make 1 more block than the `transmit_shreds_cache` can hold
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let mut banks_and_shreds = HashMap::new();
+        banks_and_shreds.insert(0, BankShreds::new(bank0.clone()));
+        (1..=MAX_UNCONFIRMED_SLOTS as u64).fold(bank0, |last_bank, slot| {
+            let new_bank = Arc::new(Bank::new_from_parent(&last_bank, &Pubkey::default(), slot));
+            banks_and_shreds.insert(slot, BankShreds::new(new_bank.clone()));
+            new_bank
+        });
+
+        // Push and process some partial updates from broadcast for slot 0
+        for data_transmit_shred in
+            banks_and_shreds.get(&0).unwrap().data_transmit_shreds[0..5].iter()
+        {
+            retransmit_cache_sender
+                .send((0, data_transmit_shred.clone()))
+                .unwrap();
+        }
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+        assert!(transmit_shreds_cache.get(0).is_some());
+
+        // Simulate retransmit signals from ReplayStage for all slots between
+        // 1..=MAX_UNCONFIRMED_SLOTS, should remove slot 0 from the cache
+        let retransmit_signals: HashMap<Slot, Arc<Bank>> = (1..=MAX_UNCONFIRMED_SLOTS as u64)
+            .map(|slot| (slot, banks_and_shreds.get(&slot).unwrap().bank.clone()))
+            .collect();
+        retransmit_slots_sender.send(retransmit_signals).unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+        assert!(transmit_shreds_cache.get(0).is_none());
+
+        // Now broadcast pushes the rest of the updates for slot 0, and push a
+        // retransmit signal for slot 0
+        for data_transmit_shred in
+            banks_and_shreds.get(&0).unwrap().data_transmit_shreds[5..].iter()
+        {
+            retransmit_cache_sender
+                .send((0, data_transmit_shred.clone()))
+                .unwrap();
+        }
+        retransmit_slots_sender
+            .send(
+                vec![(0, banks_and_shreds.get(&0).unwrap().bank.clone())]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+
+        // Now write updates for slot 0 to blockstore, should send retransmits
+        // for entire slot, should not be missing any shreds
+        let data_shreds = banks_and_shreds.get(&0).unwrap().data_shreds.clone();
+        let coding_shreds = banks_and_shreds.get(&0).unwrap().coding_shreds.clone();
+        let num_data_shreds = data_shreds.len();
+        let num_coding_shreds = coding_shreds.len();
+        blockstore.insert_shreds(data_shreds, None, true).unwrap();
+        blockstore.insert_shreds(coding_shreds, None, true).unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+
+        check_all_shreds_received(
+            &transmit_receiver,
+            0,
+            0,
+            num_data_shreds as u64,
+            num_coding_shreds as u64,
+        );
+    }
+
+    #[test]
+    fn test_run_retransmit_updates() {
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+        let mut unfinished_retransmit_slots = HashSet::new();
+        let (transmit_sender, transmit_receiver) = channel();
+        let (retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Make some shreds
+        let updated_slot = 0;
+        let (
+            all_data_shreds,
+            all_coding_shreds,
+            all_data_transmit_shreds,
+            all_coding_transmit_shreds,
+        ) = make_transmit_shreds(updated_slot, 10);
+        let num_data_shreds = all_data_shreds.len();
+        let num_coding_shreds = all_coding_shreds.len();
+        assert!(num_data_shreds >= 10);
+
+        // Send all the data shreds for slot `updated_slot`, and then a retransmit signal
+        // for slot `updated_slot`. The cache for slot `updated_slot` is missing coding shreds so the
+        // `unfinished_retransmit_slots` should contain slot `updated_slot`
+        for data_transmit_shred in all_data_transmit_shreds {
+            retransmit_cache_sender
+                .send((updated_slot, data_transmit_shred))
+                .unwrap();
+        }
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+
+        assert!(unfinished_retransmit_slots.contains(&updated_slot));
+
+        // Now send all missing coding shreds so the `unfinished_retransmit_slots`
+        // should now be empty
+        for code_transmit_shred in all_coding_transmit_shreds {
+            retransmit_cache_sender
+                .send((updated_slot, code_transmit_shred))
+                .unwrap();
+        }
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+
+        assert!(unfinished_retransmit_slots.is_empty());
+        check_all_shreds_received(
+            &transmit_receiver,
+            0,
+            0,
+            num_data_shreds as u64,
+            num_coding_shreds as u64,
+        );
     }
 
     #[test]
@@ -486,11 +962,18 @@ mod test {
         let (transmit_sender, transmit_receiver) = channel();
 
         // Make some updates
-        let (all_shreds, all_transmit_shreds) = make_transmit_shreds();
-        let mut updates = HashMap::new();
         let updated_slot = 1;
-        let num_shreds = all_shreds.len() as u64;
-        updates.insert(updated_slot, all_transmit_shreds.clone());
+        let (
+            all_data_shreds,
+            all_coding_shreds,
+            all_data_transmit_shreds,
+            all_coding_transmit_shreds,
+        ) = make_transmit_shreds(updated_slot, 10);
+        let mut updates = HashMap::new();
+        let num_data_shreds = all_data_shreds.len() as u64;
+        let num_coding_shreds = all_coding_shreds.len() as u64;
+        assert!(num_data_shreds >= 10);
+        updates.insert(updated_slot, all_data_transmit_shreds.clone());
 
         // `unfinished_retransmit_slots` is empty, so there should be nothing sent, even
         // if there were updates
@@ -505,9 +988,10 @@ mod test {
         .unwrap();
         assert!(transmit_receiver.try_recv().is_err());
 
-        // `unfinished_retransmit_slots` contains the slot that wass updated,
+        // `unfinished_retransmit_slots` contains the slot that was updated,
         // but `transmit_shreds_cache` doesn't have that slot (implies outdated slot),
-        // so no updates will be sent
+        // so no updates will be sent, and the outdated slot should be removed from
+        // `unfinished_retransmit_slots`
         unfinished_retransmit_slots.insert(updated_slot);
         BroadcastStage::retry_unfinished_retransmit_slots(
             &blockstore,
@@ -518,10 +1002,15 @@ mod test {
         )
         .unwrap();
         assert!(transmit_receiver.try_recv().is_err());
+        assert!(unfinished_retransmit_slots.is_empty());
 
         // Now `transmit_shreds_cache` contains the slot that was updated,
-        // so all updates should be sent
-        for transmit_shreds in all_transmit_shreds {
+        // so any updates passed in should be sent. For now, only
+        // pass in the data shreds. This means all the updates for the slot
+        // were not yet received (missing coding shreds), so the slot should
+        // not be purged from `unfinished_retransmit_slots`
+        unfinished_retransmit_slots.insert(updated_slot);
+        for transmit_shreds in all_data_transmit_shreds.into_iter() {
             transmit_shreds_cache.push(updated_slot, transmit_shreds);
         }
         BroadcastStage::retry_unfinished_retransmit_slots(
@@ -532,16 +1021,34 @@ mod test {
             &transmit_sender,
         )
         .unwrap();
-        let mut index = 0;
-        while let Ok(new_retransmit_slots) = transmit_receiver.try_recv() {
-            assert_eq!(new_retransmit_slots.1[0].index(), index);
-            index += 1;
+        check_all_shreds_received(&transmit_receiver, 0, 0, num_data_shreds, 0);
+        assert!(unfinished_retransmit_slots.contains(&updated_slot));
+
+        // Now push the coding shreds into the cache.
+        // All the updates for the slot have now been received,
+        // so the slot should be purged from `unfinished_retransmit_slots`
+        for transmit_shreds in all_coding_transmit_shreds.into_iter() {
+            transmit_shreds_cache.push(updated_slot, transmit_shreds);
         }
-        assert_eq!(index as u64, num_shreds - 1);
+        BroadcastStage::retry_unfinished_retransmit_slots(
+            &blockstore,
+            updates.clone(),
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &transmit_sender,
+        )
+        .unwrap();
+        check_all_shreds_received(
+            &transmit_receiver,
+            num_data_shreds,
+            0,
+            num_data_shreds,
+            num_coding_shreds,
+        );
+        assert!(unfinished_retransmit_slots.is_empty());
 
         // If `unfinished_retransmit_slots` is non-empty but doesn't contain the slot to
         // be updated, should get no updates
-        unfinished_retransmit_slots.remove(&updated_slot);
         unfinished_retransmit_slots.insert(updated_slot + 1);
         BroadcastStage::retry_unfinished_retransmit_slots(
             &blockstore,
@@ -554,62 +1061,59 @@ mod test {
         assert!(transmit_receiver.try_recv().is_err());
     }
 
-    /*#[test]
+    #[test]
     fn test_retry_unfinished_retransmit_slots_with_blockstore_updates() {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
         let (transmit_sender, transmit_receiver) = channel();
 
         // Make some updates
-        let (all_shreds, all_transmit_shreds) = make_transmit_shreds();
-        let mut updates = HashMap::new();
+        let updated_slot = 1;
+        let (all_data_shreds, all_coding_shreds, all_data_transmit_shreds, _) =
+            make_transmit_shreds(updated_slot, 10);
+        let num_data_shreds = all_data_shreds.len() as u64;
+        assert!(num_data_shreds >= 10);
+        let num_coding_shreds = all_coding_shreds.len() as u64;
 
-        // `unfinished_retransmit_slots` is empty, so there should be nothing sent, even
-        // if there were updates
         let mut unfinished_retransmit_slots = HashSet::new();
-        BroadcastStage::retry_unfinished_retransmit_slots(
-            &blockstore,
-            updates.clone(),
-            &mut transmit_shreds_cache,
-            &mut unfinished_retransmit_slots,
-            &transmit_sender,
-        ).unwrap();
-        assert!(transmit_receiver.try_recv().is_err());
-
-        // `unfinished_retransmit_slots` contains the slot that wass updated,
-        // but `transmit_shreds_cache` doesn't have that slot (implies outdated slot),
-        // so no updates will be sent
         unfinished_retransmit_slots.insert(updated_slot);
-        BroadcastStage::retry_unfinished_retransmit_slots(
-            &blockstore,
-            updates.clone(),
-            &mut transmit_shreds_cache,
-            &mut unfinished_retransmit_slots,
-            &transmit_sender,
-        ).unwrap();
-        assert!(transmit_receiver.try_recv().is_err());
+        // `transmit_shreds_cache` contains the first shred, but is
+        // missing the rest
+        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+        transmit_shreds_cache.push(updated_slot, all_data_transmit_shreds[0].clone());
 
-        // Now `transmit_shreds_cache` contains the slot that was updated,
-        // so all updates should be sent
-        for transmit_shreds in all_transmit_shreds {
-            transmit_shreds_cache.push(updated_slot, transmit_shreds);
-        }
+        // Write all the shreds to blockstore
+        blockstore
+            .insert_shreds(all_data_shreds, None, true)
+            .unwrap();
+        blockstore
+            .insert_shreds(all_coding_shreds, None, true)
+            .unwrap();
+
+        // Now even though there are no updates passed in, the slot should be
+        // updated by the blockstore and those updates sent.
         BroadcastStage::retry_unfinished_retransmit_slots(
             &blockstore,
-            updates.clone(),
+            HashMap::new(),
             &mut transmit_shreds_cache,
             &mut unfinished_retransmit_slots,
             &transmit_sender,
-        ).unwrap();
-        let mut index = 0;
-        while let Ok(new_retransmit_slots) = transmit_receiver.try_recv() {
-            assert_eq!(new_retransmit_slots.1[0].index(), index);
-            index += 1;
-        }
-        assert_eq!(index as u64, num_shreds - 1);
-    }*/
+        )
+        .unwrap();
+
+        // We have the first data shred in the cache already, but everything else
+        // should be sent
+        let start_data_index = 1;
+        let start_coding_index = 0;
+        check_all_shreds_received(
+            &transmit_receiver,
+            start_data_index,
+            start_coding_index,
+            num_data_shreds,
+            num_coding_shreds,
+        );
+    }
 
     struct MockBroadcastStage {
         blockstore: Arc<Blockstore>,
