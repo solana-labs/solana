@@ -14,18 +14,12 @@ pub struct SlotCachedTransmitShreds {
 
 impl SlotCachedTransmitShreds {
     pub fn contains_last_shreds(&self) -> bool {
-        self.data_shred_batches
-            .last()
-            .and_then(|last_shred_batch| last_shred_batch.last().map(|shred| shred.last_in_slot()))
+        self.last_data_shred()
+            .map(|shred| shred.last_in_slot())
             .unwrap_or(false)
             && self
-                .coding_shred_batches
-                .last()
-                .and_then(|last_shred_batch| {
-                    last_shred_batch
-                        .last()
-                        .map(|shred| shred.is_last_coding_in_set())
-                })
+                .last_coding_shred()
+                .map(|shred| shred.is_last_coding_in_set())
                 .unwrap_or(false)
     }
 
@@ -39,6 +33,18 @@ impl SlotCachedTransmitShreds {
                     .map(|code_shred_batch| (self.stakes.clone(), code_shred_batch.clone())),
             )
             .collect()
+    }
+
+    pub fn last_data_shred(&self) -> Option<&Shred> {
+        self.data_shred_batches
+            .last()
+            .and_then(|last_shred_batch| last_shred_batch.last())
+    }
+
+    pub fn last_coding_shred(&self) -> Option<&Shred> {
+        self.coding_shred_batches
+            .last()
+            .and_then(|last_shred_batch| last_shred_batch.last())
     }
 }
 
@@ -142,20 +148,14 @@ impl SlotTransmitShredsCache {
             .filter_map(|(slot, cached_shreds)| {
                 if !cached_shreds.contains_last_shreds() {
                     let last_data_shred_index = cached_shreds
-                        .data_shred_batches
-                        .last()
-                        .and_then(|last_shred_batch| {
-                            last_shred_batch.last().map(|shred| shred.index())
-                        })
-                        .expect("Cache entry cannot be empty (guaranteed by push())");
+                        .last_data_shred()
+                        .expect("Cache entry cannot be empty (guaranteed by push())")
+                        .index();
 
                     let last_coding_shred_index = cached_shreds
-                        .coding_shred_batches
-                        .last()
-                        .and_then(|last_shred_batch| {
-                            last_shred_batch.last().map(|shred| shred.index())
-                        })
-                        .expect("Cache entry cannot be empty (guaranteed by push())");
+                        .last_coding_shred()
+                        .expect("Cache entry cannot be empty (guaranteed by push())")
+                        .index();
 
                     let (new_data_shreds, new_coding_shreds) = self.get_new_shreds_since(
                         blockstore,
@@ -230,11 +230,11 @@ impl SlotTransmitShredsCache {
     pub fn update_retransmit_cache(
         &mut self,
         retransmit_cache_receiver: &RetransmitCacheReceiver,
-        updated_slots: &mut HashSet<Slot>,
+        updates: &mut HashMap<Slot, TransmitShreds>,
     ) -> Result<()> {
         let timer = Duration::from_millis(100);
         let (slot, transmit_shreds) = retransmit_cache_receiver.recv_timeout(timer)?;
-        updated_slots.insert(slot);
+        updated_slots.insert(slot, transmit_shreds.clone());
         // Update the cache with shreds from latest leader slot
         self.push(slot, transmit_shreds);
         while let Ok((slot, transmit_shreds)) = retransmit_cache_receiver.try_recv() {
