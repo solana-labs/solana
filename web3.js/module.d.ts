@@ -6,6 +6,11 @@ declare module '@solana/web3.js' {
   export class PublicKey {
     constructor(value: number | string | Buffer | Uint8Array | Array<number>);
     static isPublicKey(o: object): boolean;
+    static createWithSeed(
+      fromPublicKey: PublicKey,
+      seed: string,
+      programId: PublicKey,
+    ): Promise<PublicKey>;
     equals(publickey: PublicKey): boolean;
     toBase58(): string;
     toBuffer(): Buffer;

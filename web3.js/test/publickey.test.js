@@ -224,42 +224,9 @@ test('equals (II)', () => {
   expect(key1.equals(key2)).toBe(true);
 });
 
-test('createWithSeed', () => {
-  const defaultPublicKey = new PublicKey([
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-  ]);
-  const derivedKey = PublicKey.createWithSeed(
+test('createWithSeed', async () => {
+  const defaultPublicKey = new PublicKey('11111111111111111111111111111111');
+  const derivedKey = await PublicKey.createWithSeed(
     defaultPublicKey,
     'limber chicken: 4/45',
     defaultPublicKey,

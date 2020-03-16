@@ -22,10 +22,10 @@ if (!mockRpcEnabled) {
   jest.setTimeout(30000);
 }
 
-test('createAccountWithSeed', () => {
+test('createAccountWithSeed', async () => {
   const fromPubkey = new Account().publicKey;
   const seed = 'test string';
-  const newAccountPubkey = PublicKey.createWithSeed(
+  const newAccountPubkey = await PublicKey.createWithSeed(
     fromPubkey,
     seed,
     StakeProgram.programId,
@@ -180,10 +180,10 @@ test('deactivate', () => {
   expect(params).toEqual(StakeInstruction.decodeDeactivate(stakeInstruction));
 });
 
-test('StakeInstructions', () => {
+test('StakeInstructions', async () => {
   const from = new Account();
   const seed = 'test string';
-  const newAccountPubkey = PublicKey.createWithSeed(
+  const newAccountPubkey = await PublicKey.createWithSeed(
     from.publicKey,
     seed,
     StakeProgram.programId,
@@ -288,7 +288,7 @@ test('live staking actions', async () => {
 
   // Create Stake account with seed
   const seed = 'test string';
-  const newAccountPubkey = PublicKey.createWithSeed(
+  const newAccountPubkey = await PublicKey.createWithSeed(
     from.publicKey,
     seed,
     StakeProgram.programId,

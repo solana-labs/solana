@@ -20,6 +20,11 @@ declare module '@solana/web3.js' {
       value: number | string | Buffer | Uint8Array | Array<number>,
     ): PublicKey;
     static isPublicKey(o: Object): boolean;
+    static createWithSeed(
+      fromPublicKey: PublicKey,
+      seed: string,
+      programId: PublicKey,
+    ): Promise<PublicKey>;
     equals(publickey: PublicKey): boolean;
     toBase58(): string;
     toBuffer(): Buffer;
