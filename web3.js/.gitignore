@@ -12,10 +12,6 @@ node_modules
 # Coverage
 coverage
 
-# Types
-flow-typed/npm/*
-!flow-typed/npm/module_vx.x.x.js
-
 # Release
 lib
 

@@ -98,6 +98,7 @@ function generateConfig(configType) {
         'bn.js',
         'bs58',
         'buffer-layout',
+        'crypto-hash',
         'jayson/lib/client/browser',
         'node-fetch',
         'rpc-websockets',

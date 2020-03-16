@@ -8,9 +8,7 @@ test('invalid', () => {
 });
 
 test('stable', () => {
-  expect(testnetChannelEndpoint('stable')).toEqual(
-    'https://devnet.solana.com',
-  );
+  expect(testnetChannelEndpoint('stable')).toEqual('https://devnet.solana.com');
 
   expect(testnetChannelEndpoint('stable', true)).toEqual(
     'https://devnet.solana.com',
