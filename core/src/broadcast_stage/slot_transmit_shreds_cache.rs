@@ -111,7 +111,7 @@ impl SlotTransmitShredsCache {
         }
     }
 
-    pub fn get(&mut self, slot: Slot) -> Option<&SlotCachedTransmitShreds> {
+    pub fn get(&self, slot: Slot) -> Option<&SlotCachedTransmitShreds> {
         self.cache.get(&slot)
     }
 
@@ -125,8 +125,7 @@ impl SlotTransmitShredsCache {
             let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
             let stakes = stakes.map(Arc::new);
 
-            let (data_shreds, coding_shreds) =
-                self.get_new_shreds_since(blockstore, bank.slot(), 0, 0);
+            let (data_shreds, coding_shreds) = self.get_new_shreds(blockstore, bank.slot(), 0, 0);
             self.push(bank.slot(), (stakes.clone(), data_shreds));
             self.push(bank.slot(), (stakes, coding_shreds));
             self.cache
@@ -141,36 +140,42 @@ impl SlotTransmitShredsCache {
     pub fn update_cache_from_blockstore(
         &mut self,
         blockstore: &Blockstore,
+        slots_to_update: &HashSet<Slot>,
     ) -> Vec<(Slot, SlotCachedTransmitShreds)> {
-        let updates: Vec<_> = self
-            .cache
+        let updates: Vec<_> = slots_to_update
             .iter()
-            .filter_map(|(slot, cached_shreds)| {
-                if !cached_shreds.contains_last_shreds() {
-                    let last_data_shred_index = cached_shreds
-                        .last_data_shred()
-                        .expect("Cache entry cannot be empty (guaranteed by push())")
-                        .index();
+            .filter_map(|slot| {
+                let cached_shreds = self.get(*slot);
+                if let Some(cached_shreds) = cached_shreds {
+                    if !cached_shreds.contains_last_shreds() {
+                        let last_data_shred_index = cached_shreds
+                            .last_data_shred()
+                            .map(|shred| shred.index() + 1)
+                            .unwrap_or(0);
 
-                    let last_coding_shred_index = cached_shreds
-                        .last_coding_shred()
-                        .expect("Cache entry cannot be empty (guaranteed by push())")
-                        .index();
+                        let last_coding_shred_index = cached_shreds
+                            .last_coding_shred()
+                            .map(|shred| shred.index() + 1)
+                            .unwrap_or(0);
 
-                    let (new_data_shreds, new_coding_shreds) = self.get_new_shreds_since(
-                        blockstore,
-                        *slot,
-                        last_data_shred_index as u64,
-                        last_coding_shred_index as u64,
-                    );
+                        let (new_data_shreds, new_coding_shreds) = self.get_new_shreds(
+                            blockstore,
+                            *slot,
+                            last_data_shred_index as u64,
+                            last_coding_shred_index as u64,
+                        );
 
-                    Some((
-                        *slot,
-                        cached_shreds.stakes.clone(),
-                        new_data_shreds,
-                        new_coding_shreds,
-                    ))
+                        Some((
+                            *slot,
+                            cached_shreds.stakes.clone(),
+                            new_data_shreds,
+                            new_coding_shreds,
+                        ))
+                    } else {
+                        None
+                    }
                 } else {
+                    warn!("update_cache_from_blockstore got a slot {} to update that doesn't exist in the cache!", slot);
                     None
                 }
             })
@@ -200,28 +205,6 @@ impl SlotTransmitShredsCache {
             .collect()
     }
 
-    fn get_new_shreds_since(
-        &self,
-        blockstore: &Blockstore,
-        slot: Slot,
-        data_start_index: u64,
-        coding_start_index: u64,
-    ) -> (Arc<Vec<Shred>>, Arc<Vec<Shred>>) {
-        let new_data_shreds = Arc::new(
-            blockstore
-                .get_data_shreds_since(slot, data_start_index)
-                .expect("My own shreds must be reconstructable"),
-        );
-
-        let new_coding_shreds = Arc::new(
-            blockstore
-                .get_coding_shreds_since(slot, coding_start_index)
-                .expect("My own shreds must be reconstructable"),
-        );
-
-        (new_data_shreds, new_coding_shreds)
-    }
-
     // Update with latest leader blocks. Note it should generally be safe to purge
     // old leader blocks, because the validator should only generate new leadder
     // blocks if the old blocks were confirmed to be propagated, which means the old
@@ -230,18 +213,87 @@ impl SlotTransmitShredsCache {
     pub fn update_retransmit_cache(
         &mut self,
         retransmit_cache_receiver: &RetransmitCacheReceiver,
-        updates: &mut HashMap<Slot, TransmitShreds>,
+        updates: &mut HashMap<Slot, Vec<TransmitShreds>>,
     ) -> Result<()> {
         let timer = Duration::from_millis(100);
-        let (slot, transmit_shreds) = retransmit_cache_receiver.recv_timeout(timer)?;
-        updated_slots.insert(slot, transmit_shreds.clone());
-        // Update the cache with shreds from latest leader slot
-        self.push(slot, transmit_shreds);
-        while let Ok((slot, transmit_shreds)) = retransmit_cache_receiver.try_recv() {
-            updated_slots.insert(slot);
-            self.push(slot, transmit_shreds);
+        let (slot, new_transmit_shreds) = retransmit_cache_receiver.recv_timeout(timer)?;
+        if self.should_push(slot, &new_transmit_shreds) {
+            updates
+                .entry(slot)
+                .or_insert_with(|| vec![new_transmit_shreds.clone()]);
+            self.push(slot, new_transmit_shreds);
+        }
+
+        while let Ok((slot, new_transmit_shreds)) = retransmit_cache_receiver.try_recv() {
+            if self.should_push(slot, &new_transmit_shreds) {
+                updates
+                    .entry(slot)
+                    .or_insert_with(|| vec![])
+                    .push(new_transmit_shreds.clone());
+                self.push(slot, new_transmit_shreds);
+            }
         }
 
         Ok(())
+    }
+
+    fn should_push(&self, slot: Slot, new_transmit_shreds: &TransmitShreds) -> bool {
+        // Check if updates should be added to the cache. Note that:
+        //
+        // 1) Other updates could have been read from the blockstore by
+        // `broadcast_stage::retry_unfinished_retransmit_slots()`, but
+        //
+        // 2) Writes to blockstore are done atomically by the broadcast stage
+        // insertion thread in batches of exactly the 'new_transmit_shreds`
+        // given here, so it's sufficent to check if the first index in each
+        //  batch of `transmit_shreds` is greater than the last index in the
+        // current cache. If so, this implies we are missing the entire batch of
+        // updates in `transmit_shreds`, and should send them to be
+        // retransmitted.
+        let (last_cached_data_index, last_cached_coding_index) = {
+            self.cache
+                .get(&slot)
+                .map(|cached_entry| {
+                    (
+                        cached_entry
+                            .last_data_shred()
+                            .map(|shred| shred.index())
+                            .unwrap_or(0),
+                        cached_entry
+                            .last_coding_shred()
+                            .map(|shred| shred.index())
+                            .unwrap_or(0),
+                    )
+                })
+                .unwrap_or((0, 0))
+        };
+
+        let first_new_shred_index = new_transmit_shreds.1[0].index();
+
+        (new_transmit_shreds.1[0].is_data() && first_new_shred_index >= last_cached_data_index)
+            || (new_transmit_shreds.1[0].is_code()
+                && first_new_shred_index >= last_cached_coding_index)
+    }
+
+    fn get_new_shreds(
+        &self,
+        blockstore: &Blockstore,
+        slot: Slot,
+        data_start_index: u64,
+        coding_start_index: u64,
+    ) -> (Arc<Vec<Shred>>, Arc<Vec<Shred>>) {
+        let new_data_shreds = Arc::new(
+            blockstore
+                .get_data_shreds_for_slot(slot, data_start_index)
+                .expect("My own shreds must be reconstructable"),
+        );
+
+        let new_coding_shreds = Arc::new(
+            blockstore
+                .get_coding_shreds_for_slot(slot, coding_start_index)
+                .expect("My own shreds must be reconstructable"),
+        );
+
+        (new_data_shreds, new_coding_shreds)
     }
 }

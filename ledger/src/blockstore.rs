@@ -1082,7 +1082,11 @@ impl Blockstore {
         self.data_shred_cf.get_bytes((slot, index))
     }
 
-    pub fn get_data_shreds_since(&self, slot: Slot, start_index: u64) -> ShredResult<Vec<Shred>> {
+    pub fn get_data_shreds_for_slot(
+        &self,
+        slot: Slot,
+        start_index: u64,
+    ) -> ShredResult<Vec<Shred>> {
         self.slot_data_iterator(slot, start_index)
             .expect("blockstore couldn't fetch iterator")
             .map(|data| Shred::new_from_serialized_shred(data.1.to_vec()))
@@ -1138,7 +1142,11 @@ impl Blockstore {
         self.code_shred_cf.get_bytes((slot, index))
     }
 
-    pub fn get_coding_shreds_since(&self, slot: Slot, start_index: u64) -> ShredResult<Vec<Shred>> {
+    pub fn get_coding_shreds_for_slot(
+        &self,
+        slot: Slot,
+        start_index: u64,
+    ) -> ShredResult<Vec<Shred>> {
         self.slot_coding_iterator(slot, start_index)
             .expect("blockstore couldn't fetch iterator")
             .map(|code| Shred::new_from_serialized_shred(code.1.to_vec()))

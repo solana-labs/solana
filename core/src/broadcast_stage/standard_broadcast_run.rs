@@ -137,7 +137,7 @@ impl StandardBroadcastRun {
     ) -> Result<()> {
         let (bsend, brecv) = channel();
         let (ssend, srecv) = channel();
-        let (retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        let (retransmit_cache_sender, _retransmit_cache_receiver) = unbounded();
         self.process_receive_results(
             &blockstore,
             &ssend,

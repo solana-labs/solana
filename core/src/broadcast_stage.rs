@@ -278,14 +278,13 @@ impl BroadcastStage {
                 // Cache of most recently transmitted MAX_UNCONFIRMED_SLOTS number of
                 // leader blocks
                 let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
-                // `unfinished_retransmit_slots_cache` is the set of blocks
-                // we got a retransmit signal for from ReplayStage, but didn't 
-                // have all the shreds in blockstore to retransmit, due to 
+                // `unfinished_retransmit_slots` is the set of blocks
+                // we got a retransmit signal for from ReplayStage, but didn't
+                // have all the shreds in blockstore to retransmit, due to
                 // arbitrary latency between the broadcast thread and the thread
                 // writing to blockstore.
-                let mut unfinished_retransmit_slots_cache =
-                    SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
-                let mut updates = HashSet::new();
+                let mut unfinished_retransmit_slots = HashSet::new();
+                let mut updates = HashMap::new();
 
                 // Update the cache with the newest shreds
                 let res = Self::handle_error(
@@ -303,7 +302,7 @@ impl BroadcastStage {
                         &blockstore,
                         updates,
                         &mut transmit_shreds_cache,
-                        &mut unfinished_retransmit_slots_cache,
+                        &mut unfinished_retransmit_slots,
                         &socket_sender,
                     ),
                     "solana-broadcaster-retransmit-retry_unfinished_retransmit_slots",
@@ -316,7 +315,7 @@ impl BroadcastStage {
                 let res = Self::handle_error(
                     Self::check_retransmit_signals(
                         &mut transmit_shreds_cache,
-                        &mut unfinished_retransmit_slots_cache,
+                        &mut unfinished_retransmit_slots,
                         &blockstore,
                         &retransmit_slots_receiver,
                         &socket_sender,
@@ -335,63 +334,56 @@ impl BroadcastStage {
 
     pub fn retry_unfinished_retransmit_slots(
         blockstore: &Blockstore,
-        updates: HashMap<Slot, TransmitShreds>,
+        updates: HashMap<Slot, Vec<TransmitShreds>>,
         transmit_shreds_cache: &mut SlotTransmitShredsCache,
-        unfinished_retransmit_slots_cache: &mut SlotTransmitShredsCache,
+        unfinished_retransmit_slots: &mut HashSet<Slot>,
         socket_sender: &Sender<TransmitShreds>,
-    ) {
-        for (updated_slot, transmit_shreds) in updates {
-            if transmit_shreds.is_empty() {
+    ) -> Result<()> {
+        for (updated_slot, all_transmit_shreds) in updates {
+            // If there's been no signal to retransmit this slot,
+            // then continue
+            if !unfinished_retransmit_slots.contains(&updated_slot) {
                 continue;
             }
-            unfinished_retransmit_slots_cache
-                .get(updated_slot)
-                .map(|cached_entry| {
-                    // Add any new updates to the cache. Note that writes to blockstore
-                    // are done atomically by the insertion thread in batches of
-                    // exactly the 'transmit_shreds` read here, so it's sufficent to
-                    // check if the first index in each batch of `transmit_shreds`
-                    // is greater than the last index in the current cache. If so,
-                    // this implies we are missing the entire batch of updates in
-                    // `transmit_shreds`, and should send them to be retransmitted.
-                    let first_new_shred_index = transmit_shreds.1[0].index();
-                    if transmit_shreds.1[0].is_data()
-                        && first_new_shred_index
-                            >= cached_entry
-                                .last_data_shred()
-                                .map(|shred| shred.index())
-                                .unwrap_or(0)
-                    {
-                        // Update the cache so we don't fetch these updates again
-                        unfinished_retransmit_slots_cache.push(updated_slot, transmit_shreds);
-                        // Send the new updates
-                        socket_sender.send(transmit_shreds);
-                    } else if transmit_shreds.1[0].is_code()
-                        &&first_new_shred_index
-                            >= cached_entry
-                                .last_coding_shred()
-                                .map(|shred| shred.index())
-                                .unwrap_or(0)
-                    {
-                        // Update the cache so we don't fetch these updates again
-                        unfinished_retransmit_slots_cache.push(updated_slot, transmit_shreds);
-                        // Send the new updates
-                        socket_sender.send(transmit_shreds);
-                    }
-                });
+
+            // If this block is outdated (no longer in the cache),
+            // then there's no longer any need to retransmit the block,
+            // so remove it from the `unfinished_retransmit_slots` set
+            let slot_cached_shreds = transmit_shreds_cache.get(updated_slot);
+            if slot_cached_shreds.is_none() {
+                unfinished_retransmit_slots.remove(&updated_slot);
+                continue;
+            }
+
+            let slot_cached_shreds = slot_cached_shreds.unwrap();
+            for transmit_shreds in all_transmit_shreds {
+                if transmit_shreds.1.is_empty() {
+                    continue;
+                }
+
+                socket_sender.send(transmit_shreds)?;
+            }
+
+            if slot_cached_shreds.contains_last_shreds() {
+                // If the block is now complete, then we've retransmitted
+                // all the updates, so we can remove this slot from
+                // the `unfinished_retransmit_slots` set
+                unfinished_retransmit_slots.remove(&updated_slot);
+            }
         }
 
         // Fetch potential updates from blockstore, necessary for slots that
         // ReplayStage sent a retransmit signal for after that slot was already
         // removed from the `transmit_shreds_cache` (so no updates coming from broadcast thread),
         // but before updates had been written to blockstore
-        let updates = unfinished_retransmit_slots_cache.update_cache_from_blockstore(blockstore);
+        let updates = transmit_shreds_cache
+            .update_cache_from_blockstore(blockstore, &unfinished_retransmit_slots);
         for (slot, cached_updates) in updates {
             // If we got all the shreds, remove this slot's entries
-            // from `unfinished_retransmit_slots_cache`, as we now have all
+            // from `unfinished_retransmit_slots`, as we now have all
             // the shreds needed for retransmit
             if cached_updates.contains_last_shreds() {
-                unfinished_retransmit_slots_cache.remove_slot(slot);
+                unfinished_retransmit_slots.remove(&slot);
             }
             let all_transmit_shreds = cached_updates.to_transmit_shreds();
 
@@ -399,11 +391,13 @@ impl BroadcastStage {
                 socket_sender.send(transmit_shreds)?;
             }
         }
+
+        Ok(())
     }
 
     pub fn check_retransmit_signals(
         transmit_shreds_cache: &mut SlotTransmitShredsCache,
-        unfinished_retransmit_slots_cache: &mut SlotTransmitShredsCache,
+        unfinished_retransmit_slots: &mut HashSet<Slot>,
         blockstore: &Blockstore,
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
         socket_sender: &Sender<TransmitShreds>,
@@ -417,15 +411,16 @@ impl BroadcastStage {
         }
 
         for (_, bank) in retransmit_slots.iter() {
+            unfinished_retransmit_slots.remove(&bank.slot());
             let cached_shreds = transmit_shreds_cache.get_or_update(bank, blockstore);
             let all_transmit_shreds = cached_shreds.to_transmit_shreds();
             for transmit_shreds in all_transmit_shreds {
                 // If the cached shreds are misssing any shreds (broadcast
                 // hasn't written them to blockstore yet), addd this slot
-                // to the `unfinished_retransmit_slots_cache` so we can retry broadcasting
+                // to the `unfinished_retransmit_slots` so we can retry broadcasting
                 // the missing shreds later.
                 if !cached_shreds.contains_last_shreds() {
-                    unfinished_retransmit_slots_cache.push(bank.slot(), transmit_shreds.clone());
+                    unfinished_retransmit_slots.insert(bank.slot());
                 }
                 socket_sender.send(transmit_shreds)?;
             }
