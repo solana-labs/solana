@@ -1,10 +1,18 @@
 import React from "react";
 import { testnetChannelEndpoint, Connection } from "@solana/web3.js";
+import { findGetParameter } from "../utils";
 
-enum NetworkStatus {
+export const DEFAULT_URL = testnetChannelEndpoint("stable");
+
+export enum NetworkStatus {
   Connected,
   Connecting,
   Failure
+}
+
+interface State {
+  url: string;
+  status: NetworkStatus;
 }
 
 interface Connecting {
@@ -23,14 +31,6 @@ interface Failure {
 type Action = Connected | Connecting | Failure;
 type Dispatch = (action: Action) => void;
 
-interface State {
-  url: string;
-  status: NetworkStatus;
-}
-
-const StateContext = React.createContext<State | undefined>(undefined);
-const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
-
 function networkReducer(state: State, action: Action): State {
   switch (action.status) {
     case NetworkStatus.Connected:
@@ -43,20 +43,7 @@ function networkReducer(state: State, action: Action): State {
   }
 }
 
-function findGetParameter(parameterName: string): string | null {
-  let result = null,
-    tmp = [];
-  window.location.search
-    .substr(1)
-    .split("&")
-    .forEach(function(item) {
-      tmp = item.split("=");
-      if (tmp[0] === parameterName) result = decodeURIComponent(tmp[1]);
-    });
-  return result;
-}
-
-function init(url: string): State {
+function initState(url: string): State {
   const networkUrlParam = findGetParameter("networkUrl");
   return {
     url: networkUrlParam || url,
@@ -64,10 +51,16 @@ function init(url: string): State {
   };
 }
 
-const DEFAULT_URL = testnetChannelEndpoint("stable");
+const StateContext = React.createContext<State | undefined>(undefined);
+const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
+
 type NetworkProviderProps = { children: React.ReactNode };
-function NetworkProvider({ children }: NetworkProviderProps) {
-  const [state, dispatch] = React.useReducer(networkReducer, DEFAULT_URL, init);
+export function NetworkProvider({ children }: NetworkProviderProps) {
+  const [state, dispatch] = React.useReducer(
+    networkReducer,
+    DEFAULT_URL,
+    initState
+  );
 
   React.useEffect(() => {
     // Connect to network immediately
@@ -83,7 +76,7 @@ function NetworkProvider({ children }: NetworkProviderProps) {
   );
 }
 
-async function updateNetwork(dispatch: Dispatch, newUrl: string) {
+export async function updateNetwork(dispatch: Dispatch, newUrl: string) {
   dispatch({
     status: NetworkStatus.Connecting,
     url: newUrl
@@ -99,7 +92,7 @@ async function updateNetwork(dispatch: Dispatch, newUrl: string) {
   }
 }
 
-function useNetwork() {
+export function useNetwork() {
   const context = React.useContext(StateContext);
   if (!context) {
     throw new Error(`useNetwork must be used within a NetworkProvider`);
@@ -107,18 +100,10 @@ function useNetwork() {
   return context;
 }
 
-function useNetworkDispatch() {
+export function useNetworkDispatch() {
   const context = React.useContext(DispatchContext);
   if (!context) {
     throw new Error(`useNetworkDispatch must be used within a NetworkProvider`);
   }
   return context;
 }
-
-export {
-  NetworkProvider,
-  useNetwork,
-  useNetworkDispatch,
-  updateNetwork,
-  NetworkStatus
-};
