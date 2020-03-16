@@ -20,3 +20,6 @@ types = { version = "0.0.1-sol4", package = "solana_libra_types" }
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_librapay"
+
+[patch.crates-io]
+bv = { git = "https://github.com/Mrmaxmeier/bv-rs", branch = "deserialize-check-invariants", features = ["serde"] }
