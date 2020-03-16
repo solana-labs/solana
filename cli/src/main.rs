@@ -33,7 +33,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     if let Some(field) = subcommand_matches.value_of("specific_setting") {
                         let (field_name, value, setting_type) = match field {
                             "json_rpc_url" => ("RPC URL", json_rpc_url, url_setting_type),
-                            "websocket_url" => ("WS URL", websocket_url, ws_setting_type),
+                            "websocket_url" => ("WebSocket URL", websocket_url, ws_setting_type),
                             "keypair" => ("Key Path", keypair_path, keypair_setting_type),
                             _ => unreachable!(),
                         };
@@ -41,7 +41,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     } else {
                         println_name_value("Config File:", config_file);
                         println_name_value_or("RPC URL:", &json_rpc_url, url_setting_type);
-                        println_name_value_or("WS URL:", &websocket_url, ws_setting_type);
+                        println_name_value_or("WebSocket URL:", &websocket_url, ws_setting_type);
                         println_name_value_or("Keypair Path:", &keypair_path, keypair_setting_type);
                     }
                 } else {
@@ -82,7 +82,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
 
                     println_name_value("Config File:", config_file);
                     println_name_value_or("RPC URL:", &json_rpc_url, url_setting_type);
-                    println_name_value_or("WS URL:", &websocket_url, ws_setting_type);
+                    println_name_value_or("WebSocket URL:", &websocket_url, ws_setting_type);
                     println_name_value_or("Keypair Path:", &keypair_path, keypair_setting_type);
                 } else {
                     println!(
@@ -151,7 +151,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let arg = Arg::with_name("config_file")
             .short("C")
             .long("config")
-            .value_name("PATH")
+            .value_name("FILEPATH")
             .takes_value(true)
             .global(true)
             .help("Configuration file to use");
@@ -184,17 +184,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name("keypair")
             .short("k")
             .long("keypair")
-            .value_name("PATH")
+            .value_name("FILEPATH")
             .global(true)
             .takes_value(true)
-            .help("/path/to/id.json or usb://remote/wallet/path"),
+            .help("Filepath or URL to a keypair"),
     )
     .arg(
         Arg::with_name("verbose")
             .long("verbose")
             .short("v")
             .global(true)
-            .help("Show extra information header"),
+            .help("Show additional information"),
     )
     .arg(
         Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
