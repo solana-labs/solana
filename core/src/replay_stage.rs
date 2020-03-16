@@ -85,7 +85,7 @@ pub struct ReplayStageConfig {
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
     pub latest_root_senders: Vec<Sender<Slot>>,
-    pub snapshot_package_sender: Option<SnapshotPackageSender>,
+    pub accounts_hash_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
@@ -189,7 +189,7 @@ impl ReplayStage {
             leader_schedule_cache,
             slot_full_senders,
             latest_root_senders,
-            snapshot_package_sender,
+            accounts_hash_sender,
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -350,7 +350,7 @@ impl ReplayStage {
                                 &leader_schedule_cache,
                                 &root_bank_sender,
                                 &lockouts_sender,
-                                &snapshot_package_sender,
+                                &accounts_hash_sender,
                                 &latest_root_senders,
                                 &mut earliest_vote_on_fork,
                             )?;
@@ -666,7 +666,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         lockouts_sender: &Sender<CommitmentAggregationData>,
-        snapshot_package_sender: &Option<SnapshotPackageSender>,
+        accounts_hash_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
         earliest_vote_on_fork: &mut Slot,
     ) -> Result<()> {
@@ -698,7 +698,7 @@ impl ReplayStage {
                 new_root,
                 &bank_forks,
                 progress,
-                snapshot_package_sender,
+                accounts_hash_sender,
                 earliest_vote_on_fork,
             );
             latest_root_senders.iter().for_each(|s| {
@@ -1167,13 +1167,13 @@ impl ReplayStage {
         new_root: u64,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
-        snapshot_package_sender: &Option<SnapshotPackageSender>,
+        accounts_hash_sender: &Option<SnapshotPackageSender>,
         earliest_vote_on_fork: &mut u64,
     ) {
         bank_forks
             .write()
             .unwrap()
-            .set_root(new_root, snapshot_package_sender);
+            .set_root(new_root, accounts_hash_sender);
         let r_bank_forks = bank_forks.read().unwrap();
         *earliest_vote_on_fork = std::cmp::max(new_root, *earliest_vote_on_fork);
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());

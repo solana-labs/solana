@@ -2,6 +2,7 @@
 //! validation pipeline in software.
 
 use crate::{
+    accounts_hash_verifier::AccountsHashVerifier,
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
@@ -29,6 +30,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
+use std::collections::HashSet;
 use std::{
     net::UdpSocket,
     path::PathBuf,
@@ -48,6 +50,7 @@ pub struct Tvu {
     blockstream_service: Option<BlockstreamService>,
     ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
+    accounts_hash_verifier: AccountsHashVerifier,
 }
 
 pub struct Sockets {
@@ -55,6 +58,16 @@ pub struct Sockets {
     pub repair: UdpSocket,
     pub retransmit: Vec<UdpSocket>,
     pub forwards: Vec<UdpSocket>,
+}
+
+#[derive(Default)]
+pub struct TvuConfig {
+    pub max_ledger_slots: Option<u64>,
+    pub sigverify_disabled: bool,
+    pub shred_version: u16,
+    pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
+    pub trusted_validators: Option<HashSet<Pubkey>>,
+    pub accounts_hash_fault_injection_slots: u64,
 }
 
 impl Tvu {
@@ -75,7 +88,6 @@ impl Tvu {
         blockstore: Arc<Blockstore>,
         storage_state: &StorageState,
         blockstream_unix_socket: Option<&PathBuf>,
-        max_ledger_slots: Option<u64>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -83,13 +95,12 @@ impl Tvu {
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-        sigverify_disabled: bool,
         cfg: Option<Arc<AtomicBool>>,
-        shred_version: u16,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         snapshot_package_sender: Option<SnapshotPackageSender>,
         vote_tracker: Arc<VoteTracker>,
+        tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -119,7 +130,7 @@ impl Tvu {
         );
 
         let (verified_sender, verified_receiver) = unbounded();
-        let sigverify_stage = if !sigverify_disabled {
+        let sigverify_stage = if !tvu_config.sigverify_disabled {
             SigVerifyStage::new(
                 fetch_receiver,
                 verified_sender,
@@ -145,11 +156,22 @@ impl Tvu {
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
-            shred_version,
+            tvu_config.shred_version,
         );
 
         let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
+
+        let (accounts_hash_sender, accounts_hash_receiver) = channel();
+        let accounts_hash_verifier = AccountsHashVerifier::new(
+            accounts_hash_receiver,
+            snapshot_package_sender,
+            exit,
+            cluster_info,
+            tvu_config.trusted_validators.clone(),
+            tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
+            tvu_config.accounts_hash_fault_injection_slots,
+        );
 
         let replay_stage_config = ReplayStageConfig {
             my_pubkey: keypair.pubkey(),
@@ -160,7 +182,7 @@ impl Tvu {
             leader_schedule_cache: leader_schedule_cache.clone(),
             slot_full_senders: vec![blockstream_slot_sender],
             latest_root_senders: vec![ledger_cleanup_slot_sender],
-            snapshot_package_sender,
+            accounts_hash_sender: Some(accounts_hash_sender),
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -188,7 +210,7 @@ impl Tvu {
             None
         };
 
-        let ledger_cleanup_service = max_ledger_slots.map(|max_ledger_slots| {
+        let ledger_cleanup_service = tvu_config.max_ledger_slots.map(|max_ledger_slots| {
             LedgerCleanupService::new(
                 ledger_cleanup_slot_receiver,
                 blockstore.clone(),
@@ -216,6 +238,7 @@ impl Tvu {
             blockstream_service,
             ledger_cleanup_service,
             storage_stage,
+            accounts_hash_verifier,
         }
     }
 
@@ -231,6 +254,7 @@ impl Tvu {
             self.ledger_cleanup_service.unwrap().join()?;
         }
         self.replay_stage.join()?;
+        self.accounts_hash_verifier.join()?;
         Ok(())
     }
 }
@@ -291,7 +315,6 @@ pub mod tests {
             blockstore,
             &StorageState::default(),
             None,
-            None,
             l_receiver,
             &Arc::new(RpcSubscriptions::new(&exit)),
             &poh_recorder,
@@ -299,13 +322,12 @@ pub mod tests {
             &exit,
             completed_slots_receiver,
             block_commitment_cache,
-            false,
             None,
-            0,
             None,
             None,
             None,
             Arc::new(VoteTracker::new(&bank)),
+            TvuConfig::default(),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

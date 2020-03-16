@@ -663,6 +663,13 @@ pub fn main() {
                 .validator(solana_net_utils::is_host)
                 .help("IP address to bind the RPC port [default: use --bind-address]"),
         )
+        .arg(
+            clap::Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
+                .long("halt-on-trusted-validators-accounts-hash-mismatch")
+                .requires("trusted_validators")
+                .takes_value(false)
+                .help("Abort the validator if a bank hash mismatch is detected within trusted validator set"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -819,6 +826,10 @@ pub fn main() {
             exit(1);
         }
         validator_config.max_ledger_slots = Some(limit_ledger_size);
+    }
+
+    if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
+        validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
     }
 
     if matches.value_of("signer_addr").is_some() {

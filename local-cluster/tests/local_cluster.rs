@@ -609,6 +609,95 @@ fn test_softlaunch_operating_mode() {
 
 #[test]
 #[serial]
+fn test_consistency_halt() {
+    solana_logger::setup();
+    let snapshot_interval_slots = 20;
+    let num_account_paths = 1;
+
+    // Create cluster with a leader producing bad snapshot hashes.
+    let mut leader_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+    leader_snapshot_test_config
+        .validator_config
+        .accounts_hash_fault_injection_slots = 40;
+
+    let validator_stake = 10_000;
+    let config = ClusterConfig {
+        node_stakes: vec![validator_stake],
+        cluster_lamports: 100_000,
+        validator_configs: vec![leader_snapshot_test_config.validator_config.clone()],
+        ..ClusterConfig::default()
+    };
+
+    let mut cluster = LocalCluster::new(&config);
+
+    sleep(Duration::from_millis(5000));
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    info!("num_nodes: {}", cluster_nodes.len());
+
+    // Add a validator with the leader as trusted, it should halt when it detects
+    // mismatch.
+    let mut validator_snapshot_test_config =
+        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+
+    let mut trusted_validators = HashSet::new();
+    trusted_validators.insert(cluster_nodes[0].id);
+
+    validator_snapshot_test_config
+        .validator_config
+        .trusted_validators = Some(trusted_validators);
+    validator_snapshot_test_config
+        .validator_config
+        .halt_on_trusted_validators_accounts_hash_mismatch = true;
+
+    warn!("adding a validator");
+    cluster.add_validator(
+        &validator_snapshot_test_config.validator_config,
+        validator_stake as u64,
+        Arc::new(Keypair::new()),
+    );
+    let num_nodes = 2;
+    assert_eq!(
+        discover_cluster(&cluster.entry_point_info.gossip, num_nodes)
+            .unwrap()
+            .0
+            .len(),
+        num_nodes
+    );
+
+    // Check for only 1 node on the network.
+    let mut encountered_error = false;
+    loop {
+        let discover = discover_cluster(&cluster.entry_point_info.gossip, 2);
+        match discover {
+            Err(_) => {
+                encountered_error = true;
+                break;
+            }
+            Ok(nodes) => {
+                if nodes.0.len() < 2 {
+                    encountered_error = true;
+                    break;
+                }
+                info!("checking cluster for fewer nodes.. {:?}", nodes.0.len());
+            }
+        }
+        let client = cluster
+            .get_validator_client(&cluster.entry_point_info.id)
+            .unwrap();
+        if let Ok(slot) = client.get_slot() {
+            if slot > 210 {
+                break;
+            }
+            info!("slot: {}", slot);
+        }
+        sleep(Duration::from_millis(1000));
+    }
+    assert!(encountered_error);
+}
+
+#[test]
+#[serial]
 fn test_snapshot_download() {
     solana_logger::setup();
     // First set up the cluster with 1 node
