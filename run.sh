@@ -93,7 +93,7 @@ abort() {
 }
 trap abort INT TERM EXIT
 
-solana-faucet - "$dataDir"/faucet.json &
+solana-faucet --keypair "$dataDir"/faucet.json &
 faucet=$!
 
 args=(
