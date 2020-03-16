@@ -702,7 +702,7 @@ pub fn parse_command(
             wallet_manager,
             VoteAuthorize::Withdrawer,
         ),
-        ("vote-account", Some(matches)) => parse_vote_get_account_command(matches),
+        ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
             parse_withdraw_from_vote_account(matches, default_signer_path, wallet_manager)
         }
