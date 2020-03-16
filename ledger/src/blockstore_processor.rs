@@ -262,10 +262,10 @@ pub enum BlockstoreProcessorError {
 
 impl BlockstoreProcessorError {
     pub fn is_severity_error(&self) -> bool {
-        match self {
-            BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) => false,
-            _ => true,
-        }
+        !matches!(
+            self,
+            BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount)
+        )
     }
 }
 
