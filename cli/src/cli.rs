@@ -120,7 +120,7 @@ pub fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(FEE_PAYER_ARG.name)
         .long(FEE_PAYER_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .value_name("KEYPAIR")
         .validator(is_valid_signer)
         .help(FEE_PAYER_ARG.help)
 }
@@ -2216,14 +2216,14 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("faucet_host")
                         .long("faucet-host")
-                        .value_name("HOST")
+                        .value_name("URL")
                         .takes_value(true)
                         .help("Faucet host to use [default: the --url host]"),
                 )
                 .arg(
                     Arg::with_name("faucet_port")
                         .long("faucet-port")
-                        .value_name("PORT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .default_value(solana_faucet::faucet::FAUCET_PORT_STR)
                         .help("Faucet port to use"),
@@ -2231,7 +2231,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("amount")
                         .index(1)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -2270,7 +2270,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(1)
-                        .value_name("PROCESS ID")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -2295,7 +2295,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("seed")
                         .index(1)
-                        .value_name("SEED_STRING")
+                        .value_name("STRING")
                         .takes_value(true)
                         .required(true)
                         .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
@@ -2303,7 +2303,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_id")
                         .index(2)
-                        .value_name("PROGRAM_ID")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help(
@@ -2327,7 +2327,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
-                        .value_name("PATH TO BPF PROGRAM")
+                        .value_name("FILEPATH")
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
@@ -2339,7 +2339,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("TO PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -2348,7 +2348,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -2395,7 +2395,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("signer")
                         .index(1)
-                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .value_name("URL")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -2417,7 +2417,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS ID")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to authorize"),
@@ -2438,7 +2438,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS ID")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to unlock"),
@@ -2457,7 +2457,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("TO PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -2466,7 +2466,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -2476,7 +2476,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("from")
                         .long("from")
                         .takes_value(true)
-                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .value_name("KEYPAIR")
                         .validator(is_valid_signer)
                         .help("Source account of funds (if different from client local account)"),
                 )
@@ -2492,7 +2492,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("account_pubkey")
                         .index(1)
-                        .value_name("ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -2502,7 +2502,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("output_file")
                         .long("output")
                         .short("o")
-                        .value_name("FILE")
+                        .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Write the account data to this file"),
                 )

@@ -200,7 +200,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let arg = Arg::with_name("config_file")
                 .short("C")
                 .long("config")
-                .value_name("PATH")
+                .value_name("FILEPATH")
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use");
@@ -216,7 +216,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("pubkey")
                         .index(1)
-                        .value_name("BASE58_PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help("Public key"),
@@ -224,7 +224,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("keypair")
                         .index(2)
-                        .value_name("PATH")
+                        .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to keypair file"),
                 )
@@ -237,7 +237,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("outfile")
                         .short("o")
                         .long("outfile")
-                        .value_name("PATH")
+                        .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to generated file"),
                 )
@@ -252,7 +252,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("word-count")
                         .possible_values(&["12", "15", "18", "21", "24"])
                         .default_value("12")
-                        .value_name("NUM")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .help("Specify the number of words that will be present in the generated seed phrase"),
                 )
@@ -321,7 +321,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("keypair")
                         .index(1)
-                        .value_name("PATH")
+                        .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to keypair file or remote wallet"),
                 )
@@ -334,7 +334,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("outfile")
                         .short("o")
                         .long("outfile")
-                        .value_name("PATH")
+                        .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to generated file"),
                 )
@@ -361,7 +361,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::with_name("outfile")
                         .short("o")
                         .long("outfile")
-                        .value_name("PATH")
+                        .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to generated file"),
                 )

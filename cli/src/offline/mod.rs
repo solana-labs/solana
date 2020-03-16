@@ -33,7 +33,7 @@ fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(SIGNER_ARG.name)
         .long(SIGNER_ARG.long)
         .takes_value(true)
-        .value_name("BASE58_PUBKEY=BASE58_SIG")
+        .value_name("PUBKEY=SIGNATURE")
         .validator(is_pubkey_sig)
         .requires(BLOCKHASH_ARG.name)
         .multiple(true)
