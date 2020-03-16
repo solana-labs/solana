@@ -37,3 +37,6 @@ vm_runtime_types = { version = "0.0.1-sol4", package = "solana_libra_vm_runtime_
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_move_loader_program"
+
+[patch.crates-io]
+bv = { git = "https://github.com/Mrmaxmeier/bv-rs", branch = "deserialize-check-invariants", features = ["serde"] }
