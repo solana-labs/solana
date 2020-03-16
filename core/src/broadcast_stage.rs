@@ -288,13 +288,13 @@ impl BroadcastStage {
 
                 // Keep the unfinished slots cache in sync with the slot cache
                 for updated_slot in updated_slots {
-                    if slot_cache.contains_slot(updated_slot) {
-                        if unfinished_slots_cache.contains_slot(updated_slot) {
-                            let cached_entry = slot_cache.get(updated_slot).clone().unwrap();
-                            unfinished_slots_cache.remove_slot(updated_slot);
-                            for transmit_slots in cached_entry.to_transmit_shreds() {
-                                unfinished_slots_cache.push(updated_slot, transmit_slots);
-                            }
+                    if slot_cache.contains_slot(updated_slot)
+                        && unfinished_slots_cache.contains_slot(updated_slot)
+                    {
+                        let cached_entry = slot_cache.get(updated_slot).clone().unwrap();
+                        unfinished_slots_cache.remove_slot(updated_slot);
+                        for transmit_slots in cached_entry.to_transmit_shreds() {
+                            unfinished_slots_cache.push(updated_slot, transmit_slots);
                         }
                     }
                 }

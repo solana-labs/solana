@@ -16,11 +16,7 @@ impl SlotCachedTransmitShreds {
     pub fn contains_last_shreds(&self) -> bool {
         self.data_shred_batches
             .last()
-            .and_then(|last_shred_batch| {
-                last_shred_batch
-                    .last()
-                    .and_then(|shred| Some(shred.last_in_slot()))
-            })
+            .and_then(|last_shred_batch| last_shred_batch.last().map(|shred| shred.last_in_slot()))
             .unwrap_or(false)
             && self
                 .coding_shred_batches
@@ -28,7 +24,7 @@ impl SlotCachedTransmitShreds {
                 .and_then(|last_shred_batch| {
                     last_shred_batch
                         .last()
-                        .and_then(|shred| Some(shred.is_last_coding_in_set()))
+                        .map(|shred| shred.is_last_coding_in_set())
                 })
                 .unwrap_or(false)
     }
@@ -49,6 +45,7 @@ impl SlotCachedTransmitShreds {
 pub struct SlotTransmitShredsCache {
     cache: HashMap<Slot, SlotCachedTransmitShreds>,
     insertion_order: VecDeque<Slot>,
+    capacity: usize,
 }
 
 impl SlotTransmitShredsCache {
@@ -56,6 +53,7 @@ impl SlotTransmitShredsCache {
         Self {
             cache: HashMap::new(),
             insertion_order: VecDeque::with_capacity(capacity),
+            capacity,
         }
     }
 
@@ -72,28 +70,30 @@ impl SlotTransmitShredsCache {
         if transmit_shreds.1.is_empty() {
             return;
         }
-        if !self.cache.contains_key(&slot) {
-            if transmit_shreds.1[0].index() != 0 {
-                // Shreds for a slot must come in order from broadcast.
-                // If it's not the first shred for the slot, and the cache
-                // doesn't contain this slot's earlier shreds, this means this
-                // slot has already been purged from the cache, so dump it.
-                return;
-            }
-            if self.insertion_order.len() == self.insertion_order.capacity() {
-                let old_slot = self.insertion_order.pop_front().unwrap();
-                self.cache.remove(&old_slot).unwrap();
-            }
-            self.insertion_order.push_back(slot);
-            let new_slot_cache = SlotCachedTransmitShreds {
-                stakes: transmit_shreds.0,
-                data_shred_batches: vec![],
-                coding_shred_batches: vec![],
-            };
-            self.cache.insert(slot, new_slot_cache);
+
+        if !self.cache.contains_key(&slot) && transmit_shreds.1[0].index() != 0 {
+            // Shreds for a slot must come in order from broadcast.
+            // If the cache doesn't contain this slot's earlier shreds, and
+            // this batch does not contain the first shred for the slot,
+            // this means this slot has already been purged from the cache,
+            //so dump it.
+            return;
         }
 
-        let slot_cache = self.cache.get_mut(&slot).unwrap();
+        if self.insertion_order.len() == self.capacity {
+            let old_slot = self.insertion_order.pop_front().unwrap();
+            self.cache.remove(&old_slot).unwrap();
+            self.insertion_order.push_back(slot);
+        }
+
+        let slot_cache = self
+            .cache
+            .entry(slot)
+            .or_insert_with(|| SlotCachedTransmitShreds {
+                stakes: transmit_shreds.0.clone(),
+                data_shred_batches: vec![],
+                coding_shred_batches: vec![],
+            });
 
         // Transmit shreds must be all of one type or another
         if transmit_shreds.1[0].is_data() {
@@ -122,7 +122,7 @@ impl SlotTransmitShredsCache {
             let (data_shreds, coding_shreds) =
                 self.get_new_shreds_since(blockstore, bank.slot(), 0, 0);
             self.push(bank.slot(), (stakes.clone(), data_shreds));
-            self.push(bank.slot(), (stakes.clone(), coding_shreds));
+            self.push(bank.slot(), (stakes, coding_shreds));
             self.cache
                 .get(&bank.slot())
                 .expect("Just inserted this entry, must exist")
@@ -145,9 +145,7 @@ impl SlotTransmitShredsCache {
                         .data_shred_batches
                         .last()
                         .and_then(|last_shred_batch| {
-                            last_shred_batch
-                                .last()
-                                .and_then(|shred| Some(shred.index()))
+                            last_shred_batch.last().map(|shred| shred.index())
                         })
                         .expect("Cache entry cannot be empty (guaranteed by push())");
 
@@ -155,14 +153,16 @@ impl SlotTransmitShredsCache {
                         .coding_shred_batches
                         .last()
                         .and_then(|last_shred_batch| {
-                            last_shred_batch
-                                .last()
-                                .and_then(|shred| Some(shred.index()))
+                            last_shred_batch.last().map(|shred| shred.index())
                         })
                         .expect("Cache entry cannot be empty (guaranteed by push())");
 
-                    let (new_data_shreds, new_coding_shreds) =
-                        self.get_new_shreds_since(blockstore, *slot, 0, 0);
+                    let (new_data_shreds, new_coding_shreds) = self.get_new_shreds_since(
+                        blockstore,
+                        *slot,
+                        last_data_shred_index as u64,
+                        last_coding_shred_index as u64,
+                    );
 
                     Some((
                         *slot,
@@ -209,13 +209,13 @@ impl SlotTransmitShredsCache {
     ) -> (Arc<Vec<Shred>>, Arc<Vec<Shred>>) {
         let new_data_shreds = Arc::new(
             blockstore
-                .get_data_shreds_since(slot, 0)
+                .get_data_shreds_since(slot, data_start_index)
                 .expect("My own shreds must be reconstructable"),
         );
 
         let new_coding_shreds = Arc::new(
             blockstore
-                .get_coding_shreds_since(slot, 0)
+                .get_coding_shreds_since(slot, coding_start_index)
                 .expect("My own shreds must be reconstructable"),
         );
 
