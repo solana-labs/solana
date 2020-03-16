@@ -46,16 +46,25 @@ pub fn is_pubkey_or_keypair(string: String) -> Result<(), String> {
     is_pubkey(string.clone()).or_else(|_| is_keypair(string))
 }
 
-// Return an error if string cannot be parsed as pubkey or keypair file or keypair ask keyword
-pub fn is_pubkey_or_keypair_or_ask_keyword(string: String) -> Result<(), String> {
-    is_pubkey(string.clone()).or_else(|_| is_keypair_or_ask_keyword(string))
-}
-
-pub fn is_valid_signer(string: String) -> Result<(), String> {
+// Return an error if string cannot be parsed as a pubkey string, or a valid Signer that can
+// produce a pubkey()
+pub fn is_valid_pubkey(string: String) -> Result<(), String> {
     match parse_keypair_path(&string) {
         KeypairUrl::Filepath(path) => is_keypair(path),
         _ => Ok(()),
     }
+}
+
+// Return an error if string cannot be parsed as a valid Signer. This is an alias of
+// `is_valid_pubkey`, and does accept pubkey strings, even though a Pubkey is not by itself
+// sufficient to sign a transaction.
+//
+// In the current offline-signing implementation, a pubkey is the valid input for a signer field
+// when paired with an offline `--signer` argument to provide a Presigner (pubkey + signature).
+// Clap validators can't check multiple fields at once, so the verification that a `--signer` is
+// also provided and correct happens in parsing, not in validation.
+pub fn is_valid_signer(string: String) -> Result<(), String> {
+    is_valid_pubkey(string)
 }
 
 // Return an error if string cannot be parsed as pubkey=signature string

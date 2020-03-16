@@ -129,6 +129,22 @@ pub fn pubkey_of_signer(
     }
 }
 
+pub fn pubkeys_of_multiple_signers(
+    matches: &ArgMatches<'_>,
+    name: &str,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
+    if let Some(pubkey_matches) = matches.values_of(name) {
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        for signer in pubkey_matches {
+            pubkeys.push(pubkey_from_path(matches, signer, name, wallet_manager)?);
+        }
+        Ok(Some(pubkeys))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn resolve_signer(
     matches: &ArgMatches<'_>,
     name: &str,

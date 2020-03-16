@@ -29,7 +29,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair),
+                        .validator(is_valid_pubkey),
                 )
                 .arg(
                     Arg::with_name("storage_account")
@@ -49,7 +49,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair),
+                        .validator(is_valid_pubkey),
                 )
                 .arg(
                     Arg::with_name("storage_account")
@@ -69,7 +69,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("The node account to credit the rewards to"),
                 )
                 .arg(
@@ -78,7 +78,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Storage account address to redeem credits for"),
                 ),
         )
@@ -92,7 +92,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_pubkey)
                         .help("Storage account pubkey"),
                 ),
         )
@@ -104,7 +104,8 @@ pub fn parse_storage_create_archiver_account(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
+    let account_owner =
+        pubkey_of_signer(matches, "storage_account_owner", wallet_manager)?.unwrap();
     let (storage_account, storage_account_pubkey) =
         signer_of(matches, "storage_account", wallet_manager)?;
 
@@ -131,7 +132,8 @@ pub fn parse_storage_create_validator_account(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
+    let account_owner =
+        pubkey_of_signer(matches, "storage_account_owner", wallet_manager)?.unwrap();
     let (storage_account, storage_account_pubkey) =
         signer_of(matches, "storage_account", wallet_manager)?;
 
@@ -158,8 +160,10 @@ pub fn parse_storage_claim_reward(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let node_account_pubkey = pubkey_of(matches, "node_account_pubkey").unwrap();
-    let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
+    let node_account_pubkey =
+        pubkey_of_signer(matches, "node_account_pubkey", wallet_manager)?.unwrap();
+    let storage_account_pubkey =
+        pubkey_of_signer(matches, "storage_account_pubkey", wallet_manager)?.unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::ClaimStorageReward {
             node_account_pubkey,
@@ -176,8 +180,10 @@ pub fn parse_storage_claim_reward(
 
 pub fn parse_storage_get_account_command(
     matches: &ArgMatches<'_>,
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
+    let storage_account_pubkey =
+        pubkey_of_signer(matches, "storage_account_pubkey", wallet_manager)?.unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::ShowStorageAccount(storage_account_pubkey),
         signers: vec![],
