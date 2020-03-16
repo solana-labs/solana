@@ -63,3 +63,6 @@ exclude = [
     "programs/move_loader",
     "programs/librapay",
 ]
+
+[patch.crates-io]
+bv = { git = "https://github.com/Mrmaxmeier/bv-rs", branch = "deserialize-check-invariants", features = ["serde"] }

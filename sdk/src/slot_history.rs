@@ -69,4 +69,59 @@ mod tests {
         assert_eq!(slot_history.check(1), Check::NotFound);
         assert_eq!(slot_history.check(2), Check::Found);
     }
+
+    #[test]
+    fn test_bit_vec_deserialize() {
+        use bincode::serialize_into;
+        use std::io::{BufReader, Cursor};
+
+        // an adhoc struct ABI-compatible with BitVec to fiddle the internal
+        #[derive(Serialize)]
+        struct Inner(Option<Box<[u64]>>);
+        #[derive(Serialize)]
+        struct LikeBitVec {
+            bits: Inner,
+            len: u64,
+        }
+
+        // normal
+        let mut wr = Cursor::new(vec![]);
+        let good = LikeBitVec {
+            bits: Inner(Some(Box::new([0; 3]))),
+            len: 15,
+        };
+        serialize_into(&mut wr, &good).unwrap();
+        let buf = wr.into_inner();
+        let d: Result<BitVec, _> = bincode::config()
+            .limit(100)
+            .deserialize_from(BufReader::new(&buf[..]));
+        assert!(d.is_ok());
+        assert_eq!(15, d.unwrap().len());
+
+        // test large `bits` is guraded by `.limit(...)` just in case
+        let mut wr = Cursor::new(vec![]);
+        let large = LikeBitVec {
+            bits: Inner(Some(Box::new([0; 30]))),
+            len: 3,
+        };
+        serialize_into(&mut wr, &large).unwrap();
+        let buf = wr.into_inner();
+        let d: Result<BitVec, _> = bincode::config()
+            .limit(100)
+            .deserialize_from(BufReader::new(&buf[..]));
+        assert!(d.is_err());
+
+        // now test super huge mal-formed BitVec
+        let mut wr = Cursor::new(vec![]);
+        let bad = LikeBitVec {
+            bits: Inner(Some(Box::new([0; 3]))),
+            len: u64::max_value(),
+        };
+        serialize_into(&mut wr, &bad).unwrap();
+        let buf = wr.into_inner();
+        let d: Result<BitVec, _> = bincode::config()
+            .limit(100)
+            .deserialize_from(BufReader::new(&buf[..]));
+        assert!(d.is_err());
+    }
 }
