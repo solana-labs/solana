@@ -260,6 +260,15 @@ pub enum BlockstoreProcessorError {
     InvalidHardFork(Slot),
 }
 
+impl BlockstoreProcessorError {
+    pub fn is_severity_error(&self) -> bool {
+        match self {
+            BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) => false,
+            _ => true,
+        }
+    }
+}
+
 /// Callback for accessing bank state while processing the blockstore
 pub type ProcessCallback = Arc<dyn Fn(&Bank) -> () + Sync + Send>;
 
