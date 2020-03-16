@@ -88,39 +88,8 @@ solana address --keypair usb://ledger/nano-s/<WALLET_KEY>
 
 Confirm it prints the same key as when you entered just `usb://ledger`.
 
-### Ledger Device URLs
-
-Solana defines a format for the URL protocol "usb://" to uniquely locate any Solana key on
-any remote wallet connected to your computer.
-
-The URL has the form, where square brackets denote optional fields:
-
-```text
-usb://ledger[/<LEDGER_TYPE>[/<WALLET_KEY>]][?key=<DERIVATION_PATH>]
-```
-
-`LEDGER_TYPE` is optional and defaults to the value "nano-s". If the value is provided,
-it must be "nano-s" without quotes, the only supported Ledger device at this time.
-
-`WALLET_KEY` is used to disambiguate multiple Nano S devices. Every Ledger has
-a unique master key and from that key derives a separate unique key per app.
-
-`DERVIATION_PATH` is used to navigate to Solana keys within your Ledger hardware
-wallet. The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and
-`CHANGE` are postive integers.
-
-All derivation paths implicitly include the prefix `44'/501'`, which indicates
-the path follows the [BIP44 specifications](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
-and that any dervied keys are Solana keys (Coin type 501).  The single quote
-indicates a "hardened" derivation. Because Solana uses Ed25519 keypairs, all
-derivations are hardened and therefore adding the quote is optional and
-unnecessary.
-
-For example, a complete Ledger device path might be:
-
-```text
-usb://ledger/nano-s/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
-```
+To learn more about USB URLs, see
+[Specify A Hardware Wallet Key](index.md#specify-a-hardware-wallet-key)
 
 ### Set CLI Configuration
 
