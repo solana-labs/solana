@@ -74,7 +74,7 @@ pub fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
         .takes_value(true)
         .value_name("PUBKEY")
         .requires(BLOCKHASH_ARG.name)
-        .validator(is_pubkey)
+        .validator(is_valid_signer)
         .help(NONCE_ARG.help)
 }
 

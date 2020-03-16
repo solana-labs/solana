@@ -821,7 +821,7 @@ pub fn parse_command(
             let cancelable = matches.is_present("cancelable");
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
-            let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+            let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
             let (nonce_authority, nonce_authority_pubkey) =
                 signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
@@ -913,7 +913,7 @@ pub fn parse_command(
             let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
-            let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+            let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
             let (nonce_authority, nonce_authority_pubkey) =
                 signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
             let (fee_payer, fee_payer_pubkey) =

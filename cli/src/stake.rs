@@ -431,7 +431,7 @@ pub fn parse_stake_create_account(
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
-    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
