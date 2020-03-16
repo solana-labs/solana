@@ -662,7 +662,7 @@ pub fn parse_command(
         ("stake-set-lockup", Some(matches)) => {
             parse_stake_set_lockup(matches, default_signer_path, wallet_manager)
         }
-        ("stake-account", Some(matches)) => parse_show_stake_account(matches),
+        ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Storage Commands
         ("create-archiver-storage-account", Some(matches)) => {
