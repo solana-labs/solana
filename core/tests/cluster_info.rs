@@ -15,7 +15,7 @@ use std::time::Instant;
 type Nodes = HashMap<Pubkey, (bool, HashSet<i32>, Receiver<(i32, bool)>)>;
 
 fn num_threads() -> usize {
-    sys_info::cpu_num().unwrap_or(10) as usize
+    num_cpus::get()
 }
 
 /// Search for the a node with the given balance
