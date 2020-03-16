@@ -1,5 +1,8 @@
 # | source | this file
 
+# shellcheck disable=SC2034
+# shellcheck disable=SC2086
+
 STAKE_PROGRAM_PUBKEY=Stake11111111111111111111111111111111111111
 SYSTEM_PROGRAM_PUBKEY=11111111111111111111111111111111
 VOTE_PROGRAM_PUBKEY=Vote111111111111111111111111111111111111111
@@ -35,6 +38,7 @@ function write_program_account_data_csv {
   fi
 
   echo "Account_Pubkey,Lamports" > $CSV_OUTFILE
+  # shellcheck disable=SC2002
   cat "$JSON_INFILE" | jq -r '(.result | .[]) | [.pubkey, (.account | .lamports)] | @csv' \
     >> $CSV_OUTFILE
 }
