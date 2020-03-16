@@ -433,13 +433,16 @@ pub fn get_ledger_from_info(
             return Err(device.error.clone().unwrap());
         }
     }
-    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = matches
+    let mut matches: Vec<(Pubkey, String)> = matches
         .filter(|&device_info| device_info.error.is_none())
         .map(|device_info| (device_info.pubkey, device_info.get_pretty_path()))
-        .unzip();
-    if pubkeys.is_empty() {
+        .collect();
+    if matches.is_empty() {
         return Err(RemoteWalletError::NoDeviceFound);
     }
+    matches.sort_by(|a, b| a.1.cmp(&b.1));
+    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = matches.into_iter().unzip();
+
     let wallet_base_pubkey = if pubkeys.len() > 1 {
         let selection = Select::with_theme(&ColorfulTheme::default())
             .with_prompt(&format!(
