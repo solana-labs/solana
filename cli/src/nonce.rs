@@ -93,12 +93,12 @@ impl NonceSubCommands for App<'_, '_> {
             SubCommand::with_name("authorize-nonce-account")
                 .about("Assign account authority to a new entity")
                 .arg(
-                    Arg::with_name("nonce_account_keypair")
+                    Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("KEYPAIR")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_pubkey_or_keypair)
                         .help("Address of the nonce account"),
                 )
                 .arg(
@@ -279,7 +279,7 @@ pub fn parse_authorize_nonce_account(
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let nonce_account = pubkey_of(matches, "nonce_account_keypair").unwrap();
+    let nonce_account = pubkey_of(matches, "nonce_account_pubkey").unwrap();
     let new_authority = pubkey_of(matches, "new_authority").unwrap();
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
