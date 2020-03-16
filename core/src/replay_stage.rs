@@ -629,11 +629,19 @@ impl ReplayStage {
             // errors related to the slot being purged
             let slot = bank.slot();
             warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            datapoint_error!(
-                "replay-stage-mark_dead_slot",
-                ("error", format!("error: {:?}", err), String),
-                ("slot", slot, i64)
-            );
+            if err.is_severity_error() {
+                datapoint_error!(
+                    "replay-stage-mark_dead_slot",
+                    ("error", format!("error: {:?}", err), String),
+                    ("slot", slot, i64)
+                );
+            } else {
+                datapoint_info!(
+                    "replay-stage-mark_dead_slot",
+                    ("error", format!("error: {:?}", err), String),
+                    ("slot", slot, i64)
+                );
+            }
             bank_progress.is_dead = true;
             blockstore
                 .set_dead_slot(slot)
