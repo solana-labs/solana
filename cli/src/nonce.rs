@@ -74,7 +74,7 @@ pub fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
         .takes_value(true)
         .value_name("PUBKEY")
         .requires(BLOCKHASH_ARG.name)
-        .validator(is_valid_signer)
+        .validator(is_valid_pubkey)
         .help(NONCE_ARG.help)
 }
 
@@ -98,7 +98,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Address of the nonce account"),
                 )
                 .arg(
@@ -107,7 +107,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Account to be granted authority of the nonce account"),
                 )
                 .arg(
@@ -145,7 +145,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .long(NONCE_AUTHORITY_ARG.long)
                         .takes_value(true)
                         .value_name("PUBKEY")
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Assign noncing authority to another entity"),
                 ),
         )
@@ -159,7 +159,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Address of the nonce account to display"),
                 ),
         )
@@ -172,7 +172,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Address of the nonce account"),
                 )
                 .arg(nonce_authority_arg()),
@@ -187,7 +187,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Address of the nonce account to display"),
                 )
                 .arg(
@@ -206,7 +206,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Nonce account to withdraw from"),
                 )
                 .arg(
@@ -215,7 +215,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The account to which the SOL should be transferred"),
                 )
                 .arg(

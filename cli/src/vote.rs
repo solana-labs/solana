@@ -45,7 +45,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Validator that will vote with this account"),
                 )
                 .arg(
@@ -61,7 +61,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .long("authorized-voter")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Public key of the authorized voter [default: validator identity pubkey]"),
                 )
                 .arg(
@@ -69,7 +69,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .long("authorized-withdrawer")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Public key of the authorized withdrawer [default: validator identity pubkey]"),
                 )
                 .arg(
@@ -89,7 +89,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Vote account in which to set the authorized voter"),
                 )
                 .arg(
@@ -98,7 +98,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("New vote signer to authorize"),
                 ),
         )
@@ -111,7 +111,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Vote account in which to set the authorized withdrawer"),
                 )
                 .arg(
@@ -120,7 +120,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("New withdrawer to authorize"),
                 ),
         )
@@ -133,7 +133,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Vote account to update"),
                 )
                 .arg(
@@ -142,7 +142,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("New validator that will vote with this account"),
                 )
                 .arg(
@@ -173,7 +173,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Vote account pubkey"),
                 )
                 .arg(
@@ -192,7 +192,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Vote account from which to withdraw"),
                 )
                 .arg(
@@ -201,7 +201,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The account to which the SOL should be transferred"),
                 )
                 .arg(

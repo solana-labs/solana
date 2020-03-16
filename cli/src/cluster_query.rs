@@ -58,7 +58,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .index(1)
                         .takes_value(true)
                         .value_name("PUBKEY")
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .required(true)
                         .help("Identity pubkey of the validator"),
                 )
@@ -224,7 +224,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .value_name("VOTE ACCOUNT PUBKEYS")
                         .takes_value(true)
                         .multiple(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Only show stake accounts delegated to the provided vote accounts"),
                 )
                 .arg(

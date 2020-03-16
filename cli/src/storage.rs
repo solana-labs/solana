@@ -29,7 +29,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer),
+                        .validator(is_valid_pubkey),
                 )
                 .arg(
                     Arg::with_name("storage_account")
@@ -49,7 +49,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer),
+                        .validator(is_valid_pubkey),
                 )
                 .arg(
                     Arg::with_name("storage_account")
@@ -69,7 +69,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The node account to credit the rewards to"),
                 )
                 .arg(
@@ -78,7 +78,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Storage account address to redeem credits for"),
                 ),
         )
@@ -92,7 +92,7 @@ impl StorageSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Storage account pubkey"),
                 ),
         )

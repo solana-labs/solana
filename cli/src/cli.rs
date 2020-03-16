@@ -2252,7 +2252,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(2)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The pubkey of airdrop recipient"),
                 ),
         )
@@ -2264,7 +2264,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The public key of the balance to check"),
                 )
                 .arg(
@@ -2327,7 +2327,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(false)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("From (base) key, [default: cli config keypair]"),
                 ),
         )
@@ -2352,7 +2352,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -2470,7 +2470,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -2505,7 +2505,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_signer)
+                        .validator(is_valid_pubkey)
                         .help("Account pubkey"),
                 )
                 .arg(
