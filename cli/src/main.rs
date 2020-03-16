@@ -184,7 +184,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name("keypair")
             .short("k")
             .long("keypair")
-            .value_name("FILEPATH")
+            .value_name("KEYPAIR")
             .global(true)
             .takes_value(true)
             .help("Filepath or URL to a keypair"),
