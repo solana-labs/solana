@@ -224,9 +224,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("keypair")
                         .index(2)
-                        .value_name("FILEPATH")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
-                        .help("Path to keypair file"),
+                        .help("Filepath or URL to a keypair"),
                 )
         )
         .subcommand(
@@ -321,9 +321,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .arg(
                     Arg::with_name("keypair")
                         .index(1)
-                        .value_name("FILEPATH")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
-                        .help("Path to keypair file or remote wallet"),
+                        .help("Filepath or URL to a keypair"),
                 )
                 .arg(
                     Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
