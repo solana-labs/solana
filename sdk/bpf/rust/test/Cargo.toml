@@ -10,3 +10,6 @@ edition = "2018"
 
 [workspace]
 members = []
+
+[patch.crates-io]
+bv = { git = "https://github.com/Mrmaxmeier/bv-rs", branch = "deserialize-check-invariants", features = ["serde"] }

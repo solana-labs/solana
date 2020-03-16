@@ -49,3 +49,6 @@ members = [
     "rust/param_passing_dep",
     "rust/sysval",
 ]
+
+[patch.crates-io]
+bv = { git = "https://github.com/Mrmaxmeier/bv-rs", branch = "deserialize-check-invariants", features = ["serde"] }
