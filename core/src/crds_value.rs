@@ -1,5 +1,6 @@
 use crate::contact_info::ContactInfo;
 use bincode::{serialize, serialized_size};
+use solana_sdk::timing::timestamp;
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
@@ -61,6 +62,7 @@ impl Signable for CrdsValue {
 pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
+<<<<<<< HEAD
     EpochSlots(EpochSlotIndex, EpochSlots),
     SnapshotHash(SnapshotHash),
 }
@@ -83,6 +85,12 @@ pub struct EpochIncompleteSlots {
     pub first: Slot,
     pub compression: CompressionType,
     pub compressed_list: Vec<u8>,
+=======
+    LowestSlot(u8, LowestSlot),
+    SnapshotHashes(SnapshotHash),
+    EpochSlots(EpochSlotsIndex, EpochSlots),
+    AccountsHashes(SnapshotHash),
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -93,11 +101,11 @@ pub struct SnapshotHash {
 }
 
 impl SnapshotHash {
-    pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>, wallclock: u64) -> Self {
+    pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
         Self {
             from,
             hashes,
-            wallclock,
+            wallclock: timestamp(),
         }
     }
 }
@@ -155,8 +163,15 @@ impl Vote {
 pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
     Vote(VoteIndex, Pubkey),
+<<<<<<< HEAD
     EpochSlots(Pubkey),
     SnapshotHash(Pubkey),
+=======
+    LowestSlot(Pubkey),
+    SnapshotHashes(Pubkey),
+    EpochSlots(EpochSlotsIndex, Pubkey),
+    AccountsHashes(Pubkey),
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -164,8 +179,15 @@ impl fmt::Display for CrdsValueLabel {
         match self {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
+<<<<<<< HEAD
             CrdsValueLabel::EpochSlots(_) => write!(f, "EpochSlots({})", self.pubkey()),
             CrdsValueLabel::SnapshotHash(_) => write!(f, "SnapshotHash({})", self.pubkey()),
+=======
+            CrdsValueLabel::LowestSlot(_) => write!(f, "LowestSlot({})", self.pubkey()),
+            CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHash({})", self.pubkey()),
+            CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
+            CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
         }
     }
 }
@@ -175,8 +197,15 @@ impl CrdsValueLabel {
         match self {
             CrdsValueLabel::ContactInfo(p) => *p,
             CrdsValueLabel::Vote(_, p) => *p,
+<<<<<<< HEAD
             CrdsValueLabel::EpochSlots(p) => *p,
             CrdsValueLabel::SnapshotHash(p) => *p,
+=======
+            CrdsValueLabel::LowestSlot(p) => *p,
+            CrdsValueLabel::SnapshotHashes(p) => *p,
+            CrdsValueLabel::EpochSlots(_, p) => *p,
+            CrdsValueLabel::AccountsHashes(p) => *p,
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
         }
     }
 }
@@ -201,24 +230,45 @@ impl CrdsValue {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
+<<<<<<< HEAD
             CrdsData::EpochSlots(_, vote) => vote.wallclock,
             CrdsData::SnapshotHash(hash) => hash.wallclock,
+=======
+            CrdsData::LowestSlot(_, obj) => obj.wallclock,
+            CrdsData::SnapshotHashes(hash) => hash.wallclock,
+            CrdsData::EpochSlots(_, p) => p.wallclock,
+            CrdsData::AccountsHashes(hash) => hash.wallclock,
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
         }
     }
     pub fn pubkey(&self) -> Pubkey {
         match &self.data {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
+<<<<<<< HEAD
             CrdsData::EpochSlots(_, slots) => slots.from,
             CrdsData::SnapshotHash(hash) => hash.from,
+=======
+            CrdsData::LowestSlot(_, slots) => slots.from,
+            CrdsData::SnapshotHashes(hash) => hash.from,
+            CrdsData::EpochSlots(_, p) => p.from,
+            CrdsData::AccountsHashes(hash) => hash.from,
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
         match &self.data {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
+<<<<<<< HEAD
             CrdsData::EpochSlots(_, _) => CrdsValueLabel::EpochSlots(self.pubkey()),
             CrdsData::SnapshotHash(_) => CrdsValueLabel::SnapshotHash(self.pubkey()),
+=======
+            CrdsData::LowestSlot(_, _) => CrdsValueLabel::LowestSlot(self.pubkey()),
+            CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
+            CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
+            CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -250,7 +300,14 @@ impl CrdsValue {
 
     pub fn snapshot_hash(&self) -> Option<&SnapshotHash> {
         match &self.data {
-            CrdsData::SnapshotHash(slots) => Some(slots),
+            CrdsData::SnapshotHashes(slots) => Some(slots),
+            _ => None,
+        }
+    }
+
+    pub fn accounts_hash(&self) -> Option<&SnapshotHash> {
+        match &self.data {
+            CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,
         }
     }
@@ -259,8 +316,14 @@ impl CrdsValue {
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
+<<<<<<< HEAD
             CrdsValueLabel::EpochSlots(*key),
             CrdsValueLabel::SnapshotHash(*key),
+=======
+            CrdsValueLabel::LowestSlot(*key),
+            CrdsValueLabel::SnapshotHashes(*key),
+            CrdsValueLabel::AccountsHashes(*key),
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels
@@ -310,14 +373,28 @@ mod test {
 
     #[test]
     fn test_labels() {
+<<<<<<< HEAD
         let mut hits = [false; 3 + MAX_VOTES as usize];
+=======
+        let mut hits = [false; 4 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
+<<<<<<< HEAD
                 CrdsValueLabel::EpochSlots(_) => hits[1] = true,
                 CrdsValueLabel::SnapshotHash(_) => hits[2] = true,
                 CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 3] = true,
+=======
+                CrdsValueLabel::LowestSlot(_) => hits[1] = true,
+                CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
+                CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 4] = true,
+                CrdsValueLabel::EpochSlots(ix, _) => {
+                    hits[*ix as usize + MAX_VOTES as usize + 4] = true
+                }
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
             }
         }
         assert!(hits.iter().all(|x| *x));

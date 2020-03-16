@@ -48,7 +48,7 @@ use solana_sdk::timing::duration_as_s;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT},
     pubkey::Pubkey,
-    signature::{Keypair, Signable, Signature},
+    signature::{Keypair, Signable, Signature, Signer},
     timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };
@@ -178,6 +178,14 @@ struct PullData {
     pub from_addr: SocketAddr,
     pub caller: CrdsValue,
     pub filter: CrdsFilter,
+}
+
+pub fn make_accounts_hashes_message(
+    keypair: &Keypair,
+    accounts_hashes: Vec<(Slot, Hash)>,
+) -> Option<CrdsValue> {
+    let message = CrdsData::AccountsHashes(SnapshotHash::new(keypair.pubkey(), accounts_hashes));
+    Some(CrdsValue::new_signed(message, keypair))
 }
 
 // TODO These messages should go through the gpu pipeline for spam filtering
@@ -422,6 +430,7 @@ impl ClusterInfo {
         }
     }
 
+<<<<<<< HEAD
     pub fn push_epoch_slots(
         &mut self,
         id: Pubkey,
@@ -441,24 +450,38 @@ impl ClusterInfo {
         );
         self.gossip
             .process_push_message(&self.id(), vec![entry], now);
+=======
+    pub fn push_message(&mut self, message: CrdsValue) {
+        let now = message.wallclock();
+        let id = message.pubkey();
+        self.gossip.process_push_message(&id, vec![message], now);
+    }
+
+    pub fn push_accounts_hashes(&mut self, accounts_hashes: Vec<(Slot, Hash)>) {
+        if accounts_hashes.len() > MAX_SNAPSHOT_HASHES {
+            warn!(
+                "accounts hashes too large, ignored: {}",
+                accounts_hashes.len(),
+            );
+            return;
+        }
+
+        let message = CrdsData::AccountsHashes(SnapshotHash::new(self.id(), accounts_hashes));
+        self.push_message(CrdsValue::new_signed(message, &self.keypair));
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
     }
 
     pub fn push_snapshot_hashes(&mut self, snapshot_hashes: Vec<(Slot, Hash)>) {
         if snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
             warn!(
-                "snapshot_hashes too large, ignored: {}",
-                snapshot_hashes.len()
+                "snapshot hashes too large, ignored: {}",
+                snapshot_hashes.len(),
             );
             return;
         }
 
-        let now = timestamp();
-        let entry = CrdsValue::new_signed(
-            CrdsData::SnapshotHash(SnapshotHash::new(self.id(), snapshot_hashes, now)),
-            &self.keypair,
-        );
-        self.gossip
-            .process_push_message(&self.id(), vec![entry], now);
+        let message = CrdsData::SnapshotHashes(SnapshotHash::new(self.id(), snapshot_hashes));
+        self.push_message(CrdsValue::new_signed(message, &self.keypair));
     }
 
     pub fn push_vote(&mut self, tower_index: usize, vote: Transaction) {
@@ -518,11 +541,19 @@ impl ClusterInfo {
             .collect()
     }
 
+    pub fn get_accounts_hash_for_node(&self, pubkey: &Pubkey) -> Option<&Vec<(Slot, Hash)>> {
+        self.gossip
+            .crds
+            .table
+            .get(&CrdsValueLabel::AccountsHashes(*pubkey))
+            .map(|x| &x.value.accounts_hash().unwrap().hashes)
+    }
+
     pub fn get_snapshot_hash_for_node(&self, pubkey: &Pubkey) -> Option<&Vec<(Slot, Hash)>> {
         self.gossip
             .crds
             .table
-            .get(&CrdsValueLabel::SnapshotHash(*pubkey))
+            .get(&CrdsValueLabel::SnapshotHashes(*pubkey))
             .map(|x| &x.value.snapshot_hash().unwrap().hashes)
     }
 
@@ -2358,6 +2389,7 @@ mod tests {
         let payload: Vec<CrdsValue> = vec![];
         let vec_size = serialized_size(&payload).unwrap();
         let desired_size = MAX_PROTOCOL_PAYLOAD_SIZE - vec_size;
+<<<<<<< HEAD
         let mut value = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
             EpochSlots {
@@ -2391,6 +2423,21 @@ mod tests {
                     wallclock: 0,
                 },
             );
+=======
+        let mut value = CrdsValue::new_unsigned(CrdsData::SnapshotHashes(SnapshotHash {
+            from: Pubkey::default(),
+            hashes: vec![],
+            wallclock: 0,
+        }));
+
+        let mut i = 0;
+        while value.size() <= desired_size {
+            value.data = CrdsData::SnapshotHashes(SnapshotHash {
+                from: Pubkey::default(),
+                hashes: vec![(0, Hash::default()); i],
+                wallclock: 0,
+            });
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
             i += 1;
         }
         let split = ClusterInfo::split_gossip_messages(vec![value.clone()]);

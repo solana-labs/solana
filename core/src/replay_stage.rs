@@ -75,7 +75,7 @@ pub struct ReplayStageConfig {
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
     pub latest_root_senders: Vec<Sender<Slot>>,
-    pub snapshot_package_sender: Option<SnapshotPackageSender>,
+    pub accounts_hash_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
@@ -178,7 +178,7 @@ impl ReplayStage {
             leader_schedule_cache,
             slot_full_senders,
             latest_root_senders,
-            snapshot_package_sender,
+            accounts_hash_sender,
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -294,6 +294,7 @@ impl ReplayStage {
                     if vote_bank.is_none() {
                         break;
                     }
+<<<<<<< HEAD
                     let bank = vote_bank.unwrap();
                     let (is_locked_out, vote_threshold, fork_weight, total_staked) = {
                         let fork_stats = &progress.get(&bank.slot()).unwrap().fork_stats;
@@ -303,6 +304,50 @@ impl ReplayStage {
                             fork_stats.weight,
                             fork_stats.total_staked,
                         )
+=======
+
+                    let start = allocated.get();
+
+                    // Vote on a fork
+                    let voted_on_different_fork = {
+                        if let Some(ref vote_bank) = vote_bank {
+                            subscriptions.notify_subscribers(vote_bank.slot(), &bank_forks);
+                            if let Some(votable_leader) = leader_schedule_cache
+                                .slot_leader_at(vote_bank.slot(), Some(vote_bank))
+                            {
+                                Self::log_leader_change(
+                                    &my_pubkey,
+                                    vote_bank.slot(),
+                                    &mut current_leader,
+                                    &votable_leader,
+                                );
+                            }
+
+                            Self::handle_votable_bank(
+                                &vote_bank,
+                                &bank_forks,
+                                &mut tower,
+                                &mut progress,
+                                &vote_account,
+                                &voting_keypair,
+                                &cluster_info,
+                                &blockstore,
+                                &leader_schedule_cache,
+                                &root_bank_sender,
+                                &lockouts_sender,
+                                &accounts_hash_sender,
+                                &latest_root_senders,
+                                &mut earliest_vote_on_fork,
+                            )?;
+
+                            ancestors
+                                .get(&vote_bank.slot())
+                                .unwrap()
+                                .contains(&earliest_vote_on_fork)
+                        } else {
+                            false
+                        }
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
                     };
                     let mut vote_bank_slot = None;
                     let start = allocated.get();
@@ -596,7 +641,7 @@ impl ReplayStage {
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         total_staked: u64,
         lockouts_sender: &Sender<CommitmentAggregationData>,
-        snapshot_package_sender: &Option<SnapshotPackageSender>,
+        accounts_hash_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
     ) -> Result<()> {
         if bank.is_empty() {
@@ -623,7 +668,17 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
+<<<<<<< HEAD
             Self::handle_new_root(new_root, &bank_forks, progress, snapshot_package_sender);
+=======
+            Self::handle_new_root(
+                new_root,
+                &bank_forks,
+                progress,
+                accounts_hash_sender,
+                earliest_vote_on_fork,
+            );
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
                     trace!("latest root send failed: {:?}", e);
@@ -949,13 +1004,19 @@ impl ReplayStage {
     pub(crate) fn handle_new_root(
         new_root: u64,
         bank_forks: &RwLock<BankForks>,
+<<<<<<< HEAD
         progress: &mut HashMap<u64, ForkProgress>,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
+=======
+        progress: &mut ProgressMap,
+        accounts_hash_sender: &Option<SnapshotPackageSender>,
+        earliest_vote_on_fork: &mut u64,
+>>>>>>> dc347dd3d... Add Accounts hash consistency halting (#8772)
     ) {
         bank_forks
             .write()
             .unwrap()
-            .set_root(new_root, snapshot_package_sender);
+            .set_root(new_root, accounts_hash_sender);
         let r_bank_forks = bank_forks.read().unwrap();
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());
     }
