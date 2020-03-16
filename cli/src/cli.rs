@@ -738,7 +738,7 @@ pub fn parse_command(
             } else {
                 None
             };
-            let pubkey = pubkey_of(matches, "to");
+            let pubkey = pubkey_of_signer(matches, "to", wallet_manager)?;
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -761,7 +761,7 @@ pub fn parse_command(
             })
         }
         ("balance", Some(matches)) => {
-            let pubkey = pubkey_of(matches, "pubkey");
+            let pubkey = pubkey_of_signer(matches, "pubkey", wallet_manager)?;
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -802,7 +802,7 @@ pub fn parse_command(
         },
         ("pay", Some(matches)) => {
             let lamports = lamports_of_sol(matches, "amount").unwrap();
-            let to = pubkey_of(matches, "to").unwrap();
+            let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let timestamp = if matches.is_present("timestamp") {
                 // Parse input for serde_json
                 let date_string = if !matches.value_of("timestamp").unwrap().contains('Z') {
@@ -852,7 +852,8 @@ pub fn parse_command(
             })
         }
         ("account", Some(matches)) => {
-            let account_pubkey = pubkey_of(matches, "account_pubkey").unwrap();
+            let account_pubkey =
+                pubkey_of_signer(matches, "account_pubkey", wallet_manager)?.unwrap();
             let output_file = matches.value_of("output_file");
             let use_lamports_unit = matches.is_present("lamports");
             Ok(CliCommandInfo {
@@ -907,7 +908,7 @@ pub fn parse_command(
         }
         ("transfer", Some(matches)) => {
             let lamports = lamports_of_sol(matches, "amount").unwrap();
-            let to = pubkey_of(matches, "to").unwrap();
+            let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
             let nonce_account = pubkey_of(matches, NONCE_ARG.name);
@@ -2249,7 +2250,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(2)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("The pubkey of airdrop recipient"),
                 ),
         )
@@ -2349,7 +2350,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -2467,7 +2468,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -2502,7 +2503,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_pubkey_or_keypair)
+                        .validator(is_valid_signer)
                         .help("Account pubkey"),
                 )
                 .arg(
