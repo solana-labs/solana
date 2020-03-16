@@ -1,6 +1,7 @@
 //! The `metrics` module enables sending measurements to an `InfluxDB` instance
 
 use crate::{counter::CounterPoint, datapoint::DataPoint};
+use gethostname::gethostname;
 use lazy_static::lazy_static;
 use log::*;
 use solana_sdk::hash::hash;
@@ -11,7 +12,6 @@ use std::sync::{Arc, Barrier, Mutex, Once, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use std::{cmp, env};
-use sys_info::hostname;
 
 type CounterMap = HashMap<(&'static str, u64), CounterPoint>;
 
@@ -317,7 +317,9 @@ fn get_singleton_agent() -> Arc<Mutex<MetricsAgent>> {
 lazy_static! {
     static ref HOST_ID: Arc<RwLock<String>> = {
         Arc::new(RwLock::new({
-            let hostname: String = hostname().unwrap_or_else(|_| "".to_string());
+            let hostname: String = gethostname()
+                .into_string()
+                .unwrap_or_else(|_| "".to_string());
             format!("{}", hash(hostname.as_bytes()))
         }))
     };

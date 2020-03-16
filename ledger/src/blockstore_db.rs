@@ -754,6 +754,6 @@ fn get_db_options() -> Options {
     options.create_if_missing(true);
     options.create_missing_column_families(true);
     // A good value for this is the number of cores on the machine
-    options.increase_parallelism(sys_info::cpu_num().unwrap() as i32);
+    options.increase_parallelism(num_cpus::get() as i32);
     options
 }
