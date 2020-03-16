@@ -301,7 +301,7 @@ pub mod tests {
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),
