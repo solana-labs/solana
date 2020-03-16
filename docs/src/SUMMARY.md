@@ -4,7 +4,7 @@
 * [Install the Solana Tool Suite](install-solana.md)
 * [Send and Receive Tokens](cli/README.md)
   * [Command-line Usage](cli/usage.md)
-  * [Remote Wallet](remote-wallet/README.md)
+  * [Hardware Wallets](remote-wallet/README.md)
     * [Ledger Hardware Wallet](remote-wallet/ledger.md)
   * [Paper Wallet](paper-wallet/README.md)
     * [Paper Wallet Usage](paper-wallet/usage.md)
