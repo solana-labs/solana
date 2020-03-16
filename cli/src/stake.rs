@@ -47,7 +47,7 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .value_name("KEYPAIR")
         .validator(is_valid_signer)
         .help(STAKE_AUTHORITY_ARG.help)
 }
@@ -56,7 +56,7 @@ fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
         .long(WITHDRAW_AUTHORITY_ARG.long)
         .takes_value(true)
-        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+        .value_name("KEYPAIR")
         .validator(is_valid_signer)
         .help(WITHDRAW_AUTHORITY_ARG.help)
 }
@@ -73,7 +73,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -82,7 +82,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -91,7 +91,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("custodian")
                         .long("custodian")
-                        .value_name("KEYPAIR or PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Identity of the custodian (can withdraw before lockup expires)")
@@ -99,21 +99,21 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
-                        .value_name("SEED STRING")
+                        .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the STAKE ACCOUNT pubkey")
+                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the stake_account pubkey")
                 )
                 .arg(
                     Arg::with_name("lockup_epoch")
                         .long("lockup-epoch")
-                        .value_name("EPOCH")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .help("The epoch height at which this account will be available for withdrawal")
                 )
                 .arg(
                     Arg::with_name("lockup_date")
                         .long("lockup-date")
-                        .value_name("RFC3339 DATE TIME")
+                        .value_name("RFC3339 DATETIME")
                         .validator(is_rfc3339_datetime)
                         .takes_value(true)
                         .help("The date and time at which this account will be available for withdrawal")
@@ -138,7 +138,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("from")
                         .long("from")
                         .takes_value(true)
-                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .value_name("KEYPAIR")
                         .validator(is_valid_signer)
                         .help("Source account of funds (if different from client local account)"),
                 )
@@ -160,7 +160,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -169,7 +169,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account_pubkey")
                         .index(2)
-                        .value_name("VOTE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -187,7 +187,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -196,7 +196,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("authorized_pubkey")
                         .index(2)
-                        .value_name("AUTHORIZE PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -214,7 +214,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -223,7 +223,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("authorized_pubkey")
                         .index(2)
-                        .value_name("AUTHORIZE PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -241,7 +241,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help("Stake account to be deactivated.")
@@ -258,7 +258,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help("Stake account to be split")
@@ -266,7 +266,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("split_stake_account")
                         .index(2)
-                        .value_name("SPLIT STAKE ACCOUNT")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -275,7 +275,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -284,7 +284,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("seed")
                         .long("seed")
-                        .value_name("SEED STRING")
+                        .value_name("STRING")
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account will be at a derived address of the SPLIT STAKE ACCOUNT pubkey")
                 )
@@ -300,7 +300,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -309,7 +309,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
-                        .value_name("DESTINATION ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -318,7 +318,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("AMOUNT")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -336,7 +336,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -345,14 +345,14 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("lockup_epoch")
                         .long("lockup-epoch")
-                        .value_name("EPOCH")
+                        .value_name("NUMBER")
                         .takes_value(true)
                         .help("The epoch height at which this account will be available for withdrawal")
                 )
                 .arg(
                     Arg::with_name("lockup_date")
                         .long("lockup-date")
-                        .value_name("RFC3339 DATE TIME")
+                        .value_name("RFC3339 DATETIME")
                         .validator(is_rfc3339_datetime)
                         .takes_value(true)
                         .help("The date and time at which this account will be available for withdrawal")
@@ -360,7 +360,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("new_custodian")
                         .long("new-custodian")
-                        .value_name("KEYPAIR or PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey_or_keypair)
                         .help("Identity of the new lockup custodian (can withdraw before lockup expires)")
@@ -372,7 +372,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("custodian")
                         .long("custodian")
                         .takes_value(true)
-                        .value_name("KEYPAIR or PUBKEY or REMOTE WALLET PATH")
+                        .value_name("KEYPAIR")
                         .validator(is_valid_signer)
                         .help("Public key of signing custodian [default: cli config pubkey]")
                 )
@@ -388,7 +388,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
-                        .value_name("STAKE ACCOUNT")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)

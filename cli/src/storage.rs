@@ -26,7 +26,7 @@ impl StorageSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair),
@@ -34,7 +34,7 @@ impl StorageSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("storage_account")
                         .index(2)
-                        .value_name("STORAGE ACCOUNT")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer),
@@ -46,7 +46,7 @@ impl StorageSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("storage_account_owner")
                         .index(1)
-                        .value_name("STORAGE ACCOUNT OWNER PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair),
@@ -54,7 +54,7 @@ impl StorageSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("storage_account")
                         .index(2)
-                        .value_name("STORAGE ACCOUNT")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer),
@@ -66,7 +66,7 @@ impl StorageSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("node_account_pubkey")
                         .index(1)
-                        .value_name("NODE PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -75,7 +75,7 @@ impl StorageSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(2)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
@@ -89,7 +89,7 @@ impl StorageSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("storage_account_pubkey")
                         .index(1)
-                        .value_name("STORAGE ACCOUNT PUBKEY")
+                        .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey_or_keypair)
