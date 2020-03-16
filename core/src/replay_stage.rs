@@ -12,6 +12,7 @@ use crate::{
 };
 use solana_ledger::{
     bank_forks::BankForks,
+    block_error::BlockError,
     blockstore::Blockstore,
     blockstore_processor::{
         self, BlockstoreProcessorError, ConfirmationProgress, ConfirmationTiming,
@@ -629,14 +630,17 @@ impl ReplayStage {
             // errors related to the slot being purged
             let slot = bank.slot();
             warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            if err.is_severity_error() {
-                datapoint_error!(
+            if matches!(
+                err,
+                BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount)
+            ) {
+                datapoint_info!(
                     "replay-stage-mark_dead_slot",
                     ("error", format!("error: {:?}", err), String),
                     ("slot", slot, i64)
                 );
             } else {
-                datapoint_info!(
+                datapoint_error!(
                     "replay-stage-mark_dead_slot",
                     ("error", format!("error: {:?}", err), String),
                     ("slot", slot, i64)
@@ -1296,7 +1300,6 @@ pub(crate) mod tests {
     use crossbeam_channel::unbounded;
     use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
-        block_error::BlockError,
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},
         create_new_tmp_ledger,
