@@ -76,7 +76,7 @@ pub struct ReplayStageConfig {
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
     pub latest_root_senders: Vec<Sender<Slot>>,
-    pub snapshot_package_sender: Option<SnapshotPackageSender>,
+    pub accounts_hash_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
@@ -179,7 +179,7 @@ impl ReplayStage {
             leader_schedule_cache,
             slot_full_senders,
             latest_root_senders,
-            snapshot_package_sender,
+            accounts_hash_sender,
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -334,7 +334,7 @@ impl ReplayStage {
                             &root_bank_sender,
                             total_staked,
                             &lockouts_sender,
-                            &snapshot_package_sender,
+                            &accounts_hash_sender,
                             &latest_root_senders,
                         )?;
                     }
@@ -605,7 +605,7 @@ impl ReplayStage {
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         total_staked: u64,
         lockouts_sender: &Sender<CommitmentAggregationData>,
-        snapshot_package_sender: &Option<SnapshotPackageSender>,
+        accounts_hash_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
     ) -> Result<()> {
         if bank.is_empty() {
@@ -632,7 +632,7 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
-            Self::handle_new_root(new_root, &bank_forks, progress, snapshot_package_sender);
+            Self::handle_new_root(new_root, &bank_forks, progress, accounts_hash_sender);
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
                     trace!("latest root send failed: {:?}", e);
@@ -959,12 +959,12 @@ impl ReplayStage {
         new_root: u64,
         bank_forks: &RwLock<BankForks>,
         progress: &mut HashMap<u64, ForkProgress>,
-        snapshot_package_sender: &Option<SnapshotPackageSender>,
+        accounts_hash_sender: &Option<SnapshotPackageSender>,
     ) {
         bank_forks
             .write()
             .unwrap()
-            .set_root(new_root, snapshot_package_sender);
+            .set_root(new_root, accounts_hash_sender);
         let r_bank_forks = bank_forks.read().unwrap();
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());
     }

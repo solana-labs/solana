@@ -1,5 +1,6 @@
 use crate::contact_info::ContactInfo;
 use bincode::{serialize, serialized_size};
+use solana_sdk::timing::timestamp;
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
@@ -62,7 +63,8 @@ pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
     EpochSlots(EpochSlotIndex, EpochSlots),
-    SnapshotHash(SnapshotHash),
+    SnapshotHashes(SnapshotHash),
+    AccountsHashes(SnapshotHash),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -93,11 +95,11 @@ pub struct SnapshotHash {
 }
 
 impl SnapshotHash {
-    pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>, wallclock: u64) -> Self {
+    pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
         Self {
             from,
             hashes,
-            wallclock,
+            wallclock: timestamp(),
         }
     }
 }
@@ -156,7 +158,8 @@ pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
     Vote(VoteIndex, Pubkey),
     EpochSlots(Pubkey),
-    SnapshotHash(Pubkey),
+    SnapshotHashes(Pubkey),
+    AccountsHashes(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -165,7 +168,8 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::EpochSlots(_) => write!(f, "EpochSlots({})", self.pubkey()),
-            CrdsValueLabel::SnapshotHash(_) => write!(f, "SnapshotHash({})", self.pubkey()),
+            CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHashes({})", self.pubkey()),
+            CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
         }
     }
 }
@@ -176,7 +180,8 @@ impl CrdsValueLabel {
             CrdsValueLabel::ContactInfo(p) => *p,
             CrdsValueLabel::Vote(_, p) => *p,
             CrdsValueLabel::EpochSlots(p) => *p,
-            CrdsValueLabel::SnapshotHash(p) => *p,
+            CrdsValueLabel::SnapshotHashes(p) => *p,
+            CrdsValueLabel::AccountsHashes(p) => *p,
         }
     }
 }
@@ -202,7 +207,8 @@ impl CrdsValue {
             CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::EpochSlots(_, vote) => vote.wallclock,
-            CrdsData::SnapshotHash(hash) => hash.wallclock,
+            CrdsData::SnapshotHashes(hash) => hash.wallclock,
+            CrdsData::AccountsHashes(hash) => hash.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -210,7 +216,8 @@ impl CrdsValue {
             CrdsData::ContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::EpochSlots(_, slots) => slots.from,
-            CrdsData::SnapshotHash(hash) => hash.from,
+            CrdsData::SnapshotHashes(hash) => hash.from,
+            CrdsData::AccountsHashes(hash) => hash.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -218,7 +225,8 @@ impl CrdsValue {
             CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::EpochSlots(_, _) => CrdsValueLabel::EpochSlots(self.pubkey()),
-            CrdsData::SnapshotHash(_) => CrdsValueLabel::SnapshotHash(self.pubkey()),
+            CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
+            CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -250,7 +258,14 @@ impl CrdsValue {
 
     pub fn snapshot_hash(&self) -> Option<&SnapshotHash> {
         match &self.data {
-            CrdsData::SnapshotHash(slots) => Some(slots),
+            CrdsData::SnapshotHashes(slots) => Some(slots),
+            _ => None,
+        }
+    }
+
+    pub fn accounts_hash(&self) -> Option<&SnapshotHash> {
+        match &self.data {
+            CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,
         }
     }
@@ -260,7 +275,8 @@ impl CrdsValue {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
             CrdsValueLabel::EpochSlots(*key),
-            CrdsValueLabel::SnapshotHash(*key),
+            CrdsValueLabel::SnapshotHashes(*key),
+            CrdsValueLabel::AccountsHashes(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels
@@ -310,14 +326,15 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 3 + MAX_VOTES as usize];
+        let mut hits = [false; 4 + MAX_VOTES as usize];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
                 CrdsValueLabel::EpochSlots(_) => hits[1] = true,
-                CrdsValueLabel::SnapshotHash(_) => hits[2] = true,
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 3] = true,
+                CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
+                CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 4] = true,
             }
         }
         assert!(hits.iter().all(|x| *x));
