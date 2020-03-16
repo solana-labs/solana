@@ -674,7 +674,9 @@ pub fn parse_command(
         ("claim-storage-reward", Some(matches)) => {
             parse_storage_claim_reward(matches, default_signer_path, wallet_manager)
         }
-        ("storage-account", Some(matches)) => parse_storage_get_account_command(matches),
+        ("storage-account", Some(matches)) => {
+            parse_storage_get_account_command(matches, wallet_manager)
+        }
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => {
