@@ -212,7 +212,7 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
-                let retransmit_slots_sender = retransmit_slots_sender;
+                let _retransmit_slots_sender = retransmit_slots_sender;
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut progress = HashMap::new();
@@ -228,7 +228,6 @@ impl ReplayStage {
                     slots.last().cloned().unwrap_or(0)
                 };
                 let mut switch_threshold = false;
-                let mut last_retransmit_poh_slot = 0;
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
