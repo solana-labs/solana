@@ -6,22 +6,22 @@ function NetworkStatusButton() {
 
   switch (status) {
     case NetworkStatus.Connected:
-      return <a className="btn btn-primary lift">{url}</a>;
+      return <span className="btn btn-white lift">{url}</span>;
 
     case NetworkStatus.Connecting:
       return (
-        <a className="btn btn-warning lift">
+        <span className="btn btn-warning lift">
           {"Connecting "}
           <span
             className="spinner-grow spinner-grow-sm text-dark"
             role="status"
             aria-hidden="true"
           ></span>
-        </a>
+        </span>
       );
 
     case NetworkStatus.Failure:
-      return <a className="btn btn-danger lift">Disconnected</a>;
+      return <span className="btn btn-danger lift">Disconnected</span>;
   }
 }
 
