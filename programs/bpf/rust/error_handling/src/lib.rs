@@ -67,14 +67,14 @@ fn process_instruction(
             info!("return custom error");
             Err(MyError::TheAnswer.into())
         }
-        6 => {
+        7 => {
             let data = accounts[0].try_borrow_mut_data()?;
             let data2 = accounts[0].try_borrow_mut_data()?;
             assert_eq!(*data, *data2);
             Ok(())
         }
         _ => {
-            info!("Unrecognized command");
+            info!("Unsupported");
             Err(ProgramError::InvalidInstructionData)
         }
     }

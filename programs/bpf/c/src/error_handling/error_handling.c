@@ -24,17 +24,20 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sol_log("return a builtin");
       return ERROR_INVALID_ACCOUNT_DATA;
     case(3):
+      sol_log("return custom error 0");
+      return ERROR_CUSTOM_ZERO;
+    case(4):
       sol_log("return custom error 42");
       return 42;
-    case(4):
+    case(5):
       sol_log("return an invalid error");
       return ERROR_INVALID_ACCOUNT_DATA + 1;
-    case(5):
+    case(6):
       sol_log("return unknown builtin");
       return TO_BUILTIN(50);
     default:
       sol_log("Unrecognized command");
       return ERROR_INVALID_INSTRUCTION_DATA;
   }
-  return SUCCESS;
+  return ERROR_INVALID_INSTRUCTION_DATA;
 }
