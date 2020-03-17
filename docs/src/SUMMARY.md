@@ -3,6 +3,7 @@
 * [Introduction](introduction.md)
 * [Install the Solana Tool Suite](install-solana.md)
 * [Send and Receive Tokens](cli/README.md)
+  * [Choose a Wallet](cli/choose-a-wallet.md)
   * [Generate Keys](cli/generate-keys.md)
   * [Hardware Wallets](remote-wallet/README.md)
     * [Ledger Hardware Wallet](remote-wallet/ledger.md)
