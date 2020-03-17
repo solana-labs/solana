@@ -1,4 +1,5 @@
 pub mod packet;
+pub mod streamer;
 pub mod recvmmsg;
 
 #[macro_use]

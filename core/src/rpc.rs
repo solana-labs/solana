@@ -2,7 +2,7 @@
 
 use crate::{
     cluster_info::ClusterInfo, commitment::BlockCommitmentCache, contact_info::ContactInfo,
-    packet::PACKET_DATA_SIZE, storage_stage::StorageState, validator::ValidatorExit,
+    storage_stage::StorageState, validator::ValidatorExit,
 };
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
@@ -18,6 +18,7 @@ use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, rooted_slot_iterator::RootedSlotIterator,
 };
+use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},

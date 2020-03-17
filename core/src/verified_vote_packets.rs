@@ -1,7 +1,8 @@
 use crate::{
     cluster_info_vote_listener::VerifiedVotePacketsReceiver, crds_value::CrdsValueLabel,
-    packet::Packets, result::Result,
+    result::Result,
 };
+use solana_perf::packet::Packets;
 use std::{collections::HashMap, ops::Deref, time::Duration};
 
 #[derive(Default)]

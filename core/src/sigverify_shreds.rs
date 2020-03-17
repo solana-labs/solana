@@ -1,11 +1,11 @@
 #![allow(clippy::implicit_hasher)]
-use crate::packet::{limited_deserialize, Packets};
 use crate::sigverify;
 use crate::sigverify_stage::SigVerifier;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::{OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_SLOT};
 use solana_ledger::sigverify_shreds::verify_shreds_gpu;
+use solana_perf::packet::{limited_deserialize, Packets};
 use solana_perf::recycler_cache::RecyclerCache;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};

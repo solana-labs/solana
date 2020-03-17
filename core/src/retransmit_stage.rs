@@ -2,10 +2,8 @@
 
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
-    packet::Packets,
     repair_service::RepairStrategy,
     result::{Error, Result},
-    streamer::PacketReceiver,
     window_service::{should_retransmit_and_persist, WindowService},
 };
 use crossbeam_channel::Receiver as CrossbeamReceiver;
@@ -17,7 +15,9 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
+use solana_perf::packet::Packets;
 use solana_sdk::epoch_schedule::EpochSchedule;
+use solana_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
     net::UdpSocket,

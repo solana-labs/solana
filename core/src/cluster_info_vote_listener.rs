@@ -1,7 +1,6 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
     crds_value::CrdsValueLabel,
-    packet::{self, Packets},
     poh_recorder::PohRecorder,
     result::{Error, Result},
     sigverify,
@@ -14,6 +13,7 @@ use itertools::izip;
 use log::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_metrics::inc_new_counter_debug;
+use solana_perf::packet::{self, Packets};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,

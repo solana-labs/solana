@@ -1,10 +1,7 @@
-use crate::packet::limited_deserialize;
-use crate::streamer::{PacketReceiver, PacketSender};
 use crate::{
     cluster_info::{ClusterInfo, ClusterInfoError},
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
-    packet::Packet,
     result::{Error, Result},
     weighted_shuffle::weighted_best,
 };
@@ -12,13 +9,14 @@ use bincode::serialize;
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug};
-use solana_perf::packet::{Packets, PacketsRecycler};
+use solana_perf::packet::{limited_deserialize, Packet, Packets, PacketsRecycler};
 use solana_sdk::{
     clock::Slot,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     timing::duration_as_ms,
 };
+use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     collections::HashMap,
     net::SocketAddr,

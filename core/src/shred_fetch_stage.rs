@@ -1,12 +1,11 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
-use crate::packet::{Packet, PacketsRecycler};
-use crate::streamer::{self, PacketReceiver, PacketSender};
 use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
 use solana_ledger::shred::{OFFSET_OF_SHRED_INDEX, SIZE_OF_SHRED_INDEX};
 use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::packet::limited_deserialize;
+use solana_perf::packet::{limited_deserialize, Packet, PacketsRecycler};
 use solana_perf::recycler::Recycler;
+use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;

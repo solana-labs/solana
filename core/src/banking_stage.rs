@@ -3,7 +3,6 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
     cluster_info::ClusterInfo,
-    packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
 };
@@ -17,7 +16,11 @@ use solana_ledger::{
 };
 use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
-use solana_perf::{cuda_runtime::PinnedVec, perf_libs};
+use solana_perf::{
+    cuda_runtime::PinnedVec,
+    packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
+    perf_libs,
+};
 use solana_runtime::{
     accounts_db::ErrorCounters,
     bank::{Bank, TransactionBalancesSet, TransactionProcessResult},

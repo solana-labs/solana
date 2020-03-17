@@ -2,10 +2,8 @@
 //!   blockstore and retransmitting where required
 //!
 use crate::cluster_info::ClusterInfo;
-use crate::packet::Packets;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
-use crate::streamer::PacketSender;
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
 };
@@ -17,10 +15,12 @@ use solana_ledger::blockstore::{self, Blockstore, MAX_DATA_SHREDS_PER_SLOT};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
+use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
+use solana_streamer::streamer::PacketSender;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
