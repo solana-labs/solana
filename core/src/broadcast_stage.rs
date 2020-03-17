@@ -604,6 +604,7 @@ mod test {
         blockstore
             .insert_shreds(all_coding_shreds, None, true)
             .unwrap();
+
         // Signal for retransmit
         retransmit_slots_sender
             .send(vec![(updated_slot, bank0.clone())].into_iter().collect())

@@ -63,7 +63,7 @@ impl SlotTransmitShredsCache {
         }
     }
 
-    pub fn push(&mut self, slot: Slot, transmit_shreds: TransmitShreds) {
+    pub fn push(&mut self, slot: Slot, transmit_shreds: TransmitShreds) -> bool {
         if !self.cache.contains_key(&slot) {
             if !transmit_shreds.1.is_empty() && transmit_shreds.1[0].index() != 0 {
                 // Shreds for a slot must come in order from broadcast.
@@ -71,8 +71,7 @@ impl SlotTransmitShredsCache {
                 // this batch does not contain the first shred for the slot,
                 // this means this slot has already been purged from the cache,
                 // so dump it.
-                println!("dumping");
-                return;
+                return false;
             }
             if self.insertion_order.len() == self.capacity {
                 let old_slot = self.insertion_order.pop_front().unwrap();
@@ -96,17 +95,22 @@ impl SlotTransmitShredsCache {
         // blockstore or broadcast later (usedd to track incomplete
         // retrasmits)
         if transmit_shreds.1.is_empty() {
-            return;
+            return true;
         }
 
         // Transmit shreds must be all of one type or another
-        if transmit_shreds.1[0].is_data() {
-            assert!(transmit_shreds.1.iter().all(|s| s.is_data()));
-            slot_cache.data_shred_batches.push(transmit_shreds.1);
-        } else {
-            assert!(transmit_shreds.1.iter().all(|s| !s.is_data()));
-            slot_cache.coding_shred_batches.push(transmit_shreds.1);
+        let should_push = Self::should_push(&slot_cache, &transmit_shreds);
+        if should_push {
+            if transmit_shreds.1[0].is_data() {
+                assert!(transmit_shreds.1.iter().all(|s| s.is_data()));
+                slot_cache.data_shred_batches.push(transmit_shreds.1);
+            } else {
+                assert!(transmit_shreds.1.iter().all(|s| !s.is_data()));
+                slot_cache.coding_shred_batches.push(transmit_shreds.1);
+            }
         }
+
+        should_push
     }
 
     pub fn get(&self, slot: Slot) -> Option<&SlotCachedTransmitShreds> {
@@ -229,30 +233,30 @@ impl SlotTransmitShredsCache {
     ) -> Result<()> {
         let timer = Duration::from_millis(100);
         let (slot, new_transmit_shreds) = retransmit_cache_receiver.recv_timeout(timer)?;
-        if self.should_push(slot, &new_transmit_shreds) {
+        if self.push(slot, new_transmit_shreds.clone()) {
             updates
                 .entry(slot)
-                .or_insert_with(|| vec![new_transmit_shreds.clone()]);
-            println!("pushing from update_retransmit_cache");
-            self.push(slot, new_transmit_shreds);
+                .or_insert_with(|| vec![new_transmit_shreds]);
         }
 
         while let Ok((slot, new_transmit_shreds)) = retransmit_cache_receiver.try_recv() {
-            if self.should_push(slot, &new_transmit_shreds) {
+            if self.push(slot, new_transmit_shreds.clone()) {
                 updates
                     .entry(slot)
                     .or_insert_with(|| vec![])
                     .push(new_transmit_shreds.clone());
-                self.push(slot, new_transmit_shreds);
             }
         }
 
         Ok(())
     }
 
-    fn should_push(&self, slot: Slot, new_transmit_shreds: &TransmitShreds) -> bool {
+    fn should_push(
+        cached_entry: &SlotCachedTransmitShreds,
+        new_transmit_shreds: &TransmitShreds,
+    ) -> bool {
         if new_transmit_shreds.1.is_empty() {
-            return false;
+            return true;
         }
         // Check if updates should be added to the cache. Note that:
         //
@@ -267,21 +271,16 @@ impl SlotTransmitShredsCache {
         // updates in `transmit_shreds`, and should send them to be
         // retransmitted.
         let (last_cached_data_index, last_cached_coding_index) = {
-            self.cache
-                .get(&slot)
-                .map(|cached_entry| {
-                    (
-                        cached_entry
-                            .last_data_shred()
-                            .map(|shred| shred.index())
-                            .unwrap_or(0),
-                        cached_entry
-                            .last_coding_shred()
-                            .map(|shred| shred.index())
-                            .unwrap_or(0),
-                    )
-                })
-                .unwrap_or((0, 0))
+            (
+                cached_entry
+                    .last_data_shred()
+                    .map(|shred| shred.index())
+                    .unwrap_or(0),
+                cached_entry
+                    .last_coding_shred()
+                    .map(|shred| shred.index())
+                    .unwrap_or(0),
+            )
         };
 
         let first_new_shred_index = new_transmit_shreds.1[0].index();
