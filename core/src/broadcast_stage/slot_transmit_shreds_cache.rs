@@ -123,13 +123,11 @@ impl SlotTransmitShredsCache {
         blockstore: &Blockstore,
     ) -> &SlotCachedTransmitShreds {
         if self.cache.get(&bank.slot()).is_none() {
-            println!("filling in {}", bank.slot());
             let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
             let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
             let stakes = stakes.map(Arc::new);
 
             let (data_shreds, coding_shreds) = self.get_new_shreds(blockstore, bank.slot(), 0, 0);
-            println!("got new {}, {}", data_shreds.len(), coding_shreds.len());
             self.push(bank.slot(), (stakes.clone(), data_shreds));
             self.push(bank.slot(), (stakes, coding_shreds));
             self.cache

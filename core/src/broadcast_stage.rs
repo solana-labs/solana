@@ -368,9 +368,6 @@ impl BroadcastStage {
         // so remove it from the `unfinished_retransmit_slots` set
         unfinished_retransmit_slots.retain(|unfinished_retransmit_slot| {
             let slot_cached_shreds = transmit_shreds_cache.get(*unfinished_retransmit_slot);
-            if slot_cached_shreds.is_none() {
-                println!("aborting");
-            }
             slot_cached_shreds.is_some()
         });
 
@@ -389,12 +386,10 @@ impl BroadcastStage {
             // `transmit_shreds_cache` because of the `retain()` run at the
             // beginning of this function
             let slot_cached_shreds = transmit_shreds_cache.get(updated_slot).unwrap();
-            println!("len: {}", all_transmit_shreds.len());
             for transmit_shreds in all_transmit_shreds {
                 if transmit_shreds.1.is_empty() {
                     continue;
                 }
-                println!("Sending: {}", transmit_shreds.1[0].is_data());
                 socket_sender.send(transmit_shreds)?;
             }
 
@@ -426,7 +421,6 @@ impl BroadcastStage {
             let all_data_transmit_shreds = cached_updates.to_transmit_shreds();
 
             for transmit_shreds in all_data_transmit_shreds {
-                println!("Sending from store");
                 socket_sender.send(transmit_shreds)?;
             }
         }
@@ -450,7 +444,6 @@ impl BroadcastStage {
         }
 
         for (_, bank) in retransmit_slots.iter() {
-            println!("got signal for {}", bank.slot());
             unfinished_retransmit_slots.remove(&bank.slot());
             let cached_shreds = transmit_shreds_cache.get_or_update(bank, blockstore);
             // If the cached shreds are missing any shreds (broadcast
@@ -458,12 +451,10 @@ impl BroadcastStage {
             // to the `unfinished_retransmit_slots` so we can retry broadcasting
             // the missing shreds later.
             if !cached_shreds.contains_last_shreds() {
-                println!("adding unfinished: {}", bank.slot());
                 unfinished_retransmit_slots.insert(bank.slot());
             }
             let all_data_transmit_shreds = cached_shreds.to_transmit_shreds();
             for transmit_shreds in all_data_transmit_shreds {
-                println!("sending transmit shreds");
                 socket_sender.send(transmit_shreds)?;
             }
         }
@@ -831,12 +822,11 @@ mod test {
             data_shreds: Vec<Shred>,
             coding_shreds: Vec<Shred>,
             data_transmit_shreds: Vec<TransmitShreds>,
-            coding_transmit_shreds: Vec<TransmitShreds>,
         }
 
         impl BankShreds {
             fn new(bank: Arc<Bank>) -> Self {
-                let (data_shreds, coding_shreds, data_transmit_shreds, coding_transmit_shreds) =
+                let (data_shreds, coding_shreds, data_transmit_shreds, _) =
                     make_transmit_shreds(bank.slot(), 10);
 
                 BankShreds {
@@ -844,7 +834,6 @@ mod test {
                     data_shreds,
                     data_transmit_shreds,
                     coding_shreds,
-                    coding_transmit_shreds,
                 }
             }
         }
@@ -920,7 +909,6 @@ mod test {
                 .collect();
 
         retransmit_slots_sender.send(slot0_signal.clone()).unwrap();
-        println!("here1");
         assert!(BroadcastStage::run_retransmit(
             &blockstore,
             &mut transmit_shreds_cache,
@@ -940,7 +928,6 @@ mod test {
         let num_coding_shreds = coding_shreds.len() as u64;
         blockstore.insert_shreds(data_shreds, None, true).unwrap();
         blockstore.insert_shreds(coding_shreds, None, true).unwrap();
-        println!("here2");
         assert!(BroadcastStage::run_retransmit(
             &blockstore,
             &mut transmit_shreds_cache,
