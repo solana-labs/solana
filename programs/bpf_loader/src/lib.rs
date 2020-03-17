@@ -158,33 +158,36 @@ pub fn process_instruction(
     if is_executable(keyed_accounts)? {
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
-        let program_account = program.try_account_ref_mut()?;
-        let (mut vm, heap_region) = match create_vm(&program_account.data) {
-            Ok(info) => info,
-            Err(e) => {
-                warn!("Failed to create BPF VM: {}", e);
-                return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
-            }
-        };
+
         let parameter_accounts = keyed_accounts_iter.as_slice();
         let parameter_bytes = serialize_parameters(
             program.unsigned_key(),
             parameter_accounts,
             &instruction_data,
         )?;
-
-        info!("Call BPF program");
-        match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
-            Ok(status) => {
-                if status != SUCCESS {
-                    let error: InstructionError = status.into();
-                    warn!("BPF program failed: {:?}", error);
-                    return Err(error);
+        {
+            let program_account = program.try_account_ref_mut()?;
+            let (mut vm, heap_region) = match create_vm(&program_account.data) {
+                Ok(info) => info,
+                Err(e) => {
+                    warn!("Failed to create BPF VM: {}", e);
+                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
                 }
-            }
-            Err(e) => {
-                warn!("BPF VM failed to run program: {}", e);
-                return Err(BPFLoaderError::VirtualMachineFailedToRunProgram.into());
+            };
+
+            info!("Call BPF program");
+            match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
+                Ok(status) => {
+                    if status != SUCCESS {
+                        let error: InstructionError = status.into();
+                        warn!("BPF program failed: {:?}", error);
+                        return Err(error);
+                    }
+                }
+                Err(e) => {
+                    warn!("BPF VM failed to run program: {}", e);
+                    return Err(BPFLoaderError::VirtualMachineFailedToRunProgram.into());
+                }
             }
         }
         deserialize_parameters(parameter_accounts, &parameter_bytes)?;
