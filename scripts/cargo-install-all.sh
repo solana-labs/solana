@@ -89,6 +89,8 @@ else
     solana-bench-tps
     solana-faucet
     solana-gossip
+    solana-install
+    solana-install-init
     solana-keygen
     solana-ledger-tool
     solana-log-analyzer
