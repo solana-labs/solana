@@ -1014,7 +1014,6 @@ mod tests {
     use crate::{
         cluster_info::Node,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        packet::to_packets,
         poh_recorder::WorkingBank,
         transaction_status_service::TransactionStatusService,
     };
@@ -1026,6 +1025,7 @@ mod tests {
         entry::{next_entry, Entry, EntrySlice},
         get_tmp_ledger_path,
     };
+    use solana_perf::packet::to_packets;
     use solana_runtime::bank::HashAgeKind;
     use solana_sdk::{
         instruction::InstructionError,

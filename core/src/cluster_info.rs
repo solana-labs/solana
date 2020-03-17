@@ -22,7 +22,6 @@ use crate::{
     },
     epoch_slots::EpochSlots,
     result::{Error, Result},
-    sendmmsg::{multicast, send_mmsg},
     weighted_shuffle::{weighted_best, weighted_shuffle},
 };
 use bincode::{serialize, serialized_size};
@@ -52,6 +51,7 @@ use solana_sdk::{
     timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };
+use solana_streamer::sendmmsg::{multicast, send_mmsg};
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     borrow::Cow,

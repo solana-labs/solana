@@ -476,11 +476,8 @@ impl WindowService {
 mod test {
     use super::*;
     use crate::{
-        cluster_info::ClusterInfo,
-        contact_info::ContactInfo,
-        genesis_utils::create_genesis_config_with_leader,
-        packet::{Packet, Packets},
-        repair_service::RepairSlotRange,
+        cluster_info::ClusterInfo, contact_info::ContactInfo,
+        genesis_utils::create_genesis_config_with_leader, repair_service::RepairSlotRange,
     };
     use rand::thread_rng;
     use solana_ledger::shred::DataShredHeader;
@@ -490,6 +487,7 @@ mod test {
         get_tmp_ledger_path,
         shred::Shredder,
     };
+    use solana_perf::packet::Packet;
     use solana_sdk::{
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,

@@ -56,11 +56,9 @@ impl VerifiedVotePackets {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        packet::{Meta, Packet},
-        result::Error,
-    };
+    use crate::result::Error;
     use crossbeam_channel::{unbounded, RecvTimeoutError};
+    use solana_perf::packet::{Meta, Packet};
     use solana_sdk::pubkey::Pubkey;
 
     #[test]

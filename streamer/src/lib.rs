@@ -1,6 +1,7 @@
 pub mod packet;
-pub mod streamer;
 pub mod recvmmsg;
+pub mod sendmmsg;
+pub mod streamer;
 
 #[macro_use]
 extern crate log;

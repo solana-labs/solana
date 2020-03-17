@@ -279,10 +279,10 @@ mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use crate::packet::{self, Meta, Packet, Packets};
     use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
     use solana_ledger::create_new_tmp_ledger;
     use solana_net_utils::find_available_port_in_range;
+    use solana_perf::packet::{Meta, Packet, Packets};
     use solana_sdk::pubkey::Pubkey;
     use std::net::{IpAddr, Ipv4Addr};
 
@@ -333,7 +333,7 @@ mod tests {
         // it should send this over the sockets.
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
+        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
 
@@ -349,7 +349,7 @@ mod tests {
         let packets = Packets::new(vec![repair, Packet::default()]);
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
+        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
     }
