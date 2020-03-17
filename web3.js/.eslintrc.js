@@ -8,14 +8,12 @@ module.exports = {
     'eslint:recommended',
     'plugin:import/errors',
     'plugin:import/warnings',
-    'plugin:flowtype/recommended',
   ],
   parser: 'babel-eslint',
   parserOptions: {
     sourceType: 'module',
     ecmaVersion: 8,
   },
-  plugins: ['flowtype'],
   rules: {
     'no-trailing-spaces': ['error'],
     'import/first': ['error'],
@@ -47,20 +45,26 @@ module.exports = {
     ],
     'require-await': ['error'],
     semi: ['error', 'always'],
-    'flowtype/generic-spacing': [0],
   },
 
   // Used to lint the TypeScript type declaration file
   overrides: [
     {
+      files: ['*.js'],
+      plugins: ['flowtype'],
+      extends: ['plugin:flowtype/recommended'],
+      rules: {
+        'flowtype/generic-spacing': [0],
+      },
+    },
+    {
       files: ['*.d.ts'],
       parser: '@typescript-eslint/parser',
       plugins: ['@typescript-eslint'],
-      extends: [
-        'eslint:recommended',
-        'plugin:@typescript-eslint/eslint-recommended',
-        'plugin:@typescript-eslint/recommended',
-      ],
+      rules: {
+        'no-unused-vars': 'off',
+        '@typescript-eslint/no-unused-vars': ['error'],
+      },
     },
   ],
 };
