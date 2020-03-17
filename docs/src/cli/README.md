@@ -19,25 +19,25 @@ device called a *hardware wallet*. Some wallets are easier to use than others.
 Some are more secure than others.  We'll go over each type of wallet here and dive
 into the various tradeoffs.
 
-### Directory Wallet
+### File System Wallet
 
-A *directory wallet* is a directory in your computer's file system. Each file
-in the directory holds a keypair.
+A *file system wallet* (aka FS wallet) is a directory in your computer's file system.
+Each file in the directory holds a keypair.
 
-#### Directory Wallet Security
+#### FS Wallet Security
 
-A directory wallet is the most convenient and least secure form of wallets. It is
+An FS wallet is the most convenient and least secure form of wallets. It is
 convenient because the keypair is stored in a simple file. You can generate as
 many keys as you'd like and trivially make copies to back them up. If you
 are confident your computer has no malware and that no other people will use
-it, a directory wallet is a fine solution for small amounts of SOL. If however,
+it, an FS wallet is a fine solution for small amounts of SOL. If however,
 your computer contains malware and is connected to the Internet, that malware may
 upload your keys and used to take your tokens. Likewise, because the keypair is
 stored on your computer in a simple file, a skilled hacker with physical access
 to your computer may be able to access it. Using an encrypted hard drive, such
 as FileVault on MacOS, minimizes that risk.
 
-#### Generate a Directory Wallet Key
+#### Generate an FS Wallet Key
 
 Use Solana's command-line tool `solana-keygen` to generate keypair files. For
 example, run the following from a command-line shell:
