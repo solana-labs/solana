@@ -14,7 +14,6 @@ mod bpf {
         instruction::{AccountMeta, Instruction, InstructionError},
         pubkey::Pubkey,
         signature::Keypair,
-        message::Message,
         signature::Signer,
         sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
         transaction::TransactionError,
