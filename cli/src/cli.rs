@@ -1255,7 +1255,8 @@ fn process_deploy(
     )?;
 
     trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction(&mut create_account_tx, &signers);
+    let result =
+        rpc_client.send_and_confirm_transaction_with_spinner(&mut create_account_tx, &signers);
     log_instruction_custom_error::<SystemError>(result)
         .map_err(|_| CliError::DynamicProgramError("Program allocate space failed".to_string()))?;
 
@@ -1264,7 +1265,7 @@ fn process_deploy(
 
     trace!("Finalizing program account");
     rpc_client
-        .send_and_confirm_transaction(&mut finalize_tx, &signers)
+        .send_and_confirm_transaction_with_spinner(&mut finalize_tx, &signers)
         .map_err(|_| {
             CliError::DynamicProgramError("Program finalize transaction failed".to_string())
         })?;
@@ -1328,7 +1329,8 @@ fn process_pay(
                 &fee_calculator,
                 &tx.message,
             )?;
-            let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+            let result =
+                rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
             log_instruction_custom_error::<SystemError>(result)
         }
     } else if *witnesses == None {
@@ -1362,8 +1364,10 @@ fn process_pay(
                 &fee_calculator,
                 &tx.message,
             )?;
-            let result = rpc_client
-                .send_and_confirm_transaction(&mut tx, &[config.signers[0], &contract_state]);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner(
+                &mut tx,
+                &[config.signers[0], &contract_state],
+            );
             let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
             Ok(json!({
@@ -1399,8 +1403,10 @@ fn process_pay(
         if sign_only {
             return_signers(&tx)
         } else {
-            let result = rpc_client
-                .send_and_confirm_transaction(&mut tx, &[config.signers[0], &contract_state]);
+            let result = rpc_client.send_and_confirm_transaction_with_spinner(
+                &mut tx,
+                &[config.signers[0], &contract_state],
+            );
             check_account_for_fee(
                 rpc_client,
                 &config.signers[0].pubkey(),
@@ -1436,7 +1442,8 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.signers[0]]);
+    let result =
+        rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
     log_instruction_custom_error::<BudgetError>(result)
 }
 
@@ -1459,7 +1466,8 @@ fn process_time_elapsed(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.signers[0]]);
+    let result =
+        rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
     log_instruction_custom_error::<BudgetError>(result)
 }
 
@@ -1516,7 +1524,7 @@ fn process_transfer(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<SystemError>(result)
     }
 }
@@ -1539,7 +1547,8 @@ fn process_witness(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[config.signers[0]]);
+    let result =
+        rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
     log_instruction_custom_error::<BudgetError>(result)
 }
 
@@ -2146,7 +2155,7 @@ pub fn request_and_confirm_airdrop(
         }
     }?;
     let mut tx = keypair.airdrop_transaction();
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&keypair]);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[&keypair]);
     log_instruction_custom_error::<SystemError>(result)
 }
 

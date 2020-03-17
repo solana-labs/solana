@@ -368,7 +368,7 @@ pub fn process_set_validator_info(
         &fee_calculator,
         &tx.message,
     )?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
+    let signature_str = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &signers)?;
 
     println!("Success! Validator info published at: {:?}", info_pubkey);
     println!("{}", signature_str);
