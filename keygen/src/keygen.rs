@@ -158,6 +158,7 @@ fn grind_print_info(grind_matches: &[GrindMatch]) {
 }
 
 fn grind_parse_args(
+    ignore_case: bool,
     starts_with_args: HashSet<String>,
     ends_with_args: HashSet<String>,
     starts_and_ends_with_args: HashSet<String>,
@@ -166,7 +167,7 @@ fn grind_parse_args(
     for sw in starts_with_args {
         let args: Vec<&str> = sw.split(':').collect();
         grind_matches.push(GrindMatch {
-            starts: args[0].to_lowercase(),
+            starts: if ignore_case { args[0].to_lowercase() } else { args[0].to_string() },
             ends: "".to_string(),
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
         });
@@ -175,15 +176,15 @@ fn grind_parse_args(
         let args: Vec<&str> = ew.split(':').collect();
         grind_matches.push(GrindMatch {
             starts: "".to_string(),
-            ends: args[0].to_lowercase(),
+            ends: if ignore_case { args[0].to_lowercase() } else { args[0].to_string() },
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
         });
     }
     for swew in starts_and_ends_with_args {
         let args: Vec<&str> = swew.split(':').collect();
         grind_matches.push(GrindMatch {
-            starts: args[0].to_lowercase(),
-            ends: args[1].to_lowercase(),
+            starts: if ignore_case { args[0].to_lowercase() } else { args[0].to_string() },
+            ends: if ignore_case { args[1].to_lowercase() } else { args[1].to_string() },
             count: AtomicU64::new(args[2].parse::<u64>().unwrap()),
         });
     }
@@ -505,7 +506,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             }
 
             let grind_matches =
-                grind_parse_args(starts_with_args, ends_with_args, starts_and_ends_with_args);
+                grind_parse_args(ignore_case, starts_with_args, ends_with_args, starts_and_ends_with_args);
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
             let attempts = Arc::new(AtomicU64::new(1));
