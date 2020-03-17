@@ -968,7 +968,10 @@ impl Blockstore {
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), &shred.payload)?;
+        write_batch.put_bytes::<cf::ShredCode>(
+            (slot, shred_index),
+            &shred.payload[..shred.payload_size],
+        )?;
         index_meta.coding_mut().set_present(shred_index, true);
 
         Ok(())
@@ -1072,7 +1075,8 @@ impl Blockstore {
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.payload)?;
+        write_batch
+            .put_bytes::<cf::ShredData>((slot, index), &shred.payload[..shred.payload_size])?;
         update_slot_meta(
             last_in_slot,
             last_in_data,

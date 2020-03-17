@@ -80,7 +80,14 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let (stakes, shreds) = receiver.lock().unwrap().recv()?;
         let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
-        let all_shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
+        let all_shred_bufs: Vec<Vec<u8>> = shreds
+            .to_vec()
+            .into_iter()
+            .map(|mut s| {
+                s.payload.resize(s.payload_size, 0);
+                s.payload
+            })
+            .collect();
         cluster_info
             .write()
             .unwrap()

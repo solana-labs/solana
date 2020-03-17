@@ -426,7 +426,7 @@ impl ServeRepair {
             let mut packet = Packet::default();
             packet.meta.size = data.len();
             packet.meta.set_addr(dest);
-            packet.data.copy_from_slice(&data);
+            packet.data[..data.len()].copy_from_slice(&data);
             packet
         }))
     }

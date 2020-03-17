@@ -112,12 +112,22 @@ pub struct CodingShredHeader {
     pub position: u16,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Shred {
     pub common_header: ShredCommonHeader,
     pub data_header: DataShredHeader,
     pub coding_header: CodingShredHeader,
     pub payload: Vec<u8>,
+    pub payload_size: usize,
+}
+
+impl PartialEq for Shred {
+    fn eq(&self, other: &Self) -> bool {
+        self.common_header == other.common_header
+            && self.data_header == other.data_header
+            && self.coding_header == other.coding_header
+            && self.payload[..self.payload_size] == other.payload[..other.payload_size]
+    }
 }
 
 impl Shred {
@@ -203,6 +213,7 @@ impl Shred {
 
         if let Some(data) = data {
             payload[start..start + data.len()].clone_from_slice(data);
+            start += data.len();
         }
 
         Self {
@@ -210,6 +221,7 @@ impl Shred {
             data_header,
             coding_header: CodingShredHeader::default(),
             payload,
+            payload_size: start,
         }
     }
 
@@ -221,20 +233,28 @@ impl Shred {
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
+            let payload_size = payload.len();
+            let mut new_payload = vec![0; PACKET_DATA_SIZE];
+            new_payload[..payload_size].copy_from_slice(&payload);
             Self {
                 common_header,
                 data_header: DataShredHeader::default(),
                 coding_header,
-                payload,
+                payload: new_payload,
+                payload_size,
             }
         } else if common_header.shred_type == ShredType(DATA_SHRED) {
             let data_header: DataShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
+            let payload_size = payload.len();
+            let mut new_payload = vec![0; PACKET_DATA_SIZE];
+            new_payload[..payload_size].copy_from_slice(&payload);
             Self {
                 common_header,
                 data_header,
                 coding_header: CodingShredHeader::default(),
-                payload,
+                payload: new_payload,
+                payload_size,
             }
         } else {
             return Err(ShredError::InvalidShredType);
@@ -279,6 +299,7 @@ impl Shred {
             data_header,
             coding_header,
             payload,
+            payload_size: start,
         }
     }
 
@@ -554,7 +575,7 @@ impl Shredder {
     }
 
     pub fn sign_shred(signer: &Keypair, shred: &mut Shred) {
-        let signature = signer.sign_message(&shred.payload[SIZE_OF_SIGNATURE..]);
+        let signature = signer.sign_message(&shred.payload[SIZE_OF_SIGNATURE..shred.payload_size]);
         bincode::serialize_into(&mut shred.payload[..SIZE_OF_SIGNATURE], &signature)
             .expect("Failed to generate serialized signature");
         shred.common_header.signature = signature;
@@ -666,11 +687,13 @@ impl Shredder {
                         i,
                         version,
                     );
+                    let payload_size = payload.len();
                     Shred {
                         common_header,
                         data_header: DataShredHeader::default(),
                         coding_header,
                         payload,
+                        payload_size,
                     }
                 })
                 .collect()
@@ -1061,8 +1084,9 @@ pub mod tests {
 
         let data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
 
-        let deserialized_shred =
-            Shred::new_from_serialized_shred(data_shreds.last().unwrap().payload.clone()).unwrap();
+        let last_shred = data_shreds.last().unwrap();
+        let payload = last_shred.payload[..last_shred.payload_size].to_vec();
+        let deserialized_shred = Shred::new_from_serialized_shred(payload).unwrap();
         assert_eq!(deserialized_shred, *data_shreds.last().unwrap());
     }
 

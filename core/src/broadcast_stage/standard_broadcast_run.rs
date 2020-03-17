@@ -261,7 +261,14 @@ impl StandardBroadcastRun {
 
         // Broadcast the shreds
         let broadcast_start = Instant::now();
-        let shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
+        let shred_bufs: Vec<Vec<u8>> = shreds
+            .to_vec()
+            .into_iter()
+            .map(|mut s| {
+                s.payload.resize(s.payload_size, 0);
+                s.payload
+            })
+            .collect();
         trace!("Broadcasting {:?} shreds", shred_bufs.len());
 
         cluster_info
