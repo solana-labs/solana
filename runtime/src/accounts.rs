@@ -12,6 +12,7 @@ use crate::{
     transaction_utils::OrderedIterator,
 };
 use log::*;
+use rand::{thread_rng, Rng};
 use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
@@ -655,6 +656,14 @@ pub fn create_test_accounts(
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
         accounts.store_slow(slot, &pubkey, &account);
         pubkeys.push(pubkey);
+    }
+}
+
+pub fn update_accounts(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
+    for pubkey in pubkeys {
+        let amount = thread_rng().gen_range(0, 10);
+        let account = Account::new(amount, 0, &Account::default().owner);
+        accounts.store_slow(slot, &pubkey, &account);
     }
 }
 
