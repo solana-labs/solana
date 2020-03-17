@@ -5,6 +5,10 @@
 # shellcheck disable=SC2206
 # shellcheck disable=SC2162
 
+# shellcheck disable=SC1090
+# shellcheck disable=SC1091
+source "$(dirname "$0")"/../automation_utils.sh
+
 set -e
 
 if [[ -n "$1" ]]; then
@@ -58,14 +62,14 @@ solana airdrop 2 $online_system_account_pubkey
 solana create-nonce-account $online_nonce_account_keypair 1 --nonce-authority $offline_system_account_pubkey --keypair $online_system_account_keypair
 nonce="$(solana nonce $nonce_account_pubkey)"
 
-echo --- OFFLINE SYSTEM ACCOUNT BALANCE BEFORE CREATING STAKE ACCOUNTS
+execution_step OFFLINE SYSTEM ACCOUNT BALANCE BEFORE CREATING STAKE ACCOUNTS
 (
   set -x
   solana balance $offline_system_account_pubkey
 )
 
 ################################
-echo --- OFFLINE STAKE ACCOUNT CREATION
+execution_step CREATE OFFLINE STAKE ACCOUNT
 ################################
 
 # Create a stake account funded by the offline system account
@@ -93,21 +97,21 @@ solana create-stake-account $stake_account_keypair 50 \
   --lockup-epoch 999 \
   --from $offline_system_account_pubkey --fee-payer $offline_system_account_pubkey ${signers[@]}
 
-echo --- STAKE ACCOUNT AFTER CREATION
+execution_step VIEW STAKE ACCOUNT AFTER CREATION
 (
   set -x
   solana stake-account $stake_account_address
 )
 
 
-echo --- OFFLINE SYSTEM ACCOUNT BALANCE AFTER CREATING FIRST STAKE ACCOUNT
+execution_step VIEW OFFLINE SYSTEM ACCOUNT BALANCE AFTER CREATING FIRST STAKE ACCOUNT
 (
   set -x
   solana balance $offline_system_account_pubkey
 )
 
 #####################
-echo --- OFFLINE STAKE SPLIT
+execution_step SPLIT STAKE OFFLINE
 #####################
 
 # Split the original stake account before delegating
@@ -131,20 +135,20 @@ solana split-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-auth
   --stake-authority $offline_staker_pubkey $stake_account_address $split_stake_account_keypair 10 \
   --fee-payer $offline_system_account_pubkey ${signers[@]}
 
-echo --- ORIGINAL STAKE ACCOUNT AFTER SPLITTING
+execution_step VIEW ORIGINAL STAKE ACCOUNT AFTER SPLITTING
 (
   set -x
   solana stake-account $stake_account_address
 )
 
-echo --- NEW STAKE ACCOUNT CREATED FROM SPLITTING ORIGINAL
+execution_step VIEW NEW STAKE ACCOUNT CREATED FROM SPLITTING ORIGINAL
 (
   set -x
   solana stake-account $split_stake_account_address
 )
 
 #####################
-echo --- CUSTODIAN CHANGE LOCKUP
+execution_step CHANGE CUSTODIAN LOCKUP
 #####################
 
 # Set the lockup epoch to 0 to allow stake to be withdrawn
@@ -164,14 +168,14 @@ solana stake-set-lockup --blockhash $nonce --nonce $nonce_account_pubkey --nonce
   $split_stake_account_address --custodian $offline_custodian_pubkey --lockup-epoch 0 \
   --fee-payer $offline_system_account_pubkey ${signers[@]}
 
-echo --- SPLIT STAKE ACCOUNT AFTER CHANGING LOCKUP
+execution_step VIEW SPLIT STAKE ACCOUNT AFTER CHANGING LOCKUP
 (
   set -x
   solana stake-account $split_stake_account_address
 )
 
 ##########################
-echo --- OFFLINE STAKE WITHDRAWAL
+execution_step OFFLINE STAKE WITHDRAWAL
 ##########################
 
 # Withdraw the lamports from the stake account that was split off and return them to the offline system account
@@ -193,14 +197,14 @@ solana withdraw-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-a
   --withdraw-authority $offline_withdrawer_pubkey \
   --fee-payer $offline_system_account_pubkey ${signers[@]}
 
-echo --- OFFLINE SYSTEM ACCOUNT BALANCE AFTER WITHDRAWING SPLIT STAKE
+execution_step VIEW OFFLINE SYSTEM ACCOUNT BALANCE AFTER WITHDRAWING SPLIT STAKE
 (
   set -x
   solana balance $offline_system_account_pubkey
 )
 
 ##########################
-echo --- OFFLINE STAKE DELEGATION
+execution_step OFFLINE STAKE DELEGATION
 ##########################
 
 # Delegate stake from the original account to a vote account
@@ -223,14 +227,14 @@ solana delegate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-a
 --stake-authority $offline_staker_pubkey $stake_account_address $vote_account_pubkey \
 --fee-payer $offline_system_account_pubkey ${signers[@]}
 
-echo --- ORIGINAL STAKE ACCOUNT AFTER DELEGATION
+execution_step VIEW ORIGINAL STAKE ACCOUNT AFTER DELEGATION
 (
   set -x
   solana stake-account $stake_account_address
 )
 
 ##########################
- echo --- OFFLINE STAKE DEACTIVATION
+ execution_step OFFLINE STAKE DEACTIVATION
 ##########################
 
 # Deactivate delegated stake
@@ -252,7 +256,7 @@ solana deactivate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce
 --stake-authority $offline_staker_pubkey $stake_account_address \
 --fee-payer $offline_system_account_pubkey ${signers[@]}
 
-echo --- ORIGINAL STAKE ACCOUNT AFTER DEACTIVATION
+execution_step VIEW ORIGINAL STAKE ACCOUNT AFTER DEACTIVATION
 (
    set -x
    solana stake-account $stake_account_address

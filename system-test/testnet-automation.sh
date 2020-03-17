@@ -171,7 +171,7 @@ function launch_testnet() {
       ;;
     script)
       execution_step "Running custom script: ${REPO_ROOT}/${CUSTOM_SCRIPT}"
-      "$REPO_ROOT"/"$CUSTOM_SCRIPT"
+      "$REPO_ROOT"/"$CUSTOM_SCRIPT" "$RESULT_FILE"
       ;;
     *)
       echo "Error: Unsupported test type: $TEST_TYPE"
@@ -185,9 +185,10 @@ function launch_testnet() {
   SLOTS_PER_SECOND="$(bc <<< "scale=3; ($END_SLOT - $START_SLOT)/($SLOT_COUNT_END_SECONDS - $SLOT_COUNT_START_SECONDS)")"
   execution_step "Average slot rate: $SLOTS_PER_SECOND slots/second over $((SLOT_COUNT_END_SECONDS - SLOT_COUNT_START_SECONDS)) seconds"
 
-  [[ "$SKIP_PERF_RESULTS" = "false" ]] || collect_performance_statistics
-
-  echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
+  if [[ "$SKIP_PERF_RESULTS" = "false" ]]; then
+    collect_performance_statistics
+    echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
+  fi
 
   RESULT_DETAILS=$(<"$RESULT_FILE")
   upload-ci-artifact "$RESULT_FILE"
@@ -198,7 +199,7 @@ RESULT_DETAILS=
 STEP=
 execution_step "Initialize Environment"
 
-[[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
+[[ -n $TESTNET_TAG ]] || TESTNET_TAG=${CLOUD_PROVIDER}-testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
 [[ -n $BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD ]] || BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD=66
 [[ -n $SKIP_PERF_RESULTS ]] || SKIP_PERF_RESULTS=false
@@ -250,16 +251,22 @@ execution_step "Checking for required parameters"
 testTypeRequiredParameters=
 case $TEST_TYPE in
   fixed_duration)
-    testTypeRequiredParameters+=TEST_DURATION_SECONDS
+    testTypeRequiredParameters=(
+      TEST_DURATION_SECONDS \
+      )
     ;;
   partition)
-    testTypeRequiredParameters+=NETEM_CONFIG_FILE
-    testTypeRequiredParameters+=PARTITION_ACTIVE_DURATION
-    testTypeRequiredParameters+=PARTITION_INACTIVE_DURATION
-    testTypeRequiredParameters+=PARTITION_ITERATION_COUNT
+    testTypeRequiredParameters=(
+      NETEM_CONFIG_FILE \
+      PARTITION_ACTIVE_DURATION \
+      PARTITION_INACTIVE_DURATION \
+      PARTITION_ITERATION_COUNT \
+    )
     ;;
   script)
-    testTypeRequiredParameters+=CUSTOM_SCRIPT
+    testTypeRequiredParameters=(
+      CUSTOM_SCRIPT \
+    )
     ;;
   *)
     echo "Error: Unsupported test type: $TEST_TYPE"
@@ -269,7 +276,7 @@ esac
 missingParameters=
 for i in "${testTypeRequiredParameters[@]}"; do
   if [[ -z ${!i} ]]; then
-    missingParameters+="${i} "
+    missingParameters+="${i}, "
   fi
 done
 
@@ -308,6 +315,8 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         PARTITION_ACTIVE_DURATION \
                         PARTITION_INACTIVE_DURATION \
                         PARTITION_ITERATION_COUNT \
+                        TEST_TYPE \
+                        CUSTOM_SCRIPT \
                         )
 
 TEST_CONFIGURATION=
