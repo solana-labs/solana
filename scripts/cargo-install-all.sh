@@ -72,26 +72,36 @@ SECONDS=0
   fi
 )
 
-BINS=(
-  solana
-  solana-bench-exchange
-  solana-bench-tps
-  solana-faucet
-  solana-gossip
-  solana-install
-  solana-install-init
-  solana-keygen
-  solana-ledger-tool
-  solana-log-analyzer
-  solana-net-shaper
-  solana-sys-tuner
-  solana-validator
-  solana-watchtower
-)
 
-#XXX: Ensure `solana-genesis` is built LAST!
-# See https://github.com/solana-labs/solana/issues/5826
-BINS+=(solana-genesis)
+if [[ $CI_OS_NAME = windows ]]; then
+  # Limit windows to end-user command-line tools.  Full validator support is not
+  # yet available on windows
+  BINS=(
+    solana
+    solana-install
+    solana-install-init
+    solana-keygen
+  )
+else
+  BINS=(
+    solana
+    solana-bench-exchange
+    solana-bench-tps
+    solana-faucet
+    solana-gossip
+    solana-keygen
+    solana-ledger-tool
+    solana-log-analyzer
+    solana-net-shaper
+    solana-sys-tuner
+    solana-validator
+    solana-watchtower
+  )
+
+  #XXX: Ensure `solana-genesis` is built LAST!
+  # See https://github.com/solana-labs/solana/issues/5826
+  BINS+=(solana-genesis)
+fi
 
 binArgs=()
 for bin in "${BINS[@]}"; do
