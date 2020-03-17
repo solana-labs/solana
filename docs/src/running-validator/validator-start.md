@@ -149,6 +149,17 @@ Create your vote account on the blockchain:
 solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
 
+## Trusted validators
+
+If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>`
+argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`.
+This has two effects, one is when the validator is booting, it will only ask that set of trusted nodes for downloading genesis and
+snapshots. Another is that in combination with the `--halt-on-trusted-validator-hash-mismatch` option, it will monitor the merkle
+root hash of the entire accounts state of other trusted nodes on gossip and if the hashes produce any mismatch, the validator will
+halt the node to prevent the validator from voting or processing potentially incorrect state values. At the moment, the slot that
+the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the trusted
+set should be set to the same snapshot interval value or multiples of the same.
+
 ## Connect Your Validator
 
 Connect to a testnet cluster by running:
