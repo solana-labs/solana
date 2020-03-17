@@ -12,5 +12,6 @@ steps:
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 40000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
       BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 100
+      TEST_TYPE: "fixed_duration"
     agents:
       - "queue=colo-deploy"

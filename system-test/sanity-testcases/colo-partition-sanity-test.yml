@@ -16,5 +16,6 @@ steps:
       PARTITION_INACTIVE_DURATION: 30
       PARTITION_ITERATION_COUNT: 2
       BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 100
+      TEST_TYPE: "partition"
     agents:
       - "queue=colo-deploy"

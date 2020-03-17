@@ -15,5 +15,6 @@ steps:
       TESTNET_ZONES: "us-west-1a,us-west-1c,us-east-1a,eu-west-1a"
       USE_PUBLIC_IP_ADDRESSES: "true"
       ADDITIONAL_FLAGS: ""
+      TEST_TYPE: "fixed_duration"
     agents:
       - "queue=aws-deploy"

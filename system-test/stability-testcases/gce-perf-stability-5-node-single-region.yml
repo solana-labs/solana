@@ -14,5 +14,6 @@ steps:
       TESTNET_ZONES: "us-west1-a"
       USE_PUBLIC_IP_ADDRESSES: "false"
       ADDITIONAL_FLAGS: "--dedicated"
+      TEST_TYPE: "fixed_duration"
     agents:
       - "queue=gce-deploy"

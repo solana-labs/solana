@@ -185,7 +185,7 @@ function launch_testnet() {
   SLOTS_PER_SECOND="$(bc <<< "scale=3; ($END_SLOT - $START_SLOT)/($SLOT_COUNT_END_SECONDS - $SLOT_COUNT_START_SECONDS)")"
   execution_step "Average slot rate: $SLOTS_PER_SECOND slots/second over $((SLOT_COUNT_END_SECONDS - SLOT_COUNT_START_SECONDS)) seconds"
 
-  [[ -n $SKIP_PERF_RESULTS ]] || collect_performance_statistics
+  [[ "$SKIP_PERF_RESULTS" = "false" ]] || collect_performance_statistics
 
   echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
 
@@ -201,6 +201,7 @@ execution_step "Initialize Environment"
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
 [[ -n $BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD ]] || BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD=66
+[[ -n $SKIP_PERF_RESULTS ]] || SKIP_PERF_RESULTS=false
 
 if [[ -z $NUMBER_OF_VALIDATOR_NODES ]]; then
   echo NUMBER_OF_VALIDATOR_NODES not defined

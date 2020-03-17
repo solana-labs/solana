@@ -11,5 +11,6 @@ steps:
       NUMBER_OF_CLIENT_NODES: 1
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 60000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
+      TEST_TYPE: "fixed_duration"
     agents:
       - "queue=colo-deploy"

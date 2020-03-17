@@ -12,6 +12,7 @@ steps:
       NUMBER_OF_CLIENT_NODES: 0
       ADDITIONAL_FLAGS: ""
       BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 100
+      SKIP_PERF_RESULTS: "true"
       TEST_TYPE: "script"
       CUSTOM_SCRIPT: "system-test/stake-operations-testcases/stake_test_automation.sh"
     agents:

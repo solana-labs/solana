@@ -14,5 +14,6 @@ steps:
       TESTNET_ZONES: "westus"
       USE_PUBLIC_IP_ADDRESSES: "true"
       ADDITIONAL_FLAGS: ""
+      TEST_TYPE: "fixed_duration"
     agents:
       - "queue=azure-deploy"

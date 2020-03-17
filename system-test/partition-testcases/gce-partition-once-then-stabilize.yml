@@ -18,5 +18,6 @@ steps:
       PARTITION_ACTIVE_DURATION: 60
       PARTITION_INACTIVE_DURATION: 300
       PARTITION_ITERATION_COUNT: 1
+      TEST_TYPE: "partition"
     agents:
       - "queue=gce-deploy"
