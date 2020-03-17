@@ -284,13 +284,29 @@ SOL_FN_PREFIX bool sol_deserialize(
   }
   params->ka_num = *(uint64_t *) input;
   input += sizeof(uint64_t);
-  if (ka_num < params->ka_num) {
+
+  if (ka_num > params->ka_num) {
     return false;
   }
 
   for (int i = 0; i < params->ka_num; i++) {
     uint8_t dup_info = input[0];
     input += sizeof(uint8_t);
+
+    if (i >= ka_num) {
+      if (dup_info == UINT8_MAX) {
+        input += sizeof(uint8_t);
+        input += sizeof(uint8_t);
+        input += sizeof(SolPubkey);
+        input += sizeof(uint64_t);
+        input += *(uint64_t *) input;
+        input += sizeof(uint64_t);
+        input += sizeof(SolPubkey);
+        input += sizeof(uint8_t);
+        input += sizeof(uint64_t);
+      }
+      continue;
+    }
     if (dup_info == UINT8_MAX) {
       // is signer?
       params->ka[i].is_signer = *(uint8_t *) input != 0;
@@ -417,7 +433,6 @@ SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
  * @return 0 if the instruction executed successfully
  */
 uint64_t entrypoint(const uint8_t *input);
-
 
 #ifdef SOL_TEST
 /**

@@ -9,7 +9,7 @@
  */
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolKeyedAccount ka[4];
+  SolKeyedAccount ka[1];
   SolParameters params = (SolParameters) { .ka = ka };
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
