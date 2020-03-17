@@ -2,3 +2,10 @@
 // solana.scss
 // Use this to write your custom SCSS
 //
+
+code {
+  padding: 0.33rem;
+  border-radius: $border-radius;
+  background-color: $gray-200;
+  color: $black;
+}
