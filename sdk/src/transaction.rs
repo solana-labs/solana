@@ -300,14 +300,20 @@ impl Transaction {
         Ok(())
     }
 
-    /// Verify the transaction
-    pub fn verify(&self) -> Result<()> {
-        if !self
-            .signatures
+    pub fn verify_with_results(&self) -> Vec<bool> {
+        self.signatures
             .iter()
             .zip(&self.message.account_keys)
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &self.message_data()))
-            .all(|verify_result| verify_result)
+            .collect()
+    }
+
+    /// Verify the transaction
+    pub fn verify(&self) -> Result<()> {
+        if !self
+            .verify_with_results()
+            .iter()
+            .all(|verify_result| *verify_result)
         {
             Err(TransactionError::SignatureFailure)
         } else {
