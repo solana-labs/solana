@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 
 pub type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 
-#[derive(Default)]
+#[derive(Default, Debug, PartialEq)]
 pub struct SlotCachedTransmitShreds {
     pub stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     pub data_shred_batches: Vec<Arc<Vec<Shred>>>,
@@ -308,5 +308,319 @@ impl SlotTransmitShredsCache {
         );
 
         (new_data_shreds, new_coding_shreds)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        broadcast_stage::test::make_transmit_shreds,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    };
+    use itertools::Itertools;
+    use solana_ledger::{
+        blockstore::Blockstore,
+        get_tmp_ledger_path,
+        shred::{Shredder, RECOMMENDED_FEC_RATE},
+    };
+    use solana_runtime::bank::Bank;
+    use solana_sdk::{
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    };
+    use std::sync::Arc;
+
+    fn get_data_and_coding_shreds(
+        data_transmit_shreds: Vec<TransmitShreds>,
+        coding_transmit_shreds: Vec<TransmitShreds>,
+    ) -> (Vec<Arc<Vec<Shred>>>, Vec<Arc<Vec<Shred>>>) {
+        let complete_data_shreds: Vec<_> = data_transmit_shreds
+            .into_iter()
+            .map(|(_, shreds)| shreds)
+            .collect();
+        let complete_coding_shreds: Vec<_> = coding_transmit_shreds
+            .into_iter()
+            .map(|(_, shreds)| shreds)
+            .collect();
+
+        (complete_data_shreds, complete_coding_shreds)
+    }
+
+    #[test]
+    fn test_last_data_code_shreds() {
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches: vec![],
+            coding_shred_batches: vec![],
+        };
+
+        assert!(cache_entry.last_data_shred().is_none());
+        assert!(cache_entry.last_coding_shred().is_none());
+
+        let (_, _, all_data_transmit_shreds, all_coding_transmit_shreds) =
+            make_transmit_shreds(1, 10);
+        let last_data_shred_index = all_data_transmit_shreds.len() - 1;
+        let last_coding_shred_index = all_coding_transmit_shreds.len() - 1;
+        let (data_shred_batches, coding_shred_batches) = get_data_and_coding_shreds(
+            all_data_transmit_shreds.clone(),
+            all_coding_transmit_shreds.clone(),
+        );
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches,
+            coding_shred_batches,
+        };
+
+        assert_eq!(
+            cache_entry.last_data_shred().unwrap().index() as usize,
+            last_data_shred_index
+        );
+        assert_eq!(
+            cache_entry.last_coding_shred().unwrap().index() as usize,
+            last_coding_shred_index
+        );
+    }
+
+    #[test]
+    fn test_contains_last_shreds_non_empty_coding() {
+        let mut shred = Shred::new_empty_data_shred();
+        shred.set_last_in_slot();
+        assert!(shred.is_data());
+        let data_shreds = vec![shred];
+        // RECOMMENDED_FEC_RATE must produce > 0 coding shreds per batch, or
+        // the test for `contains_last_shreds()` will fail.
+        let shredder =
+            Shredder::new(1, 0, RECOMMENDED_FEC_RATE, Arc::new(Keypair::new()), 0, 0).unwrap();
+        let coding_shred_batch = shredder.data_shreds_to_coding_shreds(&data_shreds);
+        assert!(coding_shred_batch.len() > 0);
+    }
+
+    #[test]
+    fn test_contains_last_shreds() {
+        let (_, _, all_data_transmit_shreds, all_coding_transmit_shreds) =
+            make_transmit_shreds(1, 10);
+        assert!(all_data_transmit_shreds.len() > 1);
+        assert!(all_coding_transmit_shreds.len() > 1);
+        let (complete_data_shreds, complete_coding_shreds) =
+            get_data_and_coding_shreds(all_data_transmit_shreds, all_coding_transmit_shreds);
+        let partial_data_shreds = complete_data_shreds[..complete_data_shreds.len() - 1].to_vec();
+        let partial_coding_shreds =
+            complete_coding_shreds[..complete_coding_shreds.len() - 1].to_vec();
+
+        let data_shred_bin = vec![complete_data_shreds, partial_data_shreds];
+        let coding_shred_bin = vec![complete_coding_shreds, partial_coding_shreds];
+
+        for (i, (data_shred_batches, coding_shred_batches)) in data_shred_bin
+            .into_iter()
+            .cartesian_product(coding_shred_bin.into_iter())
+            .enumerate()
+        {
+            let cache_entry = SlotCachedTransmitShreds {
+                stakes: None,
+                data_shred_batches,
+                coding_shred_batches,
+            };
+            if i == 0 {
+                assert!(cache_entry.contains_last_shreds());
+            } else {
+                assert!(!cache_entry.contains_last_shreds());
+            }
+        }
+    }
+
+    #[test]
+    fn test_to_transmit_shreds() {
+        let (_, _, all_data_transmit_shreds, all_coding_transmit_shreds) =
+            make_transmit_shreds(1, 10);
+        let (complete_data_shreds, complete_coding_shreds) = get_data_and_coding_shreds(
+            all_data_transmit_shreds.clone(),
+            all_coding_transmit_shreds.clone(),
+        );
+
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches: vec![],
+            coding_shred_batches: vec![],
+        };
+        assert_eq!(cache_entry.to_transmit_shreds(), vec![]);
+
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches: complete_data_shreds.clone(),
+            coding_shred_batches: vec![],
+        };
+        assert_eq!(cache_entry.to_transmit_shreds(), all_data_transmit_shreds);
+
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches: vec![],
+            coding_shred_batches: complete_coding_shreds.clone(),
+        };
+        assert_eq!(cache_entry.to_transmit_shreds(), all_coding_transmit_shreds);
+
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches: complete_data_shreds.clone(),
+            coding_shred_batches: complete_coding_shreds,
+        };
+        assert_eq!(
+            cache_entry.to_transmit_shreds(),
+            all_data_transmit_shreds
+                .into_iter()
+                .chain(all_coding_transmit_shreds.into_iter())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_should_push() {
+        let (_, _, all_data_transmit_shreds, all_coding_transmit_shreds) =
+            make_transmit_shreds(1, 10);
+        let (complete_data_shreds, complete_coding_shreds) =
+            get_data_and_coding_shreds(all_data_transmit_shreds, all_coding_transmit_shreds);
+
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches: vec![],
+            coding_shred_batches: vec![],
+        };
+
+        // Empty cache entry should always push
+        assert!(SlotTransmitShredsCache::should_push(
+            &cache_entry,
+            &(None, complete_data_shreds[0].clone())
+        ));
+        assert!(SlotTransmitShredsCache::should_push(
+            &cache_entry,
+            &(None, complete_coding_shreds[0].clone())
+        ));
+
+        let cache_entry = SlotCachedTransmitShreds {
+            stakes: None,
+            data_shred_batches: complete_data_shreds[0..2].to_vec(),
+            coding_shred_batches: complete_coding_shreds[0..2].to_vec(),
+        };
+
+        // Empty TransmitShreds to push should return true
+        assert!(SlotTransmitShredsCache::should_push(
+            &cache_entry,
+            &(None, Arc::new(vec![]))
+        ));
+
+        // Greater indexes than the last pushed batch of TransmitShreds should
+        // pass, lesser should fail
+        assert!(SlotTransmitShredsCache::should_push(
+            &cache_entry,
+            &(None, complete_data_shreds[2].clone())
+        ));
+        assert!(!SlotTransmitShredsCache::should_push(
+            &cache_entry,
+            &(None, complete_data_shreds[0].clone())
+        ));
+        assert!(SlotTransmitShredsCache::should_push(
+            &cache_entry,
+            &(None, complete_coding_shreds[2].clone())
+        ));
+        assert!(!SlotTransmitShredsCache::should_push(
+            &cache_entry,
+            &(None, complete_coding_shreds[0].clone())
+        ));
+    }
+
+    #[test]
+    fn test_push_get() {
+        let (_, _, all_data_transmit_shreds, all_coding_transmit_shreds) =
+            make_transmit_shreds(1, 10);
+
+        let mut cache = SlotTransmitShredsCache::new(0);
+        assert!(cache.capacity > 0);
+
+        cache = SlotTransmitShredsCache::new(2);
+        // Pushing empty should still make an entry in the cache
+        assert!(cache.push(0, (None, Arc::new(vec![]))));
+        cache.get(0).unwrap().to_transmit_shreds().is_empty();
+
+        // Pushing same thing twice should fail
+        assert!(cache.push(0, all_data_transmit_shreds[9].clone()));
+        assert!(!cache.push(0, all_data_transmit_shreds[0].clone()));
+
+        // Pushing new later shred should succeed
+        assert!(cache.push(0, all_data_transmit_shreds[1].clone()));
+        assert_eq!(
+            cache.get(0).unwrap().to_transmit_shreds(),
+            all_data_transmit_shreds[0..=1].to_vec()
+        );
+
+        // Trying to push a new slot starting at non-zero index should
+        // fail
+        assert!(!cache.push(1, all_data_transmit_shreds[2].clone()));
+        assert!(!cache.push(1, all_coding_transmit_shreds[2].clone()));
+        assert!(cache.get(1).is_none());
+
+        // Pushing more than the capacity of 2 should purge earlier slots
+        assert!(!cache.push(1, all_data_transmit_shreds[0].clone()));
+        assert!(!cache.push(2, all_data_transmit_shreds[0].clone()));
+        assert!(cache.get(0).is_none());
+        assert_eq!(
+            cache.get(1).unwrap().to_transmit_shreds(),
+            vec![all_data_transmit_shreds[0].clone()]
+        );
+        assert_eq!(
+            cache.get(2).unwrap().to_transmit_shreds(),
+            vec![all_data_transmit_shreds[0].clone()]
+        );
+    }
+
+    #[test]
+    fn test_get_or_update() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let (
+            all_data_shreds,
+            all_coding_shreds,
+            all_data_transmit_shreds,
+            all_coding_transmit_shreds,
+        ) = make_transmit_shreds(0, 10);
+        // Make the database ledger
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let mut cache = SlotTransmitShredsCache::new(2);
+
+        // Blockstore is empty, should insert empty entry into cache
+        assert_eq!(
+            *cache.get_or_update(&bank0, &blockstore),
+            SlotCachedTransmitShreds::default()
+        );
+        assert_eq!(
+            cache.get(bank0.slot()).unwrap().to_transmit_shreds(),
+            vec![]
+        );
+
+        // Insert shreds into blockstore
+        blockstore
+            .insert_shreds(all_data_shreds, None, false)
+            .unwrap();
+        blockstore
+            .insert_shreds(all_coding_shreds, None, false)
+            .unwrap();
+
+        // Gettng without update still returns old cached entry
+        assert_eq!(
+            cache.get(bank0.slot()).unwrap().to_transmit_shreds(),
+            vec![]
+        );
+
+        cache = SlotTransmitShredsCache::new(2);
+        assert_eq!(
+            cache
+                .get_or_update(&bank0, &blockstore)
+                .to_transmit_shreds(),
+            all_data_transmit_shreds
+                .into_iter()
+                .chain(all_coding_transmit_shreds.into_iter())
+                .collect::<Vec<_>>()
+        );
     }
 }

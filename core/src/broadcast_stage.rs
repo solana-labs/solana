@@ -471,7 +471,7 @@ impl BroadcastStage {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use crate::{
         cluster_info::{ClusterInfo, Node},
@@ -497,7 +497,7 @@ mod test {
         thread::sleep,
     };
 
-    fn make_transmit_shreds(
+    pub fn make_transmit_shreds(
         slot: Slot,
         num: u64,
     ) -> (
