@@ -4,7 +4,7 @@ mod bpf {
         bank::Bank,
         bank_client::BankClient,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        loader_utils::{load_program},
+        loader_utils::load_program,
     };
     use solana_sdk::{
         account::Account,
@@ -44,10 +44,10 @@ mod bpf {
         load_program(bank_client, payer_keypair, &bpf_loader::id(), elf)
     }
 
-        #[test]
-#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
+    #[test]
+    #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
     fn test_program_bpf_sanity() {
-            solana_logger::setup();
+        solana_logger::setup();
 
         let mut programs = Vec::new();
         #[cfg(feature = "bpf_c")]
@@ -63,7 +63,7 @@ mod bpf {
                 ("struct_ret", true),
             ]);
         }
-    #[cfg(feature = "bpf_rust")]
+        #[cfg(feature = "bpf_rust")]
         {
             programs.extend_from_slice(&[
                 ("solana_bpf_rust_128bit", true),
@@ -79,45 +79,45 @@ mod bpf {
             ]);
         }
 
-            for program in programs.iter() {
-                println!("Test program: {:?}", program.0);
+        for program in programs.iter() {
+            println!("Test program: {:?}", program.0);
 
-                let GenesisConfigInfo {
-                    genesis_config,
-                    mint_keypair,
-                    ..
-                } = create_genesis_config(50);
-                let bank = Arc::new(Bank::new(&genesis_config));
-                // Create bank with specific slot, used by solana_bpf_rust_sysvar test
-                let bank =
-                    Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
-                let bank_client = BankClient::new(bank);
+            let GenesisConfigInfo {
+                genesis_config,
+                mint_keypair,
+                ..
+            } = create_genesis_config(50);
+            let bank = Arc::new(Bank::new(&genesis_config));
+            // Create bank with specific slot, used by solana_bpf_rust_sysvar test
+            let bank =
+                Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
+            let bank_client = BankClient::new(bank);
 
-                // Call user program
-                let program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
-                let account_metas = vec![
-                    AccountMeta::new(mint_keypair.pubkey(), true),
-                    AccountMeta::new(Keypair::new().pubkey(), false),
-                    AccountMeta::new(clock::id(), false),
-                    AccountMeta::new(fees::id(), false),
-                    AccountMeta::new(rewards::id(), false),
-                    AccountMeta::new(slot_hashes::id(), false),
-                    AccountMeta::new(stake_history::id(), false),
-                    AccountMeta::new(rent::id(), false),
-                ];
-                let instruction = Instruction::new(program_id, &1u8, account_metas);
-                let result = bank_client.send_instruction(&mint_keypair, instruction);
-                if program.1 {
-                    assert!(result.is_ok());
-                } else {
-                    assert!(result.is_err());
-                }
+            // Call user program
+            let program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
+            let account_metas = vec![
+                AccountMeta::new(mint_keypair.pubkey(), true),
+                AccountMeta::new(Keypair::new().pubkey(), false),
+                AccountMeta::new(clock::id(), false),
+                AccountMeta::new(fees::id(), false),
+                AccountMeta::new(rewards::id(), false),
+                AccountMeta::new(slot_hashes::id(), false),
+                AccountMeta::new(stake_history::id(), false),
+                AccountMeta::new(rent::id(), false),
+            ];
+            let instruction = Instruction::new(program_id, &1u8, account_metas);
+            let result = bank_client.send_instruction(&mint_keypair, instruction);
+            if program.1 {
+                assert!(result.is_ok());
+            } else {
+                assert!(result.is_err());
             }
         }
+    }
 
-        #[test]
+    #[test]
     fn test_program_bpf_duplicate_accounts() {
-            solana_logger::setup();
+        solana_logger::setup();
 
         let mut programs = Vec::new();
         #[cfg(feature = "bpf_c")]
@@ -197,9 +197,9 @@ mod bpf {
         }
     }
 
-        #[test]
+    #[test]
     fn test_program_bpf_error_handling() {
-            solana_logger::setup();
+        solana_logger::setup();
 
         let mut programs = Vec::new();
         #[cfg(feature = "bpf_c")]
@@ -279,10 +279,10 @@ mod bpf {
             if TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
                 != result
             {
-            assert_eq!(
+                assert_eq!(
                     result,
-                TransactionError::InstructionError(0, InstructionError::AccountBorrowFailed)
-            );
+                    TransactionError::InstructionError(0, InstructionError::AccountBorrowFailed)
+                );
             }
 
             let instruction = Instruction::new(program_id, &8u8, account_metas.clone());

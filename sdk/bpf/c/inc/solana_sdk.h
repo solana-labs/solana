@@ -178,7 +178,7 @@ typedef struct {
   bool is_signer;      /** Transaction was signed by this account's key? */
   bool is_writable;    /** Is the account writable? */
   bool executable;     /** This account's data contains a loaded program (and is now read-only) */
-} SolKeyedAccount;
+} SolAccountInfo;
 
 /**
  * Copies memory
@@ -252,9 +252,9 @@ if (!(expr)) {          \
  * Structure that the program's entrypoint input data is deserialized into.
  */
 typedef struct {
-  SolKeyedAccount* ka; /** Pointer to an array of SolKeyedAccount, must already
-                           point to an array of SolKeyedAccounts */
-  uint64_t ka_num; /** Number of SolKeyedAccount entries in `ka` */
+  SolAccountInfo* ka; /** Pointer to an array of SolAccountInfo, must already
+                           point to an array of SolAccountInfos */
+  uint64_t ka_num; /** Number of SolAccountInfo entries in `ka` */
   const uint8_t *data; /** pointer to the instruction data */
   uint64_t data_len; /** Length in bytes of the instruction data */
   const SolPubkey *program_id; /** program_id of the currently executing program */
@@ -265,7 +265,7 @@ typedef struct {
  *
  * Use this function to deserialize the buffer passed to the program entrypoint
  * into usable types.  This function does not perform copy deserialization,
- * instead it populates the pointers and lengths in SolKeyedAccount and data so
+ * instead it populates the pointers and lengths in SolAccountInfo and data so
  * that any modification to lamports or account data take place on the original
  * buffer.  Doing so also eliminates the need to serialize back into the buffer
  * at program end.

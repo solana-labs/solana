@@ -5,7 +5,7 @@
 #include <solana_sdk.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolKeyedAccount ka[1];
+  SolAccountInfo ka[1];
   SolParameters params = (SolParameters) { .ka = ka };
 
   sol_log(__FILE__);
