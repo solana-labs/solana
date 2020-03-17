@@ -521,8 +521,12 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 exit(1);
             }
 
-            let grind_matches =
-                grind_parse_args(ignore_case, starts_with_args, ends_with_args, starts_and_ends_with_args);
+            let grind_matches = grind_parse_args(
+                ignore_case,
+                starts_with_args,
+                ends_with_args,
+                starts_and_ends_with_args,
+            );
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
             let attempts = Arc::new(AtomicU64::new(1));
