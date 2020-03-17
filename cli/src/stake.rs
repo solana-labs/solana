@@ -860,7 +860,7 @@ pub fn process_create_stake_account(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<SystemError>(result)
     }
 }
@@ -922,7 +922,7 @@ pub fn process_stake_authorize(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<StakeError>(result)
     }
 }
@@ -975,7 +975,7 @@ pub fn process_deactivate_stake_account(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<StakeError>(result)
     }
 }
@@ -1034,7 +1034,7 @@ pub fn process_withdraw_stake(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<SystemError>(result)
     }
 }
@@ -1167,7 +1167,7 @@ pub fn process_split_stake(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<StakeError>(result)
     }
 }
@@ -1223,7 +1223,7 @@ pub fn process_stake_set_lockup(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<StakeError>(result)
     }
 }
@@ -1457,7 +1457,7 @@ pub fn process_delegate_stake(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
         log_instruction_custom_error::<StakeError>(result)
     }
 }

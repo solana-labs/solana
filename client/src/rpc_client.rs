@@ -1,5 +1,5 @@
 use crate::{
-    client_error::{ClientError, Result as ClientResult},
+    client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use bincode::serialize;
+use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
 use solana_sdk::{
@@ -26,9 +27,11 @@ use solana_sdk::{
     signers::Signers,
     transaction::{self, Transaction, TransactionError},
 };
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     error,
     net::SocketAddr,
+    str::FromStr,
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -946,6 +949,93 @@ impl RpcClient {
         })
     }
 
+    pub fn send_and_confirm_transaction_with_spinner<T: Signers>(
+        &self,
+        transaction: &mut Transaction,
+        signer_keys: &T,
+    ) -> ClientResult<String> {
+        let mut send_retries = 20;
+        let signature_str = loop {
+            let mut status_retries = 15;
+            let (signature_str, status) = loop {
+                let signature_str = self.send_transaction(transaction)?;
+
+                // Get recent commitment in order to count confirmations for successful transactions
+                let status = self.get_signature_status_with_commitment(
+                    &signature_str,
+                    CommitmentConfig::recent(),
+                )?;
+                if status.is_none() {
+                    status_retries -= 1;
+                    if status_retries == 0 {
+                        break (signature_str, status);
+                    }
+                } else {
+                    break (signature_str, status);
+                }
+
+                if cfg!(not(test)) {
+                    sleep(Duration::from_millis(500));
+                }
+            };
+            send_retries = if let Some(result) = status.clone() {
+                match result {
+                    Ok(_) => 0,
+                    Err(TransactionError::AccountInUse) => {
+                        // Fetch a new blockhash and re-sign the transaction before sending it again
+                        self.resign_transaction(transaction, signer_keys)?;
+                        send_retries - 1
+                    }
+                    // If transaction errors, return right away; no point in counting confirmations
+                    Err(_) => 0,
+                }
+            } else {
+                send_retries - 1
+            };
+            if send_retries == 0 {
+                if let Some(result) = status {
+                    match result {
+                        Ok(_) => {
+                            break signature_str;
+                        }
+                        Err(err) => {
+                            return Err(err.into());
+                        }
+                    }
+                } else {
+                    return Err(
+                        RpcError::ForUser("unable to confirm transaction. This can happen in situations such as transaction expiration and insufficient fee-payer funds".to_string()).into(),
+                    );
+                }
+            }
+        };
+
+        let progress_bar = new_spinner_progress_bar();
+        progress_bar.set_message("Confirming...");
+        let mut confirmations = 0;
+        let signature = Signature::from_str(&signature_str).map_err(|_| {
+            ClientError::from(ClientErrorKind::Custom(format!(
+                "Returned string {} cannot be parsed as a signature",
+                signature_str
+            )))
+        })?;
+        loop {
+            // Return when default (max) commitment is reached
+            // Failed transactions have already been eliminated, `is_some` check is sufficient
+            if self.get_signature_status(&signature_str)?.is_some() {
+                progress_bar.set_message("Transaction confirmed");
+                progress_bar.finish_and_clear();
+                return Ok(signature_str);
+            }
+            progress_bar.set_message(&format!(
+                "[{}/{}] Waiting for confirmations",
+                confirmations, MAX_LOCKOUT_HISTORY,
+            ));
+            sleep(Duration::from_millis(500));
+            confirmations = self.get_num_blocks_since_signature_confirmation(&signature)?;
+        }
+    }
+
     pub fn validator_exit(&self) -> ClientResult<bool> {
         let response = self
             .client
@@ -959,6 +1049,14 @@ impl RpcClient {
         assert!(params.is_array() || params.is_null());
         self.client.send(request, params, retries)
     }
+}
+
+fn new_spinner_progress_bar() -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar
+        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
+    progress_bar.enable_steady_tick(100);
+    progress_bar
 }
 
 pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
