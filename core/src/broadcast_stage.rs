@@ -363,30 +363,38 @@ impl BroadcastStage {
         unfinished_retransmit_slots: &mut HashSet<Slot>,
         socket_sender: &Sender<TransmitShreds>,
     ) -> Result<()> {
-        for (updated_slot, all_data_transmit_shreds) in updates {
+        // If this block is outdated (no longer in the cache),
+        // then there's no longer any need to retransmit the block,
+        // so remove it from the `unfinished_retransmit_slots` set
+        unfinished_retransmit_slots.retain(|unfinished_retransmit_slot| {
+            let slot_cached_shreds = transmit_shreds_cache.get(*unfinished_retransmit_slot);
+            if slot_cached_shreds.is_none() {
+                println!("aborting");
+            }
+            slot_cached_shreds.is_some()
+        });
+
+        for (updated_slot, all_transmit_shreds) in updates {
             // If there's been no signal to retransmit this slot,
             // then continue
             if !unfinished_retransmit_slots.contains(&updated_slot) {
                 continue;
             }
 
-            // If this block is outdated (no longer in the cache),
-            // then there's no longer any need to retransmit the block,
-            // so remove it from the `unfinished_retransmit_slots` set
-            let slot_cached_shreds = transmit_shreds_cache.get(updated_slot);
-            if slot_cached_shreds.is_none() {
-                println!("aborting");
-                unfinished_retransmit_slots.remove(&updated_slot);
-                continue;
-            }
-
-            let slot_cached_shreds = slot_cached_shreds.unwrap();
-            println!("len: {}", all_data_transmit_shreds.len());
-            for transmit_shreds in all_data_transmit_shreds {
+            // Safe to unwrap because:
+            // 1) `updated_slot` is a member of `unfinished_retransmit_slots`
+            // due to the check above,
+            //
+            // 2) `unfinished_retransmit_slots` is a subset of
+            // `transmit_shreds_cache` because of the `retain()` run at the
+            // beginning of this function
+            let slot_cached_shreds = transmit_shreds_cache.get(updated_slot).unwrap();
+            println!("len: {}", all_transmit_shreds.len());
+            for transmit_shreds in all_transmit_shreds {
                 if transmit_shreds.1.is_empty() {
                     continue;
                 }
-                println!("Sending");
+                println!("Sending: {}", transmit_shreds.1[0].is_data());
                 socket_sender.send(transmit_shreds)?;
             }
 
@@ -418,6 +426,7 @@ impl BroadcastStage {
             let all_data_transmit_shreds = cached_updates.to_transmit_shreds();
 
             for transmit_shreds in all_data_transmit_shreds {
+                println!("Sending from store");
                 socket_sender.send(transmit_shreds)?;
             }
         }
@@ -441,17 +450,20 @@ impl BroadcastStage {
         }
 
         for (_, bank) in retransmit_slots.iter() {
+            println!("got signal for {}", bank.slot());
             unfinished_retransmit_slots.remove(&bank.slot());
             let cached_shreds = transmit_shreds_cache.get_or_update(bank, blockstore);
+            // If the cached shreds are missing any shreds (broadcast
+            // hasn't written them to blockstore yet), add this slot
+            // to the `unfinished_retransmit_slots` so we can retry broadcasting
+            // the missing shreds later.
+            if !cached_shreds.contains_last_shreds() {
+                println!("adding unfinished: {}", bank.slot());
+                unfinished_retransmit_slots.insert(bank.slot());
+            }
             let all_data_transmit_shreds = cached_shreds.to_transmit_shreds();
             for transmit_shreds in all_data_transmit_shreds {
-                // If the cached shreds are missing any shreds (broadcast
-                // hasn't written them to blockstore yet), addd this slot
-                // to the `unfinished_retransmit_slots` so we can retry broadcasting
-                // the missing shreds later.
-                if !cached_shreds.contains_last_shreds() {
-                    unfinished_retransmit_slots.insert(bank.slot());
-                }
+                println!("sending transmit shreds");
                 socket_sender.send(transmit_shreds)?;
             }
         }
@@ -548,6 +560,73 @@ mod test {
 
         assert_eq!(num_expected_data_shreds, data_index);
         assert_eq!(num_expected_coding_shreds, coding_index);
+    }
+
+    #[test]
+    fn test_empty_signal_updated() {
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let mut transmit_shreds_cache = SlotTransmitShredsCache::new(MAX_UNCONFIRMED_SLOTS);
+        let mut unfinished_retransmit_slots = HashSet::new();
+        let (transmit_sender, transmit_receiver) = channel();
+        let (_retransmit_cache_sender, retransmit_cache_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Ask for retransmit of a slot before any shreds have arrived in the
+        // cache or been written to blockstore
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+
+        // Check nothing was received
+        check_all_shreds_received(&transmit_receiver, 0, 0, 0, 0);
+
+        // Make some shreds
+        let updated_slot = 0;
+        let (all_data_shreds, all_coding_shreds, _, _) = make_transmit_shreds(updated_slot, 10);
+        let num_data_shreds = all_data_shreds.len();
+        let num_coding_shreds = all_coding_shreds.len();
+        assert!(num_data_shreds >= 10);
+
+        // Insert all the shreds
+        blockstore
+            .insert_shreds(all_data_shreds, None, true)
+            .unwrap();
+        blockstore
+            .insert_shreds(all_coding_shreds, None, true)
+            .unwrap();
+        // Signal for retransmit
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+
+        assert!(BroadcastStage::run_retransmit(
+            &blockstore,
+            &mut transmit_shreds_cache,
+            &mut unfinished_retransmit_slots,
+            &retransmit_cache_receiver,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .is_none());
+
+        // Check retransmit occurred
+        check_all_shreds_received(
+            &transmit_receiver,
+            0,
+            0,
+            num_data_shreds as u64,
+            num_coding_shreds as u64,
+        );
     }
 
     #[test]
@@ -834,13 +913,13 @@ mod test {
                 .send((0, data_transmit_shred.clone()))
                 .unwrap();
         }
-        retransmit_slots_sender
-            .send(
-                vec![(0, banks_and_shreds.get(&0).unwrap().bank.clone())]
-                    .into_iter()
-                    .collect(),
-            )
-            .unwrap();
+        let slot0_signal: HashMap<Slot, Arc<Bank>> =
+            vec![(0, banks_and_shreds.get(&0).unwrap().bank.clone())]
+                .into_iter()
+                .collect();
+
+        retransmit_slots_sender.send(slot0_signal.clone()).unwrap();
+        println!("here1");
         assert!(BroadcastStage::run_retransmit(
             &blockstore,
             &mut transmit_shreds_cache,
@@ -850,15 +929,17 @@ mod test {
             &transmit_sender,
         )
         .is_none());
+        assert!(unfinished_retransmit_slots.contains(&0));
 
-        // Now write updates for slot 0 to blockstore, should send retransmits
-        // for entire slot, should not be missing any shreds
+        // Now write updates for slot 0 to blockstore, no retransmits
+        // should happen as slot 0 was considered "outdated"
         let data_shreds = banks_and_shreds.get(&0).unwrap().data_shreds.clone();
         let coding_shreds = banks_and_shreds.get(&0).unwrap().coding_shreds.clone();
-        let num_data_shreds = data_shreds.len();
-        let num_coding_shreds = coding_shreds.len();
+        let num_data_shreds = data_shreds.len() as u64;
+        let num_coding_shreds = coding_shreds.len() as u64;
         blockstore.insert_shreds(data_shreds, None, true).unwrap();
         blockstore.insert_shreds(coding_shreds, None, true).unwrap();
+        println!("here2");
         assert!(BroadcastStage::run_retransmit(
             &blockstore,
             &mut transmit_shreds_cache,
@@ -868,14 +949,7 @@ mod test {
             &transmit_sender,
         )
         .is_none());
-
-        check_all_shreds_received(
-            &transmit_receiver,
-            0,
-            0,
-            num_data_shreds as u64,
-            num_coding_shreds as u64,
-        );
+        check_all_shreds_received(&transmit_receiver, 0, 0, num_data_shreds, num_coding_shreds);
     }
 
     #[test]
@@ -1027,9 +1101,11 @@ mod test {
         // Now push the coding shreds into the cache.
         // All the updates for the slot have now been received,
         // so the slot should be purged from `unfinished_retransmit_slots`
-        for transmit_shreds in all_coding_transmit_shreds.into_iter() {
+        for transmit_shreds in all_coding_transmit_shreds.clone() {
             transmit_shreds_cache.push(updated_slot, transmit_shreds);
         }
+        updates.clear();
+        updates.insert(updated_slot, all_coding_transmit_shreds);
         BroadcastStage::retry_unfinished_retransmit_slots(
             &blockstore,
             updates.clone(),

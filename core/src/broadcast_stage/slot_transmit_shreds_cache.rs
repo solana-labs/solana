@@ -14,11 +14,6 @@ pub struct SlotCachedTransmitShreds {
 
 impl SlotCachedTransmitShreds {
     pub fn contains_last_shreds(&self) -> bool {
-        let x = self.last_data_shred().map(|shred| shred.last_in_slot());
-        let y = self
-            .last_coding_shred()
-            .map(|shred| shred.is_last_coding_in_set());
-        println!("x: {:?}, y: {:?}", x, y);
         self.last_data_shred()
             .map(|shred| shred.last_in_slot())
             .unwrap_or(false)
@@ -63,28 +58,27 @@ impl SlotTransmitShredsCache {
     pub fn new(capacity: usize) -> Self {
         Self {
             cache: HashMap::new(),
-            insertion_order: VecDeque::with_capacity(capacity),
+            insertion_order: VecDeque::with_capacity(std::cmp::max(capacity, 1)),
             capacity,
         }
     }
 
     pub fn push(&mut self, slot: Slot, transmit_shreds: TransmitShreds) {
-        if transmit_shreds.1.is_empty() {
-            return;
-        }
+        if !self.cache.contains_key(&slot) {
+            if !transmit_shreds.1.is_empty() && transmit_shreds.1[0].index() != 0 {
+                // Shreds for a slot must come in order from broadcast.
+                // If the cache doesn't contain this slot's earlier shreds, and
+                // this batch does not contain the first shred for the slot,
+                // this means this slot has already been purged from the cache,
+                // so dump it.
+                println!("dumping");
+                return;
+            }
+            if self.insertion_order.len() == self.capacity {
+                let old_slot = self.insertion_order.pop_front().unwrap();
+                self.cache.remove(&old_slot).unwrap();
+            }
 
-        if !self.cache.contains_key(&slot) && transmit_shreds.1[0].index() != 0 {
-            // Shreds for a slot must come in order from broadcast.
-            // If the cache doesn't contain this slot's earlier shreds, and
-            // this batch does not contain the first shred for the slot,
-            // this means this slot has already been purged from the cache,
-            //so dump it.
-            return;
-        }
-
-        if self.insertion_order.len() == self.capacity {
-            let old_slot = self.insertion_order.pop_front().unwrap();
-            self.cache.remove(&old_slot).unwrap();
             self.insertion_order.push_back(slot);
         }
 
@@ -96,6 +90,14 @@ impl SlotTransmitShredsCache {
                 data_shred_batches: vec![],
                 coding_shred_batches: vec![],
             });
+
+        // It's important that empty entries are still inserted
+        // into the cache so that they can be updated later by
+        // blockstore or broadcast later (usedd to track incomplete
+        // retrasmits)
+        if transmit_shreds.1.is_empty() {
+            return;
+        }
 
         // Transmit shreds must be all of one type or another
         if transmit_shreds.1[0].is_data() {
@@ -117,11 +119,13 @@ impl SlotTransmitShredsCache {
         blockstore: &Blockstore,
     ) -> &SlotCachedTransmitShreds {
         if self.cache.get(&bank.slot()).is_none() {
+            println!("filling in {}", bank.slot());
             let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
             let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
             let stakes = stakes.map(Arc::new);
 
             let (data_shreds, coding_shreds) = self.get_new_shreds(blockstore, bank.slot(), 0, 0);
+            println!("got new {}, {}", data_shreds.len(), coding_shreds.len());
             self.push(bank.slot(), (stakes.clone(), data_shreds));
             self.push(bank.slot(), (stakes, coding_shreds));
             self.cache
@@ -229,6 +233,7 @@ impl SlotTransmitShredsCache {
             updates
                 .entry(slot)
                 .or_insert_with(|| vec![new_transmit_shreds.clone()]);
+            println!("pushing from update_retransmit_cache");
             self.push(slot, new_transmit_shreds);
         }
 
@@ -246,6 +251,9 @@ impl SlotTransmitShredsCache {
     }
 
     fn should_push(&self, slot: Slot, new_transmit_shreds: &TransmitShreds) -> bool {
+        if new_transmit_shreds.1.is_empty() {
+            return false;
+        }
         // Check if updates should be added to the cache. Note that:
         //
         // 1) Other updates could have been read from the blockstore by
