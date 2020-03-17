@@ -225,7 +225,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             .get_balance(&Pubkey::from_str(&validator_identity).unwrap_or_default())
                             .map(lamports_to_sol)
                             .map(|balance| {
-                                if balance < 1.0 {
+                                if balance < 10.0 {
+                                    // At 1 SOL/day for validator voting fees, this gives over a week to
+                                    // find some more SOL
                                     failures.push((
                                         "balance",
                                         format!("{} has {} SOL", validator_identity, balance),
