@@ -37,9 +37,9 @@ solana-gossip spy --gossip-port 8001 > "$logDir"/gossip.log 2>&1 &
 solanaGossipPid=$!
 echo "solana-gossip pid: $solanaGossipPid"
 sleep 5
-dd if=/dev/zero bs=1232 > /dev/udp/127.0.0.1/8001 &
-ddPid=$!
-echo "dd pid: $ddPid"
+solana-dos --mode gossip &
+dosPid=$!
+echo "solana-dos pid: $dosPid"
 
 pass=true
 
@@ -50,8 +50,8 @@ while ((SECONDS < 600)); do
     pass=false
     break
   fi
-  if ! kill -0 $ddPid; then
-    echo "dd is no longer running after $SECONDS seconds"
+  if ! kill -0 $dosPid; then
+    echo "solana-dos is no longer running after $SECONDS seconds"
     pass=false
     break
   fi
@@ -59,7 +59,7 @@ while ((SECONDS < 600)); do
 done
 
 kill $solanaGossipPid || true
-kill $ddPid || true
+kill $dosPid || true
 wait || true
 
 $pass && echo Pass
