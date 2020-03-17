@@ -167,7 +167,11 @@ fn grind_parse_args(
     for sw in starts_with_args {
         let args: Vec<&str> = sw.split(':').collect();
         grind_matches.push(GrindMatch {
-            starts: if ignore_case { args[0].to_lowercase() } else { args[0].to_string() },
+            starts: if ignore_case {
+                args[0].to_lowercase()
+            } else {
+                args[0].to_string()
+            },
             ends: "".to_string(),
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
         });
@@ -176,15 +180,27 @@ fn grind_parse_args(
         let args: Vec<&str> = ew.split(':').collect();
         grind_matches.push(GrindMatch {
             starts: "".to_string(),
-            ends: if ignore_case { args[0].to_lowercase() } else { args[0].to_string() },
+            ends: if ignore_case {
+                args[0].to_lowercase()
+            } else {
+                args[0].to_string()
+            },
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
         });
     }
     for swew in starts_and_ends_with_args {
         let args: Vec<&str> = swew.split(':').collect();
         grind_matches.push(GrindMatch {
-            starts: if ignore_case { args[0].to_lowercase() } else { args[0].to_string() },
-            ends: if ignore_case { args[1].to_lowercase() } else { args[1].to_string() },
+            starts: if ignore_case {
+                args[0].to_lowercase()
+            } else {
+                args[0].to_string()
+            },
+            ends: if ignore_case {
+                args[1].to_lowercase()
+            } else {
+                args[1].to_string()
+            },
             count: AtomicU64::new(args[2].parse::<u64>().unwrap()),
         });
     }
