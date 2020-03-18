@@ -67,11 +67,11 @@ keypair generated from your seed phrase, and "Failed" otherwise.
 Keypairs are automatically derived when you query a hardware wallet with a
 [keypair URL](../remote-wallet#specify-a-hardware-wallet-key).
 
-Once you have your keypair URL, use `solana address` to query the hardware
+Once you have your keypair URL, use `solana-keygen pubkey` to query the hardware
 wallet for the keypair's public key:
 
 ```bash
-solana address --keypair <KEYPAIR>
+solana-keygen pubkey <KEYPAIR>
 ```
 
 where `<KEYPAIR>` is the keypair URL.
