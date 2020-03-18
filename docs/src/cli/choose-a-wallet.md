@@ -53,8 +53,8 @@ A hardware wallet, such as the [Ledger hardware
 wallet](https://www.ledger.com/), offers a great blend of security and
 convenience for cryptocurrencies. It effectively automates the process of
 offline signing while retaining nearly all the convenience of an FS wallet.
-Compared to offline signing with paper wallets, which we regard as highly
-secure, some security concerns with hardware wallets:
+In contrast to offline signing with paper wallets, which we regard as highly
+secure, offline signing with hardware wallets presents some security concerns:
 
 * Keys could be leaked by a malicious app on the hardware wallet
 * Keys could be stolen by a malicious client via a bug in the hardware wallet's
