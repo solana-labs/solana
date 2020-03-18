@@ -131,20 +131,15 @@ pub fn main() -> Result<(), String> {
                         .long("no-modify-path")
                         .help("Don't configure the PATH environment variable"),
                 )
-                .arg({
-                    let arg = Arg::with_name("update_manifest_pubkey")
+                .arg(
+                    Arg::with_name("update_manifest_pubkey")
                         .short("p")
                         .long("pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .validator(is_pubkey)
-                        .help("Public key of the update manifest");
-
-                    match defaults::update_manifest_pubkey(build_env::TARGET) {
-                        Some(default_value) => arg.default_value(default_value),
-                        None => arg,
-                    }
-                })
+                        .help("Public key of the update manifest"),
+                )
                 .arg(
                     Arg::with_name("explicit_release")
                         .value_name("release")
@@ -314,20 +309,15 @@ pub fn main_init() -> Result<(), String> {
                 .long("no-modify-path")
                 .help("Don't configure the PATH environment variable"),
         )
-        .arg({
-            let arg = Arg::with_name("update_manifest_pubkey")
+        .arg(
+            Arg::with_name("update_manifest_pubkey")
                 .short("p")
                 .long("pubkey")
                 .value_name("PUBKEY")
                 .takes_value(true)
                 .validator(is_pubkey)
-                .help("Public key of the update manifest");
-
-            match defaults::update_manifest_pubkey(build_env::TARGET) {
-                Some(default_value) => arg.default_value(default_value),
-                None => arg,
-            }
-        })
+                .help("Public key of the update manifest"),
+        )
         .arg(
             Arg::with_name("explicit_release")
                 .value_name("release")
