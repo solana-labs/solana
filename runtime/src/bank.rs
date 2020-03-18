@@ -1513,42 +1513,48 @@ impl Bank {
         let mut total_staked = 0;
         let mut rent_distributed_in_initial_round = 0;
 
-        let mut node_stakes = vote_account_hashmap
+        // Collect the stake associated with each validator.
+        // Note that a validator may be present in this vector multiple times if it happens to have
+        // more than one staked vote account somehow
+        let mut validator_stakes = vote_account_hashmap
             .iter()
             .filter_map(|(_vote_pubkey, (staked, account))| {
-                total_staked += *staked;
-                VoteState::deserialize(&account.data)
-                    .ok()
-                    .map(|vote_state| (vote_state.node_pubkey, *staked))
-                    .filter(|(_pubkey, staked)| *staked != 0)
+                if *staked == 0 {
+                    None
+                } else {
+                    total_staked += *staked;
+                    VoteState::deserialize(&account.data)
+                        .ok()
+                        .map(|vote_state| (vote_state.node_pubkey, *staked))
+                }
             })
             .collect::<Vec<(Pubkey, u64)>>();
 
-        // Sort first by stake and then by pubkey for determinism
-        node_stakes.sort_by(
-            |(pubkey1, staked1), (pubkey2, staked2)| match staked2.cmp(staked1) {
+        // Sort first by stake and then by validator identity pubkey for determinism
+        validator_stakes.sort_by(|(pubkey1, staked1), (pubkey2, staked2)| {
+            match staked2.cmp(staked1) {
                 std::cmp::Ordering::Equal => pubkey2.cmp(pubkey1),
                 other => other,
-            },
-        );
+            }
+        });
 
-        let node_stakes_and_rent = node_stakes
+        let validator_rent_shares = validator_stakes
             .iter()
             .map(|(pubkey, staked)| {
                 let rent_share =
                     (((*staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
                 rent_distributed_in_initial_round += rent_share;
-                (*pubkey, *staked, rent_share)
+                (*pubkey, rent_share)
             })
-            .collect::<Vec<(Pubkey, u64, u64)>>();
+            .collect::<Vec<(Pubkey, u64)>>();
 
         // Leftover lamports after fraction calculation, will be paid to validators starting from highest stake
         // holder
         let mut leftover_lamports = rent_to_be_distributed - rent_distributed_in_initial_round;
 
-        node_stakes_and_rent
+        validator_rent_shares
             .iter()
-            .for_each(|(pubkey, _staked, rent_share)| {
+            .for_each(|(pubkey, rent_share)| {
                 let rent_to_be_paid = if leftover_lamports > 0 {
                     leftover_lamports -= 1;
                     *rent_share + 1
