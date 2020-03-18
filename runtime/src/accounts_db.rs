@@ -2920,6 +2920,25 @@ pub mod tests {
     }
 
     #[test]
+    fn test_too_many_alive_slots() {
+        use solana_sdk::signature::{Keypair, Signer};
+        let db = AccountsDB::new(Vec::new());
+
+        // just 10-hours-worth of slots...
+        for i in 0..100_000 {
+            let key = Pubkey::new_rand();
+            let random_lamports = thread_rng().gen_range(0, 1_000_000);
+            let account = Account::new(random_lamports, 0, &key);
+            db.store(i, &[(&key, &account)]);
+            db.add_root(i);
+            let no_ancestors = HashMap::new();
+
+            let loaded_account = db.load_slow(&no_ancestors, &key).unwrap().0;
+            assert_eq!(loaded_account.lamports, random_lamports);
+        }
+    }
+
+    #[test]
     fn test_get_snapshot_storages_empty() {
         let db = AccountsDB::new(Vec::new());
         assert!(db.get_snapshot_storages(0).is_empty());
