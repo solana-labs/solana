@@ -2,8 +2,10 @@
 extern crate lazy_static;
 
 use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::input_validators::{is_pubkey, is_url};
-use solana_sdk::pubkey::Pubkey;
+use solana_clap_utils::{
+    input_parsers::pubkey_of,
+    input_validators::{is_pubkey, is_url},
+};
 
 mod build_env;
 mod command;
@@ -51,6 +53,30 @@ pub fn explicit_release_of(
                 config::ExplicitRelease::Channel(explicit_release)
             }
         })
+}
+
+fn handle_init(matches: &ArgMatches<'_>, config_file: &str) -> Result<(), String> {
+    let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
+    let update_manifest_pubkey = pubkey_of(&matches, "update_manifest_pubkey");
+    let data_dir = matches.value_of("data_dir").unwrap();
+    let no_modify_path = matches.is_present("no_modify_path");
+    let explicit_release = explicit_release_of(&matches, "explicit_release");
+
+    if update_manifest_pubkey.is_none() && explicit_release.is_none() {
+        Err(format!(
+            "Please specify the release to install for {}.  See --help for more",
+            build_env::TARGET
+        ))
+    } else {
+        command::init(
+            config_file,
+            data_dir,
+            json_rpc_url,
+            &update_manifest_pubkey.unwrap_or_default(),
+            no_modify_path,
+            explicit_release,
+        )
+    }
 }
 
 pub fn main() -> Result<(), String> {
@@ -111,7 +137,6 @@ pub fn main() -> Result<(), String> {
                         .long("pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .required(true)
                         .validator(is_pubkey)
                         .help("Public key of the update manifest");
 
@@ -126,7 +151,7 @@ pub fn main() -> Result<(), String> {
                         .index(1)
                         .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
                         .validator(is_explicit_release)
-                        .help("The exact version to install.  Either a semver or release channel name"),
+                        .help("The release version or channel to install"),
                 ),
         )
         .subcommand(
@@ -211,26 +236,7 @@ pub fn main() -> Result<(), String> {
     let config_file = matches.value_of("config_file").unwrap();
 
     match matches.subcommand() {
-        ("init", Some(matches)) => {
-            let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
-            let update_manifest_pubkey = matches
-                .value_of("update_manifest_pubkey")
-                .unwrap()
-                .parse::<Pubkey>()
-                .unwrap();
-            let data_dir = matches.value_of("data_dir").unwrap();
-            let no_modify_path = matches.is_present("no_modify_path");
-            let explicit_release = explicit_release_of(&matches, "explicit_release");
-
-            command::init(
-                config_file,
-                data_dir,
-                json_rpc_url,
-                &update_manifest_pubkey,
-                no_modify_path,
-                explicit_release,
-            )
-        }
+        ("init", Some(matches)) => handle_init(&matches, &config_file),
         ("info", Some(matches)) => {
             let local_info_only = matches.is_present("local_info_only");
             command::info(config_file, local_info_only).map(|_| ())
@@ -314,7 +320,6 @@ pub fn main_init() -> Result<(), String> {
                 .long("pubkey")
                 .value_name("PUBKEY")
                 .takes_value(true)
-                .required(true)
                 .validator(is_pubkey)
                 .help("Public key of the update manifest");
 
@@ -329,28 +334,10 @@ pub fn main_init() -> Result<(), String> {
                 .index(1)
                 .conflicts_with_all(&["json_rpc_url", "update_manifest_pubkey"])
                 .validator(is_explicit_release)
-                .help("The exact version to install.  Updates will not be available if this argument is used"),
+                .help("The release version or channel to install"),
         )
         .get_matches();
 
     let config_file = matches.value_of("config_file").unwrap();
-
-    let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
-    let update_manifest_pubkey = matches
-        .value_of("update_manifest_pubkey")
-        .unwrap()
-        .parse::<Pubkey>()
-        .unwrap();
-    let data_dir = matches.value_of("data_dir").unwrap();
-    let no_modify_path = matches.is_present("no_modify_path");
-    let explicit_release = explicit_release_of(&matches, "explicit_release");
-
-    command::init(
-        config_file,
-        data_dir,
-        json_rpc_url,
-        &update_manifest_pubkey,
-        no_modify_path,
-        explicit_release,
-    )
+    handle_init(&matches, &config_file)
 }
