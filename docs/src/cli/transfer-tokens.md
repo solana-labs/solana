@@ -58,7 +58,7 @@ where you replace the text `<PUBKEY>` with your base58 public key.
 If the airdrop was successful, it will output the account's balance,
 10 SOL. If you run the same command again, it should output 20 SOL.
 
-Next, proof that you own those tokens by transferring them. The Solana cluster
+Next, prove that you own those tokens by transferring them. The Solana cluster
 will only accept the transfer if you sign the transaction with the private
 key corresponding to the sender's public key in the transaction.
 
