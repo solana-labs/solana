@@ -37,9 +37,9 @@ regenerate a keypair on demand.
 In terms of convenience versus security, a paper wallet sits at the opposite
 side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
 offers excellent security. That high security is further amplified when paper
-wallets are used in conjunction with [offline
-signing](../offline-signing/index.md). Custody services such as [Coinbase
-Custody](https://custody.coinbase.com/) use this combination.  Paper wallets
+wallets are used in conjunction with
+[offline signing](../offline-signing/index.md). Custody services such as
+[Coinbase Custody](https://custody.coinbase.com/) use this combination.  Paper wallets
 and custody services are an excellent way to secure a large number of tokens
 for a long period of time.
 
@@ -50,12 +50,13 @@ some interface for signing transactions.
 
 ### Hardware Wallet Security
 
-A hardware wallet, such as the [Ledger hardware
-wallet](https://www.ledger.com/), offers a great blend of security and
-convenience for cryptocurrencies. It effectively automates the process of
-offline signing while retaining nearly all the convenience of an FS wallet.
-In contrast to offline signing with paper wallets, which we regard as highly
-secure, offline signing with hardware wallets presents some security concerns:
+A hardware wallet, such as the
+[Ledger hardware wallet](https://www.ledger.com/), offers a great blend of
+security and convenience for cryptocurrencies. It effectively automates the
+process of offline signing while retaining nearly all the convenience of an FS
+wallet.  In contrast to offline signing with paper wallets, which we regard as
+highly secure, offline signing with hardware wallets presents some security
+concerns:
 
 * Keys could be leaked by a malicious app on the hardware wallet
 * Keys could be stolen by a malicious client via a bug in the hardware wallet's
@@ -72,7 +73,7 @@ To keep your hardware wallet tokens safe, we suggest:
 ## Which Wallet is Best?
 
 Different people will have different needs, but if you are still unsure what's
-best for you after reading the comparisons above, go with a [Ledger Nano
-S](https://shop.ledger.com/products/ledger-nano-s). The [Nano S is
-well-integrated into Solana's tool suite](../remote-wallet/ledger) and offers
-an outstanding blend of security and convenience.
+best for you after reading the comparisons above, go with a
+[Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s). The
+[Nano S is well-integrated into Solana's tool suite](../remote-wallet/ledger)
+and offers an outstanding blend of security and convenience.
