@@ -74,4 +74,4 @@ Different people will have different needs, but if you are still unsure what's
 best for you after reading the comparisons above, go with a [Ledger Nano
 S](https://shop.ledger.com/products/ledger-nano-s). The [Nano S is
 well-integrated into Solana's tool suite](../remote-wallet/ledger) and offers
-an outstanding blend of security and conveinence.
+an outstanding blend of security and convenience.
