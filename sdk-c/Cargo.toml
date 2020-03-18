@@ -15,7 +15,7 @@ crate-type = ["staticlib"]
 [dependencies]
 bincode = "1.2.1"
 bs58 = "0.3.0"
-libc = "0.2.67"
+libc = "0.2.68"
 rand_chacha = "0.1.1"
 rand_core = { version = ">=0.2, <0.4", default-features = false }
 solana-sdk = { path = "../sdk", version = "1.1.0" }
