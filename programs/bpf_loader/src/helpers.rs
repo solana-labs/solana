@@ -1,18 +1,16 @@
 use crate::alloc;
 use alloc::Alloc;
-use libc::c_char;
 use log::*;
 use solana_rbpf::{
-    ebpf::{HelperObject, MM_HEAP_START},
+    ebpf::{HelperObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
 use std::{
     alloc::Layout,
-    ffi::CStr,
     io::{Error, ErrorKind},
-    mem::align_of,
-    slice::from_raw_parts,
+    mem::{align_of, size_of},
+    slice::from_raw_parts_mut,
     str::from_utf8,
 };
 
@@ -49,6 +47,84 @@ pub fn register_helpers(vm: &mut EbpfVm) -> Result<MemoryRegion, Error> {
     Ok(heap_region)
 }
 
+#[macro_export]
+macro_rules! translate {
+    ($vm_addr:expr, $len:expr, $regions:expr) => {
+        translate_addr(
+            $vm_addr as u64,
+            $len as usize,
+            file!(),
+            line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
+            $regions,
+        )?
+    };
+}
+
+#[macro_export]
+macro_rules! translate_type_mut {
+    ($t:ty, $vm_addr:expr, $regions:expr) => {
+        unsafe {
+            &mut *(translate_addr(
+                $vm_addr as u64,
+                size_of::<$t>(),
+                file!(),
+                line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
+                $regions,
+            )? as *mut $t)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! translate_type {
+    ($t:ty, $vm_addr:expr, $regions:expr) => {
+        &*translate_type_mut!($t, $vm_addr, $regions)
+    };
+}
+
+#[macro_export]
+macro_rules! translate_slice_mut {
+    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {{
+        let host_addr = translate_addr(
+            $vm_addr as u64,
+            $len as usize * size_of::<$t>(),
+            file!(),
+            line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
+            $regions,
+        )? as *mut $t;
+        unsafe { from_raw_parts_mut(host_addr, $len as usize) }
+    }};
+}
+
+#[macro_export]
+macro_rules! translate_slice {
+    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {
+        &*translate_slice_mut!($t, $vm_addr, $len, $regions)
+    };
+}
+
+/// Take a virtual pointer to a string (points to BPF VM memory space), translate it
+/// pass it to a user-defined work function
+fn translate_string_and_do(
+    addr: u64,
+    len: u64,
+    regions: &[MemoryRegion],
+    work: &dyn Fn(&str) -> Result<u64, Error>,
+) -> Result<u64, Error> {
+    let buf = translate_slice!(u8, addr, len, regions);
+    let i = match buf.iter().position(|byte| *byte == 0) {
+        Some(i) => i,
+        None => len as usize,
+    };
+    match from_utf8(&buf[..i]) {
+        Ok(message) => work(message),
+        Err(err) => Err(Error::new(
+            ErrorKind::Other,
+            format!("Error: Invalid string {:?}", err),
+        )),
+    }
+}
+
 /// Abort helper functions, called when the BPF program calls `abort()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
@@ -79,22 +155,18 @@ pub fn helper_sol_panic(
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, Error> {
-    if let Ok(host_addr) = translate_addr(file, len as usize, "Load", 0, ro_regions) {
-        let c_buf: *const c_char = host_addr as *const c_char;
-        let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
-        if let Ok(slice) = c_str.to_str() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Error: BPF program Panicked at {}, {}:{}",
-                    slice, line, column
-                ),
-            ));
-        }
-    }
-    Err(Error::new(ErrorKind::Other, "Error: BPF program Panicked"))
+    translate_string_and_do(file, len, ro_regions, &|string: &str| {
+        Err(Error::new(
+            ErrorKind::Other,
+            format!(
+                "Error: BPF program Panicked at {}, {}:{}",
+                string, line, column
+            ),
+        ))
+    })
 }
 
+/// Log a user's info message
 pub fn helper_sol_log(
     addr: u64,
     len: u64,
@@ -105,28 +177,15 @@ pub fn helper_sol_log(
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, Error> {
     if log_enabled!(log::Level::Info) {
-        let host_addr = translate_addr(addr, len as usize, "Load", 0, ro_regions)?;
-        let c_buf: *const c_char = host_addr as *const c_char;
-        unsafe {
-            for i in 0..len {
-                let c = std::ptr::read(c_buf.offset(i as isize));
-                if i == len - 1 || c == 0 {
-                    let message =
-                        from_utf8(from_raw_parts(host_addr as *const u8, len as usize)).unwrap();
-                    info!("info!: {}", message);
-                    return Ok(0);
-                }
-            }
-        }
-        Err(Error::new(
-            ErrorKind::Other,
-            "Error: Unterminated string logged",
-        ))
-    } else {
-        Ok(0)
+        translate_string_and_do(addr, len, ro_regions, &|string: &str| {
+            info!("info!: {}", string);
+            Ok(0)
+        })?;
     }
+    Ok(0)
 }
 
+/// Log 5 u64 values
 pub fn helper_sol_log_u64(
     arg1: u64,
     arg2: u64,
