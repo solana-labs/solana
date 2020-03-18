@@ -93,7 +93,6 @@ pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
     let absent_signers = signer_strings
         .iter()
         .map(|val| {
-            println!("val: {:?}", val);
             let s = val.as_str().unwrap();
             Pubkey::from_str(s).unwrap()
         })

@@ -270,7 +270,7 @@ where
 }
 
 /// NullSigner - A `Signer` implementation that always produces `Signature::default()`.
-/// Used as a placeholder for absentee signers who's 'Pubkey` is required to construct
+/// Used as a placeholder for absentee signers whose 'Pubkey` is required to construct
 /// the transaction
 #[derive(Clone, Debug, Default)]
 pub struct NullSigner {
