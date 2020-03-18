@@ -1,4 +1,3 @@
-use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     nonce,
@@ -102,8 +101,8 @@ fn test_transfer() {
         fee_payer: 0,
     };
     let sign_only_reply = process_command(&offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sign_only_reply);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
         lamports: 10,
@@ -193,8 +192,8 @@ fn test_transfer() {
         fee_payer: 0,
     };
     let sign_only_reply = process_command(&offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sign_only_reply);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
         lamports: 10,
@@ -203,7 +202,7 @@ fn test_transfer() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,

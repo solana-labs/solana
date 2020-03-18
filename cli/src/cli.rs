@@ -1019,13 +1019,14 @@ pub fn get_blockhash_and_fee_calculator(
 }
 
 pub fn return_signers(tx: &Transaction) -> ProcessResult {
-    println_signers(tx);
     let signers: Vec<_> = tx
         .signatures
         .iter()
-        .zip(tx.message.account_keys.clone())
+        .zip(tx.message.account_keys.iter())
         .map(|(signature, pubkey)| format!("{}={}", pubkey, signature))
         .collect();
+
+    println_signers(&tx.message.recent_blockhash, &signers);
 
     Ok(json!({
         "blockhash": tx.message.recent_blockhash.to_string(),

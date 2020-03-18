@@ -1,6 +1,6 @@
 use crate::cli::SettingType;
 use console::style;
-use solana_sdk::transaction::Transaction;
+use solana_sdk::hash::Hash;
 
 // Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
@@ -27,13 +27,12 @@ pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType)
     );
 }
 
-pub fn println_signers(tx: &Transaction) {
+pub fn println_signers(blockhash: &Hash, signers: &[String]) {
     println!();
-    println!("Blockhash: {}", tx.message.recent_blockhash);
-    println!("Signers (Pubkey=Signature):");
-    tx.signatures
-        .iter()
-        .zip(tx.message.account_keys.clone())
-        .for_each(|(signature, pubkey)| println!("  {:?}={:?}", pubkey, signature));
+    println!("Blockhash: {}", blockhash);
+    if !signers.is_empty() {
+        println!("Signers (Pubkey=Signature):");
+        signers.iter().for_each(|signer| println!("  {}", signer))
+    }
     println!();
 }
