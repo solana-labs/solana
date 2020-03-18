@@ -5275,6 +5275,75 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_transaction_status() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
+
+            let pre_balances_vec = vec![1, 2, 3];
+            let post_balances_vec = vec![3, 2, 1];
+            let status = RpcTransactionStatus {
+                status: solana_sdk::transaction::Result::<()>::Ok(()),
+                fee: 42u64,
+                pre_balances: pre_balances_vec.clone(),
+                post_balances: post_balances_vec.clone(),
+            };
+
+            let signature0 = Signature::new(&[2u8; 64]);
+            let signature1 = Signature::new(&[3u8; 64]);
+            let signature2 = Signature::new(&[4u8; 64]);
+            let signature3 = Signature::new(&[5u8; 64]);
+
+            transaction_status_cf
+                .put((0, signature0.clone()), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((1, signature1.clone()), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((2, signature2.clone()), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((3, signature3.clone()), &status)
+                .unwrap();
+
+            blockstore.set_roots(&[0, 2]).unwrap();
+
+            // A transaction status should return the correct corresponding slot, regardless of
+            // whether that slot is rooted yet
+            assert_eq!(
+                blockstore.get_transaction_status(signature0, 2).unwrap(),
+                Some((0, status.clone()))
+            );
+            assert_eq!(
+                blockstore.get_transaction_status(signature2, 2).unwrap(),
+                Some((2, status.clone()))
+            );
+            assert_eq!(
+                blockstore.get_transaction_status(signature3, 2).unwrap(),
+                Some((3, status.clone()))
+            );
+            // A transaction status in a slot that can never be rooted should return None
+            assert_eq!(
+                blockstore.get_transaction_status(signature1, 2).unwrap(),
+                None
+            );
+            // If signature doesn't exist in column, should return None
+            assert_eq!(
+                blockstore
+                    .get_transaction_status(Signature::default(), 2)
+                    .unwrap(),
+                None
+            );
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
     fn test_lowest_slot() {
         let blockstore_path = get_tmp_ledger_path!();
         {
