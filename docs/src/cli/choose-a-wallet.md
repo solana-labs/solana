@@ -16,14 +16,15 @@ file system. Each file in the directory holds a keypair.
 
 An FS wallet is the most convenient and least secure form of wallet. It is
 convenient because the keypair is stored in a simple file. You can generate as
-many keys as you'd like and trivially back them up by copying the files. If you
-are the only user of your computer and you are confident it is free of malware,
-an FS wallet is a fine solution for small amounts of cryptocurrency. If,
-however, your computer contains malware and is connected to the Internet, that
-malware may upload your keys and use them to take your tokens. Likewise,
-because the keypairs are stored on your computer as files, a skilled hacker
-with physical access to your computer may be able to access it. Using an
-encrypted hard drive, such as FileVault on MacOS, minimizes that risk.
+many keys as you'd like and trivially back them up by copying the files. It is
+insecure because the keypair files are **unencrypted**. If you are the only
+user of your computer and you are confident it is free of malware, an FS wallet
+is a fine solution for small amounts of cryptocurrency. If, however, your
+computer contains malware and is connected to the Internet, that malware may
+upload your keys and use them to take your tokens. Likewise, because the
+keypairs are stored on your computer as files, a skilled hacker with physical
+access to your computer may be able to access it. Using an encrypted hard
+drive, such as FileVault on MacOS, minimizes that risk.
 
 ## Paper Wallet
 
@@ -34,10 +35,10 @@ regenerate a keypair on demand.
 ### Paper Wallet Security
 
 In terms of convenience versus security, a paper wallet sits at the opposite
-side of the spectrum from an FS wallet. It is is terribly inconvenient to use,
-but offers excellent security. That high security is further amplified when
-paper wallets are used in conjunction with [offline
-signing](../offline-signing). Custody services such as [Coinbase
+side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
+offers excellent security. That high security is further amplified when paper
+wallets are used in conjunction with [offline
+signing](../offline-signing/index.md). Custody services such as [Coinbase
 Custody](https://custody.coinbase.com/) use this combination.  Paper wallets
 and custody services are an excellent way to secure a large number of tokens
 for a long period of time.

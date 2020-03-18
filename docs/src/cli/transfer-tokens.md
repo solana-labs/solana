@@ -55,19 +55,39 @@ solana airdrop 10 <PUBKEY> --url http://devnet.solana.com
 
 where you replace the text `<PUBKEY>` with your base58 public key.
 
-If the airdrop was successful, it will output the account's balance,
-10 SOL. If you run the same command again, it should output 20 SOL.
+Confirm the airdrop was successful by checking the account's balance.
+It should output `10 SOL`:
+
+```bash
+solana balance <PUBKEY> --url http://devnet.solana.com
+```
 
 Next, prove that you own those tokens by transferring them. The Solana cluster
 will only accept the transfer if you sign the transaction with the private
 key corresponding to the sender's public key in the transaction.
 
+First, we'll need a public key to receive our tokens. Create a second
+keypair and record its pubkey:
+
 ```bash
-solana-keygen new -o rando-keypair.json
-solana transfer --keypair=<KEYPAIR> rando-keypair.json 5
+solana-keygen new --no-passphrase --no-outfile
 ```
 
-where you replace `<KEYPAIR>` with the path to a keypair in your wallet.
+The output will contain the public key after the text `pubkey:`. Copy the
+public key. We'll use it in the next step.
+
+```text
+============================================================================
+pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
+============================================================================
+```
+
+```bash
+solana transfer --keypair=<KEYPAIR> <PUBKEY> 5
+```
+
+where you replace `<KEYPAIR>` with the path to a keypair in your wallet,
+and replace `<PUBKEY>` with the output of `solana-keygen new` above.
 
 If the transaction was accepted by the cluster, the command will output the
 transaction signature. The signature uniquely identifies your transaction.

@@ -47,21 +47,23 @@ solana-keygen verify <PUBKEY> ~/my-solana-wallet/my-keypair.json
 ```
 
 where `<PUBKEY>` is the public key output from the previous command.
-
+The command will output "Success" if the given public key matches the
+the one in your keypair file, and "Failed" otherwise.
 
 ## Generate a Paper Wallet Seed Phrase
 
 See [Creating a Paper Wallet](../paper-wallet/usage.md#creating-a-paper-wallet).
 
-To verify you control the private key of that public key, use `solana-verify`:
+To verify you control the private key of that public key, use `solana-keygen verify`:
 
 ```bash
 solana-keygen verify <PUBKEY> ASK
 ```
 
 where `<PUBKEY>` is the keypair's public key and they keyword `ASK` tells the
-command to prompt you for the keypair's seed phrase. After typing your seed
-phrase, the command will output "Success" if the given public key matches the
+command to prompt you for the keypair's seed phrase. Note that for security
+reasons, your seed phrase will not be displayed as you type. After entering your
+seed phrase, the command will output "Success" if the given public key matches the
 keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## Generate a Hardware Wallet Keypair
@@ -78,7 +80,7 @@ solana-keygen pubkey <KEYPAIR>
 
 where `<KEYPAIR>` is the keypair URL.
 
-To verify you control the private key of that public key, use `solana-verify`:
+To verify you control the private key of that public key, use `solana-keygen verify`:
 
 ```bash
 solana-keygen verify <PUBKEY> <KEYPAIR>
