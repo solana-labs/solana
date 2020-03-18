@@ -26,11 +26,8 @@ Solana key on any hardware wallet connected to your computer.
 The URL has the following form, where square brackets denote optional fields:
 
 ```text
-usb://<MANUFACTURER>[/<PRODUCT>[/<WALLET_KEY>]][?key=<DERIVATION_PATH>]
+usb://<MANUFACTURER>[/<WALLET_KEY>][?key=<DERIVATION_PATH>]
 ```
-
-`PRODUCT` is optional and defaults to an auto-detected value. When using a Ledger
-Nano S, for example, it defaults to "nano-s" without quotes.
 
 `WALLET_KEY` is used to disambiguate multiple devices. Each device has a unique
 master key and from that key derives a separate unique key per app.
@@ -49,7 +46,7 @@ unnecessary.
 For example, a fully qualified URL for a Ledger device might be:
 
 ```text
-usb://ledger/nano-s/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
+usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
 ## Manage Multiple Hardware Wallets
@@ -72,7 +69,7 @@ solana resolve-signer usb://ledger?key=0/0
 You will see output similar to:
 
 ```text
-usb://ledger/nano-s/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
+usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
 but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_KEY`.
