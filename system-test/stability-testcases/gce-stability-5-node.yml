@@ -13,5 +13,9 @@ steps:
       TESTNET_ZONES: "us-west1-a,us-west1-b,us-central1-a,europe-west4-a"
       USE_PUBLIC_IP_ADDRESSES: "true"
       ADDITIONAL_FLAGS: "--dedicated"
+      #let's repurpose our 8-hours-long stability test? or create a new one?
+      #first https://github.com/solana-labs/solana/pull/8510 needs to land!
+      CUSTOM_SCRIPT: "/path/to/script.sh"
+      #basically contains like this: "bash -c (while ./target/release/solana ping --interval 0 --count 1 --lamports 10000; do sleep 0.1; done)"
     agents:
       - "queue=stability-deploy"
