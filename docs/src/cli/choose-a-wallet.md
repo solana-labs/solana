@@ -64,7 +64,7 @@ secure, offline signing with hardware wallets presents some security concerns:
 To keep your hardware wallet tokens safe, we suggest:
 
 * Only install apps using the vendor's app manager
-* Keep the hardware wallet's firmware up-to-date
+* Keep the hardware wallet's firmware up to date
 * Put keys for large amounts of tokens into its own hardware wallet. Store it
   in a secure location.
 
