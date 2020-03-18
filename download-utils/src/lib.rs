@@ -173,20 +173,35 @@ pub fn download_genesis(
 pub fn download_snapshot(
     rpc_addr: &SocketAddr,
     ledger_path: &Path,
-    snapshot_hash: (Slot, Hash),
+    desired_snapshot_hash: (Slot, Hash),
 ) -> Result<(), String> {
-    let snapshot_package =
-        solana_ledger::snapshot_utils::get_snapshot_archive_path(ledger_path, &snapshot_hash);
-    if snapshot_package.exists() {
+    // Remove all snapshot not matching the desired hash
+    let snapshot_packages = solana_ledger::snapshot_utils::get_snapshot_archives(ledger_path);
+    for (snapshot_package, snapshot_hash) in snapshot_packages.iter() {
+        if snapshot_hash != desired_snapshot_hash {
+            fs::remove_file(snapshot_package)
+                .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
+        }
+    }
+
+    let desired_snapshot_package = solana_ledger::snapshot_utils::get_snapshot_archive_path(
+        ledger_path,
+        &desired_snapshot_hash,
+    );
+    if desired_snapshot_package.exists() {
         Ok(())
     } else {
         download_file(
             &format!(
                 "http://{}/{}",
                 rpc_addr,
-                snapshot_package.file_name().unwrap().to_str().unwrap()
+                desired_snapshot_package
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
             ),
-            &snapshot_package,
+            &desired_snapshot_package,
         )
     }
 }
