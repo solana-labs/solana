@@ -16,4 +16,4 @@ solana-measure = { path = "../measure", version = "1.1.0" }
 solana-sdk = { path = "../sdk", version = "1.1.0" }
 rand = "0.6.5"
 clap = "2.33.0"
-crossbeam-channel = "0.3"
+crossbeam-channel = "0.4"
