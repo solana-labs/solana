@@ -88,7 +88,7 @@ pub enum VoteInstruction {
     Withdraw(u64),
 
     /// Update the vote account's validator identity (node id)
-    ///    requires authorized voter and new validator identity signature
+    ///    requires authorized withdrawer and new validator identity signature
     ///
     /// Expects 3 Accounts:
     ///    0 - Vote account to be updated with the Pubkey for authorization
@@ -169,7 +169,7 @@ pub fn authorize(
 
 pub fn update_node(
     vote_pubkey: &Pubkey,
-    authorized_voter_pubkey: &Pubkey,
+    authorized_withdrawer_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
@@ -177,7 +177,7 @@ pub fn update_node(
         AccountMeta::new_readonly(*node_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
     ]
-    .with_signer(authorized_voter_pubkey)
+    .with_signer(authorized_withdrawer_pubkey)
     .with_signer(node_pubkey);
 
     Instruction::new(id(), &VoteInstruction::UpdateNode, account_metas)
@@ -196,7 +196,7 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
 
 pub fn withdraw(
     vote_pubkey: &Pubkey,
-    withdrawer_pubkey: &Pubkey,
+    authorized_withdrawer_pubkey: &Pubkey,
     lamports: u64,
     to_pubkey: &Pubkey,
 ) -> Instruction {
@@ -204,7 +204,7 @@ pub fn withdraw(
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(*to_pubkey, false),
     ]
-    .with_signer(withdrawer_pubkey);
+    .with_signer(authorized_withdrawer_pubkey);
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }

@@ -146,13 +146,13 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("New validator that will vote with this account"),
                 )
                 .arg(
-                    Arg::with_name("authorized_voter")
+                    Arg::with_name("authorized_withdrawer")
                         .index(3)
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("Authorized voter keypair"),
+                        .help("Authorized withdrawer keypair"),
                 )
         )
         .subcommand(
@@ -295,11 +295,11 @@ pub fn parse_vote_update_validator(
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let new_identity_pubkey =
         pubkey_of_signer(matches, "new_identity_pubkey", wallet_manager)?.unwrap();
-    let (authorized_voter, _) = signer_of(matches, "authorized_voter", wallet_manager)?;
+    let (authorized_withdrawer, _) = signer_of(matches, "authorized_withdrawer", wallet_manager)?;
 
     let payer_provided = None;
     let CliSignerInfo { signers } = generate_unique_signers(
-        vec![payer_provided, authorized_voter],
+        vec![payer_provided, authorized_withdrawer],
         matches,
         default_signer_path,
         wallet_manager,
@@ -488,7 +488,7 @@ pub fn process_vote_update_validator(
     vote_account_pubkey: &Pubkey,
     new_identity_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let authorized_voter = config.signers[1];
+    let authorized_withdrawer = config.signers[1];
     check_unique_pubkeys(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (new_identity_pubkey, "new_identity_pubkey".to_string()),
@@ -496,7 +496,7 @@ pub fn process_vote_update_validator(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::update_node(
         vote_account_pubkey,
-        &authorized_voter.pubkey(),
+        &authorized_withdrawer.pubkey(),
         new_identity_pubkey,
     )];
 
