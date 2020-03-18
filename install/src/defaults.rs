@@ -20,12 +20,3 @@ lazy_static! {
         })
     };
 }
-
-pub fn update_manifest_pubkey(target: &str) -> Option<&str> {
-    match target {
-        "x86_64-apple-darwin" => Some("GRUP8YUGASLdu2gBwHstFgeVH28qppfuCaTzq5Yo7wRo"), // SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_apple_darwin
-        "x86_64-unknown-linux-gnu" => Some("FnKt2ES9iUJkjoprf2rL62xxBAxZLVgyA4SFexPGotFE"), // SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu
-        "x86_64-pc-windows-msvc" => Some("2Lrj5xDCHDmqwCgGwjVqAUUM84vLpj5dReYeoXL9vSXV"), // SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_pc_windows_msvc
-        _ => None,
-    }
-}
