@@ -1315,11 +1315,12 @@ fn process_pay(
             Message::new(&[ix])
         };
         let mut tx = Transaction::new_unsigned(message);
-        tx.try_sign(&config.signers, blockhash)?;
 
         if sign_only {
+            tx.try_partial_sign(&config.signers, blockhash)?;
             return_signers(&tx)
         } else {
+            tx.try_sign(&config.signers, blockhash)?;
             if let Some(nonce_account) = &nonce_account {
                 let nonce_account = rpc_client.get_account(nonce_account)?;
                 check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &blockhash)?;
@@ -1355,10 +1356,11 @@ fn process_pay(
         );
         let message = Message::new(&ixs);
         let mut tx = Transaction::new_unsigned(message);
-        tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
         if sign_only {
+            tx.try_partial_sign(&[config.signers[0], &contract_state], blockhash)?;
             return_signers(&tx)
         } else {
+            tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
             check_account_for_fee(
                 rpc_client,
                 &config.signers[0].pubkey(),
@@ -1400,10 +1402,11 @@ fn process_pay(
         );
         let message = Message::new(&ixs);
         let mut tx = Transaction::new_unsigned(message);
-        tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
         if sign_only {
+            tx.try_partial_sign(&[config.signers[0], &contract_state], blockhash)?;
             return_signers(&tx)
         } else {
+            tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
             let result = rpc_client.send_and_confirm_transaction_with_spinner(
                 &mut tx,
                 &[config.signers[0], &contract_state],
@@ -1510,11 +1513,12 @@ fn process_transfer(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
