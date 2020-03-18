@@ -3,13 +3,13 @@
 ## Receive Tokens
 
 To receive tokens, you will need an address for others to send tokens to. In
-Solana, an address is the public key of a *keypair*. There are a variety
+Solana, an address is the public key of a keypair. There are a variety
 of techniques for generating keypairs. The method you choose will depend on how
-you choose to store keypairs.  Keypairs are stored in *wallets*. Before receiving
+you choose to store keypairs.  Keypairs are stored in wallets. Before receiving
 tokens, you'll need to [choose a wallet](choose-a-wallet.md) and
-[generate keys](generate-keys.md). Once completed, you should have a *public key*
+[generate keys](generate-keys.md). Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
-characters. Its length varies from 42 to 43 characters.
+characters. Its length varies from 32 to 44 characters.
 
 ### Using Solana CLI
 
