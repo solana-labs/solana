@@ -5,6 +5,5 @@ branches:
   only:
     - master
 script:
-  # temporary until hasha dependency warning is fixed
-  - CI=false npm run build
+  - npm run build
   - npm run format
