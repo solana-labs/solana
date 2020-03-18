@@ -335,6 +335,7 @@ fn test_offline_pay_tx() {
     check_balance(0, &rpc_client, &bob_pubkey);
 
     let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only
         .presigner_of(&config_offline.signers[0].pubkey())
         .unwrap();

@@ -1019,18 +1019,31 @@ pub fn get_blockhash_and_fee_calculator(
 }
 
 pub fn return_signers(tx: &Transaction) -> ProcessResult {
-    let signers: Vec<_> = tx
-        .signatures
+    let verify_results = tx.verify_with_results();
+    let mut signers = Vec::new();
+    let mut absent = Vec::new();
+    let mut bad_sig = Vec::new();
+    tx.signatures
         .iter()
         .zip(tx.message.account_keys.iter())
-        .map(|(signature, pubkey)| format!("{}={}", pubkey, signature))
-        .collect();
+        .zip(verify_results.into_iter())
+        .for_each(|((sig, key), res)| {
+            if res {
+                signers.push(format!("{}={}", key, sig))
+            } else if *sig == Signature::default() {
+                absent.push(key.to_string());
+            } else {
+                bad_sig.push(key.to_string());
+            }
+        });
 
-    println_signers(&tx.message.recent_blockhash, &signers);
+    println_signers(&tx.message.recent_blockhash, &signers, &absent, &bad_sig);
 
     Ok(json!({
         "blockhash": tx.message.recent_blockhash.to_string(),
         "signers": &signers,
+        "absent": &absent,
+        "badSig": &bad_sig,
     })
     .to_string())
 }
@@ -2548,7 +2561,9 @@ mod tests {
     use solana_client::mock_rpc_client_request::SIGNATURE;
     use solana_sdk::{
         pubkey::Pubkey,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Presigner},
+        signature::{
+            keypair_from_seed, read_keypair_file, write_keypair_file, NullSigner, Presigner,
+        },
         transaction::TransactionError,
     };
     use std::path::PathBuf;
@@ -3675,5 +3690,53 @@ mod tests {
                 ],
             }
         );
+    }
+
+    #[test]
+    fn test_return_signers() {
+        struct BadSigner {
+            pubkey: Pubkey,
+        }
+
+        impl BadSigner {
+            pub fn new(pubkey: Pubkey) -> Self {
+                Self { pubkey }
+            }
+        }
+
+        impl Signer for BadSigner {
+            fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
+                Ok(self.pubkey)
+            }
+
+            fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
+                Ok(Signature::new(&[1u8; 64]))
+            }
+        }
+
+        let present: Box<dyn Signer> = Box::new(keypair_from_seed(&[2u8; 32]).unwrap());
+        let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::new(&[3u8; 32])));
+        let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::new(&[4u8; 32])));
+        let to = Pubkey::new(&[5u8; 32]);
+        let nonce = Pubkey::new(&[6u8; 32]);
+        let from = present.pubkey();
+        let fee_payer = absent.pubkey();
+        let nonce_auth = bad.pubkey();
+        let mut tx = Transaction::new_unsigned(Message::new_with_nonce(
+            vec![system_instruction::transfer(&from, &to, 42)],
+            Some(&fee_payer),
+            &nonce,
+            &nonce_auth,
+        ));
+
+        let signers = vec![present.as_ref(), absent.as_ref(), bad.as_ref()];
+        let blockhash = Hash::new(&[7u8; 32]);
+        tx.try_partial_sign(&signers, blockhash).unwrap();
+        let res = return_signers(&tx).unwrap();
+        let sign_only = parse_sign_only_reply_string(&res);
+        assert_eq!(sign_only.blockhash, blockhash);
+        assert_eq!(sign_only.present_signers[0].0, present.pubkey());
+        assert_eq!(sign_only.absent_signers[0], absent.pubkey());
+        assert_eq!(sign_only.bad_signers[0], bad.pubkey());
     }
 }

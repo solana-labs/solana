@@ -388,6 +388,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only
         .presigner_of(&config_offline.signers[0].pubkey())
         .unwrap();
@@ -418,6 +419,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only
         .presigner_of(&config_offline.signers[0].pubkey())
         .unwrap();
@@ -681,6 +683,7 @@ fn test_stake_authorize() {
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only.presigner_of(&offline_authority_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
@@ -740,6 +743,7 @@ fn test_stake_authorize() {
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
+    assert!(sign_only.has_all_signers());
     assert_eq!(sign_only.blockhash, nonce_hash);
     let offline_presigner = sign_only.presigner_of(&offline_authority_pubkey).unwrap();
     let nonced_authority_presigner = sign_only.presigner_of(&nonced_authority_pubkey).unwrap();
@@ -886,6 +890,7 @@ fn test_stake_authorize_with_fee_payer() {
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
@@ -1023,6 +1028,7 @@ fn test_stake_split() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner, &split_account];
     config.command = CliCommand::SplitStake {
@@ -1275,6 +1281,7 @@ fn test_stake_set_lockup() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeSetLockup {
@@ -1392,6 +1399,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     let stake_presigner = sign_only.presigner_of(&stake_pubkey).unwrap();
     config.signers = vec![&offline_presigner, &stake_presigner];

@@ -27,12 +27,25 @@ pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType)
     );
 }
 
-pub fn println_signers(blockhash: &Hash, signers: &[String]) {
+pub fn println_signers(
+    blockhash: &Hash,
+    signers: &[String],
+    absent: &[String],
+    bad_sig: &[String],
+) {
     println!();
     println!("Blockhash: {}", blockhash);
     if !signers.is_empty() {
         println!("Signers (Pubkey=Signature):");
         signers.iter().for_each(|signer| println!("  {}", signer))
+    }
+    if !absent.is_empty() {
+        println!("Absent Signers (Pubkey):");
+        absent.iter().for_each(|pubkey| println!("  {}", pubkey))
+    }
+    if !bad_sig.is_empty() {
+        println!("Bad Signatures (Pubkey):");
+        bad_sig.iter().for_each(|pubkey| println!("  {}", pubkey))
     }
     println!();
 }

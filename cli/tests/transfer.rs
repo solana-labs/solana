@@ -102,6 +102,7 @@ fn test_transfer() {
     };
     let sign_only_reply = process_command(&offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
@@ -193,6 +194,7 @@ fn test_transfer() {
     };
     let sign_only_reply = process_command(&offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(sign_only.has_all_signers());
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
@@ -274,6 +276,7 @@ fn test_transfer_multisession_signing() {
     };
     let sign_only_reply = process_command(&fee_payer_config).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(!sign_only.has_all_signers());
     let fee_payer_presigner = sign_only
         .presigner_of(&offline_fee_payer_signer.pubkey())
         .unwrap();
@@ -297,6 +300,7 @@ fn test_transfer_multisession_signing() {
     };
     let sign_only_reply = process_command(&from_config).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(sign_only.has_all_signers());
     let from_presigner = sign_only
         .presigner_of(&offline_from_signer.pubkey())
         .unwrap();
