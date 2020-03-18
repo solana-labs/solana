@@ -118,6 +118,7 @@ impl AccountsHashVerifier {
         trusted_validators: &Option<HashSet<Pubkey>>,
         slot_to_hash: &mut HashMap<Slot, Hash>,
     ) -> bool {
+        let mut verified_count = 0;
         if let Some(trusted_validators) = trusted_validators.as_ref() {
             for trusted_validator in trusted_validators {
                 let cluster_info_r = cluster_info.read().unwrap();
@@ -135,6 +136,8 @@ impl AccountsHashVerifier {
                                 );
 
                                 return true;
+                            } else {
+                                verified_count += 1;
                             }
                         } else {
                             slot_to_hash.insert(*slot, *hash);
@@ -143,6 +146,7 @@ impl AccountsHashVerifier {
                 }
             }
         }
+        inc_new_counter_info!("accounts_hash_verifier-hashes_verified", verified_count);
         false
     }
 
