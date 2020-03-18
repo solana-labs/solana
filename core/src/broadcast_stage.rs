@@ -405,26 +405,38 @@ impl BroadcastStage {
         // ReplayStage sent a retransmit signal for after that slot was already
         // removed from the `transmit_shreds_cache` (so no updates coming from broadcast thread),
         // but before updates had been written to blockstore
-        let updates = transmit_shreds_cache
-            .update_cache_from_blockstore(blockstore, &unfinished_retransmit_slots);
-        for (slot, cached_updates) in updates {
-            // If we got all the shreds, remove this slot's entries
-            // from `unfinished_retransmit_slots`, as we now have all
-            // the shreds needed for retransmit
-            if transmit_shreds_cache
-                .get(slot)
-                .map(|cache_entry| cache_entry.contains_last_shreds())
-                .unwrap_or(false)
-            {
-                unfinished_retransmit_slots.remove(&slot);
+        let mut res = Ok(());
+        unfinished_retransmit_slots.retain(|slot| {
+            let maybe_updates = transmit_shreds_cache.update_cached_slot(blockstore, *slot);
+            let mut got_all_updates = false;
+            if let Some(cached_updates) = maybe_updates {
+                let all_data_transmit_shreds = cached_updates.to_transmit_shreds();
+                if all_data_transmit_shreds.is_empty() {
+                    error!("Updates should not be empty!");
+                } else {
+                    for transmit_shreds in all_data_transmit_shreds {
+                        let send_res = socket_sender.send(transmit_shreds);
+                        if send_res.is_err() {
+                            res = send_res;
+                        }
+                    }
+                }
+                // If we got all the shreds, remove this slot's entries
+                // from `unfinished_retransmit_slots`, as we now have all
+                // the shreds needed for retransmit
+                if transmit_shreds_cache
+                    .get(*slot)
+                    .map(|cache_entry| cache_entry.contains_last_shreds())
+                    .unwrap_or(false)
+                {
+                    got_all_updates = true;
+                }
             }
-            let all_data_transmit_shreds = cached_updates.to_transmit_shreds();
 
-            for transmit_shreds in all_data_transmit_shreds {
-                socket_sender.send(transmit_shreds)?;
-            }
-        }
+            !got_all_updates
+        });
 
+        res?;
         Ok(())
     }
 
@@ -445,7 +457,7 @@ impl BroadcastStage {
 
         for (_, bank) in retransmit_slots.iter() {
             unfinished_retransmit_slots.remove(&bank.slot());
-            let cached_shreds = transmit_shreds_cache.get_or_update(bank, blockstore);
+            let cached_shreds = transmit_shreds_cache.get_or_insert(bank, blockstore);
             // If the cached shreds are missing any shreds (broadcast
             // hasn't written them to blockstore yet), add this slot
             // to the `unfinished_retransmit_slots` so we can retry broadcasting
@@ -500,6 +512,7 @@ pub mod test {
     pub fn make_transmit_shreds(
         slot: Slot,
         num: u64,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> (
         Vec<Shred>,
         Vec<Shred>,
@@ -518,11 +531,11 @@ pub mod test {
             coding_shreds.clone(),
             data_shreds
                 .into_iter()
-                .map(|s| (None, Arc::new(vec![s])))
+                .map(|s| (stakes.clone(), Arc::new(vec![s])))
                 .collect(),
             coding_shreds
                 .into_iter()
-                .map(|s| (None, Arc::new(vec![s])))
+                .map(|s| (stakes.clone(), Arc::new(vec![s])))
                 .collect(),
         )
     }
@@ -583,7 +596,8 @@ pub mod test {
 
         // Make some shreds
         let updated_slot = 0;
-        let (all_data_shreds, all_coding_shreds, _, _) = make_transmit_shreds(updated_slot, 10);
+        let (all_data_shreds, all_coding_shreds, _, _) =
+            make_transmit_shreds(updated_slot, 10, None);
         let num_data_shreds = all_data_shreds.len();
         let num_coding_shreds = all_coding_shreds.len();
         assert!(num_data_shreds >= 10);
@@ -641,7 +655,7 @@ pub mod test {
             all_coding_shreds,
             all_data_transmit_shreds,
             all_coding_transmit_shreds,
-        ) = make_transmit_shreds(updated_slot, 10);
+        ) = make_transmit_shreds(updated_slot, 10, None);
         let num_data_shreds = all_data_shreds.len();
         let num_coding_shreds = all_coding_shreds.len();
         assert!(num_data_shreds >= 10);
@@ -705,7 +719,7 @@ pub mod test {
         // Make some shreds
         let updated_slot = 0;
         let (all_data_shreds, all_coding_shreds, _, _all_coding_transmit_shreds) =
-            make_transmit_shreds(updated_slot, 10);
+            make_transmit_shreds(updated_slot, 10, None);
         let num_data_shreds = all_data_shreds.len();
         let num_coding_shreds = all_coding_shreds.len();
         assert!(num_data_shreds >= 10);
@@ -761,7 +775,7 @@ pub mod test {
         // Make some shreds
         let updated_slot = 0;
         let (all_data_shreds, all_coding_shreds, _, _all_coding_transmit_shreds) =
-            make_transmit_shreds(updated_slot, 10);
+            make_transmit_shreds(updated_slot, 10, None);
         let num_data_shreds = all_data_shreds.len();
         let num_coding_shreds = all_coding_shreds.len();
         assert!(num_data_shreds >= 10);
@@ -827,7 +841,7 @@ pub mod test {
         impl BankShreds {
             fn new(bank: Arc<Bank>) -> Self {
                 let (data_shreds, coding_shreds, data_transmit_shreds, _) =
-                    make_transmit_shreds(bank.slot(), 10);
+                    make_transmit_shreds(bank.slot(), 10, None);
 
                 BankShreds {
                     bank,
@@ -960,7 +974,7 @@ pub mod test {
             all_coding_shreds,
             all_data_transmit_shreds,
             all_coding_transmit_shreds,
-        ) = make_transmit_shreds(updated_slot, 10);
+        ) = make_transmit_shreds(updated_slot, 10, None);
         let num_data_shreds = all_data_shreds.len();
         let num_coding_shreds = all_coding_shreds.len();
         assert!(num_data_shreds >= 10);
@@ -1030,7 +1044,7 @@ pub mod test {
             all_coding_shreds,
             all_data_transmit_shreds,
             all_coding_transmit_shreds,
-        ) = make_transmit_shreds(updated_slot, 10);
+        ) = make_transmit_shreds(updated_slot, 10, None);
         let mut updates = HashMap::new();
         let num_data_shreds = all_data_shreds.len() as u64;
         let num_coding_shreds = all_coding_shreds.len() as u64;
@@ -1135,7 +1149,7 @@ pub mod test {
         // Make some updates
         let updated_slot = 1;
         let (all_data_shreds, all_coding_shreds, all_data_transmit_shreds, _) =
-            make_transmit_shreds(updated_slot, 10);
+            make_transmit_shreds(updated_slot, 10, None);
         let num_data_shreds = all_data_shreds.len() as u64;
         assert!(num_data_shreds >= 10);
         let num_coding_shreds = all_coding_shreds.len() as u64;
