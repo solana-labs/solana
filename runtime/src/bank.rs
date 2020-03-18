@@ -1539,12 +1539,12 @@ impl Bank {
         });
 
         let validator_rent_shares = validator_stakes
-            .iter()
+            .into_iter()
             .map(|(pubkey, staked)| {
                 let rent_share =
-                    (((*staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
+                    (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
                 rent_distributed_in_initial_round += rent_share;
-                (*pubkey, rent_share)
+                (pubkey, rent_share)
             })
             .collect::<Vec<(Pubkey, u64)>>();
 
@@ -1553,17 +1553,17 @@ impl Bank {
         let mut leftover_lamports = rent_to_be_distributed - rent_distributed_in_initial_round;
 
         validator_rent_shares
-            .iter()
+            .into_iter()
             .for_each(|(pubkey, rent_share)| {
                 let rent_to_be_paid = if leftover_lamports > 0 {
                     leftover_lamports -= 1;
-                    *rent_share + 1
+                    rent_share + 1
                 } else {
-                    *rent_share
+                    rent_share
                 };
-                let mut account = self.get_account(pubkey).unwrap_or_default();
+                let mut account = self.get_account(&pubkey).unwrap_or_default();
                 account.lamports += rent_to_be_paid;
-                self.store_account(pubkey, &account);
+                self.store_account(&pubkey, &account);
             });
     }
 
