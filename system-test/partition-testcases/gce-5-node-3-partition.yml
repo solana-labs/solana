@@ -19,4 +19,4 @@ steps:
       PARTITION_INACTIVE_DURATION: 30
       PARTITION_ITERATION_COUNT: 5
     agents:
-      - "queue=testnet-deploy"
+      - "queue=gce-deploy"
