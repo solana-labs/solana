@@ -62,6 +62,10 @@ function analyze_packet_loss {
 
 function wait_for_bootstrap_validator_stake_drop {
   max_stake="$1"
+  if [[ $max_stake -eq 100 ]]; then
+    return
+  fi
+
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
 
@@ -83,6 +87,68 @@ function get_slot {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
   ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana slot'
+}
+
+function get_bootstrap_validator_ip_address {
+  source "${REPO_ROOT}"/net/common.sh
+  loadConfigFile
+  echo "${validatorIpList[0]}"
+}
+
+function collect_performance_statistics {
+  execution_step "Collect performance statistics about run"
+  declare q_mean_tps='
+    SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
+      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
+        SELECT SUM("count") AS "sum_count"
+          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
+          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
+          GROUP BY time(1s), host_id)
+      GROUP BY time(1s)
+    )'
+
+  declare q_max_tps='
+    SELECT MAX("median_sum") as "max_tps" FROM (
+      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
+        SELECT SUM("count") AS "sum_count"
+          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
+          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
+          GROUP BY time(1s), host_id)
+      GROUP BY time(1s)
+    )'
+
+  declare q_mean_confirmation='
+    SELECT round(mean("duration_ms")) as "mean_confirmation_ms"
+      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
+
+  declare q_max_confirmation='
+    SELECT round(max("duration_ms")) as "max_confirmation_ms"
+      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
+
+  declare q_99th_confirmation='
+    SELECT round(percentile("duration_ms", 99)) as "99th_percentile_confirmation_ms"
+      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
+
+  declare q_max_tower_distance_observed='
+    SELECT MAX("tower_distance") as "max_tower_distance" FROM (
+      SELECT last("slot") - last("root") as "tower_distance"
+        FROM "'$TESTNET_TAG'"."autogen"."tower-observed"
+        WHERE time > now() - '"$TEST_DURATION_SECONDS"'s
+        GROUP BY time(1s), host_id)'
+
+  declare q_last_tower_distance_observed='
+      SELECT MEAN("tower_distance") as "last_tower_distance" FROM (
+            SELECT last("slot") - last("root") as "tower_distance"
+              FROM "'$TESTNET_TAG'"."autogen"."tower-observed"
+              GROUP BY host_id)'
+
+  curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
+    --data-urlencode "db=${TESTNET_TAG}" \
+    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed;$q_last_tower_distance_observed" |
+    python "${REPO_ROOT}"/system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
 }
 
 function upload_results_to_slack() {
@@ -166,7 +232,7 @@ function upload_results_to_slack() {
 		{
 			"type": "divider"
 		},
-                {
+    {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",

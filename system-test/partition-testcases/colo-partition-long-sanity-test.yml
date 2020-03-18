@@ -15,5 +15,6 @@ steps:
       PARTITION_ACTIVE_DURATION: 60
       PARTITION_INACTIVE_DURATION: 60
       PARTITION_ITERATION_COUNT: 10
+      TEST_TYPE: "partition"
     agents:
       - "queue=colo-deploy"

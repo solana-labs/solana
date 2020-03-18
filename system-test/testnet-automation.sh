@@ -147,30 +147,36 @@ function launch_testnet() {
   SLOT_COUNT_START_SECONDS=$SECONDS
   execution_step "Marking beginning of slot rate test - Slot: $START_SLOT, Seconds: $SLOT_COUNT_START_SECONDS"
 
-  if [[ -n $TEST_DURATION_SECONDS ]]; then
-    execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
-    sleep "$TEST_DURATION_SECONDS"
-  elif [[ "$APPLY_PARTITIONS" = "true" ]]; then
-    STATS_START_SECONDS=$SECONDS
-    execution_step "Wait $PARTITION_INACTIVE_DURATION before beginning to apply partitions"
-    sleep "$PARTITION_INACTIVE_DURATION"
-    for (( i=1; i<=PARTITION_ITERATION_COUNT; i++ )); do
-      execution_step "Partition Iteration $i of $PARTITION_ITERATION_COUNT"
-      execution_step "Applying netem config $NETEM_CONFIG_FILE for $PARTITION_ACTIVE_DURATION seconds"
-      "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE"
-      sleep "$PARTITION_ACTIVE_DURATION"
-
-      execution_step "Resolving partitions for $PARTITION_INACTIVE_DURATION seconds"
-      "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup
+  case $TEST_TYPE in
+    fixed_duration)
+      execution_step "Wait ${TEST_DURATION_SECONDS} seconds to complete test"
+      sleep "$TEST_DURATION_SECONDS"
+      ;;
+    partition)
+      STATS_START_SECONDS=$SECONDS
+      execution_step "Wait $PARTITION_INACTIVE_DURATION before beginning to apply partitions"
       sleep "$PARTITION_INACTIVE_DURATION"
-    done
-    STATS_FINISH_SECONDS=$SECONDS
-    TEST_DURATION_SECONDS=$((STATS_FINISH_SECONDS - STATS_START_SECONDS))
-  else
-    # We should never get here
-    echo Test duration and partition config not defined
-    exit 1
-  fi
+      for (( i=1; i<=PARTITION_ITERATION_COUNT; i++ )); do
+        execution_step "Partition Iteration $i of $PARTITION_ITERATION_COUNT"
+        execution_step "Applying netem config $NETEM_CONFIG_FILE for $PARTITION_ACTIVE_DURATION seconds"
+        "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE"
+        sleep "$PARTITION_ACTIVE_DURATION"
+
+        execution_step "Resolving partitions for $PARTITION_INACTIVE_DURATION seconds"
+        "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup
+        sleep "$PARTITION_INACTIVE_DURATION"
+      done
+      STATS_FINISH_SECONDS=$SECONDS
+      TEST_DURATION_SECONDS=$((STATS_FINISH_SECONDS - STATS_START_SECONDS))
+      ;;
+    script)
+      execution_step "Running custom script: ${REPO_ROOT}/${CUSTOM_SCRIPT}"
+      "$REPO_ROOT"/"$CUSTOM_SCRIPT" "$RESULT_FILE"
+      ;;
+    *)
+      echo "Error: Unsupported test type: $TEST_TYPE"
+      ;;
+  esac
 
   END_SLOT=$(get_slot)
   SLOT_COUNT_END_SECONDS=$SECONDS
@@ -179,63 +185,11 @@ function launch_testnet() {
   SLOTS_PER_SECOND="$(bc <<< "scale=3; ($END_SLOT - $START_SLOT)/($SLOT_COUNT_END_SECONDS - $SLOT_COUNT_START_SECONDS)")"
   execution_step "Average slot rate: $SLOTS_PER_SECOND slots/second over $((SLOT_COUNT_END_SECONDS - SLOT_COUNT_START_SECONDS)) seconds"
 
-  execution_step "Collect statistics about run"
-  declare q_mean_tps='
-    SELECT ROUND(MEAN("median_sum")) as "mean_tps" FROM (
-      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
-        SELECT SUM("count") AS "sum_count"
-          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
-          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
-          GROUP BY time(1s), host_id)
-      GROUP BY time(1s)
-    )'
+  if [[ "$SKIP_PERF_RESULTS" = "false" ]]; then
+    collect_performance_statistics
+    echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
+  fi
 
-  declare q_max_tps='
-    SELECT MAX("median_sum") as "max_tps" FROM (
-      SELECT MEDIAN(sum_count) AS "median_sum" FROM (
-        SELECT SUM("count") AS "sum_count"
-          FROM "'$TESTNET_TAG'"."autogen"."bank-process_transactions"
-          WHERE time > now() - '"$TEST_DURATION_SECONDS"'s AND count > 0
-          GROUP BY time(1s), host_id)
-      GROUP BY time(1s)
-    )'
-
-  declare q_mean_confirmation='
-    SELECT round(mean("duration_ms")) as "mean_confirmation_ms"
-      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
-      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
-
-  declare q_max_confirmation='
-    SELECT round(max("duration_ms")) as "max_confirmation_ms"
-      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
-      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
-
-  declare q_99th_confirmation='
-    SELECT round(percentile("duration_ms", 99)) as "99th_percentile_confirmation_ms"
-      FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
-      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
-
-  declare q_max_tower_distance_observed='
-    SELECT MAX("tower_distance") as "max_tower_distance" FROM (
-      SELECT last("slot") - last("root") as "tower_distance"
-        FROM "'$TESTNET_TAG'"."autogen"."tower-observed"
-        WHERE time > now() - '"$TEST_DURATION_SECONDS"'s
-        GROUP BY time(1s), host_id)'
-
-  declare q_last_tower_distance_observed='
-      SELECT MEAN("tower_distance") as "last_tower_distance" FROM (
-            SELECT last("slot") - last("root") as "tower_distance"
-              FROM "'$TESTNET_TAG'"."autogen"."tower-observed"
-              GROUP BY host_id)'
-
-  curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
-    --data-urlencode "db=${TESTNET_TAG}" \
-    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed;$q_last_tower_distance_observed" |
-    python "${REPO_ROOT}"/system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
-
-  echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
-
-  execution_step "Writing test results to ${RESULT_FILE}"
   RESULT_DETAILS=$(<"$RESULT_FILE")
   upload-ci-artifact "$RESULT_FILE"
 }
@@ -245,9 +199,10 @@ RESULT_DETAILS=
 STEP=
 execution_step "Initialize Environment"
 
-[[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
+[[ -n $TESTNET_TAG ]] || TESTNET_TAG=${CLOUD_PROVIDER}-testnet-automation
 [[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
 [[ -n $BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD ]] || BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD=66
+[[ -n $SKIP_PERF_RESULTS ]] || SKIP_PERF_RESULTS=false
 
 if [[ -z $NUMBER_OF_VALIDATOR_NODES ]]; then
   echo NUMBER_OF_VALIDATOR_NODES not defined
@@ -292,18 +247,41 @@ if [[ "$USE_PUBLIC_IP_ADDRESSES" = "true" ]]; then
   maybePublicIpAddresses="-P"
 fi
 
-: "${CLIENT_DELAY_START:=0}"
+execution_step "Checking for required parameters"
+testTypeRequiredParameters=
+case $TEST_TYPE in
+  fixed_duration)
+    testTypeRequiredParameters=(
+      TEST_DURATION_SECONDS \
+      )
+    ;;
+  partition)
+    testTypeRequiredParameters=(
+      NETEM_CONFIG_FILE \
+      PARTITION_ACTIVE_DURATION \
+      PARTITION_INACTIVE_DURATION \
+      PARTITION_ITERATION_COUNT \
+    )
+    ;;
+  script)
+    testTypeRequiredParameters=(
+      CUSTOM_SCRIPT \
+    )
+    ;;
+  *)
+    echo "Error: Unsupported test type: $TEST_TYPE"
+    ;;
+esac
 
-if [[ -z $APPLY_PARTITIONS ]]; then
-  APPLY_PARTITIONS=false
-fi
-if [[ "$APPLY_PARTITIONS" = "true" ]]; then
-  if [[ -n $TEST_DURATION_SECONDS ]]; then
-    echo Cannot accept TEST_DURATION_SECONDS and a parition looping config
-    exit 1
+missingParameters=
+for i in "${testTypeRequiredParameters[@]}"; do
+  if [[ -z ${!i} ]]; then
+    missingParameters+="${i}, "
   fi
-elif [[ -z $TEST_DURATION_SECONDS ]]; then
-  echo TEST_DURATION_SECONDS not defined
+done
+
+if [[ -n $missingParameters ]]; then
+  echo "Error: For test type $TEST_TYPE, the following required parameters are missing: ${missingParameters[*]}"
   exit 1
 fi
 
@@ -337,6 +315,8 @@ TEST_PARAMS_TO_DISPLAY=(CLOUD_PROVIDER \
                         PARTITION_ACTIVE_DURATION \
                         PARTITION_INACTIVE_DURATION \
                         PARTITION_ITERATION_COUNT \
+                        TEST_TYPE \
+                        CUSTOM_SCRIPT \
                         )
 
 TEST_CONFIGURATION=

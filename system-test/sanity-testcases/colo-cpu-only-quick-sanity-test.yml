@@ -6,11 +6,12 @@ steps:
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-cpu-only"
       ENABLE_GPU: "false"
-      TEST_DURATION_SECONDS: 30
+      TEST_DURATION_SECONDS: 60
       NUMBER_OF_VALIDATOR_NODES: 1
       NUMBER_OF_CLIENT_NODES: 1
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 40000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
-      BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 100
+      BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 99
+      TEST_TYPE: "fixed_duration"
     agents:
       - "queue=colo-deploy"

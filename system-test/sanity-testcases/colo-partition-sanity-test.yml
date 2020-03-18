@@ -5,7 +5,7 @@ steps:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-cpu-only"
-      NUMBER_OF_VALIDATOR_NODES: 4
+      NUMBER_OF_VALIDATOR_NODES: 3
       ENABLE_GPU: "false"
       NUMBER_OF_CLIENT_NODES: 1
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 15000 --thread-batch-sleep-ms 250"
@@ -15,6 +15,7 @@ steps:
       PARTITION_ACTIVE_DURATION: 30
       PARTITION_INACTIVE_DURATION: 30
       PARTITION_ITERATION_COUNT: 2
-      BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 100
+      BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 66
+      TEST_TYPE: "partition"
     agents:
       - "queue=colo-deploy"
