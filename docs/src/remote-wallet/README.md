@@ -10,27 +10,27 @@ interface for signing transactions.
 
 The Solana CLI has first class support for hardware wallets. Anywhere
 you use a keypair filepath (denoted as `<KEYPAIR>` in usage docs), you
-can pass a URL that uniquely identifies a keypair in a hardware
-wallet.
+can pass a *keypair URL* that uniquely identifies a keypair in a
+hardware wallet.
 
 ## Supported Hardware Wallets
 
 The Solana CLI supports the following hardware wallets:
-- Ledger Nano S {% page-ref page="ledger.md" %}
+- [Ledger Nano S](ledger.md)
 
-## Specify A Hardware Wallet Key
+## Specify a Hardware Wallet Key
 
-Solana defines a format for the URL protocol "usb://" to uniquely locate any
-Solana key on any hardware wallet connected to your computer.
+Solana defines a keypair URL format to uniquely locate any Solana keypair on a
+hardware wallet connected to your computer.
 
-The URL has the following form, where square brackets denote optional fields:
+The keypair URL has the following form, where square brackets denote optional
+fields:
 
 ```text
-usb://<MANUFACTURER>[/<WALLET_KEY>][?key=<DERIVATION_PATH>]
+usb://<MANUFACTURER>[/<WALLET_ID>][?key=<DERIVATION_PATH>]
 ```
 
-`WALLET_KEY` is used to disambiguate multiple devices. Each device has a unique
-master key and from that key derives a separate unique key per app.
+`WALLET_ID` is a globally unique key used to disambiguate multiple devices.
 
 `DERVIATION_PATH` is used to navigate to Solana keys within your hardware wallet.
 The path has the form `<ACCOUNT>[/<CHANGE>]`, where each `ACCOUNT` and `CHANGE`
@@ -72,7 +72,7 @@ You will see output similar to:
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_KEY`.
+but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_ID`.
 
 With your fully qualified URL, you can connect multiple hardware wallets to
 the same computer and uniquely identify a keypair from any of them.

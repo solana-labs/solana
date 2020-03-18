@@ -1,4 +1,4 @@
-# Send and Receive Tokens
+# Command-line Guide
 
 In this section, we'll describe how to create a Solana *wallet*, how to send
 and receive tokens, and how to participate in the cluster by delegating stake.
