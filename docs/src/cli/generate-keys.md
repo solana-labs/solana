@@ -64,4 +64,23 @@ keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## Generate a Hardware Wallet Keypair
 
-See [Query for a Hardware Wallet Pubkey Key](../remote-wallet/index.md#query-for-a-public-key).
+Keypairs are automatically derived when you query a hardware wallet with a
+[keypair URL](../remote-wallet#specify-a-hardware-wallet-key).
+
+Once you have your keypair URL, use `solana address` to query the hardware
+wallet for the keypair's public key:
+
+```bash
+solana address --keypair <KEYPAIR>
+```
+
+where `<KEYPAIR>` is the keypair URL.
+
+To verify you control the private key of that public key, use `solana-verify`:
+
+```bash
+solana-keygen verify <PUBKEY> <KEYPAIR>
+```
+
+The command will output "Success" if the given public key matches the
+the one at your keypair URL, and "Failed" otherwise.

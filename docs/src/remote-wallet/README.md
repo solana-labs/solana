@@ -49,22 +49,6 @@ For example, a fully qualified URL for a Ledger device might be:
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
-## Query for a Public Key
-
-To query a hardware wallet for the public key at that URL, use `solana address`:
-
-```bash
-solana address --keypair <KEYPAIR>
-```
-
-where `<KEYPAIR>` is a [keypair URL](#specify-a-hardware-wallet-key).
-
-To verify you control the private key of that public key, use `solana-verify`:
-
-```bash
-solana-keygen verify <PUBKEY> <KEYPAIR>
-```
-
 ## Manage Multiple Hardware Wallets
 
 It is sometimes useful to sign a transaction with keys from multiple hardware
