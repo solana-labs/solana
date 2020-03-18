@@ -4587,6 +4587,7 @@ dependencies = [
  "libc 0.2.67 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger 1.1.0",
  "solana-measure 1.1.0",
  "solana-metrics 1.1.0",
  "solana-perf 1.1.0",
