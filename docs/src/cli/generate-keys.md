@@ -1,4 +1,9 @@
-# Generate Keys
+# Generate a Keypair and its Public Key
+
+In this section, we'll go over generating a keypair, query it for its
+public key, and how to verify you control the private key for a given
+public key. Before you begin, you'll need to [choose a
+wallet](choose-a-wallet.md).
 
 ## Generate an FS Wallet Keypair
 
@@ -42,10 +47,21 @@ solana-keygen verify <PUBKEY> ~/my-solana-wallet/my-keypair.json
 where `<PUBKEY>` is the public key output from the previous command.
 
 
-## Generate a Paper Wallet Keypair
+## Generate a Paper Wallet Seed Phrase
 
-See [Paper Wallets](paper_wallet.md).
+See [Creating a Paper Wallet](../paper_wallet/usage.md#creating-a-paper-wallet).
+
+To verify you control the private key of that public key, use `solana-verify`:
+
+```bash
+solana-keygen verify <PUBKEY> ASK
+```
+
+where `<PUBKEY>` is the keypair's public key and they keyword `ASK` tells the
+command to prompt you for the keypair's seed phrase. After typing your seed
+phrase, the command will output "Success" if the given public key matches the
+keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## Generate a Hardware Wallet Keypair
 
-See [Hardware Wallets](../remote-wallet).
+See [Query for a Hardware Wallet Pubkey Key](../remote-wallet/index.md#query-for-a-public-key).
