@@ -1,9 +1,11 @@
 # Generate a Keypair and its Public Key
 
-In this section, we'll go over generating a keypair, query it for its
-public key, and how to verify you control the private key for a given
-public key. Before you begin, you'll need to [choose a
-wallet](choose-a-wallet.md).
+In this section, we'll generate a keypair, query it for its public key,
+and verify you control its private key. Before you begin, you'll need
+to:
+
+* [Install the Solana Tool Suite](../install-solana.md)
+* [Choose a wallet](choose-a-wallet.md)
 
 ## Generate an FS Wallet Keypair
 
@@ -49,7 +51,7 @@ where `<PUBKEY>` is the public key output from the previous command.
 
 ## Generate a Paper Wallet Seed Phrase
 
-See [Creating a Paper Wallet](../paper_wallet/usage.md#creating-a-paper-wallet).
+See [Creating a Paper Wallet](../paper-wallet/usage.md#creating-a-paper-wallet).
 
 To verify you control the private key of that public key, use `solana-verify`:
 
