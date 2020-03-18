@@ -2921,7 +2921,6 @@ pub mod tests {
 
     #[test]
     fn test_too_many_alive_slots() {
-        use solana_sdk::signature::{Keypair, Signer};
         let db = AccountsDB::new(Vec::new());
 
         // just 10-hours-worth of slots...
