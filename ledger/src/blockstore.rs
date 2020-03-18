@@ -1540,16 +1540,12 @@ impl Blockstore {
     ) -> Result<Option<(Slot, RpcTransactionStatus)>> {
         let mut transaction_iter = self.transaction_status_cf.iter(IteratorMode::End)?;
         let status = transaction_iter
-            .find(|((_, sig), _)| sig == &signature)
-            .and_then(|((slot, _), status_data)| {
+            .find(|((slot, sig), _)| {
                 // If a slot is older than the root from bank_forks but not a root itself, it is a
-                // dead fork and will never be rooted
-                if slot <= root && !self.is_root(slot) {
-                    None
-                } else {
-                    Some((slot, deserialize(&status_data).unwrap()))
-                }
-            });
+                // dead fork and will never be rooted; disregard transaction statuses for these slots
+                (self.is_root(*slot) || (*slot > root && !self.is_dead(*slot))) && sig == &signature
+            })
+            .map(|((slot, _), status_data)| (slot, deserialize(&status_data).unwrap()));
         Ok(status)
     }
 
@@ -5294,7 +5290,25 @@ pub mod tests {
             let signature1 = Signature::new(&[3u8; 64]);
             let signature2 = Signature::new(&[4u8; 64]);
             let signature3 = Signature::new(&[5u8; 64]);
+            let signature4 = Signature::new(&[6u8; 64]);
+            let signature5 = Signature::new(&[7u8; 64]);
+            let signature6 = Signature::new(&[8u8; 64]);
 
+            /*
+                Imply the following fork structure:
+
+                     slot 0 <-- set_root(true)
+                      /  \
+                slot 1   |
+                         slot 2 <-- set_root(true)
+                         /  \
+                        |   slot 3
+                        |   |
+                        |   slot 4 <-- set_dead_slot(true)
+                        |
+                   slot 5
+
+            */
             transaction_status_cf
                 .put((0, signature0.clone()), &status)
                 .unwrap();
@@ -5311,7 +5325,32 @@ pub mod tests {
                 .put((3, signature3.clone()), &status)
                 .unwrap();
 
+            // Duplicate signature in two forks, one of which is a dead fork (< root)
+            transaction_status_cf
+                .put((1, signature4.clone()), &status)
+                .unwrap();
+            transaction_status_cf
+                .put((2, signature4.clone()), &status)
+                .unwrap();
+
+            // Duplicate signature in two forks, one of which is marked dead by blockstore
+            transaction_status_cf
+                .put((3, signature5.clone()), &status)
+                .unwrap();
+            transaction_status_cf
+                .put((4, signature5.clone()), &status)
+                .unwrap();
+
+            // Duplicate sugnature in two forks, both of which are still pending
+            transaction_status_cf
+                .put((3, signature6.clone()), &status)
+                .unwrap();
+            transaction_status_cf
+                .put((5, signature6.clone()), &status)
+                .unwrap();
+
             blockstore.set_roots(&[0, 2]).unwrap();
+            blockstore.set_dead_slot(4).unwrap();
 
             // A transaction status should return the correct corresponding slot, regardless of
             // whether that slot is rooted yet
@@ -5338,6 +5377,21 @@ pub mod tests {
                     .get_transaction_status(Signature::default(), 2)
                     .unwrap(),
                 None
+            );
+            // If duplicate signatures [root, old fork], return root
+            assert_eq!(
+                blockstore.get_transaction_status(signature4, 2).unwrap(),
+                Some((2, status.clone()))
+            );
+            // If duplicate signatures [active slot, dead slot], return active slot
+            assert_eq!(
+                blockstore.get_transaction_status(signature5, 2).unwrap(),
+                Some((3, status.clone()))
+            );
+            // If duplicate signatures [active slot, active slot], return most recent active slot
+            assert_eq!(
+                blockstore.get_transaction_status(signature6, 2).unwrap(),
+                Some((5, status.clone()))
             );
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
