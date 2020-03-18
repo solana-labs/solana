@@ -14,7 +14,7 @@ file system. Each file in the directory holds a keypair.
 
 ### FS Wallet Security
 
-An FS wallet is the most convenient and least secure form of wallets. It is
+An FS wallet is the most convenient and least secure form of wallet. It is
 convenient because the keypair is stored in a simple file. You can generate as
 many keys as you'd like and trivially back them up by copying the files. If you
 are the only user of your computer and you are confident it is free of malware,
