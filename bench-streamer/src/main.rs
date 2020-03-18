@@ -1,6 +1,6 @@
 use clap::{crate_description, crate_name, App, Arg};
-use solana_core::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
-use solana_core::streamer::{receiver, PacketReceiver};
+use solana_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
+use solana_streamer::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

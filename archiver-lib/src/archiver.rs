@@ -12,14 +12,12 @@ use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    packet::{limited_deserialize, PACKET_DATA_SIZE},
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStrategy},
     serve_repair::ServeRepair,
     shred_fetch_stage::ShredFetchStage,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
     storage_stage::NUM_STORAGE_SAMPLES,
-    streamer::{receiver, responder, PacketReceiver},
     window_service::WindowService,
 };
 use solana_ledger::{
@@ -27,6 +25,7 @@ use solana_ledger::{
 };
 use solana_net_utils::bind_in_range;
 use solana_perf::packet::Packets;
+use solana_perf::packet::{limited_deserialize, PACKET_DATA_SIZE};
 use solana_perf::recycler::Recycler;
 use solana_sdk::packet::Packet;
 use solana_sdk::{
@@ -45,6 +44,7 @@ use solana_storage_program::{
     storage_contract::StorageContract,
     storage_instruction::{self, StorageAccountType},
 };
+use solana_streamer::streamer::{receiver, responder, PacketReceiver};
 use std::{
     io::{self, ErrorKind},
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
