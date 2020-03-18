@@ -1067,10 +1067,10 @@ pub fn parse_create_address_with_seed(
     };
 
     let program_id = match matches.value_of("program_id").unwrap() {
-        "STAKE" => solana_stake_program::id(),
-        "VOTE" => solana_vote_program::id(),
-        "STORAGE" => solana_storage_program::id(),
         "NONCE" => system_program::id(),
+        "STAKE" => solana_stake_program::id(),
+        "STORAGE" => solana_storage_program::id(),
+        "VOTE" => solana_vote_program::id(),
         _ => pubkey_of(matches, "program_id").unwrap(),
     };
 
@@ -2347,7 +2347,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .help(
                             "The program_id that the address will ultimately be used for, \n\
-                             or one of NONCE, STAKE, VOTE, and STORAGE keywords",
+                             or one of NONCE, STAKE, STORAGE, and VOTE keywords",
                         ),
                 )
                 .arg(
