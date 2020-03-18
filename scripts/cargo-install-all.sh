@@ -55,23 +55,8 @@ cargo=cargo
 echo "Install location: $installDir ($buildVariant)"
 
 cd "$(dirname "$0")"/..
-./fetch-perf-libs.sh
 
 SECONDS=0
-
-(
-  set -x
-  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $maybeRustVersion build $maybeReleaseFlag
-
-  if $useMove; then
-    moveLoaderDir=programs/move_loader
-    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path "$moveLoaderDir/Cargo.toml"
-    cp -fv $moveLoaderDir/target/$buildVariant/libsolana_move_loader_program.* "$installDir/bin/deps"
-  fi
-)
-
 
 if [[ $CI_OS_NAME = windows ]]; then
   # Limit windows to end-user command-line tools.  Full validator support is not
@@ -83,6 +68,21 @@ if [[ $CI_OS_NAME = windows ]]; then
     solana-keygen
   )
 else
+  ./fetch-perf-libs.sh
+  (
+    set -x
+    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+    $cargo $maybeRustVersion build $maybeReleaseFlag
+
+    if $useMove; then
+      moveLoaderDir=programs/move_loader
+      # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+      $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path "$moveLoaderDir/Cargo.toml"
+      cp -fv $moveLoaderDir/target/$buildVariant/libsolana_move_loader_program.* "$installDir/bin/deps"
+    fi
+  )
+
+
   BINS=(
     solana
     solana-bench-exchange
