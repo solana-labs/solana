@@ -65,7 +65,7 @@ To keep your hardware wallet tokens safe, we suggest:
 
 * Only install apps using the vendor's app manager
 * Keep the hardware wallet's firmware up to date
-* Put keys for large amounts of tokens into its own hardware wallet. Store it
+* Put keys for large amounts of tokens into their own hardware wallets. Store
   in a secure location.
 
 ## Which Wallet is Best?
