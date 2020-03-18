@@ -42,6 +42,7 @@ use std::{
 };
 
 type RpcResponse<T> = Result<Response<T>>;
+type RpcResponseVec<T> = Result<Vec<Response<T>>>;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
@@ -417,26 +418,29 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_transaction_status_history(
         &self,
-        signature: Signature,
-    ) -> RpcResponse<Option<RpcTransactionStatus>> {
+        signatures: Vec<Signature>,
+    ) -> RpcResponseVec<Option<RpcTransactionStatus>> {
+        let mut statuses: Vec<Response<Option<RpcTransactionStatus>>> = vec![];
         let root = self.bank_forks.read().unwrap().root();
-        self.blockstore
-            .get_transaction_status(signature, root)
-            .map_err(|_| Error::internal_error())
-            .map(|result| {
-                let mut context = RpcResponseContext { slot: root };
-                let value = result.and_then(|(slot, status)| {
-                    // If a slot is newer than the root in bank_forks, but not present in
-                    // bank_forks, it is a dead fork that will never be rooted
-                    if slot > root && !self.bank_forks.read().unwrap().banks.contains_key(&slot) {
-                        None
-                    } else {
-                        context = RpcResponseContext { slot };
-                        Some(status)
-                    }
-                });
-                Response { context, value }
-            })
+        for signature in signatures {
+            let status = self
+                .blockstore
+                .get_transaction_status(signature, root)
+                .map_err(|_| Error::internal_error())?;
+            let mut context = RpcResponseContext { slot: root };
+            let value = status.and_then(|(slot, status)| {
+                // If a slot is newer than the root in bank_forks, but not present in
+                // bank_forks, it is a dead fork that will never be rooted
+                if slot > root && !self.bank_forks.read().unwrap().banks.contains_key(&slot) {
+                    None
+                } else {
+                    context = RpcResponseContext { slot };
+                    Some(status)
+                }
+            });
+            statuses.push(Response { context, value });
+        }
+        Ok(statuses)
     }
 }
 
@@ -681,8 +685,8 @@ pub trait RpcSol {
     fn get_transaction_status_history(
         &self,
         meta: Self::Metadata,
-        signature_str: String,
-    ) -> RpcResponse<Option<RpcTransactionStatus>>;
+        signature_strs: Vec<String>,
+    ) -> RpcResponseVec<Option<RpcTransactionStatus>>;
 }
 
 pub struct RpcSolImpl;
@@ -1211,13 +1215,16 @@ impl RpcSol for RpcSolImpl {
     fn get_transaction_status_history(
         &self,
         meta: Self::Metadata,
-        signature_str: String,
-    ) -> RpcResponse<Option<RpcTransactionStatus>> {
-        let signature = verify_signature(&signature_str)?;
+        signature_strs: Vec<String>,
+    ) -> RpcResponseVec<Option<RpcTransactionStatus>> {
+        let mut signatures: Vec<Signature> = vec![];
+        for signature_str in signature_strs {
+            signatures.push(verify_signature(&signature_str)?);
+        }
         meta.request_processor
             .read()
             .unwrap()
-            .get_transaction_status_history(signature)
+            .get_transaction_status_history(signatures)
     }
 }
 
