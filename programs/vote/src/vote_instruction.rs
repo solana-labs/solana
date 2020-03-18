@@ -51,19 +51,48 @@ impl<E> DecodeError<E> for VoteError {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
     /// Initialize the VoteState for this `vote account`
+    ///
+    /// Expects 3 Accounts:
+    ///    0 - Uninitialized Vote account
+    ///    1 - Rent sysvar
+    ///    2 - Clock sysvar
+    ///
     InitializeAccount(VoteInit),
 
-    /// Authorize a voter to send signed votes or a withdrawer
-    ///  to withdraw
+    /// Authorize a key to send votes or issue a withdrawal
+    ///    requires authorized voter or authorized withdrawer signature,
+    ///    depending on which key's being updated
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - Vote account to be updated with the Pubkey for authorization
+    ///    1 - Clock sysvar
+    ///
     Authorize(Pubkey, VoteAuthorize),
 
     /// A Vote instruction with recent votes
+    ///    requires authorized voter signature
+    ///
+    /// Expects 3 Accounts:
+    ///    0 - Vote account to vote with
+    ///    1 - Slot hashes sysvar
+    ///    2 - Clock sysvar
     Vote(Vote),
 
     /// Withdraw some amount of funds
+    ///    requires authorized withdrawer signature
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - Vote account to withdraw from
+    ///    1 - Destination account for the withdrawal
     Withdraw(u64),
 
     /// Update the vote account's validator identity (node id)
+    ///    requires authorized voter signature
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - Vote account to be updated with the Pubkey for authorization
+    ///    1 - Clock sysvar Account that carries clock bank epoch
+    ///
     UpdateNode(Pubkey),
 }
 
