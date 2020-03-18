@@ -242,7 +242,7 @@ pub fn process_create_storage_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.signers);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
     log_instruction_custom_error::<SystemError>(result)
 }
 
@@ -266,7 +266,7 @@ pub fn process_claim_storage_reward(
         &fee_calculator,
         &tx.message,
     )?;
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &signers)?;
+    let signature_str = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &signers)?;
     Ok(signature_str)
 }
 

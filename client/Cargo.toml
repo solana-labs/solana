@@ -11,6 +11,7 @@ edition = "2018"
 [dependencies]
 bincode = "1.2.1"
 bs58 = "0.3.0"
+indicatif = "0.14.0"
 jsonrpc-core = "14.0.5"
 log = "0.4.8"
 rayon = "1.2.0"
@@ -20,6 +21,7 @@ serde_derive = "1.0.103"
 serde_json = "1.0.46"
 solana-net-utils = { path = "../net-utils", version = "1.0.8" }
 solana-sdk = { path = "../sdk", version = "1.0.8" }
+solana-vote-program = { path = "../programs/vote", version = "1.0.8" }
 thiserror = "1.0"
 tungstenite = "0.10.1"
 url = "2.1.1"
