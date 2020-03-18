@@ -1,7 +1,7 @@
 # Choose a Wallet
 
 Keypairs are stored in *wallets* and wallets come in many forms. A wallet might
-be a directory on your computer's file system, a piece of paper, or a
+be a directory in your computer's file system, a piece of paper, or a
 specialized device called a *hardware wallet*. Some wallets are easier to use
 than others.  Some are more secure than others. In this section, we'll compare
 and contrast different types of wallets and help you choose the wallet that
