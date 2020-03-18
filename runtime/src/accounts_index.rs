@@ -8,11 +8,11 @@ use std::{
 pub type Slot = u64;
 type SlotList<T> = Vec<(Slot, T)>;
 pub type RefCount = u64;
-type AccountMapEntry<T> = SlotList<T>;
+type AccountMapEntry<T> = (AtomicU64, RwLock<SlotList<T>>);
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: HashMap<Pubkey, (AtomicU64, RwLock<AccountMapEntry<T>>)>,
+    pub account_maps: HashMap<Pubkey, AccountMapEntry<T>>,
 
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
@@ -73,7 +73,7 @@ impl<T: Clone> AccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         ancestors: &HashMap<Slot, usize>,
-    ) -> Option<(RwLockReadGuard<AccountMapEntry<T>>, usize)> {
+    ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let list_r = list.1.read().unwrap();
             let lock = &list_r;

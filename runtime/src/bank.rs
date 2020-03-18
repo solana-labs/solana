@@ -2129,7 +2129,7 @@ impl Bank {
     }
 
     pub fn clean_dead_slots(&self) {
-        self.rc.accounts.accounts_db.handle_dead_slots();
+        self.rc.accounts.accounts_db.process_dead_slots();
     }
 }
 

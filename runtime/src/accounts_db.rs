@@ -478,6 +478,28 @@ pub struct AccountsDB {
     pub dead_slots: RwLock<HashSet<Slot>>,
 }
 
+fn make_min_priority_thread_pool() -> ThreadPool {
+    use thread_priority::{
+        set_thread_priority, thread_native_id, NormalThreadSchedulePolicy, ThreadPriority,
+        ThreadSchedulePolicy,
+    };
+    let num_threads = get_thread_count();
+    rayon::ThreadPoolBuilder::new()
+        .start_handler(|_id| {
+            let thread_id = thread_native_id();
+            set_thread_priority(
+                thread_id,
+                ThreadPriority::Min,
+                ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Normal),
+            )
+            .unwrap();
+        })
+        .thread_name(|i| format!("solana-accounts-cleanup-{}", i))
+        .num_threads(num_threads)
+        .build()
+        .unwrap()
+}
+
 impl Default for AccountsDB {
     fn default() -> Self {
         let num_threads = get_thread_count();
@@ -494,12 +516,10 @@ impl Default for AccountsDB {
             file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
+                .thread_name(|i| format!("solana-accounts-db-{}", i))
                 .build()
                 .unwrap(),
-            thread_pool_clean: rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap(),
+            thread_pool_clean: make_min_priority_thread_pool(),
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
             frozen_accounts: HashMap::new(),
@@ -724,8 +744,7 @@ impl AccountsDB {
                 |m1, m2| {
                     // Collapse down the hashmaps/vecs into one.
                     let x = m2.0.iter().fold(m1.0, |mut acc, (k, vs)| {
-                        let entry = acc.entry(k.clone()).or_insert_with(|| vec![]);
-                        entry.extend(vs.clone());
+                        acc.insert(k.clone(), vs.clone());
                         acc
                     });
                     let mut y = vec![];
@@ -834,13 +853,20 @@ impl AccountsDB {
         let mut dead_accounts = Measure::start("reclaims::remove_dead_accounts");
         let dead_slots = self.remove_dead_accounts(reclaims);
         dead_accounts.stop();
-        self.dead_slots.write().unwrap().extend(dead_slots);
+        let dead_slots_len = {
+            let mut dead_slots_w = self.dead_slots.write().unwrap();
+            dead_slots_w.extend(dead_slots);
+            dead_slots_w.len()
+        };
+        if dead_slots_len > 5000 {
+            self.process_dead_slots();
+        }
     }
 
-    pub fn handle_dead_slots(&self) {
+    pub fn process_dead_slots(&self) {
+        let empty = HashSet::new();
         let mut dead_slots_w = self.dead_slots.write().unwrap();
-        let dead_slots = dead_slots_w.clone();
-        dead_slots_w.clear();
+        let dead_slots = std::mem::replace(&mut *dead_slots_w, empty);
         drop(dead_slots_w);
 
         let mut clean_dead_slots = Measure::start("reclaims::purge_slots");
@@ -852,7 +878,7 @@ impl AccountsDB {
         purge_slots.stop();
 
         debug!(
-            "handle_dead_slots({}): {} {}",
+            "process_dead_slots({}): {} {}",
             dead_slots.len(),
             clean_dead_slots,
             purge_slots
@@ -1027,11 +1053,9 @@ impl AccountsDB {
     }
 
     pub fn purge_slot(&self, slot: Slot) {
-        //add_root should be called first
-        let is_root = self.accounts_index.read().unwrap().is_root(slot);
-        if !is_root {
-            self.storage.write().unwrap().0.remove(&slot);
-        }
+        let mut slots = HashSet::new();
+        slots.insert(slot);
+        self.purge_slots(&slots);
     }
 
     pub fn purge_slots(&self, slots: &HashSet<Slot>) {
@@ -1458,7 +1482,7 @@ impl AccountsDB {
                 }
                 drop(storage);
                 datapoint_info!("clean_dead_slots", ("stores", stores.len(), i64));
-                let pubkeys: Vec<Pubkey> = {
+                let pubkeys: Vec<Vec<Pubkey>> = {
                     self.thread_pool_clean.install(|| {
                         stores
                             .into_par_iter()
@@ -1469,13 +1493,14 @@ impl AccountsDB {
                                     .map(|account| account.meta.pubkey)
                                     .collect::<Vec<Pubkey>>()
                             })
-                            .flatten()
                             .collect()
                     })
                 };
                 let index = self.accounts_index.read().unwrap();
-                for pubkey in pubkeys {
-                    index.unref_from_storage(&pubkey);
+                for pubkey_v in pubkeys {
+                    for pubkey in pubkey_v {
+                        index.unref_from_storage(&pubkey);
+                    }
                 }
                 drop(index);
                 measure.stop();
@@ -2192,7 +2217,7 @@ pub mod tests {
         //slot is gone
         print_accounts("pre-clean", &accounts);
         accounts.clean_accounts();
-        accounts.handle_dead_slots();
+        accounts.process_dead_slots();
         assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
 
         //new value is there
@@ -2627,7 +2652,7 @@ pub mod tests {
         let hash = accounts.update_accounts_hash(current_slot, &ancestors);
 
         accounts.clean_accounts();
-        accounts.handle_dead_slots();
+        accounts.process_dead_slots();
 
         assert_eq!(
             accounts.update_accounts_hash(current_slot, &ancestors),
@@ -3432,7 +3457,7 @@ pub mod tests {
         current_slot += 1;
         assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &zero_lamport_account)]);
-        accounts.handle_dead_slots();
+        accounts.process_dead_slots();
         assert_eq!(
             3, /* == 4 - 2 + 1 */
             accounts.ref_count_for_pubkey(&pubkey1)
