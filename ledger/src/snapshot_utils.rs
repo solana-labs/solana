@@ -509,28 +509,35 @@ fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash)> {
     None
 }
 
-fn get_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P) -> Vec<(PathBuf, (Slot, Hash))> {
-    let files = fs::read_dir(&snapshot_output_dir)
-        .unwrap_or_else(|err| panic!("Unable to read snapshot directory: {}", err));
-
-    let mut archives: Vec<_> = files
-        .filter_map(|entry| {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(snapshot_hash) =
-                        snapshot_hash_of(path.file_name().unwrap().to_str().unwrap())
-                    {
-                        return Some((path, snapshot_hash));
+pub fn get_snapshot_archives<P: AsRef<Path>>(
+    snapshot_output_dir: P,
+) -> Vec<(PathBuf, (Slot, Hash))> {
+    match fs::read_dir(&snapshot_output_dir) {
+        Err(err) => {
+            info!("Unable to read snapshot directory: {}", err);
+            vec![]
+        }
+        Ok(files) => {
+            let mut archives: Vec<_> = files
+                .filter_map(|entry| {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if path.is_file() {
+                            if let Some(snapshot_hash) =
+                                snapshot_hash_of(path.file_name().unwrap().to_str().unwrap())
+                            {
+                                return Some((path, snapshot_hash));
+                            }
+                        }
                     }
-                }
-            }
-            None
-        })
-        .collect();
+                    None
+                })
+                .collect();
 
-    archives.sort_by(|a, b| (b.1).0.cmp(&(a.1).0)); // reverse sort by slot
-    archives
+            archives.sort_by(|a, b| (b.1).0.cmp(&(a.1).0)); // reverse sort by slot
+            archives
+        }
+    }
 }
 
 pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(

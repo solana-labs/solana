@@ -178,7 +178,8 @@ pub fn download_snapshot(
     // Remove all snapshot not matching the desired hash
     let snapshot_packages = solana_ledger::snapshot_utils::get_snapshot_archives(ledger_path);
     for (snapshot_package, snapshot_hash) in snapshot_packages.iter() {
-        if snapshot_hash != desired_snapshot_hash {
+        if *snapshot_hash != desired_snapshot_hash {
+            info!("Removing old snapshot: {:?}", snapshot_package);
             fs::remove_file(snapshot_package)
                 .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
         }
