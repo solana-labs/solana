@@ -83,22 +83,20 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 ```bash
-solana transfer --keypair=<KEYPAIR> <PUBKEY> 5
+solana transfer --keypair=<KEYPAIR> <PUBKEY> 5 --url http://devnet.solana.com
 ```
 
 where you replace `<KEYPAIR>` with the path to a keypair in your wallet,
 and replace `<PUBKEY>` with the output of `solana-keygen new` above.
 
-If the transaction was accepted by the cluster, the command will output the
-transaction signature. The signature uniquely identifies your transaction.
-To confirm the transaction executed successfully, run:
+Confirm the updated balances with `solana balance`:
 
 ```bash
-solana confirm <SIGNATURE>
+solana balance <PUBKEY> --url http://devnet.solana.com
 ```
 
-If it outputs "Confirmed", you can confidently share your public key and know
-that you will have control over any tokens sent to it.
+where `<PUBKEY>` is either the public key from your keypair or the
+recipient's public key.
 
 ## Send Tokens
 
