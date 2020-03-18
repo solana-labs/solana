@@ -418,21 +418,24 @@ impl JsonRpcRequestProcessor {
     pub fn get_transaction_status_history(
         &self,
         signature: Signature,
-    ) -> Result<Option<RpcTransactionStatus>> {
+    ) -> RpcResponse<Option<RpcTransactionStatus>> {
         let root = self.bank_forks.read().unwrap().root();
         self.blockstore
             .get_transaction_status(signature, root)
             .map_err(|_| Error::internal_error())
             .map(|result| {
-                result.and_then(|(slot, status)| {
+                let mut context = RpcResponseContext { slot: root };
+                let value = result.and_then(|(slot, status)| {
                     // If a slot is newer than the root in bank_forks, but not present in
                     // bank_forks, it is a dead fork that will never be rooted
                     if slot > root && !self.bank_forks.read().unwrap().banks.contains_key(&slot) {
                         None
                     } else {
+                        context = RpcResponseContext { slot };
                         Some(status)
                     }
-                })
+                });
+                Response { context, value }
             })
     }
 }
@@ -679,7 +682,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         signature_str: String,
-    ) -> Result<Option<RpcTransactionStatus>>;
+    ) -> RpcResponse<Option<RpcTransactionStatus>>;
 }
 
 pub struct RpcSolImpl;
@@ -1209,7 +1212,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         signature_str: String,
-    ) -> Result<Option<RpcTransactionStatus>> {
+    ) -> RpcResponse<Option<RpcTransactionStatus>> {
         let signature = verify_signature(&signature_str)?;
         meta.request_processor
             .read()
