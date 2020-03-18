@@ -3,7 +3,6 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
     cluster_info::ClusterInfo,
-    packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
     poh_service::PohService,
 };
@@ -17,7 +16,11 @@ use solana_ledger::{
 };
 use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
-use solana_perf::{cuda_runtime::PinnedVec, perf_libs};
+use solana_perf::{
+    cuda_runtime::PinnedVec,
+    packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
+    perf_libs,
+};
 use solana_runtime::{
     accounts_db::ErrorCounters,
     bank::{Bank, TransactionBalancesSet, TransactionProcessResult},
@@ -1011,7 +1014,6 @@ mod tests {
     use crate::{
         cluster_info::Node,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        packet::to_packets,
         poh_recorder::WorkingBank,
         transaction_status_service::TransactionStatusService,
     };
@@ -1023,6 +1025,7 @@ mod tests {
         entry::{next_entry, Entry, EntrySlice},
         get_tmp_ledger_path,
     };
+    use solana_perf::packet::to_packets;
     use solana_runtime::bank::HashAgeKind;
     use solana_sdk::{
         instruction::InstructionError,

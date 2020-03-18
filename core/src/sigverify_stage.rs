@@ -5,14 +5,14 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if perf-libs are available
 
-use crate::packet::Packets;
 use crate::sigverify;
-use crate::streamer::{self, PacketReceiver, StreamerError};
 use crossbeam_channel::{SendError, Sender as CrossbeamSender};
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_debug;
+use solana_perf::packet::Packets;
 use solana_perf::perf_libs;
 use solana_sdk::timing;
+use solana_streamer::streamer::{self, PacketReceiver, StreamerError};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};

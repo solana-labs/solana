@@ -1,7 +1,8 @@
 use crate::{
     cluster_info_vote_listener::VerifiedVotePacketsReceiver, crds_value::CrdsValueLabel,
-    packet::Packets, result::Result,
+    result::Result,
 };
+use solana_perf::packet::Packets;
 use std::{collections::HashMap, ops::Deref, time::Duration};
 
 #[derive(Default)]
@@ -55,11 +56,9 @@ impl VerifiedVotePackets {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        packet::{Meta, Packet},
-        result::Error,
-    };
+    use crate::result::Error;
     use crossbeam_channel::{unbounded, RecvTimeoutError};
+    use solana_perf::packet::{Meta, Packet};
     use solana_sdk::pubkey::Pubkey;
 
     #[test]

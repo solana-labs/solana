@@ -2,13 +2,13 @@
 
 use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
-use crate::streamer;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_ledger::bank_forks::BankForks;
 use solana_perf::recycler::Recycler;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
+use solana_streamer::streamer;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;

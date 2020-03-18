@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn test_packets_set_addr() {
         // test that the address is actually being updated
-        let send_addr = socketaddr!([127, 0, 0, 1], 123);
+        let send_addr: SocketAddr = "127.0.0.1:123".parse().unwrap();
         let packets = vec![Packet::default()];
         let mut msgs = Packets::new(packets);
         msgs.set_addr(&send_addr);

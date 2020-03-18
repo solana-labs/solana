@@ -12,8 +12,6 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::packet::limited_deserialize;
-use crate::streamer::{PacketReceiver, PacketSender};
 use crate::{
     contact_info::ContactInfo,
     crds_gossip::CrdsGossip,
@@ -23,9 +21,7 @@ use crate::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash, Vote,
     },
     epoch_slots::EpochSlots,
-    packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
-    sendmmsg::{multicast, send_mmsg},
     weighted_shuffle::{weighted_best, weighted_shuffle},
 };
 use bincode::{serialize, serialized_size};
@@ -41,7 +37,10 @@ use solana_net_utils::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
     multi_bind_in_range, PortRange,
 };
-use solana_perf::packet::{to_packets_with_destination, Packets, PacketsRecycler};
+use solana_perf::packet::{
+    limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
+    PACKET_DATA_SIZE,
+};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing::duration_as_s;
@@ -52,6 +51,8 @@ use solana_sdk::{
     timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };
+use solana_streamer::sendmmsg::{multicast, send_mmsg};
+use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     borrow::Cow,
     cmp::min,

@@ -29,6 +29,7 @@ solana-logger = { path = "../logger", version = "1.1.0" }
 solana-perf = { path = "../perf", version = "1.1.0" }
 solana-sdk = { path = "../sdk", version = "1.1.0" }
 solana-core = { path = "../core", version = "1.1.0" }
+solana-streamer = { path = "../streamer", version = "1.1.0" }
 solana-archiver-utils = { path = "../archiver-utils", version = "1.1.0" }
 solana-metrics = { path = "../metrics", version = "1.1.0" }
 

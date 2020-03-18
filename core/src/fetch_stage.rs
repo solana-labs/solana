@@ -1,14 +1,14 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
 use crate::banking_stage::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET;
-use crate::packet::PacketsRecycler;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
-use crate::streamer::{self, PacketReceiver, PacketSender};
 use solana_measure::thread_mem_usage;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
+use solana_perf::packet::PacketsRecycler;
 use solana_perf::recycler::Recycler;
 use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
+use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, RecvTimeoutError};

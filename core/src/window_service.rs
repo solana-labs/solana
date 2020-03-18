@@ -2,10 +2,8 @@
 //!   blockstore and retransmitting where required
 //!
 use crate::cluster_info::ClusterInfo;
-use crate::packet::Packets;
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
-use crate::streamer::PacketSender;
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
 };
@@ -17,10 +15,12 @@ use solana_ledger::blockstore::{self, Blockstore, MAX_DATA_SHREDS_PER_SLOT};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
+use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
+use solana_streamer::streamer::PacketSender;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -476,11 +476,8 @@ impl WindowService {
 mod test {
     use super::*;
     use crate::{
-        cluster_info::ClusterInfo,
-        contact_info::ContactInfo,
-        genesis_utils::create_genesis_config_with_leader,
-        packet::{Packet, Packets},
-        repair_service::RepairSlotRange,
+        cluster_info::ClusterInfo, contact_info::ContactInfo,
+        genesis_utils::create_genesis_config_with_leader, repair_service::RepairSlotRange,
     };
     use rand::thread_rng;
     use solana_ledger::shred::DataShredHeader;
@@ -490,6 +487,7 @@ mod test {
         get_tmp_ledger_path,
         shred::Shredder,
     };
+    use solana_perf::packet::Packet;
     use solana_sdk::{
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,

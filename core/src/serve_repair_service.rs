@@ -1,7 +1,7 @@
 use crate::serve_repair::ServeRepair;
-use crate::streamer;
 use solana_ledger::blockstore::Blockstore;
 use solana_perf::recycler::Recycler;
+use solana_streamer::streamer;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;

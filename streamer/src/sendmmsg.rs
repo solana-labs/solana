@@ -164,8 +164,8 @@ mod tests {
             .map(|_| (vec![0u8; PACKET_DATA_SIZE], &addr))
             .collect();
 
-        let sent = send_mmsg(&sender, &mut packets);
-        assert_matches!(sent, Ok(32));
+        let sent = send_mmsg(&sender, &mut packets).ok();
+        assert_eq!(sent, Some(32));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
@@ -192,8 +192,8 @@ mod tests {
             })
             .collect();
 
-        let sent = send_mmsg(&sender, &mut packets);
-        assert_matches!(sent, Ok(32));
+        let sent = send_mmsg(&sender, &mut packets).ok();
+        assert_eq!(sent, Some(32));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
@@ -226,8 +226,9 @@ mod tests {
             &sender,
             &mut packet.data[..packet.meta.size],
             &[&addr, &addr2, &addr3, &addr4],
-        );
-        assert_matches!(sent, Ok(4));
+        )
+        .ok();
+        assert_eq!(sent, Some(4));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
