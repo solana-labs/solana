@@ -83,7 +83,7 @@ you want to use. Run the same command again, but this time, with its fully
 qualified URL:
 
 ```text
-solana address --keypair usb://ledger/nano-s/<WALLET_KEY>
+solana address --keypair usb://ledger/<WALLET_KEY>
 ```
 
 Confirm it prints the same key as when you entered just `usb://ledger`.
