@@ -11,7 +11,7 @@
 #define NUM_KA 3
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolKeyedAccount ka[NUM_KA];
+  SolAccountInfo ka[NUM_KA];
   SolParameters params = (SolParameters) { .ka = ka };
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
