@@ -63,7 +63,9 @@ function CustomNetworkInput({ activeSuffix, active }: InputProps) {
   return (
     <div
       className="btn input-group input-group-merge p-0"
-      onClick={() => updateNetwork(dispatch, Network.Custom, customUrl)}
+      onClick={() =>
+        !active && updateNetwork(dispatch, Network.Custom, customUrl)
+      }
     >
       <input
         type="text"
