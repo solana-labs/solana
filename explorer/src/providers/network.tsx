@@ -133,7 +133,7 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
   );
 }
 
-export function networkUrl(network: Network, customUrl: string) {
+export function networkUrl(network: Network, customUrl: string): string {
   switch (network) {
     case Network.Devnet:
       return DEVNET_URL;

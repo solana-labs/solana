@@ -10,3 +10,7 @@ export function findGetParameter(parameterName: string): string | null {
     });
   return result;
 }
+
+export function assertUnreachable(x: never): never {
+  throw new Error("Unreachable!");
+}

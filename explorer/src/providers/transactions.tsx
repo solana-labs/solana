@@ -8,13 +8,18 @@ export enum Status {
   CheckFailed,
   Success,
   Failure,
-  Pending
+  Missing
+}
+
+enum Source {
+  Url,
+  Input
 }
 
 export interface Transaction {
   id: number;
   status: Status;
-  recent: boolean;
+  source: Source;
   signature: TransactionSignature;
 }
 
@@ -24,20 +29,52 @@ interface State {
   transactions: Transactions;
 }
 
+export enum ActionType {
+  UpdateStatus,
+  InputSignature
+}
+
 interface UpdateStatus {
+  type: ActionType.UpdateStatus;
   id: number;
   status: Status;
 }
 
-type Action = UpdateStatus;
+interface InputSignature {
+  type: ActionType.InputSignature;
+  signature: TransactionSignature;
+}
+
+type Action = UpdateStatus | InputSignature;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
-  let transaction = state.transactions[action.id];
-  if (transaction) {
-    transaction = { ...transaction, status: action.status };
-    const transactions = { ...state.transactions, [action.id]: transaction };
-    return { ...state, transactions };
+  switch (action.type) {
+    case ActionType.InputSignature: {
+      const idCounter = state.idCounter + 1;
+      const transactions = {
+        ...state.transactions,
+        [idCounter]: {
+          id: idCounter,
+          status: Status.Checking,
+          source: Source.Input,
+          signature: action.signature
+        }
+      };
+      return { ...state, transactions, idCounter };
+    }
+    case ActionType.UpdateStatus: {
+      let transaction = state.transactions[action.id];
+      if (transaction) {
+        transaction = { ...transaction, status: action.status };
+        const transactions = {
+          ...state.transactions,
+          [action.id]: transaction
+        };
+        return { ...state, transactions };
+      }
+      break;
+    }
   }
   return state;
 }
@@ -51,7 +88,7 @@ function initState(): State {
       transactions[id] = {
         id,
         status: Status.Checking,
-        recent: true,
+        source: Source.Url,
         signature
       };
       return transactions;
@@ -72,9 +109,8 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 
   // Check transaction statuses on startup and whenever network updates
   React.useEffect(() => {
-    const connection = new Connection(url);
     Object.values(state.transactions).forEach(tx => {
-      checkTransactionStatus(dispatch, tx, connection);
+      checkTransactionStatus(dispatch, tx.id, tx.signature, url);
     });
   }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -89,23 +125,24 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 
 export async function checkTransactionStatus(
   dispatch: Dispatch,
-  transaction: Transaction,
-  connection: Connection
+  id: number,
+  signature: TransactionSignature,
+  url: string
 ) {
-  const id = transaction.id;
   dispatch({
+    type: ActionType.UpdateStatus,
     status: Status.Checking,
     id
   });
 
   let status;
   try {
-    const signatureStatus = await connection.getSignatureStatus(
-      transaction.signature
+    const signatureStatus = await new Connection(url).getSignatureStatus(
+      signature
     );
 
     if (signatureStatus === null) {
-      status = Status.Pending;
+      status = Status.Missing;
     } else if ("Ok" in signatureStatus) {
       status = Status.Success;
     } else {
@@ -115,7 +152,7 @@ export async function checkTransactionStatus(
     console.error("Failed to check transaction status", error);
     status = Status.CheckFailed;
   }
-  dispatch({ status, id });
+  dispatch({ type: ActionType.UpdateStatus, status, id });
 }
 
 export function useTransactions() {
@@ -125,7 +162,12 @@ export function useTransactions() {
       `useTransactions must be used within a TransactionsProvider`
     );
   }
-  return context;
+  return {
+    idCounter: context.idCounter,
+    transactions: Object.values(context.transactions).sort((a, b) =>
+      a.id <= b.id ? 1 : -1
+    )
+  };
 }
 
 export function useTransactionsDispatch() {

@@ -9,6 +9,7 @@ import {
   NETWORKS,
   Network
 } from "../providers/network";
+import { assertUnreachable } from "../utils";
 
 type Props = {
   show: boolean;
@@ -103,6 +104,8 @@ function NetworkToggle() {
     case NetworkStatus.Failure:
       activeSuffix = "danger";
       break;
+    default:
+      assertUnreachable(status);
   }
 
   return (
