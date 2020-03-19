@@ -87,22 +87,30 @@ using a keyword.  The keyword can symbolically identify how this
 address is used.
 
 ```rust,ignore
-
-use system_instruction::create_address_with_seed;
-
+//! Generate a derived program address
+//!     * program_id, the program's id
+//!     * key_base, can be any public key chosen by the program
+//!     * keyword, symbolic keyword to identify the key
+//!
+//! The tuple (`key_base`, `keyword`) is used by programs to create user specific
+//! symbolic keys.  For example for the staking contact, the program may need:
+//!     * <user account>/<"withdrawer">
+//!     * <user account>/<"staker">
+//!     * <user account>/<"custodian">
+//! As generated keys to control a single stake account for each user.
 pub fn derive_program_address(
     program_id: &Pubkey,
+    key_base, &Pubkey,
     keyword, &str,
 ) -> Result<Pubkey, SystemError> {
 
     // Generate a deterministic base for all program addresses that
     // are owned by `program_id`.
-
-    let base = create_address_with_seed(program_id,
-            &"ProgramAddress11111111111111111111111111111" , program_id)?;
-
-    // Generate a unique Program Address with the keyword.
-    create_address_with_seed(&base, keyword, program_id)
+    // Hashing twice is recommended to prevent lenght extension attacks.
+    Ok(Pubkey::new(
+        hashv(&[hashv(&[program_id.as_ref(), key_base.as_ref(), keyword.as_ref(),
+            &"ProgramAddress11111111111111111111111111111"]).as_ref()])
+    ))
 }
 ```
 
@@ -111,9 +119,9 @@ pub fn derive_program_address(
 Clients can use the `derive_program_address` function to generate
 a destination address.
 
-```text
+```rust,ignore
 //deterministically derive the escrow key
-let escrow_pubkey = derive_program_address(&escrow_program_id, &"escrow");
+let escrow_pubkey = derive_program_address(&escrow_program_id, &alice_pubkey, &"escrow");
 let message = Message::new(vec![
     token_instruction::transfer(&alice_pubkey, &escrow_pubkey, 1),
 ]);
@@ -131,11 +139,12 @@ fn transfer_one_token_from_escrow(
     keyed_accounts: &[KeyedAccount]
 ) -> Result<()> {
 
-    // Deterministically derive the escrow pubkey.
-    let escrow_pubkey = derive_program_address(program_id, &"escrow");
 
     //user supplies the destination
     let alice_pubkey = keyed_accounts[1].key;
+
+    // Deterministically derive the escrow pubkey.
+    let escrow_pubkey = derive_program_address(program_id, &alice_pubkey, &"escrow");
 
     //create the transfer instruction
     let instruction = token_instruction::transfer(&escrow_pubkey, &alice_pubkey, 1);
@@ -144,7 +153,7 @@ fn transfer_one_token_from_escrow(
     // program id and the supplied keywords.
     // If the derived key matches a key in the instruction
     // the `is_signed` flag is set.
-    process_signed_instruction(&instruction,  &[&"escrow"])?
+    process_signed_instruction(&instruction,  &[(&alice_pubkey, &"escrow")])?
 }
 ```
 
@@ -156,5 +165,5 @@ the runtime to verify that the address belongs to a program is for
 the program to supply the keyword used to generate the address.
 
 The runtime will internally run  `derive_program_address(program_id,
-&"escrow")`, and compare the result against the addresses supplied
-in the instruction.
+&alice_pubkey, &"escrow")`, and compare the result against the addresses
+supplied in the instruction.
