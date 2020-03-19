@@ -35,8 +35,8 @@ export function networkName(network: Network): string {
   }
 }
 
-export const MAINNET_BETA_URL = "http://34.82.103.142";
-export const TDS_URL = "http://35.233.128.214";
+export const MAINNET_BETA_URL = "https://api.mainnet-beta.solana.com";
+export const TDS_URL = "https://tds.solana.com";
 export const DEVNET_URL = testnetChannelEndpoint("stable");
 
 export const DEFAULT_NETWORK = Network.MainnetBeta;
