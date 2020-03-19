@@ -15,7 +15,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 
 [dependencies]
 bincode = "1.2.1"
-bv = { version = "0.11.0", features = ["serde"] }
+bv = { version = "0.11.1", features = ["serde"] }
 bs58 = "0.3.0"
 byteorder = "1.3.4"
 chrono = { version = "0.4.11", features = ["serde"] }
