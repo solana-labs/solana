@@ -163,7 +163,8 @@ fn test_stake_account_lifetime() {
     let stake_pubkey = stake_keypair.pubkey();
     let vote_keypair = Keypair::new();
     let vote_pubkey = vote_keypair.pubkey();
-    let node_pubkey = Pubkey::new_rand();
+    let identity_keypair = Keypair::new();
+    let identity_pubkey = identity_keypair.pubkey();
 
     let GenesisConfigInfo {
         mut genesis_config,
@@ -183,7 +184,7 @@ fn test_stake_account_lifetime() {
         &mint_pubkey,
         &vote_pubkey,
         &VoteInit {
-            node_pubkey,
+            node_pubkey: identity_pubkey,
             authorized_voter: vote_pubkey,
             authorized_withdrawer: vote_pubkey,
             commission: 50,
@@ -191,7 +192,7 @@ fn test_stake_account_lifetime() {
         10,
     ));
     bank_client
-        .send_message(&[&mint_keypair, &vote_keypair], message)
+        .send_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
         .expect("failed to create vote account");
 
     let authorized = stake_state::Authorized::auto(&stake_pubkey);
@@ -394,7 +395,8 @@ fn test_stake_account_lifetime() {
 fn test_create_stake_account_from_seed() {
     let vote_keypair = Keypair::new();
     let vote_pubkey = vote_keypair.pubkey();
-    let node_pubkey = Pubkey::new_rand();
+    let identity_keypair = Keypair::new();
+    let identity_pubkey = identity_keypair.pubkey();
 
     let GenesisConfigInfo {
         mut genesis_config,
@@ -418,7 +420,7 @@ fn test_create_stake_account_from_seed() {
         &mint_pubkey,
         &vote_pubkey,
         &VoteInit {
-            node_pubkey,
+            node_pubkey: identity_pubkey,
             authorized_voter: vote_pubkey,
             authorized_withdrawer: vote_pubkey,
             commission: 50,
@@ -426,7 +428,7 @@ fn test_create_stake_account_from_seed() {
         10,
     ));
     bank_client
-        .send_message(&[&mint_keypair, &vote_keypair], message)
+        .send_message(&[&mint_keypair, &vote_keypair, &identity_keypair], message)
         .expect("failed to create vote account");
 
     let authorized = stake_state::Authorized::auto(&mint_pubkey);
