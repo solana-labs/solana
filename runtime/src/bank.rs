@@ -4905,15 +4905,19 @@ mod tests {
         assert!(bank.get_account(&solana_vote_program::id()).is_some());
 
         let mock_account = Keypair::new();
+        let mock_validator_identity = Keypair::new();
         let instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &mock_account.pubkey(),
-            &VoteInit::default(),
+            &VoteInit {
+                node_pubkey: mock_validator_identity.pubkey(),
+                ..VoteInit::default()
+            },
             1,
         );
 
         let transaction = Transaction::new_signed_instructions(
-            &[&mint_keypair, &mock_account],
+            &[&mint_keypair, &mock_account, &mock_validator_identity],
             instructions,
             bank.last_blockhash(),
         );
@@ -4946,15 +4950,19 @@ mod tests {
         }
 
         let mock_account = Keypair::new();
+        let mock_validator_identity = Keypair::new();
         let instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &mock_account.pubkey(),
-            &VoteInit::default(),
+            &VoteInit {
+                node_pubkey: mock_validator_identity.pubkey(),
+                ..VoteInit::default()
+            },
             1,
         );
 
         let transaction = Transaction::new_signed_instructions(
-            &[&mint_keypair, &mock_account],
+            &[&mint_keypair, &mock_account, &mock_validator_identity],
             instructions,
             bank.last_blockhash(),
         );

@@ -130,7 +130,7 @@ pub(crate) mod tests {
         bank: &Bank,
         from_account: &Keypair,
         vote_account: &Keypair,
-        node_pubkey: &Pubkey,
+        validator_identity_account: &Keypair,
         amount: u64,
     ) {
         let vote_pubkey = vote_account.pubkey();
@@ -146,12 +146,12 @@ pub(crate) mod tests {
 
         process_instructions(
             bank,
-            &[from_account, vote_account],
+            &[from_account, vote_account, validator_identity_account],
             vote_instruction::create_account(
                 &from_account.pubkey(),
                 &vote_pubkey,
                 &VoteInit {
-                    node_pubkey: *node_pubkey,
+                    node_pubkey: validator_identity_account.pubkey(),
                     authorized_voter: vote_pubkey,
                     authorized_withdrawer: vote_pubkey,
                     commission: 0,
@@ -209,13 +209,7 @@ pub(crate) mod tests {
 
         // Make a mint vote account. Because the mint has nonzero stake, this
         // should show up in the active set
-        setup_vote_and_stake_accounts(
-            &bank,
-            &mint_keypair,
-            &vote_account,
-            &mint_keypair.pubkey(),
-            stake,
-        );
+        setup_vote_and_stake_accounts(&bank, &mint_keypair, &vote_account, &mint_keypair, stake);
 
         // simulated stake
         let other_stake = Stake {
