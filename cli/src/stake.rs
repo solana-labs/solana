@@ -845,11 +845,12 @@ pub fn process_create_stake_account(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
@@ -907,11 +908,12 @@ pub fn process_stake_authorize(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
@@ -960,11 +962,12 @@ pub fn process_deactivate_stake_account(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
@@ -1019,11 +1022,12 @@ pub fn process_withdraw_stake(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
@@ -1152,11 +1156,12 @@ pub fn process_split_stake(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
@@ -1208,11 +1213,12 @@ pub fn process_stake_set_lockup(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
@@ -1442,11 +1448,12 @@ pub fn process_delegate_stake(
         Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
     };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
 
     if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx)
     } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
