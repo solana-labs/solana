@@ -90,10 +90,9 @@ pub enum VoteInstruction {
     /// Update the vote account's validator identity (node id)
     ///    requires authorized withdrawer and new validator identity signature
     ///
-    /// Expects 3 Accounts:
+    /// Expects 2 Accounts:
     ///    0 - Vote account to be updated with the Pubkey for authorization
     ///    1 - New validator identity (node id)
-    ///    2 - Clock sysvar Account that carries clock bank epoch
     ///
     UpdateNode,
 }
@@ -175,7 +174,6 @@ pub fn update_node(
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(*node_pubkey, false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
     ]
     .with_signer(authorized_withdrawer_pubkey)
     .with_signer(node_pubkey);
@@ -245,7 +243,6 @@ pub fn process_instruction(
             me,
             next_keyed_account(keyed_accounts)?.unsigned_key(),
             &signers,
-            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
         VoteInstruction::Vote(vote) => {
             inc_new_counter_info!("vote-native", 1);
