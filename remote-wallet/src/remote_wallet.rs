@@ -173,6 +173,10 @@ impl RemoteWalletManager {
 
 /// `RemoteWallet` trait
 pub trait RemoteWallet {
+    fn name(&self) -> &str {
+        "remote wallet"
+    }
+
     /// Parse device info and get device base pubkey
     fn read_device(
         &self,

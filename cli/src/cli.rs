@@ -2191,17 +2191,9 @@ where
             )) = err.kind()
             {
                 if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
-                    error!("{}::{:?}", E::type_of(), specific_error);
-                    eprintln!(
-                        "Program Error ({}::{:?}): {}",
-                        E::type_of(),
-                        specific_error,
-                        specific_error
-                    );
                     return Err(specific_error.into());
                 }
             }
-            error!("{:?}", err);
             Err(err.into())
         }
         Ok(sig) => Ok(sig),
