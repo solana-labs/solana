@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Solana Explorer",
+  "name": "Explorer for Solana clusters",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,18 +8,18 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "rainbow192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "rainbow512.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#75FBB4",
   "background_color": "#ffffff"
 }
