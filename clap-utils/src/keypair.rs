@@ -1,4 +1,8 @@
-use crate::{input_parsers::pubkeys_sigs_of, offline::SIGNER_ARG, ArgConstant};
+use crate::{
+    input_parsers::pubkeys_sigs_of,
+    offline::{SIGNER_ARG, SIGN_ONLY_ARG},
+    ArgConstant,
+};
 use bip39::{Language, Mnemonic, Seed};
 use clap::ArgMatches;
 use rpassword::prompt_password_stderr;
@@ -10,7 +14,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{
         keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
-        read_keypair_file, Keypair, Presigner, Signature, Signer,
+        read_keypair_file, Keypair, NullSigner, Presigner, Signature, Signer,
     },
 };
 use std::{
@@ -101,6 +105,8 @@ pub fn signer_from_path(
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {
                 Ok(Box::new(presigner))
+            } else if matches.is_present(SIGN_ONLY_ARG.name) {
+                Ok(Box::new(NullSigner::new(&pubkey)))
             } else {
                 Err(std::io::Error::new(
                     std::io::ErrorKind::Other,

@@ -6,10 +6,16 @@ use serde_json::Value;
 use solana_clap_utils::{
     input_parsers::{pubkey_of, value_of},
     input_validators::{is_hash, is_pubkey_sig},
+    keypair::presigner_from_pubkey_sigs,
     offline::{BLOCKHASH_ARG, SIGNER_ARG, SIGN_ONLY_ARG},
 };
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey, signature::Signature};
+use solana_sdk::{
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::{Presigner, Signature},
+};
 use std::str::FromStr;
 
 fn blockhash_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -52,12 +58,29 @@ impl OfflineArgs for App<'_, '_> {
     }
 }
 
-pub fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signature)>) {
+pub struct SignOnly {
+    pub blockhash: Hash,
+    pub present_signers: Vec<(Pubkey, Signature)>,
+    pub absent_signers: Vec<Pubkey>,
+    pub bad_signers: Vec<Pubkey>,
+}
+
+impl SignOnly {
+    pub fn has_all_signers(&self) -> bool {
+        self.absent_signers.is_empty() && self.bad_signers.is_empty()
+    }
+
+    pub fn presigner_of(&self, pubkey: &Pubkey) -> Option<Presigner> {
+        presigner_from_pubkey_sigs(pubkey, &self.present_signers)
+    }
+}
+
+pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
     let object: Value = serde_json::from_str(&reply).unwrap();
     let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
     let blockhash = blockhash_str.parse::<Hash>().unwrap();
     let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let signers = signer_strings
+    let present_signers = signer_strings
         .iter()
         .map(|signer_string| {
             let mut signer = signer_string.as_str().unwrap().split('=');
@@ -66,5 +89,26 @@ pub fn parse_sign_only_reply_string(reply: &str) -> (Hash, Vec<(Pubkey, Signatur
             (key, sig)
         })
         .collect();
-    (blockhash, signers)
+    let signer_strings = object.get("absent").unwrap().as_array().unwrap();
+    let absent_signers = signer_strings
+        .iter()
+        .map(|val| {
+            let s = val.as_str().unwrap();
+            Pubkey::from_str(s).unwrap()
+        })
+        .collect();
+    let signer_strings = object.get("badSig").unwrap().as_array().unwrap();
+    let bad_signers = signer_strings
+        .iter()
+        .map(|val| {
+            let s = val.as_str().unwrap();
+            Pubkey::from_str(s).unwrap()
+        })
+        .collect();
+    SignOnly {
+        blockhash,
+        present_signers,
+        absent_signers,
+        bad_signers,
+    }
 }

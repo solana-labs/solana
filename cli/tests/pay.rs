@@ -1,6 +1,5 @@
 use chrono::prelude::*;
 use serde_json::Value;
-use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
     nonce,
@@ -335,9 +334,11 @@ fn test_offline_pay_tx() {
     check_balance(50, &rpc_client, &config_online.signers[0].pubkey());
     check_balance(0, &rpc_client, &bob_pubkey);
 
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner =
-        presigner_from_pubkey_sigs(&config_offline.signers[0].pubkey(), &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only
+        .presigner_of(&config_offline.signers[0].pubkey())
+        .unwrap();
     let online_pubkey = config_online.signers[0].pubkey();
     config_online.signers = vec![&offline_presigner];
     config_online.command = CliCommand::Pay(PayCommand {

@@ -2,7 +2,8 @@ use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches
 use console::style;
 
 use solana_clap_utils::{
-    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
+    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, offline::SIGN_ONLY_ARG,
+    DisplayError,
 };
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
@@ -242,7 +243,13 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
         let (mut config, signers) = parse_args(&matches, wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
         let result = process_command(&config)?;
-        println!("{}", result);
+        let (_, submatches) = matches.subcommand();
+        let sign_only = submatches
+            .map(|m| m.is_present(SIGN_ONLY_ARG.name))
+            .unwrap_or(false);
+        if !sign_only {
+            println!("{}", result);
+        }
     };
     Ok(())
 }
