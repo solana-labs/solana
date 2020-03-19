@@ -130,7 +130,7 @@ impl FromStr for Signature {
     }
 }
 
-pub trait Signer {
+pub trait Signer: Send {
     fn pubkey(&self) -> Pubkey {
         self.try_pubkey().unwrap_or_default()
     }

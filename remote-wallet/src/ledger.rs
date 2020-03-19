@@ -6,7 +6,11 @@ use dialoguer::{theme::ColorfulTheme, Select};
 use log::*;
 use semver::Version as FirmwareVersion;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
-use std::{cmp::min, fmt, sync::Arc};
+use std::{
+    cmp::min,
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 
@@ -424,7 +428,7 @@ pub fn get_ledger_from_info(
     info: RemoteWalletInfo,
     keypair_name: &str,
     wallet_manager: &RemoteWalletManager,
-) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
+) -> Result<Arc<Mutex<LedgerWallet>>, RemoteWalletError> {
     let devices = wallet_manager.list_devices();
     let mut matches = devices
         .iter()

@@ -113,7 +113,9 @@ impl RemoteWalletManager {
                                 v.push(Device {
                                     path,
                                     info,
-                                    wallet_type: RemoteWalletType::Ledger(Arc::new(ledger)),
+                                    wallet_type: RemoteWalletType::Ledger(Arc::new(
+                                        std::sync::Mutex::new(ledger),
+                                    )),
                                 })
                             }
                         }
@@ -136,7 +138,10 @@ impl RemoteWalletManager {
 
     /// Get a particular wallet
     #[allow(unreachable_patterns)]
-    pub fn get_ledger(&self, pubkey: &Pubkey) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
+    pub fn get_ledger(
+        &self,
+        pubkey: &Pubkey,
+    ) -> Result<Arc<std::sync::Mutex<LedgerWallet>>, RemoteWalletError> {
         self.devices
             .read()
             .iter()
@@ -209,7 +214,7 @@ pub struct Device {
 /// Remote wallet convenience enum to hold various wallet types
 #[derive(Debug)]
 pub enum RemoteWalletType {
-    Ledger(Arc<LedgerWallet>),
+    Ledger(Arc<std::sync::Mutex<LedgerWallet>>),
 }
 
 /// Remote wallet information.
