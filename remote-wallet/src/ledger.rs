@@ -236,7 +236,8 @@ impl LedgerWallet {
         self.write(command, p1, p2, data)?;
         if p1 == P1_CONFIRM && is_last_part(p2) {
             println!(
-                "Waiting for approval from remote wallet {}",
+                "Waiting for your approval on {} {}",
+                self.name(),
                 self.pretty_path
             );
             let result = self.read()?;
@@ -261,6 +262,10 @@ impl LedgerWallet {
 }
 
 impl RemoteWallet for LedgerWallet {
+    fn name(&self) -> &str {
+        "Ledger hardware wallet"
+    }
+
     fn read_device(
         &self,
         dev_info: &hidapi::DeviceInfo,
