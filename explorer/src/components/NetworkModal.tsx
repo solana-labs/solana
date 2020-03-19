@@ -122,7 +122,7 @@ function NetworkToggle() {
           );
 
         const btnClass = active
-          ? `btn-outline-${activeSuffix}`
+          ? `border-${activeSuffix} text-${activeSuffix}`
           : "btn-white text-dark";
 
         return (
