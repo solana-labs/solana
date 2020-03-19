@@ -135,7 +135,6 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
-                let my_vote_pubkey = voting_keypair.as_ref().map(|k| k.pubkey());
                 let mut all_pubkeys: HashSet<Rc<Pubkey>> = HashSet::new();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
@@ -158,7 +157,7 @@ impl ReplayStage {
                         ForkProgress::new_from_bank(
                             &bank,
                             &my_pubkey,
-                            my_vote_pubkey,
+                            &vote_account,
                             prev_leader_slot,
                         ),
                     );
@@ -200,7 +199,7 @@ impl ReplayStage {
                         &blockstore,
                         &bank_forks,
                         &my_pubkey,
-                        &my_vote_pubkey,
+                        &vote_account,
                         &mut progress,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
@@ -798,7 +797,7 @@ impl ReplayStage {
         blockstore: &Arc<Blockstore>,
         bank_forks: &Arc<RwLock<BankForks>>,
         my_pubkey: &Pubkey,
-        my_vote_pubkey: &Option<Pubkey>,
+        vote_account: &Pubkey,
         progress: &mut ProgressMap,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
@@ -822,7 +821,7 @@ impl ReplayStage {
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
             // this bank in `select_forks()`
             let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
-                ForkProgress::new_from_bank(&bank, &my_pubkey, *my_vote_pubkey, prev_leader_slot)
+                ForkProgress::new_from_bank(&bank, &my_pubkey, vote_account, prev_leader_slot)
             });
             if bank.collector_id() != my_pubkey {
                 let replay_result = Self::replay_blockstore_into_bank(

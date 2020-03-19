@@ -139,21 +139,17 @@ impl ForkProgress {
     pub fn new_from_bank(
         bank: &Bank,
         my_pubkey: &Pubkey,
-        voting_pubkey: Option<Pubkey>,
+        voting_pubkey: &Pubkey,
         prev_leader_slot: Option<Slot>,
     ) -> Self {
         let validator_fork_info = {
             if bank.collector_id() == my_pubkey {
-                if let Some(voting_pubkey) = voting_pubkey {
-                    let stake = bank.epoch_vote_account_stake(&voting_pubkey);
-                    Some(ValidatorStakeInfo::new(
-                        voting_pubkey,
-                        stake,
-                        bank.total_epoch_stake(),
-                    ))
-                } else {
-                    None
-                }
+                let stake = bank.epoch_vote_account_stake(voting_pubkey);
+                Some(ValidatorStakeInfo::new(
+                    *voting_pubkey,
+                    stake,
+                    bank.total_epoch_stake(),
+                ))
             } else {
                 None
             }
