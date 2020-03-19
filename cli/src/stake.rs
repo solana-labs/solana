@@ -194,7 +194,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Stake account in which to set the authorized staker")
                 )
                 .arg(
-                    Arg::with_name("authorized_pubkey")
+                    Arg::with_name("new_stake_authority")
                         .index(2)
                         .value_name("AUTHORIZED_PUBKEY")
                         .takes_value(true)
@@ -221,7 +221,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Stake account in which to set the authorized withdrawer")
                 )
                 .arg(
-                    Arg::with_name("authorized_pubkey")
+                    Arg::with_name("new_withdraw_authority")
                         .index(2)
                         .value_name("AUTHORIZED_PUBKEY")
                         .takes_value(true)
@@ -515,37 +515,54 @@ pub fn parse_stake_authorize(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
-    stake_authorize: StakeAuthorize,
+    stake_authorizations: &[StakeAuthorize],
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
-    let new_authorized_pubkey =
-        pubkey_of_signer(matches, "authorized_pubkey", wallet_manager)?.unwrap();
-    let authority_flag = match stake_authorize {
-        StakeAuthorize::Staker => STAKE_AUTHORITY_ARG.name,
-        StakeAuthorize::Withdrawer => WITHDRAW_AUTHORITY_ARG.name,
-    };
+    let mut new_authorizations = Vec::new();
+    let mut bulk_signers = Vec::new();
+    for stake_authorize in stake_authorizations {
+        let (authority_flag, new_authority_flag) = match stake_authorize {
+            StakeAuthorize::Staker => (STAKE_AUTHORITY_ARG.name, "new_stake_authority"),
+            StakeAuthorize::Withdrawer => (WITHDRAW_AUTHORITY_ARG.name, "new_withdraw_authority"),
+        };
+        if let Some(new_authority_pubkey) = pubkey_of_signer(matches, new_authority_flag, wallet_manager)? {
+            let (authority, authority_pubkey) = signer_of(matches, authority_flag, wallet_manager)?;
+            new_authorizations.push((*stake_authorize, new_authority_pubkey, authority_pubkey));
+            bulk_signers.push(authority);
+        } else if stake_authorizations.len() == 1 {
+            panic!("Missing expected argument \"{}\"", new_authority_flag);
+        }
+    }
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-    let (authority, authority_pubkey) = signer_of(matches, authority_flag, wallet_manager)?;
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let mut bulk_signers = vec![authority, fee_payer];
+    bulk_signers.push(fee_payer);
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
     }
     let signer_info =
         generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
 
+    let new_authorizations = new_authorizations
+        .into_iter()
+        .map(|(stake_authorize, new_authority_pubkey, authority_pubkey)| {
+            (
+                stake_authorize,
+                new_authority_pubkey,
+                signer_info.index_of(authority_pubkey).unwrap(),
+            )
+        })
+        .collect();
+
     Ok(CliCommandInfo {
         command: CliCommand::StakeAuthorize {
             stake_account_pubkey,
-            new_authorized_pubkey,
-            stake_authorize,
-            authority: signer_info.index_of(authority_pubkey).unwrap(),
+            new_authorizations,
             sign_only,
             blockhash_query,
             nonce_account,
@@ -871,28 +888,30 @@ pub fn process_stake_authorize(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    authorized_pubkey: &Pubkey,
-    stake_authorize: StakeAuthorize,
-    authority: SignerIndex,
+    new_authorizations: &[(StakeAuthorize, Pubkey, SignerIndex)],
     sign_only: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
-    check_unique_pubkeys(
-        (stake_account_pubkey, "stake_account_pubkey".to_string()),
-        (authorized_pubkey, "new_authorized_pubkey".to_string()),
-    )?;
-    let authority = config.signers[authority];
+    let mut ixs = Vec::new();
+    for (stake_authorize, authorized_pubkey, authority) in new_authorizations.into_iter() {
+        check_unique_pubkeys(
+            (stake_account_pubkey, "stake_account_pubkey".to_string()),
+            (authorized_pubkey, "new_authorized_pubkey".to_string()),
+        )?;
+        let authority = config.signers[*authority];
+        ixs.push(stake_instruction::authorize(
+            stake_account_pubkey, // stake account to update
+            &authority.pubkey(),  // currently authorized
+            authorized_pubkey,    // new stake signer
+            *stake_authorize,     // stake or withdraw
+        ));
+    }
+
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
-    let ixs = vec![stake_instruction::authorize(
-        stake_account_pubkey, // stake account to update
-        &authority.pubkey(),  // currently authorized
-        authorized_pubkey,    // new stake signer
-        stake_authorize,      // stake or withdraw
-    )];
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1515,9 +1534,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
@@ -1541,9 +1558,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 1,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 1)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
@@ -1573,9 +1588,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: true,
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
@@ -1607,9 +1620,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
@@ -1654,9 +1665,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
@@ -1687,9 +1696,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
@@ -1725,9 +1732,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account_pubkey),
@@ -1762,9 +1767,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -1797,9 +1800,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorized_pubkey: stake_account_pubkey,
-                    stake_authorize,
-                    authority: 0,
+                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
