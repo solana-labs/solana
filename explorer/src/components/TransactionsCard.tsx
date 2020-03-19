@@ -51,7 +51,7 @@ function TransactionsCard() {
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
-              <th className="text-muted text-center">
+              <th className="text-muted">
                 <span className="fe fe-hash"></span>
               </th>
               <th className="text-muted">Status</th>
