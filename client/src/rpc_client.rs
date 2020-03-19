@@ -1029,7 +1029,8 @@ impl RpcClient {
             }
             progress_bar.set_message(&format!(
                 "[{}/{}] Waiting for confirmations",
-                confirmations, MAX_LOCKOUT_HISTORY,
+                confirmations + 1,
+                MAX_LOCKOUT_HISTORY + 1,
             ));
             sleep(Duration::from_millis(500));
             confirmations = self.get_num_blocks_since_signature_confirmation(&signature)?;
