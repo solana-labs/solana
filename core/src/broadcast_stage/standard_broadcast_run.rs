@@ -137,15 +137,7 @@ impl StandardBroadcastRun {
     ) -> Result<()> {
         let (bsend, brecv) = channel();
         let (ssend, srecv) = channel();
-        let (retransmit_cache_sender, _retransmit_cache_receiver) = unbounded();
-        self.process_receive_results(
-            &blockstore,
-            &ssend,
-            &bsend,
-            &retransmit_cache_sender,
-            receive_results,
-        )?;
-
+        self.process_receive_results(&blockstore, &ssend, &bsend, receive_results)?;
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
         //data
@@ -161,7 +153,6 @@ impl StandardBroadcastRun {
         blockstore: &Arc<Blockstore>,
         socket_sender: &Sender<TransmitShreds>,
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
-        retransmit_cache_sender: &RetransmitCacheSender,
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
@@ -218,22 +209,10 @@ impl StandardBroadcastRun {
         let stakes = stakes.map(Arc::new);
         let data_shreds = Arc::new(data_shreds);
         socket_sender.send((stakes.clone(), data_shreds.clone()))?;
-        retransmit_cache_sender.send((bank.slot(), (stakes.clone(), data_shreds.clone())))?;
         blockstore_sender.send(data_shreds.clone())?;
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
-        if data_shreds
-            .last()
-            .map(|s| s.last_in_slot())
-            .unwrap_or(false)
-        {
-            assert!(coding_shreds
-                .last()
-                .map(|s| s.is_last_coding_in_set())
-                .unwrap_or(true));
-        }
-        socket_sender.send((stakes.clone(), coding_shreds.clone()))?;
-        retransmit_cache_sender.send((bank.slot(), (stakes, coding_shreds.clone())))?;
+        socket_sender.send((stakes, coding_shreds.clone()))?;
         blockstore_sender.send(coding_shreds)?;
         self.update_broadcast_stats(BroadcastStats {
             shredding_elapsed: duration_as_us(&to_shreds_elapsed),
@@ -343,14 +322,12 @@ impl BroadcastRun for StandardBroadcastRun {
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<TransmitShreds>,
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
-        retransmit_cache_sender: &RetransmitCacheSender,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         self.process_receive_results(
             blockstore,
             socket_sender,
             blockstore_sender,
-            retransmit_cache_sender,
             receive_results,
         )
     }
