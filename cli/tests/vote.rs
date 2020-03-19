@@ -57,7 +57,7 @@ fn test_vote_authorize_and_withdraw() {
     config.signers = vec![&default_signer, &vote_account_keypair];
     config.command = CliCommand::CreateVoteAccount {
         seed: None,
-        node_pubkey: config.signers[0].pubkey(),
+        identity_account: 0,
         authorized_voter: None,
         authorized_withdrawer: Some(config.signers[0].pubkey()),
         commission: 0,
@@ -103,6 +103,15 @@ fn test_vote_authorize_and_withdraw() {
     process_command(&config).unwrap();
     check_balance(expected_balance - 100, &rpc_client, &vote_account_pubkey);
     check_balance(100, &rpc_client, &destination_account);
+
+    // Re-assign validator identity
+    let new_identity_keypair = Keypair::new();
+    config.signers.push(&new_identity_keypair);
+    config.command = CliCommand::VoteUpdateValidator {
+        vote_account_pubkey,
+        new_identity_account: 2,
+    };
+    process_command(&config).unwrap();
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
