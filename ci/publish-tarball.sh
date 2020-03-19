@@ -45,7 +45,7 @@ linux)
   TARGET=x86_64-unknown-linux-gnu
   ;;
 windows)
-  TARGET=x86_64-pc-windows-msvc
+  TARGET=x86_64-pc-windows-gnu
   ;;
 *)
   echo CI_OS_NAME unset
@@ -72,15 +72,6 @@ echo --- Creating release tarball
 
   source ci/rust-version.sh stable
   scripts/cargo-install-all.sh +"$rust_stable" --use-move solana-release
-
-  # Reduce the Windows archive size until
-  # https://github.com/appveyor/ci/issues/2997 is fixed
-  if [[ -n $APPVEYOR ]]; then
-    rm -f \
-      solana-release/bin/solana-validator.exe \
-      solana-release/bin/solana-bench-exchange.exe \
-
-  fi
 
   tar cvf solana-release-$TARGET.tar solana-release
   bzip2 solana-release-$TARGET.tar

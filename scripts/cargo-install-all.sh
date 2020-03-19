@@ -55,43 +55,55 @@ cargo=cargo
 echo "Install location: $installDir ($buildVariant)"
 
 cd "$(dirname "$0")"/..
-./fetch-perf-libs.sh
 
 SECONDS=0
 
-(
-  set -x
-  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $maybeRustVersion build $maybeReleaseFlag
-
-  if $useMove; then
-    moveLoaderDir=programs/move_loader
+if [[ $CI_OS_NAME = windows ]]; then
+  # Limit windows to end-user command-line tools.  Full validator support is not
+  # yet available on windows
+  BINS=(
+    solana
+    solana-install
+    solana-install-init
+    solana-keygen
+  )
+else
+  ./fetch-perf-libs.sh
+  (
+    set -x
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path "$moveLoaderDir/Cargo.toml"
-    cp -fv $moveLoaderDir/target/$buildVariant/libsolana_move_loader_program.* "$installDir/bin/deps"
-  fi
-)
+    $cargo $maybeRustVersion build $maybeReleaseFlag
 
-BINS=(
-  solana
-  solana-bench-exchange
-  solana-bench-tps
-  solana-faucet
-  solana-gossip
-  solana-install
-  solana-install-init
-  solana-keygen
-  solana-ledger-tool
-  solana-log-analyzer
-  solana-net-shaper
-  solana-sys-tuner
-  solana-validator
-  solana-watchtower
-)
+    if $useMove; then
+      moveLoaderDir=programs/move_loader
+      # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+      $cargo $maybeRustVersion build $maybeReleaseFlag --manifest-path "$moveLoaderDir/Cargo.toml"
+      cp -fv $moveLoaderDir/target/$buildVariant/libsolana_move_loader_program.* "$installDir/bin/deps"
+    fi
+  )
 
-#XXX: Ensure `solana-genesis` is built LAST!
-# See https://github.com/solana-labs/solana/issues/5826
-BINS+=(solana-genesis)
+
+  BINS=(
+    solana
+    solana-bench-exchange
+    solana-bench-tps
+    solana-faucet
+    solana-gossip
+    solana-install
+    solana-install-init
+    solana-keygen
+    solana-ledger-tool
+    solana-log-analyzer
+    solana-net-shaper
+    solana-sys-tuner
+    solana-validator
+    solana-watchtower
+  )
+
+  #XXX: Ensure `solana-genesis` is built LAST!
+  # See https://github.com/solana-labs/solana/issues/5826
+  BINS+=(solana-genesis)
+fi
 
 binArgs=()
 for bin in "${BINS[@]}"; do
