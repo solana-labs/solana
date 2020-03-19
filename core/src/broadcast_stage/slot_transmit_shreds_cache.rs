@@ -6,14 +6,14 @@ use std::collections::VecDeque;
 pub type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
 
 #[derive(Default, Debug, PartialEq)]
-pub struct SlotCachedTransmitShreds {
+pub struct CachedBroadcastShreds {
     pub slot: Slot,
     pub stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     pub data_shred_batches: Vec<Arc<Vec<Shred>>>,
     pub coding_shred_batches: Vec<Arc<Vec<Shred>>>,
 }
 
-impl SlotCachedTransmitShreds {
+impl CachedBroadcastShreds {
     pub fn contains_last_shreds(&self) -> bool {
         self.last_data_shred()
             .map(|shred| shred.last_in_slot())
@@ -48,7 +48,7 @@ impl SlotCachedTransmitShreds {
             .and_then(|last_shred_batch| last_shred_batch.last())
     }
 
-    // Updates with new shreds from blockstore and returns a `SlotCachedTransmitShreds`
+    // Updates with new shreds from blockstore and returns a `CachedBroadcastShreds`
     // representing just the diff from the updates
     pub fn update_from_blockstore(&mut self, blockstore: &Blockstore) -> Option<Self> {
         if !self.contains_last_shreds() {
@@ -88,7 +88,7 @@ impl SlotCachedTransmitShreds {
             };
 
             if !data_shred_batches.is_empty() || !coding_shred_batches.is_empty() {
-                Some(SlotCachedTransmitShreds {
+                Some(CachedBroadcastShreds {
                     slot: self.slot,
                     stakes: self.stakes.clone(),
                     data_shred_batches,
@@ -125,7 +125,7 @@ impl SlotCachedTransmitShreds {
 }
 
 pub struct SlotTransmitShredsCache {
-    cache: HashMap<Slot, SlotCachedTransmitShreds>,
+    cache: HashMap<Slot, CachedBroadcastShreds>,
     insertion_order: VecDeque<Slot>,
     capacity: usize,
 }
@@ -161,7 +161,7 @@ impl SlotTransmitShredsCache {
         let slot_cache = self
             .cache
             .entry(slot)
-            .or_insert_with(|| SlotCachedTransmitShreds {
+            .or_insert_with(|| CachedBroadcastShreds {
                 slot,
                 stakes: transmit_shreds.0.clone(),
                 data_shred_batches: vec![],
@@ -170,7 +170,7 @@ impl SlotTransmitShredsCache {
 
         // It's important that empty entries are still inserted
         // into the cache so that they can be updated later by
-        // blockstore or broadcast later (usedd to track incomplete
+        // blockstore or broadcast later (used to track incomplete
         // retrasmits)
         if transmit_shreds.1.is_empty() {
             return true;
@@ -191,7 +191,7 @@ impl SlotTransmitShredsCache {
         should_push
     }
 
-    pub fn get(&self, slot: Slot) -> Option<&SlotCachedTransmitShreds> {
+    pub fn get(&self, slot: Slot) -> Option<&CachedBroadcastShreds> {
         self.cache.get(&slot)
     }
 
@@ -199,7 +199,7 @@ impl SlotTransmitShredsCache {
         &mut self,
         bank: &Bank,
         blockstore: &Blockstore,
-    ) -> &SlotCachedTransmitShreds {
+    ) -> &CachedBroadcastShreds {
         if self.cache.get(&bank.slot()).is_none() {
             let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
             let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
@@ -216,12 +216,12 @@ impl SlotTransmitShredsCache {
     }
 
     // Updates a cached slot with new shreds from blockstore and returns a
-    // `SlotCachedTransmitShreds` representing just the diff from the updates
+    // `CachedBroadcastShreds` representing just the diff from the updates
     pub fn update_cached_slot(
         &mut self,
         blockstore: &Blockstore,
         slot: Slot,
-    ) -> Option<SlotCachedTransmitShreds> {
+    ) -> Option<CachedBroadcastShreds> {
         self.cache
             .get_mut(&slot)
             .map(|cached_entry| cached_entry.update_from_blockstore(blockstore))
@@ -259,7 +259,7 @@ impl SlotTransmitShredsCache {
     }
 
     fn should_push(
-        cached_entry: &SlotCachedTransmitShreds,
+        cached_entry: &CachedBroadcastShreds,
         new_transmit_shreds: &TransmitShreds,
     ) -> bool {
         if new_transmit_shreds.1.is_empty() {
@@ -330,7 +330,7 @@ mod test {
 
     #[test]
     fn test_last_data_code_shreds() {
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches: vec![],
@@ -348,7 +348,7 @@ mod test {
             all_data_transmit_shreds.clone(),
             all_coding_transmit_shreds.clone(),
         );
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches,
@@ -385,7 +385,7 @@ mod test {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
-        let mut slot_cache_entry = SlotCachedTransmitShreds::default();
+        let mut slot_cache_entry = CachedBroadcastShreds::default();
 
         // There are no updates
         assert!(slot_cache_entry
@@ -406,7 +406,7 @@ mod test {
             slot_cache_entry
                 .update_from_blockstore(&blockstore)
                 .unwrap(),
-            SlotCachedTransmitShreds {
+            CachedBroadcastShreds {
                 slot: 0,
                 stakes: None,
                 data_shred_batches: vec![Arc::new(vec![all_data_shreds[0].clone()])],
@@ -440,7 +440,7 @@ mod test {
             .cartesian_product(coding_shred_bin.into_iter())
             .enumerate()
         {
-            let cache_entry = SlotCachedTransmitShreds {
+            let cache_entry = CachedBroadcastShreds {
                 slot: 1,
                 stakes: None,
                 data_shred_batches,
@@ -463,7 +463,7 @@ mod test {
             all_coding_transmit_shreds.clone(),
         );
 
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches: vec![],
@@ -471,7 +471,7 @@ mod test {
         };
         assert_eq!(cache_entry.to_transmit_shreds(), vec![]);
 
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches: complete_data_shreds.clone(),
@@ -479,7 +479,7 @@ mod test {
         };
         assert_eq!(cache_entry.to_transmit_shreds(), all_data_transmit_shreds);
 
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches: vec![],
@@ -487,7 +487,7 @@ mod test {
         };
         assert_eq!(cache_entry.to_transmit_shreds(), all_coding_transmit_shreds);
 
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches: complete_data_shreds.clone(),
@@ -502,7 +502,7 @@ mod test {
         );
 
         let stakes = Some(Arc::new(HashMap::new()));
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: stakes.clone(),
             data_shred_batches: vec![complete_data_shreds[0].clone()],
@@ -522,7 +522,7 @@ mod test {
         let (complete_data_shreds, complete_coding_shreds) =
             get_data_and_coding_shreds(all_data_transmit_shreds, all_coding_transmit_shreds);
 
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches: vec![],
@@ -539,7 +539,7 @@ mod test {
             &(None, complete_coding_shreds[0].clone())
         ));
 
-        let cache_entry = SlotCachedTransmitShreds {
+        let cache_entry = CachedBroadcastShreds {
             slot: 1,
             stakes: None,
             data_shred_batches: complete_data_shreds[0..=1].to_vec(),
@@ -637,7 +637,7 @@ mod test {
 
         // Blockstore is empty, should insert empty entry into cache, but
         // with valid stakes
-        let mut default = SlotCachedTransmitShreds::default();
+        let mut default = CachedBroadcastShreds::default();
         default.stakes = stakes.clone();
         default.slot = 0;
         assert_eq!(*cache.get_or_insert(&bank0, &blockstore), default);
