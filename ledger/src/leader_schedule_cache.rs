@@ -272,7 +272,7 @@ mod tests {
         EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
         MINIMUM_SLOTS_PER_EPOCH,
     };
-    use solana_sdk::signature::Keypair;
+    use solana_sdk::signature::{Keypair, Signer};
     use std::{sync::mpsc::channel, sync::Arc, thread::Builder};
 
     #[test]
@@ -526,15 +526,16 @@ mod tests {
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         // Create new vote account
-        let node_pubkey = Pubkey::new_rand();
+        let validator_identity = Keypair::new();
         let vote_account = Keypair::new();
         setup_vote_and_stake_accounts(
             &bank,
             &mint_keypair,
             &vote_account,
-            &node_pubkey,
+            &validator_identity,
             BOOTSTRAP_VALIDATOR_LAMPORTS,
         );
+        let node_pubkey = validator_identity.pubkey();
 
         // Have to wait until the epoch at after the epoch stakes generated at genesis
         // for the new votes to take effect.
