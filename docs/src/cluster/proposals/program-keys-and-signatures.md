@@ -118,7 +118,7 @@ let message = Message::new(vec![
     token_instruction::transfer(&alice_pubkey, &escrow_pubkey, 1),
 ]);
 //transfer 1 token to escrow
-client.send_message(&[&alice_pubkey, &escrow_pubkey], &message);
+client.send_message(&[&alice_keypair], &message);
 ```
 
 Programs can use the same function to generate the same address.
