@@ -2254,7 +2254,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("faucet_port")
                         .long("faucet-port")
-                        .value_name("NUMBER")
+                        .value_name("PORT_NUMBER")
                         .takes_value(true)
                         .default_value(solana_faucet::faucet::FAUCET_PORT_STR)
                         .help("Faucet port to use"),
@@ -2271,7 +2271,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("RECIPIENT_PUBKEY")
                         .takes_value(true)
                         .validator(is_valid_pubkey)
                         .help("The pubkey of airdrop recipient"),
@@ -2301,7 +2301,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("PROCESS_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -2334,7 +2334,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_id")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("PROGRAM_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help(
@@ -2345,7 +2345,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("from")
                         .long("from")
-                        .value_name("PUBKEY")
+                        .value_name("FROM_PUBKEY")
                         .takes_value(true)
                         .required(false)
                         .validator(is_valid_pubkey)
@@ -2370,7 +2370,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("RECIPIENT_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
@@ -2439,7 +2439,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("RECIPIENT_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -2448,7 +2448,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("PROCESS_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to authorize"),
@@ -2460,7 +2460,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("RECIPIENT_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -2469,7 +2469,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("PROCESS_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .help("The process id of the transfer to unlock"),
@@ -2488,7 +2488,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("RECIPIENT_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
