@@ -2,6 +2,7 @@ use crate::{
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
 };
+use std::sync::MutexGuard;
 
 pub trait Signers {
     fn pubkeys(&self) -> Vec<Pubkey>;
@@ -45,6 +46,10 @@ impl<T: Signer> Signers for [&T] {
 }
 
 impl Signers for [Box<dyn Signer>] {
+    default_keypairs_impl!();
+}
+
+impl Signers for [MutexGuard<'_, Box<dyn Signer>>; 1] {
     default_keypairs_impl!();
 }
 

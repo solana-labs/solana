@@ -29,7 +29,7 @@ use solana_sdk::{
     clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, Signer},
+    signature::Signer,
     timing::{self, duration_as_ms},
     transaction::Transaction,
 };
@@ -79,7 +79,7 @@ impl Drop for Finalizer {
 pub struct ReplayStageConfig {
     pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
-    pub voting_keypair: Option<Arc<Keypair>>,
+    pub voting_keypair: Option<Arc<Mutex<Box<dyn Signer>>>>,
     pub exit: Arc<AtomicBool>,
     pub subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -660,7 +660,7 @@ impl ReplayStage {
         tower: &mut Tower,
         progress: &mut ProgressMap,
         vote_account: &Pubkey,
-        voting_keypair: &Option<Arc<Keypair>>,
+        voting_keypair: &Option<Arc<Mutex<Box<dyn Signer>>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -725,7 +725,7 @@ impl ReplayStage {
             // Send our last few votes along with the new one
             let vote_ix = vote_instruction::vote(
                 &vote_account,
-                &voting_keypair.pubkey(),
+                &voting_keypair.lock().unwrap().pubkey(),
                 tower.last_vote_and_timestamp(),
             );
 
@@ -734,7 +734,7 @@ impl ReplayStage {
 
             let blockhash = bank.last_blockhash();
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
-            vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
+            vote_tx.partial_sign(&[voting_keypair.lock().unwrap()], blockhash);
             cluster_info
                 .write()
                 .unwrap()

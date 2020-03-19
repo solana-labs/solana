@@ -80,7 +80,7 @@ impl Tvu {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         vote_account: &Pubkey,
-        voting_keypair: Option<Arc<Keypair>>,
+        voting_keypair: Option<Arc<Mutex<Box<dyn Signer>>>>,
         storage_keypair: &Arc<Keypair>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,

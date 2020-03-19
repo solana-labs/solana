@@ -148,7 +148,7 @@ impl Validator {
         keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
-        authorized_voter: &Arc<Keypair>,
+        authorized_voter: &Arc<Mutex<Box<dyn Signer>>>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
         poh_verify: bool,
@@ -159,7 +159,10 @@ impl Validator {
 
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
-        warn!("authorized voter: {}", authorized_voter.pubkey());
+        warn!(
+            "authorized voter: {}",
+            authorized_voter.lock().unwrap().pubkey()
+        );
         report_target_features();
 
         info!("entrypoint: {:?}", entrypoint_info_option);
@@ -711,7 +714,8 @@ impl TestValidator {
 
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-        let leader_voting_keypair = Arc::new(voting_keypair);
+        let leader_voting_pubkey = voting_keypair.pubkey();
+        let leader_voting_keypair = Arc::new(Mutex::new(voting_keypair.into()));
         let storage_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
             rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
@@ -721,7 +725,7 @@ impl TestValidator {
             node,
             &node_keypair,
             &ledger_path,
-            &leader_voting_keypair.pubkey(),
+            &leader_voting_pubkey,
             &leader_voting_keypair,
             &storage_keypair,
             None,
@@ -735,7 +739,7 @@ impl TestValidator {
             alice: mint_keypair,
             ledger_path,
             genesis_hash: blockhash,
-            vote_pubkey: leader_voting_keypair.pubkey(),
+            vote_pubkey: leader_voting_pubkey,
         }
     }
 }

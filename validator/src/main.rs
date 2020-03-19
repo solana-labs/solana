@@ -4,8 +4,10 @@ use clap::{
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
-    input_parsers::{keypair_of, pubkey_of},
-    input_validators::{is_keypair_or_ask_keyword, is_pubkey, is_pubkey_or_keypair, is_slot},
+    input_parsers::{keypair_of, pubkey_of_signer, signer_of},
+    input_validators::{
+        is_keypair_or_ask_keyword, is_pubkey, is_slot, is_valid_pubkey, is_valid_signer,
+    },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_client::rpc_client::RpcClient;
@@ -20,6 +22,7 @@ use solana_core::{
 use solana_download_utils::{download_genesis, download_snapshot};
 use solana_ledger::bank_forks::SnapshotConfig;
 use solana_perf::recycler::enable_recycler_warming;
+use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
@@ -35,7 +38,7 @@ use std::{
     str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+        Arc, Mutex, RwLock,
     },
     thread::sleep,
     time::{Duration, Instant},
@@ -384,7 +387,7 @@ pub fn main() {
                 .long("authorized-voter")
                 .value_name("PATH")
                 .takes_value(true)
-                .validator(is_keypair_or_ask_keyword)
+                .validator(is_valid_signer)
                 .help("Authorized voter keypair [default: value of --identity]"),
         )
         .arg(
@@ -401,7 +404,7 @@ pub fn main() {
                 .long("vote-account")
                 .value_name("PUBKEY")
                 .takes_value(true)
-                .validator(is_pubkey_or_keypair)
+                .validator(is_valid_pubkey)
                 .help("Validator vote account public key.  If unspecified voting will be disabled")
         )
         .arg(
@@ -672,15 +675,24 @@ pub fn main() {
         )
         .get_matches();
 
+    let wallet_manager = maybe_wallet_manager().ok().flatten();
+
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
 
-    let authorized_voter = keypair_of(&matches, "authorized_voter")
+    let authorized_voter = signer_of(&matches, "authorized_voter", wallet_manager.as_ref())
+        .ok()
+        .and_then(|(maybe_voter, _)| maybe_voter)
         .or_else(|| {
             // Legacy v1.0.6 argument support
-            keypair_of(&matches, "deprecated_voting_keypair")
+            keypair_of(&matches, "deprecated_voting_keypair").map(Keypair::into)
         })
-        .map(Arc::new)
-        .unwrap_or_else(|| identity_keypair.clone());
+        .unwrap_or_else(|| {
+            keypair_of(&matches, "identity")
+                .unwrap_or_else(Keypair::new)
+                .into()
+        });
+    let authorized_voter_pubkey = authorized_voter.pubkey();
+    let authorized_voter = Arc::new(Mutex::new(authorized_voter));
 
     let storage_keypair = keypair_of(&matches, "storage_keypair").unwrap_or_else(Keypair::new);
 
@@ -747,18 +759,21 @@ pub fn main() {
         ..ValidatorConfig::default()
     };
 
-    let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
-        if matches.is_present("deprecated_voting_keypair") {
-            // Legacy v1.0.6 behaviour of using `--voting-keypair` as `--vote-account`
-            keypair_of(&matches, "deprecated_voting_keypair")
-                .unwrap()
-                .pubkey()
-        } else {
-            warn!("--vote-account not specified, validator will not vote");
-            validator_config.voting_disabled = true;
-            Keypair::new().pubkey()
-        }
-    });
+    let vote_account = pubkey_of_signer(&matches, "vote_account", wallet_manager.as_ref())
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| {
+            if matches.is_present("deprecated_voting_keypair") {
+                // Legacy v1.0.6 behaviour of using `--voting-keypair` as `--vote-account`
+                keypair_of(&matches, "deprecated_voting_keypair")
+                    .unwrap()
+                    .pubkey()
+            } else {
+                warn!("--vote-account not specified, validator will not vote");
+                validator_config.voting_disabled = true;
+                Keypair::new().pubkey()
+            }
+        });
 
     let dynamic_port_range =
         solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
@@ -1050,7 +1065,7 @@ pub fn main() {
                         check_vote_account(
                             &rpc_client,
                             &vote_account,
-                            &authorized_voter.pubkey(),
+                            &authorized_voter_pubkey,
                             &identity_keypair.pubkey(),
                         )
                     } else {
