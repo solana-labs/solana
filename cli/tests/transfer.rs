@@ -1,4 +1,3 @@
-use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     nonce,
@@ -13,7 +12,7 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     nonce::State as NonceState,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, Keypair, Signer},
+    signature::{keypair_from_seed, Keypair, NullSigner, Signer},
 };
 use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
 
@@ -102,8 +101,9 @@ fn test_transfer() {
         fee_payer: 0,
     };
     let sign_only_reply = process_command(&offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sign_only_reply);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
         lamports: 10,
@@ -193,8 +193,9 @@ fn test_transfer() {
         fee_payer: 0,
     };
     let sign_only_reply = process_command(&offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sign_only_reply);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
         lamports: 10,
@@ -203,7 +204,7 @@ fn test_transfer() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
@@ -212,6 +213,117 @@ fn test_transfer() {
     process_command(&config).unwrap();
     check_balance(28, &rpc_client, &offline_pubkey);
     check_balance(40, &rpc_client, &recipient_pubkey);
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+#[test]
+fn test_transfer_multisession_signing() {
+    let TestValidator {
+        server,
+        leader_data,
+        alice: mint_keypair,
+        ledger_path,
+        ..
+    } = TestValidator::run_with_options(TestValidatorOptions {
+        fees: 1,
+        bootstrap_validator_lamports: 42_000,
+    });
+
+    let (sender, receiver) = channel();
+    run_local_faucet(mint_keypair, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let to_pubkey = Pubkey::new(&[1u8; 32]);
+    let offline_from_signer = keypair_from_seed(&[2u8; 32]).unwrap();
+    let offline_fee_payer_signer = keypair_from_seed(&[3u8; 32]).unwrap();
+    let from_null_signer = NullSigner::new(&offline_from_signer.pubkey());
+
+    // Setup accounts
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_from_signer.pubkey(), 43)
+        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &offline_fee_payer_signer.pubkey(),
+        3,
+    )
+    .unwrap();
+    check_balance(43, &rpc_client, &offline_from_signer.pubkey());
+    check_balance(3, &rpc_client, &offline_fee_payer_signer.pubkey());
+    check_balance(0, &rpc_client, &to_pubkey);
+
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+
+    // Offline fee-payer signs first
+    let mut fee_payer_config = CliConfig::default();
+    fee_payer_config.json_rpc_url = String::default();
+    fee_payer_config.signers = vec![&offline_fee_payer_signer, &from_null_signer];
+    // Verify we cannot contact the cluster
+    fee_payer_config.command = CliCommand::ClusterVersion;
+    process_command(&fee_payer_config).unwrap_err();
+    fee_payer_config.command = CliCommand::Transfer {
+        lamports: 42,
+        to: to_pubkey,
+        from: 1,
+        sign_only: true,
+        blockhash_query: BlockhashQuery::None(blockhash),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    let sign_only_reply = process_command(&fee_payer_config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(!sign_only.has_all_signers());
+    let fee_payer_presigner = sign_only
+        .presigner_of(&offline_fee_payer_signer.pubkey())
+        .unwrap();
+
+    // Now the offline fund source
+    let mut from_config = CliConfig::default();
+    from_config.json_rpc_url = String::default();
+    from_config.signers = vec![&fee_payer_presigner, &offline_from_signer];
+    // Verify we cannot contact the cluster
+    from_config.command = CliCommand::ClusterVersion;
+    process_command(&from_config).unwrap_err();
+    from_config.command = CliCommand::Transfer {
+        lamports: 42,
+        to: to_pubkey,
+        from: 1,
+        sign_only: true,
+        blockhash_query: BlockhashQuery::None(blockhash),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    let sign_only_reply = process_command(&from_config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    assert!(sign_only.has_all_signers());
+    let from_presigner = sign_only
+        .presigner_of(&offline_from_signer.pubkey())
+        .unwrap();
+
+    // Finally submit to the cluster
+    let mut config = CliConfig::default();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.signers = vec![&fee_payer_presigner, &from_presigner];
+    config.command = CliCommand::Transfer {
+        lamports: 42,
+        to: to_pubkey,
+        from: 1,
+        sign_only: false,
+        blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+
+    check_balance(1, &rpc_client, &offline_from_signer.pubkey());
+    check_balance(1, &rpc_client, &offline_fee_payer_signer.pubkey());
+    check_balance(42, &rpc_client, &to_pubkey);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

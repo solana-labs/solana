@@ -1,4 +1,3 @@
-use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     nonce,
@@ -388,9 +387,11 @@ fn test_offline_stake_delegation_and_deactivation() {
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner =
-        presigner_from_pubkey_sigs(&config_offline.signers[0].pubkey(), &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only
+        .presigner_of(&config_offline.signers[0].pubkey())
+        .unwrap();
     config_payer.signers = vec![&offline_presigner];
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
@@ -417,9 +418,11 @@ fn test_offline_stake_delegation_and_deactivation() {
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner =
-        presigner_from_pubkey_sigs(&config_offline.signers[0].pubkey(), &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only
+        .presigner_of(&config_offline.signers[0].pubkey())
+        .unwrap();
     config_payer.signers = vec![&offline_presigner];
     config_payer.command = CliCommand::DeactivateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
@@ -679,9 +682,9 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     let sign_reply = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
-    let offline_presigner =
-        presigner_from_pubkey_sigs(&offline_authority_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_reply);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only.presigner_of(&offline_authority_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
@@ -739,12 +742,11 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     let sign_reply = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
-    assert_eq!(blockhash, nonce_hash);
-    let offline_presigner =
-        presigner_from_pubkey_sigs(&offline_authority_pubkey, &signers).unwrap();
-    let nonced_authority_presigner =
-        presigner_from_pubkey_sigs(&nonced_authority_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_reply);
+    assert!(sign_only.has_all_signers());
+    assert_eq!(sign_only.blockhash, nonce_hash);
+    let offline_presigner = sign_only.presigner_of(&offline_authority_pubkey).unwrap();
+    let nonced_authority_presigner = sign_only.presigner_of(&nonced_authority_pubkey).unwrap();
     config.signers = vec![&offline_presigner, &nonced_authority_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
@@ -754,7 +756,7 @@ fn test_stake_authorize() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
@@ -816,6 +818,7 @@ fn test_stake_authorize_with_fee_payer() {
     let mut config_offline = CliConfig::default();
     let offline_signer = Keypair::new();
     config_offline.signers = vec![&offline_signer];
+    config_offline.json_rpc_url = String::new();
     let offline_pubkey = config_offline.signers[0].pubkey();
     // Verify we're offline
     config_offline.command = CliCommand::ClusterVersion;
@@ -886,8 +889,9 @@ fn test_stake_authorize_with_fee_payer() {
         fee_payer: 0,
     };
     let sign_reply = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sign_reply);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_reply);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
@@ -1023,8 +1027,9 @@ fn test_stake_split() {
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner, &split_account];
     config.command = CliCommand::SplitStake {
         stake_account_pubkey: stake_account_pubkey,
@@ -1032,7 +1037,7 @@ fn test_stake_split() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
@@ -1275,8 +1280,9 @@ fn test_stake_set_lockup() {
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
@@ -1285,7 +1291,7 @@ fn test_stake_set_lockup() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account_pubkey),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_account_pubkey),
         nonce_authority: 0,
@@ -1392,9 +1398,10 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         from: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
-    let stake_presigner = presigner_from_pubkey_sigs(&stake_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    assert!(sign_only.has_all_signers());
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
+    let stake_presigner = sign_only.presigner_of(&stake_pubkey).unwrap();
     config.signers = vec![&offline_presigner, &stake_presigner];
     config.command = CliCommand::CreateStakeAccount {
         stake_account: 1,
@@ -1406,7 +1413,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_pubkey),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
@@ -1438,8 +1445,8 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::WithdrawStake {
         stake_account_pubkey: stake_pubkey,
@@ -1449,7 +1456,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_pubkey),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
@@ -1482,9 +1489,9 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         from: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
-    let (blockhash, signers) = parse_sign_only_reply_string(&sig_response);
-    let offline_presigner = presigner_from_pubkey_sigs(&offline_pubkey, &signers).unwrap();
-    let stake_presigner = presigner_from_pubkey_sigs(&stake_pubkey, &signers).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
+    let stake_presigner = sign_only.presigner_of(&stake_pubkey).unwrap();
     config.signers = vec![&offline_presigner, &stake_presigner];
     config.command = CliCommand::CreateStakeAccount {
         stake_account: 1,
@@ -1496,7 +1503,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_pubkey),
-            blockhash,
+            sign_only.blockhash,
         ),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
