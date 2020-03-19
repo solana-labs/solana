@@ -110,13 +110,6 @@ impl NonceSubCommands for App<'_, '_> {
                         .validator(is_valid_pubkey)
                         .help("Account to be granted authority of the nonce account"),
                 )
-                .arg(
-                    Arg::with_name("seed")
-                        .long("seed")
-                        .value_name("STRING")
-                        .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
-                )
                 .arg(nonce_authority_arg()),
         )
         .subcommand(
@@ -147,6 +140,13 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("PUBKEY")
                         .validator(is_valid_pubkey)
                         .help("Assign noncing authority to another entity"),
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
                 ),
         )
         .subcommand(

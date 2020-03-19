@@ -1,6 +1,13 @@
-use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
+use solana_cli::{
+    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    nonce,
+    offline::{
+        blockhash_query::{self, BlockhashQuery},
+        parse_sign_only_reply_string,
+    },
+};
 use solana_client::rpc_client::RpcClient;
-use solana_core::validator::TestValidator;
+use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     hash::Hash,
@@ -246,4 +253,125 @@ fn full_battery_tests(
     check_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
     check_balance(800, &rpc_client, &nonce_account);
     check_balance(200, &rpc_client, &payee_pubkey);
+}
+
+#[test]
+fn test_create_account_with_seed() {
+    let TestValidator {
+        server,
+        leader_data,
+        alice: mint_keypair,
+        ledger_path,
+        ..
+    } = TestValidator::run_with_options(TestValidatorOptions {
+        fees: 1,
+        bootstrap_validator_lamports: 42_000,
+    });
+
+    let (sender, receiver) = channel();
+    run_local_faucet(mint_keypair, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let offline_nonce_authority_signer = keypair_from_seed(&[1u8; 32]).unwrap();
+    let online_nonce_creator_signer = keypair_from_seed(&[2u8; 32]).unwrap();
+    let to_address = Pubkey::new(&[3u8; 32]);
+
+    // Setup accounts
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &offline_nonce_authority_signer.pubkey(),
+        42,
+    )
+    .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &online_nonce_creator_signer.pubkey(),
+        4242,
+    )
+    .unwrap();
+    check_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
+    check_balance(4242, &rpc_client, &online_nonce_creator_signer.pubkey());
+    check_balance(0, &rpc_client, &to_address);
+
+    // Create nonce account
+    let creator_pubkey = online_nonce_creator_signer.pubkey();
+    let authority_pubkey = offline_nonce_authority_signer.pubkey();
+    let seed = authority_pubkey.to_string()[0..32].to_string();
+    let nonce_address =
+        create_address_with_seed(&creator_pubkey, &seed, &system_program::id()).unwrap();
+    check_balance(0, &rpc_client, &nonce_address);
+
+    let mut creator_config = CliConfig::default();
+    creator_config.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    creator_config.signers = vec![&online_nonce_creator_signer];
+    creator_config.command = CliCommand::CreateNonceAccount {
+        nonce_account: 0,
+        seed: Some(seed),
+        nonce_authority: Some(authority_pubkey),
+        lamports: 241,
+    };
+    process_command(&creator_config).unwrap();
+    check_balance(241, &rpc_client, &nonce_address);
+    check_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
+    check_balance(4000, &rpc_client, &online_nonce_creator_signer.pubkey());
+    check_balance(0, &rpc_client, &to_address);
+
+    // Fetch nonce hash
+    let nonce_hash = nonce::get_account(&rpc_client, &nonce_address)
+        .and_then(|ref a| nonce::data_from_account(a))
+        .unwrap()
+        .blockhash;
+
+    // Test by creating transfer TX with nonce, fully offline
+    let mut authority_config = CliConfig::default();
+    authority_config.json_rpc_url = String::default();
+    authority_config.signers = vec![&offline_nonce_authority_signer];
+    // Verify we cannot contact the cluster
+    authority_config.command = CliCommand::ClusterVersion;
+    process_command(&authority_config).unwrap_err();
+    authority_config.command = CliCommand::Transfer {
+        lamports: 10,
+        to: to_address,
+        from: 0,
+        sign_only: true,
+        blockhash_query: BlockhashQuery::None(nonce_hash),
+        nonce_account: Some(nonce_address),
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    let sign_only_reply = process_command(&authority_config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sign_only_reply);
+    let authority_presigner = sign_only.presigner_of(&authority_pubkey).unwrap();
+    assert_eq!(sign_only.blockhash, nonce_hash);
+
+    // And submit it
+    let mut submit_config = CliConfig::default();
+    submit_config.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    submit_config.signers = vec![&authority_presigner];
+    submit_config.command = CliCommand::Transfer {
+        lamports: 10,
+        to: to_address,
+        from: 0,
+        sign_only: false,
+        blockhash_query: BlockhashQuery::FeeCalculator(
+            blockhash_query::Source::NonceAccount(nonce_address),
+            sign_only.blockhash,
+        ),
+        nonce_account: Some(nonce_address),
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&submit_config).unwrap();
+    check_balance(241, &rpc_client, &nonce_address);
+    check_balance(31, &rpc_client, &offline_nonce_authority_signer.pubkey());
+    check_balance(4000, &rpc_client, &online_nonce_creator_signer.pubkey());
+    check_balance(10, &rpc_client, &to_address);
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
 }
