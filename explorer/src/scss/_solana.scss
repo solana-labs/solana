@@ -23,3 +23,13 @@ code {
     color: $dark !important;
   }
 }
+
+.btn.input-group {
+  input {
+    cursor: pointer;
+
+    &:focus {
+      cursor: text;
+    }
+  }
+}
