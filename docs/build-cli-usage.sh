@@ -25,6 +25,8 @@ section() {
 
 section "$usage" >> "$out"
 
+usage=$(sed -e '/^ \{5,\}/d' <<<"$usage")
+
 in_subcommands=0
 while read -r subcommand rest; do
   [[ $subcommand == "SUBCOMMANDS:" ]] && in_subcommands=1 && continue
