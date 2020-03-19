@@ -721,11 +721,12 @@ impl ReplayStage {
 
         if let Some(ref voting_keypair) = voting_keypair {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
+            let authorized_voter_pubkey = voting_keypair.lock().unwrap().pubkey();
 
             // Send our last few votes along with the new one
             let vote_ix = vote_instruction::vote(
                 &vote_account,
-                &voting_keypair.lock().unwrap().pubkey(),
+                &authorized_voter_pubkey,
                 tower.last_vote_and_timestamp(),
             );
 
@@ -734,7 +735,14 @@ impl ReplayStage {
 
             let blockhash = bank.last_blockhash();
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
-            vote_tx.partial_sign(&[voting_keypair.lock().unwrap()], blockhash);
+            vote_tx
+                .try_partial_sign(&[voting_keypair.lock().unwrap()], blockhash)
+                .unwrap_or_else(|err| {
+                    error!(
+                        "vote signing by authorized voter {} failed: {:?}",
+                        authorized_voter_pubkey, err
+                    );
+                });
             cluster_info
                 .write()
                 .unwrap()
