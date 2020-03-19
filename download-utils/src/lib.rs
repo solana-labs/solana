@@ -11,6 +11,8 @@ use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Instant;
+use tar::Archive;
+use thiserror::Error;
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static SPARKLE: Emoji = Emoji("✨ ", "");
@@ -108,7 +110,70 @@ pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn extract_archive(archive_filename: &Path, destination_dir: &Path) -> Result<(), String> {
+const MAXIMUM_GENESIS_ARCHIVE_SIZE: u64 = 10 * 1024 * 1024; // 10 MiB
+
+fn is_valid_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
+    use tar::EntryType::{Directory, GNUSparse, Regular};
+
+    trace!("validating: {:?} {:?}", parts, kind);
+    match (parts, kind) {
+        (["genesis.bin"], Regular) => true,
+        (["rocksdb"], Directory) => true,
+        (["rocksdb", ..], GNUSparse) => true,
+        (["rocksdb", ..], Regular) => true,
+        _ => false,
+    }
+}
+
+#[derive(Error, Debug)]
+enum GenesisUnpackError {
+    #[error("IO error")]
+    IO(#[from] std::io::Error),
+    #[error("Archive error")]
+    Archive(String),
+}
+
+fn unpack_genesis<A: Read, P: AsRef<Path>>(
+    archive: &mut Archive<A>,
+    unpack_dir: P,
+) -> Result<(), GenesisUnpackError> {
+    let mut total_size: u64 = 0;
+
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?;
+
+        let parts = path.iter().map(|p| p.to_str());
+        if parts.clone().any(|p| p.is_none()) {
+            return Err(GenesisUnpackError::Archive(format!(
+                "invalid path found: {:?}",
+                path
+            )));
+        }
+
+        let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
+        if !is_valid_archive_entry(parts.as_slice(), entry.header().entry_type()) {
+            return Err(GenesisUnpackError::Archive(format!(
+                "invalid entry found: {:?}",
+                path
+            )));
+        }
+
+        total_size = total_size.saturating_add(entry.header().size()?);
+        if total_size > MAXIMUM_GENESIS_ARCHIVE_SIZE {
+            return Err(GenesisUnpackError::Archive(format!(
+                "too large snapshot: {:?}",
+                total_size
+            )));
+        }
+
+        entry.unpack_in(&unpack_dir)?;
+    }
+
+    Ok(())
+}
+
+fn unpack_genesis_archive(archive_filename: &Path, destination_dir: &Path) -> Result<(), String> {
     info!("Extracting {:?}...", archive_filename);
     let extract_start = Instant::now();
 
@@ -116,9 +181,8 @@ fn extract_archive(archive_filename: &Path, destination_dir: &Path) -> Result<()
     let tar_bz2 = File::open(&archive_filename)
         .map_err(|err| format!("Unable to open {:?}: {:?}", archive_filename, err))?;
     let tar = BzDecoder::new(std::io::BufReader::new(tar_bz2));
-    let mut archive = tar::Archive::new(tar);
-    archive
-        .unpack(destination_dir)
+    let mut archive = Archive::new(tar);
+    unpack_genesis(&mut archive, destination_dir)
         .map_err(|err| format!("Unable to unpack {:?}: {:?}", archive_filename, err))?;
     info!(
         "Extracted {:?} in {:?}",
@@ -144,7 +208,7 @@ pub fn download_genesis(
             &format!("http://{}/{}", rpc_addr, "genesis.tar.bz2"),
             &tmp_genesis_package,
         )?;
-        extract_archive(&tmp_genesis_package, &ledger_path)?;
+        unpack_genesis_archive(&tmp_genesis_package, &ledger_path)?;
 
         let tmp_genesis_config = GenesisConfig::load(&ledger_path)
             .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
@@ -204,5 +268,22 @@ pub fn download_snapshot(
             ),
             &desired_snapshot_package,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_is_valid_archive_entry() {
+        assert!(!is_valid_archive_entry(&["aaaa"], tar::EntryType::Regular));
+        assert!(is_valid_archive_entry(
+            &["genesis.bin"],
+            tar::EntryType::Regular
+        ));
+        assert!(is_valid_archive_entry(
+            &["rocksdb"],
+            tar::EntryType::Directory
+        ));
     }
 }
