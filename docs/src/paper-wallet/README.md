@@ -17,6 +17,4 @@ support keypair input via seed phrases.
 To learn more about the BIP39 standard, visit the Bitcoin BIPs Github repository
 [here](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
 
-{% page-ref page="installation.md" %}
-
 {% page-ref page="usage.md" %}
