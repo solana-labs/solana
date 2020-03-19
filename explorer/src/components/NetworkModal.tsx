@@ -16,17 +16,14 @@ type Props = {
 };
 
 function NetworkModal({ show, onClose }: Props) {
-  const cancelClose = React.useCallback(e => e.stopPropagation(), []);
-
   return (
     <div
-      className={`modal fade fixed-right ${show ? "show" : ""}`}
-      tabIndex={-1}
+      className={`modal fade fixed-right${show ? " show" : ""}`}
       onClick={onClose}
     >
       <div className="modal-dialog modal-dialog-vertical">
         <div className="modal-content">
-          <div className="modal-body" onClick={cancelClose}>
+          <div className="modal-body" onClick={e => e.stopPropagation()}>
             <span className="close" onClick={onClose}>
               &times;
             </span>

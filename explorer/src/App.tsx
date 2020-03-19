@@ -1,4 +1,5 @@
 import React from "react";
+
 import { NetworkProvider } from "./providers/network";
 import { TransactionsProvider } from "./providers/transactions";
 import NetworkStatusButton from "./components/NetworkStatusButton";
@@ -37,7 +38,6 @@ function App() {
           </div>
         </div>
       </div>
-
       <Overlay show={showModal} onClick={() => setShowModal(false)} />
     </NetworkProvider>
   );
@@ -49,9 +49,10 @@ type OverlayProps = {
 };
 
 function Overlay({ show, onClick }: OverlayProps) {
-  return show ? (
-    <div className="modal-backdrop fade show" onClick={onClick}></div>
-  ) : null;
+  if (show)
+    return <div className="modal-backdrop fade show" onClick={onClick}></div>;
+
+  return <div className="fade"></div>;
 }
 
 export default App;
