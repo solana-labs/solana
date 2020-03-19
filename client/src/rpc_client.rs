@@ -954,6 +954,15 @@ impl RpcClient {
         transaction: &mut Transaction,
         signer_keys: &T,
     ) -> ClientResult<String> {
+        let mut confirmations = 0;
+
+        let progress_bar = new_spinner_progress_bar();
+        progress_bar.set_message(&format!(
+            "[{}/{}] Waiting for confirmations",
+            confirmations,
+            MAX_LOCKOUT_HISTORY + 1,
+        ));
+
         let mut send_retries = 20;
         let signature_str = loop {
             let mut status_retries = 15;
@@ -1009,10 +1018,6 @@ impl RpcClient {
                 }
             }
         };
-
-        let progress_bar = new_spinner_progress_bar();
-        progress_bar.set_message("Confirming...");
-        let mut confirmations = 0;
         let signature = Signature::from_str(&signature_str).map_err(|_| {
             ClientError::from(ClientErrorKind::Custom(format!(
                 "Returned string {} cannot be parsed as a signature",
@@ -1029,7 +1034,8 @@ impl RpcClient {
             }
             progress_bar.set_message(&format!(
                 "[{}/{}] Waiting for confirmations",
-                confirmations, MAX_LOCKOUT_HISTORY,
+                confirmations + 1,
+                MAX_LOCKOUT_HISTORY + 1,
             ));
             sleep(Duration::from_millis(500));
             confirmations = self.get_num_blocks_since_signature_confirmation(&signature)?;
