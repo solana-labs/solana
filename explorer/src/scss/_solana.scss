@@ -9,3 +9,17 @@ code {
   background-color: $gray-200;
   color: $black;
 }
+
+.modal.show {
+  display: block;
+}
+
+.modal .close {
+  cursor: pointer;
+}
+
+.btn-outline-warning:hover {
+  .spinner-grow {
+    color: $dark !important;
+  }
+}

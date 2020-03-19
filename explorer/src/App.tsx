@@ -3,10 +3,13 @@ import { NetworkProvider } from "./providers/network";
 import { TransactionsProvider } from "./providers/transactions";
 import NetworkStatusButton from "./components/NetworkStatusButton";
 import TransactionsCard from "./components/TransactionsCard";
+import NetworkModal from "./components/NetworkModal";
 
 function App() {
+  const [showModal, setShowModal] = React.useState(false);
   return (
     <NetworkProvider>
+      <NetworkModal show={showModal} onClose={() => setShowModal(false)} />
       <div className="main-content">
         <div className="header">
           <div className="container">
@@ -17,7 +20,7 @@ function App() {
                   <h1 className="header-title">Solana Explorer</h1>
                 </div>
                 <div className="col-auto">
-                  <NetworkStatusButton />
+                  <NetworkStatusButton onClick={() => setShowModal(true)} />
                 </div>
               </div>
             </div>
@@ -34,8 +37,21 @@ function App() {
           </div>
         </div>
       </div>
+
+      <Overlay show={showModal} onClick={() => setShowModal(false)} />
     </NetworkProvider>
   );
+}
+
+type OverlayProps = {
+  show: boolean;
+  onClick: () => void;
+};
+
+function Overlay({ show, onClick }: OverlayProps) {
+  return show ? (
+    <div className="modal-backdrop fade show" onClick={onClick}></div>
+  ) : null;
 }
 
 export default App;
