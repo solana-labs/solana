@@ -173,10 +173,9 @@ pub fn update_node(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new_readonly(*node_pubkey, false),
+        AccountMeta::new_readonly(*node_pubkey, true),
     ]
-    .with_signer(authorized_withdrawer_pubkey)
-    .with_signer(node_pubkey);
+    .with_signer(authorized_withdrawer_pubkey);
 
     Instruction::new(id(), &VoteInstruction::UpdateNode, account_metas)
 }
