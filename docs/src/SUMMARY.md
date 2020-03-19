@@ -1,15 +1,9 @@
 # Table of contents
 
 * [Introduction](introduction.md)
-<<<<<<< HEAD
-* [Install Solana](install-solana.md)
-* [Use Solana from the Command-line](cli/README.md)
-  * [Command-line Usage](cli/usage.md)
-=======
 * [Install the Solana Tool Suite](install-solana.md)
 * [Command-line Guide](cli/README.md)
   * [Choose a Wallet](cli/choose-a-wallet.md)
->>>>>>> 21b287ef0... Add docs on wallets and generating keys (#8905)
   * [Hardware Wallets](remote-wallet/README.md)
     * [Ledger Hardware Wallet](remote-wallet/ledger.md)
   * [Paper Wallet](paper-wallet/README.md)
