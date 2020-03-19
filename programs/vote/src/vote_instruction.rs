@@ -51,6 +51,7 @@ impl<E> DecodeError<E> for VoteError {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
     /// Initialize the VoteState for this `vote account`
+    ///    requires VoteInit::node_pubkey signature
     ///
     /// Expects 3 Accounts:
     ///    0 - Uninitialized Vote account
@@ -87,13 +88,13 @@ pub enum VoteInstruction {
     Withdraw(u64),
 
     /// Update the vote account's validator identity (node id)
-    ///    requires authorized voter signature
+    ///    requires authorized withdrawer and new validator identity signature
     ///
     /// Expects 2 Accounts:
     ///    0 - Vote account to be updated with the Pubkey for authorization
-    ///    1 - Clock sysvar Account that carries clock bank epoch
+    ///    1 - New validator identity (node id)
     ///
-    UpdateNode(Pubkey),
+    UpdateNode,
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -101,7 +102,9 @@ fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::rent::id(), false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-    ];
+    ]
+    .with_signer(&vote_init.node_pubkey);
+
     Instruction::new(
         id(),
         &VoteInstruction::InitializeAccount(*vote_init),
@@ -165,20 +168,16 @@ pub fn authorize(
 
 pub fn update_node(
     vote_pubkey: &Pubkey,
-    authorized_voter_pubkey: &Pubkey,
+    authorized_withdrawer_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*node_pubkey, true),
     ]
-    .with_signer(authorized_voter_pubkey);
+    .with_signer(authorized_withdrawer_pubkey);
 
-    Instruction::new(
-        id(),
-        &VoteInstruction::UpdateNode(*node_pubkey),
-        account_metas,
-    )
+    Instruction::new(id(), &VoteInstruction::UpdateNode, account_metas)
 }
 
 pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) -> Instruction {
@@ -194,7 +193,7 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
 
 pub fn withdraw(
     vote_pubkey: &Pubkey,
-    withdrawer_pubkey: &Pubkey,
+    authorized_withdrawer_pubkey: &Pubkey,
     lamports: u64,
     to_pubkey: &Pubkey,
 ) -> Instruction {
@@ -202,7 +201,7 @@ pub fn withdraw(
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new(*to_pubkey, false),
     ]
-    .with_signer(withdrawer_pubkey);
+    .with_signer(authorized_withdrawer_pubkey);
 
     Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
@@ -228,6 +227,7 @@ pub fn process_instruction(
             vote_state::initialize_account(
                 me,
                 &vote_init,
+                &signers,
                 &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             )
         }
@@ -238,11 +238,10 @@ pub fn process_instruction(
             &signers,
             &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
-        VoteInstruction::UpdateNode(node_pubkey) => vote_state::update_node(
+        VoteInstruction::UpdateNode => vote_state::update_node(
             me,
-            &node_pubkey,
+            next_keyed_account(keyed_accounts)?.unsigned_key(),
             &signers,
-            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
         VoteInstruction::Vote(vote) => {
             inc_new_counter_info!("vote-native", 1);

@@ -354,7 +354,7 @@ pub enum CliCommand {
     // Vote Commands
     CreateVoteAccount {
         seed: Option<String>,
-        node_pubkey: Pubkey,
+        identity_account: SignerIndex,
         authorized_voter: Option<Pubkey>,
         authorized_withdrawer: Option<Pubkey>,
         commission: u8,
@@ -377,7 +377,7 @@ pub enum CliCommand {
     },
     VoteUpdateValidator {
         vote_account_pubkey: Pubkey,
-        new_identity_pubkey: Pubkey,
+        new_identity_account: SignerIndex,
     },
     // Wallet Commands
     Address,
@@ -1947,7 +1947,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Create vote account
         CliCommand::CreateVoteAccount {
             seed,
-            node_pubkey,
+            identity_account,
             authorized_voter,
             authorized_withdrawer,
             commission,
@@ -1955,7 +1955,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             seed,
-            &node_pubkey,
+            *identity_account,
             authorized_voter,
             authorized_withdrawer,
             *commission,
@@ -1997,12 +1997,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
         CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
-            new_identity_pubkey,
+            new_identity_account,
         } => process_vote_update_validator(
             &rpc_client,
             config,
             &vote_account_pubkey,
-            &new_identity_pubkey,
+            *new_identity_account,
         ),
 
         // Wallet Commands
@@ -3210,15 +3210,15 @@ mod tests {
 
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
-        let node_pubkey = Pubkey::new_rand();
+        let identity_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
             seed: None,
-            node_pubkey,
+            identity_account: 2,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
             commission: 0,
         };
-        config.signers = vec![&keypair, &bob_keypair];
+        config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -3232,11 +3232,11 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        let new_identity_pubkey = Pubkey::new_rand();
-        config.signers = vec![&keypair, &bob_keypair];
+        let new_identity_keypair = Keypair::new();
+        config.signers = vec![&keypair, &bob_keypair, &new_identity_keypair];
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
-            new_identity_pubkey,
+            new_identity_account: 2,
         };
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -3454,14 +3454,15 @@ mod tests {
         assert!(process_command(&config).is_err());
 
         let bob_keypair = Keypair::new();
+        let identity_keypair = Keypair::new();
         config.command = CliCommand::CreateVoteAccount {
             seed: None,
-            node_pubkey,
+            identity_account: 2,
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
             commission: 0,
         };
-        config.signers = vec![&keypair, &bob_keypair];
+        config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         assert!(process_command(&config).is_err());
 
         config.command = CliCommand::VoteAuthorize {
@@ -3473,7 +3474,7 @@ mod tests {
 
         config.command = CliCommand::VoteUpdateValidator {
             vote_account_pubkey: bob_pubkey,
-            new_identity_pubkey: bob_pubkey,
+            new_identity_account: 1,
         };
         assert!(process_command(&config).is_err());
 

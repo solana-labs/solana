@@ -40,13 +40,13 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("Vote account keypair to fund"),
                 )
                 .arg(
-                    Arg::with_name("identity_pubkey")
+                    Arg::with_name("identity_account")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Validator that will vote with this account"),
+                        .validator(is_valid_signer)
+                        .help("Keypair of validator that will vote with this account"),
                 )
                 .arg(
                     Arg::with_name("commission")
@@ -137,22 +137,22 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("Vote account to update"),
                 )
                 .arg(
-                    Arg::with_name("new_identity_pubkey")
+                    Arg::with_name("new_identity_account")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("New validator that will vote with this account"),
+                        .validator(is_valid_signer)
+                        .help("Keypair of new validator that will vote with this account"),
                 )
                 .arg(
-                    Arg::with_name("authorized_voter")
+                    Arg::with_name("authorized_withdrawer")
                         .index(3)
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("Authorized voter keypair"),
+                        .help("Authorized withdrawer keypair"),
                 )
         )
         .subcommand(
@@ -232,14 +232,15 @@ pub fn parse_create_vote_account(
 ) -> Result<CliCommandInfo, CliError> {
     let (vote_account, _) = signer_of(matches, "vote_account", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
-    let identity_pubkey = pubkey_of_signer(matches, "identity_pubkey", wallet_manager)?.unwrap();
+    let (identity_account, identity_pubkey) =
+        signer_of(matches, "identity_account", wallet_manager)?;
     let commission = value_t_or_exit!(matches, "commission", u8);
     let authorized_voter = pubkey_of_signer(matches, "authorized_voter", wallet_manager)?;
     let authorized_withdrawer = pubkey_of_signer(matches, "authorized_withdrawer", wallet_manager)?;
 
     let payer_provided = None;
-    let CliSignerInfo { signers } = generate_unique_signers(
-        vec![payer_provided, vote_account],
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, vote_account, identity_account],
         matches,
         default_signer_path,
         wallet_manager,
@@ -248,12 +249,12 @@ pub fn parse_create_vote_account(
     Ok(CliCommandInfo {
         command: CliCommand::CreateVoteAccount {
             seed,
-            node_pubkey: identity_pubkey,
+            identity_account: signer_info.index_of(identity_pubkey).unwrap(),
             authorized_voter,
             authorized_withdrawer,
             commission,
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -293,13 +294,13 @@ pub fn parse_vote_update_validator(
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
-    let new_identity_pubkey =
-        pubkey_of_signer(matches, "new_identity_pubkey", wallet_manager)?.unwrap();
-    let (authorized_voter, _) = signer_of(matches, "authorized_voter", wallet_manager)?;
+    let (new_identity_account, new_identity_pubkey) =
+        signer_of(matches, "new_identity_account", wallet_manager)?;
+    let (authorized_withdrawer, _) = signer_of(matches, "authorized_withdrawer", wallet_manager)?;
 
     let payer_provided = None;
-    let CliSignerInfo { signers } = generate_unique_signers(
-        vec![payer_provided, authorized_voter],
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, authorized_withdrawer, new_identity_account],
         matches,
         default_signer_path,
         wallet_manager,
@@ -308,9 +309,9 @@ pub fn parse_vote_update_validator(
     Ok(CliCommandInfo {
         command: CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
-            new_identity_pubkey,
+            new_identity_account: signer_info.index_of(new_identity_pubkey).unwrap(),
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -372,7 +373,7 @@ pub fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     seed: &Option<String>,
-    identity_pubkey: &Pubkey,
+    identity_account: SignerIndex,
     authorized_voter: &Option<Pubkey>,
     authorized_withdrawer: &Option<Pubkey>,
     commission: u8,
@@ -389,6 +390,8 @@ pub fn process_create_vote_account(
         (&vote_account_address, "vote_account".to_string()),
     )?;
 
+    let identity_account = config.signers[identity_account];
+    let identity_pubkey = identity_account.pubkey();
     check_unique_pubkeys(
         (&vote_account_address, "vote_account".to_string()),
         (&identity_pubkey, "identity_pubkey".to_string()),
@@ -411,9 +414,9 @@ pub fn process_create_vote_account(
         .max(1);
 
     let vote_init = VoteInit {
-        node_pubkey: *identity_pubkey,
-        authorized_voter: authorized_voter.unwrap_or(*identity_pubkey),
-        authorized_withdrawer: authorized_withdrawer.unwrap_or(*identity_pubkey),
+        node_pubkey: identity_pubkey,
+        authorized_voter: authorized_voter.unwrap_or(identity_pubkey),
+        authorized_withdrawer: authorized_withdrawer.unwrap_or(identity_pubkey),
         commission,
     };
 
@@ -486,18 +489,20 @@ pub fn process_vote_update_validator(
     rpc_client: &RpcClient,
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
-    new_identity_pubkey: &Pubkey,
+    new_identity_account: SignerIndex,
 ) -> ProcessResult {
-    let authorized_voter = config.signers[1];
+    let authorized_withdrawer = config.signers[1];
+    let new_identity_account = config.signers[new_identity_account];
+    let new_identity_pubkey = new_identity_account.pubkey();
     check_unique_pubkeys(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
-        (new_identity_pubkey, "new_identity_pubkey".to_string()),
+        (&new_identity_pubkey, "new_identity_account".to_string()),
     )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::update_node(
         vote_account_pubkey,
-        &authorized_voter.pubkey(),
-        new_identity_pubkey,
+        &authorized_withdrawer.pubkey(),
+        &new_identity_pubkey,
     )];
 
     let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
@@ -675,13 +680,14 @@ mod tests {
         let keypair = Keypair::new();
         write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // Test CreateVoteAccount SubCommand
-        let node_pubkey = Pubkey::new_rand();
-        let node_pubkey_string = format!("{}", node_pubkey);
+        let (identity_keypair_file, mut tmp_file) = make_tmp_file();
+        let identity_keypair = Keypair::new();
+        write_keypair(&identity_keypair, tmp_file.as_file_mut()).unwrap();
         let test_create_vote_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
             &keypair_file,
-            &node_pubkey_string,
+            &identity_keypair_file,
             "--commission",
             "10",
         ]);
@@ -690,14 +696,15 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
-                    node_pubkey,
+                    identity_account: 2,
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 10,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(keypair)
+                    Box::new(keypair),
+                    read_keypair_file(&identity_keypair_file).unwrap().into(),
                 ],
             }
         );
@@ -710,21 +717,22 @@ mod tests {
             "test",
             "create-vote-account",
             &keypair_file,
-            &node_pubkey_string,
+            &identity_keypair_file,
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account2, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
-                    node_pubkey,
+                    identity_account: 2,
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 100,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(keypair)
+                    Box::new(keypair),
+                    read_keypair_file(&identity_keypair_file).unwrap().into(),
                 ],
             }
         );
@@ -739,7 +747,7 @@ mod tests {
             "test",
             "create-vote-account",
             &keypair_file,
-            &node_pubkey_string,
+            &identity_keypair_file,
             "--authorized-voter",
             &authed.to_string(),
         ]);
@@ -748,14 +756,15 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
-                    node_pubkey,
+                    identity_account: 2,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
                     commission: 100
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(keypair)
+                    Box::new(keypair),
+                    read_keypair_file(&identity_keypair_file).unwrap().into(),
                 ],
             }
         );
@@ -768,7 +777,7 @@ mod tests {
             "test",
             "create-vote-account",
             &keypair_file,
-            &node_pubkey_string,
+            &identity_keypair_file,
             "--authorized-withdrawer",
             &authed.to_string(),
         ]);
@@ -777,14 +786,15 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
-                    node_pubkey,
+                    identity_account: 2,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
                     commission: 100
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(keypair)
+                    Box::new(keypair),
+                    read_keypair_file(&identity_keypair_file).unwrap().into(),
                 ],
             }
         );
@@ -793,7 +803,7 @@ mod tests {
             "test",
             "vote-update-validator",
             &pubkey_string,
-            &pubkey2_string,
+            &identity_keypair_file,
             &keypair_file,
         ]);
         assert_eq!(
@@ -801,11 +811,12 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::VoteUpdateValidator {
                     vote_account_pubkey: pubkey,
-                    new_identity_pubkey: pubkey2,
+                    new_identity_account: 2,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(read_keypair_file(&keypair_file).unwrap())
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    read_keypair_file(&identity_keypair_file).unwrap().into(),
                 ],
             }
         );

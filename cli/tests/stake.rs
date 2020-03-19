@@ -68,7 +68,7 @@ fn test_stake_delegation_force() {
     config.signers = vec![&default_signer, &vote_keypair];
     config.command = CliCommand::CreateVoteAccount {
         seed: None,
-        node_pubkey: config.signers[0].pubkey(),
+        identity_account: 0,
         authorized_voter: None,
         authorized_withdrawer: None,
         commission: 0,

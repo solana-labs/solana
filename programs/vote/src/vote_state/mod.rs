@@ -582,16 +582,15 @@ pub fn update_node<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     node_pubkey: &Pubkey,
     signers: &HashSet<Pubkey, S>,
-    clock: &Clock,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
-    let authorized_voter = vote_state
-        .get_and_update_authorized_voter(clock.epoch)
-        .expect("the clock epoch is monotonically increasing, so authorized voter must be known");
 
-    // current authorized voter must say "yay"
-    verify_authorized_signer(&authorized_voter, signers)?;
+    // current authorized withdrawer must say "yay"
+    verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
+
+    // new node must say "yay"
+    verify_authorized_signer(&node_pubkey, signers)?;
 
     vote_state.node_pubkey = *node_pubkey;
 
@@ -632,9 +631,10 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 /// Initialize the vote_state for a vote account
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
-pub fn initialize_account(
+pub fn initialize_account<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     vote_init: &VoteInit,
+    signers: &HashSet<Pubkey, S>,
     clock: &Clock,
 ) -> Result<(), InstructionError> {
     let versioned = State::<VoteStateVersions>::state(vote_account)?;
@@ -642,6 +642,9 @@ pub fn initialize_account(
     if !versioned.is_uninitialized() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
+
+    // node must agree to accept this vote account
+    verify_authorized_signer(&vote_init.node_pubkey, signers)?;
 
     vote_account.set_state(&VoteStateVersions::Current(Box::new(VoteState::new(
         vote_init, clock,
@@ -664,7 +667,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     let mut vote_state = versioned.convert_to_current();
     let authorized_voter = vote_state
         .get_and_update_authorized_voter(clock.epoch)
-        .expect("the clock epoch is monotonically increasinig, so authorized voter must be known");
+        .expect("the clock epoch is monotonically increasing, so authorized voter must be known");
     verify_authorized_signer(&authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
@@ -745,11 +748,14 @@ mod tests {
     fn test_initialize_vote_account() {
         let vote_account_pubkey = Pubkey::new_rand();
         let vote_account = Account::new_ref(100, VoteState::size_of(), &id());
+        let vote_account = KeyedAccount::new(&vote_account_pubkey, false, &vote_account);
 
         let node_pubkey = Pubkey::new_rand();
+        let node_account = RefCell::new(Account::default());
+        let keyed_accounts = &[];
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
 
-        //init should pass
-        let vote_account = KeyedAccount::new(&vote_account_pubkey, false, &vote_account);
+        //init should fail, node_pubkey didn't sign the transaction
         let res = initialize_account(
             &vote_account,
             &VoteInit {
@@ -758,6 +764,24 @@ mod tests {
                 authorized_withdrawer: vote_account_pubkey,
                 commission: 0,
             },
+            &signers,
+            &Clock::default(),
+        );
+        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+
+        let keyed_accounts = &[KeyedAccount::new(&node_pubkey, true, &node_account)];
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+
+        //init should pass
+        let res = initialize_account(
+            &vote_account,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_account_pubkey,
+                authorized_withdrawer: vote_account_pubkey,
+                commission: 0,
+            },
+            &signers,
             &Clock::default(),
         );
         assert_eq!(res, Ok(()));
@@ -771,6 +795,7 @@ mod tests {
                 authorized_withdrawer: vote_account_pubkey,
                 commission: 0,
             },
+            &signers,
             &Clock::default(),
         );
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
@@ -783,6 +808,25 @@ mod tests {
             RefCell::new(vote_state::create_account(
                 &vote_pubkey,
                 &Pubkey::new_rand(),
+                0,
+                100,
+            )),
+        )
+    }
+
+    fn create_test_account_with_authorized() -> (Pubkey, Pubkey, Pubkey, RefCell<Account>) {
+        let vote_pubkey = Pubkey::new_rand();
+        let authorized_voter = Pubkey::new_rand();
+        let authorized_withdrawer = Pubkey::new_rand();
+
+        (
+            vote_pubkey,
+            authorized_voter,
+            authorized_withdrawer,
+            RefCell::new(vote_state::create_account_with_authorized(
+                &Pubkey::new_rand(),
+                &authorized_voter,
+                &authorized_withdrawer,
                 0,
                 100,
             )),
@@ -906,43 +950,46 @@ mod tests {
 
     #[test]
     fn test_vote_update_node_id() {
-        let (vote_pubkey, vote_account) = create_test_account();
+        let (vote_pubkey, _authorized_voter, authorized_withdrawer, vote_account) =
+            create_test_account_with_authorized();
 
         let node_pubkey = Pubkey::new_rand();
+        let node_account = RefCell::new(Account::default());
+        let authorized_withdrawer_account = RefCell::new(Account::default());
 
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, false, &vote_account)];
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, true, &vote_account),
+            KeyedAccount::new(&node_pubkey, false, &node_account),
+            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
+        ];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_node(
-            &keyed_accounts[0],
-            &node_pubkey,
-            &signers,
-            &Clock::default(),
-        );
+        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
+        assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
+
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, true, &vote_account),
+            KeyedAccount::new(&node_pubkey, true, &node_account),
+            KeyedAccount::new(
+                &authorized_withdrawer,
+                false,
+                &authorized_withdrawer_account,
+            ),
+        ];
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
         let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
             .unwrap()
             .convert_to_current();
         assert!(vote_state.node_pubkey != node_pubkey);
 
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, true, &vote_account),
+            KeyedAccount::new(&node_pubkey, true, &node_account),
+            KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
+        ];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_node(
-            &keyed_accounts[0],
-            &node_pubkey,
-            &signers,
-            &Clock::default(),
-        );
-        assert_eq!(res, Ok(()));
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
-            .unwrap()
-            .convert_to_current();
-        assert_eq!(vote_state.node_pubkey, node_pubkey);
-
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let mut clock = Clock::default();
-        clock.epoch += 10;
-        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers, &clock);
+        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
         assert_eq!(res, Ok(()));
         let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
             .unwrap()
