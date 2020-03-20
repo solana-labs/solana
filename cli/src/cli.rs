@@ -2262,7 +2262,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("amount")
                         .index(1)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -2379,7 +2379,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -2497,7 +2497,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)

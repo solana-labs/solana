@@ -51,7 +51,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("commission")
                         .long("commission")
-                        .value_name("NUMBER")
+                        .value_name("PERCENTAGE")
                         .takes_value(true)
                         .default_value("100")
                         .help("The commission taken on reward redemption (0-100)"),
@@ -207,7 +207,7 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)

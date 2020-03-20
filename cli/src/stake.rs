@@ -82,7 +82,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -255,7 +255,7 @@ impl StakeSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("split-stake")
-                .about("Create a new stake account using tokens from an existing one")
+                .about("Duplicate a stake account, splitting the tokens between the two")
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .index(1)
@@ -277,7 +277,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
@@ -320,7 +320,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)

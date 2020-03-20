@@ -127,7 +127,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(2)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
@@ -221,7 +221,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("amount")
                         .index(3)
-                        .value_name("NUMBER")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
