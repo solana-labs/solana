@@ -27,9 +27,9 @@ pub struct Pubkey([u8; 32]);
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum ParsePubkeyError {
-    #[error("Length of string is the wrong side")]
+    #[error("String is the wrong size")]
     WrongSize,
-    #[error("Invalid BS58 string")]
+    #[error("Invalid bs58 string")]
     Invalid,
 }
 impl<T> DecodeError<T> for ParsePubkeyError {
