@@ -562,7 +562,9 @@ pub fn parse_stake_authorize(
             StakeAuthorize::Staker => (STAKE_AUTHORITY_ARG.name, "new_stake_authority"),
             StakeAuthorize::Withdrawer => (WITHDRAW_AUTHORITY_ARG.name, "new_withdraw_authority"),
         };
-        if let Some(new_authority_pubkey) = pubkey_of_signer(matches, new_authority_flag, wallet_manager)? {
+        if let Some(new_authority_pubkey) =
+            pubkey_of_signer(matches, new_authority_flag, wallet_manager)?
+        {
             let (authority, authority_pubkey) = signer_of(matches, authority_flag, wallet_manager)?;
             new_authorizations.push((*stake_authorize, new_authority_pubkey, authority_pubkey));
             bulk_signers.push(authority);
@@ -586,13 +588,15 @@ pub fn parse_stake_authorize(
 
     let new_authorizations = new_authorizations
         .into_iter()
-        .map(|(stake_authorize, new_authority_pubkey, authority_pubkey)| {
-            (
-                stake_authorize,
-                new_authority_pubkey,
-                signer_info.index_of(authority_pubkey).unwrap(),
-            )
-        })
+        .map(
+            |(stake_authorize, new_authority_pubkey, authority_pubkey)| {
+                (
+                    stake_authorize,
+                    new_authority_pubkey,
+                    signer_info.index_of(authority_pubkey).unwrap(),
+                )
+            },
+        )
         .collect();
 
     Ok(CliCommandInfo {
@@ -932,7 +936,7 @@ pub fn process_stake_authorize(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let mut ixs = Vec::new();
-    for (stake_authorize, authorized_pubkey, authority) in new_authorizations.into_iter() {
+    for (stake_authorize, authorized_pubkey, authority) in new_authorizations.iter() {
         check_unique_pubkeys(
             (stake_account_pubkey, "stake_account_pubkey".to_string()),
             (authorized_pubkey, "new_authorized_pubkey".to_string()),
@@ -1902,16 +1906,8 @@ mod tests {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
                     new_authorizations: vec![
-                        (
-                            StakeAuthorize::Staker,
-                            new_stake_authority,
-                            0,
-                        ),
-                        (
-                            StakeAuthorize::Withdrawer,
-                            new_withdraw_authority,
-                            0,
-                        ),
+                        (StakeAuthorize::Staker, new_stake_authority, 0,),
+                        (StakeAuthorize::Withdrawer, new_withdraw_authority, 0,),
                     ],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -1919,9 +1915,7 @@ mod tests {
                     nonce_authority: 0,
                     fee_payer: 0,
                 },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                ],
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
         );
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
@@ -1936,22 +1930,14 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorizations: vec![
-                        (
-                            StakeAuthorize::Staker,
-                            new_stake_authority,
-                            0,
-                        ),
-                    ],
+                    new_authorizations: vec![(StakeAuthorize::Staker, new_stake_authority, 0,),],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
                 },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                ],
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
         );
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
@@ -1966,22 +1952,18 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::StakeAuthorize {
                     stake_account_pubkey,
-                    new_authorizations: vec![
-                        (
-                            StakeAuthorize::Withdrawer,
-                            new_withdraw_authority,
-                            0,
-                        ),
-                    ],
+                    new_authorizations: vec![(
+                        StakeAuthorize::Withdrawer,
+                        new_withdraw_authority,
+                        0,
+                    ),],
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
                 },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                ],
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
         );
 

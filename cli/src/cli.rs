@@ -650,19 +650,19 @@ pub fn parse_command(
             matches,
             default_signer_path,
             wallet_manager,
-            &vec![StakeAuthorize::Staker, StakeAuthorize::Withdrawer],
+            &[StakeAuthorize::Staker, StakeAuthorize::Withdrawer],
         ),
         ("stake-authorize-staker", Some(matches)) => parse_stake_authorize(
             matches,
             default_signer_path,
             wallet_manager,
-            &vec![StakeAuthorize::Staker],
+            &[StakeAuthorize::Staker],
         ),
         ("stake-authorize-withdrawer", Some(matches)) => parse_stake_authorize(
             matches,
             default_signer_path,
             wallet_manager,
-            &vec![StakeAuthorize::Withdrawer],
+            &[StakeAuthorize::Withdrawer],
         ),
         ("stake-set-lockup", Some(matches)) => {
             parse_stake_set_lockup(matches, default_signer_path, wallet_manager)

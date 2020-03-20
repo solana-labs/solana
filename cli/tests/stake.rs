@@ -650,16 +650,8 @@ fn test_stake_authorize() {
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![
-            (
-                StakeAuthorize::Staker,
-                online_authority2_pubkey,
-                1,
-            ),
-            (
-                StakeAuthorize::Withdrawer,
-                withdraw_authority_pubkey,
-                0,
-            ),
+            (StakeAuthorize::Staker, online_authority2_pubkey, 1),
+            (StakeAuthorize::Withdrawer, withdraw_authority_pubkey, 0),
         ],
         sign_only: false,
         blockhash_query: BlockhashQuery::default(),
