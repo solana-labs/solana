@@ -436,24 +436,40 @@ impl JsonRpcRequestProcessor {
         let root = self.bank_forks.read().unwrap().root();
 
         for signature in signatures {
-            let slot = bank
-                .get_signature_confirmation_status(&signature)
+            let recent_status = bank.get_signature_confirmation_status(&signature);
+            let known_slot = recent_status
+                .clone()
                 .map(|SignatureConfirmationStatus { slot, .. }| slot);
             let status = self
                 .blockstore
-                .get_transaction_status(signature, slot, maximum_slot, root)
+                .get_transaction_status(signature, known_slot, maximum_slot, root)
                 .map_err(|_| Error::internal_error())?;
             let mut context = RpcResponseContext { slot: root };
-            let value = status.and_then(|(slot, status)| {
-                // If a slot is newer than the root in bank_forks, but not present in
-                // bank_forks, it is a dead fork that will never be rooted
-                if slot > root && !self.bank_forks.read().unwrap().banks.contains_key(&slot) {
-                    None
-                } else {
-                    context = RpcResponseContext { slot };
-                    Some(status)
-                }
-            });
+            let value = status
+                .and_then(|(slot, status)| {
+                    // If a slot is newer than the root in bank_forks, but not present in
+                    // bank_forks, it is a dead fork that will never be rooted
+                    if slot > root && !self.bank_forks.read().unwrap().banks.contains_key(&slot) {
+                        None
+                    } else {
+                        context = RpcResponseContext { slot };
+                        Some(status)
+                    }
+                })
+                .or_else(|| {
+                    // If status exists in status cache but not blockstore, return the status with
+                    // empty metadata. This enables send-and-confirm transactions with nodes that
+                    // do not have a transaction_status_service enabled
+                    recent_status.map(|(slot, _, status)| {
+                        context = RpcResponseContext { slot };
+                        RpcTransactionStatus {
+                            status,
+                            fee: 0,
+                            pre_balances: vec![],
+                            post_balances: vec![],
+                        }
+                    })
+                });
             statuses.push(Response { context, value });
         }
         Ok(statuses)
