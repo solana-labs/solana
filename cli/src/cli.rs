@@ -2283,7 +2283,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("ACCOUNT_PUBKEY")
                         .takes_value(true)
                         .validator(is_valid_pubkey)
                         .help("The public key of the balance to check"),
@@ -2314,7 +2314,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("signature")
                         .index(1)
-                        .value_name("SIGNATURE")
+                        .value_name("TRANSACTION_SIGNATURE")
                         .takes_value(true)
                         .required(true)
                         .help("The transaction signature to confirm"),
@@ -2326,7 +2326,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("seed")
                         .index(1)
-                        .value_name("STRING")
+                        .value_name("SEED_STRING")
                         .takes_value(true)
                         .required(true)
                         .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
@@ -2358,7 +2358,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
-                        .value_name("FILEPATH")
+                        .value_name("PROGRAM_FILEPATH")
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
@@ -2426,7 +2426,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("signer")
                         .index(1)
-                        .value_name("KEYPAIR")
+                        .value_name("SIGNER_KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -2523,7 +2523,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("account_pubkey")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("ACCOUNT_PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
