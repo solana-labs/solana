@@ -34,7 +34,6 @@ solana-sdk = { path = "../sdk", version = "1.0.9" }
 solana-stake-program = { path = "../programs/stake", version = "1.0.9" }
 solana-storage-program = { path = "../programs/storage", version = "1.0.9" }
 solana-vote-program = { path = "../programs/vote", version = "1.0.9" }
-sys-info = "0.5.9"
 tempfile = "3.1.0"
 thiserror = "1.0"
 
