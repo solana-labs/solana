@@ -2131,15 +2131,6 @@ impl Bank {
             .unwrap_or(&0)
     }
 
-    pub fn vote_account_epoch_stake(&self, voting_pubkey: &Pubkey) -> u64 {
-        *self
-            .epoch_vote_accounts(self.epoch())
-            .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
-            .get(voting_pubkey)
-            .map(|(stake, _)| stake)
-            .unwrap_or(&0)
-    }
-
     /// given a slot, return the epoch and offset into the epoch this slot falls
     /// e.g. with a fixed number for slots_per_epoch, the calculation is simply:
     ///

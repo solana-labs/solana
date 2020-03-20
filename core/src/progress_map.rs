@@ -145,7 +145,7 @@ impl ForkProgress {
         let validator_fork_info = {
             if bank.collector_id() == my_pubkey {
                 if let Some(voting_pubkey) = voting_pubkey {
-                    let stake = bank.vote_account_epoch_stake(&voting_pubkey);
+                    let stake = bank.epoch_vote_account_stake(&voting_pubkey);
                     Some(ValidatorStakeInfo::new(
                         voting_pubkey,
                         stake,

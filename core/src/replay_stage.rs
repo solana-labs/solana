@@ -1321,7 +1321,7 @@ impl ReplayStage {
                     .propagated_validators
                     .insert(voting_pubkey.clone());
                 leader_propagated_stats.propagated_validators_stake +=
-                    leader_bank.vote_account_epoch_stake(&voting_pubkey);
+                    leader_bank.epoch_vote_account_stake(&voting_pubkey);
 
                 if leader_propagated_stats.total_epoch_stake == 0
                     || leader_propagated_stats.propagated_validators_stake as f64
