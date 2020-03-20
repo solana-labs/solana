@@ -6,7 +6,7 @@ To receive tokens, you will need an address for others to send tokens to. In
 Solana, an address is the public key of a keypair. There are a variety
 of techniques for generating keypairs. The method you choose will depend on how
 you choose to store keypairs.  Keypairs are stored in wallets. Before receiving
-tokens, you'll need to [choose a wallet](choose-a-wallet.md) and
+tokens, you will need to [choose a wallet](choose-a-wallet.md) and
 [generate keys](generate-keys.md). Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
 characters. Its length varies from 32 to 44 characters.
@@ -67,7 +67,7 @@ Next, prove that you own those tokens by transferring them. The Solana cluster
 will only accept the transfer if you sign the transaction with the private
 key corresponding to the sender's public key in the transaction.
 
-First, we'll need a public key to receive our tokens. Create a second
+First, we will need a public key to receive our tokens. Create a second
 keypair and record its pubkey:
 
 ```bash
@@ -75,7 +75,7 @@ solana-keygen new --no-passphrase --no-outfile
 ```
 
 The output will contain the public key after the text `pubkey:`. Copy the
-public key. We'll use it in the next step.
+public key. We will use it in the next step.
 
 ```text
 ============================================================================
@@ -113,11 +113,11 @@ solana config set --keypair=<KEYPAIR>
 
 For convenience, consider setting the default signer to the account you want
 to pay transaction fees. Because transaction fees are so inexpensive on
-Solana, it's oftentimes sufficient to use a keypair file for this. Although
+Solana, it is oftentimes sufficient to use a keypair file for this. Although
 keypair files are the most insecure way to store tokens, a fee-payer account
 rarely needs to hold more than a fraction of a SOL.
 
-Here's how to create and configure a fee-payer account:
+Here is how to create and configure a fee-payer account:
 
 ```bash
 solana-keygen --no-passphrase -o ~/fee-payer.json
@@ -130,7 +130,7 @@ Now transfer it a small amount of SOL:
 solana transfer --fee-payer=<SENDER_KEYPAIR> --from=<SENDER_KEYPAIR> ~/fee-payer.json 1
 ```
 
-Hopefully that's the last time you use the `--fee-payer` option!
+Hopefully that is the last time you use the `--fee-payer` option!
 
 ## Send Tokens
 

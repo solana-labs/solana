@@ -31,40 +31,42 @@ solana create-stake-account --from=<KEYPAIR> <ACCOUNT_KEYPAIR> <AMOUNT>
 `<AMOUNT>` tokens are transferred from the account at `<KEYPAIR>` to a new
 stake account at the public key of `<ACCOUNT_KEYPAIR>`.  Record the account
 public key, as it will be used later to perform actions on the stake account.
-The keypair file can be discarded. To authorize additional actions, you will
-use `<KEYPAIR>`, not `<ACCOUNT_KEYPAIR>`.
+The keypair file can then be discarded. To authorize additional actions, you
+will use `<KEYPAIR>`, not `<ACCOUNT_KEYPAIR>`.
 
 ### Advanced: Derive Stake Account Addresses
 
-When we delegate stake, we delegate all tokens to a single validator. To
-delegate to multiple validators we'll need multiple stake accounts. Creating
-a new keypair for each account and managing those addresses can be cumbersome.
-Fortunately, we can derive stake addresses using the `--seed` option:
+When we delegate stake, we delegate all tokens in the stake account to a single
+validator. To delegate to multiple validators we will need multiple stake
+accounts. Creating a new keypair for each account and managing those addresses
+can be cumbersome. Fortunately, we can derive stake addresses using the `--seed`
+option:
 
 ```bash
 solana create-stake-account --from=<KEYPAIR> <KEYPAIR> --seed=<STRING> <AMOUNT>
 ```
 
-`<STRING>` is arbitrary but typically a number corresponding to which derived
-account this is. The first account might be "0", then "1", and so on.
-`<KEYPAIR>` is the same for both the source keypair and account keypair,
-because the second instance is used only as a base address. The command
-derives a new address from the base address and seed string. To see what stake
-address the command will derive, use `solana create-address-with-seed`:
+`<STRING>` is an arbitrary string up to 32 characters, but will typically be
+a number corresponding to which derived account this is. The first account
+might be "0", then "1", and so on. `<KEYPAIR>` is the same for both the source
+keypair and account keypair, because the second instance is used only as a base
+address.  The command derives a new address from the base address and seed
+string. To see what stake address the command will derive, use
+`solana create-address-with-seed`:
 
 ```bash
 solana create-address-with-seed --from=<PUBKEY> <SEED_STRING> STAKE
 ```
 
-It will output a derived public key, which can be used for the
+It will output a derived address, which can be used for the
 `<ACCOUNT_PUBKEY>` argument in staking operations.
 
 ## Set Stake and Withdraw Authorities
 
 Staking commands look to keypairs to authorize certain stake account
-operations. It uses a stake authority to authorize stake delegation,
-deactivating stake, splitting stake, and setting a new stake authority.  It
-uses a withdraw authority to authorize withdrawing stake, and setting either
+operations. They use the stake authority to authorize stake delegation,
+deactivating stake, splitting stake, and setting a new stake authority.  They
+use the withdraw authority to authorize withdrawing stake, and when setting either
 a new stake or withdraw authority.
 
 Stake and withdraw authorities can be set when creating account via the
@@ -104,12 +106,12 @@ solana deactivate-stake --stake-authority=<KEYPAIR> <ACCOUNT_PUBKEY>
 `<ACCOUNT_PUBKEY>`.
 
 Note that stake takes several epochs to "cool down". Attempts to delegate
-stake in the cooldown period will fail.
+stake in the cool down period will fail.
 
 ## Split Stake
 
-All stake in a stake account is delegated to a single validator. If you'd
-prefer to spread your stake over multiple validators use the
+All stake in a stake account is delegated to a single validator. If you
+would prefer to spread your stake over multiple validators use the
 `solana split-stake` command to duplicate stake accounts and split your
 tokens between them:
 
@@ -118,7 +120,7 @@ solana split-stake --stake-authority=<KEYPAIR> <ACCOUNT_PUBKEY> <NEW_ACCOUNT_KEY
 ```
 
 `<ACCOUNT_PUBKEY>` is the existing stake account, `<KEYPAIR>` is the
-authorized staker, `<NEW_ACCOUNT_KEYPAIR>` is the keypair for the new account,
+stake authority, `<NEW_ACCOUNT_KEYPAIR>` is the keypair for the new account,
 and `<AMOUNT>` is the number of tokens to transfer to the new account.
 
 ## Withdraw Stake
