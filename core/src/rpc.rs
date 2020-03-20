@@ -53,7 +53,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool,
     pub enable_set_log_filter: bool,
-    pub enable_get_confirmed_block: bool,
+    pub enable_rpc_transaction_history: bool,
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
 }
@@ -375,7 +375,7 @@ impl JsonRpcRequestProcessor {
         slot: Slot,
         encoding: Option<RpcTransactionEncoding>,
     ) -> Result<Option<RpcConfirmedBlock>> {
-        if self.config.enable_get_confirmed_block {
+        if self.config.enable_rpc_transaction_history {
             Ok(self.blockstore.get_confirmed_block(slot, encoding).ok())
         } else {
             Ok(None)
@@ -1383,7 +1383,7 @@ pub mod tests {
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             JsonRpcConfig {
-                enable_get_confirmed_block: true,
+                enable_rpc_transaction_history: true,
                 identity_pubkey: *pubkey,
                 ..JsonRpcConfig::default()
             },

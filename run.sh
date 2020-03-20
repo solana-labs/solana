@@ -94,7 +94,7 @@ args=(
   --rpc-faucet-address 127.0.0.1:9900
   --log -
   --enable-rpc-exit
-  --enable-rpc-get-confirmed-block
+  --enable-rpc-transaction-history
   --init-complete-file "$dataDir"/init-completed
 )
 solana-validator "${args[@]}" &

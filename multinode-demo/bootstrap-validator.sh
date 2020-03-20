@@ -39,7 +39,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --limit-ledger-size ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --enable-rpc-get-confirmed-block ]]; then
+    elif [[ $1 = --enable-rpc-transaction-history ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --skip-poh-verify ]]; then
