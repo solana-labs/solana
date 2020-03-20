@@ -13,7 +13,7 @@ use crate::{
         deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64,
     },
     stakes::Stakes,
-    status_cache::{SlotDelta, StatusCache},
+    status_cache::{SignatureConfirmationStatus, SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
@@ -1826,14 +1826,14 @@ impl Bank {
     pub fn get_signature_confirmation_status(
         &self,
         signature: &Signature,
-    ) -> Option<(usize, Result<()>)> {
+    ) -> Option<SignatureConfirmationStatus<Result<()>>> {
         let rcache = self.src.status_cache.read().unwrap();
         rcache.get_signature_status_slow(signature, &self.ancestors)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
         self.get_signature_confirmation_status(signature)
-            .map(|v| v.1)
+            .map(|v| v.status)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {

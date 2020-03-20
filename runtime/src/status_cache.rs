@@ -32,6 +32,13 @@ type SlotDeltaMap<T> = HashMap<Slot, SignatureStatus<T>>;
 // construct a new one. Usually derived from a status cache's `SlotDeltaMap`
 pub type SlotDelta<T> = (Slot, bool, SignatureStatus<T>);
 
+#[derive(Debug, PartialEq)]
+pub struct SignatureConfirmationStatus<T> {
+    pub slot: Slot,
+    pub confirmations: usize,
+    pub status: T,
+}
+
 #[derive(Clone, Debug)]
 pub struct StatusCache<T: Serialize + Clone> {
     cache: StatusMap<T>,
@@ -100,7 +107,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         &self,
         sig: &Signature,
         ancestors: &HashMap<Slot, usize>,
-    ) -> Option<(usize, T)> {
+    ) -> Option<SignatureConfirmationStatus<T>> {
         trace!("get_signature_status_slow");
         let mut keys = vec![];
         let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
@@ -112,8 +119,18 @@ impl<T: Serialize + Clone> StatusCache<T> {
                 trace!("get_signature_status_slow: got {}", forkid);
                 return ancestors
                     .get(&forkid)
-                    .map(|id| (*id, res.clone()))
-                    .or_else(|| Some((ancestors.len(), res)));
+                    .map(|id| SignatureConfirmationStatus {
+                        slot: forkid,
+                        confirmations: *id,
+                        status: res.clone(),
+                    })
+                    .or_else(|| {
+                        Some(SignatureConfirmationStatus {
+                            slot: forkid,
+                            confirmations: ancestors.len(),
+                            status: res,
+                        })
+                    });
             }
         }
         None
@@ -272,7 +289,11 @@ mod tests {
         );
         assert_eq!(
             status_cache.get_signature_status_slow(&sig, &ancestors),
-            Some((1, ()))
+            Some(SignatureConfirmationStatus {
+                slot: 0,
+                confirmations: 1,
+                status: ()
+            })
         );
     }
 
@@ -317,7 +338,11 @@ mod tests {
         status_cache.add_root(0);
         assert_eq!(
             status_cache.get_signature_status_slow(&sig, &ancestors),
-            Some((ancestors.len(), ()))
+            Some(SignatureConfirmationStatus {
+                slot: 0,
+                confirmations: ancestors.len(),
+                status: ()
+            })
         );
     }
 
