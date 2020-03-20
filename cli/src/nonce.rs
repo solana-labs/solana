@@ -21,9 +21,8 @@ use solana_sdk::{
     },
     pubkey::Pubkey,
     system_instruction::{
-        advance_nonce_account, authorize_nonce_account, create_address_with_seed,
-        create_nonce_account, create_nonce_account_with_seed, withdraw_nonce_account, NonceError,
-        SystemError,
+        advance_nonce_account, authorize_nonce_account, create_nonce_account,
+        create_nonce_account_with_seed, withdraw_nonce_account, NonceError, SystemError,
     },
     system_program,
     transaction::Transaction,
@@ -474,7 +473,7 @@ pub fn process_create_nonce_account(
 ) -> ProcessResult {
     let nonce_account_pubkey = config.signers[nonce_account].pubkey();
     let nonce_account_address = if let Some(seed) = seed.clone() {
-        create_address_with_seed(&nonce_account_pubkey, &seed, &system_program::id())?
+        Pubkey::create_with_seed(&nonce_account_pubkey, &seed, &system_program::id())?
     } else {
         nonce_account_pubkey
     };

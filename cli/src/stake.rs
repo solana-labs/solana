@@ -17,7 +17,7 @@ use solana_sdk::{
     account_utils::StateMut,
     message::Message,
     pubkey::Pubkey,
-    system_instruction::{create_address_with_seed, SystemError},
+    system_instruction::SystemError,
     sysvar::{
         stake_history::{self, StakeHistory},
         Sysvar,
@@ -769,7 +769,7 @@ pub fn process_create_stake_account(
 ) -> ProcessResult {
     let stake_account = config.signers[stake_account];
     let stake_account_address = if let Some(seed) = seed {
-        create_address_with_seed(&stake_account.pubkey(), &seed, &solana_stake_program::id())?
+        Pubkey::create_with_seed(&stake_account.pubkey(), &seed, &solana_stake_program::id())?
     } else {
         stake_account.pubkey()
     };
@@ -1085,7 +1085,7 @@ pub fn process_split_stake(
     let stake_authority = config.signers[stake_authority];
 
     let split_stake_account_address = if let Some(seed) = split_stake_account_seed {
-        create_address_with_seed(
+        Pubkey::create_with_seed(
             &split_stake_account.pubkey(),
             &seed,
             &solana_stake_program::id(),

@@ -13,7 +13,6 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
-    system_instruction::create_address_with_seed,
     system_program,
 };
 use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
@@ -130,7 +129,7 @@ fn full_battery_tests(
     config_nonce.signers = vec![&nonce_keypair];
 
     let nonce_account = if let Some(seed) = seed.as_ref() {
-        create_address_with_seed(
+        Pubkey::create_with_seed(
             &config_nonce.signers[0].pubkey(),
             seed,
             &system_program::id(),
@@ -301,7 +300,7 @@ fn test_create_account_with_seed() {
     let authority_pubkey = offline_nonce_authority_signer.pubkey();
     let seed = authority_pubkey.to_string()[0..32].to_string();
     let nonce_address =
-        create_address_with_seed(&creator_pubkey, &seed, &system_program::id()).unwrap();
+        Pubkey::create_with_seed(&creator_pubkey, &seed, &system_program::id()).unwrap();
     check_balance(0, &rpc_client, &nonce_address);
 
     let mut creator_config = CliConfig::default();

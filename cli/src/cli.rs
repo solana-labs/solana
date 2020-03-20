@@ -38,9 +38,9 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     program_utils::DecodeError,
-    pubkey::Pubkey,
+    pubkey::{Pubkey, MAX_SEED_LEN},
     signature::{Keypair, Signature, Signer, SignerError},
-    system_instruction::{self, create_address_with_seed, SystemError, MAX_ADDRESS_SEED_LEN},
+    system_instruction::{self, SystemError},
     system_program,
     transaction::{Transaction, TransactionError},
 };
@@ -1076,7 +1076,7 @@ pub fn parse_create_address_with_seed(
 
     let seed = matches.value_of("seed").unwrap().to_string();
 
-    if seed.len() > MAX_ADDRESS_SEED_LEN {
+    if seed.len() > MAX_SEED_LEN {
         return Err(CliError::BadParameter(
             "Address seed must not be longer than 32 bytes".to_string(),
         ));
@@ -1103,7 +1103,7 @@ fn process_create_address_with_seed(
     } else {
         config.pubkey()?
     };
-    let address = create_address_with_seed(&from_pubkey, seed, program_id)?;
+    let address = Pubkey::create_with_seed(&from_pubkey, seed, program_id)?;
     Ok(address.to_string())
 }
 
@@ -3390,7 +3390,7 @@ mod tests {
         };
         let address = process_command(&config);
         let expected_address =
-            create_address_with_seed(&from_pubkey, "seed", &solana_stake_program::id()).unwrap();
+            Pubkey::create_with_seed(&from_pubkey, "seed", &solana_stake_program::id()).unwrap();
         assert_eq!(address.unwrap(), expected_address.to_string());
 
         // Need airdrop cases

@@ -8,12 +8,8 @@ use solana_clap_utils::{input_parsers::*, input_validators::*};
 use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    account::Account,
-    commitment_config::CommitmentConfig,
-    message::Message,
-    pubkey::Pubkey,
-    system_instruction::{create_address_with_seed, SystemError},
-    transaction::Transaction,
+    account::Account, commitment_config::CommitmentConfig, message::Message, pubkey::Pubkey,
+    system_instruction::SystemError, transaction::Transaction,
 };
 use solana_vote_program::{
     vote_instruction::{self, withdraw, VoteError},
@@ -381,7 +377,7 @@ pub fn process_create_vote_account(
     let vote_account = config.signers[1];
     let vote_account_pubkey = vote_account.pubkey();
     let vote_account_address = if let Some(seed) = seed {
-        create_address_with_seed(&vote_account_pubkey, &seed, &solana_vote_program::id())?
+        Pubkey::create_with_seed(&vote_account_pubkey, &seed, &solana_vote_program::id())?
     } else {
         vote_account_pubkey
     };
