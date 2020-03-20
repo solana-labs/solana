@@ -235,6 +235,7 @@ impl Archiver {
             shred_forward_sockets,
             repair_socket.clone(),
             &shred_fetch_sender,
+            None,
             &exit,
         );
         let (slot_sender, slot_receiver) = channel();
