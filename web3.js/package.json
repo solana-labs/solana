@@ -48,7 +48,7 @@
     "defs": "set -ex; flow check-contents < module.flow.js; tsc module.d.ts",
     "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "examples": "set -ex; for example in examples/*.js; do node $example; done",
-    "flow": "set -ex; flow stop; flow-typed install jest@24; flow",
+    "flow": "set -ex; flow stop; flow",
     "flow:stop": "flow stop",
     "flow:watch": "flow stop; watch 'flow' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "lint": "set -ex; npm run pretty; eslint . --ext .js,.ts",
