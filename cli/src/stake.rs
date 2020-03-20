@@ -1952,8 +1952,12 @@ mod tests {
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file).unwrap().into(),
+                    read_keypair_file(&stake_authority_keypair_file)
+                        .unwrap()
+                        .into(),
+                    read_keypair_file(&withdraw_authority_keypair_file)
+                        .unwrap()
+                        .into(),
                 ],
             },
         );
@@ -2002,7 +2006,9 @@ mod tests {
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file).unwrap().into(),
+                    read_keypair_file(&stake_authority_keypair_file)
+                        .unwrap()
+                        .into(),
                 ],
             },
         );
@@ -2059,7 +2065,9 @@ mod tests {
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file).unwrap().into(),
+                    read_keypair_file(&withdraw_authority_keypair_file)
+                        .unwrap()
+                        .into(),
                 ],
             },
         );
