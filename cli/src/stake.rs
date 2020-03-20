@@ -183,7 +183,7 @@ impl StakeSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("stake-authorize")
-                .about("Authorize a new stake signing keypair for the given stake account")
+                .about("Authorize a new signing keypair for the given stake account")
                 .arg(
                     Arg::with_name("stake_account_pubkey")
                         .required(true)
