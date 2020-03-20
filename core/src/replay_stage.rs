@@ -1,6 +1,7 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::{
+    broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
@@ -47,6 +48,7 @@ use std::{
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
+
 pub(crate) type ProgressMap = HashMap<Slot, ForkProgress>;
 
 #[derive(PartialEq, Debug)]
@@ -179,6 +181,7 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         _vote_tracker: Arc<VoteTracker>,
+        retransmit_slots_sender: RetransmitSlotsSender,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
@@ -208,6 +211,7 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
+                let _retransmit_slots_sender = retransmit_slots_sender;
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut progress = HashMap::new();

@@ -1,11 +1,11 @@
 use super::broadcast_utils::{self, ReceiveResults};
 use super::*;
 use crate::broadcast_stage::broadcast_utils::UnfinishedSlotInfo;
-use solana_ledger::entry::Entry;
-use solana_ledger::shred::{Shred, Shredder, RECOMMENDED_FEC_RATE, SHRED_TICK_REFERENCE_MASK};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
-use solana_sdk::timing::duration_as_us;
+use solana_ledger::{
+    entry::Entry,
+    shred::{Shred, Shredder, RECOMMENDED_FEC_RATE, SHRED_TICK_REFERENCE_MASK},
+};
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, timing::duration_as_us};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -212,7 +212,8 @@ impl StandardBroadcastRun {
         blockstore_sender.send(data_shreds.clone())?;
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
-        socket_sender.send((stakes, coding_shreds))?;
+        socket_sender.send((stakes, coding_shreds.clone()))?;
+        blockstore_sender.send(coding_shreds)?;
         self.update_broadcast_stats(BroadcastStats {
             shredding_elapsed: duration_as_us(&to_shreds_elapsed),
             receive_elapsed: duration_as_us(&receive_elapsed),
@@ -360,7 +361,6 @@ mod test {
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::{
-        clock::Slot,
         genesis_config::GenesisConfig,
         signature::{Keypair, Signer},
     };

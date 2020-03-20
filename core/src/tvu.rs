@@ -4,6 +4,7 @@
 use crate::{
     accounts_hash_verifier::AccountsHashVerifier,
     blockstream_service::BlockstreamService,
+    broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
     commitment::BlockCommitmentCache,
@@ -100,6 +101,7 @@ impl Tvu {
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         snapshot_package_sender: Option<SnapshotPackageSender>,
         vote_tracker: Arc<VoteTracker>,
+        retransmit_slots_sender: RetransmitSlotsSender,
         tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
@@ -196,6 +198,7 @@ impl Tvu {
             ledger_signal_receiver,
             poh_recorder.clone(),
             vote_tracker,
+            retransmit_slots_sender,
         );
 
         let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
@@ -298,6 +301,7 @@ pub mod tests {
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),
@@ -327,6 +331,7 @@ pub mod tests {
             None,
             None,
             Arc::new(VoteTracker::new(&bank)),
+            retransmit_slots_sender,
             TvuConfig::default(),
         );
         exit.store(true, Ordering::Relaxed);

@@ -380,6 +380,7 @@ impl Validator {
 
         let vote_tracker = Arc::new({ VoteTracker::new(bank_forks.read().unwrap().root_bank()) });
 
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             if config.voting_disabled {
@@ -430,6 +431,7 @@ impl Validator {
             rewards_recorder_sender,
             snapshot_package_sender,
             vote_tracker.clone(),
+            retransmit_slots_sender,
             TvuConfig {
                 max_ledger_slots: config.max_ledger_slots,
                 sigverify_disabled: config.dev_sigverify_disabled,
@@ -449,6 +451,7 @@ impl Validator {
             &cluster_info,
             &poh_recorder,
             entry_receiver,
+            retransmit_slots_receiver,
             node.sockets.tpu,
             node.sockets.tpu_forwards,
             node.sockets.broadcast,

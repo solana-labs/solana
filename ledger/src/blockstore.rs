@@ -13,7 +13,7 @@ use crate::{
     leader_schedule_cache::LeaderScheduleCache,
     next_slots_iterator::NextSlotsIterator,
     rooted_slot_iterator::RootedSlotIterator,
-    shred::{Shred, Shredder},
+    shred::{Result as ShredResult, Shred, Shredder},
 };
 use bincode::deserialize;
 use log::*;
@@ -452,20 +452,24 @@ impl Blockstore {
     pub fn slot_data_iterator<'a>(
         &'a self,
         slot: Slot,
+        index: u64,
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + 'a> {
-        let slot_iterator = self
-            .db
-            .iter::<cf::ShredData>(IteratorMode::From((slot, 0), IteratorDirection::Forward))?;
+        let slot_iterator = self.db.iter::<cf::ShredData>(IteratorMode::From(
+            (slot, index),
+            IteratorDirection::Forward,
+        ))?;
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
     pub fn slot_coding_iterator<'a>(
         &'a self,
         slot: Slot,
+        index: u64,
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + 'a> {
-        let slot_iterator = self
-            .db
-            .iter::<cf::ShredCode>(IteratorMode::From((slot, 0), IteratorDirection::Forward))?;
+        let slot_iterator = self.db.iter::<cf::ShredCode>(IteratorMode::From(
+            (slot, index),
+            IteratorDirection::Forward,
+        ))?;
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
@@ -1078,6 +1082,17 @@ impl Blockstore {
         self.data_shred_cf.get_bytes((slot, index))
     }
 
+    pub fn get_data_shreds_for_slot(
+        &self,
+        slot: Slot,
+        start_index: u64,
+    ) -> ShredResult<Vec<Shred>> {
+        self.slot_data_iterator(slot, start_index)
+            .expect("blockstore couldn't fetch iterator")
+            .map(|data| Shred::new_from_serialized_shred(data.1.to_vec()))
+            .collect()
+    }
+
     pub fn get_data_shreds(
         &self,
         slot: Slot,
@@ -1125,6 +1140,17 @@ impl Blockstore {
 
     pub fn get_coding_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         self.code_shred_cf.get_bytes((slot, index))
+    }
+
+    pub fn get_coding_shreds_for_slot(
+        &self,
+        slot: Slot,
+        start_index: u64,
+    ) -> ShredResult<Vec<Shred>> {
+        self.slot_coding_iterator(slot, start_index)
+            .expect("blockstore couldn't fetch iterator")
+            .map(|code| Shred::new_from_serialized_shred(code.1.to_vec()))
+            .collect()
     }
 
     // Only used by tests
@@ -4385,12 +4411,12 @@ pub mod tests {
         }
 
         // Slot doesnt exist, iterator should be empty
-        let shred_iter = blockstore.slot_data_iterator(5).unwrap();
+        let shred_iter = blockstore.slot_data_iterator(5, 0).unwrap();
         let result: Vec<_> = shred_iter.collect();
         assert_eq!(result, vec![]);
 
         // Test that the iterator for slot 8 contains what was inserted earlier
-        let shred_iter = blockstore.slot_data_iterator(8).unwrap();
+        let shred_iter = blockstore.slot_data_iterator(8, 0).unwrap();
         let result: Vec<Shred> = shred_iter
             .filter_map(|(_, bytes)| Shred::new_from_serialized_shred(bytes.to_vec()).ok())
             .collect();
@@ -5451,7 +5477,7 @@ pub mod tests {
         let index = blockstore.get_index(slot).unwrap().unwrap();
         // Test the set of data shreds in the index and in the data column
         // family are the same
-        let data_iter = blockstore.slot_data_iterator(slot).unwrap();
+        let data_iter = blockstore.slot_data_iterator(slot, 0).unwrap();
         let mut num_data = 0;
         for ((slot, index), _) in data_iter {
             num_data += 1;
@@ -5464,7 +5490,7 @@ pub mod tests {
 
         // Test the set of coding shreds in the index and in the coding column
         // family are the same
-        let coding_iter = blockstore.slot_coding_iterator(slot).unwrap();
+        let coding_iter = blockstore.slot_coding_iterator(slot, 0).unwrap();
         let mut num_coding = 0;
         for ((slot, index), _) in coding_iter {
             num_coding += 1;

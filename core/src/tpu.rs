@@ -3,7 +3,7 @@
 
 use crate::{
     banking_stage::BankingStage,
-    broadcast_stage::{BroadcastStage, BroadcastStageType},
+    broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
     fetch_stage::FetchStage,
@@ -39,6 +39,7 @@ impl Tpu {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
+        retransmit_slots_receiver: RetransmitSlotsReceiver,
         transactions_sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
         broadcast_sockets: Vec<UdpSocket>,
@@ -92,6 +93,7 @@ impl Tpu {
             broadcast_sockets,
             cluster_info.clone(),
             entry_receiver,
+            retransmit_slots_receiver,
             &exit,
             blockstore,
             shred_version,
