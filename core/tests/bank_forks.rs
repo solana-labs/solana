@@ -45,6 +45,7 @@ mod tests {
         let bank0 = Bank::new_with_paths(
             &genesis_config_info.genesis_config,
             vec![accounts_dir.path().to_path_buf()],
+            &[],
         );
         bank0.freeze();
         let mut bank_forks = BankForks::new(0, bank0);
@@ -80,6 +81,7 @@ mod tests {
 
         let deserialized_bank = snapshot_utils::bank_from_archive(
             &account_paths,
+            &[],
             &old_bank_forks
                 .snapshot_config
                 .as_ref()

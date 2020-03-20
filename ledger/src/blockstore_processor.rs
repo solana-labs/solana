@@ -291,7 +291,11 @@ pub fn process_blockstore(
     }
 
     // Setup bank for slot 0
-    let bank0 = Arc::new(Bank::new_with_paths(&genesis_config, account_paths));
+    let bank0 = Arc::new(Bank::new_with_paths(
+        &genesis_config,
+        account_paths,
+        &opts.frozen_accounts,
+    ));
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
     process_bank_0(&bank0, blockstore, &opts, &recyclers)?;
@@ -309,8 +313,6 @@ pub fn process_blockstore_from_root(
     info!("processing ledger from root slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
     let initial_allocation = allocated.get();
-
-    bank.freeze_accounts(&opts.frozen_accounts);
 
     // Starting slot must be a root, and thus has no parents
     assert!(bank.parent().is_none());
@@ -2615,7 +2617,7 @@ pub mod tests {
         genesis_config: &GenesisConfig,
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(&genesis_config, account_paths);
+        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[]);
         bank.epoch_schedule().clone()
     }
 

@@ -60,15 +60,9 @@ pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, Trans
 
 impl Accounts {
     pub fn new(paths: Vec<PathBuf>) -> Self {
-        let accounts_db = Arc::new(AccountsDB::new(paths));
-
-        Accounts {
-            slot: 0,
-            accounts_db,
-            account_locks: Mutex::new(HashSet::new()),
-            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-        }
+        Self::new_with_frozen_accounts(paths, &HashMap::default(), &[])
     }
+
     pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.set_hash(slot, parent_slot);
@@ -80,13 +74,39 @@ impl Accounts {
         }
     }
 
-    pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
-        &self,
+    pub fn new_with_frozen_accounts(
+        paths: Vec<PathBuf>,
+        ancestors: &HashMap<Slot, usize>,
+        frozen_account_pubkeys: &[Pubkey],
+    ) -> Self {
+        let mut accounts_db = AccountsDB::new(paths);
+        accounts_db.freeze_accounts(ancestors, frozen_account_pubkeys);
+
+        Accounts {
+            slot: 0,
+            accounts_db: Arc::new(accounts_db),
+            account_locks: Mutex::new(HashSet::new()),
+            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+        }
+    }
+
+    pub fn from_stream<R: Read, P: AsRef<Path>>(
+        account_paths: &[PathBuf],
+        ancestors: &HashMap<Slot, usize>,
+        frozen_account_pubkeys: &[Pubkey],
         stream: &mut BufReader<R>,
-        append_vecs_path: P,
-    ) -> std::result::Result<(), IOError> {
-        self.accounts_db
-            .accounts_from_stream(stream, append_vecs_path)
+        stream_append_vecs_path: P,
+    ) -> std::result::Result<Self, IOError> {
+        let mut accounts_db = AccountsDB::new(account_paths.to_vec());
+        accounts_db.accounts_from_stream(stream, stream_append_vecs_path)?;
+        accounts_db.freeze_accounts(ancestors, frozen_account_pubkeys);
+
+        Ok(Accounts {
+            slot: 0,
+            accounts_db: Arc::new(accounts_db),
+            account_locks: Mutex::new(HashSet::new()),
+            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+        })
     }
 
     /// Return true if the slice has any duplicate elements
@@ -575,15 +595,6 @@ impl Accounts {
             last_blockhash,
         );
         self.accounts_db.store(slot, &accounts_to_store);
-    }
-
-    pub fn freeze_accounts(
-        &self,
-        ancestors: &HashMap<Slot, usize>,
-        frozen_account_pubkeys: &[Pubkey],
-    ) {
-        self.accounts_db
-            .freeze_accounts(ancestors, frozen_account_pubkeys);
     }
 
     /// Purge a slot if it is not a root
@@ -1410,10 +1421,14 @@ mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
-        let daccounts = Accounts::new(daccounts_paths.clone());
-        assert!(daccounts
-            .accounts_from_stream(&mut reader, copied_accounts.path())
-            .is_ok());
+        let daccounts = Accounts::from_stream(
+            &daccounts_paths,
+            &HashMap::default(),
+            &[],
+            &mut reader,
+            copied_accounts.path(),
+        )
+        .unwrap();
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));
     }
