@@ -17,13 +17,8 @@ pub struct EpochStakes {
 
 impl EpochStakes {
     pub fn new(stakes: &Stakes, leader_schedule_epoch: Epoch) -> Self {
-        let total_stake = stakes
-            .vote_accounts()
-            .iter()
-            .map(|(_, (stake, _))| stake)
-            .sum();
         let epoch_vote_accounts = Stakes::vote_accounts(stakes);
-        let (node_id_to_vote_accounts, epoch_authorized_voters) =
+        let (total_stake, node_id_to_vote_accounts, epoch_authorized_voters) =
             Self::parse_epoch_vote_accounts(&epoch_vote_accounts, leader_schedule_epoch);
         Self {
             stakes: Arc::new(stakes.clone()),
@@ -52,8 +47,12 @@ impl EpochStakes {
     fn parse_epoch_vote_accounts(
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
         leader_schedule_epoch: Epoch,
-    ) -> (NodeIdToVoteAccounts, EpochAuthorizedVoters) {
+    ) -> (u64, NodeIdToVoteAccounts, EpochAuthorizedVoters) {
         let mut node_id_to_vote_accounts: NodeIdToVoteAccounts = HashMap::new();
+        let total_stake = epoch_vote_accounts
+            .iter()
+            .map(|(_, (stake, _))| stake)
+            .sum();
         let epoch_authorized_voters = epoch_vote_accounts
             .iter()
             .filter_map(|(key, (stake, account))| {
@@ -88,6 +87,109 @@ impl EpochStakes {
                 }
             })
             .collect();
-        (node_id_to_vote_accounts, epoch_authorized_voters)
+        (
+            total_stake,
+            node_id_to_vote_accounts,
+            epoch_authorized_voters,
+        )
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use solana_vote_program::vote_state::create_account_with_authorized;
+    use std::iter;
+
+    struct VoteAccountInfo {
+        vote_account: Pubkey,
+        account: Account,
+        authorized_voter: Pubkey,
+    }
+
+    #[test]
+    fn test_parse_epoch_vote_accounts() {
+        let num_vote_accounts_per_node = 2;
+        // Create some vote accounts for each pubkey
+        let vote_accounts_map: HashMap<Pubkey, Vec<VoteAccountInfo>> = (0..10)
+            .map(|_| {
+                let node_id = Pubkey::new_rand();
+                (
+                    node_id,
+                    iter::repeat_with(|| {
+                        let authorized_voter = Pubkey::new_rand();
+                        VoteAccountInfo {
+                            vote_account: Pubkey::new_rand(),
+                            account: create_account_with_authorized(
+                                &node_id,
+                                &authorized_voter,
+                                &node_id,
+                                0,
+                                100,
+                            ),
+                            authorized_voter,
+                        }
+                    })
+                    .take(num_vote_accounts_per_node)
+                    .collect(),
+                )
+            })
+            .collect();
+
+        let expected_authorized_voters: HashMap<_, _> = vote_accounts_map
+            .iter()
+            .flat_map(|(_, vote_accounts)| {
+                vote_accounts
+                    .iter()
+                    .map(|v| (v.vote_account, v.authorized_voter))
+            })
+            .collect();
+
+        let expected_node_id_to_vote_accounts: HashMap<_, _> = vote_accounts_map
+            .iter()
+            .map(|(node_pubkey, vote_accounts)| {
+                let mut vote_accounts = vote_accounts
+                    .iter()
+                    .map(|v| (v.vote_account))
+                    .collect::<Vec<_>>();
+                vote_accounts.sort();
+                (*node_pubkey, vote_accounts)
+            })
+            .collect();
+
+        // Create and process the vote accounts
+        let epoch_vote_accounts: HashMap<_, _> = vote_accounts_map
+            .iter()
+            .flat_map(|(_, vote_accounts)| {
+                vote_accounts
+                    .iter()
+                    .map(|v| (v.vote_account, (100, v.account.clone())))
+            })
+            .collect();
+
+        let (total_stake, mut node_id_to_vote_accounts, epoch_authorized_voters) =
+            EpochStakes::parse_epoch_vote_accounts(&epoch_vote_accounts, 0);
+
+        // Verify the results
+        node_id_to_vote_accounts
+            .iter_mut()
+            .for_each(|(_, vote_accounts)| vote_accounts.sort());
+
+        assert!(
+            node_id_to_vote_accounts.len() == expected_node_id_to_vote_accounts.len()
+                && node_id_to_vote_accounts
+                    .iter()
+                    .all(|(k, v)| expected_node_id_to_vote_accounts.get(k).unwrap() == v)
+        );
+        assert!(
+            epoch_authorized_voters.len() == expected_authorized_voters.len()
+                && epoch_authorized_voters
+                    .iter()
+                    .all(|(k, v)| expected_authorized_voters.get(k).unwrap() == v)
+        );
+        assert_eq!(
+            total_stake,
+            vote_accounts_map.len() as u64 * num_vote_accounts_per_node as u64 * 100
+        );
     }
 }
