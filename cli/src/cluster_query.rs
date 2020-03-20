@@ -57,7 +57,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     Arg::with_name("node_pubkey")
                         .index(1)
                         .takes_value(true)
-                        .value_name("PUBKEY")
+                        .value_name("VALIDATOR_PUBKEY")
                         .validator(is_valid_pubkey)
                         .required(true)
                         .help("Identity pubkey of the validator"),
@@ -221,7 +221,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("vote_account_pubkeys")
                         .index(1)
-                        .value_name("VOTE ACCOUNT PUBKEYS")
+                        .value_name("VOTE_ACCOUNT_PUBKEYS")
                         .takes_value(true)
                         .multiple(true)
                         .validator(is_valid_pubkey)
