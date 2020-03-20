@@ -182,6 +182,42 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
         )
         .subcommand(
+            SubCommand::with_name("stake-authorize")
+                .about("Authorize a new stake signing keypair for the given stake account")
+                .arg(
+                    Arg::with_name("stake_account_pubkey")
+                        .required(true)
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("ACCOUNT_PUBKEY")
+                        .validator(is_valid_pubkey)
+                        .help("Stake account in which to set the authorized staker")
+                )
+                .arg(
+                    Arg::with_name("new_stake_authority")
+                        .long("new-stake-authority")
+                        .required_unless("new_withdraw_authority")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_valid_pubkey)
+                        .help("New authorized staker")
+                )
+                .arg(
+                    Arg::with_name("new_withdraw_authority")
+                        .long("new-withdraw-authority")
+                        .required_unless("new_stake_authority")
+                        .takes_value(true)
+                        .value_name("PUBKEY")
+                        .validator(is_valid_pubkey)
+                        .help("New authorized withdrawer")
+                )
+                .arg(stake_authority_arg())
+                .offline_args()
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
+                .arg(fee_payer_arg())
+        )
+        .subcommand(
             SubCommand::with_name("stake-authorize-staker")
                 .about("Authorize a new stake signing keypair for the given stake account")
                 .arg(
@@ -1843,6 +1879,110 @@ mod tests {
             stake_account_pubkey,
             &stake_authority_keypair_file,
             StakeAuthorize::Withdrawer,
+        );
+
+        // Combined stake authorize subcommand (stake-authorize)
+        let stake_account_string = stake_account_pubkey.to_string();
+        let new_stake_authority = Pubkey::new(&[1u8; 32]);
+        let new_stake_string = new_stake_authority.to_string();
+        let new_withdraw_authority = Pubkey::new(&[2u8; 32]);
+        let new_withdraw_string = new_withdraw_authority.to_string();
+        let test_stake_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &new_stake_string,
+            "--new-withdraw-authority",
+            &new_withdraw_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_stake_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![
+                        (
+                            StakeAuthorize::Staker,
+                            new_stake_authority,
+                            0,
+                        ),
+                        (
+                            StakeAuthorize::Withdrawer,
+                            new_withdraw_authority,
+                            0,
+                        ),
+                    ],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                ],
+            },
+        );
+        let test_stake_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &new_stake_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_stake_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![
+                        (
+                            StakeAuthorize::Staker,
+                            new_stake_authority,
+                            0,
+                        ),
+                    ],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                ],
+            },
+        );
+        let test_stake_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-withdraw-authority",
+            &new_withdraw_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_stake_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![
+                        (
+                            StakeAuthorize::Withdrawer,
+                            new_withdraw_authority,
+                            0,
+                        ),
+                    ],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                ],
+            },
         );
 
         // Test CreateStakeAccount SubCommand

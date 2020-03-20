@@ -641,8 +641,45 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, online_authority_pubkey);
 
-    // Assign new offline stake authority
+    // Assign new online stake and withdraw authorities
+    let online_authority2 = Keypair::new();
+    let online_authority2_pubkey = online_authority2.pubkey();
+    let withdraw_authority = Keypair::new();
+    let withdraw_authority_pubkey = withdraw_authority.pubkey();
     config.signers.push(&online_authority);
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorizations: vec![
+            (
+                StakeAuthorize::Staker,
+                online_authority2_pubkey,
+                1,
+            ),
+            (
+                StakeAuthorize::Withdrawer,
+                withdraw_authority_pubkey,
+                0,
+            ),
+        ],
+        sign_only: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let (current_staker, current_withdrawer) = match stake_state {
+        StakeState::Initialized(meta) => (meta.authorized.staker, meta.authorized.withdrawer),
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_staker, online_authority2_pubkey);
+    assert_eq!(current_withdrawer, withdraw_authority_pubkey);
+
+    // Assign new offline stake authority
+    config.signers.pop();
+    config.signers.push(&online_authority2);
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![(StakeAuthorize::Staker, offline_authority_pubkey, 1)],

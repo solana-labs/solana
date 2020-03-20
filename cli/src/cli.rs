@@ -646,6 +646,12 @@ pub fn parse_command(
         ("split-stake", Some(matches)) => {
             parse_split_stake(matches, default_signer_path, wallet_manager)
         }
+        ("stake-authorize", Some(matches)) => parse_stake_authorize(
+            matches,
+            default_signer_path,
+            wallet_manager,
+            &vec![StakeAuthorize::Staker, StakeAuthorize::Withdrawer],
+        ),
         ("stake-authorize-staker", Some(matches)) => parse_stake_authorize(
             matches,
             default_signer_path,
