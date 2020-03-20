@@ -84,7 +84,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 ```bash
-solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
+solana transfer --fee-payer=<SENDER_KEYPAIR> --from=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
 ```
 
 where you replace `<SENDER_KEYPAIR>` with the path to a keypair in your wallet,
@@ -99,6 +99,39 @@ solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
 recipient's public key.
 
+## Set a default fee-payer
+
+Every transaction includes a fee, which is paid from a fee-payer account.
+The fee-payer is specified with `--fee-payer=<KEYPAIR>`. If the option,
+is missing, commands use the keypair at `--keypair=<KEYPAIR>` as the
+fee-payer. If that option is missing as well, commands use the *default signer*,
+which is set in your CLI configuration:
+
+```bash
+solana config set --keypair=<KEYPAIR>
+```
+
+For convenience, consider setting the default signer to the account you want
+to pay transaction fees. Because transaction fees are so inexpensive on
+Solana, it's oftentimes sufficient to use a keypair file for this. Although
+keypair files are the most insecure way to store tokens, a fee-payer account
+rarely needs to hold more than a fraction of a SOL.
+
+Here's how to create and configure a fee-payer account:
+
+```bash
+solana-keygen --no-passphrase -o ~/fee-payer.json
+solana config set --keypair=~/fee-payer.json
+```
+
+Now transfer it a small amount of SOL:
+
+```bash
+solana transfer --fee-payer=<SENDER_KEYPAIR> --from=<SENDER_KEYPAIR> ~/fee-payer.json 1
+```
+
+Hopefully that's the last time you use the `--fee-payer` option!
+
 ## Send Tokens
 
 If you already hold SOL and want to send tokens to someone, you will need
@@ -107,7 +140,7 @@ tokens to transfer. Once you have that collected, you can transfer tokens
 with the `solana transfer` command:
 
 ```bash
-solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
+solana transfer --from=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
 ```
 
 Confirm the updated balances with `solana balance`:
