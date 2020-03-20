@@ -1,4 +1,4 @@
-use solana_sdk::{pubkey::Pubkey, system_instruction::create_address_with_seed};
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Default)]
 pub struct AddressGenerator {
@@ -17,7 +17,7 @@ impl AddressGenerator {
     }
 
     pub fn nth(&self, nth: usize) -> Pubkey {
-        create_address_with_seed(&self.base_pubkey, &format!("{}", nth), &self.program_id).unwrap()
+        Pubkey::create_with_seed(&self.base_pubkey, &format!("{}", nth), &self.program_id).unwrap()
     }
 
     #[allow(clippy::should_implement_trait)]

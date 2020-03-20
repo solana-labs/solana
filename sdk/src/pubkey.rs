@@ -1,6 +1,24 @@
+use crate::{hash::hashv, program_utils::DecodeError};
+use num_derive::{FromPrimitive, ToPrimitive};
 use std::{convert::TryFrom, error, fmt, mem, str::FromStr};
+use thiserror::Error;
 
 pub use bs58;
+
+/// maximum length of derived pubkey seed
+pub const MAX_SEED_LEN: usize = 32;
+
+#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+pub enum PubkeyError {
+    #[error("length of requested seed is too long")]
+    MaxSeedLengthExceeded,
+}
+
+impl<T> DecodeError<T> for PubkeyError {
+    fn type_of() -> &'static str {
+        "PubkeyError"
+    }
+}
 
 #[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -45,6 +63,20 @@ impl Pubkey {
 
     pub const fn new_from_array(pubkey_array: [u8; 32]) -> Self {
         Self(pubkey_array)
+    }
+
+    pub fn create_with_seed(
+        base: &Pubkey,
+        seed: &str,
+        program_id: &Pubkey,
+    ) -> Result<Pubkey, PubkeyError> {
+        if seed.len() > MAX_SEED_LEN {
+            return Err(PubkeyError::MaxSeedLengthExceeded);
+        }
+
+        Ok(Pubkey::new(
+            hashv(&[base.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
+        ))
     }
 
     #[cfg(not(feature = "program"))]
@@ -101,7 +133,7 @@ pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::remove_file;
+    use std::{fs::remove_file, str::from_utf8};
 
     #[test]
     fn pubkey_fromstr() {
@@ -133,6 +165,58 @@ mod tests {
         assert_eq!(
             pubkey_base58_str.parse::<Pubkey>(),
             Err(ParsePubkeyError::Invalid)
+        );
+    }
+
+    #[test]
+    fn test_create_with_seed() {
+        assert!(Pubkey::create_with_seed(&Pubkey::new_rand(), "☉", &Pubkey::new_rand()).is_ok());
+        assert_eq!(
+            Pubkey::create_with_seed(
+                &Pubkey::new_rand(),
+                from_utf8(&[127; MAX_SEED_LEN + 1]).unwrap(),
+                &Pubkey::new_rand()
+            ),
+            Err(PubkeyError::MaxSeedLengthExceeded)
+        );
+        assert!(Pubkey::create_with_seed(
+            &Pubkey::new_rand(),
+            "\
+             \u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
+             ",
+            &Pubkey::new_rand()
+        )
+        .is_ok());
+        // utf-8 abuse ;)
+        assert_eq!(
+            Pubkey::create_with_seed(
+                &Pubkey::new_rand(),
+                "\
+                 x\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
+                 ",
+                &Pubkey::new_rand()
+            ),
+            Err(PubkeyError::MaxSeedLengthExceeded)
+        );
+
+        assert!(Pubkey::create_with_seed(
+            &Pubkey::new_rand(),
+            std::str::from_utf8(&[0; MAX_SEED_LEN]).unwrap(),
+            &Pubkey::new_rand(),
+        )
+        .is_ok());
+
+        assert!(Pubkey::create_with_seed(&Pubkey::new_rand(), "", &Pubkey::new_rand(),).is_ok());
+
+        assert_eq!(
+            Pubkey::create_with_seed(
+                &Pubkey::default(),
+                "limber chicken: 4/45",
+                &Pubkey::default(),
+            ),
+            Ok("9h1HyLCW5dZnBVap8C5egQ9Z6pHyjsh5MNy83iPqqRuq"
+                .parse()
+                .unwrap())
         );
     }
 

@@ -6,9 +6,7 @@ use solana_sdk::{
     nonce::{self, Account as NonceAccount},
     program_utils::{limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
-    system_instruction::{
-        create_address_with_seed, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
-    },
+    system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
     system_program,
     sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent, Sysvar},
 };
@@ -36,7 +34,7 @@ impl Address {
     ) -> Result<Self, InstructionError> {
         let base = if let Some((base, seed, program_id)) = with_seed {
             // re-derive the address, must match the supplied address
-            if *address != create_address_with_seed(base, seed, program_id)? {
+            if *address != Pubkey::create_with_seed(base, seed, program_id)? {
                 return Err(SystemError::AddressWithSeedMismatch.into());
             }
             Some(*base)
@@ -404,7 +402,7 @@ mod tests {
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
         let seed = "shiny pepper";
-        let to = create_address_with_seed(&from, seed, &new_program_owner).unwrap();
+        let to = Pubkey::create_with_seed(&from, seed, &new_program_owner).unwrap();
 
         let from_account = Account::new_ref(100, 0, &system_program::id());
         let to_account = Account::new_ref(0, 0, &Pubkey::default());
@@ -451,7 +449,7 @@ mod tests {
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
         let seed = "dull boy";
-        let to = create_address_with_seed(&from, seed, &new_program_owner).unwrap();
+        let to = Pubkey::create_with_seed(&from, seed, &new_program_owner).unwrap();
 
         let from_account = Account::new_ref(100, 0, &system_program::id());
         let mut to_account = Account::new(0, 0, &Pubkey::default());
@@ -919,7 +917,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let seed = "seed";
         let program_id = Pubkey::new_rand();
-        let alice_with_seed = create_address_with_seed(&alice_pubkey, seed, &program_id).unwrap();
+        let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &program_id).unwrap();
 
         bank_client
             .transfer(50, &mint_keypair, &alice_pubkey)
@@ -1029,7 +1027,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let seed = "seed";
         let program_id = Pubkey::new_rand();
-        let alice_with_seed = create_address_with_seed(&alice_pubkey, seed, &program_id).unwrap();
+        let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &program_id).unwrap();
 
         bank_client
             .transfer(50, &mint_keypair, &alice_pubkey)

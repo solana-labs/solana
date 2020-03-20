@@ -9,7 +9,6 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_instruction::create_address_with_seed,
     sysvar::{self, stake_history::StakeHistory, Sysvar},
 };
 use solana_stake_program::{
@@ -114,7 +113,7 @@ fn test_stake_create_and_split_single_signature() {
     let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
 
     let stake_address =
-        create_address_with_seed(&staker_pubkey, "stake", &solana_stake_program::id()).unwrap();
+        Pubkey::create_with_seed(&staker_pubkey, "stake", &solana_stake_program::id()).unwrap();
 
     let authorized = stake_state::Authorized::auto(&staker_pubkey);
 
@@ -138,7 +137,7 @@ fn test_stake_create_and_split_single_signature() {
 
     // split the stake
     let split_stake_address =
-        create_address_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
+        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
             .unwrap();
     // Test split
     let message = Message::new(&stake_instruction::split_with_seed(
@@ -413,7 +412,7 @@ fn test_create_stake_account_from_seed() {
 
     let seed = "test-string";
     let stake_pubkey =
-        create_address_with_seed(&mint_pubkey, seed, &solana_stake_program::id()).unwrap();
+        Pubkey::create_with_seed(&mint_pubkey, seed, &solana_stake_program::id()).unwrap();
 
     // Create Vote Account
     let message = Message::new(&vote_instruction::create_account(
