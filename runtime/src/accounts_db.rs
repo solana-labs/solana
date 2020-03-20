@@ -48,7 +48,7 @@ use std::{
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 use tempfile::TempDir;
 
@@ -426,6 +426,12 @@ pub struct BankHashInfo {
     pub stats: BankHashStats,
 }
 
+#[derive(Debug)]
+struct FrozenAccountInfo {
+    pub hash: Hash,
+    pub lamports: u64, // Account balance must be >= this value
+}
+
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDB {
@@ -447,6 +453,9 @@ pub struct AccountsDB {
 
     /// Starting file size of appendvecs
     file_size: u64,
+
+    /// Accounts that will cause a panic! if modified
+    frozen_accounts: Mutex<HashMap<Pubkey, FrozenAccountInfo>>,
 
     /// Thread pool used for par_iter
     pub thread_pool: ThreadPool,
@@ -478,6 +487,7 @@ impl Default for AccountsDB {
                 .unwrap(),
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
+            frozen_accounts: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -491,7 +501,7 @@ impl AccountsDB {
                 ..Self::default()
             }
         } else {
-            // Create a temprorary set of accounts directories, used primarily
+            // Create a temporary set of accounts directories, used primarily
             // for testing
             let (temp_dirs, paths) = get_temp_accounts_paths(DEFAULT_NUM_DIRS).unwrap();
             Self {
@@ -976,6 +986,25 @@ impl AccountsDB {
         )
     }
 
+    fn hash_frozen_account_data(account: &Account) -> Hash {
+        let mut hasher = Hasher::default();
+        let mut buf = [0u8; 8];
+
+        hasher.hash(&account.data);
+        hasher.hash(&account.owner.as_ref());
+
+        if account.executable {
+            hasher.hash(&[1u8; 1]);
+        } else {
+            hasher.hash(&[0u8; 1]);
+        }
+
+        LittleEndian::write_u64(&mut buf[..], account.rent_epoch);
+        hasher.hash(&buf);
+
+        hasher.result()
+    }
+
     pub fn hash_account_data(
         slot: Slot,
         lamports: u64,
@@ -1387,8 +1416,52 @@ impl AccountsDB {
         hashes
     }
 
+    pub fn freeze_accounts(&self, ancestors: &HashMap<Slot, usize>, account_pubkeys: &[Pubkey]) {
+        let mut frozen_accounts = self.frozen_accounts.lock().unwrap();
+        for account_pubkey in account_pubkeys {
+            let (account, _slot) = self
+                .load_slow(ancestors, &account_pubkey)
+                .unwrap_or_default();
+            let frozen_account_info = FrozenAccountInfo {
+                hash: Self::hash_frozen_account_data(&account),
+                lamports: account.lamports,
+            };
+            warn!(
+                "Account {} is now frozen at lamports={}, hash={}",
+                account_pubkey, frozen_account_info.lamports, frozen_account_info.hash
+            );
+            frozen_accounts.insert(*account_pubkey, frozen_account_info);
+        }
+    }
+
     /// Store the account update.
     pub fn store(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) {
+        let mut frozen_accounts = self.frozen_accounts.lock().unwrap();
+        if !frozen_accounts.is_empty() {
+            for (account_pubkey, account) in accounts.iter() {
+                frozen_accounts
+                    .entry(**account_pubkey)
+                    .and_modify(|frozen_account_info| {
+                        if account.lamports < frozen_account_info.lamports {
+                            panic!(
+                                "Frozen account {} modified.  Lamports decreased from {} to {}",
+                                account_pubkey, frozen_account_info.lamports, account.lamports,
+                            )
+                        } else {
+                            frozen_account_info.lamports = account.lamports;
+                        }
+
+                        let hash = Self::hash_frozen_account_data(&account);
+                        if hash != frozen_account_info.hash {
+                            panic!(
+                                "Frozen account {} modified.  Hash changed from {} to {}",
+                                account_pubkey, frozen_account_info.hash, hash,
+                            )
+                        }
+                    });
+            }
+        }
+
         let hashes = self.hash_accounts(slot_id, accounts);
         self.store_with_hashes(slot_id, accounts, &hashes);
     }
@@ -2710,6 +2783,111 @@ pub mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_hash_frozen_account_data() {
+        let account = Account::new(1, 42, &Pubkey::default());
+
+        let hash = AccountsDB::hash_frozen_account_data(&account);
+        assert_ne!(hash, Hash::default()); // Better not be the default Hash
+
+        // Lamports changes to not affect the hash
+        let mut account_modified = account.clone();
+        account_modified.lamports -= 1;
+        assert_eq!(
+            hash,
+            AccountsDB::hash_frozen_account_data(&account_modified)
+        );
+
+        // Account data may not be modified
+        let mut account_modified = account.clone();
+        account_modified.data[0] = 42;
+        assert_ne!(
+            hash,
+            AccountsDB::hash_frozen_account_data(&account_modified)
+        );
+
+        // Owner may not be modified
+        let mut account_modified = account.clone();
+        account_modified.owner =
+            Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+        assert_ne!(
+            hash,
+            AccountsDB::hash_frozen_account_data(&account_modified)
+        );
+
+        // Executable may not be modified
+        let mut account_modified = account.clone();
+        account_modified.executable = true;
+        assert_ne!(
+            hash,
+            AccountsDB::hash_frozen_account_data(&account_modified)
+        );
+
+        // Rent epoch may not be modified
+        let mut account_modified = account.clone();
+        account_modified.rent_epoch = 1;
+        assert_ne!(
+            hash,
+            AccountsDB::hash_frozen_account_data(&account_modified)
+        );
+    }
+
+    #[test]
+    fn test_frozen_account_lamport_increase() {
+        let frozen_pubkey =
+            Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+        let db = AccountsDB::new(Vec::new());
+
+        let mut account = Account::new(1, 42, &frozen_pubkey);
+        db.store(0, &[(&frozen_pubkey, &account)]);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        db.freeze_accounts(&ancestors, &[frozen_pubkey]);
+
+        // Store with no account changes is ok
+        db.store(0, &[(&frozen_pubkey, &account)]);
+
+        // Store with an increase in lamports is ok
+        account.lamports += 1;
+        db.store(0, &[(&frozen_pubkey, &account)]);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Frozen account My11111111111111111111111111111111111111111 modified.  Lamports decreased from 1 to 0"
+    )]
+    fn test_frozen_account_lamport_decrease() {
+        let frozen_pubkey =
+            Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+        let db = AccountsDB::new(Vec::new());
+
+        let mut account = Account::new(1, 42, &frozen_pubkey);
+        db.store(0, &[(&frozen_pubkey, &account)]);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        db.freeze_accounts(&ancestors, &[frozen_pubkey]);
+
+        // Store with a decrease in lamports is not ok
+        account.lamports -= 1;
+        db.store(0, &[(&frozen_pubkey, &account)]);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Frozen account My11111111111111111111111111111111111111111 modified.  Hash changed from Be7wuvGiFrjk9XzTTm3LPepeon8sDiVm1qcFsE9VASbb to DDPbmARwVsQjthreFUgSevmkgFAo9RTyoBmVrJ1G8pQC"
+    )]
+    fn test_frozen_account_data_modified() {
+        let frozen_pubkey =
+            Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+        let db = AccountsDB::new(Vec::new());
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        db.freeze_accounts(&ancestors, &[frozen_pubkey]);
+
+        let account = Account::new(1, 42, &frozen_pubkey);
+        db.store(0, &[(&frozen_pubkey, &account)]);
     }
 
     #[test]

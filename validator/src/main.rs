@@ -1,5 +1,6 @@
 use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg, ArgMatches,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App, Arg,
+    ArgMatches,
 };
 use log::*;
 use rand::{thread_rng, Rng};
@@ -662,6 +663,17 @@ pub fn main() {
                 .takes_value(false)
                 .help("Abort the validator if a bank hash mismatch is detected within trusted validator set"),
         )
+        .arg(
+            clap::Arg::with_name("frozen_accounts")
+                .long("frozen-account")
+                .validator(is_pubkey)
+                .value_name("PUBKEY")
+                .multiple(true)
+                .takes_value(true)
+                .help("Freeze the specified account.  This will cause the validator to \
+                       intentionally crash should any transaction modify the frozen account in any way \
+                       other than increasing the account balance"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -733,6 +745,7 @@ pub fn main() {
         voting_disabled: matches.is_present("no_voting"),
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
+        frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         ..ValidatorConfig::default()
     };
 

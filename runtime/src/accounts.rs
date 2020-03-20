@@ -577,6 +577,15 @@ impl Accounts {
         self.accounts_db.store(slot, &accounts_to_store);
     }
 
+    pub fn freeze_accounts(
+        &self,
+        ancestors: &HashMap<Slot, usize>,
+        frozen_account_pubkeys: &[Pubkey],
+    ) {
+        self.accounts_db
+            .freeze_accounts(ancestors, frozen_account_pubkeys);
+    }
+
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
     pub fn purge_slot(&self, slot: Slot) {

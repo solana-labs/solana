@@ -23,6 +23,7 @@ use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     genesis_config::GenesisConfig,
     hash::Hash,
+    pubkey::Pubkey,
     signature::Keypair,
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
@@ -271,6 +272,7 @@ pub struct ProcessOptions {
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
+    pub frozen_accounts: Vec<Pubkey>,
 }
 
 pub fn process_blockstore(
@@ -307,6 +309,8 @@ pub fn process_blockstore_from_root(
     info!("processing ledger from root slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
     let initial_allocation = allocated.get();
+
+    bank.freeze_accounts(&opts.frozen_accounts);
 
     // Starting slot must be a root, and thus has no parents
     assert!(bank.parent().is_none());

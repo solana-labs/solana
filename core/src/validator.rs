@@ -78,6 +78,7 @@ pub struct ValidatorConfig {
     pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
+    pub frozen_accounts: Vec<Pubkey>,
 }
 
 impl Default for ValidatorConfig {
@@ -102,6 +103,7 @@ impl Default for ValidatorConfig {
             trusted_validators: None,
             halt_on_trusted_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
+            frozen_accounts: vec![],
         }
     }
 }
@@ -594,6 +596,7 @@ fn new_banks_from_blockstore(
         poh_verify,
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
+        frozen_accounts: config.frozen_accounts.clone(),
         ..blockstore_processor::ProcessOptions::default()
     };
 

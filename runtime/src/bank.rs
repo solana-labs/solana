@@ -1451,6 +1451,12 @@ impl Bank {
         results
     }
 
+    pub fn freeze_accounts(&self, frozen_account_pubkeys: &[Pubkey]) {
+        self.rc
+            .accounts
+            .freeze_accounts(&self.ancestors, frozen_account_pubkeys)
+    }
+
     pub fn commit_transactions(
         &self,
         txs: &[Transaction],
