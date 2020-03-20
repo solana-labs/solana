@@ -60,9 +60,8 @@ impl ShredFetchStage {
     {
         p.meta.discard = true;
         if let Some((slot, index)) = Self::get_slot_index(p, index_overrun) {
-            info!("slot {} index {}", slot, index);
+            // Seems reasonable to limit shreds to 2 epochs away
             if slot > last_root && slot < (last_slot + 2 * slots_per_epoch) {
-                info!("slot > {}", last_root);
                 // Shred filter
                 let slot_received = shreds_received
                     .entry(slot)
