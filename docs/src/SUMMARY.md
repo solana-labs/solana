@@ -1,8 +1,8 @@
 # Table of contents
 
 * [Introduction](introduction.md)
+* [Install the Solana Tool Suite](install-solana.md)
 * [Command-line Guide](cli/README.md)
-  * [Install the Solana Tool Suite](install-solana.md)
   * [Choose a Wallet](cli/choose-a-wallet.md)
   * [Hardware Wallets](remote-wallet/README.md)
     * [Ledger Hardware Wallet](remote-wallet/ledger.md)
