@@ -18,6 +18,7 @@ At present, the following commands support offline signing:
 * [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
 * [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
 * [`split-stake`](../cli/usage.md#solana-split-stake)
+* [`stake-authorize`](../cli/usage.md#solana-stake-authorize)
 * [`stake-authorize-staker`](../cli/usage.md#solana-stake-authorize-staker)
 * [`stake-authorize-withdrawer`](../cli/usage.md#solana-stake-authorize-withdrawer)
 * [`stake-set-lockup`](../cli/usage.md#solana-stake-set-lockup)
