@@ -120,7 +120,7 @@
     "marked": "^0.8.0",
     "prettier": "^1.14.3",
     "rimraf": "3.0.2",
-    "rollup": "2.0.6",
+    "rollup": "2.1.0",
     "rollup-plugin-babel": "^4.3.2",
     "rollup-plugin-commonjs": "^10.0.0",
     "rollup-plugin-copy": "^3.3.0",
