@@ -1,6 +1,8 @@
 use crate::{hash::hashv, program_utils::DecodeError};
 use num_derive::{FromPrimitive, ToPrimitive};
-use std::{convert::TryFrom, error, fmt, mem, str::FromStr};
+#[cfg(not(feature = "program"))]
+use std::error;
+use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
 
 pub use bs58;
@@ -13,7 +15,6 @@ pub enum PubkeyError {
     #[error("length of requested seed is too long")]
     MaxSeedLengthExceeded,
 }
-
 impl<T> DecodeError<T> for PubkeyError {
     fn type_of() -> &'static str {
         "PubkeyError"
@@ -24,19 +25,18 @@ impl<T> DecodeError<T> for PubkeyError {
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey([u8; 32]);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum ParsePubkeyError {
+    #[error("String is the wrong size")]
     WrongSize,
+    #[error("Invalid Base58 string")]
     Invalid,
 }
-
-impl fmt::Display for ParsePubkeyError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ParsePubkeyError: {:?}", self)
+impl<T> DecodeError<T> for ParsePubkeyError {
+    fn type_of() -> &'static str {
+        "ParsePubkeyError"
     }
 }
-
-impl error::Error for ParsePubkeyError {}
 
 impl FromStr for Pubkey {
     type Err = ParsePubkeyError;
