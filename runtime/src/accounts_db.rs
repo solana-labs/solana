@@ -1448,31 +1448,36 @@ impl AccountsDB {
         }
     }
 
-    /// Store the account update.
-    pub fn store(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) {
-        if !self.frozen_accounts.is_empty() {
-            for (account_pubkey, account) in accounts.iter() {
-                if let Some(frozen_account_info) = self.frozen_accounts.get(*account_pubkey) {
-                    if account.lamports < frozen_account_info.lamports {
-                        FROZEN_ACCOUNT_PANIC.store(true, Ordering::Relaxed);
-                        panic!(
-                            "Frozen account {} modified.  Lamports decreased from {} to {}",
-                            account_pubkey, frozen_account_info.lamports, account.lamports,
-                        )
-                    }
+    /// Cause a panic if frozen accounts would be affected by data in `accounts`
+    fn assert_frozen_accounts(&self, accounts: &[(&Pubkey, &Account)]) {
+        if self.frozen_accounts.is_empty() {
+            return;
+        }
+        for (account_pubkey, account) in accounts.iter() {
+            if let Some(frozen_account_info) = self.frozen_accounts.get(*account_pubkey) {
+                if account.lamports < frozen_account_info.lamports {
+                    FROZEN_ACCOUNT_PANIC.store(true, Ordering::Relaxed);
+                    panic!(
+                        "Frozen account {} modified.  Lamports decreased from {} to {}",
+                        account_pubkey, frozen_account_info.lamports, account.lamports,
+                    )
+                }
 
-                    let hash = Self::hash_frozen_account_data(&account);
-                    if hash != frozen_account_info.hash {
-                        FROZEN_ACCOUNT_PANIC.store(true, Ordering::Relaxed);
-                        panic!(
-                            "Frozen account {} modified.  Hash changed from {} to {}",
-                            account_pubkey, frozen_account_info.hash, hash,
-                        )
-                    }
+                let hash = Self::hash_frozen_account_data(&account);
+                if hash != frozen_account_info.hash {
+                    FROZEN_ACCOUNT_PANIC.store(true, Ordering::Relaxed);
+                    panic!(
+                        "Frozen account {} modified.  Hash changed from {} to {}",
+                        account_pubkey, frozen_account_info.hash, hash,
+                    )
                 }
             }
         }
+    }
 
+    /// Store the account update.
+    pub fn store(&self, slot_id: Slot, accounts: &[(&Pubkey, &Account)]) {
+        self.assert_frozen_accounts(accounts);
         let hashes = self.hash_accounts(slot_id, accounts);
         self.store_with_hashes(slot_id, accounts, &hashes);
     }
