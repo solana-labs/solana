@@ -1360,6 +1360,7 @@ impl AccountsDB {
                         }
                     }
                 }
+                drop(storage);
                 drop(index);
                 measure.stop();
                 inc_new_counter_info!("clean_dead_slots-unref-ms", measure.as_ms() as usize);
