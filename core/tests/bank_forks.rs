@@ -7,12 +7,10 @@ mod tests {
     use itertools::Itertools;
     use solana_core::cluster_info::ClusterInfo;
     use solana_core::contact_info::ContactInfo;
-    use solana_core::{
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        snapshot_packager_service::SnapshotPackagerService,
-    };
+    use solana_core::snapshot_packager_service::SnapshotPackagerService;
     use solana_ledger::{
         bank_forks::{BankForks, SnapshotConfig},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_utils,
     };
     use solana_runtime::{

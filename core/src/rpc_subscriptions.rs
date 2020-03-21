@@ -533,10 +533,10 @@ impl RpcSubscriptions {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_program;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::{
         signature::{Keypair, Signer},
         system_transaction,

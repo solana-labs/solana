@@ -278,9 +278,9 @@ impl RetransmitStage {
 mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
     use solana_ledger::create_new_tmp_ledger;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_net_utils::find_available_port_in_range;
     use solana_perf::packet::{Meta, Packet, Packets};
     use solana_sdk::pubkey::Pubkey;

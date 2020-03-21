@@ -76,7 +76,7 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::genesis_config::GenesisConfig;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::system_transaction;

@@ -6,11 +6,13 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
-    genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     gossip_service::discover_cluster,
     validator::{Validator, ValidatorConfig},
 };
-use solana_ledger::create_new_tmp_ledger;
+use solana_ledger::{
+    create_new_tmp_ledger,
+    genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+};
 use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT, DEFAULT_TICKS_PER_SLOT},

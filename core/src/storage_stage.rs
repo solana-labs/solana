@@ -645,8 +645,8 @@ pub fn test_cluster_info(id: &Pubkey) -> Arc<RwLock<ClusterInfo>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use rayon::prelude::*;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hasher;
     use solana_sdk::signature::{Keypair, Signer};

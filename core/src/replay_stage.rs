@@ -1294,7 +1294,6 @@ pub(crate) mod tests {
         commitment::BlockCommitment,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
-        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
     };
@@ -1305,6 +1304,7 @@ pub(crate) mod tests {
         blockstore::{entries_to_test_shreds, BlockstoreError},
         create_new_tmp_ledger,
         entry::{self, next_entry, Entry},
+        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         get_tmp_ledger_path,
         shred::{
             CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,

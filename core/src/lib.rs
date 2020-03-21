@@ -28,7 +28,6 @@ pub mod crds_value;
 pub mod epoch_slots;
 pub mod fetch_stage;
 pub mod gen_keys;
-pub mod genesis_utils;
 pub mod gossip_service;
 pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;

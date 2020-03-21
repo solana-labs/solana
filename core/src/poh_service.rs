@@ -120,8 +120,8 @@ impl PohService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::poh_recorder::WorkingBank;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
     use solana_perf::test_tx::test_tx;
