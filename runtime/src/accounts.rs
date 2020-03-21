@@ -79,15 +79,24 @@ impl Accounts {
         ancestors: &HashMap<Slot, usize>,
         frozen_account_pubkeys: &[Pubkey],
     ) -> Self {
-        let mut accounts_db = AccountsDB::new(paths);
-        accounts_db.freeze_accounts(ancestors, frozen_account_pubkeys);
-
-        Accounts {
+        let mut accounts = Accounts {
             slot: 0,
-            accounts_db: Arc::new(accounts_db),
+            accounts_db: Arc::new(AccountsDB::new(paths)),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-        }
+        };
+        accounts.freeze_accounts(ancestors, frozen_account_pubkeys);
+        accounts
+    }
+
+    pub fn freeze_accounts(
+        &mut self,
+        ancestors: &HashMap<Slot, usize>,
+        frozen_account_pubkeys: &[Pubkey],
+    ) {
+        Arc::get_mut(&mut self.accounts_db)
+            .unwrap()
+            .freeze_accounts(ancestors, frozen_account_pubkeys);
     }
 
     pub fn from_stream<R: Read, P: AsRef<Path>>(

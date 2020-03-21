@@ -366,12 +366,15 @@ impl Bank {
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
-        bank.rc.accounts = Arc::new(Accounts::new_with_frozen_accounts(
-            paths,
-            &bank.ancestors,
-            frozen_account_pubkeys,
-        ));
+
+        bank.rc.accounts = Arc::new(Accounts::new(paths));
         bank.process_genesis_config(genesis_config);
+
+        // Freeze accounts after process_genesis_config creates the initial append vecs
+        Arc::get_mut(&mut bank.rc.accounts)
+            .unwrap()
+            .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);
+
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         {
