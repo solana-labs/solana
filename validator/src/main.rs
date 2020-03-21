@@ -357,14 +357,6 @@ pub fn main() {
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_clap_utils::version!())
         .arg(
-            Arg::with_name("blockstream_unix_socket")
-                .long("blockstream")
-                .takes_value(true)
-                .hidden(true) // Don't document this argument to discourage its use
-                .value_name("UNIX DOMAIN SOCKET")
-                .help("Stream entries to this unix domain socket path")
-        )
-        .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                 .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
@@ -719,9 +711,6 @@ pub fn main() {
     };
 
     let mut validator_config = ValidatorConfig {
-        blockstream_unix_socket: matches
-            .value_of("blockstream_unix_socket")
-            .map(PathBuf::from),
         dev_sigverify_disabled: matches.is_present("dev_no_sigverify"),
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
