@@ -1012,9 +1012,7 @@ pub fn create_test_recorder(
 mod tests {
     use super::*;
     use crate::{
-        cluster_info::Node,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        poh_recorder::WorkingBank,
+        cluster_info::Node, poh_recorder::WorkingBank,
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
@@ -1023,6 +1021,7 @@ mod tests {
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         entry::{next_entry, Entry, EntrySlice},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
     use solana_perf::packet::to_packets;

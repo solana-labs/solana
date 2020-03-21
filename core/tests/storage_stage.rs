@@ -3,12 +3,12 @@
 #[cfg(test)]
 mod tests {
     use log::*;
-    use solana_core::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_core::storage_stage::{test_cluster_info, SLOTS_PER_TURN_TEST};
     use solana_core::storage_stage::{StorageStage, StorageState};
     use solana_ledger::bank_forks::BankForks;
     use solana_ledger::blockstore_processor;
     use solana_ledger::entry;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::{blockstore::Blockstore, create_new_tmp_ledger};
     use solana_runtime::bank::Bank;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;

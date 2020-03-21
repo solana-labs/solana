@@ -1182,17 +1182,18 @@ impl RpcSol for RpcSolImpl {
 pub mod tests {
     use super::*;
     use crate::{
-        commitment::BlockCommitment,
-        contact_info::ContactInfo,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        commitment::BlockCommitment, contact_info::ContactInfo,
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
     use bincode::deserialize;
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
     use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
-        blockstore::entries_to_test_shreds, blockstore_processor::fill_blockstore_slot_with_ticks,
-        entry::next_entry_mut, get_tmp_ledger_path,
+        blockstore::entries_to_test_shreds,
+        blockstore_processor::fill_blockstore_slot_with_ticks,
+        entry::next_entry_mut,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        get_tmp_ledger_path,
     };
     use solana_sdk::{
         fee_calculator::DEFAULT_BURN_PERCENT,

@@ -331,14 +331,12 @@ impl BroadcastStage {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::{
-        cluster_info::{ClusterInfo, Node},
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    };
+    use crate::cluster_info::{ClusterInfo, Node};
     use crossbeam_channel::unbounded;
     use solana_ledger::{
         blockstore::{make_slot_entries, Blockstore},
         entry::create_ticks,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
         shred::{max_ticks_per_n_shreds, Shredder, RECOMMENDED_FEC_RATE},
     };

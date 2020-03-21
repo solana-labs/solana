@@ -476,14 +476,14 @@ impl WindowService {
 mod test {
     use super::*;
     use crate::{
-        cluster_info::ClusterInfo, contact_info::ContactInfo,
-        genesis_utils::create_genesis_config_with_leader, repair_service::RepairSlotRange,
+        cluster_info::ClusterInfo, contact_info::ContactInfo, repair_service::RepairSlotRange,
     };
     use rand::thread_rng;
     use solana_ledger::shred::DataShredHeader;
     use solana_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
         entry::{create_ticks, Entry},
+        genesis_utils::create_genesis_config_with_leader,
         get_tmp_ledger_path,
         shred::Shredder,
     };

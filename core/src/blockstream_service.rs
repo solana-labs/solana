@@ -100,12 +100,12 @@ impl BlockstreamService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use bincode::{deserialize, serialize};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::entry::{create_ticks, Entry};
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::system_transaction;

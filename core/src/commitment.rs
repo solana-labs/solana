@@ -230,7 +230,7 @@ impl AggregateCommitmentService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::pubkey::Pubkey;
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state::{self, VoteStateVersions};

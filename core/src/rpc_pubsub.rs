@@ -279,12 +279,12 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use crate::rpc_subscriptions::tests::robust_poll_or_panic;
     use jsonrpc_core::{futures::sync::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_budget_program::{self, budget_instruction};
     use solana_ledger::bank_forks::BankForks;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         pubkey::Pubkey,

@@ -669,7 +669,7 @@ pub struct TestValidatorOptions {
 
 impl Default for TestValidatorOptions {
     fn default() -> Self {
-        use crate::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
+        use solana_ledger::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
         TestValidatorOptions {
             fees: 0,
             bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
@@ -683,7 +683,9 @@ impl TestValidator {
     }
 
     pub fn run_with_options(options: TestValidatorOptions) -> Self {
-        use crate::genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo};
+        use solana_ledger::genesis_utils::{
+            create_genesis_config_with_leader_ex, GenesisConfigInfo,
+        };
         use solana_sdk::fee_calculator::FeeRateGovernor;
 
         let TestValidatorOptions {
@@ -803,7 +805,7 @@ fn get_stake_percent_in_gossip(bank: &Arc<Bank>, cluster_info: &Arc<RwLock<Clust
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::create_genesis_config_with_leader;
+    use solana_ledger::genesis_utils::create_genesis_config_with_leader;
     use std::fs::remove_dir_all;
 
     #[test]

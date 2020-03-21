@@ -248,12 +248,11 @@ impl JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        contact_info::ContactInfo,
+    use crate::{contact_info::ContactInfo, rpc::tests::create_validator_exit};
+    use solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        rpc::tests::create_validator_exit,
+        get_tmp_ledger_path,
     };
-    use solana_ledger::get_tmp_ledger_path;
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::Signer;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
