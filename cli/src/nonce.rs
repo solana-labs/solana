@@ -94,7 +94,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("NONCE_ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
@@ -155,7 +155,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("NONCE_ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
@@ -168,7 +168,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("NONCE_ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
@@ -183,7 +183,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("NONCE_ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
@@ -202,7 +202,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("nonce_account_pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("NONCE_ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
@@ -211,7 +211,7 @@ impl NonceSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("destination_account_pubkey")
                         .index(2)
-                        .value_name("RECIPIENT_PUBKEY")
+                        .value_name("RECIPIENT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
