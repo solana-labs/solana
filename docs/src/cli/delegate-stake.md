@@ -1,20 +1,12 @@
 # Earn Staking Rewards
 
 After you have [received SOL](transfer-tokens.md), you might consider putting
-it to use by delegating stake to a validator. Solana is a Proof of Stake
-blockchain, which means that holding tokens gives you the option to influence
-which validators participate in securing the ledger. The more tokens you hold,
-the more influence you have. The running assumption of any Proof of Stake
-blockchain is that the more tokens you hold, the more you have to lose if a
-validator acts maliciously.
-
-As a tokenholder, it is your option to use your tokens as *stake*. Stake is
-what we call tokens when they reside in a *stake account*. From the stake
-account, you can delegate that stake to validators. Solana weights validator
-votes by the amount of stake delegated to them, which gives those validators
-more influence in determining then next valid block of transactions in the
-blockchain. Solana then generates new SOL periodically to reward stakers and
-validators. You earn more rewards the more stake you delegate.
+it to use by delegating *stake* to a validator. Stake is what we call tokens
+in a *stake account*. Solana weights validator votes by the amount of stake
+delegated to them, which gives those validators more influence in determining
+then next valid block of transactions in the blockchain. Solana then generates
+new SOL periodically to reward stakers and validators. You earn more rewards
+the more stake you delegate.
 
 ## Create a Stake Account
 
