@@ -83,11 +83,10 @@ impl Accounts {
     pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         stream: &mut BufReader<R>,
-        local_paths: &[PathBuf],
         append_vecs_path: P,
     ) -> std::result::Result<(), IOError> {
         self.accounts_db
-            .accounts_from_stream(stream, local_paths, append_vecs_path)
+            .accounts_from_stream(stream, append_vecs_path)
     }
 
     /// Return true if the slice has any duplicate elements
@@ -1404,7 +1403,7 @@ mod tests {
         let (_accounts_dir, daccounts_paths) = get_temp_accounts_paths(2).unwrap();
         let daccounts = Accounts::new(daccounts_paths.clone());
         assert!(daccounts
-            .accounts_from_stream(&mut reader, &daccounts_paths, copied_accounts.path())
+            .accounts_from_stream(&mut reader, copied_accounts.path())
             .is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(accounts.bank_hash_at(0), daccounts.bank_hash_at(0));

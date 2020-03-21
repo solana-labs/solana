@@ -935,22 +935,14 @@ impl AccountsDB {
     }
 
     fn create_and_insert_store(&self, slot_id: Slot, size: u64) -> Arc<AccountStorageEntry> {
-        let mut stores = self.storage.write().unwrap();
-        let slot_storage = stores.0.entry(slot_id).or_insert_with(HashMap::new);
-
-        self.create_store(slot_id, slot_storage, size)
-    }
-
-    fn create_store(
-        &self,
-        slot_id: Slot,
-        slot_storage: &mut SlotStores,
-        size: u64,
-    ) -> Arc<AccountStorageEntry> {
         let path_index = thread_rng().gen_range(0, self.paths.len());
         let store =
             Arc::new(self.new_storage_entry(slot_id, &Path::new(&self.paths[path_index]), size));
-        slot_storage.insert(store.id, store.clone());
+        let store_for_index = store.clone();
+
+        let mut stores = self.storage.write().unwrap();
+        let slot_storage = stores.0.entry(slot_id).or_insert_with(HashMap::new);
+        slot_storage.insert(store.id, store_for_index);
         store
     }
 
@@ -2329,12 +2321,11 @@ pub mod tests {
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let daccounts = AccountsDB::new(Vec::new());
-        let local_paths = daccounts.paths.clone();
         let copied_accounts = TempDir::new().unwrap();
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
         daccounts
-            .accounts_from_stream(&mut reader, &local_paths, copied_accounts.path())
+            .accounts_from_stream(&mut reader, copied_accounts.path())
             .unwrap();
 
         print_count_and_status("daccounts", &daccounts);
