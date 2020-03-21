@@ -646,24 +646,9 @@ pub fn parse_command(
         ("split-stake", Some(matches)) => {
             parse_split_stake(matches, default_signer_path, wallet_manager)
         }
-        ("stake-authorize", Some(matches)) => parse_stake_authorize(
-            matches,
-            default_signer_path,
-            wallet_manager,
-            &[StakeAuthorize::Staker, StakeAuthorize::Withdrawer],
-        ),
-        ("stake-authorize-staker", Some(matches)) => parse_stake_authorize(
-            matches,
-            default_signer_path,
-            wallet_manager,
-            &[StakeAuthorize::Staker],
-        ),
-        ("stake-authorize-withdrawer", Some(matches)) => parse_stake_authorize(
-            matches,
-            default_signer_path,
-            wallet_manager,
-            &[StakeAuthorize::Withdrawer],
-        ),
+        ("stake-authorize", Some(matches)) => {
+            parse_stake_authorize(matches, default_signer_path, wallet_manager)
+        }
         ("stake-set-lockup", Some(matches)) => {
             parse_stake_set_lockup(matches, default_signer_path, wallet_manager)
         }

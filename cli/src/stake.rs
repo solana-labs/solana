@@ -219,60 +219,6 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
         )
         .subcommand(
-            SubCommand::with_name("stake-authorize-staker")
-                .about("Authorize a new stake signing keypair for the given stake account")
-                .arg(
-                    Arg::with_name("stake_account_pubkey")
-                        .index(1)
-                        .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Stake account in which to set the authorized staker")
-                )
-                .arg(
-                    Arg::with_name("new_stake_authority")
-                        .index(2)
-                        .value_name("AUTHORIZED_PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("New authorized staker")
-                )
-                .arg(stake_authority_arg())
-                .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
-                .arg(fee_payer_arg())
-        )
-        .subcommand(
-            SubCommand::with_name("stake-authorize-withdrawer")
-                .about("Authorize a new withdraw signing keypair for the given stake account")
-                .arg(
-                    Arg::with_name("stake_account_pubkey")
-                        .index(1)
-                        .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Stake account in which to set the authorized withdrawer")
-                )
-                .arg(
-                    Arg::with_name("new_withdraw_authority")
-                        .index(2)
-                        .value_name("AUTHORIZED_PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("New authorized withdrawer")
-                )
-                .arg(withdraw_authority_arg())
-                .offline_args()
-                .arg(nonce_arg())
-                .arg(nonce_authority_arg())
-                .arg(fee_payer_arg())
-        )
-        .subcommand(
             SubCommand::with_name("deactivate-stake")
                 .about("Deactivate the delegated stake from the stake account")
                 .arg(
@@ -552,27 +498,44 @@ pub fn parse_stake_authorize(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
     wallet_manager: Option<&Arc<RemoteWalletManager>>,
-    stake_authorizations: &[StakeAuthorize],
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
+
     let mut new_authorizations = Vec::new();
     let mut bulk_signers = Vec::new();
-    for stake_authorize in stake_authorizations {
-        let (authority_flag, new_authority_flag) = match stake_authorize {
-            StakeAuthorize::Staker => (STAKE_AUTHORITY_ARG.name, "new_stake_authority"),
-            StakeAuthorize::Withdrawer => (WITHDRAW_AUTHORITY_ARG.name, "new_withdraw_authority"),
+    if let Some(new_authority_pubkey) =
+        pubkey_of_signer(matches, "new_stake_authority", wallet_manager)?
+    {
+        let (authority, authority_pubkey) = {
+            let (authority, authority_pubkey) =
+                signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
+            // Withdraw authority may also change the staker
+            if authority.is_none() {
+                signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?
+            } else {
+                (authority, authority_pubkey)
+            }
         };
-        if let Some(new_authority_pubkey) =
-            pubkey_of_signer(matches, new_authority_flag, wallet_manager)?
-        {
-            let (authority, authority_pubkey) = signer_of(matches, authority_flag, wallet_manager)?;
-            new_authorizations.push((*stake_authorize, new_authority_pubkey, authority_pubkey));
-            bulk_signers.push(authority);
-        } else if stake_authorizations.len() == 1 {
-            panic!("Missing expected argument \"{}\"", new_authority_flag);
-        }
-    }
+        new_authorizations.push((
+            StakeAuthorize::Staker,
+            new_authority_pubkey,
+            authority_pubkey,
+        ));
+        bulk_signers.push(authority);
+    };
+    if let Some(new_authority_pubkey) =
+        pubkey_of_signer(matches, "new_withdraw_authority", wallet_manager)?
+    {
+        let (authority, authority_pubkey) =
+            signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
+        new_authorizations.push((
+            StakeAuthorize::Withdrawer,
+            new_authority_pubkey,
+            authority_pubkey,
+        ));
+        bulk_signers.push(authority);
+    };
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
@@ -1546,319 +1509,6 @@ mod tests {
         (String::from(tmp_file.path().to_str().unwrap()), tmp_file)
     }
 
-    fn parse_authorize_tests(
-        test_commands: &App,
-        stake_account_pubkey: Pubkey,
-        authority_keypair_file: &str,
-        stake_authorize: StakeAuthorize,
-    ) {
-        let default_keypair = Keypair::new();
-        let (default_keypair_file, mut tmp_file) = make_tmp_file();
-        write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
-
-        let stake_account_string = stake_account_pubkey.to_string();
-
-        let (subcommand, authority_flag) = match stake_authorize {
-            StakeAuthorize::Staker => ("stake-authorize-staker", "--stake-authority"),
-            StakeAuthorize::Withdrawer => ("stake-authorize-withdrawer", "--withdraw-authority"),
-        };
-
-        // Test Staker Subcommand
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::default(),
-                    nonce_account: None,
-                    nonce_authority: 0,
-                    fee_payer: 0,
-                },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
-            }
-        );
-        // Test Staker Subcommand w/ authority
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            &authority_flag,
-            &authority_keypair_file,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 1)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::default(),
-                    nonce_account: None,
-                    nonce_authority: 0,
-                    fee_payer: 0,
-                },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into()
-                ],
-            }
-        );
-        // Test Authorize Subcommand w/ sign-only
-        let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            "--blockhash",
-            &blockhash_string,
-            "--sign-only",
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: true,
-                    blockhash_query: BlockhashQuery::None(blockhash),
-                    nonce_account: None,
-                    nonce_authority: 0,
-                    fee_payer: 0,
-                },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
-            }
-        );
-        // Test Authorize Subcommand w/ offline feepayer
-        let keypair = Keypair::new();
-        let pubkey = keypair.pubkey();
-        let sig = keypair.sign_message(&[0u8]);
-        let signer = format!("{}={}", keypair.pubkey(), sig);
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            "--blockhash",
-            &blockhash_string,
-            "--signer",
-            &signer,
-            "--fee-payer",
-            &pubkey.to_string(),
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(
-                        blockhash_query::Source::Cluster,
-                        blockhash
-                    ),
-                    nonce_account: None,
-                    nonce_authority: 0,
-                    fee_payer: 1,
-                },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&pubkey, &sig).into()
-                ],
-            }
-        );
-        // Test Authorize Subcommand w/ offline fee payer and nonce authority
-        let keypair2 = Keypair::new();
-        let pubkey2 = keypair2.pubkey();
-        let sig2 = keypair.sign_message(&[0u8]);
-        let signer2 = format!("{}={}", keypair2.pubkey(), sig2);
-        let nonce_account = Pubkey::new(&[1u8; 32]);
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            "--blockhash",
-            &blockhash_string,
-            "--signer",
-            &signer,
-            "--signer",
-            &signer2,
-            "--fee-payer",
-            &pubkey.to_string(),
-            "--nonce",
-            &nonce_account.to_string(),
-            "--nonce-authority",
-            &pubkey2.to_string(),
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(
-                        blockhash_query::Source::NonceAccount(nonce_account),
-                        blockhash
-                    ),
-                    nonce_account: Some(nonce_account),
-                    nonce_authority: 2,
-                    fee_payer: 1,
-                },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&pubkey, &sig).into(),
-                    Presigner::new(&pubkey2, &sig2).into(),
-                ],
-            }
-        );
-        // Test Authorize Subcommand w/ blockhash
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            "--blockhash",
-            &blockhash_string,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(
-                        blockhash_query::Source::Cluster,
-                        blockhash
-                    ),
-                    nonce_account: None,
-                    nonce_authority: 0,
-                    fee_payer: 0,
-                },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
-            }
-        );
-        // Test Authorize Subcommand w/ nonce
-        let (nonce_keypair_file, mut nonce_tmp_file) = make_tmp_file();
-        let nonce_authority_keypair = Keypair::new();
-        write_keypair(&nonce_authority_keypair, nonce_tmp_file.as_file_mut()).unwrap();
-        let nonce_account_pubkey = nonce_authority_keypair.pubkey();
-        let nonce_account_string = nonce_account_pubkey.to_string();
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            "--blockhash",
-            &blockhash_string,
-            "--nonce",
-            &nonce_account_string,
-            "--nonce-authority",
-            &nonce_keypair_file,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(
-                        blockhash_query::Source::NonceAccount(nonce_account_pubkey),
-                        blockhash
-                    ),
-                    nonce_account: Some(nonce_account_pubkey),
-                    nonce_authority: 1,
-                    fee_payer: 0,
-                },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    nonce_authority_keypair.into()
-                ],
-            }
-        );
-        // Test Authorize Subcommand w/ fee-payer
-        let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
-        let fee_payer_keypair = Keypair::new();
-        write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
-        let fee_payer_pubkey = fee_payer_keypair.pubkey();
-        let fee_payer_string = fee_payer_pubkey.to_string();
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            "--fee-payer",
-            &fee_payer_keypair_file,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
-                    nonce_account: None,
-                    nonce_authority: 0,
-                    fee_payer: 1,
-                },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&fee_payer_keypair_file).unwrap().into(),
-                ],
-            }
-        );
-        // Test Authorize Subcommand w/ absentee fee-payer
-        let sig = fee_payer_keypair.sign_message(&[0u8]);
-        let signer = format!("{}={}", fee_payer_string, sig);
-        let test_authorize = test_commands.clone().get_matches_from(vec![
-            "test",
-            &subcommand,
-            &stake_account_string,
-            &stake_account_string,
-            "--fee-payer",
-            &fee_payer_string,
-            "--blockhash",
-            &blockhash_string,
-            "--signer",
-            &signer,
-        ]);
-        assert_eq!(
-            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::StakeAuthorize {
-                    stake_account_pubkey,
-                    new_authorizations: vec![(stake_authorize, stake_account_pubkey, 0)],
-                    sign_only: false,
-                    blockhash_query: BlockhashQuery::FeeCalculator(
-                        blockhash_query::Source::Cluster,
-                        blockhash
-                    ),
-                    nonce_account: None,
-                    nonce_authority: 0,
-                    fee_payer: 1,
-                },
-                signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&fee_payer_pubkey, &sig).into()
-                ],
-            }
-        );
-    }
-
     #[test]
     fn test_parse_command() {
         let test_commands = app("test", "desc", "version");
@@ -1873,20 +1523,7 @@ mod tests {
         let stake_authority_keypair = Keypair::new();
         write_keypair(&stake_authority_keypair, tmp_file.as_file_mut()).unwrap();
 
-        parse_authorize_tests(
-            &test_commands,
-            stake_account_pubkey,
-            &stake_authority_keypair_file,
-            StakeAuthorize::Staker,
-        );
-        parse_authorize_tests(
-            &test_commands,
-            stake_account_pubkey,
-            &stake_authority_keypair_file,
-            StakeAuthorize::Withdrawer,
-        );
-
-        // Combined stake authorize subcommand (stake-authorize)
+        // stake-authorize subcommand
         let stake_account_string = stake_account_pubkey.to_string();
         let new_stake_authority = Pubkey::new(&[1u8; 32]);
         let new_stake_string = new_stake_authority.to_string();
@@ -2070,6 +1707,259 @@ mod tests {
                         .into(),
                 ],
             },
+        );
+
+        // Test Authorize Subcommand w/ sign-only
+        let blockhash = Hash::default();
+        let blockhash_string = format!("{}", blockhash);
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
+            "--sign-only",
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: true,
+                    blockhash_query: BlockhashQuery::None(blockhash),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+        // Test Authorize Subcommand w/ offline feepayer
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let sig = keypair.sign_message(&[0u8]);
+        let signer = format!("{}={}", keypair.pubkey(), sig);
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &signer,
+            "--fee-payer",
+            &pubkey.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 1,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&pubkey, &sig).into()
+                ],
+            }
+        );
+        // Test Authorize Subcommand w/ offline fee payer and nonce authority
+        let keypair2 = Keypair::new();
+        let pubkey2 = keypair2.pubkey();
+        let sig2 = keypair.sign_message(&[0u8]);
+        let signer2 = format!("{}={}", keypair2.pubkey(), sig2);
+        let nonce_account = Pubkey::new(&[1u8; 32]);
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &signer,
+            "--signer",
+            &signer2,
+            "--fee-payer",
+            &pubkey.to_string(),
+            "--nonce",
+            &nonce_account.to_string(),
+            "--nonce-authority",
+            &pubkey2.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        blockhash
+                    ),
+                    nonce_account: Some(nonce_account),
+                    nonce_authority: 2,
+                    fee_payer: 1,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&pubkey, &sig).into(),
+                    Presigner::new(&pubkey2, &sig2).into(),
+                ],
+            }
+        );
+        // Test Authorize Subcommand w/ blockhash
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+        // Test Authorize Subcommand w/ nonce
+        let (nonce_keypair_file, mut nonce_tmp_file) = make_tmp_file();
+        let nonce_authority_keypair = Keypair::new();
+        write_keypair(&nonce_authority_keypair, nonce_tmp_file.as_file_mut()).unwrap();
+        let nonce_account_pubkey = nonce_authority_keypair.pubkey();
+        let nonce_account_string = nonce_account_pubkey.to_string();
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--blockhash",
+            &blockhash_string,
+            "--nonce",
+            &nonce_account_string,
+            "--nonce-authority",
+            &nonce_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account_pubkey),
+                        blockhash
+                    ),
+                    nonce_account: Some(nonce_account_pubkey),
+                    nonce_authority: 1,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    nonce_authority_keypair.into()
+                ],
+            }
+        );
+        // Test Authorize Subcommand w/ fee-payer
+        let (fee_payer_keypair_file, mut fee_payer_tmp_file) = make_tmp_file();
+        let fee_payer_keypair = Keypair::new();
+        write_keypair(&fee_payer_keypair, fee_payer_tmp_file.as_file_mut()).unwrap();
+        let fee_payer_pubkey = fee_payer_keypair.pubkey();
+        let fee_payer_string = fee_payer_pubkey.to_string();
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--fee-payer",
+            &fee_payer_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 1,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&fee_payer_keypair_file).unwrap().into(),
+                ],
+            }
+        );
+        // Test Authorize Subcommand w/ absentee fee-payer
+        let sig = fee_payer_keypair.sign_message(&[0u8]);
+        let signer = format!("{}={}", fee_payer_string, sig);
+        let test_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &stake_account_string,
+            "--fee-payer",
+            &fee_payer_string,
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &signer,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 1,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    Presigner::new(&fee_payer_pubkey, &sig).into()
+                ],
+            }
         );
 
         // Test CreateStakeAccount SubCommand
