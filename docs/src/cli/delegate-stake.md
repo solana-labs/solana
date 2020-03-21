@@ -67,7 +67,7 @@ the `--seed` option:
 solana create-stake-account --from=<KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed=<STRING> <AMOUNT> --stake-authority=<PUBKEY> --withdraw-authority=<PUBKEY>
 ```
 
-`<STRING>` is an arbitrary string up to 32 characters, but will typically be a
+`<STRING>` is an arbitrary string up to 32 bytes, but will typically be a
 number corresponding to which derived account this is. The first account might
 be "0", then "1", and so on. The keypair used for `<STAKE_ACCOUNT_KEYPAIR>`
 acts as base key. The command derives a new address from the base address and
