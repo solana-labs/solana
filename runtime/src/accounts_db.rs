@@ -2904,7 +2904,7 @@ pub mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Frozen account My11111111111111111111111111111111111111111 modified.  Hash changed from DDPbmARwVsQjthreFUgSevmkgFAo9RTyoBmVrJ1G8pQC to GWfXaToDiNJmwHFuaLdCLFmj3QjPcH9uYxebGZsbx51"
+        expected = "Frozen account My11111111111111111111111111111111111111111 modified.  Hash changed from 8wHcxDkjiwdrkPAsDnmNrF1UDGJFAtZzPQBSVweY3yRA to JdscGYB1uczVssmYuJusDD1Bfe6wpNeeho8XjcH8inN"
     )]
     fn test_frozen_account_data_modified() {
         let frozen_pubkey =
