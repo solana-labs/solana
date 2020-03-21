@@ -75,7 +75,17 @@ The command will output a derived address, which can be used for the
 
 ## Delegate Stake
 
-To delegate your stake to a validator, run:
+To delegate your stake to a validator, you will need to its vote account
+address. Find it by querying the cluster for the list of all validators and
+their vote accounts with the `solana validators` command:
+
+```bash
+solana validators
+```
+
+The first column of each row contains the validator's identity and the second
+is the vote account address. Choose a validator and use its vote account
+address in `solana delegate-stake`:
 
 ```bash
 solana delegate-stake --stake-authority=<KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS>
