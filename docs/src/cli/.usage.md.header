@@ -8,7 +8,7 @@ The [solana-cli crate](https://crates.io/crates/solana-cli) provides a command-l
 
 ```bash
 // Command
-$ solana address
+$ solana-keygen pubkey
 
 // Return
 <PUBKEY>

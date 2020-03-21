@@ -72,7 +72,7 @@ To fix, check the following:
 3. On your computer, run:
 
 ```text
-solana address --keypair=usb://ledger
+solana-keygen pubkey usb://ledger
 ```
 
 This confirms your Ledger device is connected properly and in the correct state
@@ -83,7 +83,7 @@ you want to use. Run the same command again, but this time, with its fully
 qualified URL:
 
 ```text
-solana address --keypair=usb://ledger/<WALLET_KEY>
+solana-keygen pubkey usb://ledger/<WALLET_KEY>
 ```
 
 Confirm it prints the same key as when you entered just `usb://ledger`.
@@ -94,7 +94,7 @@ To learn more about keypair URLs, see
 ### Check Account Balance
 
 ```text
-solana balance --keypair=usb://ledger?key=12345
+solana balance usb://ledger?key=12345
 ```
 
 ### Send SOL via Ledger Device
