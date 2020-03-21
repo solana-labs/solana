@@ -19,9 +19,6 @@ validators. You earn more rewards the more stake you delegate.
 ## Create a Stake Account
 
 To delegate stake, you will need to transfer some tokens into a stake account.
-All commands in this section assume you have
-[set a default fee-payer](transfer-tokens.md#set-a-default-fee-payer).
-
 Create a stake account with the `solana create-stake-account` command:
 
 ```bash

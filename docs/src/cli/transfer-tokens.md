@@ -84,7 +84,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 ```bash
-solana transfer --fee-payer=<SENDER_KEYPAIR> --from=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
+solana transfer --from=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
 ```
 
 where you replace `<SENDER_KEYPAIR>` with the path to a keypair in your wallet,
@@ -98,37 +98,6 @@ solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 
 where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
 recipient's public key.
-
-## Set a default fee-payer
-
-Every transaction includes a fee, which is paid from a fee-payer account.
-The fee-payer is specified with `--fee-payer=<KEYPAIR>`. If that option is
-missing, commands use the *default fee-payer*, which is set in your CLI
-configuration:
-
-```bash
-solana config set --fee-payer=<KEYPAIR>
-```
-
-Because transaction fees are so inexpensive on Solana, it is oftentimes
-sufficient to use a keypair file for this. Although keypair files are the most
-insecure form of keypairs, a fee-payer account rarely needs to hold more than a
-fraction of a SOL.
-
-Here is how to create and configure a fee-payer account:
-
-```bash
-solana-keygen --no-passphrase -o ~/fee-payer.json
-solana config set --fee-payer=~/fee-payer.json
-```
-
-Now transfer it 1 SOL:
-
-```bash
-solana transfer --fee-payer=<SENDER_KEYPAIR> --from=<SENDER_KEYPAIR> ~/fee-payer.json 1
-```
-
-Hopefully that is the last time you use the `--fee-payer` option!
 
 ## Send Tokens
 
