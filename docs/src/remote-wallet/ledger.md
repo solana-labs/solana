@@ -72,7 +72,7 @@ To fix, check the following:
 3. On your computer, run:
 
 ```text
-solana address --keypair usb://ledger
+solana address --keypair=usb://ledger
 ```
 
 This confirms your Ledger device is connected properly and in the correct state
@@ -83,69 +83,30 @@ you want to use. Run the same command again, but this time, with its fully
 qualified URL:
 
 ```text
-solana address --keypair usb://ledger/<WALLET_KEY>
+solana address --keypair=usb://ledger/<WALLET_KEY>
 ```
 
 Confirm it prints the same key as when you entered just `usb://ledger`.
 
-To learn more about USB URLs, see
+To learn more about keypair URLs, see
 [Specify A Hardware Wallet Key](index.md#specify-a-hardware-wallet-key)
-
-### Set CLI Configuration
-
-Configure the `solana` CLI tool to connect to a particular cluster:
-
-```bash
-solana config set --url <CLUSTER_URL> # (i.e. http://devnet.solana.com)
-```
-
-If you want to set a Ledger key as the default signer for CLI commands, use the
-[CLI configuration settings](../cli/usage.md#solana-config):
-
-```text
-solana config set --keypair <LEDGER_URL>
-```
-
-For example:
-
-```text
-solana config set --keypair usb://ledger?key=0
-```
 
 ### Check Account Balance
 
 ```text
-solana balance --keypair usb://ledger?key=12345
-```
-
-Or with the default signer:
-
-```text
-solana balance
+solana balance --keypair=usb://ledger?key=12345
 ```
 
 ### Send SOL via Ledger Device
 
 ```text
-solana transfer <RECIPIENT> <AMOUNT> --from <LEDGER_URL>
-```
-
-Or with the default signer:
-
-```text
-solana transfer <RECIPIENT> <AMOUNT>
+solana transfer --from=<LEDGER_URL> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
 ```
 
 ### Delegate Stake with Ledger Device
 
 ```text
-solana delegate-stake <STAKE_ACCOUNT> <VOTER_ID> --keypair <LEDGER_URL>
-```
-
-Or with the default signer:
-
-```text
-solana delegate-stake <STAKE_ACCOUNT> <VOTER_ID>
+solana delegate-stake --stake-authority=<LEDGER_URL> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS>
 ```
 
 ## Support

@@ -39,7 +39,7 @@ the base58 encoding of your public key. For `<KEYPAIR>`, it depends on what type
 of wallet you chose. If you chose an fs wallet, that path might be
 `~/my-solana-wallet/my-keypair.json`.  If you chose a paper wallet, use the
 keyword `ASK`, and the Solana CLI will prompt you for your seed phrase. If
-you chose a hardware wallet, use your USB URL, such as `usb://ledger?key=0`.
+you chose a hardware wallet, use your keypair URL, such as `usb://ledger?key=0`.
 
 ### Test-drive your Public Keys
 
@@ -102,29 +102,27 @@ recipient's public key.
 ## Set a default fee-payer
 
 Every transaction includes a fee, which is paid from a fee-payer account.
-The fee-payer is specified with `--fee-payer=<KEYPAIR>`. If the option,
-is missing, commands use the keypair at `--keypair=<KEYPAIR>` as the
-fee-payer. If that option is missing as well, commands use the *default signer*,
-which is set in your CLI configuration:
+The fee-payer is specified with `--fee-payer=<KEYPAIR>`. If that option is
+missing, commands use the *default fee-payer*, which is set in your CLI
+configuration:
 
 ```bash
-solana config set --keypair=<KEYPAIR>
+solana config set --fee-payer=<KEYPAIR>
 ```
 
-For convenience, consider setting the default signer to the account you want
-to pay transaction fees. Because transaction fees are so inexpensive on
-Solana, it is oftentimes sufficient to use a keypair file for this. Although
-keypair files are the most insecure way to store tokens, a fee-payer account
-rarely needs to hold more than a fraction of a SOL.
+Because transaction fees are so inexpensive on Solana, it is oftentimes
+sufficient to use a keypair file for this. Although keypair files are the most
+insecure form of keypairs, a fee-payer account rarely needs to hold more than a
+fraction of a SOL.
 
 Here is how to create and configure a fee-payer account:
 
 ```bash
 solana-keygen --no-passphrase -o ~/fee-payer.json
-solana config set --keypair=~/fee-payer.json
+solana config set --fee-payer=~/fee-payer.json
 ```
 
-Now transfer it a small amount of SOL:
+Now transfer it 1 SOL:
 
 ```bash
 solana transfer --fee-payer=<SENDER_KEYPAIR> --from=<SENDER_KEYPAIR> ~/fee-payer.json 1
