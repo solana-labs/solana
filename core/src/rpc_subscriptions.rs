@@ -4,7 +4,7 @@ use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{typed::Sink, SubscriptionId};
 use serde::Serialize;
-use solana_client::rpc_response::{RpcAccount, RpcKeyedAccount};
+use solana_client::rpc_response::{Response, RpcAccount, RpcKeyedAccount, RpcResponseContext};
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -50,11 +50,15 @@ impl std::fmt::Debug for NotificationEntry {
 }
 
 type RpcAccountSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<RpcAccount>, Confirmations)>>>;
-type RpcProgramSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<RpcKeyedAccount>, Confirmations)>>>;
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcAccount>>, Confirmations)>>>;
+type RpcProgramSubscriptions = RwLock<
+    HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcKeyedAccount>>, Confirmations)>>,
+>;
 type RpcSignatureSubscriptions = RwLock<
-    HashMap<Signature, HashMap<SubscriptionId, (Sink<transaction::Result<()>>, Confirmations)>>,
+    HashMap<
+        Signature,
+        HashMap<SubscriptionId, (Sink<Response<transaction::Result<()>>>, Confirmations)>,
+    >,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
 
@@ -105,8 +109,9 @@ where
     found
 }
 
+#[allow(clippy::type_complexity)]
 fn check_confirmations_and_notify<K, S, B, F, X>(
-    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
+    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<Response<S>>, Confirmations)>>,
     hashmap_key: &K,
     current_slot: Slot,
     bank_forks: &Arc<RwLock<BankForks>>,
@@ -131,7 +136,7 @@ where
 
     let mut notified_set: HashSet<SubscriptionId> = HashSet::new();
     if let Some(hashmap) = subscriptions.get(hashmap_key) {
-        for (bank_sub_id, (sink, confirmations)) in hashmap.iter() {
+        for (sub_id, (sink, confirmations)) in hashmap.iter() {
             let desired_slot: Vec<u64> = current_ancestors
                 .iter()
                 .filter(|(_, &v)| v == *confirmations)
@@ -146,16 +151,18 @@ where
                 .collect();
             let root = if root.len() == 1 { root[0] } else { 0 };
             if desired_slot.len() == 1 {
-                let desired_bank = bank_forks
-                    .read()
-                    .unwrap()
-                    .get(desired_slot[0])
-                    .unwrap()
-                    .clone();
+                let slot = desired_slot[0];
+                let desired_bank = bank_forks.read().unwrap().get(slot).unwrap().clone();
                 let results = bank_method(&desired_bank, hashmap_key);
                 for result in filter_results(results, root) {
-                    notifier.notify(result, sink);
-                    notified_set.insert(bank_sub_id.clone());
+                    notifier.notify(
+                        Response {
+                            context: RpcResponseContext { slot },
+                            value: result,
+                        },
+                        sink,
+                    );
+                    notified_set.insert(sub_id.clone());
                 }
             }
         }
@@ -354,7 +361,7 @@ impl RpcSubscriptions {
         pubkey: &Pubkey,
         confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
-        sink: &Sink<RpcAccount>,
+        sink: &Sink<Response<RpcAccount>>,
     ) {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, pubkey, confirmations, sub_id, sink);
@@ -370,7 +377,7 @@ impl RpcSubscriptions {
         program_id: &Pubkey,
         confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
-        sink: &Sink<RpcKeyedAccount>,
+        sink: &Sink<Response<RpcKeyedAccount>>,
     ) {
         let mut subscriptions = self.program_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, program_id, confirmations, sub_id, sink);
@@ -386,7 +393,7 @@ impl RpcSubscriptions {
         signature: &Signature,
         confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
-        sink: &Sink<transaction::Result<()>>,
+        sink: &Sink<Response<transaction::Result<()>>>,
     ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, signature, confirmations, sub_id, sink);
@@ -610,10 +617,24 @@ pub(crate) mod tests {
 
         subscriptions.notify_subscribers(0, &bank_forks);
         let response = robust_poll_or_panic(transport_receiver);
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"data":"1111111111111111","executable":false,"lamports":1,"owner":"Budget1111111111111111111111111111111111111","rentEpoch":1}},"subscription":0}}}}"#
-        );
-        assert_eq!(expected, response);
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "accountNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 0 },
+                   "value": {
+                       "data": "1111111111111111",
+                       "executable": false,
+                       "lamports": 1,
+                       "owner": "Budget1111111111111111111111111111111111111",
+                       "rentEpoch": 1,
+                    },
+               },
+               "subscription": 0,
+           }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         subscriptions.remove_account_subscription(&sub_id);
         assert!(!subscriptions
@@ -666,11 +687,27 @@ pub(crate) mod tests {
 
         subscriptions.notify_subscribers(0, &bank_forks);
         let response = robust_poll_or_panic(transport_receiver);
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":{{"account":{{"data":"1111111111111111","executable":false,"lamports":1,"owner":"Budget1111111111111111111111111111111111111","rentEpoch":1}},"pubkey":"{:?}"}},"subscription":0}}}}"#,
-            alice.pubkey()
-        );
-        assert_eq!(expected, response);
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "programNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 0 },
+                   "value": {
+                       "account": {
+                          "data": "1111111111111111",
+                          "executable": false,
+                          "lamports": 1,
+                          "owner": "Budget1111111111111111111111111111111111111",
+                          "rentEpoch": 1,
+                       },
+                       "pubkey": alice.pubkey().to_string(),
+                    },
+               },
+               "subscription": 0,
+           }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         subscriptions.remove_program_subscription(&sub_id);
         assert!(!subscriptions
@@ -728,13 +765,18 @@ pub(crate) mod tests {
         subscriptions.notify_subscribers(0, &bank_forks);
         let response = robust_poll_or_panic(transport_receiver);
         let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
-        let expected_res_str =
-            serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
-        );
-        assert_eq!(expected, response);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "method": "signatureNotification",
+            "params": {
+                "result": {
+                    "context": { "slot": 0 },
+                    "value": expected_res,
+                },
+                "subscription": 0,
+            }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         // Subscription should be automatically removed after notification
         assert!(!subscriptions
