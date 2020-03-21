@@ -32,10 +32,10 @@ where you replace the text `<COMMAND>` with the name of the command you want
 to learn more about.
 
 The command's usage message will typically contain words such as `<AMOUNT>`,
-`<PUBKEY>` or `<KEYPAIR>`. Each word is a placeholder for the *type* of text
-you can execute the command with. For example, you can replace `<AMOUNT>`
-with a number such as `42` or `100.42`. You can replace `<PUBKEY>` with the
-base58 encoding of your public key. For `<KEYPAIR>`, it depends on what type
+`<ACCOUNT_ADDRESS>` or `<KEYPAIR>`. Each word is a placeholder for the *type* of
+text you can execute the command with. For example, you can replace `<AMOUNT>`
+with a number such as `42` or `100.42`. You can replace `<ACCOUNT_ADDRESS>` with
+the base58 encoding of your public key. For `<KEYPAIR>`, it depends on what type
 of wallet you chose. If you chose an fs wallet, that path might be
 `~/my-solana-wallet/my-keypair.json`.  If you chose a paper wallet, use the
 keyword `ASK`, and the Solana CLI will prompt you for your seed phrase. If
@@ -50,16 +50,17 @@ Try and *airdrop* yourself some play tokens on the developer testnet, called
 Devnet:
 
 ```bash
-solana airdrop 10 <RECIPIENT_PUBKEY> --url http://devnet.solana.com
+solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url http://devnet.solana.com
 ```
 
-where you replace the text `<RECIPIENT_PUBKEY>` with your base58 public key.
+where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
+public key.
 
 Confirm the airdrop was successful by checking the account's balance.
 It should output `10 SOL`:
 
 ```bash
-solana balance <ACCOUNT_PUBKEY> --url http://devnet.solana.com
+solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 ```
 
 Next, prove that you own those tokens by transferring them. The Solana cluster
@@ -83,19 +84,19 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 ```bash
-solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_PUBKEY> 5 --url http://devnet.solana.com
+solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
 ```
 
 where you replace `<SENDER_KEYPAIR>` with the path to a keypair in your wallet,
-and replace `<RECIPIENT_PUBKEY>` with the output of `solana-keygen new` above.
+and replace `<RECIPIENT_ACCOUNT_ADDRESS>` with the output of `solana-keygen new` above.
 
 Confirm the updated balances with `solana balance`:
 
 ```bash
-solana balance <ACCOUNT_PUBKEY> --url http://devnet.solana.com
+solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 ```
 
-where `<PUBKEY>` is either the public key from your keypair or the
+where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
 recipient's public key.
 
 ## Send Tokens
@@ -106,11 +107,11 @@ tokens to transfer. Once you have that collected, you can transfer tokens
 with the `solana transfer` command:
 
 ```bash
-solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_PUBKEY> <AMOUNT>
+solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
 ```
 
 Confirm the updated balances with `solana balance`:
 
 ```bash
-solana balance <ACCOUNT_PUBKEY>
+solana balance <ACCOUNT_ADDRESS>
 ```
