@@ -72,42 +72,29 @@ To fix, check the following:
 3. On your computer, run:
 
 ```text
-solana-keygen pubkey usb://ledger
+solana pubkey usb://ledger
 ```
 
 This confirms your Ledger device is connected properly and in the correct state
 to interact with the Solana CLI. The command returns your Ledger's unique
-*wallet key*. When you have multiple Nano S devices connected to the same
+*wallet ID*. When you have multiple Nano S devices connected to the same
 computer, you can use your wallet key to specify which Ledger hardware wallet
 you want to use. Run the same command again, but this time, with its fully
 qualified URL:
 
 ```text
-solana-keygen pubkey usb://ledger/<WALLET_KEY>
+solana-keygen pubkey usb://ledger/<WALLET_ID>
 ```
 
-Confirm it prints the same key as when you entered just `usb://ledger`.
+where you replace `<WALLET_ID>` with the output of the first command.
+Confirm it prints the same wallet ID as before.
 
 To learn more about keypair URLs, see
 [Specify A Hardware Wallet Key](index.md#specify-a-hardware-wallet-key)
 
-### Check Account Balance
-
-```text
-solana balance usb://ledger?key=12345
-```
-
-### Send SOL via Ledger Device
-
-```text
-solana transfer --from=<LEDGER_URL> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
-```
-
-### Delegate Stake with Ledger Device
-
-```text
-solana delegate-stake --stake-authority=<LEDGER_URL> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS>
-```
+Read more about [sending and receiving tokens](../transfer-tokens.md) and
+[delegating stake](../delegate-stake.md). You can use your Ledger keypair URL
+anywhere you see an option or argument that accepts a `<KEYPAIR>`.
 
 ## Support
 
