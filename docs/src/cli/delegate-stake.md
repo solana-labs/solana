@@ -64,22 +64,24 @@ addresses can be cumbersome. Fortunately, you can derive stake addresses using
 the `--seed` option:
 
 ```bash
-solana create-stake-account --from=<KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed=<STRING> <AMOUNT> --stake-authority=<KEYPAIR> --withdraw-authority=<KEYPAIR>
+solana create-stake-account --from=<KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed=<STRING> <AMOUNT> --stake-authority=<PUBKEY> --withdraw-authority=<PUBKEY>
 ```
 
 `<STRING>` is an arbitrary string up to 32 characters, but will typically be a
 number corresponding to which derived account this is. The first account might
-be "0", then "1", and so on. `<KEYPAIR>` is the same for both the source
-keypair and account keypair, because the second instance is used only as a base
-address.  The command derives a new address from the base address and seed
-string. To see what stake address the command will derive, use
-`solana create-address-with-seed`:
+be "0", then "1", and so on. The keypair used for `<STAKE_ACCOUNT_KEYPAIR>`
+acts as base key. The command derives a new address from the base address and
+seed string. To see what stake address the command will derive, use `solana
+create-address-with-seed`:
 
 ```bash
 solana create-address-with-seed --from=<PUBKEY> <SEED_STRING> STAKE
 ```
 
-It will output a derived address, which can be used for the
+`<PUBKEY>` is the public key of the `<STAKE_ACCOUNT_KEYPAIR>` passed to
+`solana create-stake-account`.
+
+The command will output a derived address, which can be used for the
 `<STAKE_ACCOUNT_ADDRESS>` argument in staking operations.
 
 ## Delegate Stake
