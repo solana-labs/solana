@@ -101,13 +101,12 @@ impl BankRc {
     pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
         &self,
         mut stream: &mut BufReader<R>,
-        local_paths: &[PathBuf],
         append_vecs_path: P,
     ) -> std::result::Result<(), IOError> {
         let _len: usize =
             deserialize_from(&mut stream).map_err(|e| BankRc::get_io_error(&e.to_string()))?;
         self.accounts
-            .accounts_from_stream(stream, local_paths, append_vecs_path)?;
+            .accounts_from_stream(stream, append_vecs_path)?;
 
         Ok(())
     }
@@ -4776,7 +4775,7 @@ mod tests {
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
         dbank
             .rc
-            .accounts_from_stream(&mut reader, &dbank_paths, copied_accounts.path())
+            .accounts_from_stream(&mut reader, copied_accounts.path())
             .unwrap();
         assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
         assert_eq!(dbank.get_balance(&key2.pubkey()), 10);

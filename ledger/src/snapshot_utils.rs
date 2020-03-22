@@ -611,7 +611,7 @@ where
                 bank::StatusCacheRc::default(),
             );
             bank.rc
-                .accounts_from_stream(stream.by_ref(), account_paths, &append_vecs_path)?;
+                .accounts_from_stream(stream.by_ref(), &append_vecs_path)?;
             Ok(bank)
         },
     )?;
