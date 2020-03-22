@@ -72,7 +72,7 @@ To fix, check the following:
 3. On your computer, run:
 
 ```text
-solana pubkey usb://ledger
+solana-keygen pubkey usb://ledger
 ```
 
 This confirms your Ledger device is connected properly and in the correct state
