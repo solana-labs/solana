@@ -6,7 +6,7 @@ To receive tokens, you will need an address for others to send tokens to. In
 Solana, an address is the public key of a keypair. There are a variety
 of techniques for generating keypairs. The method you choose will depend on how
 you choose to store keypairs.  Keypairs are stored in wallets. Before receiving
-tokens, you'll need to [choose a wallet](choose-a-wallet.md) and
+tokens, you will need to [choose a wallet](choose-a-wallet.md) and
 [generate keys](generate-keys.md). Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
 characters. Its length varies from 32 to 44 characters.
@@ -39,7 +39,7 @@ the base58 encoding of your public key. For `<KEYPAIR>`, it depends on what type
 of wallet you chose. If you chose an fs wallet, that path might be
 `~/my-solana-wallet/my-keypair.json`.  If you chose a paper wallet, use the
 keyword `ASK`, and the Solana CLI will prompt you for your seed phrase. If
-you chose a hardware wallet, use your USB URL, such as `usb://ledger?key=0`.
+you chose a hardware wallet, use your keypair URL, such as `usb://ledger?key=0`.
 
 ### Test-drive your Public Keys
 
@@ -67,7 +67,7 @@ Next, prove that you own those tokens by transferring them. The Solana cluster
 will only accept the transfer if you sign the transaction with the private
 key corresponding to the sender's public key in the transaction.
 
-First, we'll need a public key to receive our tokens. Create a second
+First, we will need a public key to receive our tokens. Create a second
 keypair and record its pubkey:
 
 ```bash
@@ -75,7 +75,7 @@ solana-keygen new --no-passphrase --no-outfile
 ```
 
 The output will contain the public key after the text `pubkey:`. Copy the
-public key. We'll use it in the next step.
+public key. We will use it in the next step.
 
 ```text
 ============================================================================
@@ -84,7 +84,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 ```bash
-solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
+solana transfer --from=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
 ```
 
 where you replace `<SENDER_KEYPAIR>` with the path to a keypair in your wallet,
@@ -107,7 +107,7 @@ tokens to transfer. Once you have that collected, you can transfer tokens
 with the `solana transfer` command:
 
 ```bash
-solana transfer --keypair=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
+solana transfer --from=<SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
 ```
 
 Confirm the updated balances with `solana balance`:

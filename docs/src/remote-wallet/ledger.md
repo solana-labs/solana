@@ -72,81 +72,29 @@ To fix, check the following:
 3. On your computer, run:
 
 ```text
-solana address --keypair usb://ledger
+solana-keygen pubkey usb://ledger
 ```
 
 This confirms your Ledger device is connected properly and in the correct state
 to interact with the Solana CLI. The command returns your Ledger's unique
-*wallet key*. When you have multiple Nano S devices connected to the same
+*wallet ID*. When you have multiple Nano S devices connected to the same
 computer, you can use your wallet key to specify which Ledger hardware wallet
 you want to use. Run the same command again, but this time, with its fully
 qualified URL:
 
 ```text
-solana address --keypair usb://ledger/<WALLET_KEY>
+solana-keygen pubkey usb://ledger/<WALLET_ID>
 ```
 
-Confirm it prints the same key as when you entered just `usb://ledger`.
+where you replace `<WALLET_ID>` with the output of the first command.
+Confirm it prints the same wallet ID as before.
 
-To learn more about USB URLs, see
+To learn more about keypair URLs, see
 [Specify A Hardware Wallet Key](index.md#specify-a-hardware-wallet-key)
 
-### Set CLI Configuration
-
-Configure the `solana` CLI tool to connect to a particular cluster:
-
-```bash
-solana config set --url <CLUSTER_URL> # (i.e. http://devnet.solana.com)
-```
-
-If you want to set a Ledger key as the default signer for CLI commands, use the
-[CLI configuration settings](../cli/usage.md#solana-config):
-
-```text
-solana config set --keypair <LEDGER_URL>
-```
-
-For example:
-
-```text
-solana config set --keypair usb://ledger?key=0
-```
-
-### Check Account Balance
-
-```text
-solana balance --keypair usb://ledger?key=12345
-```
-
-Or with the default signer:
-
-```text
-solana balance
-```
-
-### Send SOL via Ledger Device
-
-```text
-solana transfer <RECIPIENT> <AMOUNT> --from <LEDGER_URL>
-```
-
-Or with the default signer:
-
-```text
-solana transfer <RECIPIENT> <AMOUNT>
-```
-
-### Delegate Stake with Ledger Device
-
-```text
-solana delegate-stake <STAKE_ACCOUNT> <VOTER_ID> --keypair <LEDGER_URL>
-```
-
-Or with the default signer:
-
-```text
-solana delegate-stake <STAKE_ACCOUNT> <VOTER_ID>
-```
+Read more about [sending and receiving tokens](../transfer-tokens.md) and
+[delegating stake](../delegate-stake.md). You can use your Ledger keypair URL
+anywhere you see an option or argument that accepts a `<KEYPAIR>`.
 
 ## Support
 

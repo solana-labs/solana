@@ -3,7 +3,7 @@
 Keypairs are stored in *wallets* and wallets come in many forms. A wallet might
 be a directory in your computer's file system, a piece of paper, or a
 specialized device called a *hardware wallet*. Some wallets are easier to use
-than others.  Some are more secure than others. In this section, we'll compare
+than others.  Some are more secure than others. In this section, we will compare
 and contrast different types of wallets and help you choose the wallet that
 best fits your needs.
 
@@ -16,8 +16,8 @@ file system. Each file in the directory holds a keypair.
 
 An FS wallet is the most convenient and least secure form of wallet. It is
 convenient because the keypair is stored in a simple file. You can generate as
-many keys as you'd like and trivially back them up by copying the files. It is
-insecure because the keypair files are **unencrypted**. If you are the only
+many keys as you would like and trivially back them up by copying the files. It
+is insecure because the keypair files are **unencrypted**. If you are the only
 user of your computer and you are confident it is free of malware, an FS wallet
 is a fine solution for small amounts of cryptocurrency. If, however, your
 computer contains malware and is connected to the Internet, that malware may
@@ -72,8 +72,8 @@ To keep your hardware wallet tokens safe, we suggest:
 
 ## Which Wallet is Best?
 
-Different people will have different needs, but if you are still unsure what's
-best for you after reading the comparisons above, go with a
+Different people will have different needs, but if you are still unsure what
+is best for you after reading the comparisons above, go with a
 [Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s). The
 [Nano S is well-integrated into Solana's tool suite](../remote-wallet/ledger)
 and offers an outstanding blend of security and convenience.
