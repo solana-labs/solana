@@ -300,7 +300,7 @@ impl LocalCluster {
         self.exit();
         for (_, node) in self.validators.iter_mut() {
             if let Some(v) = node.validator.take() {
-                v.join().unwrap();
+                v.join().expect("Validator join failed");
             }
         }
 

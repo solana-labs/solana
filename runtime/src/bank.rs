@@ -4,9 +4,7 @@
 //! already been signed and verified.
 use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
-    accounts_db::{
-        AccountsDBSerialize, AppendVecId, ErrorCounters, SnapshotStorage, SnapshotStorages,
-    },
+    accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     blockhash_queue::BlockhashQueue,
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
@@ -85,30 +83,30 @@ pub struct BankRc {
 }
 
 impl BankRc {
-    pub fn new(account_paths: Vec<PathBuf>, id: AppendVecId, slot: Slot) -> Self {
-        let accounts = Accounts::new(account_paths);
-        accounts
-            .accounts_db
-            .next_id
-            .store(id as usize, Ordering::Relaxed);
-        BankRc {
+    pub fn from_stream<R: Read, P: AsRef<Path>>(
+        account_paths: &[PathBuf],
+        slot: Slot,
+        ancestors: &HashMap<Slot, usize>,
+        frozen_account_pubkeys: &[Pubkey],
+        mut stream: &mut BufReader<R>,
+        stream_append_vecs_path: P,
+    ) -> std::result::Result<Self, IOError> {
+        let _len: usize =
+            deserialize_from(&mut stream).map_err(|e| BankRc::get_io_error(&e.to_string()))?;
+
+        let accounts = Accounts::from_stream(
+            account_paths,
+            ancestors,
+            frozen_account_pubkeys,
+            stream,
+            stream_append_vecs_path,
+        )?;
+
+        Ok(BankRc {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
             slot,
-        }
-    }
-
-    pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
-        &self,
-        mut stream: &mut BufReader<R>,
-        append_vecs_path: P,
-    ) -> std::result::Result<(), IOError> {
-        let _len: usize =
-            deserialize_from(&mut stream).map_err(|e| BankRc::get_io_error(&e.to_string()))?;
-        self.accounts
-            .accounts_from_stream(stream, append_vecs_path)?;
-
-        Ok(())
+        })
     }
 
     pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorages {
@@ -358,14 +356,25 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new())
+        Self::new_with_paths(&genesis_config, Vec::new(), &[])
     }
 
-    pub fn new_with_paths(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
+    pub fn new_with_paths(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+    ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
+
         bank.rc.accounts = Arc::new(Accounts::new(paths));
         bank.process_genesis_config(genesis_config);
+
+        // Freeze accounts after process_genesis_config creates the initial append vecs
+        Arc::get_mut(&mut bank.rc.accounts)
+            .unwrap()
+            .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);
+
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         {
@@ -4769,14 +4778,21 @@ mod tests {
         let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
         let ref_sc = StatusCacheRc::default();
         ref_sc.status_cache.write().unwrap().add_root(2);
-        dbank.set_bank_rc(BankRc::new(dbank_paths.clone(), 0, dbank.slot()), ref_sc);
         // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
         let copied_accounts = TempDir::new().unwrap();
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-        dbank
-            .rc
-            .accounts_from_stream(&mut reader, copied_accounts.path())
-            .unwrap();
+        dbank.set_bank_rc(
+            BankRc::from_stream(
+                &dbank_paths,
+                dbank.slot(),
+                &dbank.ancestors,
+                &[],
+                &mut reader,
+                copied_accounts.path(),
+            )
+            .unwrap(),
+            ref_sc,
+        );
         assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
         assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
         assert_eq!(dbank.get_balance(&key3.pubkey()), 0);

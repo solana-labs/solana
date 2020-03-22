@@ -12,7 +12,7 @@ use solana_runtime::{
         MAX_SNAPSHOT_DATA_FILE_SIZE,
     },
 };
-use solana_sdk::{clock::Slot, hash::Hash};
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
     env,
@@ -432,6 +432,7 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
 
 pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: &[PathBuf],
+    frozen_account_pubkeys: &[Pubkey],
     snapshot_path: &PathBuf,
     snapshot_tar: P,
 ) -> Result<Bank> {
@@ -450,6 +451,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     let bank = rebuild_bank_from_snapshots(
         snapshot_version.trim(),
         account_paths,
+        frozen_account_pubkeys,
         &unpacked_snapshots_dir,
         unpacked_accounts_dir,
     )?;
@@ -575,6 +577,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
 fn rebuild_bank_from_snapshots<P>(
     snapshot_version: &str,
     account_paths: &[PathBuf],
+    frozen_account_pubkeys: &[Pubkey],
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
 ) -> Result<Bank>
@@ -606,12 +609,16 @@ where
                 }
             };
             info!("Rebuilding accounts...");
-            bank.set_bank_rc(
-                bank::BankRc::new(account_paths.to_vec(), 0, bank.slot()),
-                bank::StatusCacheRc::default(),
-            );
-            bank.rc
-                .accounts_from_stream(stream.by_ref(), &append_vecs_path)?;
+            let rc = bank::BankRc::from_stream(
+                account_paths,
+                bank.slot(),
+                &bank.ancestors,
+                frozen_account_pubkeys,
+                stream.by_ref(),
+                &append_vecs_path,
+            )?;
+
+            bank.set_bank_rc(rc, bank::StatusCacheRc::default());
             Ok(bank)
         },
     )?;

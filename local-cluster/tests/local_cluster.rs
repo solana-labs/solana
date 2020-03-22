@@ -18,13 +18,14 @@ use solana_local_cluster::{
     local_cluster::{ClusterConfig, LocalCluster},
 };
 use solana_sdk::{
-    client::SyncClient,
+    client::{AsyncClient, SyncClient},
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
     genesis_config::OperatingMode,
     hash::Hash,
     poh_config::PohConfig,
+    pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -548,7 +549,7 @@ fn test_listener_startup() {
 
 #[test]
 #[serial]
-fn test_softlaunch_operating_mode() {
+fn test_stable_operating_mode() {
     solana_logger::setup();
 
     let config = ClusterConfig {
@@ -567,7 +568,7 @@ fn test_softlaunch_operating_mode() {
         solana_core::cluster_info::VALIDATOR_PORT_RANGE,
     );
 
-    // Programs that are available at soft launch epoch 0
+    // Programs that are available at epoch 0
     for program_id in [
         &solana_config_program::id(),
         &solana_sdk::system_program::id(),
@@ -587,7 +588,7 @@ fn test_softlaunch_operating_mode() {
         );
     }
 
-    // Programs that are not available at soft launch epoch 0
+    // Programs that are not available at epoch 0
     for program_id in [
         &solana_sdk::bpf_loader::id(),
         &solana_storage_program::id(),
@@ -605,6 +606,110 @@ fn test_softlaunch_operating_mode() {
             (program_id, None)
         );
     }
+}
+
+fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<Keypair>) {
+    let client = cluster
+        .get_validator_client(&frozen_account.pubkey())
+        .unwrap();
+
+    // Check the validator is alive by poking it over RPC
+    trace!(
+        "validator slot: {}",
+        client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .expect("get slot")
+    );
+
+    // Reset the frozen account panic signal
+    solana_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.store(false, Ordering::Relaxed);
+
+    // Wait for the frozen account panic signal
+    let mut i = 0;
+    while !solana_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.load(Ordering::Relaxed) {
+        // Transfer from frozen account
+        let (blockhash, _fee_calculator) = client
+            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .unwrap();
+        client
+            .async_transfer(1, &frozen_account, &Pubkey::new_rand(), blockhash)
+            .unwrap();
+
+        sleep(Duration::from_secs(1));
+        i += 1;
+        if i > 10 {
+            panic!("FROZEN_ACCOUNT_PANIC still false");
+        }
+    }
+
+    // The validator is now broken and won't shutdown properly.  Avoid LocalCluster panic in Drop
+    // with some manual cleanup:
+    cluster.exit();
+    cluster.validators = HashMap::default();
+}
+
+#[test]
+#[serial]
+fn test_frozen_account_from_genesis() {
+    solana_logger::setup();
+    let validator_identity =
+        Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
+
+    let config = ClusterConfig {
+        validator_keys: Some(vec![validator_identity.clone()]),
+        node_stakes: vec![100; 1],
+        cluster_lamports: 1_000,
+        validator_configs: vec![
+            ValidatorConfig {
+                // Freeze the validator identity account
+                frozen_accounts: vec![validator_identity.pubkey()],
+                ..ValidatorConfig::default()
+            };
+            1
+        ],
+        ..ClusterConfig::default()
+    };
+    generate_frozen_account_panic(LocalCluster::new(&config), validator_identity);
+}
+
+#[test]
+#[serial]
+fn test_frozen_account_from_snapshot() {
+    solana_logger::setup();
+    let validator_identity =
+        Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
+
+    let mut snapshot_test_config = setup_snapshot_validator_config(5, 1);
+    // Freeze the validator identity account
+    snapshot_test_config.validator_config.frozen_accounts = vec![validator_identity.pubkey()];
+
+    let config = ClusterConfig {
+        validator_keys: Some(vec![validator_identity.clone()]),
+        node_stakes: vec![100; 1],
+        cluster_lamports: 1_000,
+        validator_configs: vec![snapshot_test_config.validator_config.clone()],
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let snapshot_package_output_path = &snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_package_output_path;
+
+    trace!("Waiting for snapshot at {:?}", snapshot_package_output_path);
+    let (archive_filename, _archive_snapshot_hash) =
+        wait_for_next_snapshot(&cluster, &snapshot_package_output_path);
+
+    trace!("Found snapshot: {:?}", archive_filename);
+
+    // Restart the validator from a snapshot
+    let validator_info = cluster.exit_node(&validator_identity.pubkey());
+    cluster.restart_node(&validator_identity.pubkey(), validator_info);
+
+    generate_frozen_account_panic(cluster, validator_identity);
 }
 
 #[test]

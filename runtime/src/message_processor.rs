@@ -110,7 +110,7 @@ impl PreAccount {
             return Err(InstructionError::ExecutableModified);
         }
 
-        // No one modifies r    ent_epoch (yet).
+        // No one modifies rent_epoch (yet).
         if self.rent_epoch != post.rent_epoch {
             return Err(InstructionError::RentEpochModified);
         }
