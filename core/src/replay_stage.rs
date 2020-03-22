@@ -85,7 +85,6 @@ pub struct ReplayStageConfig {
     pub exit: Arc<AtomicBool>,
     pub subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
-    pub slot_full_senders: Vec<Sender<(u64, Pubkey)>>,
     pub latest_root_senders: Vec<Sender<Slot>>,
     pub accounts_hash_sender: Option<SnapshotPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
@@ -190,7 +189,6 @@ impl ReplayStage {
             exit,
             subscriptions,
             leader_schedule_cache,
-            slot_full_senders,
             latest_root_senders,
             accounts_hash_sender,
             block_commitment_cache,
@@ -255,7 +253,6 @@ impl ReplayStage {
                         &bank_forks,
                         &my_pubkey,
                         &mut progress,
-                        &slot_full_senders,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
                     );
@@ -796,7 +793,6 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         my_pubkey: &Pubkey,
         progress: &mut ProgressMap,
-        slot_full_senders: &[Sender<(u64, Pubkey)>],
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
     ) -> bool {
@@ -846,7 +842,8 @@ impl ReplayStage {
                     bank_progress.replay_progress.num_shreds,
                 );
                 did_complete_bank = true;
-                Self::process_completed_bank(my_pubkey, bank, slot_full_senders);
+                info!("bank frozen: {}", bank.slot());
+                bank.freeze();
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
@@ -1181,20 +1178,6 @@ impl ReplayStage {
         let r_bank_forks = bank_forks.read().unwrap();
         *earliest_vote_on_fork = std::cmp::max(new_root, *earliest_vote_on_fork);
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());
-    }
-
-    fn process_completed_bank(
-        my_pubkey: &Pubkey,
-        bank: Arc<Bank>,
-        slot_full_senders: &[Sender<(u64, Pubkey)>],
-    ) {
-        info!("bank frozen: {}", bank.slot());
-        bank.freeze();
-        slot_full_senders.iter().for_each(|sender| {
-            if let Err(e) = sender.send((bank.slot(), *bank.collector_id())) {
-                trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
-            }
-        });
     }
 
     fn generate_new_bank_forks(

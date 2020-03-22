@@ -178,7 +178,6 @@ impl Tvu {
             exit: exit.clone(),
             subscriptions: subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
-            slot_full_senders: vec![],
             latest_root_senders: vec![ledger_cleanup_slot_sender],
             accounts_hash_sender: Some(accounts_hash_sender),
             block_commitment_cache,
