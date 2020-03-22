@@ -79,6 +79,7 @@ pub struct ValidatorConfig {
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
+    pub no_rocksdb_compaction: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -104,6 +105,7 @@ impl Default for ValidatorConfig {
             halt_on_trusted_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
+            no_rocksdb_compaction: false,
         }
     }
 }
@@ -589,8 +591,9 @@ fn new_banks_from_blockstore(
         }
     }
 
-    let (blockstore, ledger_signal_receiver, completed_slots_receiver) =
+    let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
         Blockstore::open_with_signal(blockstore_path).expect("Failed to open ledger database");
+    blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify,

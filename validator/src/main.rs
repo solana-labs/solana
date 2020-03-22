@@ -640,6 +640,12 @@ pub fn main() {
                 .help("Use the RPC service of trusted validators only")
         )
         .arg(
+            Arg::with_name("no_rocksdb_compaction")
+                .long("no-rocksdb-compaction")
+                .takes_value(false)
+                .help("Disable manual compaction of the ledger database. May increase storage requirements.")
+        )
+        .arg(
             clap::Arg::with_name("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
@@ -696,6 +702,7 @@ pub fn main() {
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let no_check_vote_account = matches.is_present("no_check_vote_account");
     let private_rpc = matches.is_present("private_rpc");
+    let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
 
     // Canonicalize ledger path to avoid issues with symlink creation
     let _ = fs::create_dir_all(&ledger_path);
@@ -746,6 +753,7 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
+        no_rocksdb_compaction,
         ..ValidatorConfig::default()
     };
 
