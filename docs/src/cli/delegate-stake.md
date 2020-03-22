@@ -58,9 +58,9 @@ solana create-stake-account --from=<KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed=<STR
 
 `<STRING>` is an arbitrary string up to 32 bytes, but will typically be a
 number corresponding to which derived account this is. The first account might
-be "0", then "1", and so on. The pubkey of `<STAKE_ACCOUNT_KEYPAIR>` acts as
-the base address. The command derives a new address from the base address and
-seed string. To see what stake address the command will derive, use `solana
+be "0", then "1", and so on. The public key of `<STAKE_ACCOUNT_KEYPAIR>` acts
+as the base address. The command derives a new address from the base address
+and seed string. To see what stake address the command will derive, use `solana
 create-address-with-seed`:
 
 ```bash
@@ -75,9 +75,9 @@ The command will output a derived address, which can be used for the
 
 ## Delegate Stake
 
-To delegate your stake to a validator, you will need to know its vote account
-address. Find it by querying the cluster for the list of all validators and
-their vote accounts with the `solana validators` command:
+To delegate your stake to a validator, you will need its vote account address.
+Find it by querying the cluster for the list of all validators and their vote
+accounts with the `solana validators` command:
 
 ```bash
 solana validators
