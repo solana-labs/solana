@@ -2866,12 +2866,20 @@ pub mod tests {
         db.store(0, &[(&frozen_pubkey, &account)]);
 
         // Store with an increase in lamports is ok
-        account.lamports += 1;
+        account.lamports = 2;
         db.store(0, &[(&frozen_pubkey, &account)]);
 
         // Store with an decrease that does not go below the frozen amount of lamports is tolerated
-        account.lamports -= 1;
+        account.lamports = 1;
         db.store(0, &[(&frozen_pubkey, &account)]);
+
+        // A store of any value over the frozen value of '1' across different slots is also ok
+        account.lamports = 3;
+        db.store(1, &[(&frozen_pubkey, &account)]);
+        account.lamports = 2;
+        db.store(2, &[(&frozen_pubkey, &account)]);
+        account.lamports = 1;
+        db.store(3, &[(&frozen_pubkey, &account)]);
     }
 
     #[test]
