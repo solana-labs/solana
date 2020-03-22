@@ -1,4 +1,4 @@
-# Earn Staking Rewards
+# Delegate Stake
 
 After you have [received SOL](transfer-tokens.md), you might consider putting
 it to use by delegating *stake* to a validator. Stake is what we call tokens
@@ -42,6 +42,21 @@ stake account at the public key of stake-account.json.
 The stake-account.json file can now be discarded. To authorize additional
 actions, you will use the `--stake-authority` or `withdraw-authority` keypair,
 not stake-account.json.
+
+View the new stake account with the `solana stake-account` command:
+
+```bash
+solana stake-account <STAKE_ACCOUNT_ADDRESS>
+```
+
+The output will look similar to this:
+
+```text
+Total Stake: 5000 SOL
+Stake account is undelegated
+Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
+Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
+```
 
 ### Set Stake and Withdraw Authorities
 
@@ -113,6 +128,26 @@ solana delegate-stake --stake-authority=<KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_
 `<KEYPAIR>` authorizes the operation on the account with address
 `<STAKE_ACCOUNT_ADDRESS>`. The stake is delegated to the vote account with
 address `<VOTE_ACCOUNT_ADDRESS>`.
+
+After delegating stake, use `solana stake-account` to observe the changes
+to the stake account:
+
+```bash
+solana stake-account <STAKE_ACCOUNT_ADDRESS>
+```
+
+You will see new fields "Delegated Stake" and "Delegated Vote Account Address"
+in the output. The output will look similar to this:
+
+```text
+Total Stake: 5000 SOL
+Credits Observed: 147462
+Delegated Stake: 4999.99771712 SOL
+Delegated Vote Account Address: CcaHc2L43ZWjwCHART3oZoJvHLAe9hzT2DJNUpBzoTN1
+Stake activates starting from epoch: 42
+Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
+Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
+```
 
 ## Deactivate Stake
 

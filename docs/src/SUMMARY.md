@@ -10,7 +10,7 @@
     * [Paper Wallet Usage](paper-wallet/usage.md)
   * [Generate Keys](cli/generate-keys.md)
   * [Send and Receive Tokens](cli/transfer-tokens.md)
-  * [Earn Staking Rewards](cli/delegate-stake.md)
+  * [Delegate Stake](cli/delegate-stake.md)
   * [Offline Signing](offline-signing/README.md)
     * [Durable Transaction Nonces](offline-signing/durable-nonce.md)
   * [Command-line Reference](cli/usage.md)
