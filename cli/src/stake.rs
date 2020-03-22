@@ -189,7 +189,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .required(true)
                         .index(1)
                         .takes_value(true)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("STAKE_ACCOUNT_ADDRESS")
                         .validator(is_valid_pubkey)
                         .help("Stake account in which to set a new authority")
                 )
