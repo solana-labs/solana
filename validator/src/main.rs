@@ -276,7 +276,7 @@ fn check_vote_account(
 ) -> Result<(), String> {
     let found_vote_account = rpc_client
         .get_account(vote_pubkey)
-        .map_err(|err| format!("Failed to get vote account: {}", err.to_string()))?;
+        .map_err(|err| format!("Vote account not found: {}", err.to_string()))?;
 
     if found_vote_account.owner != solana_vote_program::id() {
         return Err(format!(
@@ -287,7 +287,7 @@ fn check_vote_account(
 
     let found_node_account = rpc_client
         .get_account(node_pubkey)
-        .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?;
+        .map_err(|err| format!("Identity account not found: {}", err.to_string()))?;
 
     let found_vote_account = solana_vote_program::vote_state::VoteState::from(&found_vote_account);
     if let Some(found_vote_account) = found_vote_account {
@@ -378,6 +378,7 @@ pub fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
+                .requires("vote_account")
                 .help("Authorized voter keypair [default: value of --identity]"),
         )
         .arg(
@@ -395,6 +396,7 @@ pub fn main() {
                 .value_name("PUBKEY")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
+                .requires("identity")
                 .help("Validator vote account public key.  If unspecified voting will be disabled")
         )
         .arg(
