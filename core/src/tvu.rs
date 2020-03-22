@@ -3,7 +3,6 @@
 
 use crate::{
     accounts_hash_verifier::AccountsHashVerifier,
-    blockstream_service::BlockstreamService,
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
@@ -34,7 +33,6 @@ use solana_sdk::{
 use std::collections::HashSet;
 use std::{
     net::UdpSocket,
-    path::PathBuf,
     sync::{
         atomic::AtomicBool,
         mpsc::{channel, Receiver},
@@ -48,7 +46,6 @@ pub struct Tvu {
     sigverify_stage: SigVerifyStage,
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
-    blockstream_service: Option<BlockstreamService>,
     ledger_cleanup_service: Option<LedgerCleanupService>,
     storage_stage: StorageStage,
     accounts_hash_verifier: AccountsHashVerifier,
@@ -88,7 +85,6 @@ impl Tvu {
         sockets: Sockets,
         blockstore: Arc<Blockstore>,
         storage_state: &StorageState,
-        blockstream_unix_socket: Option<&PathBuf>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -162,7 +158,6 @@ impl Tvu {
             tvu_config.shred_version,
         );
 
-        let (blockstream_slot_sender, blockstream_slot_receiver) = channel();
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
 
         let (accounts_hash_sender, accounts_hash_receiver) = channel();
@@ -183,7 +178,6 @@ impl Tvu {
             exit: exit.clone(),
             subscriptions: subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
-            slot_full_senders: vec![blockstream_slot_sender],
             latest_root_senders: vec![ledger_cleanup_slot_sender],
             accounts_hash_sender: Some(accounts_hash_sender),
             block_commitment_cache,
@@ -201,18 +195,6 @@ impl Tvu {
             vote_tracker,
             retransmit_slots_sender,
         );
-
-        let blockstream_service = if let Some(blockstream_unix_socket) = blockstream_unix_socket {
-            let blockstream_service = BlockstreamService::new(
-                blockstream_slot_receiver,
-                blockstore.clone(),
-                blockstream_unix_socket,
-                &exit,
-            );
-            Some(blockstream_service)
-        } else {
-            None
-        };
 
         let ledger_cleanup_service = tvu_config.max_ledger_slots.map(|max_ledger_slots| {
             LedgerCleanupService::new(
@@ -239,7 +221,6 @@ impl Tvu {
             sigverify_stage,
             retransmit_stage,
             replay_stage,
-            blockstream_service,
             ledger_cleanup_service,
             storage_stage,
             accounts_hash_verifier,
@@ -251,9 +232,6 @@ impl Tvu {
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
         self.storage_stage.join()?;
-        if self.blockstream_service.is_some() {
-            self.blockstream_service.unwrap().join()?;
-        }
         if self.ledger_cleanup_service.is_some() {
             self.ledger_cleanup_service.unwrap().join()?;
         }
@@ -319,7 +297,6 @@ pub mod tests {
             },
             blockstore,
             &StorageState::default(),
-            None,
             l_receiver,
             &Arc::new(RpcSubscriptions::new(&exit)),
             &poh_recorder,

@@ -29,17 +29,6 @@ $ok || {
   exit 1
 }
 
-blockstreamSocket=/tmp/solana-blockstream.sock # Default to location used by the block explorer
-while [[ -n $1 ]]; do
-  if [[ $1 = --blockstream ]]; then
-    blockstreamSocket=$2
-    shift 2
-  else
-    echo "Unknown argument: $1"
-    exit 1
-  fi
-done
-
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 dataDir=$PWD/config/"$(basename "$0" .sh)"
@@ -108,9 +97,6 @@ args=(
   --enable-rpc-get-confirmed-block
   --init-complete-file "$dataDir"/init-completed
 )
-if [[ -n $blockstreamSocket ]]; then
-  args+=(--blockstream "$blockstreamSocket")
-fi
 solana-validator "${args[@]}" &
 validator=$!
 

@@ -14,8 +14,6 @@ mod deprecated;
 pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
-pub mod blockstream;
-pub mod blockstream_service;
 pub mod cluster_info;
 pub mod cluster_slots;
 pub mod consensus;

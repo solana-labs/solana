@@ -29,7 +29,6 @@ Start a validator with no stake
 
 OPTIONS:
   --ledger PATH             - store ledger under this PATH
-  --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --label LABEL             - Append the given label to the configuration files, useful when running
                               multiple validators in the same workspace
@@ -60,9 +59,6 @@ while [[ -n $1 ]]; do
       airdrops_enabled=0
       shift
     # solana-validator options
-    elif [[ $1 = --blockstream ]]; then
-      args+=("$1" "$2")
-      shift 2
     elif [[ $1 = --expected-genesis-hash ]]; then
       args+=("$1" "$2")
       shift 2
