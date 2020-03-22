@@ -66,6 +66,7 @@ pub fn load(
 
                 let deserialized_bank = snapshot_utils::bank_from_archive(
                     &account_paths,
+                    &process_options.frozen_accounts,
                     &snapshot_config.snapshot_path,
                     &archive_filename,
                 )
