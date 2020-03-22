@@ -2,7 +2,7 @@ use crate::{
     client_error::Result,
     generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::RpcRequest,
-    rpc_response::{Response, RpcResponseContext, RpcTransactionStatusMeta},
+    rpc_response::{Response, RpcResponseContext, RpcTransactionStatus},
 };
 use serde_json::{Number, Value};
 use solana_sdk::{
@@ -97,20 +97,12 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 } else {
                     Ok(())
                 };
-                let value = if self.url == "sig_not_found" {
+                let status = if self.url == "sig_not_found" {
                     None
                 } else {
-                    Some(RpcTransactionStatusMeta {
-                        status,
-                        fee: 0,
-                        pre_balances: vec![],
-                        post_balances: vec![],
-                    })
+                    Some(RpcTransactionStatus { status, slot: 1 })
                 };
-                serde_json::to_value(vec![Response {
-                    context: RpcResponseContext { slot: 1 },
-                    value,
-                }])?
+                serde_json::to_value(vec![status])?
             }
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
             RpcRequest::GetSlot => Value::Number(Number::from(0)),

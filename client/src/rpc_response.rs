@@ -143,6 +143,13 @@ pub struct RpcTransactionStatusMeta {
     pub post_balances: Vec<u64>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTransactionStatus {
+    pub slot: Slot,
+    pub status: Result<()>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockhashFeeCalculator {

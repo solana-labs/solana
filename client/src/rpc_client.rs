@@ -7,8 +7,7 @@ use crate::{
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
         RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
-        RpcLeaderSchedule, RpcResult, RpcTransactionStatusMeta, RpcVersionInfo,
-        RpcVoteAccountStatus,
+        RpcLeaderSchedule, RpcResult, RpcTransactionStatus, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -124,12 +123,9 @@ impl RpcClient {
             json!([[signature.to_string()], commitment_config]),
             5,
         )?;
-        let result: Vec<Response<Option<RpcTransactionStatusMeta>>> =
+        let result: Vec<Option<RpcTransactionStatus>> =
             serde_json::from_value(signature_status).unwrap();
-        Ok(result[0]
-            .value
-            .clone()
-            .map(|status_meta| status_meta.status))
+        Ok(result[0].clone().map(|status_meta| status_meta.status))
     }
 
     pub fn get_slot(&self) -> ClientResult<Slot> {

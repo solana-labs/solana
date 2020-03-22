@@ -1536,23 +1536,17 @@ impl Blockstore {
     pub fn get_transaction_status(
         &self,
         signature: Signature,
-        slot: Option<Slot>,
         maximum_slot: Slot,
         root: Slot,
     ) -> Result<Option<(Slot, RpcTransactionStatusMeta)>> {
         let mut transaction_iter = self.transaction_status_cf.iter(IteratorMode::End)?;
         let status = transaction_iter
             .find(|((slot_index, sig), _)| {
-                if let Some(known_slot) = slot {
-                    slot_index == &known_slot && sig == &signature
-                } else {
-                    // If a slot is older than the root from bank_forks but not a root itself, it is a
-                    // dead fork and will never be rooted; disregard transaction statuses for these slots
-                    (self.is_root(*slot_index)
-                        || (*slot_index > root && !self.is_dead(*slot_index)))
-                        && slot_index <= &maximum_slot
-                        && sig == &signature
-                }
+                // If a slot is older than the root from bank_forks but not a root itself, it is a
+                // dead fork and will never be rooted; disregard transaction statuses for these slots
+                (self.is_root(*slot_index) || (*slot_index > root && !self.is_dead(*slot_index)))
+                    && slot_index <= &maximum_slot
+                    && sig == &signature
             })
             .map(|((slot, _), status_data)| (slot, deserialize(&status_data).unwrap()));
         Ok(status)
@@ -5364,76 +5358,47 @@ pub mod tests {
             // A transaction status should return the correct corresponding slot, regardless of
             // whether that slot is rooted yet
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature0, None, 5, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature0, 5, 2).unwrap(),
                 Some((0, status.clone()))
             );
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature2, None, 5, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature2, 5, 2).unwrap(),
                 Some((2, status.clone()))
             );
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature3, None, 5, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature3, 5, 2).unwrap(),
                 Some((3, status.clone()))
-            );
-            // If specific slot is specified, success depends on slot equality
-            assert_eq!(
-                blockstore
-                    .get_transaction_status(signature2, Some(2), 5, 2)
-                    .unwrap(),
-                Some((2, status.clone()))
-            );
-            assert_eq!(
-                blockstore
-                    .get_transaction_status(signature2, Some(3), 5, 2)
-                    .unwrap(),
-                None
             );
             // A transaction status in a slot greater than maximum should return None
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature2, None, 0, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature2, 0, 2).unwrap(),
                 None
             );
             // A transaction status in a slot that can never be rooted should return None
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature1, None, 5, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature1, 5, 2).unwrap(),
                 None
             );
             // If signature doesn't exist in column, should return None
             assert_eq!(
                 blockstore
-                    .get_transaction_status(Signature::default(), None, 5, 2)
+                    .get_transaction_status(Signature::default(), 5, 2)
                     .unwrap(),
                 None
             );
             // If duplicate signatures [root, old fork], return root
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature4, None, 5, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature4, 5, 2).unwrap(),
                 Some((2, status.clone()))
             );
             // If duplicate signatures [active slot, dead slot], return active slot
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature5, None, 5, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature5, 5, 2).unwrap(),
                 Some((3, status.clone()))
             );
             // If duplicate signatures [active slot, active slot], return most recent active slot
             assert_eq!(
-                blockstore
-                    .get_transaction_status(signature6, None, 5, 2)
-                    .unwrap(),
+                blockstore.get_transaction_status(signature6, 5, 2).unwrap(),
                 Some((5, status.clone()))
             );
         }
