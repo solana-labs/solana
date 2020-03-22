@@ -1,7 +1,7 @@
 # Generate a Keypair and its Public Key
 
-In this section, we'll generate a keypair, query it for its public key,
-and verify you control its private key. Before you begin, you'll need
+In this section, we will generate a keypair, query it for its public key,
+and verify you control its private key. Before you begin, you will need
 to:
 
 * [Install the Solana Tool Suite](../install-solana.md)
