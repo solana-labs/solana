@@ -35,14 +35,15 @@ enum LedgerOutputMethod {
     Json,
 }
 
-fn output_slot(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
+fn output_slot(
+    blockstore: &Blockstore,
+    slot: Slot,
+    method: &LedgerOutputMethod,
+) -> Result<(), String> {
     println!("Slot Meta {:?}", blockstore.meta(slot));
     let entries = blockstore
         .get_slot_entries(slot, 0, None)
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to load entries for slot {}: {:?}", slot, err);
-            exit(1);
-        });
+        .map_err(|err| format!("Failed to load entries for slot {}: {}", slot, err))?;
 
     for (entry_index, entry) in entries.iter().enumerate() {
         match method {
@@ -115,6 +116,7 @@ fn output_slot(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod)
             }
         }
     }
+    Ok(())
 }
 
 fn output_ledger(blockstore: Blockstore, starting_slot: Slot, method: LedgerOutputMethod) {
@@ -140,7 +142,9 @@ fn output_ledger(blockstore: Blockstore, starting_slot: Slot, method: LedgerOutp
             }
         }
 
-        output_slot(&blockstore, slot, &method);
+        if let Err(err) = output_slot(&blockstore, slot, &method) {
+            eprintln!("{}", err);
+        }
     }
 
     if method == LedgerOutputMethod::Json {
@@ -616,7 +620,21 @@ fn main() {
                     .takes_value(true)
                     .multiple(true)
                     .required(true)
-                    .help("List of slots to print"),
+                    .help("Slots to print"),
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("set-dead-slot")
+            .about("Mark one or more slots dead")
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+                    .help("Slots to mark dead"),
             )
         )
         .subcommand(
@@ -824,13 +842,12 @@ fn main() {
         }
         ("slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let blockstore = open_blockstore(&ledger_path);
             for slot in slots {
                 println!("Slot {}", slot);
-                output_slot(
-                    &open_blockstore(&ledger_path),
-                    slot,
-                    &LedgerOutputMethod::Print,
-                );
+                if let Err(err) = output_slot(&blockstore, slot, &LedgerOutputMethod::Print) {
+                    eprintln!("{}", err);
+                }
             }
         }
         ("json", Some(arg_matches)) => {
@@ -840,6 +857,16 @@ fn main() {
                 starting_slot,
                 LedgerOutputMethod::Json,
             );
+        }
+        ("set-dead-slot", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let blockstore = open_blockstore(&ledger_path);
+            for slot in slots {
+                match blockstore.set_dead_slot(slot) {
+                    Ok(_) => println!("Slot {} dead", slot),
+                    Err(err) => eprintln!("Failed to set slot {} dead slot: {}", slot, err),
+                }
+            }
         }
         ("verify", Some(arg_matches)) => {
             let process_options = ProcessOptions {
