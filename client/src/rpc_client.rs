@@ -7,7 +7,8 @@ use crate::{
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
         RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
-        RpcLeaderSchedule, RpcResult, RpcTransactionStatus, RpcVersionInfo, RpcVoteAccountStatus,
+        RpcLeaderSchedule, RpcResult, RpcTransactionStatusMeta, RpcVersionInfo,
+        RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -123,7 +124,7 @@ impl RpcClient {
             json!([[signature.to_string()], commitment_config]),
             5,
         )?;
-        let result: Vec<Response<Option<RpcTransactionStatus>>> =
+        let result: Vec<Response<Option<RpcTransactionStatusMeta>>> =
             serde_json::from_value(signature_status).unwrap();
         Ok(result[0]
             .value

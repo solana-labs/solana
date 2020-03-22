@@ -11,7 +11,7 @@ use solana_client::rpc_response::{
     Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
     RpcContactInfo, RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity,
     RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
-    RpcStorageTurn, RpcTransactionEncoding, RpcTransactionStatus, RpcVersionInfo,
+    RpcStorageTurn, RpcTransactionEncoding, RpcTransactionStatusMeta, RpcVersionInfo,
     RpcVoteAccountInfo, RpcVoteAccountStatus,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -428,8 +428,8 @@ impl JsonRpcRequestProcessor {
         &self,
         signatures: Vec<Signature>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponseVec<Option<RpcTransactionStatus>> {
-        let mut statuses: Vec<Response<Option<RpcTransactionStatus>>> = vec![];
+    ) -> RpcResponseVec<Option<RpcTransactionStatusMeta>> {
+        let mut statuses: Vec<Response<Option<RpcTransactionStatusMeta>>> = vec![];
 
         let bank = self.bank(commitment);
         let maximum_slot = bank.slot();
@@ -462,7 +462,7 @@ impl JsonRpcRequestProcessor {
                     // do not have a transaction_status_service enabled
                     recent_status.map(|(slot, _, status)| {
                         context = RpcResponseContext { slot };
-                        RpcTransactionStatus {
+                        RpcTransactionStatusMeta {
                             status,
                             fee: 0,
                             pre_balances: vec![],
@@ -602,7 +602,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_strs: Vec<String>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponseVec<Option<RpcTransactionStatus>>;
+    ) -> RpcResponseVec<Option<RpcTransactionStatusMeta>>;
 
     #[rpc(meta, name = "getSlot")]
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
@@ -948,7 +948,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         signature_strs: Vec<String>,
         commitment: Option<CommitmentConfig>,
-    ) -> RpcResponseVec<Option<RpcTransactionStatus>> {
+    ) -> RpcResponseVec<Option<RpcTransactionStatusMeta>> {
         let mut signatures: Vec<Signature> = vec![];
         for signature_str in signature_strs {
             signatures.push(verify_signature(&signature_str)?);
@@ -1854,7 +1854,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
-        let result: Vec<SolanaRpcResponse<Option<RpcTransactionStatus>>> =
+        let result: Vec<SolanaRpcResponse<Option<RpcTransactionStatusMeta>>> =
             serde_json::from_value(json["result"].clone())
                 .expect("actual response deserialization");
         assert_eq!(
@@ -1873,7 +1873,7 @@ pub mod tests {
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
-        let result: Vec<SolanaRpcResponse<Option<RpcTransactionStatus>>> =
+        let result: Vec<SolanaRpcResponse<Option<RpcTransactionStatusMeta>>> =
             serde_json::from_value(json["result"].clone())
                 .expect("actual response deserialization");
         assert!(result[0].value.is_none());
@@ -1888,7 +1888,7 @@ pub mod tests {
             TransactionError::InstructionError(0, InstructionError::CustomError(1)),
         ));
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
-        let result: Vec<SolanaRpcResponse<Option<RpcTransactionStatus>>> =
+        let result: Vec<SolanaRpcResponse<Option<RpcTransactionStatusMeta>>> =
             serde_json::from_value(json["result"].clone())
                 .expect("actual response deserialization");
         assert_eq!(
