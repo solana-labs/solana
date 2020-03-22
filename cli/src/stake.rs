@@ -1598,6 +1598,41 @@ mod tests {
                 ],
             },
         );
+        // Withdraw authority may set both new authorities
+        let test_stake_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &new_stake_string,
+            "--new-withdraw-authority",
+            &new_withdraw_string,
+            "--withdraw-authority",
+            &withdraw_authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_stake_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![
+                        (StakeAuthorize::Staker, new_stake_authority, 1,),
+                        (StakeAuthorize::Withdrawer, new_withdraw_authority, 1,),
+                    ],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&withdraw_authority_keypair_file)
+                        .unwrap()
+                        .into(),
+                ],
+            },
+        );
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize",
@@ -1644,6 +1679,36 @@ mod tests {
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     read_keypair_file(&stake_authority_keypair_file)
+                        .unwrap()
+                        .into(),
+                ],
+            },
+        );
+        // Withdraw authority may set new stake authority
+        let test_stake_authorize = test_commands.clone().get_matches_from(vec![
+            "test",
+            "stake-authorize",
+            &stake_account_string,
+            "--new-stake-authority",
+            &new_stake_string,
+            "--withdraw-authority",
+            &withdraw_authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_stake_authorize, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::StakeAuthorize {
+                    stake_account_pubkey,
+                    new_authorizations: vec![(StakeAuthorize::Staker, new_stake_authority, 1,),],
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&withdraw_authority_keypair_file)
                         .unwrap()
                         .into(),
                 ],
