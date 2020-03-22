@@ -550,8 +550,6 @@ impl AccountsDB {
         let storage: AccountStorage = deserialize_from_snapshot(&mut stream)
             .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
 
-        let paths = self.paths.read().unwrap();
-
         // Remap the deserialized AppendVec paths to point to correct local paths
         let new_storage_map: Result<HashMap<Slot, SlotStores>, IOError> = storage
             .0
@@ -560,7 +558,7 @@ impl AccountsDB {
                 let mut new_slot_storage = HashMap::new();
                 for (id, storage_entry) in slot_storage.drain() {
                     let path_index = thread_rng().gen_range(0, self.paths.len());
-                    let local_dir = &paths[path_index];
+                    let local_dir = &self.paths[path_index];
 
                     std::fs::create_dir_all(local_dir).expect("Create directory failed");
 
