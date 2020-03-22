@@ -11,18 +11,37 @@ the more stake you delegate.
 ## Create a Stake Account
 
 To delegate stake, you will need to transfer some tokens into a stake account.
-Create a stake account with the `solana create-stake-account` command:
+To create an account, you will need a keypair. Its public key will be used as
+the stake account address. No need for a password or encryption here; this
+keypair will be discarded right after creating the stake account.
 
 ```bash
 solana-keygen new --no-passphrase -o stake-account.json
+```
+
+The output will contain the public key after the text `pubkey:`.
+
+```text
+============================================================================
+pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
+============================================================================
+```
+
+Copy the public key and store it for safekeeping. You will need it any time you
+want to perform an action on the stake account you create next.
+
+Now, create a stake account:
+
+```bash
 solana create-stake-account --from=<KEYPAIR> stake-account.json <AMOUNT> --stake-authority=<KEYPAIR> --withdraw-authority=<KEYPAIR>
 ```
 
 `<AMOUNT>` tokens are transferred from the account at `<KEYPAIR>` to a new
-stake account at the public key of stake-account.json.  Record the account
-public key, as it will be used later to perform actions on the stake account.
-The stake-account.json file can then be discarded. To authorize additional
-actions, you will use `<KEYPAIR>`, not the keypair at stake-account.json.
+stake account at the public key of stake-account.json.
+
+The stake-account.json file can now be discarded. To authorize additional
+actions, you will use the `--stake-authority` or `withdraw-authority` keypair,
+not stake-account.json.
 
 ### Set Stake and Withdraw Authorities
 
