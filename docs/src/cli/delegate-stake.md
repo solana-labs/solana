@@ -32,7 +32,7 @@ deactivating stake, splitting stake, and setting a new stake authority.  They
 use the withdraw authority to authorize withdrawing stake, and when setting
 either a new stake or withdraw authority.
 
-Stake and withdraw authorities can be set when creating account via the
+Stake and withdraw authorities can be set when creating an account via the
 `--stake-authority` and `--withdraw-authority` options, or afterward with the
 `solana stake-authorize` command. For example, to set a new stake authority,
 run:
@@ -58,8 +58,8 @@ solana create-stake-account --from=<KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed=<STR
 
 `<STRING>` is an arbitrary string up to 32 bytes, but will typically be a
 number corresponding to which derived account this is. The first account might
-be "0", then "1", and so on. The keypair used for `<STAKE_ACCOUNT_KEYPAIR>`
-acts as base key. The command derives a new address from the base address and
+be "0", then "1", and so on. The pubkey of `<STAKE_ACCOUNT_KEYPAIR>` acts as
+the base address. The command derives a new address from the base address and
 seed string. To see what stake address the command will derive, use `solana
 create-address-with-seed`:
 
@@ -75,7 +75,7 @@ The command will output a derived address, which can be used for the
 
 ## Delegate Stake
 
-To delegate your stake to a validator, you will need to its vote account
+To delegate your stake to a validator, you will need to know its vote account
 address. Find it by querying the cluster for the list of all validators and
 their vote accounts with the `solana validators` command:
 
@@ -138,4 +138,6 @@ stake authority, `<NEW_STAKE_ACCOUNT_KEYPAIR>` is the keypair for the new accoun
 and `<AMOUNT>` is the number of tokens to transfer to the new account.
 
 To split a stake account into a derived account address, use the `--seed`
-option in the same way as with `solana create-stake-account`.
+option.  See
+[Derive Stake Account Addresses](#advanced-derive-stake-account-addresses)
+for details.
