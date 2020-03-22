@@ -1259,8 +1259,8 @@ pub fn process_stake_set_lockup(
 
 pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamports_unit: bool) {
     fn show_authorized(authorized: &Authorized) {
-        println!("Authorized Staker: {}", authorized.staker);
-        println!("Authorized Withdrawer: {}", authorized.withdrawer);
+        println!("Stake Authority: {}", authorized.staker);
+        println!("Withdraw Authority: {}", authorized.withdrawer);
     }
     fn show_lockup(lockup: &Lockup) {
         println!(
@@ -1289,7 +1289,10 @@ pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamp
                 build_balance_message(stake.delegation.stake, use_lamports_unit, true)
             );
             if stake.delegation.voter_pubkey != Pubkey::default() {
-                println!("Delegated Voter Pubkey: {}", stake.delegation.voter_pubkey);
+                println!(
+                    "Delegated Vote Account Address: {}",
+                    stake.delegation.voter_pubkey
+                );
             }
             println!(
                 "Stake activates starting from epoch: {}",
