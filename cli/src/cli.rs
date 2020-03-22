@@ -304,9 +304,7 @@ pub enum CliCommand {
     },
     StakeAuthorize {
         stake_account_pubkey: Pubkey,
-        new_authorized_pubkey: Pubkey,
-        stake_authorize: StakeAuthorize,
-        authority: SignerIndex,
+        new_authorizations: Vec<(StakeAuthorize, Pubkey, SignerIndex)>,
         sign_only: bool,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
@@ -648,18 +646,9 @@ pub fn parse_command(
         ("split-stake", Some(matches)) => {
             parse_split_stake(matches, default_signer_path, wallet_manager)
         }
-        ("stake-authorize-staker", Some(matches)) => parse_stake_authorize(
-            matches,
-            default_signer_path,
-            wallet_manager,
-            StakeAuthorize::Staker,
-        ),
-        ("stake-authorize-withdrawer", Some(matches)) => parse_stake_authorize(
-            matches,
-            default_signer_path,
-            wallet_manager,
-            StakeAuthorize::Withdrawer,
-        ),
+        ("stake-authorize", Some(matches)) => {
+            parse_stake_authorize(matches, default_signer_path, wallet_manager)
+        }
         ("stake-set-lockup", Some(matches)) => {
             parse_stake_set_lockup(matches, default_signer_path, wallet_manager)
         }
@@ -1832,9 +1821,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         }
         CliCommand::StakeAuthorize {
             stake_account_pubkey,
-            new_authorized_pubkey,
-            stake_authorize,
-            authority,
+            ref new_authorizations,
             sign_only,
             blockhash_query,
             nonce_account,
@@ -1844,9 +1831,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             &stake_account_pubkey,
-            &new_authorized_pubkey,
-            *stake_authorize,
-            *authority,
+            new_authorizations,
             *sign_only,
             blockhash_query,
             *nonce_account,

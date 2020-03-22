@@ -625,9 +625,7 @@ fn test_stake_authorize() {
     config.signers.pop();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: online_authority_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 0,
+        new_authorizations: vec![(StakeAuthorize::Staker, online_authority_pubkey, 0)],
         sign_only: false,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
@@ -643,13 +641,40 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, online_authority_pubkey);
 
-    // Assign new offline stake authority
+    // Assign new online stake and withdraw authorities
+    let online_authority2 = Keypair::new();
+    let online_authority2_pubkey = online_authority2.pubkey();
+    let withdraw_authority = Keypair::new();
+    let withdraw_authority_pubkey = withdraw_authority.pubkey();
     config.signers.push(&online_authority);
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: offline_authority_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 1,
+        new_authorizations: vec![
+            (StakeAuthorize::Staker, online_authority2_pubkey, 1),
+            (StakeAuthorize::Withdrawer, withdraw_authority_pubkey, 0),
+        ],
+        sign_only: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let (current_staker, current_withdrawer) = match stake_state {
+        StakeState::Initialized(meta) => (meta.authorized.staker, meta.authorized.withdrawer),
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_staker, online_authority2_pubkey);
+    assert_eq!(current_withdrawer, withdraw_authority_pubkey);
+
+    // Assign new offline stake authority
+    config.signers.pop();
+    config.signers.push(&online_authority2);
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorizations: vec![(StakeAuthorize::Staker, offline_authority_pubkey, 1)],
         sign_only: false,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
@@ -671,9 +696,7 @@ fn test_stake_authorize() {
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: nonced_authority_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 0,
+        new_authorizations: vec![(StakeAuthorize::Staker, nonced_authority_pubkey, 0)],
         sign_only: true,
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
@@ -687,9 +710,7 @@ fn test_stake_authorize() {
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: nonced_authority_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 0,
+        new_authorizations: vec![(StakeAuthorize::Staker, nonced_authority_pubkey, 0)],
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
@@ -731,9 +752,7 @@ fn test_stake_authorize() {
     config_offline.signers.push(&nonced_authority);
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: online_authority_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 1,
+        new_authorizations: vec![(StakeAuthorize::Staker, online_authority_pubkey, 1)],
         sign_only: true,
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
@@ -749,9 +768,7 @@ fn test_stake_authorize() {
     config.signers = vec![&offline_presigner, &nonced_authority_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: online_authority_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 1,
+        new_authorizations: vec![(StakeAuthorize::Staker, online_authority_pubkey, 1)],
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
@@ -858,9 +875,7 @@ fn test_stake_authorize_with_fee_payer() {
     config.signers = vec![&default_signer, &payer_keypair];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: offline_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 0,
+        new_authorizations: vec![(StakeAuthorize::Staker, offline_pubkey, 0)],
         sign_only: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
@@ -878,9 +893,7 @@ fn test_stake_authorize_with_fee_payer() {
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: payer_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 0,
+        new_authorizations: vec![(StakeAuthorize::Staker, payer_pubkey, 0)],
         sign_only: true,
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
@@ -894,9 +907,7 @@ fn test_stake_authorize_with_fee_payer() {
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorized_pubkey: payer_pubkey,
-        stake_authorize: StakeAuthorize::Staker,
-        authority: 0,
+        new_authorizations: vec![(StakeAuthorize::Staker, payer_pubkey, 0)],
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
