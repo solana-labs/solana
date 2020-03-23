@@ -25,7 +25,7 @@ use solana_measure::thread_mem_usage;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-    clock::Slot,
+    clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -49,6 +49,7 @@ use std::{
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
+pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -75,6 +76,12 @@ impl Drop for Finalizer {
     fn drop(&mut self) {
         self.exit_sender.clone().store(true, Ordering::Relaxed);
     }
+}
+
+#[derive(Default)]
+struct SkippedSlotsInfo {
+    last_retransmit_slot: u64,
+    last_skipped_slot: u64,
 }
 
 #[derive(Default)]
@@ -170,6 +177,7 @@ impl ReplayStage {
                     slots.last().cloned().unwrap_or(0)
                 };
                 let mut switch_threshold = false;
+                let mut skipped_slots_info = SkippedSlotsInfo::default();
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
@@ -418,6 +426,8 @@ impl ReplayStage {
                             &subscriptions,
                             rewards_recorder_sender.clone(),
                             &progress,
+                            &retransmit_slots_sender,
+                            &mut skipped_slots_info,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -522,6 +532,8 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         progress_map: &ProgressMap,
+        retransmit_slots_sender: &RetransmitSlotsSender,
+        skipped_slots_info: &mut SkippedSlotsInfo,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -577,11 +589,33 @@ impl ReplayStage {
             );
 
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
-                let latest_leader_slot = progress_map.get_latest_leader_slot(parent_slot);
-                error!(
-                    "skipping starting bank for {}, parent: {}, latest_leader: {:?}, propagation not confirmed",
-                    poh_slot, parent_slot, latest_leader_slot
-                );
+                let latest_leader_slot = progress_map.get_latest_leader_slot(parent_slot).expect("In order for propagated check to fail, latest leader must exist in progress map");
+                error!("skipping slot: {}", poh_slot);
+                if poh_slot != skipped_slots_info.last_skipped_slot {
+                    datapoint_error!(
+                        "replay_stage-skip_leader_slot",
+                        ("slot", poh_slot, i64),
+                        ("parent_slot", parent_slot, i64),
+                        ("latest_unconfirmed_leader", latest_leader_slot, i64)
+                    );
+                    skipped_slots_info.last_skipped_slot = poh_slot;
+                }
+                let bank = bank_forks.read().unwrap().get(latest_leader_slot)
+                .expect("In order for propagated check to fail, latest leader must exist in progress map, and thus also in BankForks").clone();
+
+                // Signal retransmit
+                if poh_slot < skipped_slots_info.last_retransmit_slot
+                    || poh_slot
+                        >= skipped_slots_info
+                            .last_retransmit_slot
+                            .saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)
+                {
+                    datapoint_error!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
+                    retransmit_slots_sender
+                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect())
+                        .unwrap();
+                    skipped_slots_info.last_retransmit_slot = poh_slot;
+                }
                 return;
             }
 
