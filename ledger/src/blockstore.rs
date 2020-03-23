@@ -93,6 +93,7 @@ pub struct Blockstore {
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
     pub lowest_cleanup_slot: Arc<RwLock<u64>>,
+    no_compaction: bool,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -228,6 +229,7 @@ impl Blockstore {
             insert_shreds_lock: Arc::new(Mutex::new(())),
             last_root,
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
+            no_compaction: false,
         };
         Ok(blockstore)
     }
@@ -243,6 +245,10 @@ impl Blockstore {
         blockstore.completed_slots_senders = vec![completed_slots_sender];
 
         Ok((blockstore, signal_receiver, completed_slots_receiver))
+    }
+
+    pub fn set_no_compaction(&mut self, no_compaction: bool) {
+        self.no_compaction = no_compaction;
     }
 
     pub fn destroy(ledger_path: &Path) -> Result<()> {
@@ -276,12 +282,14 @@ impl Blockstore {
         while from_slot < batch_end {
             match self.run_purge(from_slot, batch_end) {
                 Ok(end) => {
-                    if let Err(e) = self.compact_storage(from_slot, batch_end) {
-                        // This error is not fatal and indicates an internal error
-                        error!(
-                            "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
-                            e, from_slot, batch_end
-                        );
+                    if !self.no_compaction {
+                        if let Err(e) = self.compact_storage(from_slot, batch_end) {
+                            // This error is not fatal and indicates an internal error
+                            error!(
+                                "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
+                                e, from_slot, batch_end
+                            );
+                        }
                     }
 
                     if end {
