@@ -11,7 +11,9 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_chacha_cuda::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
-use solana_runtime::{bank::Bank, storage_utils::archiver_accounts};
+use solana_runtime::{
+    bank::Bank, status_cache::SignatureConfirmationStatus, storage_utils::archiver_accounts,
+};
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
@@ -343,8 +345,13 @@ impl StorageStage {
                 .unwrap()
                 .working_bank()
                 .get_signature_confirmation_status(signature);
-            if let Some((confirmations, res)) = response {
-                if res.is_ok() {
+            if let Some(SignatureConfirmationStatus {
+                confirmations,
+                status,
+                ..
+            }) = response
+            {
+                if status.is_ok() {
                     if confirmed_blocks != confirmations {
                         now = Instant::now();
                         confirmed_blocks = confirmations;
