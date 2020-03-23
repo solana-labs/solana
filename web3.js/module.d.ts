@@ -37,10 +37,12 @@ declare module '@solana/web3.js' {
   /* TODO */
 
   // === src/connection.js ===
+  export type Context = {
+    slot: number;
+  };
+
   export type RpcResponseAndContext<T> = {
-    context: {
-      slot: number;
-    };
+    context: Context;
     value: T;
   };
 
@@ -115,13 +117,18 @@ declare module '@solana/web3.js' {
     root: 'number';
   };
 
-  export type AccountChangeCallback = (accountInfo: AccountInfo) => void;
+  export type AccountChangeCallback = (
+    accountInfo: AccountInfo,
+    context: Context,
+  ) => void;
   export type ProgramAccountChangeCallback = (
     keyedAccountInfo: KeyedAccountInfo,
+    context: Context,
   ) => void;
   export type SlotChangeCallback = (slotInfo: SlotInfo) => void;
   export type SignatureResultCallback = (
     signatureResult: SignatureStatusResult,
+    context: Context,
   ) => void;
 
   export type SignatureSuccess = {
