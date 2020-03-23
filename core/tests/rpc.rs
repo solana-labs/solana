@@ -7,9 +7,13 @@ use jsonrpc_core_client::transports::ws;
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
-use solana_client::{rpc_client::get_rpc_request_str, rpc_response::Response};
+use solana_client::{
+    rpc_client::{get_rpc_request_str, RpcClient},
+    rpc_response::Response,
+};
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     hash::Hash,
     pubkey::Pubkey,
     system_transaction,
@@ -266,12 +270,25 @@ fn test_rpc_subscriptions() {
             .unwrap();
     });
 
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let transaction_count = rpc_client
+        .get_transaction_count_with_commitment(CommitmentConfig::recent())
+        .unwrap();
+
     // Send all transactions to tpu socket for processing
     transactions.iter().for_each(|tx| {
         transactions_socket
             .send_to(&bincode::serialize(&tx).unwrap(), leader_data.tpu)
             .unwrap();
     });
+    let mut x = 0;
+    let now = Instant::now();
+    while x < transaction_count + 500 || now.elapsed() > Duration::from_secs(5) {
+        x = rpc_client
+            .get_transaction_count_with_commitment(CommitmentConfig::recent())
+            .unwrap();
+        sleep(Duration::from_millis(200));
+    }
 
     // Wait for all signature subscriptions
     let deadline = Instant::now() + Duration::from_secs(5);
