@@ -52,7 +52,7 @@ usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ## Manage Multiple Hardware Wallets
 
 It is sometimes useful to sign a transaction with keys from multiple hardware
-wallets. Signing with multiple wallets requires *fully qualified USB URLs*.
+wallets. Signing with multiple wallets requires *fully qualified keypair URLs*.
 When the URL is not fully qualified, the Solana CLI will prompt you with
 the fully qualified URLs of all connected hardware wallets, and ask you to
 choose which wallet to use for each signature.

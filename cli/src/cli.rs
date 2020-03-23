@@ -301,9 +301,7 @@ pub enum CliCommand {
     },
     StakeAuthorize {
         stake_account_pubkey: Pubkey,
-        new_authorized_pubkey: Pubkey,
-        stake_authorize: StakeAuthorize,
-        authority: SignerIndex,
+        new_authorizations: Vec<(StakeAuthorize, Pubkey, SignerIndex)>,
         sign_only: bool,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
@@ -644,18 +642,9 @@ pub fn parse_command(
         ("split-stake", Some(matches)) => {
             parse_split_stake(matches, default_signer_path, wallet_manager)
         }
-        ("stake-authorize-staker", Some(matches)) => parse_stake_authorize(
-            matches,
-            default_signer_path,
-            wallet_manager,
-            StakeAuthorize::Staker,
-        ),
-        ("stake-authorize-withdrawer", Some(matches)) => parse_stake_authorize(
-            matches,
-            default_signer_path,
-            wallet_manager,
-            StakeAuthorize::Withdrawer,
-        ),
+        ("stake-authorize", Some(matches)) => {
+            parse_stake_authorize(matches, default_signer_path, wallet_manager)
+        }
         ("stake-set-lockup", Some(matches)) => {
             parse_stake_set_lockup(matches, default_signer_path, wallet_manager)
         }
@@ -1825,9 +1814,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         }
         CliCommand::StakeAuthorize {
             stake_account_pubkey,
-            new_authorized_pubkey,
-            stake_authorize,
-            authority,
+            ref new_authorizations,
             sign_only,
             blockhash_query,
             nonce_account,
@@ -1837,9 +1824,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             &stake_account_pubkey,
-            &new_authorized_pubkey,
-            *stake_authorize,
-            *authority,
+            new_authorizations,
             *sign_only,
             blockhash_query,
             *nonce_account,
@@ -2264,10 +2249,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(2)
-                        .value_name("RECIPIENT_PUBKEY")
+                        .value_name("RECIPIENT_ADDRESS")
                         .takes_value(true)
                         .validator(is_valid_pubkey)
-                        .help("The pubkey of airdrop recipient"),
+                        .help("The account address of airdrop recipient"),
                 ),
         )
         .subcommand(
@@ -2276,10 +2261,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .validator(is_valid_pubkey)
-                        .help("The public key of the balance to check"),
+                        .help("The account address of the balance to check"),
                 )
                 .arg(
                     Arg::with_name("lamports")
@@ -2294,11 +2279,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("process_id")
                         .index(1)
-                        .value_name("PROCESS_PUBKEY")
+                        .value_name("ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
-                        .help("The process id of the transfer to cancel"),
+                        .help("The account address of the transfer to cancel"),
                 ),
         )
         .subcommand(
@@ -2327,7 +2312,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("program_id")
                         .index(2)
-                        .value_name("PROGRAM_PUBKEY")
+                        .value_name("PROGRAM_ID")
                         .takes_value(true)
                         .required(true)
                         .help(
@@ -2363,11 +2348,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("RECIPIENT_PUBKEY")
+                        .value_name("RECIPIENT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
-                        .help("The pubkey of recipient"),
+                        .help("The account address of recipient"),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -2432,19 +2417,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("RECIPIENT_PUBKEY")
+                        .value_name("RECIPIENT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
-                        .help("The pubkey of recipient"),
+                        .help("The account address of recipient"),
                 )
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_PUBKEY")
+                        .value_name("ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
-                        .help("The process id of the transfer to authorize"),
+                        .help("The account address of the transfer to authorize"),
                 ),
         )
         .subcommand(
@@ -2453,19 +2438,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("RECIPIENT_PUBKEY")
+                        .value_name("RECIPIENT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
-                        .help("The pubkey of recipient"),
+                        .help("The account address of recipient"),
                 )
                 .arg(
                     Arg::with_name("process_id")
                         .index(2)
-                        .value_name("PROCESS_PUBKEY")
+                        .value_name("ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
-                        .help("The process id of the transfer to unlock"),
+                        .help("The account address of the transfer to unlock"),
                 )
                 .arg(
                     Arg::with_name("datetime")
@@ -2481,11 +2466,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("to")
                         .index(1)
-                        .value_name("RECIPIENT_PUBKEY")
+                        .value_name("RECIPIENT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
-                        .help("The pubkey of recipient"),
+                        .help("The account address of recipient"),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -2516,7 +2501,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("account_pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_PUBKEY")
+                        .value_name("ACCOUNT_ADDRESS")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)

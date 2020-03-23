@@ -23,6 +23,7 @@ use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     genesis_config::GenesisConfig,
     hash::Hash,
+    pubkey::Pubkey,
     signature::Keypair,
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
@@ -271,6 +272,7 @@ pub struct ProcessOptions {
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
+    pub frozen_accounts: Vec<Pubkey>,
 }
 
 pub fn process_blockstore(
@@ -289,7 +291,11 @@ pub fn process_blockstore(
     }
 
     // Setup bank for slot 0
-    let bank0 = Arc::new(Bank::new_with_paths(&genesis_config, account_paths));
+    let bank0 = Arc::new(Bank::new_with_paths(
+        &genesis_config,
+        account_paths,
+        &opts.frozen_accounts,
+    ));
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
     process_bank_0(&bank0, blockstore, &opts, &recyclers)?;
@@ -2611,7 +2617,7 @@ pub mod tests {
         genesis_config: &GenesisConfig,
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(&genesis_config, account_paths);
+        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[]);
         bank.epoch_schedule().clone()
     }
 
