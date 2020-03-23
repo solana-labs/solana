@@ -7,7 +7,7 @@ use jsonrpc_core_client::transports::ws;
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
-use solana_client::rpc_client::get_rpc_request_str;
+use solana_client::{rpc_client::get_rpc_request_str, rpc_response::Response};
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, system_transaction, transaction};
 use std::{
@@ -217,7 +217,7 @@ fn test_rpc_subscriptions() {
     // Create the pub sub runtime
     let mut rt = Runtime::new().unwrap();
     let rpc_pubsub_url = format!("ws://{}/", leader_data.rpc_pubsub);
-    let (sender, receiver) = channel::<(String, transaction::Result<()>)>();
+    let (sender, receiver) = channel::<(String, Response<transaction::Result<()>>)>();
     let sender = Arc::new(Mutex::new(sender));
 
     rt.spawn({
@@ -253,7 +253,7 @@ fn test_rpc_subscriptions() {
         assert!(now.elapsed().unwrap() < timeout);
         match receiver.recv_timeout(Duration::from_secs(1)) {
             Ok((sig, result)) => {
-                assert!(result.is_ok());
+                assert!(result.value.is_ok());
                 assert!(signature_set.remove(&sig));
             }
             Err(_err) => {
