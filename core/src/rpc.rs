@@ -18,7 +18,7 @@ use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, rooted_slot_iterator::RootedSlotIterator,
 };
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, status_cache::SignatureConfirmationStatus};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -202,7 +202,9 @@ impl JsonRpcRequestProcessor {
             Ok(sig) => {
                 let status = bank.get_signature_confirmation_status(&sig);
                 match status {
-                    Some((_, result)) => new_response(bank, result.is_ok()),
+                    Some(SignatureConfirmationStatus { status, .. }) => {
+                        new_response(bank, status.is_ok())
+                    }
                     None => new_response(bank, false),
                 }
             }
@@ -226,10 +228,16 @@ impl JsonRpcRequestProcessor {
     ) -> Option<RpcSignatureConfirmation> {
         self.bank(commitment)
             .get_signature_confirmation_status(&signature)
-            .map(|(confirmations, status)| RpcSignatureConfirmation {
-                confirmations,
-                status,
-            })
+            .map(
+                |SignatureConfirmationStatus {
+                     confirmations,
+                     status,
+                     ..
+                 }| RpcSignatureConfirmation {
+                    confirmations,
+                    status,
+                },
+            )
     }
 
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
