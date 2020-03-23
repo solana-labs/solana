@@ -266,7 +266,7 @@ impl Validator {
         });
 
         let (transaction_status_sender, transaction_status_service) =
-            if rpc_service.is_some() && config.rpc_config.enable_get_confirmed_block {
+            if rpc_service.is_some() && config.rpc_config.enable_rpc_transaction_history {
                 let (transaction_status_sender, transaction_status_receiver) = unbounded();
                 (
                     Some(transaction_status_sender),
@@ -281,7 +281,7 @@ impl Validator {
             };
 
         let (rewards_recorder_sender, rewards_recorder_service) =
-            if rpc_service.is_some() && config.rpc_config.enable_get_confirmed_block {
+            if rpc_service.is_some() && config.rpc_config.enable_rpc_transaction_history {
                 let (rewards_recorder_sender, rewards_receiver) = unbounded();
                 (
                     Some(rewards_recorder_sender),

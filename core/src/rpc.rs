@@ -7,13 +7,7 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_response::{
-    Response, RpcAccount, RpcBlockCommitment, RpcBlockhashFeeCalculator, RpcConfirmedBlock,
-    RpcContactInfo, RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity,
-    RpcKeyedAccount, RpcLeaderSchedule, RpcResponseContext, RpcSignatureConfirmation,
-    RpcStorageTurn, RpcTransactionEncoding, RpcVersionInfo, RpcVoteAccountInfo,
-    RpcVoteAccountStatus,
-};
+use solana_client::rpc_response::*;
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, rooted_slot_iterator::RootedSlotIterator,
@@ -29,7 +23,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
     timing::slot_duration_from_slots_per_year,
-    transaction::{self, Transaction},
+    transaction::Transaction,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
@@ -52,7 +46,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 pub struct JsonRpcConfig {
     pub enable_validator_exit: bool,
     pub enable_set_log_filter: bool,
-    pub enable_get_confirmed_block: bool,
+    pub enable_rpc_transaction_history: bool,
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
 }
@@ -374,7 +368,7 @@ impl JsonRpcRequestProcessor {
         slot: Slot,
         encoding: Option<RpcTransactionEncoding>,
     ) -> Result<Option<RpcConfirmedBlock>> {
-        if self.config.enable_get_confirmed_block {
+        if self.config.enable_rpc_transaction_history {
             Ok(self.blockstore.get_confirmed_block(slot, encoding).ok())
         } else {
             Ok(None)
@@ -421,6 +415,27 @@ impl JsonRpcRequestProcessor {
             .get_block_time(slot, slot_duration, stakes)
             .ok()
             .unwrap_or(None))
+    }
+
+    pub fn get_signature_status(
+        &self,
+        signatures: Vec<Signature>,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Vec<Option<RpcTransactionStatus>>> {
+        let mut statuses: Vec<Option<RpcTransactionStatus>> = vec![];
+
+        let bank = self.bank(commitment);
+
+        for signature in signatures {
+            let status = bank.get_signature_confirmation_status(&signature).map(
+                |SignatureConfirmationStatus { slot, status, .. }| RpcTransactionStatus {
+                    slot,
+                    status,
+                },
+            );
+            statuses.push(status);
+        }
+        Ok(statuses)
     }
 }
 
@@ -548,9 +563,9 @@ pub trait RpcSol {
     fn get_signature_status(
         &self,
         meta: Self::Metadata,
-        signature_str: String,
+        signature_strs: Vec<String>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<transaction::Result<()>>>;
+    ) -> Result<Vec<Option<RpcTransactionStatus>>>;
 
     #[rpc(meta, name = "getSlot")]
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
@@ -894,11 +909,17 @@ impl RpcSol for RpcSolImpl {
     fn get_signature_status(
         &self,
         meta: Self::Metadata,
-        signature_str: String,
+        signature_strs: Vec<String>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<transaction::Result<()>>> {
-        self.get_signature_confirmation(meta, signature_str, commitment)
-            .map(|res| res.map(|x| x.status))
+    ) -> Result<Vec<Option<RpcTransactionStatus>>> {
+        let mut signatures: Vec<Signature> = vec![];
+        for signature_str in signature_strs {
+            signatures.push(verify_signature(&signature_str)?);
+        }
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_signature_status(signatures, commitment)
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -1210,7 +1231,7 @@ pub mod tests {
         rpc_port,
         signature::{Keypair, Signer},
         system_transaction,
-        transaction::TransactionError,
+        transaction::{self, TransactionError},
     };
     use solana_vote_program::{
         vote_instruction,
@@ -1339,7 +1360,7 @@ pub mod tests {
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             JsonRpcConfig {
-                enable_get_confirmed_block: true,
+                enable_rpc_transaction_history: true,
                 identity_pubkey: *pubkey,
                 ..JsonRpcConfig::default()
             },
@@ -1783,66 +1804,50 @@ pub mod tests {
             meta,
             blockhash,
             alice,
+            confirmed_block_signatures,
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
-            tx.signatures[0]
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":[["{}"]]}}"#,
+            confirmed_block_signatures[0]
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": expected_res,
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        let expected_res: transaction::Result<()> = Ok(());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let result: Vec<Option<RpcTransactionStatus>> =
+            serde_json::from_value(json["result"].clone())
+                .expect("actual response deserialization");
+        assert_eq!(expected_res, result[0].as_ref().unwrap().status);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":[["{}"]]}}"#,
             tx.signatures[0]
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected_res: Option<String> = None;
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": expected_res,
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let result: Vec<Option<RpcTransactionStatus>> =
+            serde_json::from_value(json["result"].clone())
+                .expect("actual response deserialization");
+        assert!(result[0].is_none());
 
         // Test getSignatureStatus request on a TransactionError
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, std::u64::MAX, blockhash);
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
-            tx.signatures[0]
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":[["{}"]]}}"#,
+            confirmed_block_signatures[1]
         );
-        let res = io.handle_request_sync(&req, meta);
-        let expected_res: Option<transaction::Result<()>> = Some(Err(
-            TransactionError::InstructionError(0, InstructionError::CustomError(1)),
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected_res: transaction::Result<()> = Err(TransactionError::InstructionError(
+            0,
+            InstructionError::CustomError(1),
         ));
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": expected_res,
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let result: Vec<Option<RpcTransactionStatus>> =
+            serde_json::from_value(json["result"].clone())
+                .expect("actual response deserialization");
+        assert_eq!(expected_res, result[0].as_ref().unwrap().status);
     }
 
     #[test]

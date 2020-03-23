@@ -52,7 +52,7 @@ pub struct RpcConfirmedBlock {
 #[serde(rename_all = "camelCase")]
 pub struct RpcTransactionWithStatusMeta {
     pub transaction: RpcEncodedTransaction,
-    pub meta: Option<RpcTransactionStatus>,
+    pub meta: Option<RpcTransactionStatusMeta>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -136,11 +136,18 @@ pub struct RpcCompiledInstruction {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcTransactionStatus {
+pub struct RpcTransactionStatusMeta {
     pub status: Result<()>,
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTransactionStatus {
+    pub slot: Slot,
+    pub status: Result<()>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

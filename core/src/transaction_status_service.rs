@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
-use solana_client::rpc_response::RpcTransactionStatus;
+use solana_client::rpc_response::RpcTransactionStatusMeta;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
 use solana_runtime::{
     bank::{Bank, HashAgeKind},
@@ -73,7 +73,7 @@ impl TransactionStatusService {
                 blockstore
                     .write_transaction_status(
                         (slot, transaction.signatures[0]),
-                        &RpcTransactionStatus {
+                        &RpcTransactionStatusMeta {
                             status,
                             fee,
                             pre_balances,
