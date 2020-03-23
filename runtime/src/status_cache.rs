@@ -117,20 +117,15 @@ impl<T: Serialize + Clone> StatusCache<T> {
             trace!("get_signature_status_slow: trying {}", blockhash);
             if let Some((forkid, res)) = self.get_signature_status(sig, blockhash, ancestors) {
                 trace!("get_signature_status_slow: got {}", forkid);
-                return ancestors
+                let confirmations = ancestors
                     .get(&forkid)
-                    .map(|id| SignatureConfirmationStatus {
-                        slot: forkid,
-                        confirmations: *id,
-                        status: res.clone(),
-                    })
-                    .or_else(|| {
-                        Some(SignatureConfirmationStatus {
-                            slot: forkid,
-                            confirmations: ancestors.len(),
-                            status: res,
-                        })
-                    });
+                    .copied()
+                    .unwrap_or_else(|| ancestors.len());
+                return Some(SignatureConfirmationStatus {
+                    slot: forkid,
+                    confirmations,
+                    status: res,
+                });
             }
         }
         None

@@ -2,7 +2,7 @@ use crate::{
     client_error::Result,
     generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::RpcRequest,
-    rpc_response::{Response, RpcResponseContext},
+    rpc_response::{Response, RpcResponseContext, RpcTransactionStatus},
 };
 use serde_json::{Number, Value};
 use solana_sdk::{
@@ -87,19 +87,22 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
             })?,
             RpcRequest::GetSignatureStatus => {
-                let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {
-                    Some(Err(TransactionError::AccountInUse))
+                let status: transaction::Result<()> = if self.url == "account_in_use" {
+                    Err(TransactionError::AccountInUse)
                 } else if self.url == "instruction_error" {
-                    Some(Err(TransactionError::InstructionError(
+                    Err(TransactionError::InstructionError(
                         0,
                         InstructionError::UninitializedAccount,
-                    )))
-                } else if self.url == "sig_not_found" {
+                    ))
+                } else {
+                    Ok(())
+                };
+                let status = if self.url == "sig_not_found" {
                     None
                 } else {
-                    Some(Ok(()))
+                    Some(RpcTransactionStatus { status, slot: 1 })
                 };
-                serde_json::to_value(response).unwrap()
+                serde_json::to_value(vec![status])?
             }
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
             RpcRequest::GetSlot => Value::Number(Number::from(0)),
