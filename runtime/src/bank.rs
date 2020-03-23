@@ -1823,6 +1823,18 @@ impl Bank {
             .fetch_add(signature_count, Ordering::Relaxed);
     }
 
+    pub fn get_signature_status_processed_since_parent(
+        &self,
+        signature: &Signature,
+    ) -> Option<Result<()>> {
+        if let Some(status) = self.get_signature_confirmation_status(signature) {
+            if status.slot == self.slot() {
+                return Some(status.status);
+            }
+        }
+        None
+    }
+
     pub fn get_signature_confirmation_status(
         &self,
         signature: &Signature,
