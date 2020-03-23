@@ -97,7 +97,7 @@ impl RpcRequest {
 
 #[derive(Debug, Error)]
 pub enum RpcError {
-    #[error("rpc reques error: {0}")]
+    #[error("rpc request error: {0}")]
     RpcRequestError(String),
     #[error("parse error: expected {0}")]
     ParseError(String), /* "expected" */
