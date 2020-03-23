@@ -754,34 +754,37 @@ pub(crate) mod tests {
 
         let (subscriber, _id_receiver, transport_receiver) =
             Subscriber::new_test("signatureNotification");
-        let id1 = SubscriptionId::Number(1 as u64);
-        let id2 = SubscriptionId::Number(2 as u64);
-        let id3 = SubscriptionId::Number(3 as u64);
         let sink = subscriber.assign_id(SubscriptionId::Number(0)).unwrap();
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(&exit);
         subscriptions.add_signature_subscription(
             &past_bank_tx.signatures[0],
             Some(0),
-            &id1,
+            &SubscriptionId::Number(1 as u64),
+            &sink.clone(),
+        );
+        subscriptions.add_signature_subscription(
+            &past_bank_tx.signatures[0],
+            Some(1),
+            &SubscriptionId::Number(2 as u64),
             &sink.clone(),
         );
         subscriptions.add_signature_subscription(
             &processed_tx.signatures[0],
             Some(0),
-            &id2,
+            &SubscriptionId::Number(3 as u64),
             &sink.clone(),
         );
         subscriptions.add_signature_subscription(
             &unprocessed_tx.signatures[0],
             Some(0),
-            &id3,
+            &SubscriptionId::Number(4 as u64),
             &sink.clone(),
         );
 
         {
             let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
-            assert!(sig_subs.contains_key(&past_bank_tx.signatures[0]));
+            assert_eq!(sig_subs.get(&past_bank_tx.signatures[0]).unwrap().len(), 2);
             assert!(sig_subs.contains_key(&unprocessed_tx.signatures[0]));
             assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
         }
@@ -802,26 +805,19 @@ pub(crate) mod tests {
         });
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
-        // Subscription should be automatically removed after notification
-        assert!(!subscriptions
-            .signature_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&processed_tx.signatures[0]));
+        let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
 
-        // Signatures processed in previous banks should not be removed
-        assert!(subscriptions
-            .signature_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&past_bank_tx.signatures[0]));
+        // Subscription should be automatically removed after notification
+        assert!(!sig_subs.contains_key(&processed_tx.signatures[0]));
+
+        // Only one notification is expected for signature processed in previous bank
+        assert_eq!(sig_subs.get(&past_bank_tx.signatures[0]).unwrap().len(), 1);
 
         // Unprocessed signature subscription should not be removed
-        assert!(subscriptions
-            .signature_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&unprocessed_tx.signatures[0]));
+        assert_eq!(
+            sig_subs.get(&unprocessed_tx.signatures[0]).unwrap().len(),
+            1
+        );
     }
 
     #[test]
