@@ -752,6 +752,8 @@ pub(crate) mod tests {
             .process_transaction(&processed_tx)
             .unwrap();
 
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
+
         let (subscriber, _id_receiver, transport_receiver) =
             Subscriber::new_test("signatureNotification");
         let sink = subscriber.assign_id(SubscriptionId::Number(0)).unwrap();
@@ -764,32 +766,26 @@ pub(crate) mod tests {
             &sink.clone(),
         );
         subscriptions.add_signature_subscription(
-            &past_bank_tx.signatures[0],
-            Some(1),
-            &SubscriptionId::Number(2 as u64),
-            &sink.clone(),
-        );
-        subscriptions.add_signature_subscription(
             &processed_tx.signatures[0],
             Some(0),
-            &SubscriptionId::Number(3 as u64),
+            &SubscriptionId::Number(2 as u64),
             &sink.clone(),
         );
         subscriptions.add_signature_subscription(
             &unprocessed_tx.signatures[0],
             Some(0),
-            &SubscriptionId::Number(4 as u64),
+            &SubscriptionId::Number(3 as u64),
             &sink.clone(),
         );
 
         {
             let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
-            assert_eq!(sig_subs.get(&past_bank_tx.signatures[0]).unwrap().len(), 2);
+            assert!(sig_subs.contains_key(&past_bank_tx.signatures[0]));
             assert!(sig_subs.contains_key(&unprocessed_tx.signatures[0]));
             assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
         }
 
-        subscriptions.notify_subscribers(1, &Arc::new(RwLock::new(bank_forks)));
+        subscriptions.notify_subscribers(1, &bank_forks);
         let response = robust_poll_or_panic(transport_receiver);
         let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
         let expected = json!({
@@ -818,6 +814,34 @@ pub(crate) mod tests {
             sig_subs.get(&unprocessed_tx.signatures[0]).unwrap().len(),
             1
         );
+
+        let (subscriber, _id_receiver, transport_receiver) =
+            Subscriber::new_test("signatureNotification");
+        let sink = subscriber.assign_id(SubscriptionId::Number(0)).unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let subscriptions = RpcSubscriptions::new(&exit);
+
+        subscriptions.add_signature_subscription(
+            &past_bank_tx.signatures[0],
+            Some(1),
+            &SubscriptionId::Number(1 as u64),
+            &sink.clone(),
+        );
+        subscriptions.notify_subscribers(1, &bank_forks);
+        let response = robust_poll_or_panic(transport_receiver);
+        let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "method": "signatureNotification",
+            "params": {
+                "result": {
+                    "context": { "slot": 0 },
+                    "value": expected_res,
+                },
+                "subscription": 0,
+            }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
     }
 
     #[test]
