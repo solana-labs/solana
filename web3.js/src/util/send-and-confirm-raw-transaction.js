@@ -39,7 +39,7 @@ export async function sendAndConfirmRawTransaction(
     }
   }
 
-  if (status && 'Ok' in status) {
+  if (status && status.status && 'Ok' in status.status) {
     return signature;
   }
 

@@ -63,6 +63,11 @@ declare module '@solana/web3.js' {
     | SignatureSuccess
     | TransactionError;
 
+  declare export type SignatureStatus = {
+    slot: number,
+    status: SignatureSuccess | TransactionError,
+  };
+
   declare export type BlockhashAndFeeCalculator = {
     blockhash: Blockhash,
     feeCalculator: FeeCalculator,
@@ -198,7 +203,11 @@ declare module '@solana/web3.js' {
     getSignatureStatus(
       signature: TransactionSignature,
       commitment: ?Commitment,
-    ): Promise<SignatureSuccess | TransactionError | null>;
+    ): Promise<SignatureStatus | null>;
+    getSignatureStatusBatch(
+      signatures: Array<TransactionSignature>,
+      commitment: ?Commitment,
+    ): Promise<Array<SignatureStatus | null>>;
     getTransactionCount(commitment: ?Commitment): Promise<number>;
     getTotalSupply(commitment: ?Commitment): Promise<number>;
     getVersion(): Promise<Version>;

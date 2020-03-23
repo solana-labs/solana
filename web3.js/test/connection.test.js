@@ -100,13 +100,20 @@ test('get program accounts', async () => {
     {
       method: 'getSignatureStatus',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
         {commitment: 'recent'},
       ],
     },
     {
       error: null,
-      result: {Ok: null},
+      result: [
+        {
+          slot: 0,
+          status: {Ok: null},
+        },
+      ],
     },
   ]);
   let transaction = SystemProgram.assign({
@@ -131,13 +138,20 @@ test('get program accounts', async () => {
     {
       method: 'getSignatureStatus',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
         {commitment: 'recent'},
       ],
     },
     {
       error: null,
-      result: {Ok: null},
+      result: [
+        {
+          slot: 0,
+          status: {Ok: null},
+        },
+      ],
     },
   ]);
   transaction = SystemProgram.assign({
@@ -471,7 +485,7 @@ test('confirm transaction - error', async () => {
     url,
     {
       method: 'getSignatureStatus',
-      params: [badTransactionSignature],
+      params: [[badTransactionSignature]],
     },
     errorResponse,
   ]);
@@ -1011,18 +1025,64 @@ test('transaction', async () => {
     {
       method: 'getSignatureStatus',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
         {commitment: 'recent'},
       ],
     },
     {
       error: null,
-      result: {Ok: null},
+      result: [
+        {
+          slot: 0,
+          status: {Ok: null},
+        },
+      ],
     },
   ]);
-  await expect(connection.getSignatureStatus(signature)).resolves.toEqual({
-    Ok: null,
-  });
+
+  const response = await connection.getSignatureStatus(signature);
+  if (response !== null) {
+    expect(typeof response.slot).toEqual('number');
+    expect(response.status).toEqual({Ok: null});
+  } else {
+    expect(response).not.toBeNull();
+  }
+
+  const unprocessedSignature =
+    '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk';
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatus',
+      params: [
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+          unprocessedSignature,
+        ],
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result: [
+        {
+          slot: 0,
+          status: {Ok: null},
+        },
+        null,
+      ],
+    },
+  ]);
+
+  const responses = await connection.getSignatureStatusBatch([
+    signature,
+    unprocessedSignature,
+  ]);
+  expect(responses.length).toEqual(2);
+  expect(responses[0]).toEqual(response);
+  expect(responses[1]).toBeNull();
 
   mockRpc.push([
     url,
@@ -1120,9 +1180,14 @@ test('multi-instruction transaction', async () => {
     expect(++i).toBeLessThan(10);
     await sleep(500);
   }
-  await expect(connection.getSignatureStatus(signature)).resolves.toEqual({
-    Ok: null,
-  });
+
+  const response = await connection.getSignatureStatus(signature);
+  if (response !== null) {
+    expect(typeof response.slot).toEqual('number');
+    expect(response.status).toEqual({Ok: null});
+  } else {
+    expect(response).not.toBeNull();
+  }
 
   // accountFrom may have less than LAMPORTS_PER_SOL due to transaction fees
   expect(await connection.getBalance(accountFrom.publicKey)).toBeGreaterThan(0);
