@@ -75,5 +75,5 @@ To keep your hardware wallet tokens safe, we suggest:
 Different people will have different needs, but if you are still unsure what
 is best for you after reading the comparisons above, go with a
 [Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s). The
-[Nano S is well-integrated into Solana's tool suite](../remote-wallet/ledger)
+[Nano S is well-integrated into Solana's tool suite](../remote-wallet/ledger.md)
 and offers an outstanding blend of security and convenience.
