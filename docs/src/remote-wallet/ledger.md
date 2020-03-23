@@ -90,7 +90,7 @@ where you replace `<WALLET_ID>` with the output of the first command.
 Confirm it prints the same wallet ID as before.
 
 To learn more about keypair URLs, see
-[Specify A Hardware Wallet Key](index.md#specify-a-hardware-wallet-key)
+[Specify A Hardware Wallet Key](README.md#specify-a-hardware-wallet-key)
 
 Read more about [sending and receiving tokens](../transfer-tokens.md) and
 [delegating stake](../delegate-stake.md). You can use your Ledger keypair URL
