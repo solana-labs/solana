@@ -84,11 +84,14 @@ impl Pubkey {
         program_id: &Pubkey,
     ) -> Result<Pubkey, PubkeyError> {
         // Use a deterministic base for all program addresses that are owned by `program_id`
-        let mut base = Pubkey::create_with_seed(program_id, &"ProgramDerivedAddress", program_id)?;
+        let mut hash = hashv(&["ProgramDerivedAddress".as_ref(), program_id.as_ref()]);
         for seed in seeds.iter() {
-            base = Pubkey::create_with_seed(&base, seed, program_id)?
+            if seed.len() > MAX_SEED_LEN {
+                return Err(PubkeyError::MaxSeedLengthExceeded);
+            }
+            hash = hashv(&[hash.as_ref(), seed.as_ref()]);
         }
-        Ok(base)
+        Ok(Pubkey::new(hashv(&[hash.as_ref()]).as_ref()))
     }
 
     #[cfg(not(feature = "program"))]
@@ -249,19 +252,19 @@ mod tests {
         assert!(Pubkey::create_program_address(&[max_seed], &Pubkey::new_rand(),).is_ok());
         assert_eq!(
             Pubkey::create_program_address(&[""], &program_id),
-            Ok("D7xCAhhnyCU2C2yPCG7EuDwyYQFmieZwxk4JwkdfJZ6V"
+            Ok("9GPJv25bvS268YUG4iTiYo2qhoBbqZdUm3wZnBKz4HcC"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["☉"], &program_id),
-            Ok("4AMmNBVEQi3kwxQcdLmja5V2cgZ7eg4tXAYegg3FDunw"
+            Ok("8UgMTXdTvG3FDfnJKTD72YFonWLdLRAm9WWtFu9B4LQT"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["Talking", "Squirrels"], &program_id),
-            Ok("GTDhkxcbQGpyuhFkcusiFrXWDeDzZi757oXo9gR2L52M"
+            Ok("7CZEb3nS3KetSKexDGh5kYt447XqHBNuPW9Qg781Y394"
                 .parse()
                 .unwrap())
         );
