@@ -181,7 +181,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_pubkey_or_keypair)
                 .help(
                     "Path to file containing the pubkey authorized to manage the bootstrap \
-                     validator's stake [default: --bootstrap-validator-pubkey]",
+                     validator's stake [default: --bootstrap-validator IDENTITY_PUBKEY]",
                 ),
         )
         .arg(
