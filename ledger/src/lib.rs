@@ -9,6 +9,7 @@ pub mod blockstore_processor;
 pub mod entry;
 pub mod erasure;
 pub mod genesis_utils;
+pub mod hardened_unpack;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;
 pub mod leader_schedule_utils;

@@ -1,3 +1,4 @@
+use crate::hardened_unpack::{unpack_snapshot, UnpackError};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::serialize_into;
 use bzip2::bufread::BzDecoder;
@@ -54,6 +55,9 @@ pub enum SnapshotError {
 
     #[error("storage path symlink is invalid")]
     StoragePathSymlinkInvalid,
+
+    #[error("Unpack error")]
+    UnpackError(#[from] UnpackError),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -549,62 +553,6 @@ pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
     archives.into_iter().next()
 }
 
-const MAXIMUM_SNAPSHOT_ARCHIVE_SIZE: u64 = 500 * 1024 * 1024 * 1024; // 500 GiB
-
-fn is_valid_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
-    use tar::EntryType::{Directory, GNUSparse, Regular};
-    let storage_regex = Regex::new(r"^\d+.\d+$").unwrap();
-    let slot_regex = Regex::new(r"^\d+$").unwrap();
-
-    trace!("validating: {:?} {:?}", parts, kind);
-    match (parts, kind) {
-        (["version"], Regular) => true,
-        (["accounts"], Directory) => true,
-        (["accounts", file], GNUSparse) if storage_regex.is_match(file) => true,
-        (["accounts", file], Regular) if storage_regex.is_match(file) => true,
-        (["snapshots"], Directory) => true,
-        (["snapshots", "status_cache"], Regular) => true,
-        (["snapshots", dir, file], Regular)
-            if slot_regex.is_match(dir) && slot_regex.is_match(file) =>
-        {
-            true
-        }
-        (["snapshots", dir], Directory) if slot_regex.is_match(dir) => true,
-        _ => false,
-    }
-}
-
-fn unpack_snapshot<A: Read, P: AsRef<Path>>(archive: &mut Archive<A>, unpack_dir: P) -> Result<()> {
-    let mut total_size: u64 = 0;
-
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?;
-
-        let parts = path.iter().map(|p| p.to_str());
-        if parts.clone().any(|p| p.is_none()) {
-            return Err(get_io_error(&format!("invalid path found: {:?}", path)));
-        }
-
-        let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
-        if !is_valid_archive_entry(parts.as_slice(), entry.header().entry_type()) {
-            return Err(get_io_error(&format!("invalid entry found: {:?}", path)));
-        }
-
-        total_size = total_size.saturating_add(entry.header().size()?);
-        if total_size > MAXIMUM_SNAPSHOT_ARCHIVE_SIZE {
-            return Err(get_io_error(&format!(
-                "too large snapshot: {:?}",
-                total_size
-            )));
-        }
-
-        entry.unpack_in(&unpack_dir)?;
-    }
-
-    Ok(())
-}
-
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: Q,
@@ -850,18 +798,5 @@ mod tests {
             Some((42, Hash::default()))
         );
         assert!(snapshot_hash_of("invalid").is_none());
-    }
-
-    #[test]
-    fn test_is_valid_archive_entry() {
-        assert!(!is_valid_archive_entry(&["aaaa"], tar::EntryType::Regular));
-        assert!(is_valid_archive_entry(
-            &["version"],
-            tar::EntryType::Regular
-        ));
-        assert!(is_valid_archive_entry(
-            &["accounts"],
-            tar::EntryType::Directory
-        ));
     }
 }

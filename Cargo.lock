@@ -4034,7 +4034,6 @@ dependencies = [
  "solana-ledger 1.1.0",
  "solana-sdk 1.1.0",
  "tar 0.4.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
