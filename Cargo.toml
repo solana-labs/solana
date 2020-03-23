@@ -53,6 +53,7 @@ members = [
     "sdk-c",
     "scripts",
     "sys-tuner",
+    "transaction-status",
     "upload-perf",
     "net-utils",
     "vote-signer",

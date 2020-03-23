@@ -22,10 +22,6 @@ use rayon::{
     ThreadPool,
 };
 use rocksdb::DBRawIterator;
-use solana_client::rpc_response::{
-    RpcConfirmedBlock, RpcEncodedTransaction, RpcRewards, RpcTransactionEncoding,
-    RpcTransactionStatusMeta, RpcTransactionWithStatusMeta,
-};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
@@ -39,6 +35,10 @@ use solana_sdk::{
     signature::{Keypair, Signature, Signer},
     timing::timestamp,
     transaction::Transaction,
+};
+use solana_transaction_status::{
+    RpcConfirmedBlock, RpcEncodedTransaction, RpcRewards, RpcTransactionEncoding,
+    RpcTransactionStatusMeta, RpcTransactionWithStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{

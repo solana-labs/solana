@@ -1,10 +1,10 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
-use solana_client::rpc_response::RpcTransactionStatusMeta;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
 use solana_runtime::{
     bank::{Bank, HashAgeKind},
     nonce_utils,
 };
+use solana_transaction_status::RpcTransactionStatusMeta;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},

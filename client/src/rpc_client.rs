@@ -23,6 +23,7 @@ use solana_sdk::{
     signers::Signers,
     transaction::{self, Transaction, TransactionError},
 };
+use solana_transaction_status::{RpcConfirmedBlock, RpcTransactionEncoding, RpcTransactionStatus};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     error,

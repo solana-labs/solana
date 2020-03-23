@@ -1,7 +1,7 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_client::rpc_response::RpcReward;
 use solana_ledger::blockstore::Blockstore;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_transaction_status::RpcReward;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},

@@ -25,6 +25,7 @@ use solana_sdk::{
     timing::slot_duration_from_slots_per_year,
     transaction::Transaction,
 };
+use solana_transaction_status::{RpcConfirmedBlock, RpcTransactionEncoding, RpcTransactionStatus};
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     collections::HashMap,
@@ -1216,7 +1217,6 @@ pub mod tests {
     };
     use bincode::deserialize;
     use jsonrpc_core::{MetaIoHandler, Output, Response, Value};
-    use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         blockstore_processor::fill_blockstore_slot_with_ticks,
@@ -1233,6 +1233,7 @@ pub mod tests {
         system_transaction,
         transaction::{self, TransactionError},
     };
+    use solana_transaction_status::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},

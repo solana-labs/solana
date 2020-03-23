@@ -1017,7 +1017,6 @@ mod tests {
     };
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
-    use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
         entry::{next_entry, Entry, EntrySlice},
@@ -1032,6 +1031,7 @@ mod tests {
         system_transaction,
         transaction::TransactionError,
     };
+    use solana_transaction_status::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use std::{sync::atomic::Ordering, thread::sleep};
 
     #[test]
