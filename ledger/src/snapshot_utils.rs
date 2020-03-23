@@ -11,6 +11,7 @@ use solana_runtime::{
         self, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
     },
+    bank_1_0::Bank1_0,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
@@ -30,7 +31,13 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
-pub const SNAPSHOT_VERSION: &str = "1.0.0";
+pub const SNAPSHOT_VERSION_1_0: &str = "1.0.0";
+pub const SNAPSHOT_VERSION_1_1: &str = "1.0.1";
+
+pub enum BankVersions {
+    Bank1_0(Bank1_0),
+    Bank1_1(Bank),
+}
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
@@ -174,7 +181,7 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     // Write version file
     {
         let mut f = std::fs::File::create(staging_version_file)?;
-        f.write_all(&SNAPSHOT_VERSION.to_string().into_bytes())?;
+        f.write_all(&SNAPSHOT_VERSION_1_1.to_string().into_bytes())?;
     }
 
     let archive_compress_options = if is_snapshot_compression_disabled() {
@@ -592,8 +599,13 @@ where
         &root_paths.snapshot_file_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-            let mut bank: Bank = match snapshot_version {
-                SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
+            let versioned_bank: BankVersions = match snapshot_version {
+                SNAPSHOT_VERSION_1_0 => {
+                    BankVersions::Bank1_0(deserialize_from_snapshot(stream.by_ref())?)
+                }
+                SNAPSHOT_VERSION_1_1 => {
+                    BankVersions::Bank1_1(deserialize_from_snapshot(stream.by_ref())?)
+                }
                 _ => {
                     return Err(get_io_error(&format!(
                         "unsupported snapshot version: {}",
@@ -602,6 +614,12 @@ where
                 }
             };
             info!("Rebuilding accounts...");
+
+            // Convert bank to current version
+            let mut bank = match versioned_bank {
+                BankVersions::Bank1_0(bank_1_0) => Bank::new_from_1_0(bank_1_0),
+                BankVersions::Bank1_1(bank_1_1) => bank_1_1,
+            };
             let rc = bank::BankRc::from_stream(
                 account_paths,
                 bank.slot(),

@@ -5,7 +5,7 @@
 use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
-    bank_1_0::Bank_1_0,
+    bank_1_0::Bank1_0,
     blockhash_queue::BlockhashQueue,
     epoch_stakes::EpochStakes,
     message_processor::{MessageProcessor, ProcessInstruction},
@@ -359,6 +359,54 @@ impl Default for BlockhashQueue {
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_paths(&genesis_config, Vec::new(), &[])
+    }
+
+    pub fn new_from_1_0(bank_1_0: Bank1_0) -> Self {
+        let bank_1_0_epoch_stakes = bank_1_0.epoch_stakes;
+        let epoch_stakes = bank_1_0_epoch_stakes
+            .iter()
+            .map(|(epoch, stakes)| (*epoch, EpochStakes::new(&stakes, *epoch)))
+            .collect();
+        Self {
+            rc: bank_1_0.rc,
+            src: bank_1_0.src,
+            blockhash_queue: bank_1_0.blockhash_queue,
+            ancestors: bank_1_0.ancestors,
+            hash: bank_1_0.hash,
+            parent_hash: bank_1_0.parent_hash,
+            parent_slot: bank_1_0.parent_slot,
+            hard_forks: bank_1_0.hard_forks,
+            transaction_count: bank_1_0.transaction_count,
+            tick_height: bank_1_0.tick_height,
+            signature_count: bank_1_0.signature_count,
+            capitalization: bank_1_0.capitalization,
+            max_tick_height: bank_1_0.max_tick_height,
+            hashes_per_tick: bank_1_0.hashes_per_tick,
+            ticks_per_slot: bank_1_0.ticks_per_slot,
+            ns_per_slot: bank_1_0.ns_per_slot,
+            genesis_creation_time: bank_1_0.genesis_creation_time,
+            slots_per_year: bank_1_0.slots_per_year,
+            slots_per_segment: bank_1_0.slots_per_segment,
+            slot: bank_1_0.slot,
+            epoch: bank_1_0.epoch,
+            block_height: bank_1_0.block_height,
+            collector_id: bank_1_0.collector_id,
+            collector_fees: bank_1_0.collector_fees,
+            fee_calculator: bank_1_0.fee_calculator,
+            fee_rate_governor: bank_1_0.fee_rate_governor,
+            collected_rent: bank_1_0.collected_rent,
+            rent_collector: bank_1_0.rent_collector,
+            epoch_schedule: bank_1_0.epoch_schedule,
+            inflation: bank_1_0.inflation,
+            stakes: bank_1_0.stakes,
+            storage_accounts: bank_1_0.storage_accounts,
+            epoch_stakes,
+            is_delta: bank_1_0.is_delta,
+            message_processor: bank_1_0.message_processor,
+            entered_epoch_callback: bank_1_0.entered_epoch_callback,
+            last_vote_sync: bank_1_0.last_vote_sync,
+            rewards: bank_1_0.rewards,
+        }
     }
 
     pub fn new_with_paths(
