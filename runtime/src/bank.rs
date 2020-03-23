@@ -5,6 +5,7 @@
 use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
+    bank_1_0::Bank_1_0,
     blockhash_queue::BlockhashQueue,
     epoch_stakes::EpochStakes,
     message_processor::{MessageProcessor, ProcessInstruction},
