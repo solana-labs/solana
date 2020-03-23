@@ -22,16 +22,24 @@ import type {TransactionSignature} from './transaction';
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 /**
+ * Extra contextual information for RPC responses
+ *
+ * @typedef {Object} Context
+ * @property {number} slot
+ */
+type Context = {
+  slot: number,
+};
+
+/**
  * RPC Response with extra contextual information
  *
  * @typedef {Object} RpcResponseAndContext
- * @property {{slot: number}} context
+ * @property {Context} context
  * @property {T} value response
  */
 type RpcResponseAndContext<T> = {
-  context: {
-    slot: number,
-  },
+  context: Context,
   value: T,
 };
 
@@ -65,6 +73,18 @@ function jsonRpcResult(resultDescription: any) {
       result: resultDescription,
     }),
   ]);
+}
+
+/**
+ * @private
+ */
+function notificationResultAndContext(resultDescription: any) {
+  return struct({
+    context: struct({
+      slot: 'number',
+    }),
+    value: resultDescription,
+  });
 }
 
 /**
@@ -330,7 +350,7 @@ const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
  */
 const AccountNotificationResult = struct({
   subscription: 'number',
-  result: AccountInfoResult,
+  result: notificationResultAndContext(AccountInfoResult),
 });
 
 /**
@@ -346,7 +366,7 @@ const ProgramAccountInfoResult = struct({
  */
 const ProgramAccountNotificationResult = struct({
   subscription: 'number',
-  result: ProgramAccountInfoResult,
+  result: notificationResultAndContext(ProgramAccountInfoResult),
 });
 
 /**
@@ -371,7 +391,7 @@ const SlotNotificationResult = struct({
  */
 const SignatureNotificationResult = struct({
   subscription: 'number',
-  result: SignatureStatusResult,
+  result: notificationResultAndContext(SignatureStatusResult),
 });
 
 /**
@@ -589,7 +609,10 @@ type KeyedAccountInfo = {
 /**
  * Callback function for account change notifications
  */
-export type AccountChangeCallback = (accountInfo: AccountInfo) => void;
+export type AccountChangeCallback = (
+  accountInfo: AccountInfo,
+  context: Context,
+) => void;
 
 /**
  * @private
@@ -610,6 +633,7 @@ type AccountSubscriptionInfo = {
  */
 export type ProgramAccountChangeCallback = (
   keyedAccountInfo: KeyedAccountInfo,
+  context: Context,
 ) => void;
 
 /**
@@ -639,6 +663,7 @@ type SlotSubscriptionInfo = {
  */
 export type SignatureResultCallback = (
   signatureResult: SignatureStatusResult,
+  context: Context,
 ) => void;
 
 /**
@@ -1472,20 +1497,23 @@ export class Connection {
     if (res.error) {
       throw new Error(res.error.message);
     }
-
+    assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._accountChangeSubscriptions).map(Number);
     for (let id of keys) {
       const sub = this._accountChangeSubscriptions[id];
       if (sub.subscriptionId === res.subscription) {
         const {result} = res;
-        assert(typeof result !== 'undefined');
+        const {value, context} = result;
 
-        sub.callback({
-          executable: result.executable,
-          owner: new PublicKey(result.owner),
-          lamports: result.lamports,
-          data: bs58.decode(result.data),
-        });
+        sub.callback(
+          {
+            executable: value.executable,
+            owner: new PublicKey(value.owner),
+            lamports: value.lamports,
+            data: bs58.decode(value.data),
+          },
+          context,
+        );
         return true;
       }
     }
@@ -1536,7 +1564,7 @@ export class Connection {
     if (res.error) {
       throw new Error(res.error.message);
     }
-
+    assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._programAccountChangeSubscriptions).map(
       Number,
     );
@@ -1544,17 +1572,20 @@ export class Connection {
       const sub = this._programAccountChangeSubscriptions[id];
       if (sub.subscriptionId === res.subscription) {
         const {result} = res;
-        assert(typeof result !== 'undefined');
+        const {value, context} = result;
 
-        sub.callback({
-          accountId: result.pubkey,
-          accountInfo: {
-            executable: result.account.executable,
-            owner: new PublicKey(result.account.owner),
-            lamports: result.account.lamports,
-            data: bs58.decode(result.account.data),
+        sub.callback(
+          {
+            accountId: value.pubkey,
+            accountInfo: {
+              executable: value.account.executable,
+              owner: new PublicKey(value.account.owner),
+              lamports: value.account.lamports,
+              data: bs58.decode(value.account.data),
+            },
           },
-        });
+          context,
+        );
         return true;
       }
     }
@@ -1608,7 +1639,6 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     const {parent, slot, root} = res.result;
-
     const keys = Object.keys(this._slotSubscriptions).map(Number);
     for (let id of keys) {
       const sub = this._slotSubscriptions[id];
@@ -1672,7 +1702,6 @@ export class Connection {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-
     const keys = Object.keys(this._signatureSubscriptions).map(Number);
     for (let id of keys) {
       const sub = this._signatureSubscriptions[id];
@@ -1681,7 +1710,7 @@ export class Connection {
         // no need to explicitly send an unsubscribe message
         delete this._signatureSubscriptions[id];
         this._updateSubscriptions();
-        sub.callback(res.result);
+        sub.callback(res.result.value, res.result.context);
         return;
       }
     }
