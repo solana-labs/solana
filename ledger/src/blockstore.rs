@@ -24,7 +24,7 @@ use rayon::{
 use rocksdb::DBRawIterator;
 use solana_client::rpc_response::{
     RpcConfirmedBlock, RpcEncodedTransaction, RpcRewards, RpcTransactionEncoding,
-    RpcTransactionStatus, RpcTransactionWithStatusMeta,
+    RpcTransactionStatusMeta, RpcTransactionWithStatusMeta,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
@@ -1493,7 +1493,7 @@ impl Blockstore {
     pub fn write_transaction_status(
         &self,
         index: (Slot, Signature),
-        status: &RpcTransactionStatus,
+        status: &RpcTransactionStatusMeta,
     ) -> Result<()> {
         self.transaction_status_cf.put(index, status)
     }
@@ -4821,7 +4821,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatus>)> = entries
+        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -4838,7 +4838,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put(
                         (slot, signature),
-                        &RpcTransactionStatus {
+                        &RpcTransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
                             pre_balances: pre_balances.clone(),
@@ -4850,7 +4850,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put(
                         (slot + 1, signature),
-                        &RpcTransactionStatus {
+                        &RpcTransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
                             pre_balances: pre_balances.clone(),
@@ -4860,7 +4860,7 @@ pub mod tests {
                     .unwrap();
                 (
                     transaction,
-                    Some(RpcTransactionStatus {
+                    Some(RpcTransactionStatusMeta {
                         status: Ok(()),
                         fee: 42,
                         pre_balances,
@@ -5123,7 +5123,7 @@ pub mod tests {
             assert!(transaction_status_cf
                 .put(
                     (0, Signature::default()),
-                    &RpcTransactionStatus {
+                    &RpcTransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Err(
                             TransactionError::AccountNotFound
                         ),
@@ -5135,7 +5135,7 @@ pub mod tests {
                 .is_ok());
 
             // result found
-            let RpcTransactionStatus {
+            let RpcTransactionStatusMeta {
                 status,
                 fee,
                 pre_balances,
@@ -5153,7 +5153,7 @@ pub mod tests {
             assert!(transaction_status_cf
                 .put(
                     (9, Signature::default()),
-                    &RpcTransactionStatus {
+                    &RpcTransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Ok(()),
                         fee: 9u64,
                         pre_balances: pre_balances_vec.clone(),
@@ -5163,7 +5163,7 @@ pub mod tests {
                 .is_ok());
 
             // result found
-            let RpcTransactionStatus {
+            let RpcTransactionStatusMeta {
                 status,
                 fee,
                 pre_balances,
@@ -5218,7 +5218,7 @@ pub mod tests {
                 transaction_status_cf
                     .put(
                         (slot, transaction.signatures[0]),
-                        &RpcTransactionStatus {
+                        &RpcTransactionStatusMeta {
                             status: solana_sdk::transaction::Result::<()>::Err(
                                 TransactionError::AccountNotFound,
                             ),
