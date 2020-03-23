@@ -479,21 +479,9 @@ pub struct AccountsDB {
 }
 
 fn make_min_priority_thread_pool() -> ThreadPool {
-    use thread_priority::{
-        set_thread_priority, thread_native_id, NormalThreadSchedulePolicy, ThreadPriority,
-        ThreadSchedulePolicy,
-    };
-    let num_threads = get_thread_count();
+    // Use lower thread count to reduce priority.
+    let num_threads = std::cmp::max(2, num_cpus::get() / 4);
     rayon::ThreadPoolBuilder::new()
-        .start_handler(|_id| {
-            let thread_id = thread_native_id();
-            set_thread_priority(
-                thread_id,
-                ThreadPriority::Min,
-                ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Normal),
-            )
-            .unwrap();
-        })
         .thread_name(|i| format!("solana-accounts-cleanup-{}", i))
         .num_threads(num_threads)
         .build()
