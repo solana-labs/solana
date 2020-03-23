@@ -1,4 +1,7 @@
-use crate::{hash::hashv, program_utils::DecodeError};
+use crate::{
+    hash::{hashv, Hasher},
+    program_utils::DecodeError,
+};
 use num_derive::{FromPrimitive, ToPrimitive};
 use std::{convert::TryFrom, error, fmt, mem, str::FromStr};
 use thiserror::Error;
@@ -83,15 +86,16 @@ impl Pubkey {
         seeds: &[&str],
         program_id: &Pubkey,
     ) -> Result<Pubkey, PubkeyError> {
-        // Use a deterministic base for all program addresses that are owned by `program_id`
-        let mut hash = hashv(&["ProgramDerivedAddress".as_ref(), program_id.as_ref()]);
+        let mut hasher = Hasher::default();
         for seed in seeds.iter() {
             if seed.len() > MAX_SEED_LEN {
                 return Err(PubkeyError::MaxSeedLengthExceeded);
             }
-            hash = hashv(&[hash.as_ref(), seed.as_ref()]);
+            hasher.hash(seed.as_ref());
         }
-        Ok(Pubkey::new(hashv(&[hash.as_ref()]).as_ref()))
+        hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
+
+        Ok(Pubkey::new(hashv(&[hasher.result().as_ref()]).as_ref()))
     }
 
     #[cfg(not(feature = "program"))]
@@ -252,19 +256,19 @@ mod tests {
         assert!(Pubkey::create_program_address(&[max_seed], &Pubkey::new_rand(),).is_ok());
         assert_eq!(
             Pubkey::create_program_address(&[""], &program_id),
-            Ok("9GPJv25bvS268YUG4iTiYo2qhoBbqZdUm3wZnBKz4HcC"
+            Ok("FXjJsFsMXM8LFXynZvEkED7yECADnaEgAzWD6yyg91QG"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["☉"], &program_id),
-            Ok("8UgMTXdTvG3FDfnJKTD72YFonWLdLRAm9WWtFu9B4LQT"
+            Ok("MAuKBzPvme5QmCNALp5iAEasZeazkpRyCZbwtJVkJEG"
                 .parse()
                 .unwrap())
         );
         assert_eq!(
             Pubkey::create_program_address(&["Talking", "Squirrels"], &program_id),
-            Ok("7CZEb3nS3KetSKexDGh5kYt447XqHBNuPW9Qg781Y394"
+            Ok("3beXgJ9MfstiGfzav45bicJ7ygiwUEoCfsM4W94EuRii"
                 .parse()
                 .unwrap())
         );
