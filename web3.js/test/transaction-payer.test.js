@@ -148,18 +148,29 @@ test('transaction-payer', async () => {
     {
       method: 'getSignatureStatus',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
         {commitment: 'recent'},
       ],
     },
     {
       error: null,
-      result: {Ok: null},
+      result: [
+        {
+          slot: 0,
+          status: {Ok: null},
+        },
+      ],
     },
   ]);
-  await expect(connection.getSignatureStatus(signature)).resolves.toEqual({
-    Ok: null,
-  });
+  const response = await connection.getSignatureStatus(signature);
+  if (response !== null) {
+    expect(typeof response.slot).toEqual('number');
+    expect(response.status).toEqual({Ok: null});
+  } else {
+    expect(response).not.toBeNull();
+  }
 
   mockRpc.push([
     url,

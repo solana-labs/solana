@@ -65,7 +65,7 @@ async function _sendAndConfirmTransaction(
       await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
     }
 
-    if (status && 'Ok' in status) {
+    if (status && 'Ok' in status.status) {
       break;
     }
     if (--sendRetries <= 0) {
@@ -77,7 +77,7 @@ async function _sendAndConfirmTransaction(
       );
     }
 
-    if (status && status.Err && !('AccountInUse' in status.Err)) {
+    if (status && status.status.Err && !('AccountInUse' in status.status.Err)) {
       throw new Error(
         `Transaction ${signature} failed (${JSON.stringify(status)})`,
       );

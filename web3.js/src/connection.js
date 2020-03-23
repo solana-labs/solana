@@ -452,7 +452,15 @@ const GetVoteAccounts = jsonRpcResult(
  * Expected JSON RPC response for the "getSignatureStatus" message
  */
 const GetSignatureStatusRpcResult = jsonRpcResult(
-  struct.union(['null', SignatureStatusResult]),
+  struct.array([
+    struct.union([
+      'null',
+      struct({
+        slot: 'number',
+        status: SignatureStatusResult,
+      }),
+    ]),
+  ]),
 );
 
 /**
@@ -659,6 +667,18 @@ export type SignatureSuccess = {|
 export type TransactionError = {|
   Err: Object,
 |};
+
+/**
+ * Signature status
+ *
+ * @typedef {Object} SignatureStatus
+ * @property {number} slot when the transaction was processed
+ * @property {SignatureStatus | TransactionError} status
+ */
+export type SignatureStatus = {
+  slot: number,
+  status: SignatureSuccess | TransactionError,
+};
 
 /**
  * A connection to a fullnode JSON RPC endpoint
@@ -944,8 +964,20 @@ export class Connection {
   async getSignatureStatus(
     signature: TransactionSignature,
     commitment: ?Commitment,
-  ): Promise<SignatureSuccess | TransactionError | null> {
-    const args = this._argsWithCommitment([signature], commitment);
+  ): Promise<SignatureStatus | null> {
+    const res = await this.getSignatureStatusBatch([signature], commitment);
+    assert(res.length === 1);
+    return res[0];
+  }
+
+  /**
+   * Fetch the current status of a signature
+   */
+  async getSignatureStatusBatch(
+    signatures: Array<TransactionSignature>,
+    commitment: ?Commitment,
+  ): Promise<Array<SignatureStatus | null>> {
+    const args = this._argsWithCommitment([signatures], commitment);
     const unsafeRes = await this._rpcRequest('getSignatureStatus', args);
     const res = GetSignatureStatusRpcResult(unsafeRes);
     if (res.error) {
