@@ -1498,7 +1498,7 @@ impl Blockstore {
                     transaction: encoded_transaction,
                     meta: self
                         .transaction_status_cf
-                        .get((slot, signature))
+                        .get((signature, slot))
                         .expect("Expect database get to succeed"),
                 }
             })
@@ -1507,14 +1507,14 @@ impl Blockstore {
 
     pub fn read_transaction_status(
         &self,
-        index: (Slot, Signature),
+        index: (Signature, Slot),
     ) -> Result<Option<TransactionStatusMeta>> {
         self.transaction_status_cf.get(index)
     }
 
     pub fn write_transaction_status(
         &self,
-        index: (Slot, Signature),
+        index: (Signature, Slot),
         status: &TransactionStatusMeta,
     ) -> Result<()> {
         self.transaction_status_cf.put(index, status)
@@ -2646,7 +2646,7 @@ pub mod tests {
                 .iter::<cf::TransactionStatus>(IteratorMode::Start)
                 .unwrap()
                 .next()
-                .map(|((slot, _), _)| slot >= min_slot)
+                .map(|((_, slot), _)| slot >= min_slot)
                 .unwrap_or(true)
             & blockstore
                 .db
@@ -4863,7 +4863,7 @@ pub mod tests {
                 ledger
                     .transaction_status_cf
                     .put(
-                        (slot, signature),
+                        (signature, slot),
                         &TransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
@@ -4875,7 +4875,7 @@ pub mod tests {
                 ledger
                     .transaction_status_cf
                     .put(
-                        (slot + 1, signature),
+                        (signature, slot + 1),
                         &TransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
@@ -5141,14 +5141,14 @@ pub mod tests {
 
             // result not found
             assert!(transaction_status_cf
-                .get((0, Signature::default()))
+                .get((Signature::default(), 0))
                 .unwrap()
                 .is_none());
 
             // insert value
             assert!(transaction_status_cf
                 .put(
-                    (0, Signature::default()),
+                    (Signature::default(), 0),
                     &TransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Err(
                             TransactionError::AccountNotFound
@@ -5167,7 +5167,7 @@ pub mod tests {
                 pre_balances,
                 post_balances,
             } = transaction_status_cf
-                .get((0, Signature::default()))
+                .get((Signature::default(), 0))
                 .unwrap()
                 .unwrap();
             assert_eq!(status, Err(TransactionError::AccountNotFound));
@@ -5178,7 +5178,7 @@ pub mod tests {
             // insert value
             assert!(transaction_status_cf
                 .put(
-                    (9, Signature::default()),
+                    (Signature::new(&[2u8; 64]), 9),
                     &TransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Ok(()),
                         fee: 9u64,
@@ -5195,7 +5195,7 @@ pub mod tests {
                 pre_balances,
                 post_balances,
             } = transaction_status_cf
-                .get((9, Signature::default()))
+                .get((Signature::new(&[2u8; 64]), 9))
                 .unwrap()
                 .unwrap();
 
@@ -5243,7 +5243,7 @@ pub mod tests {
                 );
                 transaction_status_cf
                     .put(
-                        (slot, transaction.signatures[0]),
+                        (transaction.signatures[0], slot),
                         &TransactionStatusMeta {
                             status: solana_sdk::transaction::Result::<()>::Err(
                                 TransactionError::AccountNotFound,
