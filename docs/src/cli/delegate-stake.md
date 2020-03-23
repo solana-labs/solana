@@ -33,7 +33,7 @@ want to perform an action on the stake account you create next.
 Now, create a stake account:
 
 ```bash
-solana create-stake-account --from=<KEYPAIR> stake-account.json <AMOUNT> --stake-authority=<KEYPAIR> --withdraw-authority=<KEYPAIR>
+solana create-stake-account --from <KEYPAIR> stake-account.json <AMOUNT> --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR>
 ```
 
 `<AMOUNT>` tokens are transferred from the account at `<KEYPAIR>` to a new
@@ -72,7 +72,7 @@ Stake and withdraw authorities can be set when creating an account via the
 run:
 
 ```bash
-solana stake-authorize <STAKE_ACCOUNT_ADDRESS> --stake-authority=<KEYPAIR> --new-stake-authority=<PUBKEY>
+solana stake-authorize <STAKE_ACCOUNT_ADDRESS> --stake-authority <KEYPAIR> --new-stake-authority <PUBKEY>
 ```
 
 This will use the existing stake authority `<KEYPAIR>` to authorize a new stake
@@ -87,7 +87,7 @@ addresses can be cumbersome. Fortunately, you can derive stake addresses using
 the `--seed` option:
 
 ```bash
-solana create-stake-account --from=<KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed=<STRING> <AMOUNT> --stake-authority=<PUBKEY> --withdraw-authority=<PUBKEY>
+solana create-stake-account --from <KEYPAIR> <STAKE_ACCOUNT_KEYPAIR> --seed <STRING> <AMOUNT> --stake-authority <PUBKEY> --withdraw-authority <PUBKEY>
 ```
 
 `<STRING>` is an arbitrary string up to 32 bytes, but will typically be a
@@ -98,7 +98,7 @@ and seed string. To see what stake address the command will derive, use `solana
 create-address-with-seed`:
 
 ```bash
-solana create-address-with-seed --from=<PUBKEY> <SEED_STRING> STAKE
+solana create-address-with-seed --from <PUBKEY> <SEED_STRING> STAKE
 ```
 
 `<PUBKEY>` is the public key of the `<STAKE_ACCOUNT_KEYPAIR>` passed to
@@ -122,7 +122,7 @@ is the vote account address. Choose a validator and use its vote account
 address in `solana delegate-stake`:
 
 ```bash
-solana delegate-stake --stake-authority=<KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS>
+solana delegate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <VOTE_ACCOUNT_ADDRESS>
 ```
 
 `<KEYPAIR>` authorizes the operation on the account with address
@@ -155,7 +155,7 @@ Once delegated, you can undelegate stake with the `solana deactivate-stake`
 command:
 
 ```bash
-solana deactivate-stake --stake-authority=<KEYPAIR> <STAKE_ACCOUNT_ADDRESS>
+solana deactivate-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS>
 ```
 
 `<KEYPAIR>` authorizes the operation on the account with address
@@ -169,7 +169,7 @@ in the cool down period will fail.
 Transfer tokens out of a stake account with the `solana withdraw-stake` command:
 
 ```bash
-solana withdraw-stake --withdraw-authority=<KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RECIPIENT_ADDRESS> <AMOUNT>
+solana withdraw-stake --withdraw-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <RECIPIENT_ADDRESS> <AMOUNT>
 ```
 
 `<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, `<KEYPAIR>` is the
@@ -184,7 +184,7 @@ currently staked, cooling down, or locked up. To transfer tokens from an
 existing stake account to a new one, use the `solana split-stake` command:
 
 ```bash
-solana split-stake --stake-authority=<KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <NEW_STAKE_ACCOUNT_KEYPAIR> <AMOUNT>
+solana split-stake --stake-authority <KEYPAIR> <STAKE_ACCOUNT_ADDRESS> <NEW_STAKE_ACCOUNT_KEYPAIR> <AMOUNT>
 ```
 
 `<STAKE_ACCOUNT_ADDRESS>` is the existing stake account, `<KEYPAIR>` is the
