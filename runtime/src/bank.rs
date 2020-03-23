@@ -2127,6 +2127,10 @@ impl Bank {
     pub fn clean_accounts(&self) {
         self.rc.accounts.accounts_db.clean_accounts();
     }
+
+    pub fn clean_dead_slots(&self) {
+        self.rc.accounts.accounts_db.process_dead_slots();
+    }
 }
 
 impl Drop for Bank {
