@@ -433,9 +433,12 @@ impl JsonRpcRequestProcessor {
         let mut statuses: Vec<Option<RpcTransactionStatus>> = vec![];
 
         let (commitment, search_transaction_history) = if let Some(config) = config {
-            (config.commitment, config.search_transaction_history)
+            (
+                config.commitment,
+                config.search_transaction_history.unwrap_or(false),
+            )
         } else {
-            (None, None)
+            (None, false)
         };
         let bank = self.bank(commitment);
         let maximum_slot = bank.slot();
@@ -446,7 +449,7 @@ impl JsonRpcRequestProcessor {
                 bank.get_signature_confirmation_status(&signature)
             {
                 Some(RpcTransactionStatus { slot, status })
-            } else if search_transaction_history.is_some() && search_transaction_history.unwrap() {
+            } else if self.config.enable_rpc_transaction_history && search_transaction_history {
                 self.blockstore
                     .get_transaction_status(signature, maximum_slot, root)
                     .map_err(|_| Error::internal_error())?

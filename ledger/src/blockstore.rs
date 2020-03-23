@@ -1541,12 +1541,11 @@ impl Blockstore {
     ) -> Result<Option<(Slot, RpcTransactionStatusMeta)>> {
         let mut transaction_iter = self.transaction_status_cf.iter(IteratorMode::End)?;
         let status = transaction_iter
-            .find(|((slot_index, sig), _)| {
+            .find(|((slot, sig), _)| {
+                slot <= &maximum_slot && sig == &signature &&
                 // If a slot is older than the root from bank_forks but not a root itself, it is a
                 // dead fork and will never be rooted; disregard transaction statuses for these slots
-                (self.is_root(*slot_index) || (*slot_index > root && !self.is_dead(*slot_index)))
-                    && slot_index <= &maximum_slot
-                    && sig == &signature
+                (self.is_root(*slot) || (*slot > root && !self.is_dead(*slot)))
             })
             .map(|((slot, _), status_data)| (slot, deserialize(&status_data).unwrap()));
         Ok(status)
