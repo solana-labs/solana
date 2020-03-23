@@ -1498,12 +1498,23 @@ impl Blockstore {
             .collect()
     }
 
+    pub fn read_transaction_status(
+        &self,
+        index: (Slot, Signature),
+    ) -> Result<Option<RpcTransactionStatusMeta>> {
+        self.transaction_status_cf.get(index)
+    }
+
     pub fn write_transaction_status(
         &self,
         index: (Slot, Signature),
         status: &RpcTransactionStatusMeta,
     ) -> Result<()> {
         self.transaction_status_cf.put(index, status)
+    }
+
+    pub fn read_rewards(&self, index: Slot) -> Result<Option<RpcRewards>> {
+        self.rewards_cf.get(index)
     }
 
     pub fn write_rewards(&self, index: Slot, rewards: RpcRewards) -> Result<()> {

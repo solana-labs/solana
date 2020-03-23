@@ -21,6 +21,7 @@ use solana_sdk::{
 use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    convert::TryInto,
     ffi::OsStr,
     fs::{self, File},
     io::{self, stdout, Write},
@@ -108,11 +109,76 @@ fn output_slot(
                             println!("        Data: {:?}", instruction.data);
                         }
                     }
+                    match blockstore.read_transaction_status((slot, transaction.signatures[0])) {
+                        Ok(transaction_status) => {
+                            if let Some(transaction_status) = transaction_status {
+                                println!(
+                                    "      Status: {}",
+                                    if transaction_status.status.is_ok() {
+                                        "Ok".into()
+                                    } else {
+                                        transaction_status.status.unwrap_err().to_string()
+                                    }
+                                );
+                                println!("        Fee: {}", transaction_status.fee);
+                                assert_eq!(
+                                    transaction_status.pre_balances.len(),
+                                    transaction_status.post_balances.len()
+                                );
+                                for (i, (pre, post)) in transaction_status
+                                    .pre_balances
+                                    .iter()
+                                    .zip(transaction_status.post_balances.iter())
+                                    .enumerate()
+                                {
+                                    if pre == post {
+                                        println!(
+                                            "        Account {} balance: {} SOL",
+                                            i,
+                                            lamports_to_sol(*pre)
+                                        );
+                                    } else {
+                                        println!(
+                                            "        Account {} balance: {} SOL -> {} SOL",
+                                            i,
+                                            lamports_to_sol(*pre),
+                                            lamports_to_sol(*post)
+                                        );
+                                    }
+                                }
+                            } else {
+                                println!("      Status: Unavailable");
+                            }
+                        }
+                        Err(err) => {
+                            println!("      Status: {:?}", err);
+                        }
+                    }
                 }
             }
             LedgerOutputMethod::Json => {
+                // Note: transaction status is not output in JSON yet
                 serde_json::to_writer(stdout(), &entry).expect("serialize entry");
                 stdout().write_all(b",\n").expect("newline");
+            }
+        }
+    }
+
+    // Note: rewards are not output in JSON yet
+    if *method == LedgerOutputMethod::Print {
+        if let Ok(rewards) = blockstore.read_rewards(slot) {
+            if let Some(rewards) = rewards {
+                if !rewards.is_empty() {
+                    println!("  Rewards:");
+                    for reward in rewards {
+                        println!(
+                            "    Account {}: {}{} SOL",
+                            reward.pubkey,
+                            if reward.lamports < 0 { '-' } else { ' ' },
+                            lamports_to_sol(reward.lamports.abs().try_into().unwrap())
+                        );
+                    }
+                }
             }
         }
     }
