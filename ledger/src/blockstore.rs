@@ -24,7 +24,7 @@ use rayon::{
 use rocksdb::DBRawIterator;
 use solana_client::rpc_response::{
     RpcConfirmedBlock, RpcEncodedTransaction, RpcRewards, RpcTransactionEncoding,
-    RpcTransactionStatus, RpcTransactionWithStatusMeta,
+    RpcTransactionStatusMeta, RpcTransactionWithStatusMeta,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
@@ -93,6 +93,7 @@ pub struct Blockstore {
     pub new_shreds_signals: Vec<SyncSender<bool>>,
     pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
     pub lowest_cleanup_slot: Arc<RwLock<u64>>,
+    no_compaction: bool,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -228,6 +229,7 @@ impl Blockstore {
             insert_shreds_lock: Arc::new(Mutex::new(())),
             last_root,
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
+            no_compaction: false,
         };
         Ok(blockstore)
     }
@@ -243,6 +245,10 @@ impl Blockstore {
         blockstore.completed_slots_senders = vec![completed_slots_sender];
 
         Ok((blockstore, signal_receiver, completed_slots_receiver))
+    }
+
+    pub fn set_no_compaction(&mut self, no_compaction: bool) {
+        self.no_compaction = no_compaction;
     }
 
     pub fn destroy(ledger_path: &Path) -> Result<()> {
@@ -276,12 +282,14 @@ impl Blockstore {
         while from_slot < batch_end {
             match self.run_purge(from_slot, batch_end) {
                 Ok(end) => {
-                    if let Err(e) = self.compact_storage(from_slot, batch_end) {
-                        // This error is not fatal and indicates an internal error
-                        error!(
-                            "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
-                            e, from_slot, batch_end
-                        );
+                    if !self.no_compaction {
+                        if let Err(e) = self.compact_storage(from_slot, batch_end) {
+                            // This error is not fatal and indicates an internal error
+                            error!(
+                                "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
+                                e, from_slot, batch_end
+                            );
+                        }
                     }
 
                     if end {
@@ -1467,7 +1475,7 @@ impl Blockstore {
     pub fn write_transaction_status(
         &self,
         index: (Slot, Signature),
-        status: &RpcTransactionStatus,
+        status: &RpcTransactionStatusMeta,
     ) -> Result<()> {
         self.transaction_status_cf.put(index, status)
     }
@@ -4795,7 +4803,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatus>)> = entries
+        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -4812,7 +4820,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put(
                         (slot, signature),
-                        &RpcTransactionStatus {
+                        &RpcTransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
                             pre_balances: pre_balances.clone(),
@@ -4824,7 +4832,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put(
                         (slot + 1, signature),
-                        &RpcTransactionStatus {
+                        &RpcTransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
                             pre_balances: pre_balances.clone(),
@@ -4834,7 +4842,7 @@ pub mod tests {
                     .unwrap();
                 (
                     transaction,
-                    Some(RpcTransactionStatus {
+                    Some(RpcTransactionStatusMeta {
                         status: Ok(()),
                         fee: 42,
                         pre_balances,
@@ -5097,7 +5105,7 @@ pub mod tests {
             assert!(transaction_status_cf
                 .put(
                     (0, Signature::default()),
-                    &RpcTransactionStatus {
+                    &RpcTransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Err(
                             TransactionError::AccountNotFound
                         ),
@@ -5109,7 +5117,7 @@ pub mod tests {
                 .is_ok());
 
             // result found
-            let RpcTransactionStatus {
+            let RpcTransactionStatusMeta {
                 status,
                 fee,
                 pre_balances,
@@ -5127,7 +5135,7 @@ pub mod tests {
             assert!(transaction_status_cf
                 .put(
                     (9, Signature::default()),
-                    &RpcTransactionStatus {
+                    &RpcTransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Ok(()),
                         fee: 9u64,
                         pre_balances: pre_balances_vec.clone(),
@@ -5137,7 +5145,7 @@ pub mod tests {
                 .is_ok());
 
             // result found
-            let RpcTransactionStatus {
+            let RpcTransactionStatusMeta {
                 status,
                 fee,
                 pre_balances,
@@ -5192,7 +5200,7 @@ pub mod tests {
                 transaction_status_cf
                     .put(
                         (slot, transaction.signatures[0]),
-                        &RpcTransactionStatus {
+                        &RpcTransactionStatusMeta {
                             status: solana_sdk::transaction::Result::<()>::Err(
                                 TransactionError::AccountNotFound,
                             ),

@@ -290,7 +290,7 @@ EOF
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
         --dev-no-sigverify
-        --enable-rpc-get-confirmed-block
+        --enable-rpc-transaction-history
       )
     else
       if [[ -n $internalNodesLamports ]]; then

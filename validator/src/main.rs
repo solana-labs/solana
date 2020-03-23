@@ -696,10 +696,10 @@ pub fn main() {
                 .help("Enable the JSON RPC 'setLogFilter' API.  Only enable in a debug environment"),
         )
         .arg(
-            Arg::with_name("enable_rpc_get_confirmed_block")
-                .long("enable-rpc-get-confirmed-block")
+            Arg::with_name("enable_rpc_transaction_history")
+                .long("enable-rpc-transaction-history")
                 .takes_value(false)
-                .help("Enable the JSON RPC 'getConfirmedBlock' API.  This will cause an increase in disk usage and IOPS"),
+                .help("Enable historical transaction info over JSON RPC, including the 'getConfirmedBlock' API.  This will cause an increase in disk usage and IOPS"),
         )
         .arg(
             Arg::with_name("rpc_faucet_addr")
@@ -836,6 +836,12 @@ pub fn main() {
                 .help("Use the RPC service of trusted validators only")
         )
         .arg(
+            Arg::with_name("no_rocksdb_compaction")
+                .long("no-rocksdb-compaction")
+                .takes_value(false)
+                .help("Disable manual compaction of the ledger database. May increase storage requirements.")
+        )
+        .arg(
             clap::Arg::with_name("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
@@ -892,6 +898,7 @@ pub fn main() {
     let no_snapshot_fetch = matches.is_present("no_snapshot_fetch");
     let no_check_vote_account = matches.is_present("no_check_vote_account");
     let private_rpc = matches.is_present("private_rpc");
+    let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
 
     // Canonicalize ledger path to avoid issues with symlink creation
     let _ = fs::create_dir_all(&ledger_path);
@@ -932,7 +939,7 @@ pub fn main() {
         rpc_config: JsonRpcConfig {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
             enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
-            enable_get_confirmed_block: matches.is_present("enable_rpc_get_confirmed_block"),
+            enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
             identity_pubkey: identity_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
@@ -945,6 +952,7 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
+        no_rocksdb_compaction,
         ..ValidatorConfig::default()
     };
 

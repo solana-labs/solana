@@ -1,4 +1,4 @@
-use crate::bank::Bank;
+use crate::{bank::Bank, status_cache::SignatureConfirmationStatus};
 use solana_sdk::{
     account::Account,
     client::{AsyncClient, Client, SyncClient},
@@ -188,8 +188,13 @@ impl SyncClient for BankClient {
         let mut confirmed_blocks = 0;
         loop {
             let response = self.bank.get_signature_confirmation_status(signature);
-            if let Some((confirmations, res)) = response {
-                if res.is_ok() {
+            if let Some(SignatureConfirmationStatus {
+                confirmations,
+                status,
+                ..
+            }) = response
+            {
+                if status.is_ok() {
                     if confirmed_blocks != confirmations {
                         now = Instant::now();
                         confirmed_blocks = confirmations;

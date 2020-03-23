@@ -79,6 +79,7 @@ pub struct ValidatorConfig {
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
+    pub no_rocksdb_compaction: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -105,6 +106,7 @@ impl Default for ValidatorConfig {
             halt_on_trusted_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
+            no_rocksdb_compaction: false,
         }
     }
 }
@@ -270,7 +272,7 @@ impl Validator {
         });
 
         let (transaction_status_sender, transaction_status_service) =
-            if rpc_service.is_some() && config.rpc_config.enable_get_confirmed_block {
+            if rpc_service.is_some() && config.rpc_config.enable_rpc_transaction_history {
                 let (transaction_status_sender, transaction_status_receiver) = unbounded();
                 (
                     Some(transaction_status_sender),
@@ -285,7 +287,7 @@ impl Validator {
             };
 
         let (rewards_recorder_sender, rewards_recorder_service) =
-            if rpc_service.is_some() && config.rpc_config.enable_get_confirmed_block {
+            if rpc_service.is_some() && config.rpc_config.enable_rpc_transaction_history {
                 let (rewards_recorder_sender, rewards_receiver) = unbounded();
                 (
                     Some(rewards_recorder_sender),
@@ -589,8 +591,9 @@ fn new_banks_from_blockstore(
         }
     }
 
-    let (blockstore, ledger_signal_receiver, completed_slots_receiver) =
+    let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
         Blockstore::open_with_signal(blockstore_path).expect("Failed to open ledger database");
+    blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify,
