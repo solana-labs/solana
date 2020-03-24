@@ -20,8 +20,30 @@ use std::{
     sync::{Arc, RwLock},
     thread::sleep,
     thread::{self, Builder, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
+
+#[derive(Default)]
+pub struct RepairStatsGroup {
+    pub count: u64,
+    pub min: u64,
+    pub max: u64,
+}
+
+impl RepairStatsGroup {
+    pub fn update(&mut self, slot: u64) {
+        self.count += 1;
+        self.min = std::cmp::min(self.min, slot);
+        self.max = std::cmp::max(self.max, slot);
+    }
+}
+
+#[derive(Default)]
+pub struct RepairStats {
+    pub shred: RepairStatsGroup,
+    pub highest_shred: RepairStatsGroup,
+    pub orphan: RepairStatsGroup,
+}
 
 pub const MAX_REPAIR_LENGTH: usize = 512;
 pub const REPAIR_MS: u64 = 100;
@@ -93,6 +115,8 @@ impl RepairService {
         if let RepairStrategy::RepairAll { .. } = repair_strategy {
             Self::initialize_lowest_slot(id, blockstore, cluster_info);
         }
+        let mut repair_stats = RepairStats::default();
+        let mut last_stats = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -137,7 +161,12 @@ impl RepairService {
                     .into_iter()
                     .filter_map(|repair_request| {
                         serve_repair
-                            .repair_request(&cluster_slots, &repair_request, &mut cache)
+                            .repair_request(
+                                &cluster_slots,
+                                &repair_request,
+                                &mut cache,
+                                &mut repair_stats,
+                            )
                             .map(|result| (result, repair_request))
                             .ok()
                     })
@@ -149,6 +178,24 @@ impl RepairService {
                         0
                     });
                 }
+            }
+            if last_stats.elapsed().as_secs() > 1 {
+                let repair_total = repair_stats.shred.count
+                    + repair_stats.highest_shred.count
+                    + repair_stats.orphan.count;
+                if repair_total > 0 {
+                    datapoint_info!(
+                        "serve_repair-repair",
+                        ("repair-total", repair_total, i64),
+                        ("shred-count", repair_stats.shred.count, i64),
+                        ("highest-shred-count", repair_stats.highest_shred.count, i64),
+                        ("orphan-count", repair_stats.orphan.count, i64),
+                        ("repair-highest-slot", repair_stats.highest_shred.max, i64),
+                        ("repair-orphan", repair_stats.orphan.max, i64),
+                    );
+                }
+                repair_stats = RepairStats::default();
+                last_stats = Instant::now();
             }
             sleep(Duration::from_millis(REPAIR_MS));
         }

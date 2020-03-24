@@ -14,7 +14,7 @@ use solana_core::{
     contact_info::ContactInfo,
     gossip_service::GossipService,
     repair_service,
-    repair_service::{RepairService, RepairSlotRange, RepairStrategy},
+    repair_service::{RepairService, RepairSlotRange, RepairStats, RepairStrategy},
     serve_repair::ServeRepair,
     shred_fetch_stage::ShredFetchStage,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
@@ -844,13 +844,14 @@ impl Archiver {
                 repair_service::MAX_REPAIR_LENGTH,
                 &repair_slot_range,
             );
+            let mut repair_stats = RepairStats::default();
             //iter over the repairs and send them
             if let Ok(repairs) = repairs {
                 let reqs: Vec<_> = repairs
                     .into_iter()
                     .filter_map(|repair_request| {
                         serve_repair
-                            .map_repair_request(&repair_request)
+                            .map_repair_request(&repair_request, &mut repair_stats)
                             .map(|result| ((archiver_info.gossip, result), repair_request))
                             .ok()
                     })
