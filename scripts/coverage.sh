@@ -52,12 +52,10 @@ if [[ -n $CI || -z $1 ]]; then
 fi
 
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
-if RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log;
-then
-  # do nothing when succeeded to capture the actual exit code in the else clause, otherwise
-  true
+if RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
+  test_status=0
 else
-  failure_code=$?
+  test_status=$?
 fi
 touch target/cov/after-test
 
@@ -125,7 +123,4 @@ genhtml --output-directory target/cov/$reportName \
 ls -l target/cov/$reportName/index.html
 ln -sfT $reportName target/cov/LATEST
 
-if [[ -n $failure_code ]]
-then
-  exit $failure_code
-fi
+exit $test_status
