@@ -344,7 +344,7 @@ impl RpcSubscriptions {
             signature,
             current_slot,
             bank_forks,
-            Bank::get_signature_status,
+            Bank::get_signature_status_processed_since_parent,
             filter_signature_result,
             notifier,
         );
@@ -726,43 +726,108 @@ pub(crate) mod tests {
         } = create_genesis_config(100);
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let mut bank_forks = BankForks::new(0, bank);
         let alice = Keypair::new();
-        let tx = system_transaction::transfer(&mint_keypair, &alice.pubkey(), 20, blockhash);
-        let signature = tx.signatures[0];
+
+        let past_bank_tx =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, blockhash);
         let unprocessed_tx =
-            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 10, blockhash);
-        let not_ready_signature = unprocessed_tx.signatures[0];
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, blockhash);
+        let processed_tx =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 3, blockhash);
+
         bank_forks
-            .write()
-            .unwrap()
             .get(0)
             .unwrap()
-            .process_transaction(&tx)
+            .process_transaction(&past_bank_tx)
             .unwrap();
+
+        let next_bank =
+            Bank::new_from_parent(&bank_forks.banks[&0].clone(), &Pubkey::new_rand(), 1);
+        bank_forks.insert(next_bank);
+
+        bank_forks
+            .get(1)
+            .unwrap()
+            .process_transaction(&processed_tx)
+            .unwrap();
+
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let (subscriber, _id_receiver, transport_receiver) =
             Subscriber::new_test("signatureNotification");
-        let sub_id = SubscriptionId::Number(0 as u64);
-        let remaining_sub_id = SubscriptionId::Number(1 as u64);
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let sink = subscriber.assign_id(SubscriptionId::Number(0)).unwrap();
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(&exit);
-        subscriptions.add_signature_subscription(&signature, None, &sub_id, &sink.clone());
         subscriptions.add_signature_subscription(
-            &not_ready_signature,
-            None,
-            &remaining_sub_id,
+            &past_bank_tx.signatures[0],
+            Some(0),
+            &SubscriptionId::Number(1 as u64),
+            &sink.clone(),
+        );
+        subscriptions.add_signature_subscription(
+            &processed_tx.signatures[0],
+            Some(0),
+            &SubscriptionId::Number(2 as u64),
+            &sink.clone(),
+        );
+        subscriptions.add_signature_subscription(
+            &unprocessed_tx.signatures[0],
+            Some(0),
+            &SubscriptionId::Number(3 as u64),
             &sink.clone(),
         );
 
         {
             let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
-            assert!(sig_subs.contains_key(&signature));
-            assert!(sig_subs.contains_key(&not_ready_signature));
+            assert!(sig_subs.contains_key(&past_bank_tx.signatures[0]));
+            assert!(sig_subs.contains_key(&unprocessed_tx.signatures[0]));
+            assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
         }
 
-        subscriptions.notify_subscribers(0, &bank_forks);
+        subscriptions.notify_subscribers(1, &bank_forks);
+        let response = robust_poll_or_panic(transport_receiver);
+        let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "method": "signatureNotification",
+            "params": {
+                "result": {
+                    "context": { "slot": 1 },
+                    "value": expected_res,
+                },
+                "subscription": 0,
+            }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
+
+        // Subscription should be automatically removed after notification
+        assert!(!sig_subs.contains_key(&processed_tx.signatures[0]));
+
+        // Only one notification is expected for signature processed in previous bank
+        assert_eq!(sig_subs.get(&past_bank_tx.signatures[0]).unwrap().len(), 1);
+
+        // Unprocessed signature subscription should not be removed
+        assert_eq!(
+            sig_subs.get(&unprocessed_tx.signatures[0]).unwrap().len(),
+            1
+        );
+
+        let (subscriber, _id_receiver, transport_receiver) =
+            Subscriber::new_test("signatureNotification");
+        let sink = subscriber.assign_id(SubscriptionId::Number(0)).unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let subscriptions = RpcSubscriptions::new(&exit);
+
+        subscriptions.add_signature_subscription(
+            &past_bank_tx.signatures[0],
+            Some(1),
+            &SubscriptionId::Number(1 as u64),
+            &sink.clone(),
+        );
+        subscriptions.notify_subscribers(1, &bank_forks);
         let response = robust_poll_or_panic(transport_receiver);
         let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
         let expected = json!({
@@ -777,20 +842,6 @@ pub(crate) mod tests {
             }
         });
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-
-        // Subscription should be automatically removed after notification
-        assert!(!subscriptions
-            .signature_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&signature));
-
-        // Unprocessed signature subscription should not be removed
-        assert!(subscriptions
-            .signature_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&not_ready_signature));
     }
 
     #[test]
