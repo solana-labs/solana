@@ -42,7 +42,7 @@ solana-storage-program = { path = "../programs/storage", version = "1.1.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.1.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.1.0" }
 titlecase = "1.1.0"
-thiserror = "1.0.12"
+thiserror = "1.0.13"
 url = "2.1.1"
 
 [dev-dependencies]
