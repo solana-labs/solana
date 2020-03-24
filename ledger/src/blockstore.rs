@@ -1736,6 +1736,46 @@ impl Blockstore {
         })
     }
 
+    fn get_any_valid_slot_entries(&self, slot: Slot, start_index: u64) -> Vec<Entry> {
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        if *lowest_cleanup_slot > slot {
+            return vec![];
+        }
+
+        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
+        let slot_meta = slot_meta_cf.get(slot).unwrap_or_default();
+        if slot_meta.is_none() {
+            return vec![];
+        }
+
+        let slot_meta = slot_meta.unwrap();
+        // Find all the ranges for the completed data blocks
+        let completed_ranges = Self::get_completed_data_ranges(
+            start_index as u32,
+            &slot_meta.completed_data_indexes[..],
+            slot_meta.consumed as u32,
+        );
+        if completed_ranges.is_empty() {
+            return vec![];
+        }
+
+        let entries: Vec<Vec<Entry>> = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                completed_ranges
+                    .par_iter()
+                    .map(|(start_index, end_index)| {
+                        self.get_entries_in_data_block(slot, *start_index, *end_index, &slot_meta)
+                            .unwrap_or_default()
+                    })
+                    .collect()
+            })
+        });
+
+        entries.into_iter().flatten().collect()
+    }
+
     // Returns slots connecting to any element of the list `slots`.
     pub fn get_slots_since(&self, slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
         // Return error if there was a database error during lookup of any of the
@@ -4761,7 +4801,7 @@ pub mod tests {
             let num_ticks = 8;
             let entries = create_ticks(num_ticks, 0, Hash::default());
             let slot = 1;
-            let shreds = entries_to_test_shreds(entries, slot, 0, false, 0);
+            let shreds = entries_to_test_shreds(entries.clone(), slot, 0, false, 0);
             let next_shred_index = shreds.len();
             blockstore
                 .insert_shreds(shreds, None, false)
@@ -4790,6 +4830,8 @@ pub mod tests {
                 .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
             assert!(blockstore.get_slot_entries(slot, 0, None).is_err());
+
+            assert_eq!(blockstore.get_any_valid_slot_entries(slot, 0), entries);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
