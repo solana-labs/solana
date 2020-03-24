@@ -2,6 +2,7 @@
 
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+    cluster_slots::ClusterSlots,
     repair_service::RepairStrategy,
     result::{Error, Result},
     window_service::{should_retransmit_and_persist, WindowService},
@@ -214,6 +215,7 @@ impl RetransmitStage {
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
+        cluster_slots: Arc<ClusterSlots>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -256,6 +258,7 @@ impl RetransmitStage {
                 );
                 rv && is_connected
             },
+            cluster_slots,
         );
 
         let thread_hdls = t_retransmit;

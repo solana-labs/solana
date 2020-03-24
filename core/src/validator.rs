@@ -884,7 +884,7 @@ mod tests {
             })
             .collect();
 
-        // Each validator can exit in parallel to speed many sequential calls to `join`
+        // Each validator can exit in parallel to speed many sequential calls to join`
         validators.iter_mut().for_each(|v| v.exit());
         // While join is called sequentially, the above exit call notified all the
         // validators to exit from all their threads

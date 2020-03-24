@@ -10,6 +10,7 @@ use solana_client::{
 };
 use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
+    cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     gossip_service::GossipService,
     repair_service,
@@ -187,7 +188,7 @@ impl Archiver {
         let mut cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
         cluster_info.set_entrypoint(cluster_entrypoint.clone());
         let cluster_info = Arc::new(RwLock::new(cluster_info));
-
+        let cluster_slots = Arc::new(ClusterSlots::default());
         // Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
@@ -262,6 +263,7 @@ impl Archiver {
                     repair_socket,
                     shred_fetch_receiver,
                     slot_sender,
+                    cluster_slots,
                 ) {
                     Ok(window_service) => window_service,
                     Err(e) => {
@@ -400,6 +402,7 @@ impl Archiver {
     }
 
     // Find a segment to replicate and download it.
+    #[allow(clippy::too_many_arguments)]
     fn setup(
         meta: &mut ArchiverMeta,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -410,6 +413,7 @@ impl Archiver {
         repair_socket: Arc<UdpSocket>,
         shred_fetch_receiver: PacketReceiver,
         slot_sender: Sender<u64>,
+        cluster_slots: Arc<ClusterSlots>,
     ) -> Result<WindowService> {
         let slots_per_segment =
             match Self::get_segment_config(&cluster_info, meta.client_commitment) {
@@ -467,6 +471,7 @@ impl Archiver {
             RepairStrategy::RepairRange(repair_slot_range),
             &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
+            cluster_slots,
         );
         info!("waiting for ledger download");
         Self::wait_for_segment_download(
