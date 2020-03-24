@@ -30,6 +30,9 @@ pub enum TransactionError {
     /// Attempt to load a program that does not exist
     ProgramAccountNotFound,
 
+    /// This program may not be used for executing instructions
+    InvalidProgramForExecution,
+
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
     InsufficientFundsForFee,
 
