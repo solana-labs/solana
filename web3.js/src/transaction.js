@@ -215,7 +215,7 @@ export class Transaction {
       }
     });
 
-    allKeys.sort(function(x, y) {
+    allKeys.sort(function (x, y) {
       const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
       const checkWritable =
         x.isWritable === y.isWritable ? 0 : x.isWritable ? -1 : 1;

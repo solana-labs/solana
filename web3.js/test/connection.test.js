@@ -202,7 +202,7 @@ test('get program accounts', async () => {
   );
   expect(programAccounts.length).toBe(2);
 
-  programAccounts.forEach(function(element) {
+  programAccounts.forEach(function (element) {
     expect([
       account0.publicKey.toBase58(),
       account1.publicKey.toBase58(),
