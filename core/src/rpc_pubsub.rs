@@ -4,7 +4,7 @@ use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_client::rpc_response::{RpcAccount, RpcKeyedAccount};
+use solana_client::rpc_response::{Response as RpcResponse, RpcAccount, RpcKeyedAccount};
 use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction};
 use std::sync::{atomic, Arc};
 
@@ -26,7 +26,7 @@ pub trait RpcSolPubSub {
     fn account_subscribe(
         &self,
         meta: Self::Metadata,
-        subscriber: Subscriber<RpcAccount>,
+        subscriber: Subscriber<RpcResponse<RpcAccount>>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     );
@@ -50,7 +50,7 @@ pub trait RpcSolPubSub {
     fn program_subscribe(
         &self,
         meta: Self::Metadata,
-        subscriber: Subscriber<RpcKeyedAccount>,
+        subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     );
@@ -74,7 +74,7 @@ pub trait RpcSolPubSub {
     fn signature_subscribe(
         &self,
         meta: Self::Metadata,
-        subscriber: Subscriber<transaction::Result<()>>,
+        subscriber: Subscriber<RpcResponse<transaction::Result<()>>>,
         signature_str: String,
         confirmations: Option<Confirmations>,
     );
@@ -133,7 +133,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn account_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<RpcAccount>,
+        subscriber: Subscriber<RpcResponse<RpcAccount>>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
@@ -171,7 +171,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn program_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<RpcKeyedAccount>,
+        subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
@@ -209,7 +209,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn signature_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<transaction::Result<()>>,
+        subscriber: Subscriber<RpcResponse<transaction::Result<()>>>,
         signature_str: String,
         confirmations: Option<Confirmations>,
     ) {
@@ -340,13 +340,18 @@ mod tests {
         // Test signature confirmation notification
         let response = robust_poll_or_panic(receiver);
         let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
-        let expected_res_str =
-            serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
-        );
-        assert_eq!(expected, response);
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "signatureNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 0 },
+                   "value": expected_res,
+               },
+               "subscription": 0,
+           }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
     }
 
     #[test]
@@ -462,11 +467,14 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "owner": budget_program_id.to_string(),
-                   "lamports": 51,
-                   "data": bs58::encode(expected_data).into_string(),
-                   "executable": false,
-                   "rentEpoch": 1,
+                   "context": { "slot": 0 },
+                   "value": {
+                       "owner": budget_program_id.to_string(),
+                       "lamports": 51,
+                       "data": bs58::encode(expected_data).into_string(),
+                       "executable": false,
+                       "rentEpoch": 1,
+                   },
                },
                "subscription": 0,
            }
@@ -609,11 +617,14 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "owner": system_program::id().to_string(),
-                   "lamports": 100,
-                   "data": "",
-                   "executable": false,
-                   "rentEpoch": 1,
+                   "context": { "slot": 0 },
+                   "value": {
+                       "owner": system_program::id().to_string(),
+                       "lamports": 100,
+                       "data": "",
+                       "executable": false,
+                       "rentEpoch": 1,
+                   },
                },
                "subscription": 0,
            }
