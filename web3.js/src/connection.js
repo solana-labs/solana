@@ -1296,8 +1296,9 @@ export class Connection {
           }
           if (attempts === 50) {
             throw new Error(
-              `Unable to obtain a new blockhash after ${Date.now() -
-                startTime}ms`,
+              `Unable to obtain a new blockhash after ${
+                Date.now() - startTime
+              }ms`,
             );
           }
 
