@@ -31,11 +31,11 @@ pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
 pub const SNAPSHOT_VERSION_1_0: &str = "1.0.0";
-pub const SNAPSHOT_VERSION_1_1: &str = "1.1.0";
+pub const SNAPSHOT_VERSION: &str = "1.1.0";
 
 pub enum BankVersions {
     Bank1_0(Bank1_0),
-    Bank1_1(Bank),
+    Current(Bank),
 }
 
 #[derive(PartialEq, Ord, Eq, Debug)]
@@ -180,7 +180,7 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     // Write version file
     {
         let mut f = std::fs::File::create(staging_version_file)?;
-        f.write_all(&SNAPSHOT_VERSION_1_1.to_string().into_bytes())?;
+        f.write_all(&SNAPSHOT_VERSION.to_string().into_bytes())?;
     }
 
     let archive_compress_options = if is_snapshot_compression_disabled() {
@@ -602,8 +602,8 @@ where
                 SNAPSHOT_VERSION_1_0 => {
                     BankVersions::Bank1_0(deserialize_from_snapshot(stream.by_ref())?)
                 }
-                SNAPSHOT_VERSION_1_1 => {
-                    BankVersions::Bank1_1(deserialize_from_snapshot(stream.by_ref())?)
+                SNAPSHOT_VERSION => {
+                    BankVersions::Current(deserialize_from_snapshot(stream.by_ref())?)
                 }
                 _ => {
                     return Err(get_io_error(&format!(
@@ -617,7 +617,7 @@ where
             // Convert bank to current version
             let mut bank = match versioned_bank {
                 BankVersions::Bank1_0(bank_1_0) => bank_1_0.convert_to_current(),
-                BankVersions::Bank1_1(bank_1_1) => bank_1_1,
+                BankVersions::Current(current_bank) => current_bank,
             };
             let rc = bank::BankRc::from_stream(
                 account_paths,
