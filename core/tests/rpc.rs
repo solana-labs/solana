@@ -271,7 +271,7 @@ fn test_rpc_subscriptions() {
     });
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
-    let transaction_count = rpc_client
+    let mut transaction_count = rpc_client
         .get_transaction_count_with_commitment(CommitmentConfig::recent())
         .unwrap();
 
@@ -281,10 +281,10 @@ fn test_rpc_subscriptions() {
             .send_to(&bincode::serialize(&tx).unwrap(), leader_data.tpu)
             .unwrap();
     });
-    let mut x = 0;
     let now = Instant::now();
-    while x < transaction_count + 500 || now.elapsed() > Duration::from_secs(5) {
-        x = rpc_client
+    let expected_transaction_count = transaction_count + transactions.len() as u64;
+    while transaction_count < expected_transaction_count && now.elapsed() < Duration::from_secs(5) {
+        transaction_count = rpc_client
             .get_transaction_count_with_commitment(CommitmentConfig::recent())
             .unwrap();
         sleep(Duration::from_millis(200));
