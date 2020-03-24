@@ -143,7 +143,7 @@ export async function checkTransactionStatus(
 
     if (signatureStatus === null) {
       status = Status.Missing;
-    } else if ("Ok" in signatureStatus) {
+    } else if ("Ok" in signatureStatus.status) {
       status = Status.Success;
     } else {
       status = Status.Failure;
