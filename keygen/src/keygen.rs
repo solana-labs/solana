@@ -534,61 +534,69 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             let start = Instant::now();
             let done = Arc::new(AtomicBool::new(false));
 
-            for _ in 0..num_cpus::get() {
-                let done = done.clone();
-                let attempts = attempts.clone();
-                let found = found.clone();
-                let grind_matches_thread_safe = grind_matches_thread_safe.clone();
+            let thread_handles: Vec<_> = (0..num_cpus::get())
+                .map(|_| {
+                    let done = done.clone();
+                    let attempts = attempts.clone();
+                    let found = found.clone();
+                    let grind_matches_thread_safe = grind_matches_thread_safe.clone();
 
-                let handle = thread::spawn(move || loop {
-                    if done.load(Ordering::Relaxed) {
-                        break;
-                    }
-                    let attempts = attempts.fetch_add(1, Ordering::Relaxed);
-                    if attempts % 1_000_000 == 0 {
-                        println!(
-                            "Searched {} keypairs in {}s. {} matches found.",
-                            attempts,
-                            start.elapsed().as_secs(),
-                            found.load(Ordering::Relaxed),
-                        );
-                    }
-                    let keypair = Keypair::new();
-                    let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
-                    if ignore_case {
-                        pubkey = pubkey.to_lowercase();
-                    }
-                    let mut total_matches_found = 0;
-                    for i in 0..grind_matches_thread_safe.len() {
-                        if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
-                            total_matches_found += 1;
-                            continue;
+                    thread::spawn(move || loop {
+                        if done.load(Ordering::Relaxed) {
+                            break;
                         }
-                        if (!grind_matches_thread_safe[i].starts.is_empty()
-                            && grind_matches_thread_safe[i].ends.is_empty()
-                            && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
-                            || (grind_matches_thread_safe[i].starts.is_empty()
-                                && !grind_matches_thread_safe[i].ends.is_empty()
-                                && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-                            || (!grind_matches_thread_safe[i].starts.is_empty()
-                                && !grind_matches_thread_safe[i].ends.is_empty()
-                                && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
-                                && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-                        {
-                            let _found = found.fetch_add(1, Ordering::Relaxed);
-                            grind_matches_thread_safe[i]
-                                .count
-                                .fetch_sub(1, Ordering::Relaxed);
-                            println!("Wrote keypair to {}", &format!("{}.json", keypair.pubkey()));
-                            write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey()))
-                                .unwrap();
+                        let attempts = attempts.fetch_add(1, Ordering::Relaxed);
+                        if attempts % 1_000_000 == 0 {
+                            println!(
+                                "Searched {} keypairs in {}s. {} matches found.",
+                                attempts,
+                                start.elapsed().as_secs(),
+                                found.load(Ordering::Relaxed),
+                            );
                         }
-                    }
-                    if total_matches_found == grind_matches_thread_safe.len() {
-                        done.store(true, Ordering::Relaxed);
-                    }
-                });
-                handle.join().unwrap();
+                        let keypair = Keypair::new();
+                        let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
+                        if ignore_case {
+                            pubkey = pubkey.to_lowercase();
+                        }
+                        let mut total_matches_found = 0;
+                        for i in 0..grind_matches_thread_safe.len() {
+                            if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
+                                total_matches_found += 1;
+                                continue;
+                            }
+                            if (!grind_matches_thread_safe[i].starts.is_empty()
+                                && grind_matches_thread_safe[i].ends.is_empty()
+                                && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
+                                || (grind_matches_thread_safe[i].starts.is_empty()
+                                    && !grind_matches_thread_safe[i].ends.is_empty()
+                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                                || (!grind_matches_thread_safe[i].starts.is_empty()
+                                    && !grind_matches_thread_safe[i].ends.is_empty()
+                                    && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
+                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                            {
+                                let _found = found.fetch_add(1, Ordering::Relaxed);
+                                grind_matches_thread_safe[i]
+                                    .count
+                                    .fetch_sub(1, Ordering::Relaxed);
+                                println!(
+                                    "Wrote keypair to {}",
+                                    &format!("{}.json", keypair.pubkey())
+                                );
+                                write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey()))
+                                    .unwrap();
+                            }
+                        }
+                        if total_matches_found == grind_matches_thread_safe.len() {
+                            done.store(true, Ordering::Relaxed);
+                        }
+                    })
+                })
+                .collect();
+
+            for thread_handle in thread_handles {
+                thread_handle.join().unwrap();
             }
         }
         ("verify", Some(matches)) => {
