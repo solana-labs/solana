@@ -70,7 +70,11 @@ main() {
       TARGET=x86_64-apple-darwin
       ;;
     *)
-      err "machine architecture is currently unsupported"
+      if [[ -n "$(systeminfo)" ]]; then # LOL, windows
+        TARGET=x86_64-pc-windows-gnu.exe
+      else
+        err "machine architecture is currently unsupported"
+      fi
       ;;
     esac
 
