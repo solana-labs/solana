@@ -8,10 +8,9 @@ use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::{SnapshotStorage, SnapshotStorages},
     bank::{
-        self, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
+        self, bank_1_0::Bank1_0, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
     },
-    bank_1_0::Bank1_0,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
@@ -32,7 +31,7 @@ pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
 pub const SNAPSHOT_VERSION_1_0: &str = "1.0.0";
-pub const SNAPSHOT_VERSION_1_1: &str = "1.0.1";
+pub const SNAPSHOT_VERSION_1_1: &str = "1.1.0";
 
 pub enum BankVersions {
     Bank1_0(Bank1_0),
@@ -617,7 +616,7 @@ where
 
             // Convert bank to current version
             let mut bank = match versioned_bank {
-                BankVersions::Bank1_0(bank_1_0) => Bank::new_from_1_0(bank_1_0),
+                BankVersions::Bank1_0(bank_1_0) => bank_1_0.convert_to_current(),
                 BankVersions::Bank1_1(bank_1_1) => bank_1_1,
             };
             let rc = bank::BankRc::from_stream(
