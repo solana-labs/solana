@@ -1523,7 +1523,7 @@ impl Blockstore {
         to_slot: Slot,
     ) -> Result<bool> {
         let mut results: Vec<bool> = vec![];
-        for slot in from_slot..=to_slot {
+        for slot in from_slot..to_slot {
             let res = self
                 .get_slot_entries(slot, 0, None)?
                 .iter()
@@ -4582,6 +4582,93 @@ pub mod tests {
 
         drop(blockstore);
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_prune_transaction_status() {
+        let slot = 5;
+        let entries_batch0 = make_slot_entries_with_transactions(5);
+        let entries_batch1 = make_slot_entries_with_transactions(5);
+        let shreds = entries_to_test_shreds(entries_batch0.clone(), slot, slot - 1, true, 0);
+        let more_shreds = entries_to_test_shreds(entries_batch1.clone(), slot + 1, slot, true, 0);
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger.insert_shreds(more_shreds, None, false).unwrap();
+        ledger.set_roots(&[slot - 1, slot, slot + 1]).unwrap();
+
+        let signatures_batch0: Vec<Signature> = entries_batch0
+            .iter()
+            .cloned()
+            .filter(|entry| !entry.is_tick())
+            .flat_map(|entry| entry.transactions)
+            .map(|transaction| {
+                let mut pre_balances: Vec<u64> = vec![];
+                let mut post_balances: Vec<u64> = vec![];
+                for (i, _account_key) in transaction.message.account_keys.iter().enumerate() {
+                    pre_balances.push(i as u64 * 10);
+                    post_balances.push(i as u64 * 11);
+                }
+                let signature = transaction.signatures[0];
+                ledger
+                    .transaction_status_cf
+                    .put(
+                        (signature, slot),
+                        &RpcTransactionStatusMeta {
+                            status: Ok(()),
+                            fee: 42,
+                            pre_balances: pre_balances.clone(),
+                            post_balances: post_balances.clone(),
+                        },
+                    )
+                    .unwrap();
+                signature
+            })
+            .collect();
+
+        let signatures_batch1: Vec<Signature> = entries_batch1
+            .iter()
+            .cloned()
+            .filter(|entry| !entry.is_tick())
+            .flat_map(|entry| entry.transactions)
+            .map(|transaction| {
+                let mut pre_balances: Vec<u64> = vec![];
+                let mut post_balances: Vec<u64> = vec![];
+                for (i, _account_key) in transaction.message.account_keys.iter().enumerate() {
+                    pre_balances.push(i as u64 * 10);
+                    post_balances.push(i as u64 * 11);
+                }
+                let signature = transaction.signatures[0];
+                ledger
+                    .transaction_status_cf
+                    .put(
+                        (signature, slot + 1),
+                        &RpcTransactionStatusMeta {
+                            status: Ok(()),
+                            fee: 42,
+                            pre_balances: pre_balances.clone(),
+                            post_balances: post_balances.clone(),
+                        },
+                    )
+                    .unwrap();
+                signature
+            })
+            .collect();
+
+        ledger.purge_slots(0, Some(slot));
+
+        for signature in signatures_batch0.into_iter() {
+            assert!(ledger
+                .read_transaction_status((signature, slot))
+                .unwrap()
+                .is_none());
+        }
+        for signature in signatures_batch1.into_iter() {
+            assert!(ledger
+                .read_transaction_status((signature, slot + 1))
+                .unwrap()
+                .is_some());
+        }
     }
 
     #[test]
