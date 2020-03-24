@@ -4,11 +4,7 @@ use crate::{
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
     rpc_request::{RpcError, RpcRequest},
-    rpc_response::{
-        Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-        RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
-        RpcLeaderSchedule, RpcResult, RpcTransactionStatus, RpcVersionInfo, RpcVoteAccountStatus,
-    },
+    rpc_response::*,
 };
 use bincode::serialize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -190,9 +186,17 @@ impl RpcClient {
     }
 
     pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<RpcConfirmedBlock> {
+        self.get_confirmed_block_with_encoding(slot, RpcTransactionEncoding::Json)
+    }
+
+    pub fn get_confirmed_block_with_encoding(
+        &self,
+        slot: Slot,
+        encoding: RpcTransactionEncoding,
+    ) -> ClientResult<RpcConfirmedBlock> {
         let response = self
             .client
-            .send(&RpcRequest::GetConfirmedBlock, json!([slot]), 0)
+            .send(&RpcRequest::GetConfirmedBlock, json!([slot, encoding]), 0)
             .map_err(|err| err.into_with_command("GetConfirmedBlock"))?;
 
         serde_json::from_value(response)
