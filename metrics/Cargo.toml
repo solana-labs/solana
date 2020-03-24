@@ -1,6 +1,6 @@
 [package]
 name = "solana-metrics"
-version = "1.0.9"
+version = "1.0.10"
 description = "Solana Metrics"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,7 +14,7 @@ gethostname = "0.2.1"
 lazy_static = "1.4.0"
 log = "0.4.8"
 reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls"] }
-solana-sdk = { path = "../sdk", version = "1.0.9" }
+solana-sdk = { path = "../sdk", version = "1.0.10" }
 
 [dev-dependencies]
 rand = "0.6.5"
