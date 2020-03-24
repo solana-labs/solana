@@ -3,8 +3,9 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::{
-    bank::{BankRc, EnteredEpochCallback, StatusCacheRc},
+    bank::{Bank, BankRc, EnteredEpochCallback, StatusCacheRc},
     blockhash_queue::BlockhashQueue,
+    epoch_stakes::EpochStakes,
     message_processor::MessageProcessor,
     rent_collector::RentCollector,
     serde_utils::{
@@ -166,4 +167,54 @@ pub struct Bank1_0 {
     /// Rewards that were paid out immediately after this bank was created
     #[serde(skip)]
     pub rewards: Option<Vec<(Pubkey, i64)>>,
+}
+
+impl Bank1_0 {
+    pub fn convert_to_current(self) -> Bank {
+        let old_epoch_stakes = self.epoch_stakes;
+        let epoch_stakes = old_epoch_stakes
+            .iter()
+            .map(|(epoch, stakes)| (*epoch, EpochStakes::new(&stakes, *epoch)))
+            .collect();
+        Bank {
+            rc: self.rc,
+            src: self.src,
+            blockhash_queue: self.blockhash_queue,
+            ancestors: self.ancestors,
+            hash: self.hash,
+            parent_hash: self.parent_hash,
+            parent_slot: self.parent_slot,
+            hard_forks: self.hard_forks,
+            transaction_count: self.transaction_count,
+            tick_height: self.tick_height,
+            signature_count: self.signature_count,
+            capitalization: self.capitalization,
+            max_tick_height: self.max_tick_height,
+            hashes_per_tick: self.hashes_per_tick,
+            ticks_per_slot: self.ticks_per_slot,
+            ns_per_slot: self.ns_per_slot,
+            genesis_creation_time: self.genesis_creation_time,
+            slots_per_year: self.slots_per_year,
+            slots_per_segment: self.slots_per_segment,
+            slot: self.slot,
+            epoch: self.epoch,
+            block_height: self.block_height,
+            collector_id: self.collector_id,
+            collector_fees: self.collector_fees,
+            fee_calculator: self.fee_calculator,
+            fee_rate_governor: self.fee_rate_governor,
+            collected_rent: self.collected_rent,
+            rent_collector: self.rent_collector,
+            epoch_schedule: self.epoch_schedule,
+            inflation: self.inflation,
+            stakes: self.stakes,
+            storage_accounts: self.storage_accounts,
+            epoch_stakes,
+            is_delta: self.is_delta,
+            message_processor: self.message_processor,
+            entered_epoch_callback: self.entered_epoch_callback,
+            last_vote_sync: self.last_vote_sync,
+            rewards: self.rewards,
+        }
+    }
 }
