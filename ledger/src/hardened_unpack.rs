@@ -81,10 +81,14 @@ where
         let path = entry.path()?;
         let path_str = path.display().to_string();
 
+        // Although the `tar` crate safely skips at the actual unpacking, fail
+        // first by ourselves when there are odd paths like including `..` or /
+        // for our clearer pattern matching reasoning:
+        //   https://docs.rs/tar/0.4.26/src/tar/entry.rs.html#371
         let parts = path.components().map(|p| match p {
             CurDir => Some("."),
             Normal(c) => c.to_str(),
-            _ => None,
+            _ => None, // Prefix (for Windows) and RootDir are forbidden
         });
         if parts.clone().any(|p| p.is_none()) {
             return Err(UnpackError::Archive(format!(
@@ -346,6 +350,50 @@ mod tests {
         archive.append(&header, data).unwrap();
         let result = finalize_and_unpack_snapshot(archive);
         assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == *"invalid path found: \"foo/../../../dangerous\"");
+    }
+
+    fn with_archive_unpack_snapshot_invalid_path(path: &str) -> Result<()> {
+        let mut header = Header::new_gnu();
+        // bypass the sanitization of the .set_path()
+        for (p, c) in header
+            .as_old_mut()
+            .name
+            .iter_mut()
+            .zip(path.as_bytes().iter().chain(Some(&0)))
+        {
+            *p = *c;
+        }
+        header.set_size(4);
+        header.set_cksum();
+
+        let data: &[u8] = &[1, 2, 3, 4];
+
+        let mut archive = Builder::new(Vec::new());
+        archive.append(&header, data).unwrap();
+        with_finalize_and_unpack(archive, |unpacking_archive, path| {
+            for entry in unpacking_archive.entries()? {
+                if entry?.unpack_in(path)? == false {
+                    return Err(UnpackError::Archive("failed!".to_string()));
+                } else if !path.join(path).exists() {
+                    return Err(UnpackError::Archive("not existing!".to_string()));
+                }
+            }
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_archive_unpack_itself() {
+        assert_matches!(
+            with_archive_unpack_snapshot_invalid_path("ryoqun/work"),
+            Ok(())
+        );
+        // Absolute paths are neutralized as relative
+        assert_matches!(
+            with_archive_unpack_snapshot_invalid_path("/etc/passwd"),
+            Ok(())
+        );
+        assert_matches!(with_archive_unpack_snapshot_invalid_path("../../../dangerous"), Err(UnpackError::Archive(ref message)) if message.to_string() == "failed!");
     }
 
     #[test]

@@ -7,7 +7,7 @@ use std::fs::{self, File};
 use std::io;
 use std::io::Read;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
@@ -108,12 +108,10 @@ pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
 
 pub fn download_genesis_if_missing(
     rpc_addr: &SocketAddr,
-    ledger_path: &Path,
-) -> Result<Option<(std::path::PathBuf, std::path::PathBuf)>, String> {
-    let genesis_package = ledger_path.join("genesis.tar.bz2");
-
+    genesis_package: &Path,
+) -> Result<PathBuf, String> {
     if !genesis_package.exists() {
-        let tmp_genesis_path = ledger_path.join("tmp-genesis");
+        let tmp_genesis_path = genesis_package.parent().unwrap().join("tmp-genesis");
         let tmp_genesis_package = tmp_genesis_path.join("genesis.tar.bz2");
 
         let _ignored = fs::remove_dir_all(&tmp_genesis_path);
@@ -122,9 +120,9 @@ pub fn download_genesis_if_missing(
             &tmp_genesis_package,
         )?;
 
-        Ok(Some((genesis_package, tmp_genesis_package)))
+        Ok(tmp_genesis_package)
     } else {
-        Ok(None)
+        Err("genesis already exists".to_string())
     }
 }
 
