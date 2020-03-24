@@ -15,6 +15,7 @@
     * [Durable Transaction Nonces](offline-signing/durable-nonce.md)
   * [Command-line Reference](cli/usage.md)
 * [Develop Applications](apps/README.md)
+  * [Develop Programs](apps/programs.md)
   * [Example: Web Wallet](apps/webwallet.md)
   * [Example: Tic-Tac-Toe](apps/tictactoe.md)
   * [Drones](apps/drones.md)
