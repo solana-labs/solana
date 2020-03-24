@@ -320,13 +320,15 @@ impl Blockstore {
             .expect("Database Error: Failed to get write batch");
         // delete range cf is not inclusive
         let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
+        // prune transaction statuses
+        if !self.is_transaction_status_empty() {
+            let _result =
+                self.prune_transaction_status_cf_by_slot(&mut write_batch, from_slot, to_slot);
+        }
         let columns_empty = self
-            .prune_transaction_status_cf_by_slot(&mut write_batch, from_slot, to_slot)
+            .db
+            .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
             .unwrap_or(false)
-            & self
-                .db
-                .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
             & self
                 .db
                 .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
@@ -1523,28 +1525,35 @@ impl Blockstore {
         self.transaction_status_cf.put(index, status)
     }
 
+    fn is_transaction_status_empty(&self) -> bool {
+        self.db
+            .iter::<cf::TransactionStatus>(IteratorMode::End)
+            .unwrap()
+            .next()
+            .map(|((signature, slot), _)| signature == Signature::default() && slot == 0)
+            .unwrap_or(true)
+    }
+
     fn prune_transaction_status_cf_by_slot(
         &self,
         batch: &mut WriteBatch,
         from_slot: Slot,
         to_slot: Slot,
     ) -> Result<bool> {
-        let mut results: Vec<bool> = vec![];
-        for slot in from_slot..to_slot {
-            let res = self
-                .get_slot_entries(slot, 0, None)?
-                .iter()
-                .cloned()
-                .flat_map(|entry| entry.transactions)
-                .map(|transaction| {
-                    batch
-                        .delete::<cf::TransactionStatus>((transaction.signatures[0], slot))
-                        .is_ok()
-                })
-                .all(|res| res);
-            results.push(res);
-        }
-        Ok(results.iter().all(|res| *res))
+        Ok((from_slot..to_slot)
+            .map(|slot| {
+                self.get_any_valid_slot_entries(slot, 0)
+                    .iter()
+                    .cloned()
+                    .flat_map(|entry| entry.transactions)
+                    .map(|transaction| {
+                        batch
+                            .delete::<cf::TransactionStatus>((transaction.signatures[0], slot))
+                            .is_ok()
+                    })
+                    .all(|res| res)
+            })
+            .all(|res| res))
     }
 
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
