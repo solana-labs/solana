@@ -33,11 +33,6 @@ pub const TAR_VERSION_FILE: &str = "version";
 pub const SNAPSHOT_VERSION_1_0: &str = "1.0.0";
 pub const SNAPSHOT_VERSION: &str = "1.1.0";
 
-pub enum BankVersions {
-    Bank1_0(Bank1_0),
-    Current(Bank),
-}
-
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
     pub slot: Slot,
@@ -598,13 +593,12 @@ where
         &root_paths.snapshot_file_path,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
-            let versioned_bank: BankVersions = match snapshot_version {
+            let mut bank: Bank = match snapshot_version {
                 SNAPSHOT_VERSION_1_0 => {
-                    BankVersions::Bank1_0(deserialize_from_snapshot(stream.by_ref())?)
+                    let bank_1_0: Bank1_0 = deserialize_from_snapshot(stream.by_ref())?;
+                    bank_1_0.convert_to_current()
                 }
-                SNAPSHOT_VERSION => {
-                    BankVersions::Current(deserialize_from_snapshot(stream.by_ref())?)
-                }
+                SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
                 _ => {
                     return Err(get_io_error(&format!(
                         "unsupported snapshot version: {}",
@@ -614,11 +608,6 @@ where
             };
             info!("Rebuilding accounts...");
 
-            // Convert bank to current version
-            let mut bank = match versioned_bank {
-                BankVersions::Bank1_0(bank_1_0) => bank_1_0.convert_to_current(),
-                BankVersions::Current(current_bank) => current_bank,
-            };
             let rc = bank::BankRc::from_stream(
                 account_paths,
                 bank.slot(),
