@@ -6,7 +6,7 @@ use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     blockhash_queue::BlockhashQueue,
-    epoch_stakes::EpochStakes,
+    epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
     rent_collector::RentCollector,
@@ -2101,7 +2101,7 @@ impl Bank {
 
     /// Get the fixed set of vote accounts for the given node id for the
     /// current epoch
-    pub fn epoch_vote_accounts_for_node_id(&self, node_id: &Pubkey) -> Option<&Vec<Pubkey>> {
+    pub fn epoch_vote_accounts_for_node_id(&self, node_id: &Pubkey) -> Option<&NodeVoteAccounts> {
         self.epoch_stakes
             .get(&self.epoch)
             .expect("Epoch stakes for bank's own epoch must exist")

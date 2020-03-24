@@ -4,8 +4,14 @@ use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
 use solana_vote_program::vote_state::VoteState;
 use std::{collections::HashMap, sync::Arc};
 
-pub type NodeIdToVoteAccounts = HashMap<Pubkey, Vec<Pubkey>>;
+pub type NodeIdToVoteAccounts = HashMap<Pubkey, NodeVoteAccounts>;
 pub type EpochAuthorizedVoters = HashMap<Pubkey, Pubkey>;
+
+#[derive(Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct NodeVoteAccounts {
+    pub vote_accounts: Vec<Pubkey>,
+    pub total_stake: u64,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EpochStakes {
@@ -76,10 +82,12 @@ impl EpochStakes {
                         .get_authorized_voter(leader_schedule_epoch)
                         .expect("Authorized voter for current epoch must be known");
 
-                    node_id_to_vote_accounts
+                    let node_vote_accounts = node_id_to_vote_accounts
                         .entry(vote_state.node_pubkey)
-                        .or_default()
-                        .push(*key);
+                        .or_default();
+
+                    node_vote_accounts.total_stake += stake;
+                    node_vote_accounts.vote_accounts.push(*key);
 
                     Some((*key, authorized_voter))
                 } else {
@@ -109,6 +117,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_parse_epoch_vote_accounts() {
+        let stake_per_account = 100;
         let num_vote_accounts_per_node = 2;
         // Create some vote accounts for each pubkey
         let vote_accounts_map: HashMap<Pubkey, Vec<VoteAccountInfo>> = (0..10)
@@ -153,7 +162,11 @@ pub(crate) mod tests {
                     .map(|v| (v.vote_account))
                     .collect::<Vec<_>>();
                 vote_accounts.sort();
-                (*node_pubkey, vote_accounts)
+                let node_vote_accounts = NodeVoteAccounts {
+                    vote_accounts,
+                    total_stake: stake_per_account * num_vote_accounts_per_node as u64,
+                };
+                (*node_pubkey, node_vote_accounts)
             })
             .collect();
 
@@ -163,7 +176,7 @@ pub(crate) mod tests {
             .flat_map(|(_, vote_accounts)| {
                 vote_accounts
                     .iter()
-                    .map(|v| (v.vote_account, (100, v.account.clone())))
+                    .map(|v| (v.vote_account, (stake_per_account, v.account.clone())))
             })
             .collect();
 
@@ -173,7 +186,7 @@ pub(crate) mod tests {
         // Verify the results
         node_id_to_vote_accounts
             .iter_mut()
-            .for_each(|(_, vote_accounts)| vote_accounts.sort());
+            .for_each(|(_, node_vote_accounts)| node_vote_accounts.vote_accounts.sort());
 
         assert!(
             node_id_to_vote_accounts.len() == expected_node_id_to_vote_accounts.len()
