@@ -142,10 +142,12 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-
-                self.subscriptions
-                    .add_account_subscription(&pubkey, confirmations, &sub_id, &sink)
+                self.subscriptions.add_account_subscription(
+                    pubkey,
+                    confirmations,
+                    sub_id,
+                    subscriber,
+                )
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -180,10 +182,12 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-
-                self.subscriptions
-                    .add_program_subscription(&pubkey, confirmations, &sub_id, &sink)
+                self.subscriptions.add_program_subscription(
+                    pubkey,
+                    confirmations,
+                    sub_id,
+                    subscriber,
+                )
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -222,13 +226,11 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     "signature_subscribe: signature={:?} id={:?}",
                     signature, sub_id
                 );
-                let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-
                 self.subscriptions.add_signature_subscription(
-                    &signature,
+                    signature,
                     confirmations,
-                    &sub_id,
-                    &sink,
+                    sub_id,
+                    subscriber,
                 );
             }
             Err(e) => subscriber.reject(e).unwrap(),
@@ -257,9 +259,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
         let sub_id = SubscriptionId::Number(id as u64);
         info!("slot_subscribe: id={:?}", sub_id);
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-
-        self.subscriptions.add_slot_subscription(&sub_id, &sink);
+        self.subscriptions.add_slot_subscription(sub_id, subscriber);
     }
 
     fn slot_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
