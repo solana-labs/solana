@@ -31,27 +31,33 @@ export RUST_MIN_STACK=8388608
 
 echo "--- remove old coverage results"
 if [[ -d target/cov ]]; then
-  find target/cov -name \*.gcda -delete
+  find target/cov -type f -name '*.gcda' -delete
 fi
 rm -rf target/cov/$reportName
 mkdir -p target/cov
 
 # Mark the base time for a clean room dir
-timing_file=target/cov/before-test
-touch "$timing_file"
+touch target/cov/before-test
 
 source ci/rust-version.sh nightly
 
 # Force rebuild of possibly-cached proc macro crates and build.rs because
 # we always want stable coverage for them
 # Don't support odd file names in our repo ever
-# shellcheck disable=SC2046
-touch \
-  $(git ls-files :**/build.rs) \
-  $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
+if [[ -n $CI || -z $1 ]]; then
+  # shellcheck disable=SC2046
+  touch \
+    $(git ls-files :**/build.rs) \
+    $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
+fi
 
 RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
-RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log
+if RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
+  test_status=0
+else
+  test_status=$?
+fi
+touch target/cov/after-test
 
 echo "--- grcov"
 
@@ -62,7 +68,7 @@ mkdir -p target/cov/tmp
 
 # Can't use a simpler construct under the condition of SC2044 and bash 3
 # (macOS's default). See: https://github.com/koalaman/shellcheck/wiki/SC2044
-find target/cov -name \*.gcda -newer "$timing_file" -print0 |
+find target/cov -type f -name '*.gcda' -newer target/cov/before-test ! -newer target/cov/after-test -print0 |
   (while IFS= read -r -d '' gcda_file; do
     gcno_file="${gcda_file%.gcda}.gcno"
     ln -sf "../../../$gcda_file" "target/cov/tmp/$(basename "$gcda_file")"
@@ -115,3 +121,6 @@ genhtml --output-directory target/cov/$reportName \
 )
 
 ls -l target/cov/$reportName/index.html
+ln -sfT $reportName target/cov/LATEST
+
+exit $test_status
