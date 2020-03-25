@@ -66,7 +66,7 @@ fn tune_poh_service_priority(uid: u32) {
 }
 
 #[cfg(target_os = "linux")]
-fn tune_kernel_udp_buffers() {
+fn tune_kernel_udp_buffers_and_vmmap() {
     use sysctl::CtlValue::String;
     use sysctl::Sysctl;
     fn sysctl_write(name: &str, value: &str) {
@@ -91,6 +91,9 @@ fn tune_kernel_udp_buffers() {
     sysctl_write("net.core.rmem_default", "134217728");
     sysctl_write("net.core.wmem_max", "134217728");
     sysctl_write("net.core.wmem_default", "134217728");
+
+    // increase mmap counts for many append_vecs
+    sysctl_write("vm.max_map_count", "262144");
 }
 
 #[cfg(unix)]
@@ -145,7 +148,7 @@ fn main() {
             info!("Tuning the system now");
             #[cfg(target_os = "linux")]
             {
-                tune_kernel_udp_buffers();
+                tune_kernel_udp_buffers_and_vmmap();
             }
         }
     }
