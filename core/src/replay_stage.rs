@@ -996,21 +996,21 @@ impl ReplayStage {
         }
 
         // Otherwise we have to check the votes for confirmation
-        let slot_vote_tracker = progress
+        let mut slot_vote_tracker = progress
             .get_propagated_stats(slot)
             .expect("All frozen banks must exist in the Progress map")
             .slot_vote_tracker
             .clone();
 
-        let new_slot_vote_tracker = {
-            if slot_vote_tracker.is_none() {
-                vote_tracker.get_slot_vote_tracker(slot)
-            } else {
-                slot_vote_tracker
-            }
-        };
+        if slot_vote_tracker.is_none() {
+            slot_vote_tracker = vote_tracker.get_slot_vote_tracker(slot);
+            progress
+                .get_propagated_stats_mut(slot)
+                .expect("All frozen banks must exist in the Progress map")
+                .slot_vote_tracker = slot_vote_tracker.clone();
+        }
 
-        let newly_voted_pubkeys = new_slot_vote_tracker
+        let newly_voted_pubkeys = slot_vote_tracker
             .as_ref()
             .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
             .unwrap_or_else(|| vec![]);
@@ -1022,13 +1022,6 @@ impl ReplayStage {
             bank_forks,
             all_pubkeys,
         );
-
-        if new_slot_vote_tracker.is_some() {
-            progress
-                .get_propagated_stats_mut(slot)
-                .expect("All frozen banks must exist in the Progress map")
-                .slot_vote_tracker = new_slot_vote_tracker;
-        }
     }
 
     // Returns:
@@ -1485,7 +1478,10 @@ impl ReplayStage {
                 {
                     Self::update_fork_propagated_threshold_from_votes(
                         progress,
-                        leader_vote_accounts.iter().collect::<Vec<_>>(),
+                        leader_vote_accounts
+                            .vote_accounts
+                            .iter()
+                            .collect::<Vec<_>>(),
                         parent_bank.slot(),
                         bank_forks,
                         all_pubkeys,
