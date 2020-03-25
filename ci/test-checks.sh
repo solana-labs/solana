@@ -30,8 +30,7 @@ _ ci/check-ssh-keys.sh
 
 {
   cd programs/bpf
-  # ignore RUSTSEC-2020-0006: https://github.com/rustwasm/wasm-bindgen/issues/2050
-  _ cargo +"$rust_stable" audit --ignore RUSTSEC-2020-0006
+  _ cargo +"$rust_stable" audit
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
