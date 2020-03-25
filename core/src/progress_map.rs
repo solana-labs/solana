@@ -1,6 +1,6 @@
 use crate::{
-    cluster_info_vote_listener::SlotVoteTracker, consensus::StakeLockout,
-    replay_stage::SUPERMINORITY_THRESHOLD,
+    cluster_info_vote_listener::SlotVoteTracker, cluster_slots::SlotPubkeys,
+    consensus::StakeLockout, replay_stage::SUPERMINORITY_THRESHOLD,
 };
 use solana_ledger::{
     bank_forks::BankForks,
@@ -179,11 +179,13 @@ pub(crate) struct ForkStats {
 #[derive(Clone, Default)]
 pub(crate) struct PropagatedStats {
     pub(crate) propagated_validators: HashSet<Rc<Pubkey>>,
+    pub(crate) propagated_node_ids: HashSet<Rc<Pubkey>>,
     pub(crate) propagated_validators_stake: u64,
     pub(crate) is_propagated: bool,
     pub(crate) is_leader_slot: bool,
     pub(crate) prev_leader_slot: Option<Slot>,
     pub(crate) slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
+    pub(crate) cluster_slot_pubkeys: Option<Arc<RwLock<SlotPubkeys>>>,
     pub(crate) total_epoch_stake: u64,
 }
 

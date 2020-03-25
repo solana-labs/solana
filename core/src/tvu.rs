@@ -198,6 +198,7 @@ impl Tvu {
             ledger_signal_receiver,
             poh_recorder.clone(),
             vote_tracker,
+            cluster_slots,
             retransmit_slots_sender,
         );
 
