@@ -42,11 +42,11 @@ impl EpochStakes {
         self.total_stake
     }
 
-    pub fn node_id_to_vote_accounts(&self) -> &NodeIdToVoteAccounts {
+    pub fn node_id_to_vote_accounts(&self) -> &Arc<NodeIdToVoteAccounts> {
         &self.node_id_to_vote_accounts
     }
 
-    pub fn epoch_authorized_voters(&self) -> &EpochAuthorizedVoters {
+    pub fn epoch_authorized_voters(&self) -> &Arc<EpochAuthorizedVoters> {
         &self.epoch_authorized_voters
     }
 
