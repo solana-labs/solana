@@ -429,9 +429,18 @@ impl JsonRpcRequestProcessor {
 
         for signature in signatures {
             let status = bank.get_signature_confirmation_status(&signature).map(
-                |SignatureConfirmationStatus { slot, status, .. }| TransactionStatus {
+                |SignatureConfirmationStatus {
+                     slot,
+                     status,
+                     confirmations,
+                 }| TransactionStatus {
                     slot,
                     status,
+                    confirmations: if confirmations <= 32 {
+                        Some(confirmations)
+                    } else {
+                        None
+                    },
                 },
             );
             statuses.push(status);

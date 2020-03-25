@@ -101,7 +101,11 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 let status = if self.url == "sig_not_found" {
                     None
                 } else {
-                    Some(TransactionStatus { status, slot: 1 })
+                    Some(TransactionStatus {
+                        status,
+                        slot: 1,
+                        confirmations: Some(0),
+                    })
                 };
                 serde_json::to_value(vec![status])?
             }
