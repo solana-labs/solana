@@ -60,6 +60,9 @@ pub enum TransactionError {
 
     /// Transaction did not pass signature verification
     SignatureFailure,
+
+    /// This program may not be used for executing instructions
+    InvalidProgramForExecution,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;

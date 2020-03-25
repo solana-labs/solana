@@ -230,9 +230,9 @@ impl Accounts {
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
-            if !program.executable || program.owner == Pubkey::default() {
-                error_counters.account_not_found += 1;
-                return Err(TransactionError::AccountNotFound);
+            if !program.executable {
+                error_counters.invalid_program_for_execution += 1;
+                return Err(TransactionError::InvalidProgramForExecution);
             }
 
             // add loader to chain
@@ -1154,12 +1154,12 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.account_not_found, 1);
+        assert_eq!(error_counters.invalid_program_for_execution, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
             (
-                Err(TransactionError::AccountNotFound),
+                Err(TransactionError::InvalidProgramForExecution),
                 Some(HashAgeKind::Extant)
             )
         );
@@ -1197,7 +1197,7 @@ mod tests {
         assert_eq!(
             loaded_accounts[0],
             (
-                Err(TransactionError::AccountNotFound),
+                Err(TransactionError::ProgramAccountNotFound),
                 Some(HashAgeKind::Extant)
             )
         );
@@ -1229,12 +1229,12 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.account_not_found, 1);
+        assert_eq!(error_counters.invalid_program_for_execution, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
             (
-                Err(TransactionError::AccountNotFound),
+                Err(TransactionError::InvalidProgramForExecution),
                 Some(HashAgeKind::Extant)
             )
         );
