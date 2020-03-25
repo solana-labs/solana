@@ -111,6 +111,7 @@ pub struct SlotMetaWorkingSetEntry {
     did_insert_occur: bool,
 }
 
+#[derive(Default)]
 pub struct BlockstoreInsertionMetrics {
     pub num_shreds: usize,
     pub insert_lock_elapsed: u64,
@@ -137,7 +138,7 @@ impl SlotMetaWorkingSetEntry {
 
 impl BlockstoreInsertionMetrics {
     pub fn report_metrics(&self, metric_name: &'static str) {
-        datapoint_debug!(
+        datapoint_info!(
             metric_name,
             ("num_shreds", self.num_shreds as i64, i64),
             ("total_elapsed", self.total_elapsed as i64, i64),
@@ -625,7 +626,8 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
         handle_duplicate: &F,
-    ) -> Result<BlockstoreInsertionMetrics>
+        metrics: &mut BlockstoreInsertionMetrics,
+    ) -> Result<()>
     where
         F: Fn(Shred) -> (),
     {
@@ -764,19 +766,19 @@ impl Blockstore {
 
         total_start.stop();
 
-        Ok(BlockstoreInsertionMetrics {
-            num_shreds,
-            total_elapsed: total_start.as_us(),
-            insert_lock_elapsed,
-            insert_shreds_elapsed,
-            shred_recovery_elapsed,
-            chaining_elapsed,
-            commit_working_sets_elapsed,
-            write_batch_elapsed,
-            num_inserted,
-            num_recovered,
-            index_meta_time,
-        })
+        metrics.num_shreds += num_shreds;
+        metrics.total_elapsed += total_start.as_us();
+        metrics.insert_lock_elapsed += insert_lock_elapsed;
+        metrics.insert_shreds_elapsed += insert_shreds_elapsed;
+        metrics.shred_recovery_elapsed += shred_recovery_elapsed;
+        metrics.chaining_elapsed += chaining_elapsed;
+        metrics.commit_working_sets_elapsed += commit_working_sets_elapsed;
+        metrics.write_batch_elapsed += write_batch_elapsed;
+        metrics.num_inserted += num_inserted;
+        metrics.num_recovered += num_recovered;
+        metrics.index_meta_time += index_meta_time;
+
+        Ok(())
     }
 
     pub fn insert_shreds(
@@ -784,8 +786,14 @@ impl Blockstore {
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
-    ) -> Result<BlockstoreInsertionMetrics> {
-        self.insert_shreds_handle_duplicate(shreds, leader_schedule, is_trusted, &|_| {})
+    ) -> Result<()> {
+        self.insert_shreds_handle_duplicate(
+            shreds,
+            leader_schedule,
+            is_trusted,
+            &|_| {},
+            &mut BlockstoreInsertionMetrics::default(),
+        )
     }
 
     fn check_insert_coding_shred(

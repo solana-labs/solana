@@ -14,7 +14,9 @@ use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blockstore::{self, Blockstore, MAX_DATA_SHREDS_PER_SLOT};
+use solana_ledger::blockstore::{
+    self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT,
+};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
@@ -110,6 +112,7 @@ fn run_insert<F>(
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
+    metrics: &mut BlockstoreInsertionMetrics,
 ) -> Result<()>
 where
     F: Fn(Shred) -> (),
@@ -121,14 +124,13 @@ where
         shreds.append(&mut more_shreds)
     }
 
-    let blockstore_insert_metrics = blockstore.insert_shreds_handle_duplicate(
+    blockstore.insert_shreds_handle_duplicate(
         shreds,
         Some(leader_schedule_cache),
         false,
         &handle_duplicate,
+        metrics,
     )?;
-    blockstore_insert_metrics.report_metrics("recv-window-insert-shreds");
-
     Ok(())
 }
 
@@ -358,6 +360,8 @@ impl WindowService {
                 let handle_duplicate = |shred| {
                     let _ = duplicate_sender.send(shred);
                 };
+                let mut metrics = BlockstoreInsertionMetrics::default();
+                let mut last_print = Instant::now();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -368,10 +372,17 @@ impl WindowService {
                         &blockstore,
                         &leader_schedule_cache,
                         &handle_duplicate,
+                        &mut metrics,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
                         }
+                    }
+
+                    if last_print.elapsed().as_secs() > 2 {
+                        metrics.report_metrics("recv-window-insert-shreds");
+                        metrics = BlockstoreInsertionMetrics::default();
+                        last_print = Instant::now();
                     }
                 }
             })
