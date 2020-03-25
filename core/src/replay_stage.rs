@@ -1553,9 +1553,10 @@ pub(crate) mod tests {
             SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
-    use solana_runtime::genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs};
+    use solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs};
     use solana_sdk::{
         account::Account,
+        clock::NUM_CONSECUTIVE_LEADER_SLOTS,
         genesis_config,
         hash::{hash, Hash},
         instruction::InstructionError,
@@ -1865,45 +1866,66 @@ pub(crate) mod tests {
     fn test_child_slots_of_same_parent() {
         let ledger_path = get_tmp_ledger_path!();
         {
+            // Setup
             let blockstore = Arc::new(
                 Blockstore::open(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
+            let validator_voting_keypairs: Vec<_> = (0..20)
+                .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+                .collect();
 
-            let genesis_config = create_genesis_config(10_000).genesis_config;
+            let validator_voting_keys: HashMap<_, _> = validator_voting_keypairs
+                .iter()
+                .map(|v| (v.node_keypair.pubkey(), v.vote_keypair.pubkey()))
+                .collect();
+            let GenesisConfigInfo { genesis_config, .. } =
+                genesis_utils::create_genesis_config_with_vote_accounts(
+                    10_000,
+                    &validator_voting_keypairs,
+                    100,
+                );
             let bank0 = Bank::new(&genesis_config);
-            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
-            let exit = Arc::new(AtomicBool::new(false));
-            let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
-            let bank_forks = BankForks::new(0, bank0);
-            bank_forks.working_bank().freeze();
-
-            // Insert shred for slot 1, generate new forks, check result
-            let (shreds, _) = make_slot_entries(1, 0, 8);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert!(bank_forks.get(1).is_none());
-            let bank_forks = RwLock::new(bank_forks);
             let mut progress = ProgressMap::default();
-            let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
             progress.insert(
                 0,
                 ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None),
             );
-            ReplayStage::generate_new_bank_forks(
-                &blockstore,
-                &bank_forks,
-                &leader_schedule_cache,
-                &subscriptions,
-                None,
-                &mut progress,
-                &mut HashSet::new(),
-            );
-            assert!(bank_forks.read().unwrap().get(1).is_some());
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
+            let exit = Arc::new(AtomicBool::new(false));
+            let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
+            let mut bank_forks = BankForks::new(0, bank0);
 
-            // Insert shred for slot 3, generate new forks, check result
-            let (shreds, _) = make_slot_entries(2, 0, 8);
+            // Insert a non-root bank so that the propagation logic will update this
+            // bank
+            let bank1 = Bank::new_from_parent(
+                bank_forks.get(0).unwrap(),
+                &leader_schedule_cache.slot_leader_at(1, None).unwrap(),
+                1,
+            );
+            progress.insert(
+                1,
+                ForkProgress::new_from_bank(
+                    &bank1,
+                    bank1.collector_id(),
+                    &validator_voting_keys.get(&bank1.collector_id()).unwrap(),
+                    Some(0),
+                ),
+            );
+            assert!(progress.get_propagated_stats(1).unwrap().is_leader_slot);
+            bank1.freeze();
+            bank_forks.insert(bank1);
+            let bank_forks = RwLock::new(bank_forks);
+
+            // Insert shreds for slot NUM_CONSECUTIVE_LEADER_SLOTS,
+            // chaining to slot 1
+            let (shreds, _) = make_slot_entries(NUM_CONSECUTIVE_LEADER_SLOTS, 1, 8);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert!(bank_forks.read().unwrap().get(2).is_none());
+            assert!(bank_forks
+                .read()
+                .unwrap()
+                .get(NUM_CONSECUTIVE_LEADER_SLOTS)
+                .is_none());
             ReplayStage::generate_new_bank_forks(
                 &blockstore,
                 &bank_forks,
@@ -1913,11 +1935,59 @@ pub(crate) mod tests {
                 &mut progress,
                 &mut HashSet::new(),
             );
-            assert!(bank_forks.read().unwrap().get(1).is_some());
-            assert!(bank_forks.read().unwrap().get(2).is_some());
-        }
+            assert!(bank_forks
+                .read()
+                .unwrap()
+                .get(NUM_CONSECUTIVE_LEADER_SLOTS)
+                .is_some());
 
-        let _ignored = remove_dir_all(&ledger_path);
+            // Insert shreds for slot 2 * NUM_CONSECUTIVE_LEADER_SLOTS,
+            // chaining to slot 1
+            let (shreds, _) = make_slot_entries(2 * NUM_CONSECUTIVE_LEADER_SLOTS, 1, 8);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            assert!(bank_forks
+                .read()
+                .unwrap()
+                .get(2 * NUM_CONSECUTIVE_LEADER_SLOTS)
+                .is_none());
+            ReplayStage::generate_new_bank_forks(
+                &blockstore,
+                &bank_forks,
+                &leader_schedule_cache,
+                &subscriptions,
+                None,
+                &mut progress,
+                &mut HashSet::new(),
+            );
+            assert!(bank_forks
+                .read()
+                .unwrap()
+                .get(NUM_CONSECUTIVE_LEADER_SLOTS)
+                .is_some());
+            assert!(bank_forks
+                .read()
+                .unwrap()
+                .get(2 * NUM_CONSECUTIVE_LEADER_SLOTS)
+                .is_some());
+
+            // // There are 20 equally staked acccounts, of which 3 have built
+            // banks above or at bank 1. Because 3/20 < SUPERMINORITY_THRESHOLD,
+            // we should see 3 validators in bank 1's propagated_validator set.
+            let expected_leader_slots = vec![
+                1,
+                NUM_CONSECUTIVE_LEADER_SLOTS,
+                2 * NUM_CONSECUTIVE_LEADER_SLOTS,
+            ];
+            for slot in expected_leader_slots {
+                let leader = leader_schedule_cache.slot_leader_at(slot, None).unwrap();
+                let vote_key = validator_voting_keys.get(&leader).unwrap();
+                assert!(progress
+                    .get_propagated_stats(1)
+                    .unwrap()
+                    .propagated_validators
+                    .contains(vote_key));
+            }
+        }
     }
 
     #[test]
