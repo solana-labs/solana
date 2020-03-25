@@ -433,7 +433,7 @@ impl Blockstore {
     pub fn slot_meta_iterator<'a>(
         &'a self,
         slot: Slot,
-    ) -> Result<impl Iterator<Item = (u64, SlotMeta)> + 'a> {
+    ) -> Result<impl Iterator<Item = (Slot, SlotMeta)> + 'a> {
         let meta_iter = self
             .db
             .iter::<cf::SlotMeta>(IteratorMode::From(slot, IteratorDirection::Forward))?;
