@@ -1464,8 +1464,10 @@ impl AccountsDB {
                 let storage = self.storage.read().unwrap();
                 let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
                 for slot in dead_slots.iter() {
-                    for store in storage.0.get(slot).unwrap().values() {
-                        stores.push(store.clone());
+                    if let Some(slot_storage) = storage.0.get(slot) {
+                        for store in slot_storage.values() {
+                            stores.push(store.clone());
+                        }
                     }
                 }
                 drop(storage);
@@ -3485,5 +3487,13 @@ pub mod tests {
         assert_not_load_account(&accounts, current_slot, pubkey1);
         assert_load_account(&accounts, current_slot, pubkey2, old_lamport);
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
+    }
+
+    #[test]
+    fn clean_dead_slots_empty() {
+        let accounts = AccountsDB::new_single();
+        let mut dead_slots = HashSet::new();
+        dead_slots.insert(10);
+        accounts.clean_dead_slots(&dead_slots);
     }
 }
