@@ -3,8 +3,10 @@
 Solana supports several different types of wallets that can be used to interface directly with the Solana command-line tools.  
 
 **If you are unfamiliar with using command line programs and just want to be able 
-to send and receive SOL tokens, we recommend setting up a third-party [supported wallet](../wallet/supported-wallets.md), 
-such as [Trust Wallet](../wallet/trust-wallet.md) or [Ledger Live in conjunction with a Ledger Nano S](../wallet/ledger-live.md).**
+to send and receive SOL tokens, we recommend setting up a third-party 
+[supported wallet](../wallet/supported-wallets.md), 
+such as [Trust Wallet](../wallet/trust-wallet.md) or 
+[Ledger Live in conjunction with a Ledger Nano S](../wallet/ledger-live.md).**
 
 ## File System Wallet
 
@@ -38,9 +40,9 @@ side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
 offers excellent security. That high security is further amplified when paper
 wallets are used in conjunction with
 [offline signing](../offline-signing/index.md). Custody services such as
-[Coinbase Custody](https://custody.coinbase.com/) use this combination.  Paper wallets
-and custody services are an excellent way to secure a large number of tokens
-for a long period of time.
+[Coinbase Custody](https://custody.coinbase.com/) use this combination.  
+Paper wallets and custody services are an excellent way to secure a 
+large number of tokens for a long period of time.
 
 {% page-ref page="../paper-wallet/README.md" %}
 

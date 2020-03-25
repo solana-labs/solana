@@ -1,7 +1,9 @@
 # Ledger Hardware Wallet
 
-**This document describes how to use a Ledger Nano S in conjunction with the Solana command line tools to interface with your wallet. 
-We recommend that most users of a Ledger Nano S should use [Ledger Live](../wallet/ledger-live.md) to interface with the wallet instead.**
+**This document describes how to use a Ledger Nano S in conjunction with the 
+Solana command line tools to interface with your wallet. 
+We recommend that most users of a Ledger Nano S should use 
+[Ledger Live](../wallet/ledger-live.md) to interface with the wallet instead.**
 
 The Ledger Nano S hardware wallet offers secure storage of your Solana private
 keys. The Solana Ledger app enables derivation of essentially infinite keys, and
