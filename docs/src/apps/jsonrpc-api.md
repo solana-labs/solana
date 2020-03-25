@@ -33,7 +33,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
-* [getSignatureConfirmation](jsonrpc-api.md#getsignatureconfirmation)
 * [getSignatureStatus](jsonrpc-api.md#getsignaturestatus)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
@@ -634,33 +633,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"burnPercent":50,"lamportsPerSignature":5000,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
-```
-
-### getSignatureConfirmation
-
-Returns the status and number of confirmations of a given signature.
-#### Parameters:
-
-* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `<null>` - Unknown transaction
-* `<object>` - Transaction confirmations and status:
-  * `confirmations: <u64>` - count of confirmations since transaction was processed
-  * `status: <object>` -
-    * `"Ok": <null>` - Transaction was successful
-    * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"confirmations":12,"status":{"Ok": null}},"id":1}
 ```
 
 ### getSignatureStatus

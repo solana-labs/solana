@@ -217,25 +217,6 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_signature_confirmation_status(
-        &self,
-        signature: Signature,
-        commitment: Option<CommitmentConfig>,
-    ) -> Option<RpcSignatureConfirmation> {
-        self.bank(commitment)
-            .get_signature_confirmation_status(&signature)
-            .map(
-                |SignatureConfirmationStatus {
-                     confirmations,
-                     status,
-                     ..
-                 }| RpcSignatureConfirmation {
-                    confirmations,
-                    status,
-                },
-            )
-    }
-
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
         Ok(self.bank(commitment).slot())
     }
@@ -642,14 +623,6 @@ pub trait RpcSol {
     #[rpc(meta, name = "validatorExit")]
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool>;
 
-    #[rpc(meta, name = "getSignatureConfirmation")]
-    fn get_signature_confirmation(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<RpcSignatureConfirmation>>;
-
     #[rpc(meta, name = "getIdentity")]
     fn get_identity(&self, meta: Self::Metadata) -> Result<RpcIdentity>;
 
@@ -928,24 +901,6 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().get_slot(commitment)
     }
 
-    fn get_signature_confirmation(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<RpcSignatureConfirmation>> {
-        debug!(
-            "get_signature_confirmation rpc request received: {:?}",
-            signature_str
-        );
-        let signature = verify_signature(&signature_str)?;
-        Ok(meta
-            .request_processor
-            .read()
-            .unwrap()
-            .get_signature_confirmation_status(signature, commitment))
-    }
-
     fn get_transaction_count(
         &self,
         meta: Self::Metadata,
@@ -1032,7 +987,8 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_confirmation_status(signature, commitment.clone())
+                .get_signature_status(vec![signature], commitment.clone())?[0]
+                .clone()
                 .map(|x| x.status);
 
             if signature_status == Some(Ok(())) {
