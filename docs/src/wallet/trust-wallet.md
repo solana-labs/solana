@@ -1,0 +1,1 @@
+This describes Trust Wallet

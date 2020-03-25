@@ -1,11 +1,10 @@
-# Choose a Wallet
+# Command Line Based Wallets
 
-Keypairs are stored in *wallets* and wallets come in many forms. A wallet might
-be a directory in your computer's file system, a piece of paper, or a
-specialized device called a *hardware wallet*. Some wallets are easier to use
-than others.  Some are more secure than others. In this section, we will compare
-and contrast different types of wallets and help you choose the wallet that
-best fits your needs.
+Solana supports several different types of wallets that can be used to interface directly with the Solana command-line tools.  
+
+**If you are unfamiliar with using command line programs and just want to be able 
+to send and receive SOL tokens, we recommend setting up a third-party [supported wallet](../wallet/supported-wallets.md), 
+such as [Trust Wallet](../wallet/trust-wallet.md) or [Ledger Live in conjunction with a Ledger Nano S](../wallet/ledger-live.md).**
 
 ## File System Wallet
 
@@ -43,6 +42,8 @@ wallets are used in conjunction with
 and custody services are an excellent way to secure a large number of tokens
 for a long period of time.
 
+{% page-ref page="../paper-wallet/README.md" %}
+
 ## Hardware Wallet
 
 A hardware wallet is a small handheld device that stores keypairs and provides
@@ -56,10 +57,4 @@ security and convenience for cryptocurrencies. It effectively automates the
 process of offline signing while retaining nearly all the convenience of an FS
 wallet.
 
-## Which Wallet is Best?
-
-Different people will have different needs, but if you are still unsure what
-is best for you after reading the comparisons above, go with a
-[Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s). The
-[Nano S is well-integrated into Solana's tool suite](../remote-wallet/ledger.md)
-and offers an outstanding blend of security and convenience.
+{% page-ref page="../remote-wallet/README.md" %}
