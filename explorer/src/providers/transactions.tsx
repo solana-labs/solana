@@ -20,6 +20,7 @@ export interface Transaction {
   id: number;
   status: Status;
   source: Source;
+  slot?: number;
   signature: TransactionSignature;
 }
 
@@ -38,6 +39,7 @@ interface UpdateStatus {
   type: ActionType.UpdateStatus;
   id: number;
   status: Status;
+  slot?: number;
 }
 
 interface InputSignature {
@@ -66,7 +68,11 @@ function reducer(state: State, action: Action): State {
     case ActionType.UpdateStatus: {
       let transaction = state.transactions[action.id];
       if (transaction) {
-        transaction = { ...transaction, status: action.status };
+        transaction = {
+          ...transaction,
+          status: action.status,
+          slot: action.slot
+        };
         const transactions = {
           ...state.transactions,
           [action.id]: transaction
@@ -136,23 +142,25 @@ export async function checkTransactionStatus(
   });
 
   let status;
+  let slot;
   try {
-    const signatureStatus = await new Connection(url).getSignatureStatus(
-      signature
-    );
+    const result = await new Connection(url).getSignatureStatus(signature);
 
-    if (signatureStatus === null) {
+    if (result === null) {
       status = Status.Missing;
-    } else if ("Ok" in signatureStatus.status) {
-      status = Status.Success;
     } else {
-      status = Status.Failure;
+      slot = result.slot;
+      if ("Ok" in result.status) {
+        status = Status.Success;
+      } else {
+        status = Status.Failure;
+      }
     }
   } catch (error) {
     console.error("Failed to check transaction status", error);
     status = Status.CheckFailed;
   }
-  dispatch({ type: ActionType.UpdateStatus, status, id });
+  dispatch({ type: ActionType.UpdateStatus, status, slot, id });
 }
 
 export function useTransactions() {

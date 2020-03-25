@@ -138,6 +138,8 @@ const renderTransactionRow = (transaction: Transaction) => {
       return assertUnreachable(transaction.status);
   }
 
+  const slotText = `${transaction.slot || "-"}`;
+
   return (
     <tr key={transaction.signature}>
       <td>
@@ -152,7 +154,7 @@ const renderTransactionRow = (transaction: Transaction) => {
         <code>{transaction.signature}</code>
       </td>
       <td>-</td>
-      <td>-</td>
+      <td>{slotText}</td>
     </tr>
   );
 };
