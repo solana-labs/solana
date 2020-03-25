@@ -363,10 +363,6 @@ impl Blockstore {
                 .unwrap_or(false)
             & self
                 .db
-                .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, from_slot, to_slot)
-                .unwrap_or(false)
-            & self
-                .db
                 .delete_range_cf::<cf::Rewards>(&mut write_batch, from_slot, to_slot)
                 .unwrap_or(false);
         if let Err(e) = self.db.write(write_batch) {
@@ -415,10 +411,6 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .index_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .transaction_status_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
