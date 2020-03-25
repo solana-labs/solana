@@ -30,6 +30,7 @@ use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::{self, BankForksInfo},
     create_new_tmp_ledger,
+    hardened_unpack::open_genesis_config,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
 };
@@ -565,10 +566,7 @@ fn new_banks_from_blockstore(
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
 ) {
-    let genesis_config = GenesisConfig::load(blockstore_path).unwrap_or_else(|err| {
-        error!("Failed to load genesis from {:?}: {}", blockstore_path, err);
-        process::exit(1);
-    });
+    let genesis_config = open_genesis_config(blockstore_path);
 
     // This needs to be limited otherwise the state in the VoteAccount data
     // grows too large

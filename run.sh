@@ -60,7 +60,7 @@ else
   solana-keygen new --no-passphrase -fso "$faucet"
 fi
 
-if [[ -e "$ledgerDir"/genesis.bin ]]; then
+if [[ -e "$ledgerDir"/genesis.bin || -e "$ledgerDir"/genesis.tar.bz2 ]]; then
   echo "Use existing genesis"
 else
   solana-genesis \

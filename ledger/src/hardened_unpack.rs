@@ -1,6 +1,7 @@
 use bzip2::bufread::BzDecoder;
 use log::*;
 use regex::Regex;
+use solana_sdk::genesis_config::GenesisConfig;
 use std::{
     fs::{self, File},
     io::{BufReader, Read},
@@ -148,6 +149,22 @@ fn is_valid_snapshot_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool
         (["snapshots", dir], Directory) if like_slot.is_match(dir) => true,
         _ => false,
     }
+}
+
+pub fn open_genesis_config(ledger_path: &Path) -> GenesisConfig {
+    GenesisConfig::load(&ledger_path).unwrap_or_else(|load_err| {
+        let genesis_package = ledger_path.join("genesis.tar.bz2");
+        unpack_genesis_archive(&genesis_package, ledger_path).unwrap_or_else(|unpack_err| {
+            eprintln!(
+                "Failed to open ledger genesis_config at {:?}: {}, {}",
+                ledger_path, load_err, unpack_err,
+            );
+            std::process::exit(1);
+        });
+
+        // loading must succeed at this moment
+        GenesisConfig::load(&ledger_path).unwrap()
+    })
 }
 
 pub fn unpack_genesis_archive(
