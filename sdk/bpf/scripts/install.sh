@@ -24,10 +24,11 @@ download() {
 
 # Install or upgrade xargo
 (
-  cargo install cargo-update
-  cargo install-update-config -a xargo
-  set -e
-  cargo install-update -i xargo
+  # cargo install cargo-update
+  # cargo install-update-config -a xargo
+  # set -e
+  # cargo install-update -i xargo
+  cargo install -f xargo
   xargo --version > xargo.md 2>&1
 )
 # shellcheck disable=SC2181
