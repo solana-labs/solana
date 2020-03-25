@@ -1,3 +1,4 @@
+use crate::hardened_unpack::{unpack_snapshot, UnpackError};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::serialize_into;
 use bzip2::bufread::BzDecoder;
@@ -54,6 +55,9 @@ pub enum SnapshotError {
 
     #[error("storage path symlink is invalid")]
     StoragePathSymlinkInvalid,
+
+    #[error("Unpack error")]
+    UnpackError(#[from] UnpackError),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -558,7 +562,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut archive = Archive::new(tar);
     if !is_snapshot_compression_disabled() {
-        archive.unpack(&unpack_dir)?;
+        unpack_snapshot(&mut archive, unpack_dir)?;
     } else if let Err(e) = archive.unpack(&unpack_dir) {
         warn!(
             "Trying to unpack as uncompressed tar because an error occurred: {:?}",
@@ -567,7 +571,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
         let tar_bz2 = File::open(snapshot_tar)?;
         let tar = BufReader::new(tar_bz2);
         let mut archive = Archive::new(tar);
-        archive.unpack(&unpack_dir)?;
+        unpack_snapshot(&mut archive, unpack_dir)?;
     }
     measure.stop();
     info!("{}", measure);

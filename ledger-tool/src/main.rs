@@ -11,6 +11,7 @@ use solana_ledger::{
     blockstore::Blockstore,
     blockstore_db::{self, Column, Database},
     blockstore_processor::{BankForksInfo, ProcessOptions},
+    hardened_unpack::open_genesis_config,
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
 };
@@ -570,16 +571,6 @@ fn analyze_storage(database: &Database) -> Result<(), String> {
     )?;
 
     Ok(())
-}
-
-fn open_genesis_config(ledger_path: &Path) -> GenesisConfig {
-    GenesisConfig::load(&ledger_path).unwrap_or_else(|err| {
-        eprintln!(
-            "Failed to open ledger genesis_config at {:?}: {}",
-            ledger_path, err
-        );
-        exit(1);
-    })
 }
 
 fn open_blockstore(ledger_path: &Path) -> Blockstore {

@@ -1,15 +1,13 @@
-use bzip2::bufread::BzDecoder;
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_sdk::clock::Slot;
-use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
 use std::fs::{self, File};
 use std::io;
 use std::io::Read;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
@@ -108,35 +106,12 @@ pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn extract_archive(archive_filename: &Path, destination_dir: &Path) -> Result<(), String> {
-    info!("Extracting {:?}...", archive_filename);
-    let extract_start = Instant::now();
-
-    fs::create_dir_all(destination_dir).map_err(|err| err.to_string())?;
-    let tar_bz2 = File::open(&archive_filename)
-        .map_err(|err| format!("Unable to open {:?}: {:?}", archive_filename, err))?;
-    let tar = BzDecoder::new(std::io::BufReader::new(tar_bz2));
-    let mut archive = tar::Archive::new(tar);
-    archive
-        .unpack(destination_dir)
-        .map_err(|err| format!("Unable to unpack {:?}: {:?}", archive_filename, err))?;
-    info!(
-        "Extracted {:?} in {:?}",
-        archive_filename,
-        Instant::now().duration_since(extract_start)
-    );
-    Ok(())
-}
-
-pub fn download_genesis(
+pub fn download_genesis_if_missing(
     rpc_addr: &SocketAddr,
-    ledger_path: &Path,
-    expected_genesis_hash: Option<Hash>,
-) -> Result<Hash, String> {
-    let genesis_package = ledger_path.join("genesis.tar.bz2");
-
-    let genesis_config = if !genesis_package.exists() {
-        let tmp_genesis_path = ledger_path.join("tmp-genesis");
+    genesis_package: &Path,
+) -> Result<PathBuf, String> {
+    if !genesis_package.exists() {
+        let tmp_genesis_path = genesis_package.parent().unwrap().join("tmp-genesis");
         let tmp_genesis_package = tmp_genesis_path.join("genesis.tar.bz2");
 
         let _ignored = fs::remove_dir_all(&tmp_genesis_path);
@@ -144,30 +119,11 @@ pub fn download_genesis(
             &format!("http://{}/{}", rpc_addr, "genesis.tar.bz2"),
             &tmp_genesis_package,
         )?;
-        extract_archive(&tmp_genesis_package, &ledger_path)?;
 
-        let tmp_genesis_config = GenesisConfig::load(&ledger_path)
-            .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
-
-        if let Some(expected_genesis_hash) = expected_genesis_hash {
-            if expected_genesis_hash != tmp_genesis_config.hash() {
-                return Err(format!(
-                    "Genesis hash mismatch: expected {} but downloaded genesis hash is {}",
-                    expected_genesis_hash,
-                    tmp_genesis_config.hash(),
-                ));
-            }
-        }
-
-        std::fs::rename(tmp_genesis_package, genesis_package)
-            .map_err(|err| format!("Unable to rename: {:?}", err))?;
-        tmp_genesis_config
+        Ok(tmp_genesis_package)
     } else {
-        GenesisConfig::load(&ledger_path)
-            .map_err(|err| format!("Failed to load genesis config: {}", err))?
-    };
-
-    Ok(genesis_config.hash())
+        Err("genesis already exists".to_string())
+    }
 }
 
 pub fn download_snapshot(

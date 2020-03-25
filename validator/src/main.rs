@@ -18,11 +18,12 @@ use solana_core::{
     rpc::JsonRpcConfig,
     validator::{Validator, ValidatorConfig},
 };
-use solana_download_utils::{download_genesis, download_snapshot};
-use solana_ledger::bank_forks::SnapshotConfig;
+use solana_download_utils::{download_genesis_if_missing, download_snapshot};
+use solana_ledger::{bank_forks::SnapshotConfig, hardened_unpack::unpack_genesis_archive};
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::{
     clock::Slot,
+    genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -347,6 +348,53 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     } else {
         None
     }
+}
+
+fn check_genesis_hash(
+    genesis_config: &GenesisConfig,
+    expected_genesis_hash: Option<Hash>,
+) -> Result<(), String> {
+    let genesis_hash = genesis_config.hash();
+
+    if let Some(expected_genesis_hash) = expected_genesis_hash {
+        if expected_genesis_hash != genesis_hash {
+            return Err(format!(
+                "Genesis hash mismatch: expected {} but downloaded genesis hash is {}",
+                expected_genesis_hash, genesis_hash,
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn download_then_check_genesis_hash(
+    rpc_addr: &SocketAddr,
+    ledger_path: &std::path::Path,
+    expected_genesis_hash: Option<Hash>,
+) -> Result<Hash, String> {
+    let genesis_package = ledger_path.join("genesis.tar.bz2");
+    let genesis_config =
+        if let Ok(tmp_genesis_package) = download_genesis_if_missing(rpc_addr, &genesis_package) {
+            unpack_genesis_archive(&tmp_genesis_package, &ledger_path)?;
+
+            let downloaded_genesis = GenesisConfig::load(&ledger_path)
+                .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
+
+            check_genesis_hash(&downloaded_genesis, expected_genesis_hash)?;
+            std::fs::rename(tmp_genesis_package, genesis_package)
+                .map_err(|err| format!("Unable to rename: {:?}", err))?;
+
+            downloaded_genesis
+        } else {
+            let existing_genesis = GenesisConfig::load(&ledger_path)
+                .map_err(|err| format!("Failed to load genesis config: {}", err))?;
+            check_genesis_hash(&existing_genesis, expected_genesis_hash)?;
+
+            existing_genesis
+        };
+
+    Ok(genesis_config.hash())
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -1016,7 +1064,7 @@ pub fn main() {
                     Err(err) => Err(format!("Failed to get RPC node version: {}", err)),
                 }
                 .and_then(|_| {
-                    let genesis_hash = download_genesis(
+                    let genesis_hash = download_then_check_genesis_hash(
                         &rpc_contact_info.rpc,
                         &ledger_path,
                         validator_config.expected_genesis_hash,

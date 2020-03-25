@@ -137,10 +137,12 @@ mod tests {
             .collect();
 
         // Create some fake snapshot
-        fs::create_dir_all(&snapshots_dir).unwrap();
         let snapshots_paths: Vec<_> = (0..5)
             .map(|i| {
-                let fake_snapshot_path = snapshots_dir.join(format!("fake_snapshot_{}", i));
+                let snapshot_file_name = format!("{}", i);
+                let snapshots_dir = snapshots_dir.join(&snapshot_file_name);
+                fs::create_dir_all(&snapshots_dir).unwrap();
+                let fake_snapshot_path = snapshots_dir.join(&snapshot_file_name);
                 let mut fake_snapshot_file = OpenOptions::new()
                     .read(true)
                     .write(true)
@@ -157,7 +159,9 @@ mod tests {
         let link_snapshots_dir = tempfile::tempdir_in(&temp_dir).unwrap();
         for snapshots_path in snapshots_paths {
             let snapshot_file_name = snapshots_path.file_name().unwrap();
-            let link_path = link_snapshots_dir.path().join(snapshot_file_name);
+            let link_snapshots_dir = link_snapshots_dir.path().join(snapshot_file_name);
+            fs::create_dir_all(&link_snapshots_dir).unwrap();
+            let link_path = link_snapshots_dir.join(snapshot_file_name);
             fs::hard_link(&snapshots_path, &link_path).unwrap();
         }
 
