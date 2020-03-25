@@ -642,14 +642,6 @@ pub trait RpcSol {
     #[rpc(meta, name = "validatorExit")]
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool>;
 
-    #[rpc(meta, name = "getNumBlocksSinceSignatureConfirmation")]
-    fn get_num_blocks_since_signature_confirmation(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<usize>>;
-
     #[rpc(meta, name = "getSignatureConfirmation")]
     fn get_signature_confirmation(
         &self,
@@ -934,16 +926,6 @@ impl RpcSol for RpcSolImpl {
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
         meta.request_processor.read().unwrap().get_slot(commitment)
-    }
-
-    fn get_num_blocks_since_signature_confirmation(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<usize>> {
-        self.get_signature_confirmation(meta, signature_str, commitment)
-            .map(|res| res.map(|x| x.confirmations))
     }
 
     fn get_signature_confirmation(

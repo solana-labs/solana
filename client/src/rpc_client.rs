@@ -944,14 +944,24 @@ impl RpcClient {
         let response = self
             .client
             .send(
-                &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
-                json!([signature.to_string(), CommitmentConfig::recent().ok()]),
+                &RpcRequest::GetSignatureStatus,
+                json!([[signature.to_string()], CommitmentConfig::recent().ok()]),
                 1,
             )
-            .map_err(|err| err.into_with_command("GetNumBlocksSinceSignatureConfirmation"))?;
-        serde_json::from_value(response).map_err(|err| {
-            ClientError::new_with_command(err.into(), "GetNumBlocksSinceSignatureConfirmation")
-        })
+            .map_err(|err| err.into_with_command("GetSignatureStatus"))?;
+        let result: Vec<Option<TransactionStatus>> = serde_json::from_value(response).unwrap();
+
+        let confirmations = result[0]
+            .clone()
+            .ok_or_else(|| {
+                ClientError::new_with_command(
+                    ClientErrorKind::Custom("signature not found".to_string()),
+                    "GetSignatureStatus",
+                )
+            })?
+            .confirmations
+            .unwrap_or(32);
+        Ok(confirmations)
     }
 
     pub fn send_and_confirm_transaction_with_spinner<T: Signers>(

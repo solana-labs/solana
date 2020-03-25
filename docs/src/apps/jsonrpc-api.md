@@ -31,7 +31,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getInflation](jsonrpc-api.md#getinflation)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
-* [getNumBlocksSinceSignatureConfirmation](jsonrpc-api.md#getnumblockssincesignatureconfirmation)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
 * [getSignatureConfirmation](jsonrpc-api.md#getsignatureconfirmation)
@@ -578,29 +577,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 // Result
 {"jsonrpc":"2.0","result":500,"id":1}
-```
-
-### getNumBlocksSinceSignatureConfirmation
-
-Returns the current number of blocks since signature has been confirmed.
-
-#### Parameters:
-
-* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `<u64>` - count, or null if signature not found
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getNumBlocksSinceSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":8,"id":1}
 ```
 
 ### getProgramAccounts
