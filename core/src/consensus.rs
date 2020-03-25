@@ -612,7 +612,7 @@ pub mod test {
                 tower,
                 progress,
                 &VoteTracker::default(),
-                bank_forks,
+                &bank_forks.read().unwrap().root_bank().clone(),
                 &mut HashSet::new(),
             );
 

@@ -231,7 +231,7 @@ impl ReplayStage {
                         &tower,
                         &mut progress,
                         &vote_tracker,
-                        &bank_forks,
+                        &bank_forks.read().unwrap().root_bank().clone(),
                         &mut all_pubkeys,
                     );
                     for slot in newly_computed_slot_stats {
@@ -905,7 +905,7 @@ impl ReplayStage {
         tower: &Tower,
         progress: &mut ProgressMap,
         vote_tracker: &VoteTracker,
-        bank_forks: &RwLock<BankForks>,
+        root_bank: &Bank,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -963,7 +963,7 @@ impl ReplayStage {
                 progress,
                 bank_slot,
                 all_pubkeys,
-                bank_forks,
+                root_bank,
                 vote_tracker,
             );
 
@@ -987,7 +987,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         slot: Slot,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
-        bank_forks: &RwLock<BankForks>,
+        root_bank: &Bank,
         vote_tracker: &VoteTracker,
     ) {
         // If propagation has already been confirmed, return
@@ -1019,7 +1019,7 @@ impl ReplayStage {
             progress,
             newly_voted_pubkeys,
             slot,
-            bank_forks,
+            root_bank,
             all_pubkeys,
         );
     }
@@ -1242,12 +1242,12 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         mut newly_voted_pubkeys: Vec<impl Deref<Target = Pubkey>>,
         fork_tip: Slot,
-        bank_forks: &RwLock<BankForks>,
+        root_bank: &Bank,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
     ) {
         let mut current_leader_slot = progress.get_latest_leader_slot(fork_tip);
         let mut did_newly_reach_threshold = false;
-        let root = bank_forks.read().unwrap().root();
+        let root = root_bank.slot();
         loop {
             // These cases mean confirmation of propagation on any earlier
             // leader blocks must have been reached
@@ -1276,16 +1276,9 @@ impl ReplayStage {
             // the linked list of 'prev_leader_slot`'s outlined in the
             // `progress` map
             assert!(leader_propagated_stats.is_leader_slot);
-            let leader_bank = bank_forks
-                .read()
-                .unwrap()
-                .get(current_leader_slot.unwrap())
-                .expect("Entry in progress map must exist in BankForks")
-                .clone();
-
             did_newly_reach_threshold = Self::update_slot_propagated_threshold_from_votes(
                 &mut newly_voted_pubkeys,
-                &leader_bank,
+                &root_bank,
                 leader_propagated_stats,
                 all_pubkeys,
                 did_newly_reach_threshold,
@@ -1298,7 +1291,7 @@ impl ReplayStage {
 
     fn update_slot_propagated_threshold_from_votes(
         newly_voted_pubkeys: &mut Vec<impl Deref<Target = Pubkey>>,
-        leader_bank: &Bank,
+        root_bank: &Bank,
         leader_propagated_stats: &mut PropagatedStats,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
         did_child_reach_threshold: bool,
@@ -1347,7 +1340,7 @@ impl ReplayStage {
                     .propagated_validators
                     .insert(voting_pubkey.clone());
                 leader_propagated_stats.propagated_validators_stake +=
-                    leader_bank.epoch_vote_account_stake(&voting_pubkey);
+                    root_bank.epoch_vote_account_stake(&voting_pubkey);
 
                 if leader_propagated_stats.total_epoch_stake == 0
                     || leader_propagated_stats.propagated_validators_stake as f64
@@ -1483,7 +1476,7 @@ impl ReplayStage {
                             .iter()
                             .collect::<Vec<_>>(),
                         parent_bank.slot(),
-                        bank_forks,
+                        &bank_forks.read().unwrap().root_bank().clone(),
                         all_pubkeys,
                     );
                 }
@@ -1536,7 +1529,6 @@ pub(crate) mod tests {
         commitment::BlockCommitment,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
-        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
@@ -1778,7 +1770,7 @@ pub(crate) mod tests {
                     &towers[i],
                     &mut fork_progresses[i],
                     &vote_tracker,
-                    &wrapped_bank_fork,
+                    &wrapped_bank_fork.read().unwrap().root_bank().clone(),
                     &mut all_pubkeys,
                 );
                 let (heaviest_bank, _) = ReplayStage::select_forks(
@@ -2479,7 +2471,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
-            &bank_forks,
+            &bank_forks.read().unwrap().root_bank().clone(),
             &mut HashSet::new(),
         );
         assert_eq!(newly_computed, vec![0]);
@@ -2516,7 +2508,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
-            &bank_forks,
+            &bank_forks.read().unwrap().root_bank().clone(),
             &mut HashSet::new(),
         );
 
@@ -2548,7 +2540,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
-            &bank_forks,
+            &bank_forks.read().unwrap().root_bank().clone(),
             &mut HashSet::new(),
         );
         // No new stats should have been computed
@@ -2606,7 +2598,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
-            &bank_forks,
+            &bank_forks.read().unwrap().root_bank().clone(),
             &mut HashSet::new(),
         );
 
@@ -2791,7 +2783,7 @@ pub(crate) mod tests {
             &mut progress_map,
             10,
             &mut HashSet::new(),
-            &RwLock::new(bank_forks),
+            &bank_forks.root_bank().clone(),
             &vote_tracker,
         );
 
@@ -2877,7 +2869,7 @@ pub(crate) mod tests {
             &mut progress_map,
             10,
             &mut HashSet::new(),
-            &RwLock::new(bank_forks),
+            &bank_forks.root_bank().clone(),
             &vote_tracker,
         );
 
@@ -2964,7 +2956,7 @@ pub(crate) mod tests {
             &mut progress_map,
             10,
             &mut HashSet::new(),
-            &RwLock::new(bank_forks),
+            &bank_forks.root_bank().clone(),
             &vote_tracker,
         );
 
