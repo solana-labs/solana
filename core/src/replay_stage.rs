@@ -1536,7 +1536,6 @@ pub(crate) mod tests {
         commitment::BlockCommitment,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
-        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
