@@ -31,7 +31,7 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
-pub const SNAPSHOT_VERSION: &str = "1.0.0";
+pub const SNAPSHOT_VERSION: &str = "1.1.0";
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {

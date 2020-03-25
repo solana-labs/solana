@@ -6,6 +6,7 @@ use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     blockhash_queue::BlockhashQueue,
+    epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
     rent_collector::RentCollector,
@@ -323,7 +324,7 @@ pub struct Bank {
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
-    epoch_stakes: HashMap<Epoch, Stakes>,
+    epoch_stakes: HashMap<Epoch, EpochStakes>,
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
@@ -380,7 +381,8 @@ impl Bank {
         {
             let stakes = bank.stakes.read().unwrap();
             for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
-                bank.epoch_stakes.insert(epoch, stakes.clone());
+                bank.epoch_stakes
+                    .insert(epoch, EpochStakes::new(&stakes, epoch));
             }
             bank.update_stake_history(None);
         }
@@ -592,8 +594,24 @@ impl Bank {
                 epoch >= leader_schedule_epoch.saturating_sub(MAX_LEADER_SCHEDULE_STAKES)
             });
 
+            let vote_stakes: HashMap<_, _> = self
+                .stakes
+                .read()
+                .unwrap()
+                .vote_accounts()
+                .iter()
+                .map(|(epoch, (stake, _))| (*epoch, *stake))
+                .collect();
+            let new_epoch_stakes =
+                EpochStakes::new(&self.stakes.read().unwrap(), leader_schedule_epoch);
+            info!(
+                "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
+                leader_schedule_epoch,
+                vote_stakes,
+                new_epoch_stakes.total_stake(),
+            );
             self.epoch_stakes
-                .insert(leader_schedule_epoch, self.stakes.read().unwrap().clone());
+                .insert(leader_schedule_epoch, new_epoch_stakes);
         }
     }
 
@@ -2062,10 +2080,55 @@ impl Bank {
         self.stakes.read().unwrap().vote_accounts().clone()
     }
 
+    /// Get the EpochStakes for a given epoch
+    pub fn epoch_stakes(&self, epoch: Epoch) -> Option<&EpochStakes> {
+        self.epoch_stakes.get(&epoch)
+    }
+
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&HashMap<Pubkey, (u64, Account)>> {
-        self.epoch_stakes.get(&epoch).map(Stakes::vote_accounts)
+        self.epoch_stakes
+            .get(&epoch)
+            .map(|epoch_stakes| Stakes::vote_accounts(epoch_stakes.stakes()))
+    }
+
+    /// Get the fixed authorized voter for the given vote account for the
+    /// current epoch
+    pub fn epoch_authorized_voter(&self, vote_account: &Pubkey) -> Option<&Pubkey> {
+        self.epoch_stakes
+            .get(&self.epoch)
+            .expect("Epoch stakes for bank's own epoch must exist")
+            .epoch_authorized_voters()
+            .get(vote_account)
+    }
+
+    /// Get the fixed set of vote accounts for the given node id for the
+    /// current epoch
+    pub fn epoch_vote_accounts_for_node_id(&self, node_id: &Pubkey) -> Option<&NodeVoteAccounts> {
+        self.epoch_stakes
+            .get(&self.epoch)
+            .expect("Epoch stakes for bank's own epoch must exist")
+            .node_id_to_vote_accounts()
+            .get(node_id)
+    }
+
+    /// Get the fixed total stake of all vote accounts for current epoch
+    pub fn total_epoch_stake(&self) -> u64 {
+        self.epoch_stakes
+            .get(&self.epoch)
+            .expect("Epoch stakes for bank's own epoch must exist")
+            .total_stake()
+    }
+
+    /// Get the fixed stake of the given vote account for the current epoch
+    pub fn epoch_vote_account_stake(&self, voting_pubkey: &Pubkey) -> u64 {
+        *self
+            .epoch_vote_accounts(self.epoch())
+            .expect("Bank epoch vote accounts must contain entry for the bank's own epoch")
+            .get(voting_pubkey)
+            .map(|(stake, _)| stake)
+            .unwrap_or(&0)
     }
 
     /// given a slot, return the epoch and offset into the epoch this slot falls
