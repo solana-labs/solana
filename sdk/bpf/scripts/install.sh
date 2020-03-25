@@ -25,7 +25,7 @@ download() {
 # Install or upgrade xargo
 (
   cargo install cargo-update
-  cargo install-update-config --version =0.3.19 xargo
+  # cargo install-update-config --version =0.3.19 xargo
   set -e
   cargo install-update -i xargo
   xargo --version > xargo.md 2>&1
