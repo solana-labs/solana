@@ -107,7 +107,10 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                         confirmations: Some(0),
                     })
                 };
-                serde_json::to_value(vec![status])?
+                serde_json::to_value(Response {
+                    context: RpcResponseContext { slot: 1 },
+                    value: vec![status],
+                })?
             }
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
             RpcRequest::GetSlot => Value::Number(Number::from(0)),

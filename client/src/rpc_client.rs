@@ -120,9 +120,11 @@ impl RpcClient {
             json!([[signature.to_string()], commitment_config]),
             5,
         )?;
-        let result: Vec<Option<TransactionStatus>> =
+        let result: Response<Vec<Option<TransactionStatus>>> =
             serde_json::from_value(signature_status).unwrap();
-        Ok(result[0].clone().map(|status_meta| status_meta.status))
+        Ok(result.value[0]
+            .clone()
+            .map(|status_meta| status_meta.status))
     }
 
     pub fn get_slot(&self) -> ClientResult<Slot> {
@@ -949,9 +951,10 @@ impl RpcClient {
                 1,
             )
             .map_err(|err| err.into_with_command("GetSignatureStatus"))?;
-        let result: Vec<Option<TransactionStatus>> = serde_json::from_value(response).unwrap();
+        let result: Response<Vec<Option<TransactionStatus>>> =
+            serde_json::from_value(response).unwrap();
 
-        let confirmations = result[0]
+        let confirmations = result.value[0]
             .clone()
             .ok_or_else(|| {
                 ClientError::new_with_command(

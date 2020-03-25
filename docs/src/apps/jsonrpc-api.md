@@ -648,11 +648,16 @@ Returns the status of a given signature. This method is similar to [confirmTrans
 
 #### Results:
 
+An RpcResponse containing a JSON object consisting of an array of TransactionStatus objects.
+
+* `RpcResponse<object>` - RpcResponse JSON object with `value` field:
+
 An array of:
 
 * `<null>` - Unknown transaction
 * `<object>`
   * `slot: <u64>` - The slot the transaction was processed
+  * `confirmations: <usize>` - Number of blocks since signature confirmation
   * `status: <object>` - Transaction status
     * `"Ok": <null>` - Transaction was successful
     * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
@@ -664,7 +669,7 @@ An array of:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[{"slot": 72, "status": {"Ok": null}}, null],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "status": {"Ok": null}}, null]},"id":1}
 ```
 
 ### getSlot

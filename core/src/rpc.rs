@@ -403,7 +403,7 @@ impl JsonRpcRequestProcessor {
         &self,
         signatures: Vec<Signature>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<Option<TransactionStatus>>> {
+    ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
         let bank = self.bank(commitment);
@@ -417,7 +417,7 @@ impl JsonRpcRequestProcessor {
                  }| TransactionStatus {
                     slot,
                     status,
-                    confirmations: if confirmations <= 32 {
+                    confirmations: if confirmations < MAX_LOCKOUT_HISTORY {
                         Some(confirmations)
                     } else {
                         None
@@ -426,7 +426,10 @@ impl JsonRpcRequestProcessor {
             );
             statuses.push(status);
         }
-        Ok(statuses)
+        Ok(Response {
+            context: RpcResponseContext { slot: bank.slot() },
+            value: statuses,
+        })
     }
 }
 
@@ -556,7 +559,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_strs: Vec<String>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<Option<TransactionStatus>>>;
+    ) -> RpcResponse<Vec<Option<TransactionStatus>>>;
 
     #[rpc(meta, name = "getSlot")]
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
@@ -886,7 +889,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         signature_strs: Vec<String>,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<Option<TransactionStatus>>> {
+    ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
         let mut signatures: Vec<Signature> = vec![];
         for signature_str in signature_strs {
             signatures.push(verify_signature(&signature_str)?);
@@ -987,7 +990,8 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_status(vec![signature], commitment.clone())?[0]
+                .get_signature_status(vec![signature], commitment.clone())?
+                .value[0]
                 .clone()
                 .map(|x| x.status);
 
@@ -1763,9 +1767,10 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let expected_res: transaction::Result<()> = Ok(());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
-        let result: Vec<Option<TransactionStatus>> = serde_json::from_value(json["result"].clone())
-            .expect("actual response deserialization");
-        assert_eq!(expected_res, result[0].as_ref().unwrap().status);
+        let result: Option<TransactionStatus> =
+            serde_json::from_value(json["result"]["value"][0].clone())
+                .expect("actual response deserialization");
+        assert_eq!(expected_res, result.as_ref().unwrap().status);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
@@ -1775,9 +1780,10 @@ pub mod tests {
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
-        let result: Vec<Option<TransactionStatus>> = serde_json::from_value(json["result"].clone())
-            .expect("actual response deserialization");
-        assert!(result[0].is_none());
+        let result: Option<TransactionStatus> =
+            serde_json::from_value(json["result"]["value"][0].clone())
+                .expect("actual response deserialization");
+        assert!(result.is_none());
 
         // Test getSignatureStatus request on a TransactionError
         let req = format!(
@@ -1790,9 +1796,10 @@ pub mod tests {
             InstructionError::CustomError(1),
         ));
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
-        let result: Vec<Option<TransactionStatus>> = serde_json::from_value(json["result"].clone())
-            .expect("actual response deserialization");
-        assert_eq!(expected_res, result[0].as_ref().unwrap().status);
+        let result: Option<TransactionStatus> =
+            serde_json::from_value(json["result"]["value"][0].clone())
+                .expect("actual response deserialization");
+        assert_eq!(expected_res, result.as_ref().unwrap().status);
     }
 
     #[test]
