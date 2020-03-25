@@ -5,7 +5,13 @@
 # |source| me
 #
 
+base_dir=$(realpath --strip "$(dirname "$0")/..")
+
 _() {
-  echo "--- $*"
+  if [[ $(pwd) = $base_dir ]]; then
+    echo "--- $*"
+  else
+    echo "--- $* (wd: $(pwd))"
+  fi
   "$@"
 }
