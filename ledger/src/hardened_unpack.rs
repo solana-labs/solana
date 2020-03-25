@@ -155,7 +155,7 @@ pub fn open_genesis_config(ledger_path: &Path) -> GenesisConfig {
     GenesisConfig::load(&ledger_path).unwrap_or_else(|load_err| {
         let genesis_package = ledger_path.join("genesis.tar.bz2");
         unpack_genesis_archive(&genesis_package, ledger_path).unwrap_or_else(|unpack_err| {
-            eprintln!(
+            warn!(
                 "Failed to open ledger genesis_config at {:?}: {}, {}",
                 ledger_path, load_err, unpack_err,
             );
