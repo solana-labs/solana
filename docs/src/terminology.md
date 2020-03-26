@@ -42,7 +42,7 @@ A [node](terminology.md#node) that utilizes the [cluster](terminology.md#cluster
 
 A set of [validators](terminology.md#validator) maintaining a single [ledger](terminology.md#ledger).
 
-## confirmation
+## confirmation time
 
 The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and recognizing a supermajority of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
 
@@ -279,6 +279,10 @@ A scarce, fungible member of a set of tokens.
 ## transaction
 
 One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) and executed atomically.
+
+## transaction confirmations
+
+The number of blocks since a transaction's block (inclusive) that have a supermajority of ledger votes. A transaction is fully confirmed when its block becomes a [root](terminology.md#root).
 
 ## transactions entry
 
