@@ -210,7 +210,7 @@ fn run_cluster_partition(
     leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
 ) {
     solana_logger::setup();
-    println!("PARTITION_TEST!");
+    info!("PARTITION_TEST!");
     let num_nodes = partitions.len();
     let node_stakes: Vec<_> = partitions
         .iter()
@@ -259,7 +259,7 @@ fn run_cluster_partition(
         ..ClusterConfig::default()
     };
 
-    println!(
+    info!(
         "PARTITION_TEST starting cluster with {:?} partitions slots_per_epoch: {}",
         partitions, config.slots_per_epoch,
     );
@@ -267,7 +267,7 @@ fn run_cluster_partition(
 
     let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
 
-    println!("PARTITION_TEST sleeping until partition starting condition",);
+    info!("PARTITION_TEST sleeping until partition starting condition",);
     loop {
         let mut reached_epoch = true;
         for node in &cluster_nodes {
@@ -284,7 +284,7 @@ fn run_cluster_partition(
         }
 
         if reached_epoch {
-            println!("PARTITION_TEST start partition");
+            info!("PARTITION_TEST start partition");
             enable_partition.clone().store(false, Ordering::Relaxed);
             break;
         } else {
@@ -293,7 +293,7 @@ fn run_cluster_partition(
     }
     sleep(Duration::from_millis(leader_schedule_time));
 
-    println!("PARTITION_TEST remove partition");
+    info!("PARTITION_TEST remove partition");
     enable_partition.store(true, Ordering::Relaxed);
 
     let mut dead_nodes = HashSet::new();
@@ -308,14 +308,14 @@ fn run_cluster_partition(
         // Give partitions time to propagate their blocks from during the partition
         // after the partition resolves
         let propagation_time = leader_schedule_time;
-        println!("PARTITION_TEST resolving partition. sleeping {}ms", timeout);
+        info!("PARTITION_TEST resolving partition. sleeping {}ms", timeout);
         sleep(Duration::from_millis(10_000));
-        println!(
+        info!(
             "PARTITION_TEST waiting for blocks to propagate after partition {}ms",
             propagation_time
         );
         sleep(Duration::from_millis(propagation_time));
-        println!("PARTITION_TEST resuming normal operation");
+        info!("PARTITION_TEST resuming normal operation");
         for (pubkey, should_exit) in validator_pubkeys.iter().zip(should_exits) {
             if *should_exit {
                 info!("Killing validator with id: {}", pubkey);
@@ -336,14 +336,14 @@ fn run_cluster_partition(
     }
 
     assert!(alive_node_contact_infos.len() > 0);
-    println!("PARTITION_TEST discovering nodes");
+    info!("PARTITION_TEST discovering nodes");
     let (cluster_nodes, _) = discover_cluster(
         &alive_node_contact_infos[0].gossip,
         alive_node_contact_infos.len(),
     )
     .unwrap();
-    println!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
-    println!("PARTITION_TEST looking for new roots on all nodes");
+    info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
+    info!("PARTITION_TEST looking for new roots on all nodes");
     let mut roots = vec![HashSet::new(); alive_node_contact_infos.len()];
     let mut done = false;
     let mut last_print = Instant::now();
@@ -357,14 +357,14 @@ fn run_cluster_partition(
             roots[i].insert(slot);
             let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
             if last_print.elapsed().as_secs() > 3 {
-                println!("PARTITION_TEST min observed roots {}/16", min_node);
+                info!("PARTITION_TEST min observed roots {}/16", min_node);
                 last_print = Instant::now();
             }
             done = min_node >= 16;
         }
         sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
     }
-    println!("PARTITION_TEST done waiting for roots");
+    info!("PARTITION_TEST done waiting for roots");
 }
 
 #[allow(unused_attributes)]
