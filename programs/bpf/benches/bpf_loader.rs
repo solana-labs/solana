@@ -3,8 +3,8 @@
 extern crate test;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_rbpf::EbpfVm;
-use std::{env, fs::File, io::Error, io::Read, mem, path::PathBuf};
+use solana_rbpf::{EbpfVm};
+use std::{env, fs::File, io::Read, mem, path::PathBuf};
 use test::Bencher;
 
 /// BPF program file extension
@@ -21,7 +21,7 @@ fn create_bpf_path(name: &str) -> PathBuf {
     pathbuf
 }
 
-fn empty_check(_prog: &[u8]) -> Result<(), Error> {
+fn empty_check(_prog: &[u8]) -> Result<(), solana_bpf_loader_program::BPFError> {
     Ok(())
 }
 
@@ -39,7 +39,7 @@ const ARMSTRONG_EXPECTED: u64 = 5;
 #[bench]
 fn bench_program_load_elf(bencher: &mut Bencher) {
     let elf = load_elf().unwrap();
-    let mut vm = EbpfVm::new(None).unwrap();
+    let mut vm = EbpfVm::<solana_bpf_loader_program::BPFError>::new(None).unwrap();
     vm.set_verifier(empty_check).unwrap();
 
     bencher.iter(|| {
@@ -50,7 +50,7 @@ fn bench_program_load_elf(bencher: &mut Bencher) {
 #[bench]
 fn bench_program_verify(bencher: &mut Bencher) {
     let elf = load_elf().unwrap();
-    let mut vm = EbpfVm::new(None).unwrap();
+    let mut vm = EbpfVm::<solana_bpf_loader_program::BPFError>::new(None).unwrap();
     vm.set_verifier(empty_check).unwrap();
     vm.set_elf(&elf).unwrap();
 
