@@ -37,8 +37,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    RpcConfirmedBlock, RpcEncodedTransaction, RpcRewards, RpcTransactionEncoding,
-    RpcTransactionStatusMeta, RpcTransactionWithStatusMeta,
+    ConfirmedBlock, EncodedTransaction, Rewards, TransactionEncoding, TransactionStatusMeta,
+    TransactionWithStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{
@@ -1422,15 +1422,15 @@ impl Blockstore {
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
-        encoding: Option<RpcTransactionEncoding>,
-    ) -> Result<RpcConfirmedBlock> {
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<ConfirmedBlock> {
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
         if *lowest_cleanup_slot > slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
-        let encoding = encoding.unwrap_or(RpcTransactionEncoding::Json);
+        let encoding = encoding.unwrap_or(TransactionEncoding::Json);
         if self.is_root(slot) {
             let slot_meta_cf = self.db.column::<cf::SlotMeta>();
             let slot_meta = match slot_meta_cf.get(slot)? {
@@ -1459,7 +1459,7 @@ impl Blockstore {
 
                 let rewards = self.rewards_cf.get(slot)?.unwrap_or_else(|| vec![]);
 
-                let block = RpcConfirmedBlock {
+                let block = ConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
                     blockhash: blockhash.to_string(),
                     parent_slot: slot_meta.parent_slot,
@@ -1479,15 +1479,14 @@ impl Blockstore {
     fn map_transactions_to_statuses<'a>(
         &self,
         slot: Slot,
-        encoding: RpcTransactionEncoding,
+        encoding: TransactionEncoding,
         iterator: impl Iterator<Item = Transaction> + 'a,
-    ) -> Vec<RpcTransactionWithStatusMeta> {
+    ) -> Vec<TransactionWithStatusMeta> {
         iterator
             .map(|transaction| {
                 let signature = transaction.signatures[0];
-                let encoded_transaction =
-                    RpcEncodedTransaction::encode(transaction, encoding.clone());
-                RpcTransactionWithStatusMeta {
+                let encoded_transaction = EncodedTransaction::encode(transaction, encoding.clone());
+                TransactionWithStatusMeta {
                     transaction: encoded_transaction,
                     meta: self
                         .transaction_status_cf
@@ -1501,23 +1500,23 @@ impl Blockstore {
     pub fn read_transaction_status(
         &self,
         index: (Slot, Signature),
-    ) -> Result<Option<RpcTransactionStatusMeta>> {
+    ) -> Result<Option<TransactionStatusMeta>> {
         self.transaction_status_cf.get(index)
     }
 
     pub fn write_transaction_status(
         &self,
         index: (Slot, Signature),
-        status: &RpcTransactionStatusMeta,
+        status: &TransactionStatusMeta,
     ) -> Result<()> {
         self.transaction_status_cf.put(index, status)
     }
 
-    pub fn read_rewards(&self, index: Slot) -> Result<Option<RpcRewards>> {
+    pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
         self.rewards_cf.get(index)
     }
 
-    pub fn write_rewards(&self, index: Slot, rewards: RpcRewards) -> Result<()> {
+    pub fn write_rewards(&self, index: Slot, rewards: Rewards) -> Result<()> {
         self.rewards_cf.put(index, &rewards)
     }
 
@@ -4840,7 +4839,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
+        let expected_transactions: Vec<(Transaction, Option<TransactionStatusMeta>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -4857,7 +4856,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put(
                         (slot, signature),
-                        &RpcTransactionStatusMeta {
+                        &TransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
                             pre_balances: pre_balances.clone(),
@@ -4869,7 +4868,7 @@ pub mod tests {
                     .transaction_status_cf
                     .put(
                         (slot + 1, signature),
-                        &RpcTransactionStatusMeta {
+                        &TransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
                             pre_balances: pre_balances.clone(),
@@ -4879,7 +4878,7 @@ pub mod tests {
                     .unwrap();
                 (
                     transaction,
-                    Some(RpcTransactionStatusMeta {
+                    Some(TransactionStatusMeta {
                         status: Ok(()),
                         fee: 42,
                         pre_balances,
@@ -4896,12 +4895,12 @@ pub mod tests {
         let confirmed_block = ledger.get_confirmed_block(slot, None).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
-        let expected_block = RpcConfirmedBlock {
+        let expected_block = ConfirmedBlock {
             transactions: expected_transactions
                 .iter()
                 .cloned()
-                .map(|(tx, meta)| RpcTransactionWithStatusMeta {
-                    transaction: RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
+                .map(|(tx, meta)| TransactionWithStatusMeta {
+                    transaction: EncodedTransaction::encode(tx, TransactionEncoding::Json),
                     meta,
                 })
                 .collect(),
@@ -4917,12 +4916,12 @@ pub mod tests {
         let confirmed_block = ledger.get_confirmed_block(slot + 1, None).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
-        let expected_block = RpcConfirmedBlock {
+        let expected_block = ConfirmedBlock {
             transactions: expected_transactions
                 .iter()
                 .cloned()
-                .map(|(tx, meta)| RpcTransactionWithStatusMeta {
-                    transaction: RpcEncodedTransaction::encode(tx, RpcTransactionEncoding::Json),
+                .map(|(tx, meta)| TransactionWithStatusMeta {
+                    transaction: EncodedTransaction::encode(tx, TransactionEncoding::Json),
                     meta,
                 })
                 .collect(),
@@ -5142,7 +5141,7 @@ pub mod tests {
             assert!(transaction_status_cf
                 .put(
                     (0, Signature::default()),
-                    &RpcTransactionStatusMeta {
+                    &TransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Err(
                             TransactionError::AccountNotFound
                         ),
@@ -5154,7 +5153,7 @@ pub mod tests {
                 .is_ok());
 
             // result found
-            let RpcTransactionStatusMeta {
+            let TransactionStatusMeta {
                 status,
                 fee,
                 pre_balances,
@@ -5172,7 +5171,7 @@ pub mod tests {
             assert!(transaction_status_cf
                 .put(
                     (9, Signature::default()),
-                    &RpcTransactionStatusMeta {
+                    &TransactionStatusMeta {
                         status: solana_sdk::transaction::Result::<()>::Ok(()),
                         fee: 9u64,
                         pre_balances: pre_balances_vec.clone(),
@@ -5182,7 +5181,7 @@ pub mod tests {
                 .is_ok());
 
             // result found
-            let RpcTransactionStatusMeta {
+            let TransactionStatusMeta {
                 status,
                 fee,
                 pre_balances,
@@ -5237,7 +5236,7 @@ pub mod tests {
                 transaction_status_cf
                     .put(
                         (slot, transaction.signatures[0]),
-                        &RpcTransactionStatusMeta {
+                        &TransactionStatusMeta {
                             status: solana_sdk::transaction::Result::<()>::Err(
                                 TransactionError::AccountNotFound,
                             ),
@@ -5260,7 +5259,7 @@ pub mod tests {
 
             let map = blockstore.map_transactions_to_statuses(
                 slot,
-                RpcTransactionEncoding::Json,
+                TransactionEncoding::Json,
                 transactions.into_iter(),
             );
             assert_eq!(map.len(), 5);

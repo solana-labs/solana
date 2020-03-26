@@ -19,7 +19,7 @@ pub struct RpcCompiledInstruction {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcTransactionStatusMeta {
+pub struct TransactionStatusMeta {
     pub status: Result<()>,
     pub fee: u64,
     pub pre_balances: Vec<u64>,
@@ -28,27 +28,27 @@ pub struct RpcTransactionStatusMeta {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcTransactionStatus {
+pub struct TransactionStatus {
     pub slot: Slot,
     pub status: Result<()>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct RpcReward {
+pub struct Reward {
     pub pubkey: String,
     pub lamports: i64,
 }
 
-pub type RpcRewards = Vec<RpcReward>;
+pub type Rewards = Vec<Reward>;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcConfirmedBlock {
+pub struct ConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,
     pub parent_slot: Slot,
-    pub transactions: Vec<RpcTransactionWithStatusMeta>,
-    pub rewards: RpcRewards,
+    pub transactions: Vec<TransactionWithStatusMeta>,
+    pub rewards: Rewards,
 }
 
 /// A duplicate representation of a Transaction for pretty JSON serialization
@@ -71,29 +71,29 @@ pub struct RpcMessage {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcTransactionWithStatusMeta {
-    pub transaction: RpcEncodedTransaction,
-    pub meta: Option<RpcTransactionStatusMeta>,
+pub struct TransactionWithStatusMeta {
+    pub transaction: EncodedTransaction,
+    pub meta: Option<TransactionStatusMeta>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub enum RpcTransactionEncoding {
+pub enum TransactionEncoding {
     Binary,
     Json,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
-pub enum RpcEncodedTransaction {
+pub enum EncodedTransaction {
     Binary(String),
     Json(RpcTransaction),
 }
 
-impl RpcEncodedTransaction {
-    pub fn encode(transaction: Transaction, encoding: RpcTransactionEncoding) -> Self {
-        if encoding == RpcTransactionEncoding::Json {
-            RpcEncodedTransaction::Json(RpcTransaction {
+impl EncodedTransaction {
+    pub fn encode(transaction: Transaction, encoding: TransactionEncoding) -> Self {
+        if encoding == TransactionEncoding::Json {
+            EncodedTransaction::Json(RpcTransaction {
                 signatures: transaction
                     .signatures
                     .iter()
@@ -121,9 +121,7 @@ impl RpcEncodedTransaction {
                 },
             })
         } else {
-            RpcEncodedTransaction::Binary(
-                bs58::encode(serialize(&transaction).unwrap()).into_string(),
-            )
+            EncodedTransaction::Binary(bs58::encode(serialize(&transaction).unwrap()).into_string())
         }
     }
 }
