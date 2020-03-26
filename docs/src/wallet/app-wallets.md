@@ -1,5 +1,5 @@
 # App Wallets
-Solana is supported by multiple third-party apps which should provide a familiar
+Solana supports multiple third-party apps which should provide a familiar
 experience for most people who are new or experienced with using crypto wallets.
 
 ## Trust Wallet
@@ -16,7 +16,7 @@ crypto accounts on a Ledger *hardware wallet*, which must be purchased
 separately and connected to the device running Ledger Live.
 
 [Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s) is a
-*hardware wallet* which stores the wallet's private keys on a secure device that
+hardware wallet which stores the wallet's private keys on a secure device that
 is physically separate from the computer, and connects via USB cable.
 This provides an extra level of security but requires the user to purchase and
 keep track of the hardware device.
