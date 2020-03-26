@@ -22,12 +22,10 @@ download() {
   wget "${args[@]}"
 }
 
-# Install or upgrade xargo
+# Install xargo
 (
-  cargo install cargo-update
-  cargo install-update-config --version =0.3.19 xargo
-  set -e
-  cargo install-update -i xargo
+  set -ex
+  cargo +"${rust_stable:-}" install xargo
   xargo --version > xargo.md 2>&1
 )
 # shellcheck disable=SC2181
