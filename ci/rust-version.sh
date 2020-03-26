@@ -38,7 +38,6 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
     declare toolchain=$1
     if ! cargo +"$toolchain" -V; then
       rustup install "$toolchain"
-      rustup default "$toolchain"
       cargo +"$toolchain" -V
     fi
   }
