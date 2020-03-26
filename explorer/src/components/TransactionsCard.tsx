@@ -138,6 +138,7 @@ const renderTransactionRow = (transaction: Transaction) => {
   }
 
   const slotText = `${transaction.slot || "-"}`;
+  const confirmationsText = `${transaction.confirmations || "-"}`;
 
   return (
     <tr key={transaction.id}>
@@ -152,7 +153,7 @@ const renderTransactionRow = (transaction: Transaction) => {
       <td>
         <code>{transaction.signature}</code>
       </td>
-      <td>-</td>
+      <td className="text-uppercase">{confirmationsText}</td>
       <td>{slotText}</td>
     </tr>
   );

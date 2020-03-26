@@ -1,7 +1,7 @@
 import React from "react";
-import { TransactionSignature, Connection } from "@solana/web3.js";
+import { TransactionSignature, Connection, PublicKey } from "@solana/web3.js";
 import { findGetParameter, findPathSegment } from "../utils";
-import { useCluster } from "../providers/cluster";
+import { useCluster, ClusterStatus } from "../providers/cluster";
 
 export enum Status {
   Checking,
@@ -16,11 +16,14 @@ enum Source {
   Input
 }
 
+export type Confirmations = number | "max";
+
 export interface Transaction {
   id: number;
   status: Status;
   source: Source;
   slot?: number;
+  confirmations?: Confirmations;
   signature: TransactionSignature;
 }
 
@@ -40,6 +43,7 @@ interface UpdateStatus {
   id: number;
   status: Status;
   slot?: number;
+  confirmations?: Confirmations;
 }
 
 interface InputSignature {
@@ -71,7 +75,8 @@ function reducer(state: State, action: Action): State {
         transaction = {
           ...transaction,
           status: action.status,
-          slot: action.slot
+          slot: action.slot,
+          confirmations: action.confirmations
         };
         const transactions = {
           ...state.transactions,
@@ -128,6 +133,13 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 
   // Check transaction statuses on startup and whenever cluster updates
   React.useEffect(() => {
+    if (status !== ClusterStatus.Connected) return;
+
+    // Create a test transaction
+    if (findGetParameter("dev")) {
+      createDevTransaction(dispatch, url);
+    }
+
     Object.values(state.transactions).forEach(tx => {
       checkTransactionStatus(dispatch, tx.id, tx.signature, url);
     });
@@ -140,6 +152,20 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
+}
+
+async function createDevTransaction(dispatch: Dispatch, url: string) {
+  try {
+    const connection = new Connection(url);
+    const signature = await connection.requestAirdrop(
+      new PublicKey(0),
+      1,
+      "recent"
+    );
+    dispatch({ type: ActionType.InputSignature, signature });
+  } catch (error) {
+    console.error("Failed to create dev transaction", error);
+  }
 }
 
 export async function checkTransactionStatus(
@@ -156,6 +182,7 @@ export async function checkTransactionStatus(
 
   let status;
   let slot;
+  let confirmations: Confirmations | undefined;
   try {
     const { value } = await new Connection(url).getSignatureStatus(signature);
 
@@ -163,6 +190,12 @@ export async function checkTransactionStatus(
       status = Status.Missing;
     } else {
       slot = value.slot;
+      if (typeof value.confirmations === "number") {
+        confirmations = value.confirmations;
+      } else {
+        confirmations = "max";
+      }
+
       if ("Ok" in value.status) {
         status = Status.Success;
       } else {
@@ -173,7 +206,7 @@ export async function checkTransactionStatus(
     console.error("Failed to check transaction status", error);
     status = Status.CheckFailed;
   }
-  dispatch({ type: ActionType.UpdateStatus, status, slot, id });
+  dispatch({ type: ActionType.UpdateStatus, status, slot, confirmations, id });
 }
 
 export function useTransactions() {

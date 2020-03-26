@@ -1,7 +1,7 @@
 import React from "react";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { findGetParameter, findPathSegment } from "../utils";
-import { useCluster } from "./cluster";
+import { useCluster, ClusterStatus } from "./cluster";
 
 export enum Status {
   Checking,
@@ -131,6 +131,8 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
 
   // Check account statuses on startup and whenever cluster updates
   React.useEffect(() => {
+    if (status !== ClusterStatus.Connected) return;
+
     Object.values(state.accounts).forEach(account => {
       fetchAccountInfo(dispatch, account.id, account.pubkey, url);
     });
