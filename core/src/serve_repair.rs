@@ -48,7 +48,7 @@ impl RepairType {
 
 /// Window protocol messages
 #[derive(Serialize, Deserialize, Debug)]
-enum RepairProtocol {
+pub enum RepairProtocol {
     WindowIndex(ContactInfo, u64, u64),
     HighestWindowIndex(ContactInfo, u64, u64),
     Orphan(ContactInfo, u64),
