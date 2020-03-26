@@ -26,8 +26,9 @@ download() {
 (
   # cargo install cargo-update
   # cargo install-update-config -a xargo
-  set -ex
+  set -x
   # cargo install-update -i xargo
+  cargo --version
   cargo install -f xargo
   xargo --version > xargo.md 2>&1
 )
