@@ -1,18 +1,37 @@
-use crate::alloc;
+use crate::{alloc, BPFError};
 use alloc::Alloc;
 use log::*;
 use solana_rbpf::{
-    ebpf::{HelperObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
+    ebpf::{EbpfError, HelperObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
+use solana_sdk::instruction::InstructionError;
 use std::{
     alloc::Layout,
-    io::{Error, ErrorKind},
     mem::{align_of, size_of},
     slice::from_raw_parts_mut,
-    str::from_utf8,
+    str::{from_utf8, Utf8Error},
 };
+use thiserror::Error as ThisError;
+
+/// Error definitions
+#[derive(Debug, ThisError)]
+pub enum HelperError {
+    #[error("{0}: {1:?}")]
+    InvalidString(Utf8Error, Vec<u8>),
+    #[error("BPF program called abort()!")]
+    Abort,
+    #[error("BPF program Panicked at {0}, {1}:{2}")]
+    Panic(String, u64, u64),
+    #[error("{0}")]
+    InstructionError(InstructionError),
+}
+impl From<HelperError> for EbpfError<BPFError> {
+    fn from(error: HelperError) -> Self {
+        EbpfError::UserError(error.into())
+    }
+}
 
 /// Program heap allocators are intended to allocate/free from a given
 /// chunk of memory.  The specific allocator implementation is
@@ -26,7 +45,9 @@ use crate::allocator_bump::BPFAllocator;
 /// are expected to enforce this
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
-pub fn register_helpers(vm: &mut EbpfVm) -> Result<MemoryRegion, Error> {
+pub fn register_helpers<'a>(
+    vm: &mut EbpfVm<'a, BPFError>,
+) -> Result<MemoryRegion, EbpfError<BPFError>> {
     vm.register_helper_ex("abort", helper_abort)?;
     vm.register_helper_ex("sol_panic", helper_sol_panic)?;
     vm.register_helper_ex("sol_panic_", helper_sol_panic)?;
@@ -74,7 +95,6 @@ macro_rules! translate_type_mut {
         }
     };
 }
-
 #[macro_export]
 macro_rules! translate_type {
     ($t:ty, $vm_addr:expr, $regions:expr) => {
@@ -95,7 +115,6 @@ macro_rules! translate_slice_mut {
         unsafe { from_raw_parts_mut(host_addr, $len as usize) }
     }};
 }
-
 #[macro_export]
 macro_rules! translate_slice {
     ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {
@@ -109,8 +128,8 @@ fn translate_string_and_do(
     addr: u64,
     len: u64,
     regions: &[MemoryRegion],
-    work: &dyn Fn(&str) -> Result<u64, Error>,
-) -> Result<u64, Error> {
+    work: &dyn Fn(&str) -> Result<u64, EbpfError<BPFError>>,
+) -> Result<u64, EbpfError<BPFError>> {
     let buf = translate_slice!(u8, addr, len, regions);
     let i = match buf.iter().position(|byte| *byte == 0) {
         Some(i) => i,
@@ -118,10 +137,7 @@ fn translate_string_and_do(
     };
     match from_utf8(&buf[..i]) {
         Ok(message) => work(message),
-        Err(err) => Err(Error::new(
-            ErrorKind::Other,
-            format!("Error: Invalid string {:?}", err),
-        )),
+        Err(err) => Err(HelperError::InvalidString(err, buf[..i].to_vec()).into()),
     }
 }
 
@@ -136,11 +152,8 @@ pub fn helper_abort(
     _arg5: u64,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
-    Err(Error::new(
-        ErrorKind::Other,
-        "Error: BPF program called abort()!",
-    ))
+) -> Result<u64, EbpfError<BPFError>> {
+    Err(HelperError::Abort.into())
 }
 
 /// Panic helper functions, called when the BPF program calls 'sol_panic_()`
@@ -154,15 +167,9 @@ pub fn helper_sol_panic(
     _arg5: u64,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
+) -> Result<u64, EbpfError<BPFError>> {
     translate_string_and_do(file, len, ro_regions, &|string: &str| {
-        Err(Error::new(
-            ErrorKind::Other,
-            format!(
-                "Error: BPF program Panicked at {}, {}:{}",
-                string, line, column
-            ),
-        ))
+        Err(HelperError::Panic(string.to_string(), line, column).into())
     })
 }
 
@@ -175,7 +182,7 @@ pub fn helper_sol_log(
     _arg5: u64,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
+) -> Result<u64, EbpfError<BPFError>> {
     if log_enabled!(log::Level::Info) {
         translate_string_and_do(addr, len, ro_regions, &|string: &str| {
             info!("info!: {}", string);
@@ -194,7 +201,7 @@ pub fn helper_sol_log_u64(
     arg5: u64,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
-) -> Result<u64, Error> {
+) -> Result<u64, EbpfError<BPFError>> {
     if log_enabled!(log::Level::Info) {
         info!(
             "info!: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
@@ -213,7 +220,7 @@ pub fn helper_sol_log_u64(
 pub struct HelperSolAllocFree {
     allocator: BPFAllocator,
 }
-impl HelperObject for HelperSolAllocFree {
+impl HelperObject<BPFError> for HelperSolAllocFree {
     fn call(
         &mut self,
         size: u64,
@@ -223,7 +230,7 @@ impl HelperObject for HelperSolAllocFree {
         _arg5: u64,
         _ro_regions: &[MemoryRegion],
         _rw_regions: &[MemoryRegion],
-    ) -> Result<u64, Error> {
+    ) -> Result<u64, EbpfError<BPFError>> {
         let layout = Layout::from_size_align(size as usize, align_of::<u8>()).unwrap();
         if free_addr == 0 {
             match self.allocator.alloc(layout) {
