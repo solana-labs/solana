@@ -21,7 +21,7 @@ export async function sendAndConfirmRawTransaction(
   let status = null;
   let statusRetries = 6;
   for (;;) {
-    status = await connection.getSignatureStatus(signature, commitment);
+    status = (await connection.getSignatureStatus(signature, commitment)).value;
     if (status) {
       break;
     }

@@ -156,20 +156,26 @@ test('transaction-payer', async () => {
     },
     {
       error: null,
-      result: [
-        {
-          slot: 0,
-          status: {Ok: null},
+      result: {
+        context: {
+          slot: 11,
         },
-      ],
+        value: [
+          {
+            slot: 0,
+            confirmations: 11,
+            status: {Ok: null},
+          },
+        ],
+      },
     },
   ]);
-  const response = await connection.getSignatureStatus(signature);
-  if (response !== null) {
-    expect(typeof response.slot).toEqual('number');
-    expect(response.status).toEqual({Ok: null});
+  const {value} = await connection.getSignatureStatus(signature);
+  if (value !== null) {
+    expect(typeof value.slot).toEqual('number');
+    expect(value.status).toEqual({Ok: null});
   } else {
-    expect(response).not.toBeNull();
+    expect(value).not.toBeNull();
   }
 
   mockRpc.push([

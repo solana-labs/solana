@@ -108,12 +108,18 @@ test('get program accounts', async () => {
     },
     {
       error: null,
-      result: [
-        {
-          slot: 0,
-          status: {Ok: null},
+      result: {
+        context: {
+          slot: 11,
         },
-      ],
+        value: [
+          {
+            slot: 0,
+            confirmations: 11,
+            status: {Ok: null},
+          },
+        ],
+      },
     },
   ]);
   let transaction = SystemProgram.assign({
@@ -146,12 +152,18 @@ test('get program accounts', async () => {
     },
     {
       error: null,
-      result: [
-        {
-          slot: 0,
-          status: {Ok: null},
+      result: {
+        context: {
+          slot: 11,
         },
-      ],
+        value: [
+          {
+            slot: 0,
+            confirmations: 11,
+            status: {Ok: null},
+          },
+        ],
+      },
     },
   ]);
   transaction = SystemProgram.assign({
@@ -1009,6 +1021,9 @@ test('transaction', async () => {
     },
   ]);
 
+  // Wait for one confirmation
+  await sleep(500);
+
   let i = 0;
   for (;;) {
     if (await connection.confirmTransaction(signature)) {
@@ -1033,22 +1048,36 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: [
-        {
-          slot: 0,
-          status: {Ok: null},
+      result: {
+        context: {
+          slot: 11,
         },
-      ],
+        value: [
+          {
+            slot: 0,
+            confirmations: 11,
+            status: {Ok: null},
+          },
+        ],
+      },
     },
   ]);
 
-  const response = await connection.getSignatureStatus(signature);
-  if (response !== null) {
-    expect(typeof response.slot).toEqual('number');
-    expect(response.status).toEqual({Ok: null});
-  } else {
+  const response = (await connection.getSignatureStatus(signature)).value;
+  if (response === null) {
     expect(response).not.toBeNull();
+    return;
   }
+
+  const responseConfirmations = response.confirmations;
+  if (typeof responseConfirmations !== 'number') {
+    expect(typeof responseConfirmations).toEqual('number');
+    return;
+  }
+
+  expect(response.status).toEqual({Ok: null});
+  expect(response.slot).toBeGreaterThanOrEqual(0);
+  expect(responseConfirmations).toBeGreaterThan(0);
 
   const unprocessedSignature =
     '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk';
@@ -1066,23 +1095,46 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: [
-        {
-          slot: 0,
-          status: {Ok: null},
+      result: {
+        context: {
+          slot: 11,
         },
-        null,
-      ],
+        value: [
+          {
+            slot: 0,
+            confirmations: 11,
+            status: {Ok: null},
+          },
+          null,
+        ],
+      },
     },
   ]);
 
-  const responses = await connection.getSignatureStatusBatch([
-    signature,
-    unprocessedSignature,
-  ]);
+  const responses = (
+    await connection.getSignatureStatusBatch([signature, unprocessedSignature])
+  ).value;
   expect(responses.length).toEqual(2);
-  expect(responses[0]).toEqual(response);
+
+  const firstResponse = responses[0];
   expect(responses[1]).toBeNull();
+
+  if (firstResponse === null) {
+    expect(firstResponse).not.toBeNull();
+    return;
+  }
+
+  expect(firstResponse.slot).toBeGreaterThanOrEqual(response.slot);
+  expect(firstResponse.status).toEqual(response.status);
+
+  if (typeof firstResponse.confirmations !== 'number') {
+    expect(typeof firstResponse.confirmations).toEqual('number');
+    return;
+  }
+
+  expect(firstResponse.confirmations).toBeGreaterThanOrEqual(
+    responseConfirmations,
+  );
 
   mockRpc.push([
     url,
@@ -1181,7 +1233,7 @@ test('multi-instruction transaction', async () => {
     await sleep(500);
   }
 
-  const response = await connection.getSignatureStatus(signature);
+  const response = (await connection.getSignatureStatus(signature)).value;
   if (response !== null) {
     expect(typeof response.slot).toEqual('number');
     expect(response.status).toEqual({Ok: null});

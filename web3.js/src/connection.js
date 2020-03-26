@@ -241,7 +241,7 @@ type ConfirmedBlock = {
       fee: number,
       preBalances: Array<number>,
       postBalances: Array<number>,
-      status?: SignatureStatusResult,
+      status?: SignatureSuccess | TransactionError,
     },
   }>,
   rewards: Array<{
@@ -471,12 +471,13 @@ const GetVoteAccounts = jsonRpcResult(
 /**
  * Expected JSON RPC response for the "getSignatureStatus" message
  */
-const GetSignatureStatusRpcResult = jsonRpcResult(
+const GetSignatureStatusRpcResult = jsonRpcResultAndContext(
   struct.array([
     struct.union([
       'null',
       struct({
         slot: 'number',
+        confirmations: struct.union(['number', 'null']),
         status: SignatureStatusResult,
       }),
     ]),
@@ -662,7 +663,7 @@ type SlotSubscriptionInfo = {
  * Callback function for signature notifications
  */
 export type SignatureResultCallback = (
-  signatureResult: SignatureStatusResult,
+  signatureResult: SignatureSuccess | TransactionError,
   context: Context,
 ) => void;
 
@@ -698,10 +699,12 @@ export type TransactionError = {|
  *
  * @typedef {Object} SignatureStatus
  * @property {number} slot when the transaction was processed
- * @property {SignatureStatus | TransactionError} status
+ * @property {number | null} confirmations the number of blocks that have been confirmed and voted on in the fork containing `slot` (TODO)
+ * @property {SignatureStatus | TransactionError} status success or error
  */
 export type SignatureStatus = {
   slot: number,
+  confirmations: number | null,
   status: SignatureSuccess | TransactionError,
 };
 
@@ -989,10 +992,13 @@ export class Connection {
   async getSignatureStatus(
     signature: TransactionSignature,
     commitment: ?Commitment,
-  ): Promise<SignatureStatus | null> {
-    const res = await this.getSignatureStatusBatch([signature], commitment);
-    assert(res.length === 1);
-    return res[0];
+  ): Promise<RpcResponseAndContext<SignatureStatus | null>> {
+    const {context, value} = await this.getSignatureStatusBatch(
+      [signature],
+      commitment,
+    );
+    assert(value.length === 1);
+    return {context, value: value[0]};
   }
 
   /**
@@ -1001,7 +1007,7 @@ export class Connection {
   async getSignatureStatusBatch(
     signatures: Array<TransactionSignature>,
     commitment: ?Commitment,
-  ): Promise<Array<SignatureStatus | null>> {
+  ): Promise<RpcResponseAndContext<Array<SignatureStatus | null>>> {
     const args = this._argsWithCommitment([signatures], commitment);
     const unsafeRes = await this._rpcRequest('getSignatureStatus', args);
     const res = GetSignatureStatusRpcResult(unsafeRes);
