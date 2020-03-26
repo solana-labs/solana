@@ -160,7 +160,7 @@ impl Tvu {
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
             tvu_config.shred_version,
-            cluster_slots,
+            cluster_slots.clone(),
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();

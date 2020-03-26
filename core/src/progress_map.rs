@@ -189,6 +189,30 @@ pub(crate) struct PropagatedStats {
     pub(crate) total_epoch_stake: u64,
 }
 
+impl PropagatedStats {
+    pub fn add_vote_pubkey(
+        &mut self,
+        vote_pubkey: &Pubkey,
+        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        stake: u64,
+    ) -> bool {
+        if !self.propagated_validators.contains(vote_pubkey) {
+            let mut cached_pubkey: Option<Rc<Pubkey>> = all_pubkeys.get(vote_pubkey).cloned();
+            if cached_pubkey.is_none() {
+                let new_pubkey = Rc::new(*vote_pubkey);
+                all_pubkeys.insert(new_pubkey.clone());
+                cached_pubkey = Some(new_pubkey);
+            }
+            let vote_pubkey = cached_pubkey.unwrap();
+            self.propagated_validators.insert(vote_pubkey);
+            self.propagated_validators_stake += stake;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct ProgressMap {
     progress_map: HashMap<Slot, ForkProgress>,
@@ -289,6 +313,33 @@ impl ProgressMap {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_add_vote_pubkey() {
+        let mut stats = PropagatedStats::default();
+        let mut all_pubkeys = HashSet::new();
+        let mut pk = Pubkey::new_rand();
+        all_pubkeys.insert(Rc::new(pk.clone()));
+
+        // Add a vote pubkey, the number of references in all_pubkeys
+        // should be 2
+        assert!(stats.add_vote_pubkey(&pk, &mut all_pubkeys, 1,));
+        assert!(stats.propagated_validators.contains(&pk));
+        assert_eq!(stats.propagated_validators_stake, 1);
+        assert_eq!(Rc::strong_count(all_pubkeys.get(&pk).unwrap()), 2);
+
+        // Adding it again should fail
+        assert!(!stats.add_vote_pubkey(&pk, &mut all_pubkeys, 1,));
+        assert!(stats.propagated_validators.contains(&pk));
+        assert_eq!(stats.propagated_validators_stake, 1);
+
+        // Addding another pubkey should succeed
+        pk = Pubkey::new_rand();
+        assert!(stats.add_vote_pubkey(&pk, &mut all_pubkeys, 2,));
+        assert!(stats.propagated_validators.contains(&pk));
+        assert_eq!(stats.propagated_validators_stake, 3);
+        assert_eq!(Rc::strong_count(all_pubkeys.get(&pk).unwrap()), 2);
+    }
 
     #[test]
     fn test_is_propagated_status_on_construction() {

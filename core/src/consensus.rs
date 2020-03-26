@@ -482,6 +482,7 @@ pub mod test {
     use super::*;
     use crate::{
         cluster_info_vote_listener::VoteTracker,
+        cluster_slots::ClusterSlots,
         progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
     };
@@ -612,6 +613,7 @@ pub mod test {
                 tower,
                 progress,
                 &VoteTracker::default(),
+                &ClusterSlots::default(),
                 bank_forks,
                 &mut HashSet::new(),
             );

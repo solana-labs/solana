@@ -1363,28 +1363,12 @@ impl ReplayStage {
         // 1) Also recorded this validator already, or
         // 2) Already reached the propagation threshold, in which case
         //    they no longer need to track the set of propagated validators
-        newly_voted_pubkeys.retain(|voting_pubkey| {
-            if !leader_propagated_stats
-                .propagated_validators
-                .contains(&**voting_pubkey)
-            {
-                let mut cached_pubkey: Option<Rc<Pubkey>> =
-                    all_pubkeys.get(&**voting_pubkey).cloned();
-                if cached_pubkey.is_none() {
-                    let new_pubkey = Rc::new(**voting_pubkey);
-                    all_pubkeys.insert(new_pubkey.clone());
-                    cached_pubkey = Some(new_pubkey);
-                }
-                let voting_pubkey = cached_pubkey.unwrap();
-                leader_propagated_stats
-                    .propagated_validators
-                    .insert(voting_pubkey.clone());
-                leader_propagated_stats.propagated_validators_stake +=
-                    leader_bank.epoch_vote_account_stake(&voting_pubkey);
-                true
-            } else {
-                false
-            }
+        newly_voted_pubkeys.retain(|vote_pubkey| {
+            leader_propagated_stats.add_vote_pubkey(
+                &*vote_pubkey,
+                all_pubkeys,
+                leader_bank.epoch_vote_account_stake(&vote_pubkey),
+            )
         });
 
         cluster_slot_pubkeys.retain(|node_pubkey| {
@@ -1409,8 +1393,11 @@ impl ReplayStage {
                     .unwrap_or(&vec![])
                     .iter()
                 {
-                    leader_propagated_stats.propagated_validators_stake +=
-                        leader_bank.epoch_vote_account_stake(&vote_pubkey);
+                    leader_propagated_stats.add_vote_pubkey(
+                        &*vote_pubkey,
+                        all_pubkeys,
+                        leader_bank.epoch_vote_account_stake(&vote_pubkey),
+                    );
                 }
                 true
             } else {
@@ -2609,6 +2596,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2646,6 +2634,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2678,6 +2667,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2736,6 +2726,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2800,27 +2791,76 @@ pub(crate) mod tests {
         .take(10)
         .collect();
 
-        let vote_pubkeys: Vec<_> = keypairs
+        let new_vote_pubkeys: Vec<_> = keypairs
             .values()
             .map(|keys| keys.vote_keypair.pubkey())
             .collect();
+        let new_node_pubkeys: Vec<_> = keypairs
+            .values()
+            .map(|keys| keys.node_keypair.pubkey())
+            .collect();
 
+        // Once 4/10 validators have voted, we have hit threshold
+        run_test_update_slot_propagated_threshold_from_votes(&keypairs, &new_vote_pubkeys, &[], 4);
+        // Adding the same node pubkey's instead of the corresponding
+        // vote pubkeys should be equivalent
+        run_test_update_slot_propagated_threshold_from_votes(&keypairs, &[], &new_node_pubkeys, 4);
+        // Adding the same node pubkey's in the same order as their
+        // corresponding vote accounts is redundant, so we don't
+        // reach the threshold any sooner.
+        run_test_update_slot_propagated_threshold_from_votes(
+            &keypairs,
+            &new_vote_pubkeys,
+            &new_node_pubkeys,
+            4,
+        );
+        // However, if we add different node pubkey's than the
+        // vote accounts, we should hit threshold much faster
+        // because now we are getting 2 new pubkeys on each
+        // iteration instead of 1, so by the 2nd iteration
+        // we should have 4/10 validators voting
+        run_test_update_slot_propagated_threshold_from_votes(
+            &keypairs,
+            &new_vote_pubkeys[0..5],
+            &new_node_pubkeys[5..],
+            2,
+        );
+    }
+
+    fn run_test_update_slot_propagated_threshold_from_votes(
+        all_keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
+        new_vote_pubkeys: &[Pubkey],
+        new_node_pubkeys: &[Pubkey],
+        success_index: usize,
+    ) {
         let stake = 10_000;
-        let (bank_forks, _) = initialize_state(&keypairs, stake);
+        let (bank_forks, _) = initialize_state(&all_keypairs, stake);
         let root_bank = bank_forks.root_bank().clone();
         let mut propagated_stats = PropagatedStats {
-            total_epoch_stake: stake * 10,
+            total_epoch_stake: stake * all_keypairs.len() as u64,
             ..PropagatedStats::default()
         };
 
         let mut all_pubkeys = HashSet::new();
-        let mut child_reached_threshold = false;
-        for i in 0..10 {
+        let child_reached_threshold = false;
+        for i in 0..std::cmp::max(new_vote_pubkeys.len(), new_node_pubkeys.len()) {
             propagated_stats.is_propagated = false;
-            let mut newly_voted_pubkeys = vote_pubkeys[..i].iter().cloned().map(Arc::new).collect();
+            let len = std::cmp::min(i, new_vote_pubkeys.len());
+            let mut voted_pubkeys = new_vote_pubkeys[..len]
+                .iter()
+                .cloned()
+                .map(Arc::new)
+                .collect();
+            let len = std::cmp::min(i, new_node_pubkeys.len());
+            let mut node_pubkeys = new_node_pubkeys[..len]
+                .iter()
+                .cloned()
+                .map(Arc::new)
+                .collect();
             let did_newly_reach_threshold =
                 ReplayStage::update_slot_propagated_threshold_from_votes(
-                    &mut newly_voted_pubkeys,
+                    &mut voted_pubkeys,
+                    &mut node_pubkeys,
                     &root_bank,
                     &mut propagated_stats,
                     &mut all_pubkeys,
@@ -2829,20 +2869,28 @@ pub(crate) mod tests {
 
             // Only the i'th voted pubkey should be new (everything else was
             // inserted in previous iteration of the loop), so those redundant
-            // pubkeys should be filtered out
-            let added_pubkeys = {
-                if i == 0 {
+            // pubkeys should have been filtered out
+            let remaining_vote_pubkeys = {
+                if i == 0 || i >= new_vote_pubkeys.len() {
                     vec![]
                 } else {
-                    vec![Arc::new(vote_pubkeys[i - 1])]
+                    vec![Arc::new(new_vote_pubkeys[i - 1])]
                 }
             };
-            assert_eq!(newly_voted_pubkeys, added_pubkeys);
+            let remaining_node_pubkeys = {
+                if i == 0 || i >= new_node_pubkeys.len() {
+                    vec![]
+                } else {
+                    vec![Arc::new(new_node_pubkeys[i - 1])]
+                }
+            };
+            assert_eq!(voted_pubkeys, remaining_vote_pubkeys);
+            assert_eq!(node_pubkeys, remaining_node_pubkeys);
 
             // If we crossed the superminority threshold, then
             // `did_newly_reach_threshold == true`, otherwise the
             // threshold has not been reached
-            if i >= 4 {
+            if i >= success_index {
                 assert!(propagated_stats.is_propagated);
                 assert!(did_newly_reach_threshold);
             } else {
@@ -2850,21 +2898,29 @@ pub(crate) mod tests {
                 assert!(!did_newly_reach_threshold);
             }
         }
+    }
 
+    #[test]
+    fn test_update_slot_propagated_threshold_from_votes2() {
+        let mut empty: Vec<&Pubkey> = vec![];
+        let genesis_config = create_genesis_config(100_000_000).genesis_config;
+        let root_bank = Bank::new(&genesis_config);
+        let stake = 10_000;
         // Simulate a child slot seeing threshold (`child_reached_threshold` = true),
         // then the parent should also be marked as having reached threshold,
         // even if there are no new pubkeys to add (`newly_voted_pubkeys.is_empty()`)
-        propagated_stats = PropagatedStats {
+        let mut propagated_stats = PropagatedStats {
             total_epoch_stake: stake * 10,
             ..PropagatedStats::default()
         };
         propagated_stats.total_epoch_stake = stake * 10;
-        all_pubkeys = HashSet::new();
-        child_reached_threshold = true;
+        let mut all_pubkeys = HashSet::new();
+        let child_reached_threshold = true;
         let mut newly_voted_pubkeys: Vec<Arc<Pubkey>> = vec![];
 
         assert!(ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
+            &mut empty,
             &root_bank,
             &mut propagated_stats,
             &mut all_pubkeys,
@@ -2879,19 +2935,20 @@ pub(crate) mod tests {
         };
         propagated_stats.is_propagated = true;
         all_pubkeys = HashSet::new();
-        child_reached_threshold = true;
         newly_voted_pubkeys = vec![];
         assert!(!ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
+            &mut empty,
             &root_bank,
             &mut propagated_stats,
             &mut all_pubkeys,
             child_reached_threshold,
         ));
 
-        child_reached_threshold = false;
+        let child_reached_threshold = false;
         assert!(!ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
+            &mut empty,
             &root_bank,
             &mut propagated_stats,
             &mut all_pubkeys,
@@ -2960,6 +3017,7 @@ pub(crate) mod tests {
             &mut HashSet::new(),
             &RwLock::new(bank_forks),
             &vote_tracker,
+            &ClusterSlots::default(),
         );
 
         let propagated_stats = &progress_map.get(&10).unwrap().propagated_stats;
@@ -3046,6 +3104,7 @@ pub(crate) mod tests {
             &mut HashSet::new(),
             &RwLock::new(bank_forks),
             &vote_tracker,
+            &ClusterSlots::default(),
         );
 
         for i in 1..=10 {
@@ -3133,6 +3192,7 @@ pub(crate) mod tests {
             &mut HashSet::new(),
             &RwLock::new(bank_forks),
             &vote_tracker,
+            &ClusterSlots::default(),
         );
 
         // Only the first 5 banks should have reached the threshold
