@@ -1,7 +1,7 @@
 # Command-line Guide
 
 In this section, we will describe how to use the Solana command-line tools to 
-create a *wallet*, how to send and receive SOL tokens, and how to participate in 
+create a *wallet*, how to send and receive SOL tokens, and how to participate in
 the cluster by delegating stake.
 
 To interact with a Solana cluster, we will use its command-line interface, also

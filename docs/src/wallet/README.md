@@ -1,6 +1,6 @@
 # Solana Wallet
 This document describes the different wallet options that are available to users
-of Solana who want to be able to send, receive and interact with 
+of Solana who want to be able to send, receive and interact with
 SOL tokens on the Solana blockchain.
 
 ## What is a Wallet?
@@ -37,7 +37,7 @@ securely storing and backing up the private key and providing a convenient way
 to interact with the keypair and sign transactions to use/spend the tokens.
 
 Some wallets are easier to use than others.  Some are more secure than others.  
-[Multiple types of wallets support Solana](supported-wallets.md) from which 
+[Multiple types of wallets support Solana](supported-wallets.md) from which
 users can choose.
 
 If you want to be able to receive SOL tokens on the Solana blockchain, 
