@@ -36,6 +36,32 @@ enum LedgerOutputMethod {
     Json,
 }
 
+fn output_slot_rewards(
+    blockstore: &Blockstore,
+    slot: Slot,
+    method: &LedgerOutputMethod,
+) -> Result<(), String> {
+    // Note: rewards are not output in JSON yet
+    if *method == LedgerOutputMethod::Print {
+        if let Ok(rewards) = blockstore.read_rewards(slot) {
+            if let Some(rewards) = rewards {
+                if !rewards.is_empty() {
+                    println!("  Rewards:");
+                    for reward in rewards {
+                        println!(
+                            "    Account {}: {}{} SOL",
+                            reward.pubkey,
+                            if reward.lamports < 0 { '-' } else { ' ' },
+                            lamports_to_sol(reward.lamports.abs().try_into().unwrap())
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn output_slot(
     blockstore: &Blockstore,
     slot: Slot,
@@ -92,6 +118,15 @@ fn output_slot(
                                 >(&instruction.data)
                             {
                                 println!("        {:?}", vote_instruction);
+                                raw = false;
+                            }
+                        } else if program_pubkey == solana_stake_program::id() {
+                            if let Ok(stake_instruction) =
+                                limited_deserialize::<
+                                    solana_stake_program::stake_instruction::StakeInstruction,
+                                >(&instruction.data)
+                            {
+                                println!("        {:?}", stake_instruction);
                                 raw = false;
                             }
                         } else if program_pubkey == solana_sdk::system_program::id() {
@@ -164,25 +199,7 @@ fn output_slot(
         }
     }
 
-    // Note: rewards are not output in JSON yet
-    if *method == LedgerOutputMethod::Print {
-        if let Ok(rewards) = blockstore.read_rewards(slot) {
-            if let Some(rewards) = rewards {
-                if !rewards.is_empty() {
-                    println!("  Rewards:");
-                    for reward in rewards {
-                        println!(
-                            "    Account {}: {}{} SOL",
-                            reward.pubkey,
-                            if reward.lamports < 0 { '-' } else { ' ' },
-                            lamports_to_sol(reward.lamports.abs().try_into().unwrap())
-                        );
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
+    output_slot_rewards(blockstore, slot, method)
 }
 
 fn output_ledger(blockstore: Blockstore, starting_slot: Slot, method: LedgerOutputMethod) {
