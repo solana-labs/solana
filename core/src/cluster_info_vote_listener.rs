@@ -59,6 +59,7 @@ pub struct VoteTracker {
     // Don't track votes from people who are not staked, acts as a spam filter
     epoch_authorized_voters: RwLock<HashMap<Epoch, Arc<EpochAuthorizedVoters>>>,
     leader_schedule_epoch: RwLock<Epoch>,
+    current_epoch: RwLock<Epoch>,
     keys: RwLock<HashSet<Arc<Pubkey>>>,
     epoch_schedule: EpochSchedule,
 }
@@ -68,6 +69,7 @@ impl VoteTracker {
         let current_epoch = root_bank.epoch();
         let vote_tracker = Self {
             leader_schedule_epoch: RwLock::new(current_epoch),
+            current_epoch: RwLock::new(current_epoch),
             epoch_schedule: *root_bank.epoch_schedule(),
             ..VoteTracker::default()
         };
@@ -76,6 +78,7 @@ impl VoteTracker {
             *vote_tracker.leader_schedule_epoch.read().unwrap(),
             root_bank.get_leader_schedule_epoch(root_bank.slot())
         );
+        assert_eq!(*vote_tracker.current_epoch.read().unwrap(), current_epoch,);
         vote_tracker
     }
 
@@ -126,7 +129,7 @@ impl VoteTracker {
         self.keys.write().unwrap().insert(pubkey);
     }
 
-    fn process_new_root_bank(&self, root_bank: &Bank) {
+    fn update_leader_schedule_epoch(&self, root_bank: &Bank) {
         // Update with any newly calculated epoch state about future epochs
         let start_leader_schedule_epoch = *self.leader_schedule_epoch.read().unwrap();
         let mut greatest_leader_schedule_epoch = start_leader_schedule_epoch;
@@ -152,26 +155,38 @@ impl VoteTracker {
             }
         }
 
+        if greatest_leader_schedule_epoch != start_leader_schedule_epoch {
+            *self.leader_schedule_epoch.write().unwrap() = greatest_leader_schedule_epoch;
+        }
+    }
+
+    fn update_new_root(&self, root_bank: &Bank) {
         // Purge any outdated slot data
         let new_root = root_bank.slot();
+        let root_epoch = root_bank.epoch();
         self.slot_vote_trackers
             .write()
             .unwrap()
             .retain(|slot, _| *slot >= new_root);
 
-        if greatest_leader_schedule_epoch != start_leader_schedule_epoch {
-            // If we can compute a new epoch, purge outdated state
-            let current_root_epoch = root_bank.epoch();
+        let current_epoch = *self.current_epoch.read().unwrap();
+        if root_epoch != current_epoch {
+            // If root moved to a new epoch, purge outdated state
             self.epoch_authorized_voters
                 .write()
                 .unwrap()
-                .retain(|epoch, _| epoch >= &current_root_epoch);
+                .retain(|epoch, _| epoch >= &root_epoch);
             self.keys
                 .write()
                 .unwrap()
                 .retain(|pubkey| Arc::strong_count(pubkey) > 1);
-            *self.leader_schedule_epoch.write().unwrap() = greatest_leader_schedule_epoch;
+            *self.current_epoch.write().unwrap() = root_epoch;
         }
+    }
+
+    fn process_new_root_bank(&self, root_bank: &Bank) {
+        self.update_leader_schedule_epoch(root_bank);
+        self.update_new_root(root_bank);
     }
 }
 
@@ -598,54 +613,77 @@ mod tests {
     }
 
     #[test]
-    fn test_process_new_root_bank() {
-        let validator_voting_keypairs: Vec<_> = (0..10)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
-        let GenesisConfigInfo { genesis_config, .. } =
-            genesis_utils::create_genesis_config_with_vote_accounts(
-                10_000,
-                &validator_voting_keypairs,
-                100,
-            );
-        let bank = Bank::new(&genesis_config);
-        let vote_tracker = Arc::new(VoteTracker::new(&bank));
-        let current_epoch = bank.epoch();
-        let leader_schedule_epoch = bank.get_leader_schedule_epoch(bank.slot());
-        vote_tracker.process_new_root_bank(&bank);
-
-        // Check the vote tracker has all the known epoch state on construction
-        for epoch in current_epoch..=leader_schedule_epoch {
-            assert_eq!(
-                vote_tracker
-                    .epoch_authorized_voters
-                    .read()
-                    .unwrap()
-                    .get(&epoch)
-                    .unwrap(),
-                bank.epoch_stakes(epoch).unwrap().epoch_authorized_voters()
-            );
-        }
+    fn test_update_new_root() {
+        let (vote_tracker, bank, _) = setup();
 
         // Check outdated slots are purged with new root
         let new_voter = Arc::new(Pubkey::new_rand());
-        vote_tracker.insert_vote(5, new_voter.clone());
+        vote_tracker.insert_vote(bank.slot(), new_voter.clone());
         assert!(vote_tracker
             .slot_vote_trackers
             .read()
             .unwrap()
-            .contains_key(&5));
-        let bank6 = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 6);
-        vote_tracker.process_new_root_bank(&bank6);
+            .contains_key(&bank.slot()));
+        let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), bank.slot() + 1);
+        vote_tracker.process_new_root_bank(&bank1);
         assert!(!vote_tracker
             .slot_vote_trackers
             .read()
             .unwrap()
-            .contains_key(&5));
+            .contains_key(&bank.slot()));
 
-        // Check `keys` and `epoch_authorized_voters` are purged at new epoch
+        // Check `keys` and `epoch_authorized_voters` are purged when new
+        // root bank moves to the next epoch
         assert!(vote_tracker.keys.read().unwrap().contains(&new_voter));
+        let current_epoch = bank.epoch();
+        let new_epoch_bank = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.epoch_schedule()
+                .get_first_slot_in_epoch(current_epoch + 1),
+        );
+        vote_tracker.process_new_root_bank(&new_epoch_bank);
         assert!(!vote_tracker.keys.read().unwrap().contains(&new_voter));
+        assert_eq!(
+            *vote_tracker.current_epoch.read().unwrap(),
+            current_epoch + 1
+        );
+    }
+
+    #[test]
+    fn test_update_new_leader_schedule_epoch() {
+        let (vote_tracker, bank, _) = setup();
+
+        // Check outdated slots are purged with new root
+        let leader_schedule_epoch = bank.get_leader_schedule_epoch(bank.slot());
+        let next_leader_schedule_epoch = leader_schedule_epoch + 1;
+        let schedule_offset = bank.epoch_schedule().leader_schedule_slot_offset;
+        let next_leader_schedule_computed = bank
+            .epoch_schedule()
+            .get_first_slot_in_epoch(next_leader_schedule_epoch)
+            - schedule_offset;
+        assert_eq!(
+            bank.get_leader_schedule_epoch(next_leader_schedule_computed),
+            next_leader_schedule_epoch
+        );
+        let next_leader_schedule_bank =
+            Bank::new_from_parent(&bank, &Pubkey::default(), next_leader_schedule_computed);
+        vote_tracker.update_leader_schedule_epoch(&next_leader_schedule_bank);
+        assert_eq!(
+            *vote_tracker.leader_schedule_epoch.read().unwrap(),
+            next_leader_schedule_epoch
+        );
+        assert_eq!(
+            vote_tracker
+                .epoch_authorized_voters
+                .read()
+                .unwrap()
+                .get(&next_leader_schedule_epoch)
+                .unwrap(),
+            bank.epoch_stakes(next_leader_schedule_epoch)
+                .unwrap()
+                .epoch_authorized_voters()
+        );
     }
 
     #[test]
@@ -916,5 +954,44 @@ mod tests {
         );
         current_ref_count += 2 * ref_count_per_vote;
         assert_eq!(ref_count, current_ref_count);
+    }
+
+    fn setup() -> (VoteTracker, Arc<Bank>, Vec<ValidatorVoteKeypairs>) {
+        let validator_voting_keypairs: Vec<_> = (0..10)
+            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+            .collect();
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+                100,
+            );
+        let bank = Bank::new(&genesis_config);
+        let vote_tracker = VoteTracker::new(&bank);
+
+        // Integrity Checks
+        let current_epoch = bank.epoch();
+        let leader_schedule_epoch = bank.get_leader_schedule_epoch(bank.slot());
+
+        // Check the vote tracker has all the known epoch state on construction
+        for epoch in current_epoch..=leader_schedule_epoch {
+            assert_eq!(
+                vote_tracker
+                    .epoch_authorized_voters
+                    .read()
+                    .unwrap()
+                    .get(&epoch)
+                    .unwrap(),
+                bank.epoch_stakes(epoch).unwrap().epoch_authorized_voters()
+            );
+        }
+
+        // Check the epoch state is correct
+        assert_eq!(
+            *vote_tracker.leader_schedule_epoch.read().unwrap(),
+            leader_schedule_epoch,
+        );
+        assert_eq!(*vote_tracker.current_epoch.read().unwrap(), current_epoch);
+        (vote_tracker, Arc::new(bank), validator_voting_keypairs)
     }
 }
