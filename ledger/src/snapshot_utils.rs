@@ -8,7 +8,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::{SnapshotStorage, SnapshotStorages},
     bank::{
-        self, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
+        self, bank_1_0::Bank1_0, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
     },
 };
@@ -30,7 +30,8 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
-pub const SNAPSHOT_VERSION: &str = "1.0.0";
+pub const SNAPSHOT_VERSION_1_0: &str = "1.0.0";
+pub const SNAPSHOT_VERSION: &str = "1.1.0";
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
@@ -593,6 +594,10 @@ where
         MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             let mut bank: Bank = match snapshot_version {
+                SNAPSHOT_VERSION_1_0 => {
+                    let bank_1_0: Bank1_0 = deserialize_from_snapshot(stream.by_ref())?;
+                    bank_1_0.convert_to_current()
+                }
                 SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
                 _ => {
                     return Err(get_io_error(&format!(
@@ -602,6 +607,7 @@ where
                 }
             };
             info!("Rebuilding accounts...");
+
             let rc = bank::BankRc::from_stream(
                 account_paths,
                 bank.slot(),
