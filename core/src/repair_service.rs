@@ -61,6 +61,7 @@ impl RepairService {
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
+        cluster_slots: Arc<ClusterSlots>,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -71,6 +72,7 @@ impl RepairService {
                     &repair_socket,
                     &cluster_info,
                     repair_strategy,
+                    &cluster_slots,
                 )
             })
             .unwrap();
@@ -79,15 +81,15 @@ impl RepairService {
     }
 
     fn run(
-        blockstore: &Arc<Blockstore>,
-        exit: &Arc<AtomicBool>,
-        repair_socket: &Arc<UdpSocket>,
+        blockstore: &Blockstore,
+        exit: &AtomicBool,
+        repair_socket: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
+        cluster_slots: &Arc<ClusterSlots>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.read().unwrap().id();
-        let mut cluster_slots = ClusterSlots::default();
         if let RepairStrategy::RepairAll { .. } = repair_strategy {
             Self::initialize_lowest_slot(id, blockstore, cluster_info);
         }
@@ -118,7 +120,7 @@ impl RepairService {
                         Self::update_completed_slots(
                             &id,
                             new_root,
-                            &mut cluster_slots,
+                            &cluster_slots,
                             blockstore,
                             completed_slots_receiver,
                             &cluster_info,
@@ -277,7 +279,7 @@ impl RepairService {
     fn update_completed_slots(
         id: &Pubkey,
         root: Slot,
-        cluster_slots: &mut ClusterSlots,
+        cluster_slots: &ClusterSlots,
         blockstore: &Blockstore,
         completed_slots_receiver: &CompletedSlotsReceiver,
         cluster_info: &RwLock<ClusterInfo>,

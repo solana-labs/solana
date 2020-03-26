@@ -7,6 +7,7 @@ use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
+    cluster_slots::ClusterSlots,
     commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
@@ -145,6 +146,7 @@ impl Tvu {
             )
         };
 
+        let cluster_slots = Arc::new(ClusterSlots::default());
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -158,6 +160,7 @@ impl Tvu {
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
             tvu_config.shred_version,
+            cluster_slots,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();

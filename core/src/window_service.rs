@@ -1,9 +1,12 @@
 //! `window_service` handles the data plane incoming shreds, storing them in
 //!   blockstore and retransmitting where required
 //!
-use crate::cluster_info::ClusterInfo;
-use crate::repair_service::{RepairService, RepairStrategy};
-use crate::result::{Error, Result};
+use crate::{
+    cluster_info::ClusterInfo,
+    cluster_slots::ClusterSlots,
+    repair_service::{RepairService, RepairStrategy},
+    result::{Error, Result},
+};
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
 };
@@ -252,6 +255,7 @@ impl WindowService {
         repair_strategy: RepairStrategy,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         shred_filter: F,
+        cluster_slots: Arc<ClusterSlots>,
     ) -> WindowService
     where
         F: 'static
@@ -270,6 +274,7 @@ impl WindowService {
             repair_socket,
             cluster_info.clone(),
             repair_strategy,
+            cluster_slots,
         );
 
         let (insert_sender, insert_receiver) = unbounded();
@@ -620,6 +625,7 @@ mod test {
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::new_localhost(&Pubkey::default(), 0),
         )));
+        let cluster_slots = Arc::new(ClusterSlots::default());
         let repair_sock = Arc::new(UdpSocket::bind(socketaddr_any!()).unwrap());
         let window = WindowService::new(
             blockstore,
@@ -631,6 +637,7 @@ mod test {
             RepairStrategy::RepairRange(RepairSlotRange { start: 0, end: 0 }),
             &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
+            cluster_slots,
         );
         window
     }
