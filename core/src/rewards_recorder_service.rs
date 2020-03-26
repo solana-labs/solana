@@ -1,7 +1,7 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_client::rpc_response::RpcReward;
 use solana_ledger::blockstore::Blockstore;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_transaction_status::Reward;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -49,7 +49,7 @@ impl RewardsRecorderService {
         let (slot, rewards) = rewards_receiver.recv_timeout(Duration::from_secs(1))?;
         let rpc_rewards = rewards
             .into_iter()
-            .map(|(pubkey, lamports)| RpcReward {
+            .map(|(pubkey, lamports)| Reward {
                 pubkey: pubkey.to_string(),
                 lamports,
             })

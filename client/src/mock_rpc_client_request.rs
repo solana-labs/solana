@@ -2,7 +2,7 @@ use crate::{
     client_error::Result,
     generic_rpc_client_request::GenericRpcClientRequest,
     rpc_request::RpcRequest,
-    rpc_response::{Response, RpcResponseContext, RpcTransactionStatus},
+    rpc_response::{Response, RpcResponseContext},
 };
 use serde_json::{Number, Value};
 use solana_sdk::{
@@ -10,6 +10,7 @@ use solana_sdk::{
     instruction::InstructionError,
     transaction::{self, TransactionError},
 };
+use solana_transaction_status::TransactionStatus;
 use std::{collections::HashMap, sync::RwLock};
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
@@ -100,7 +101,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 let status = if self.url == "sig_not_found" {
                     None
                 } else {
-                    Some(RpcTransactionStatus { status, slot: 1 })
+                    Some(TransactionStatus { status, slot: 1 })
                 };
                 serde_json::to_value(vec![status])?
             }
