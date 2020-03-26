@@ -3,10 +3,15 @@ pub mod allocator_bump;
 pub mod bpf_verifier;
 pub mod helpers;
 
+use crate::{bpf_verifier::VerifierError, helpers::HelperError};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
-use solana_rbpf::{memory_region::MemoryRegion, EbpfVm};
+use solana_rbpf::{
+    ebpf::{EbpfError, UserDefinedError},
+    memory_region::MemoryRegion,
+    EbpfVm,
+};
 use solana_sdk::{
     account::KeyedAccount,
     bpf_loader,
@@ -18,10 +23,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     sysvar::rent,
 };
-use std::{
-    io::{prelude::*, Error},
-    mem,
-};
+use std::{io::prelude::*, mem};
 use thiserror::Error;
 
 solana_sdk::declare_program!(
@@ -32,19 +34,28 @@ solana_sdk::declare_program!(
 
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum BPFLoaderError {
-    #[error("Failed to create virtual machine")]
-    VirtualMachineCreationFailed,
-    #[error("Virtual machine failed to run the program to completion")]
-    VirtualMachineFailedToRunProgram,
+    #[error("failed to create virtual machine")]
+    VirtualMachineCreationFailed = 0x0b9f_0001,
+    #[error("virtual machine failed to run the program to completion")]
+    VirtualMachineFailedToRunProgram = 0x0b9f_0002,
 }
-
 impl<E> DecodeError<E> for BPFLoaderError {
     fn type_of() -> &'static str {
         "BPFLoaderError"
     }
 }
 
-pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
+/// Errors returned by functions the BPF Loader registers with the vM
+#[derive(Debug, Error)]
+pub enum BPFError {
+    #[error("{0}")]
+    VerifierError(#[from] VerifierError),
+    #[error("{0}")]
+    HelperError(#[from] HelperError),
+}
+impl UserDefinedError for BPFError {}
+
+pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm<BPFError>, MemoryRegion), EbpfError<BPFError>> {
     let mut vm = EbpfVm::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_max_instruction_count(100_000)?;
@@ -55,7 +66,7 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm, MemoryRegion), Error> {
     Ok((vm, heap_region))
 }
 
-pub fn check_elf(prog: &[u8]) -> Result<(), Error> {
+pub fn check_elf(prog: &[u8]) -> Result<(), EbpfError<BPFError>> {
     let mut vm = EbpfVm::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_elf(&prog)?;
@@ -180,13 +191,18 @@ pub fn process_instruction(
                 Ok(status) => {
                     if status != SUCCESS {
                         let error: InstructionError = status.into();
-                        warn!("BPF program failed: {:?}", error);
+                        warn!("BPF program failed: {}", error);
                         return Err(error);
                     }
                 }
-                Err(e) => {
-                    warn!("BPF VM failed to run program: {}", e);
-                    return Err(BPFLoaderError::VirtualMachineFailedToRunProgram.into());
+                Err(error) => {
+                    warn!("BPF program failed: {}", error);
+                    return match error {
+                        EbpfError::UserError(BPFError::HelperError(
+                            HelperError::InstructionError(error),
+                        )) => Err(error),
+                        _ => Err(BPFLoaderError::VirtualMachineFailedToRunProgram.into()),
+                    };
                 }
             }
         }
@@ -221,7 +237,7 @@ pub fn process_instruction(
                 }
 
                 if let Err(e) = check_elf(&program.try_account_ref()?.data) {
-                    warn!("Invalid ELF: {}", e);
+                    warn!("{}", e);
                     return Err(InstructionError::InvalidAccountData);
                 }
 
@@ -242,7 +258,7 @@ mod tests {
     use std::{cell::RefCell, fs::File, io::Read};
 
     #[test]
-    #[should_panic(expected = "Error: Exceeded maximum number of instructions allowed")]
+    #[should_panic(expected = "ExceededMaxInstructions(10)")]
     fn test_bpf_loader_non_terminating_program() {
         #[rustfmt::skip]
         let program = &[
@@ -252,7 +268,7 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-        let mut vm = EbpfVm::new(None).unwrap();
+        let mut vm = EbpfVm::<BPFError>::new(None).unwrap();
         vm.set_verifier(bpf_verifier::check).unwrap();
         vm.set_max_instruction_count(10).unwrap();
         vm.set_program(program).unwrap();

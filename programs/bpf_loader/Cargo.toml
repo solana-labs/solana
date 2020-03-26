@@ -17,7 +17,7 @@ num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 solana-logger = { path = "../../logger", version = "1.1.0" }
 solana-sdk = { path = "../../sdk", version = "1.1.0" }
-solana_rbpf = "=0.1.23"
+solana_rbpf = "=0.1.24"
 thiserror = "1.0"
 
 [lib]
