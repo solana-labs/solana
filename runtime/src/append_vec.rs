@@ -80,8 +80,17 @@ impl<'a> StoredAccount<'a> {
     }
 
     fn sanitize(&self) -> bool {
+        self.sanitize_executable() && self.sanitize_lamports()
+    }
+
+    fn sanitize_executable(&self) -> bool {
         // Sanitize executable to ensure higher 7-bits are cleared correctly.
         self.ref_executable_byte() & !1 == 0
+    }
+
+    fn sanitize_lamports(&self) -> bool {
+        // Sanitize 0 lamports to ensure to be same as Account::default()
+        self.account_meta.lamports != 0 || self.clone_account() == Account::default()
     }
 
     fn ref_executable_byte(&self) -> &u8 {
@@ -258,7 +267,7 @@ impl AppendVec {
         if !self.sanitize_layout_and_length() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "incorrect layout/length",
+                "incorrect layout/length/data",
             ));
         }
 
@@ -687,6 +696,32 @@ pub mod tests {
     }
 
     #[test]
+    fn test_set_file_crafted_zero_lamport_account() {
+        let file = get_append_vec_path("test_append");
+        let path = &file.path;
+        let mut av = AppendVec::new(&path, true, 1024 * 1024);
+
+        let pubkey = Pubkey::new_rand();
+        let owner = Pubkey::default();
+        let data_len = 3 as u64;
+        let mut account = Account::new(0, data_len as usize, &owner);
+        account.data = b"abc".to_vec();
+        let stored_meta = StoredMeta {
+            write_version: 0,
+            pubkey,
+            data_len,
+        };
+        let account_with_meta = (stored_meta, account);
+        let index = av.append_account_test(&account_with_meta).unwrap();
+        assert_eq!(av.get_account_test(index).unwrap(), account_with_meta);
+
+        av.flush().unwrap();
+        av.file_size = 0;
+        let result = av.set_file(path);
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+    }
+
+    #[test]
     fn test_set_file_crafted_data_len() {
         let file = get_append_vec_path("test_set_file_crafted_data_len");
         let path = &file.path;
@@ -709,7 +744,7 @@ pub mod tests {
         av.flush().unwrap();
         av.file_size = 0;
         let result = av.set_file(path);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
     }
 
     #[test]
@@ -733,7 +768,7 @@ pub mod tests {
         av.flush().unwrap();
         av.file_size = 0;
         let result = av.set_file(path);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
     }
 
     #[test]
@@ -786,6 +821,6 @@ pub mod tests {
         av.flush().unwrap();
         av.file_size = 0;
         let result = av.set_file(path);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length");
+        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
     }
 }
