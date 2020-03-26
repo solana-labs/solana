@@ -1,7 +1,12 @@
 use bincode::{deserialize_from, serialize_into};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{account::Account, clock::Epoch, hash::Hash, pubkey::Pubkey};
+use solana_sdk::{
+    account::Account,
+    clock::{Epoch, Slot},
+    hash::Hash,
+    pubkey::Pubkey,
+};
 use std::{
     fmt,
     fs::{remove_file, OpenOptions},
@@ -223,8 +228,8 @@ impl AppendVec {
         append_vec_path.as_ref().file_name().map(PathBuf::from)
     }
 
-    pub fn new_relative_path(fork_id: u64, id: usize) -> PathBuf {
-        PathBuf::from(&format!("{}.{}", fork_id, id))
+    pub fn new_relative_path(slot: Slot, id: usize) -> PathBuf {
+        PathBuf::from(&format!("{}.{}", slot, id))
     }
 
     #[allow(clippy::mutex_atomic)]
