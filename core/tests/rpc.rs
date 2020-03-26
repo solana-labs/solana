@@ -212,7 +212,7 @@ fn test_rpc_subscriptions() {
 
     // Create transaction signatures to subscribe to
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let transactions: Vec<Transaction> = (0..500)
+    let transactions: Vec<Transaction> = (0..100)
         .map(|_| system_transaction::transfer(&alice, &Pubkey::new_rand(), 1, genesis_hash))
         .collect();
     let mut signature_set: HashSet<String> = transactions
