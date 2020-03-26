@@ -4,8 +4,8 @@ In this section, we will generate a keypair, query it for its public key,
 and verify you control its private key. Before you begin, you will need
 to:
 
-* [Install the Solana Tool Suite](../install-solana.md)
-* [Choose a wallet](choose-a-wallet.md)
+* [Install the Solana Tool Suite](install-solana-cli-tools.md)
+* [Choose a wallet](cli-wallets.md)
 
 ## Generate an FS Wallet Keypair
 
