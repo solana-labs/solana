@@ -310,7 +310,7 @@ pub fn process_blockstore_from_root(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
 ) -> BlockstoreProcessorResult {
-    info!("processing ledger from root slot {}...", bank.slot());
+    info!("processing ledger from slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
     let initial_allocation = allocated.get();
 
@@ -344,6 +344,12 @@ pub fn process_blockstore_from_root(
     blockstore
         .set_roots(&[start_slot])
         .expect("Couldn't set root slot on startup");
+
+    if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
+        if let Some((slot, _meta)) = metas.last() {
+            info!("ledger holds data through slot {}", slot);
+        }
+    }
 
     let meta = blockstore.meta(start_slot).unwrap();
 
