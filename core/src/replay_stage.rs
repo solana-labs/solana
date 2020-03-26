@@ -1281,7 +1281,6 @@ pub(crate) mod tests {
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
-    use solana_client::rpc_response::{RpcEncodedTransaction, RpcTransactionWithStatusMeta};
     use solana_ledger::{
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},
@@ -1306,6 +1305,7 @@ pub(crate) mod tests {
         transaction::TransactionError,
     };
     use solana_stake_program::stake_state;
+    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta};
     use solana_vote_program::{
         vote_state::{self, Vote, VoteState, VoteStateVersions},
         vote_transaction,
@@ -2137,10 +2137,10 @@ pub(crate) mod tests {
             let confirmed_block = blockstore.get_confirmed_block(slot, None).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
-            for RpcTransactionWithStatusMeta { transaction, meta } in
+            for TransactionWithStatusMeta { transaction, meta } in
                 confirmed_block.transactions.into_iter()
             {
-                if let RpcEncodedTransaction::Json(transaction) = transaction {
+                if let EncodedTransaction::Json(transaction) = transaction {
                     if transaction.signatures[0] == signatures[0].to_string() {
                         assert_eq!(meta.unwrap().status, Ok(()));
                     } else if transaction.signatures[0] == signatures[1].to_string() {

@@ -10,8 +10,8 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use solana_client::rpc_response::{RpcRewards, RpcTransactionStatusMeta};
 use solana_sdk::{clock::Slot, signature::Signature};
+use solana_transaction_status::{Rewards, TransactionStatusMeta};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -269,7 +269,7 @@ pub trait TypedColumn: Column {
 }
 
 impl TypedColumn for columns::TransactionStatus {
-    type Type = RpcTransactionStatusMeta;
+    type Type = TransactionStatusMeta;
 }
 
 pub trait SlotColumn<Index = u64> {}
@@ -330,7 +330,7 @@ impl ColumnName for columns::Rewards {
     const NAME: &'static str = REWARDS_CF;
 }
 impl TypedColumn for columns::Rewards {
-    type Type = RpcRewards;
+    type Type = Rewards;
 }
 
 impl Column for columns::ShredCode {

@@ -23,6 +23,7 @@ use solana_sdk::{
     signers::Signers,
     transaction::{self, Transaction, TransactionError},
 };
+use solana_transaction_status::{ConfirmedBlock, TransactionEncoding, TransactionStatus};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     error,
@@ -119,7 +120,7 @@ impl RpcClient {
             json!([[signature.to_string()], commitment_config]),
             5,
         )?;
-        let result: Vec<Option<RpcTransactionStatus>> =
+        let result: Vec<Option<TransactionStatus>> =
             serde_json::from_value(signature_status).unwrap();
         Ok(result[0].clone().map(|status_meta| status_meta.status))
     }
@@ -185,15 +186,15 @@ impl RpcClient {
             .map_err(|err| ClientError::new_with_command(err.into(), "GetClusterNodes"))
     }
 
-    pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<RpcConfirmedBlock> {
-        self.get_confirmed_block_with_encoding(slot, RpcTransactionEncoding::Json)
+    pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<ConfirmedBlock> {
+        self.get_confirmed_block_with_encoding(slot, TransactionEncoding::Json)
     }
 
     pub fn get_confirmed_block_with_encoding(
         &self,
         slot: Slot,
-        encoding: RpcTransactionEncoding,
-    ) -> ClientResult<RpcConfirmedBlock> {
+        encoding: TransactionEncoding,
+    ) -> ClientResult<ConfirmedBlock> {
         let response = self
             .client
             .send(&RpcRequest::GetConfirmedBlock, json!([slot, encoding]), 0)

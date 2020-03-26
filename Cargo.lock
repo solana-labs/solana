@@ -3898,6 +3898,7 @@ dependencies = [
  "solana-logger 1.1.0",
  "solana-net-utils 1.1.0",
  "solana-sdk 1.1.0",
+ "solana-transaction-status 1.1.0",
  "solana-vote-program 1.1.0",
  "thiserror 1.0.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tungstenite 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3972,6 +3973,7 @@ dependencies = [
  "solana-storage-program 1.1.0",
  "solana-streamer 1.1.0",
  "solana-sys-tuner 1.1.0",
+ "solana-transaction-status 1.1.0",
  "solana-vote-program 1.1.0",
  "solana-vote-signer 1.1.0",
  "systemstat 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4205,7 +4207,6 @@ dependencies = [
  "serde_bytes 0.11.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-budget-program 1.1.0",
- "solana-client 1.1.0",
  "solana-genesis-programs 1.1.0",
  "solana-logger 1.1.0",
  "solana-measure 1.1.0",
@@ -4217,6 +4218,7 @@ dependencies = [
  "solana-runtime 1.1.0",
  "solana-sdk 1.1.0",
  "solana-stake-program 1.1.0",
+ "solana-transaction-status 1.1.0",
  "solana-vote-program 1.1.0",
  "symlink 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tar 0.4.26 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4643,6 +4645,17 @@ dependencies = [
  "sysctl 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unix_socket2 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "users 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-transaction-status"
+version = "1.1.0"
+dependencies = [
+ "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.105 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.105 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 1.1.0",
 ]
 
 [[package]]
