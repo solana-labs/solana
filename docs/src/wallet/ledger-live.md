@@ -34,21 +34,9 @@ line tools](../remote-wallet/ledger.md).
  click Install
    - Make sure your device is plugged in via USB and is unlocked with its PIN
  - You may be prompted on the Nano S to confirm the install of Solana App
- - "Solana (SOL)" should now show as "Installed" in the Ledger Live Manager
+ - "Solana" should now show as "Installed" in the Ledger Live Manager
 
-## Future Features (Not yet supported)
-
-####Add a Solana account to Ledger Live
- - Make sure the Solana App is installed on the Nano S and the device is
- plugged in and unlocked with the PIN
- - In Ledger Live, go to Accounts, and click/tap Add Account and select
- "Solana" from the crypto asset dropdown list
- - Follow the prompts on-screen to finish adding your Solana account
-
-####Receiving SOL tokens
-  - Open the Solana App on your Nano S
-  - In Ledger Live, click on Accounts, and then select your Solana account
-  - Click the Receive button
-  - Select your Solana account
-  - Your wallet receiving address should appear on screen.  You may copy this
-   address and share it with anybody who wants to send you SOL tokens.
+##Interact with Solana network
+- To interact with your Ledger wallet on our live network, please see our
+instructions on how to [use a Ledger Nano S with the Solana command
+line tools](../remote-wallet/ledger.md).
