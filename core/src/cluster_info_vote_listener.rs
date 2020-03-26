@@ -618,7 +618,10 @@ mod tests {
 
         // Check outdated slots are purged with new root
         let new_voter = Arc::new(Pubkey::new_rand());
-        vote_tracker.insert_vote(bank.slot(), new_voter.clone());
+        // Make separate copy so the original doesn't count toward
+        // the ref count, which would prevent cleanup
+        let new_voter_ = Arc::new(*new_voter);
+        vote_tracker.insert_vote(bank.slot(), new_voter_);
         assert!(vote_tracker
             .slot_vote_trackers
             .read()
@@ -657,11 +660,15 @@ mod tests {
         // Check outdated slots are purged with new root
         let leader_schedule_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let next_leader_schedule_epoch = leader_schedule_epoch + 1;
-        let schedule_offset = bank.epoch_schedule().leader_schedule_slot_offset;
-        let next_leader_schedule_computed = bank
-            .epoch_schedule()
-            .get_first_slot_in_epoch(next_leader_schedule_epoch)
-            - schedule_offset;
+        let mut next_leader_schedule_computed = bank.slot();
+        loop {
+            next_leader_schedule_computed += 1;
+            if bank.get_leader_schedule_epoch(next_leader_schedule_computed)
+                == next_leader_schedule_epoch
+            {
+                break;
+            }
+        }
         assert_eq!(
             bank.get_leader_schedule_epoch(next_leader_schedule_computed),
             next_leader_schedule_epoch
@@ -680,7 +687,8 @@ mod tests {
                 .unwrap()
                 .get(&next_leader_schedule_epoch)
                 .unwrap(),
-            bank.epoch_stakes(next_leader_schedule_epoch)
+            next_leader_schedule_bank
+                .epoch_stakes(next_leader_schedule_epoch)
                 .unwrap()
                 .epoch_authorized_voters()
         );
@@ -689,19 +697,7 @@ mod tests {
     #[test]
     fn test_process_votes() {
         // Create some voters at genesis
-        let validator_voting_keypairs: Vec<_> = (0..10)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
-        let GenesisConfigInfo { genesis_config, .. } =
-            genesis_utils::create_genesis_config_with_vote_accounts(
-                10_000,
-                &validator_voting_keypairs,
-                100,
-            );
-        let bank = Bank::new(&genesis_config);
-
-        // Send some votes to process
-        let vote_tracker = Arc::new(VoteTracker::new(&bank));
+        let (vote_tracker, _, validator_voting_keypairs) = setup();
         let (votes_sender, votes_receiver) = unbounded();
 
         let vote_slots = vec![1, 2];
@@ -739,20 +735,8 @@ mod tests {
     #[test]
     fn test_process_votes2() {
         // Create some voters at genesis
-        let num_voters = 10;
-        let validator_voting_keypairs: Vec<_> = (0..num_voters)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
-        let GenesisConfigInfo { genesis_config, .. } =
-            genesis_utils::create_genesis_config_with_vote_accounts(
-                10_000,
-                &validator_voting_keypairs,
-                100,
-            );
-        let bank = Bank::new(&genesis_config);
-
+        let (vote_tracker, _, validator_voting_keypairs) = setup();
         // Send some votes to process
-        let vote_tracker = Arc::new(VoteTracker::new(&bank));
         let (votes_sender, votes_receiver) = unbounded();
 
         for (i, keyset) in validator_voting_keypairs.chunks(2).enumerate() {
@@ -795,18 +779,7 @@ mod tests {
     #[test]
     fn test_get_voters_by_epoch() {
         // Create some voters at genesis
-        let validator_voting_keypairs: Vec<_> = (0..10)
-            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
-            .collect();
-        let GenesisConfigInfo { genesis_config, .. } =
-            genesis_utils::create_genesis_config_with_vote_accounts(
-                10_000,
-                &validator_voting_keypairs,
-                100,
-            );
-        let bank = Bank::new(&genesis_config);
-
-        let vote_tracker = VoteTracker::new(&bank);
+        let (vote_tracker, bank, validator_voting_keypairs) = setup();
         let last_known_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let last_known_slot = bank
             .epoch_schedule()
@@ -956,7 +929,7 @@ mod tests {
         assert_eq!(ref_count, current_ref_count);
     }
 
-    fn setup() -> (VoteTracker, Arc<Bank>, Vec<ValidatorVoteKeypairs>) {
+    fn setup() -> (Arc<VoteTracker>, Arc<Bank>, Vec<ValidatorVoteKeypairs>) {
         let validator_voting_keypairs: Vec<_> = (0..10)
             .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
             .collect();
@@ -992,6 +965,10 @@ mod tests {
             leader_schedule_epoch,
         );
         assert_eq!(*vote_tracker.current_epoch.read().unwrap(), current_epoch);
-        (vote_tracker, Arc::new(bank), validator_voting_keypairs)
+        (
+            Arc::new(vote_tracker),
+            Arc::new(bank),
+            validator_voting_keypairs,
+        )
     }
 }
