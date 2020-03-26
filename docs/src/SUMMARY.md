@@ -4,7 +4,7 @@
 * [Wallet Guide](wallet/README.md)
    * [Supported Wallets](wallet/supported-wallets.md)
      * [Trust Wallet](wallet/trust-wallet.md)
-     * [Ledger Nano S](wallet/ledger-live.md)
+     * [Ledger Nano S](wallet/ledger-nano-s.md)
 * [Command Line Guide](cli/README.md)
   * [Install the Solana Command Line Tool Suite](cli/install-solana.md)
   * [Command Line-based Wallet Options](cli/cli-wallets.md)

@@ -1,12 +1,11 @@
 # Command Line Based Wallets
 
-Solana supports several different types of wallets that can be used to interface directly with the Solana command-line tools.  
+Solana supports several different types of wallets that can be used to interface 
+directly with the Solana command-line tools.  
 
 **If you are unfamiliar with using command line programs and just want to be able 
 to send and receive SOL tokens, we recommend setting up a third-party 
-[supported wallet](../wallet/supported-wallets.md), 
-such as [Trust Wallet](../wallet/trust-wallet.md) or 
-[Ledger Live in conjunction with a Ledger Nano S](../wallet/ledger-live.md).**
+[supported wallet](../wallet/supported-wallets.md).
 
 ## File System Wallet
 
