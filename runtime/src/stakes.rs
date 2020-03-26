@@ -27,10 +27,6 @@ pub struct Stakes {
 }
 
 impl Stakes {
-    pub fn total_stake(&self) -> u64 {
-        self.vote_accounts.iter().map(|(_, (stake, _))| stake).sum()
-    }
-
     pub fn history(&self) -> &StakeHistory {
         &self.stake_history
     }
