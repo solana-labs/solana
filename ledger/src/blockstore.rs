@@ -74,6 +74,7 @@ const TIMESTAMP_SLOT_RANGE: usize = 50;
 pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
 pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
+pub type CompletedRanges = Vec<(u32, u32)>;
 
 // ledger window
 pub struct Blockstore {
@@ -1608,29 +1609,11 @@ impl Blockstore {
             return Err(BlockstoreError::DeadSlot);
         }
 
-        // lowest_cleanup_slot is the last slot that was not cleaned up by
-        // LedgerCleanupService
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > slot {
-            return Err(BlockstoreError::SlotCleanedUp);
-        }
-
-        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-        let slot_meta = slot_meta_cf.get(slot)?;
-        if slot_meta.is_none() {
-            return Ok((vec![], 0, false));
-        }
-
-        let slot_meta = slot_meta.unwrap();
-        // Find all the ranges for the completed data blocks
-        let completed_ranges = Self::get_completed_data_ranges(
-            start_index as u32,
-            &slot_meta.completed_data_indexes[..],
-            slot_meta.consumed as u32,
-        );
+        let (completed_ranges, slot_meta) = self.get_completed_ranges(slot, start_index)?;
         if completed_ranges.is_empty() {
             return Ok((vec![], 0, false));
         }
+        let slot_meta = slot_meta.unwrap();
         let num_shreds = completed_ranges
             .last()
             .map(|(_, end_index)| u64::from(*end_index) - start_index + 1)
@@ -1651,12 +1634,41 @@ impl Blockstore {
         Ok((entries, num_shreds, slot_meta.is_full()))
     }
 
+    fn get_completed_ranges(
+        &self,
+        slot: Slot,
+        start_index: u64,
+    ) -> Result<(CompletedRanges, Option<SlotMeta>)> {
+        // lowest_cleanup_slot is the last slot that was not cleaned up by
+        // LedgerCleanupService
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
+        if *lowest_cleanup_slot > slot {
+            return Err(BlockstoreError::SlotCleanedUp);
+        }
+
+        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
+        let slot_meta = slot_meta_cf.get(slot)?;
+        if slot_meta.is_none() {
+            return Ok((vec![], slot_meta));
+        }
+
+        let slot_meta = slot_meta.unwrap();
+        // Find all the ranges for the completed data blocks
+        let completed_ranges = Self::get_completed_data_ranges(
+            start_index as u32,
+            &slot_meta.completed_data_indexes[..],
+            slot_meta.consumed as u32,
+        );
+
+        Ok((completed_ranges, Some(slot_meta)))
+    }
+
     // Get the range of indexes [start_index, end_index] of every completed data block
     fn get_completed_data_ranges(
         mut start_index: u32,
         completed_data_end_indexes: &[u32],
         consumed: u32,
-    ) -> Vec<(u32, u32)> {
+    ) -> CompletedRanges {
         let mut completed_data_ranges = vec![];
         let floor = completed_data_end_indexes
             .iter()
@@ -1738,29 +1750,13 @@ impl Blockstore {
     }
 
     fn get_any_valid_slot_entries(&self, slot: Slot, start_index: u64) -> Vec<Entry> {
-        // lowest_cleanup_slot is the last slot that was not cleaned up by
-        // LedgerCleanupService
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > slot {
-            return vec![];
-        }
-
-        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
-        let slot_meta = slot_meta_cf.get(slot).unwrap_or_default();
-        if slot_meta.is_none() {
-            return vec![];
-        }
-
-        let slot_meta = slot_meta.unwrap();
-        // Find all the ranges for the completed data blocks
-        let completed_ranges = Self::get_completed_data_ranges(
-            start_index as u32,
-            &slot_meta.completed_data_indexes[..],
-            slot_meta.consumed as u32,
-        );
+        let (completed_ranges, slot_meta) = self
+            .get_completed_ranges(slot, start_index)
+            .unwrap_or_default();
         if completed_ranges.is_empty() {
             return vec![];
         }
+        let slot_meta = slot_meta.unwrap();
 
         let entries: Vec<Vec<Entry>> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
