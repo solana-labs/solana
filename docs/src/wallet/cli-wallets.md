@@ -1,11 +1,13 @@
-# Choose a Wallet
+# Command Line Wallets
 
-Keypairs are stored in *wallets* and wallets come in many forms. A wallet might
-be a directory in your computer's file system, a piece of paper, or a
-specialized device called a *hardware wallet*. Some wallets are easier to use
-than others.  Some are more secure than others. In this section, we will compare
-and contrast different types of wallets and help you choose the wallet that
-best fits your needs.
+Solana supports several different types of wallets that can be used to interface
+directly with the Solana command-line tools.
+
+**If you are unfamiliar with using command line programs and just want to be able
+to send and receive SOL tokens, we recommend setting up a third-party
+[Web Wallet](app-wallets.md)**.
+
+To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
 
 ## File System Wallet
 

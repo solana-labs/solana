@@ -12,7 +12,7 @@ protect against this scenario.
 
 ## Before You Begin
 
-- [Install the Solana command-line tools](../install-solana.md)
+- [Install the Solana command-line tools](../cli/install-solana-cli-tools.md)
 
 ### Check your installation
 
