@@ -32,7 +32,7 @@ private key to a wallet, they can withdraw all the tokens it contains.
 If the private key for a wallet is lost, any tokens that have been sent
 to that wallet's address are **permanently lost**.
 
-Different wallet solutions are available to manage the compromise between
+Different wallet solutions are available to manage the trade offs between
 securely storing and backing up the private key and providing a convenient way
 to interact with the keypair and sign transactions to use/spend the tokens.
 

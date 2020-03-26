@@ -7,9 +7,6 @@ experience for most people who are new or experienced with using crypto wallets.
 currently the easiest and fastest way to get set up with a new wallet on Solana.
 The app is free and getting your wallet set up only takes a few minutes.
 
-**NOTE: At this time, Solana is only supported on the iOS version of TrustWallet.
- Support for Android on Trust Wallet is coming very very soon!**
-
 {% page-ref page="trust-wallet.md" %}
 
 ## Ledger Live with Ledger Nano S
@@ -23,12 +20,6 @@ separately and connected to the device running Ledger Live.
 is physically separate from the computer, and connects via USB cable.
 This provides an extra level of security but requires the user to purchase and
 keep track of the hardware device.
-
-**NOTE: While Solana tools are fully integrated with the Ledger Nano S device,
-and the Solana App can be installed on the Nano S using Ledger Live, adding and
-managing wallet accounts currently requires use of our command-line tools.
-Integration with Ledger Live to use Solana wallet accounts on Ledger Live
-will be available in the future.**
 
 Solana does not support the Ledger Nano **X** at this time.
 

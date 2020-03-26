@@ -28,7 +28,9 @@ Instructions for how to do that are found [here](../remote-wallet/ledger.md).
 
 ##Install the Solana App on your Nano S
  - Open Ledger Live
- - Go to Manager in the app and find "Solana (SOL)" in the App Catalog and
+ - Currently Ledger Live needs to be in "Developer Mode"
+ (Settings > Experimental > Developer Mode) to see our app.
+ - Go to Manager in the app and find "Solana" in the App Catalog and
  click Install
    - Make sure your device is plugged in via USB and is unlocked with its PIN
  - You may be prompted on the Nano S to confirm the install of Solana App
