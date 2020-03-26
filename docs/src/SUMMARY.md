@@ -2,8 +2,8 @@
 
 * [Introduction](introduction.md)
 * [Wallet Guide](wallet/README.md)
-  * [Web Wallets](wallet/web-wallets.md)
-  * [Command Line-based Wallets](wallet/cli-wallets.md)
+  * [App Wallets](wallet/app-wallets.md)
+  * [Command-line Wallets](wallet/cli-wallets.md)
     * [Hardware Wallets](remote-wallet/README.md)
       * [Ledger Hardware Wallet](remote-wallet/ledger.md)
     * [Paper Wallet](paper-wallet/README.md)

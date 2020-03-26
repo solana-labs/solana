@@ -1,11 +1,11 @@
-# Command Line Based Wallets
+# Command Line Wallets
 
 Solana supports several different types of wallets that can be used to interface
 directly with the Solana command-line tools.
 
 **If you are unfamiliar with using command line programs and just want to be able
 to send and receive SOL tokens, we recommend setting up a third-party
-[Web Wallet](../wallet/web-wallets.md)**.
+[Web Wallet](app-wallets.md)**.
 
 To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
 
