@@ -1,11 +1,16 @@
+<<<<<<< HEAD
 use solana_sdk::pubkey::Pubkey;
+=======
+use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use std::sync::atomic::{AtomicU64, Ordering};
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
 use std::{
     collections::{HashMap, HashSet},
     sync::{RwLock, RwLockReadGuard},
 };
 
-pub type Slot = u64;
-type SlotList<T> = Vec<(Slot, T)>;
+pub type SlotList<T> = Vec<(Slot, T)>;
+pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
 type AccountMapEntry<T> = (RefCount, SlotList<T>);
 
@@ -31,35 +36,46 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
-    fn get_rooted_entries(&self, list: &[(Slot, T)]) -> Vec<(Slot, T)> {
-        list.iter()
+    fn get_rooted_entries(&self, slice: SlotSlice<T>) -> SlotList<T> {
+        slice
+            .iter()
             .filter(|(slot, _)| self.is_root(*slot))
             .cloned()
             .collect()
     }
 
+<<<<<<< HEAD
     pub fn would_purge(&self, pubkey: &Pubkey) -> Vec<(Slot, T)> {
         let list = &self.account_maps.get(&pubkey).unwrap().read().unwrap().1;
+=======
+    pub fn would_purge(&self, pubkey: &Pubkey) -> SlotList<T> {
+        let list = &self.account_maps.get(&pubkey).unwrap().1.read().unwrap();
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
         self.get_rooted_entries(&list)
     }
 
     // filter any rooted entries and return them along with a bool that indicates
     // if this account has no more entries.
+<<<<<<< HEAD
     pub fn purge(&self, pubkey: &Pubkey) -> (Vec<(Slot, T)>, bool) {
         let list = &mut self.account_maps.get(&pubkey).unwrap().write().unwrap().1;
+=======
+    pub fn purge(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
+        let list = &mut self.account_maps.get(&pubkey).unwrap().1.write().unwrap();
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
         let reclaims = self.get_rooted_entries(&list);
         list.retain(|(slot, _)| !self.is_root(*slot));
         (reclaims, list.is_empty())
     }
 
-    // find the latest slot and T in a list for a given ancestor
-    // returns index into 'list' if found, None if not.
-    fn latest_slot(&self, ancestors: &HashMap<Slot, usize>, list: &[(Slot, T)]) -> Option<usize> {
+    // find the latest slot and T in a slice for a given ancestor
+    // returns index into 'slice' if found, None if not.
+    fn latest_slot(&self, ancestors: &HashMap<Slot, usize>, slice: SlotSlice<T>) -> Option<usize> {
         let mut max = 0;
         let mut rv = None;
-        for (i, (slot, _t)) in list.iter().rev().enumerate() {
+        for (i, (slot, _t)) in slice.iter().rev().enumerate() {
             if *slot >= max && (ancestors.contains_key(slot) || self.is_root(*slot)) {
-                rv = Some((list.len() - 1) - i);
+                rv = Some((slice.len() - 1) - i);
                 max = *slot;
             }
         }
@@ -81,9 +97,9 @@ impl<T: Clone> AccountsIndex<T> {
         })
     }
 
-    pub fn get_max_root(roots: &HashSet<Slot>, slot_vec: &[(Slot, T)]) -> Slot {
+    pub fn get_max_root(roots: &HashSet<Slot>, slice: SlotSlice<T>) -> Slot {
         let mut max_root = 0;
-        for (f, _) in slot_vec.iter() {
+        for (f, _) in slice.iter() {
             if *f > max_root && roots.contains(f) {
                 max_root = *f;
             }
@@ -96,12 +112,15 @@ impl<T: Clone> AccountsIndex<T> {
         slot: Slot,
         pubkey: &Pubkey,
         account_info: T,
-        reclaims: &mut Vec<(Slot, T)>,
+        reclaims: &mut SlotList<T>,
     ) {
-        let _slot_vec = self
-            .account_maps
+        self.account_maps
             .entry(*pubkey)
+<<<<<<< HEAD
             .or_insert_with(|| RwLock::new((0 as RefCount, Vec::with_capacity(32))));
+=======
+            .or_insert_with(|| (AtomicU64::new(0), RwLock::new(SlotList::with_capacity(32))));
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
         self.update(slot, pubkey, account_info, reclaims);
     }
 
@@ -114,9 +133,10 @@ impl<T: Clone> AccountsIndex<T> {
         slot: Slot,
         pubkey: &Pubkey,
         account_info: T,
-        reclaims: &mut Vec<(Slot, T)>,
+        reclaims: &mut SlotList<T>,
     ) -> Option<T> {
         if let Some(lock) = self.account_maps.get(pubkey) {
+<<<<<<< HEAD
             let slot_vec = &mut lock.write().unwrap();
             // filter out other dirty entries
             reclaims.extend(slot_vec.1.iter().filter(|(f, _)| *f == slot).cloned());
@@ -126,6 +146,17 @@ impl<T: Clone> AccountsIndex<T> {
             slot_vec.1.push((slot, account_info));
             // now, do lazy clean
             self.purge_older_root_entries(&mut slot_vec.1, reclaims);
+=======
+            let mut list = &mut lock.1.write().unwrap();
+            // filter out other dirty entries
+            reclaims.extend(list.iter().filter(|(f, _)| *f == slot).cloned());
+            list.retain(|(f, _)| *f != slot);
+
+            lock.0.fetch_add(1, Ordering::Relaxed);
+            list.push((slot, account_info));
+            // now, do lazy clean
+            self.purge_older_root_entries(&mut list, reclaims);
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
 
             None
         } else {
@@ -134,44 +165,58 @@ impl<T: Clone> AccountsIndex<T> {
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
+<<<<<<< HEAD
         let locked_slot_vec = self.account_maps.get(pubkey);
         if let Some(slot_vec) = locked_slot_vec {
             let mut slot_vec = slot_vec.write().unwrap();
             slot_vec.0 -= 1 as RefCount;
+=======
+        let locked_entry = self.account_maps.get(pubkey);
+        if let Some(entry) = locked_entry {
+            entry.0.fetch_sub(1, Ordering::Relaxed);
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
         }
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
+<<<<<<< HEAD
         let locked_slot_vec = self.account_maps.get(pubkey);
         if let Some(slot_vec) = locked_slot_vec {
             slot_vec.read().unwrap().0
+=======
+        let locked_entry = self.account_maps.get(pubkey);
+        if let Some(entry) = locked_entry {
+            entry.0.load(Ordering::Relaxed)
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
         } else {
             0
         }
     }
 
-    fn purge_older_root_entries(
-        &self,
-        slot_vec: &mut Vec<(Slot, T)>,
-        reclaims: &mut Vec<(Slot, T)>,
-    ) {
+    fn purge_older_root_entries(&self, list: &mut SlotList<T>, reclaims: &mut SlotList<T>) {
         let roots = &self.roots;
 
-        let max_root = Self::get_max_root(roots, &slot_vec);
+        let max_root = Self::get_max_root(roots, &list);
 
         reclaims.extend(
-            slot_vec
-                .iter()
+            list.iter()
                 .filter(|(slot, _)| Self::can_purge(max_root, *slot))
                 .cloned(),
         );
-        slot_vec.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
+        list.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
     }
 
+<<<<<<< HEAD
     pub fn clean_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut Vec<(Slot, T)>) {
         if let Some(lock) = self.account_maps.get(pubkey) {
             let mut slot_vec = lock.write().unwrap();
             self.purge_older_root_entries(&mut slot_vec.1, reclaims);
+=======
+    pub fn clean_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut SlotList<T>) {
+        if let Some(locked_entry) = self.account_maps.get(pubkey) {
+            let mut list = locked_entry.1.write().unwrap();
+            self.purge_older_root_entries(&mut list, reclaims);
+>>>>>>> 2623c71ed... Use type aliases/resulting var names consistently (#9060)
         }
     }
 
