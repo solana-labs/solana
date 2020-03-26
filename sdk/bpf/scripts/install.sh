@@ -28,7 +28,9 @@ download() {
   # cargo install-update-config -a xargo
   set -x
   # cargo install-update -i xargo
+  env
   cargo --version
+  rustup toolchain list
   cargo install -f xargo
   xargo --version > xargo.md 2>&1
 )
