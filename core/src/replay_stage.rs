@@ -590,9 +590,8 @@ impl ReplayStage {
 
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
                 let latest_leader_slot = progress_map.get_latest_leader_slot(parent_slot).expect("In order for propagated check to fail, latest leader must exist in progress map");
-                error!("skipping slot: {}", poh_slot);
                 if poh_slot != skipped_slots_info.last_skipped_slot {
-                    datapoint_error!(
+                    datapoint_info!(
                         "replay_stage-skip_leader_slot",
                         ("slot", poh_slot, i64),
                         ("parent_slot", parent_slot, i64),
@@ -610,7 +609,7 @@ impl ReplayStage {
                             .last_retransmit_slot
                             .saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)
                 {
-                    datapoint_error!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
+                    datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
                     retransmit_slots_sender
                         .send(vec![(bank.slot(), bank.clone())].into_iter().collect())
                         .unwrap();
