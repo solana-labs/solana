@@ -963,7 +963,7 @@ impl RpcClient {
                 )
             })?
             .confirmations
-            .unwrap_or(32);
+            .unwrap_or(MAX_LOCKOUT_HISTORY + 1);
         Ok(confirmations)
     }
 

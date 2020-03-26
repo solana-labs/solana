@@ -657,7 +657,7 @@ An array of:
 * `<null>` - Unknown transaction
 * `<object>`
   * `slot: <u64>` - The slot the transaction was processed
-  * `confirmations: <usize>` - Number of blocks since signature confirmation
+  * `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted
   * `status: <object>` - Transaction status
     * `"Ok": <null>` - Transaction was successful
     * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
@@ -670,6 +670,9 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "status": {"Ok": null}}, null]},"id":1}
+
+// Result, first transaction rooted
+{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 48, "confirmations": null, "status": {"Ok": null}}, null]},"id":1}
 ```
 
 ### getSlot

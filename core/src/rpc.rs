@@ -417,7 +417,7 @@ impl JsonRpcRequestProcessor {
                  }| TransactionStatus {
                     slot,
                     status,
-                    confirmations: if confirmations < MAX_LOCKOUT_HISTORY {
+                    confirmations: if confirmations <= MAX_LOCKOUT_HISTORY {
                         Some(confirmations)
                     } else {
                         None
