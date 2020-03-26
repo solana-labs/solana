@@ -2172,7 +2172,7 @@ pub(crate) mod tests {
             ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
         );
 
-        let (bank_forks, mut progress) = initialize_state(&keypairs);
+        let (bank_forks, mut progress) = initialize_state(&keypairs, 10_000);
         let bank0 = bank_forks.get(0).unwrap().clone();
         let my_keypairs = keypairs.get(&node_pubkey).unwrap();
         let vote_tx = vote_transaction::new_vote_transaction(
@@ -2285,7 +2285,7 @@ pub(crate) mod tests {
             ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
         );
 
-        let (bank_forks, mut progress) = initialize_state(&keypairs);
+        let (bank_forks, mut progress) = initialize_state(&keypairs, 10_000);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let mut tower = Tower::new_with_key(&node_pubkey);
 

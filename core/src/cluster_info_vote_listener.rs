@@ -39,6 +39,7 @@ pub type VerifiedVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Pa
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 
+#[derive(Default)]
 pub struct SlotVoteTracker {
     voted: HashSet<Arc<Pubkey>>,
     updates: Option<Vec<Arc<Pubkey>>>,
@@ -51,11 +52,13 @@ impl SlotVoteTracker {
     }
 }
 
+#[derive(Default)]
 pub struct VoteTracker {
     // Map from a slot to a set of validators who have voted for that slot
     slot_vote_trackers: RwLock<HashMap<Slot, Arc<RwLock<SlotVoteTracker>>>>,
     // Don't track votes from people who are not staked, acts as a spam filter
     epoch_authorized_voters: RwLock<HashMap<Epoch, Arc<EpochAuthorizedVoters>>>,
+    leader_schedule_epoch: RwLock<Epoch>,
     keys: RwLock<HashSet<Arc<Pubkey>>>,
     epoch_schedule: EpochSchedule,
 }
@@ -63,50 +66,21 @@ pub struct VoteTracker {
 impl VoteTracker {
     pub fn new(root_bank: &Bank) -> Self {
         let current_epoch = root_bank.epoch();
-        let leader_schedule_epoch = root_bank
-            .epoch_schedule()
-            .get_leader_schedule_epoch(root_bank.slot());
-
         let vote_tracker = Self {
-            epoch_authorized_voters: RwLock::new(HashMap::new()),
-            slot_vote_trackers: RwLock::new(HashMap::new()),
-            keys: RwLock::new(HashSet::new()),
+            leader_schedule_epoch: RwLock::new(current_epoch),
             epoch_schedule: *root_bank.epoch_schedule(),
+            ..VoteTracker::default()
         };
-
-        // Parse voter information about all the known epochs
-        for epoch in current_epoch..=leader_schedule_epoch {
-            let new_epoch_authorized_voters = root_bank
-                .epoch_stakes(epoch)
-                .unwrap()
-                .epoch_authorized_voters()
-                .clone();
-            vote_tracker
-                .process_new_leader_schedule_epoch_state(epoch, new_epoch_authorized_voters);
-        }
-
+        vote_tracker.process_new_root_bank(&root_bank);
+        assert_eq!(
+            *vote_tracker.leader_schedule_epoch.read().unwrap(),
+            root_bank.get_leader_schedule_epoch(root_bank.slot())
+        );
         vote_tracker
     }
 
     pub fn get_slot_vote_tracker(&self, slot: Slot) -> Option<Arc<RwLock<SlotVoteTracker>>> {
         self.slot_vote_trackers.read().unwrap().get(&slot).cloned()
-    }
-
-    // Returns `Some` if the given pubkey is a staked voter for the epoch at the given
-    // slot. Note this decision uses bank.EpochStakes not live stakes.
-    pub fn get_voter_pubkey(&self, pubkey: &Pubkey, slot: Slot) -> Option<Pubkey> {
-        let epoch = self.epoch_schedule.get_epoch(slot);
-        self.epoch_authorized_voters
-            .read()
-            .unwrap()
-            .get(&epoch)
-            .map(|epoch_authorized_voters| {
-                epoch_authorized_voters
-                    .get_key_value(pubkey)
-                    .map(|(key, _)| key)
-            })
-            .unwrap_or(None)
-            .cloned()
     }
 
     pub fn get_authorized_voter(&self, pubkey: &Pubkey, slot: Slot) -> Option<Pubkey> {
@@ -134,19 +108,70 @@ impl VoteTracker {
         false
     }
 
-    fn process_new_leader_schedule_epoch_state(
-        &self,
-        new_leader_schedule_epoch: Epoch,
-        new_epoch_authorized_voters: Arc<EpochAuthorizedVoters>,
-    ) {
-        self.epoch_authorized_voters
+    #[cfg(test)]
+    pub fn insert_vote(&self, slot: Slot, pubkey: Arc<Pubkey>) {
+        let mut w_slot_vote_trackers = self.slot_vote_trackers.write().unwrap();
+
+        let slot_vote_tracker = w_slot_vote_trackers.entry(slot).or_default();
+
+        let mut w_slot_vote_tracker = slot_vote_tracker.write().unwrap();
+
+        w_slot_vote_tracker.voted.insert(pubkey.clone());
+        if let Some(ref mut updates) = w_slot_vote_tracker.updates {
+            updates.push(pubkey.clone())
+        } else {
+            w_slot_vote_tracker.updates = Some(vec![pubkey.clone()]);
+        }
+
+        self.keys.write().unwrap().insert(pubkey);
+    }
+
+    fn process_new_root_bank(&self, root_bank: &Bank) {
+        // Update with any newly calculated epoch state about future epochs
+        let start_leader_schedule_epoch = *self.leader_schedule_epoch.read().unwrap();
+        let mut greatest_leader_schedule_epoch = start_leader_schedule_epoch;
+        for leader_schedule_epoch in
+            start_leader_schedule_epoch..=root_bank.get_leader_schedule_epoch(root_bank.slot())
+        {
+            let exists = self
+                .epoch_authorized_voters
+                .read()
+                .unwrap()
+                .contains_key(&leader_schedule_epoch);
+            if !exists {
+                let epoch_authorized_voters = root_bank
+                    .epoch_stakes(leader_schedule_epoch)
+                    .unwrap()
+                    .epoch_authorized_voters()
+                    .clone();
+                self.epoch_authorized_voters
+                    .write()
+                    .unwrap()
+                    .insert(leader_schedule_epoch, epoch_authorized_voters);
+                greatest_leader_schedule_epoch = leader_schedule_epoch;
+            }
+        }
+
+        // Purge any outdated slot data
+        let new_root = root_bank.slot();
+        self.slot_vote_trackers
             .write()
             .unwrap()
-            .insert(new_leader_schedule_epoch, new_epoch_authorized_voters);
-        self.keys
-            .write()
-            .unwrap()
-            .retain(|pubkey| Arc::strong_count(pubkey) > 1);
+            .retain(|slot, _| *slot >= new_root);
+
+        if greatest_leader_schedule_epoch != start_leader_schedule_epoch {
+            // If we can compute a new epoch, purge outdated state
+            let current_root_epoch = root_bank.epoch();
+            self.epoch_authorized_voters
+                .write()
+                .unwrap()
+                .retain(|epoch, _| epoch >= &current_root_epoch);
+            self.keys
+                .write()
+                .unwrap()
+                .retain(|pubkey| Arc::strong_count(pubkey) > 1);
+            *self.leader_schedule_epoch.write().unwrap() = greatest_leader_schedule_epoch;
+        }
     }
 }
 
@@ -325,49 +350,16 @@ impl ClusterInfoVoteListener {
         vote_tracker: Arc<VoteTracker>,
         bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
-        let (mut old_leader_schedule_epoch, mut last_root) = {
-            let root_bank = bank_forks.read().unwrap().root_bank().clone();
-            (
-                root_bank.get_leader_schedule_epoch(root_bank.slot()),
-                root_bank.slot(),
-            )
-        };
-
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
 
             let root_bank = bank_forks.read().unwrap().root_bank().clone();
-            if root_bank.slot() != last_root {
-                Self::process_new_root(&vote_tracker, root_bank.slot());
-                last_root = root_bank.slot();
-            }
-
-            let new_leader_schedule_epoch =
-                { root_bank.get_leader_schedule_epoch(root_bank.slot()) };
-
-            if old_leader_schedule_epoch != new_leader_schedule_epoch {
-                assert!(vote_tracker
-                    .epoch_authorized_voters
-                    .read()
-                    .unwrap()
-                    .get(&new_leader_schedule_epoch)
-                    .is_none());
-                let new_epoch_authorized_voters = root_bank
-                    .epoch_stakes(new_leader_schedule_epoch)
-                    .unwrap()
-                    .epoch_authorized_voters()
-                    .clone();
-                vote_tracker.process_new_leader_schedule_epoch_state(
-                    new_leader_schedule_epoch,
-                    new_epoch_authorized_voters,
-                );
-                old_leader_schedule_epoch = new_leader_schedule_epoch;
-            }
+            vote_tracker.process_new_root_bank(&root_bank);
 
             if let Err(e) =
-                Self::get_and_process_votes(&vote_txs_receiver, &vote_tracker, last_root)
+                Self::get_and_process_votes(&vote_txs_receiver, &vote_tracker, root_bank.slot())
             {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -507,20 +499,6 @@ impl ClusterInfoVoteListener {
             }
         }
     }
-
-    fn process_new_root(vote_tracker: &VoteTracker, new_root: Slot) {
-        let root_epoch = vote_tracker.epoch_schedule.get_epoch(new_root);
-        vote_tracker
-            .slot_vote_trackers
-            .write()
-            .unwrap()
-            .retain(|slot, _| *slot >= new_root);
-        vote_tracker
-            .epoch_authorized_voters
-            .write()
-            .unwrap()
-            .retain(|epoch, _| epoch >= &root_epoch);
-    }
 }
 
 #[cfg(test)]
@@ -533,7 +511,7 @@ mod tests {
     };
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, Signer};
-    use solana_vote_program::{vote_state::create_account, vote_transaction};
+    use solana_vote_program::vote_transaction;
 
     #[test]
     fn test_max_vote_tx_fits() {
@@ -620,6 +598,57 @@ mod tests {
     }
 
     #[test]
+    fn test_process_new_root_bank() {
+        let validator_voting_keypairs: Vec<_> = (0..10)
+            .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
+            .collect();
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                10_000,
+                &validator_voting_keypairs,
+                100,
+            );
+        let bank = Bank::new(&genesis_config);
+        let vote_tracker = Arc::new(VoteTracker::new(&bank));
+        let current_epoch = bank.epoch();
+        let leader_schedule_epoch = bank.get_leader_schedule_epoch(bank.slot());
+        vote_tracker.process_new_root_bank(&bank);
+
+        // Check the vote tracker has all the known epoch state on construction
+        for epoch in current_epoch..=leader_schedule_epoch {
+            assert_eq!(
+                vote_tracker
+                    .epoch_authorized_voters
+                    .read()
+                    .unwrap()
+                    .get(&epoch)
+                    .unwrap(),
+                bank.epoch_stakes(epoch).unwrap().epoch_authorized_voters()
+            );
+        }
+
+        // Check outdated slots are purged with new root
+        let new_voter = Arc::new(Pubkey::new_rand());
+        vote_tracker.insert_vote(5, new_voter.clone());
+        assert!(vote_tracker
+            .slot_vote_trackers
+            .read()
+            .unwrap()
+            .contains_key(&5));
+        let bank6 = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 6);
+        vote_tracker.process_new_root_bank(&bank6);
+        assert!(!vote_tracker
+            .slot_vote_trackers
+            .read()
+            .unwrap()
+            .contains_key(&5));
+
+        // Check `keys` and `epoch_authorized_voters` are purged at new epoch
+        assert!(vote_tracker.keys.read().unwrap().contains(&new_voter));
+        assert!(!vote_tracker.keys.read().unwrap().contains(&new_voter));
+    }
+
+    #[test]
     fn test_process_votes() {
         // Create some voters at genesis
         let validator_voting_keypairs: Vec<_> = (0..10)
@@ -629,6 +658,7 @@ mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
+                100,
             );
         let bank = Bank::new(&genesis_config);
 
@@ -679,6 +709,7 @@ mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
+                100,
             );
         let bank = Bank::new(&genesis_config);
 
@@ -733,6 +764,7 @@ mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
+                100,
             );
         let bank = Bank::new(&genesis_config);
 
@@ -742,14 +774,8 @@ mod tests {
             .epoch_schedule()
             .get_last_slot_in_epoch(last_known_epoch);
 
-        // Check we can get the voters and authorized voters
+        // Check we can get the authorized voters
         for keypairs in &validator_voting_keypairs {
-            assert!(vote_tracker
-                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), last_known_slot)
-                .is_some());
-            assert!(vote_tracker
-                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), last_known_slot + 1)
-                .is_none());
             assert!(vote_tracker
                 .get_authorized_voter(&keypairs.vote_keypair.pubkey(), last_known_slot)
                 .is_some());
@@ -764,37 +790,17 @@ mod tests {
         let new_keypairs: Vec<_> = (0..10)
             .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
             .collect();
-        let new_epoch_vote_accounts: HashMap<_, _> = new_keypairs
+        let new_epoch_authorized_voters: HashMap<_, _> = new_keypairs
             .iter()
             .chain(validator_voting_keypairs[0..5].iter())
-            .map(|keypair| {
-                (
-                    keypair.vote_keypair.pubkey(),
-                    (
-                        1,
-                        bank.get_account(&keypair.vote_keypair.pubkey())
-                            .unwrap_or(create_account(
-                                &keypair.vote_keypair.pubkey(),
-                                &keypair.vote_keypair.pubkey(),
-                                0,
-                                100,
-                            )),
-                    ),
-                )
-            })
+            .map(|keypair| (keypair.vote_keypair.pubkey(), keypair.vote_keypair.pubkey()))
             .collect();
 
-        let (new_epoch_authorized_voters, new_pubkeys) = VoteTracker::parse_epoch_state(
-            new_epoch,
-            &new_epoch_vote_accounts,
-            &vote_tracker.keys.read().unwrap(),
-        );
-
-        vote_tracker.process_new_leader_schedule_epoch_state(
-            new_epoch,
-            new_epoch_authorized_voters,
-            new_pubkeys,
-        );
+        vote_tracker
+            .epoch_authorized_voters
+            .write()
+            .unwrap()
+            .insert(new_epoch, Arc::new(new_epoch_authorized_voters));
 
         // These keypairs made it into the new epoch
         for keypairs in new_keypairs
@@ -802,18 +808,12 @@ mod tests {
             .chain(validator_voting_keypairs[0..5].iter())
         {
             assert!(vote_tracker
-                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
-                .is_some());
-            assert!(vote_tracker
                 .get_authorized_voter(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
                 .is_some());
         }
 
         // These keypairs were not refreshed in new epoch
         for keypairs in validator_voting_keypairs[5..10].iter() {
-            assert!(vote_tracker
-                .get_voter_pubkey(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
-                .is_none());
             assert!(vote_tracker
                 .get_authorized_voter(&keypairs.vote_keypair.pubkey(), first_slot_in_new_epoch)
                 .is_none());
@@ -836,6 +836,7 @@ mod tests {
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
                 &validator_voting_keypairs,
+                100,
             );
         let bank = Bank::new(&genesis_config);
 
@@ -853,27 +854,37 @@ mod tests {
             &validator0_keypairs.vote_keypair,
         )];
 
-        let mut current_ref_count = Arc::strong_count(
+        ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, 0);
+        let ref_count = Arc::strong_count(
             &vote_tracker
-                .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey(), bank.slot())
+                .keys
+                .read()
+                .unwrap()
+                .get(&validator0_keypairs.vote_keypair.pubkey())
                 .unwrap(),
         );
 
-        {
-            ClusterInfoVoteListener::process_votes(&vote_tracker, vote_tx, 0);
-            let ref_count = Arc::strong_count(
-                &vote_tracker
-                    .get_voter_pubkey(&validator0_keypairs.vote_keypair.pubkey(), bank.slot())
-                    .unwrap(),
-            );
+        // This pubkey voted for a slot, so ref count is `ref_count_per_vote + 1`,
+        // +1 in `vote_tracker.keys` and +ref_count_per_vote for the one vote
+        let mut current_ref_count = ref_count_per_vote + 1;
+        assert_eq!(ref_count, current_ref_count);
 
-            // This pubkey voted for a slot, so ref count goes up
-            current_ref_count += ref_count_per_vote;
-            assert_eq!(ref_count, current_ref_count);
-        }
+        // Setup next epoch
+        let old_epoch = bank.get_leader_schedule_epoch(bank.slot());
+        let new_epoch = old_epoch + 1;
+        let new_epoch_vote_accounts: HashMap<_, _> = vec![(
+            validator0_keypairs.vote_keypair.pubkey(),
+            validator0_keypairs.vote_keypair.pubkey(),
+        )]
+        .into_iter()
+        .collect();
+        vote_tracker
+            .epoch_authorized_voters
+            .write()
+            .unwrap()
+            .insert(new_epoch, Arc::new(new_epoch_vote_accounts));
 
         // Test with votes across two epochs
-        let new_epoch = bank.get_leader_schedule_epoch(bank.slot()) + 1;
         let first_slot_in_new_epoch = bank.epoch_schedule().get_first_slot_in_epoch(new_epoch);
 
         // Make 2 new votes in two different epochs, ref count should go up
@@ -897,11 +908,12 @@ mod tests {
 
         let ref_count = Arc::strong_count(
             &vote_tracker
-                .get_voter_pubkey(&old_refreshed_pubkey, first_slot_in_new_epoch)
+                .keys
+                .read()
+                .unwrap()
+                .get(&validator0_keypairs.vote_keypair.pubkey())
                 .unwrap(),
         );
-
-        // Ref count goes up by 2 (see above comments)
         current_ref_count += 2 * ref_count_per_vote;
         assert_eq!(ref_count, current_ref_count);
     }
