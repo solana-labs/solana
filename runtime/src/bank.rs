@@ -2974,9 +2974,7 @@ mod tests {
             genesis_config.hash(),
         );
 
-        let pre_balance = bank.get_balance(&account_pubkey);
-        let result = bank.process_transaction(&tx);
-        assert_eq!(result, Ok(()));
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(
             bank.get_balance(&account_pubkey),
             account_balance + transfer_lamports
