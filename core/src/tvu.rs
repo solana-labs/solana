@@ -308,7 +308,10 @@ pub mod tests {
             blockstore,
             &StorageState::default(),
             l_receiver,
-            &Arc::new(RpcSubscriptions::new(&exit)),
+            &Arc::new(RpcSubscriptions::new(
+                &exit,
+                Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            )),
             &poh_recorder,
             &leader_schedule_cache,
             &exit,

@@ -1846,7 +1846,7 @@ impl Bank {
         signature: &Signature,
     ) -> Option<Result<()>> {
         if let Some((slot, status)) = self.get_signature_status_slot(signature) {
-            if slot == self.slot() {
+            if slot <= self.slot() {
                 return Some(status);
             }
         }

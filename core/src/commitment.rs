@@ -108,6 +108,16 @@ impl BlockCommitmentCache {
             0
         })
     }
+    #[cfg(test)]
+    pub fn new_for_tests() -> Self {
+        let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
+        block_commitment.insert(0, BlockCommitment::default());
+        Self {
+            block_commitment,
+            total_stake: 42,
+            ..Self::default()
+        }
+    }
 }
 
 pub struct CommitmentAggregationData {

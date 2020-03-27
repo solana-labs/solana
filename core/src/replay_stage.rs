@@ -1904,7 +1904,10 @@ pub(crate) mod tests {
             );
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let exit = Arc::new(AtomicBool::new(false));
-            let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
+            let subscriptions = Arc::new(RpcSubscriptions::new(
+                &exit,
+                Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            ));
             let mut bank_forks = BankForks::new(0, bank0);
 
             // Insert a non-root bank so that the propagation logic will update this
