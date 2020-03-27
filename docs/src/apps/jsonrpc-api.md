@@ -296,11 +296,11 @@ The result field will be an object with the following fields:
 * `previousBlockhash: <string>` - the blockhash of this block's parent, as base-58 encoded string
 * `parentSlot: <u64>` - the slot index of this block's parent
 * `transactions: <array>` - an array of JSON objects containing:
-  * `transaction: <object|string>` - [Transaction](transaction-api.md) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
+  * `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
   * `meta: <object>` - transaction status metadata object, containing `null` or:
      * `status: <object>` - Transaction status:
        * `"Ok": null` - Transaction was successful
-       * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+       * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L18)
      * `fee: <u64>` - fee this transaction was charged, as u64 integer
      * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
      * `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -323,6 +323,25 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 // Result
 {"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[{"transaction":"81UZJt4dh4Do66jDhrgkQudS8J2N6iG3jaVav7gJrqJSFY4Ug53iA9JFJZh2gxKWcaFdLJwhHx9mRdg9JwDAWB4ywiu5154CRwXV4FMdnPLg7bhxRLwhhYaLsVgMF5AyNRcTzjCVoBvqFgDU7P8VEKDEiMvD3qxzm1pLZVxDG1LTQpT3Dz4Uviv4KQbFQNuC22KupBoyHFB7Zh6KFdMqux4M9PvhoqcoJsJKwXjWpKu7xmEKnnrSbfLadkgjBmmjhW3fdTrFvnhQdTkhtdJxUL1xS9GMuJQer8YgSKNtUXB1eXZQwXU8bU2BjYkZE6Q5Xww8hu9Z4E4Mo4QsooVtHoP6BM3NKw8zjVbWfoCQqxTrwuSzrNCWCWt58C24LHecH67CTt2uXbYSviixvrYkK7A3t68BxTJcF1dXJitEPTFe2ceTkauLJqrJgnER4iUrsjr26T8YgWvpY9wkkWFSviQW6wV5RASTCUasVEcrDiaKj8EQMkgyDoe9HyKitSVg67vMWJFpUXpQobseWJUs5FTWWzmfHmFp8FZ","meta":{"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}}]},"id":1}
 ```
+
+#### Transaction Structure
+
+Transactions are quite different from those on other blockchains. Be sure to review [Anatomy of a Transaction](transaction.md) to learn about transactions on Solana.
+
+The JSON structure of a transaction is defined as follows:
+
+* `signatures: <array[string]>` - A list of base-58 encoded signatures applied to the transaction. The list is always of length `message.header.numRequiredSignatures`, and the signature at index `i` corresponds to the public key at index `i` in `message.account_keys`.
+* `message: <object>` - Defines the content of the transaction.
+  * `accountKeys: <array[string]>` - List of base-58 encoded public keys used by the transaction, including by the instructions and for signatures. The first `message.header.numRequiredSignatures` public keys must sign the transaction.
+  * `header: <object>` - Details the account types and signatures required by the transaction.
+    * `numRequiredSignatures: <number>` - The total number of signatures required to make the transaction valid. The signatures must match the first `numRequiredSignatures` of `message.account_keys`.
+    * `numReadonlySignedAccounts: <number>` - The last `numReadonlySignedAccounts` of the signed keys are read-only accounts. Programs may process multiple transactions that load read-only accounts within a single PoH entry, but are not permitted to credit or debit lamports or modify account data. Transactions targeting the same read-write account are evaluated sequentially.
+    * `numReadonlyUnsignedAccounts: <number>` - The last `numReadonlyUnsignedAccounts` of the unsigned keys are read-only accounts.
+  * `recentBlockhash: <string>` - A base-58 encoded hash of a recent block in the ledger used to prevent transaction duplication and to give transactions lifetimes.
+  * `instructions: <array[object]>` - List of program instructions that will be executed in sequence and committed in one atomic transaction if all succeed.
+    * `programIdIndex: <number>` - Index into the `message.accountKeys` array indicating the program account that executes this instruction.
+    * `accounts: <array[number]>` - List of ordered indices into the `message.accountKeys` array indicating which accounts to pass to the program.
+    * `data: <string>` - The program input data encoded in a base-58 string.
 
 ### getConfirmedBlocks
 
