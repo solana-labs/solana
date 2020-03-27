@@ -4,7 +4,7 @@
 
 Validator-clients have two functional roles in the Solana network:
 
-* Validate \(vote\) the current global state of that PoH along with any Proofs-of-Replication \(see [Replication Client Economics](../ed_replication_client_economics/)\) that they are eligible to validate.
+* Validate \(vote\) the current global state of that PoH along with any Proofs-of-Replication \(see [Replication Client Economics](../ed_replication_client_economics/README.md)\) that they are eligible to validate.
 * Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and Proofs-of-Replication and incorporating them into the PoH, thus updating the global state of the network and providing chain continuity.
 
 Validator-client rewards for these services are to be distributed at the end of each Solana epoch. As previously discussed, compensation for validator-clients is provided via a protocol-based annual inflation rate dispersed in proportion to the stake-weight of each validator \(see below\) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each transaction fee, less a protocol-specified amount that is destroyed \(see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)\). PoRep transaction fees are also collected by the leader client and validator PoRep rewards are distributed in proportion to the number of validated PoReps less the number of PoReps that mismatch an archiver's challenge. \(see [Replication-client Transaction Fees](ed_vce_replication_validation_transaction_fees.md)\)

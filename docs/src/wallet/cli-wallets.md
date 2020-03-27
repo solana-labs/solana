@@ -40,7 +40,7 @@ In terms of convenience versus security, a paper wallet sits at the opposite
 side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
 offers excellent security. That high security is further amplified when paper
 wallets are used in conjunction with
-[offline signing](../offline-signing/index.md). Custody services such as
+[offline signing](../offline-signing/README.md). Custody services such as
 [Coinbase Custody](https://custody.coinbase.com/) use this combination.
 Paper wallets and custody services are an excellent way to secure a large number
 of tokens for a long period of time.
