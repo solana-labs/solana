@@ -18,7 +18,6 @@ pub enum RpcRequest {
     GetIdentity,
     GetInflation,
     GetLeaderSchedule,
-    GetNumBlocksSinceSignatureConfirmation,
     GetProgramAccounts,
     GetRecentBlockhash,
     GetFeeCalculatorForBlockhash,
@@ -60,9 +59,6 @@ impl RpcRequest {
             RpcRequest::GetIdentity => "getIdentity",
             RpcRequest::GetInflation => "getInflation",
             RpcRequest::GetLeaderSchedule => "getLeaderSchedule",
-            RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
-                "getNumBlocksSinceSignatureConfirmation"
-            }
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetFeeCalculatorForBlockhash => "getFeeCalculatorForBlockhash",
