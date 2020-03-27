@@ -120,9 +120,11 @@ impl RpcClient {
             json!([[signature.to_string()], commitment_config]),
             5,
         )?;
-        let result: Vec<Option<TransactionStatus>> =
+        let result: Response<Vec<Option<TransactionStatus>>> =
             serde_json::from_value(signature_status).unwrap();
-        Ok(result[0].clone().map(|status_meta| status_meta.status))
+        Ok(result.value[0]
+            .clone()
+            .map(|status_meta| status_meta.status))
     }
 
     pub fn get_slot(&self) -> ClientResult<Slot> {
@@ -944,14 +946,25 @@ impl RpcClient {
         let response = self
             .client
             .send(
-                &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
-                json!([signature.to_string(), CommitmentConfig::recent().ok()]),
+                &RpcRequest::GetSignatureStatus,
+                json!([[signature.to_string()], CommitmentConfig::recent().ok()]),
                 1,
             )
-            .map_err(|err| err.into_with_command("GetNumBlocksSinceSignatureConfirmation"))?;
-        serde_json::from_value(response).map_err(|err| {
-            ClientError::new_with_command(err.into(), "GetNumBlocksSinceSignatureConfirmation")
-        })
+            .map_err(|err| err.into_with_command("GetSignatureStatus"))?;
+        let result: Response<Vec<Option<TransactionStatus>>> =
+            serde_json::from_value(response).unwrap();
+
+        let confirmations = result.value[0]
+            .clone()
+            .ok_or_else(|| {
+                ClientError::new_with_command(
+                    ClientErrorKind::Custom("signature not found".to_string()),
+                    "GetSignatureStatus",
+                )
+            })?
+            .confirmations
+            .unwrap_or(MAX_LOCKOUT_HISTORY + 1);
+        Ok(confirmations)
     }
 
     pub fn send_and_confirm_transaction_with_spinner<T: Signers>(

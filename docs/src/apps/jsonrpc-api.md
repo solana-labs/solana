@@ -31,10 +31,8 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getInflation](jsonrpc-api.md#getinflation)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
-* [getNumBlocksSinceSignatureConfirmation](jsonrpc-api.md#getnumblockssincesignatureconfirmation)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
-* [getSignatureConfirmation](jsonrpc-api.md#getsignatureconfirmation)
 * [getSignatureStatus](jsonrpc-api.md#getsignaturestatus)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
@@ -580,29 +578,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 {"jsonrpc":"2.0","result":500,"id":1}
 ```
 
-### getNumBlocksSinceSignatureConfirmation
-
-Returns the current number of blocks since signature has been confirmed.
-
-#### Parameters:
-
-* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `<u64>` - count, or null if signature not found
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getNumBlocksSinceSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":8,"id":1}
-```
-
 ### getProgramAccounts
 
 Returns all accounts owned by the provided program Pubkey
@@ -660,33 +635,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"burnPercent":50,"lamportsPerSignature":5000,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
 ```
 
-### getSignatureConfirmation
-
-Returns the status and number of confirmations of a given signature.
-#### Parameters:
-
-* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `<null>` - Unknown transaction
-* `<object>` - Transaction confirmations and status:
-  * `confirmations: <u64>` - count of confirmations since transaction was processed
-  * `status: <object>` -
-    * `"Ok": <null>` - Transaction was successful
-    * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"confirmations":12,"status":{"Ok": null}},"id":1}
-```
-
 ### getSignatureStatus
 
 Returns the status of a given signature. This method is similar to [confirmTransaction](jsonrpc-api.md#confirmtransaction) but provides more resolution for error events.
@@ -700,11 +648,16 @@ Returns the status of a given signature. This method is similar to [confirmTrans
 
 #### Results:
 
+An RpcResponse containing a JSON object consisting of an array of TransactionStatus objects.
+
+* `RpcResponse<object>` - RpcResponse JSON object with `value` field:
+
 An array of:
 
 * `<null>` - Unknown transaction
 * `<object>`
   * `slot: <u64>` - The slot the transaction was processed
+  * `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted
   * `status: <object>` - Transaction status
     * `"Ok": <null>` - Transaction was successful
     * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
@@ -716,7 +669,10 @@ An array of:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[{"slot": 72, "status": {"Ok": null}}, null],"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "status": {"Ok": null}}, null]},"id":1}
+
+// Result, first transaction rooted
+{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 48, "confirmations": null, "status": {"Ok": null}}, null]},"id":1}
 ```
 
 ### getSlot

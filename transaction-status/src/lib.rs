@@ -30,6 +30,7 @@ pub struct TransactionStatusMeta {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,
+    pub confirmations: Option<usize>,
     pub status: Result<()>,
 }
 
