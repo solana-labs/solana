@@ -13,7 +13,7 @@ use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, rooted_slot_iterator::RootedSlotIterator,
 };
 use solana_perf::packet::PACKET_DATA_SIZE;
-use solana_runtime::{bank::Bank, status_cache::SignatureConfirmationStatus};
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -196,11 +196,9 @@ impl JsonRpcRequestProcessor {
         match signature {
             Err(e) => Err(e),
             Ok(sig) => {
-                let status = bank.get_signature_confirmation_status(&sig);
+                let status = bank.get_signature_status(&sig);
                 match status {
-                    Some(SignatureConfirmationStatus { status, .. }) => {
-                        new_response(bank, status.is_ok())
-                    }
+                    Some(status) => new_response(bank, status.is_ok()),
                     None => new_response(bank, false),
                 }
             }

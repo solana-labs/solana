@@ -1845,18 +1845,15 @@ impl Bank {
         &self,
         signature: &Signature,
     ) -> Option<Result<()>> {
-        if let Some(status) = self.get_signature_confirmation_status(signature) {
-            if status.slot == self.slot() {
-                return Some(status.status);
+        if let Some((slot, status)) = self.get_signature_status_slot(signature) {
+            if slot == self.slot() {
+                return Some(status);
             }
         }
         None
     }
 
-    pub fn get_signature_status_slot(
-        &self,
-        signature: &Signature
-    ) -> Option<(Slot, Result<()>)> {
+    pub fn get_signature_status_slot(&self, signature: &Signature) -> Option<(Slot, Result<()>)> {
         let rcache = self.src.status_cache.read().unwrap();
         rcache.get_signature_slot(signature, &self.ancestors)
     }
@@ -1870,12 +1867,11 @@ impl Bank {
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        self.get_signature_confirmation_status(signature)
-            .map(|v| v.status)
+        self.get_signature_status_slot(signature).map(|v| v.1)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.get_signature_confirmation_status(signature).is_some()
+        self.get_signature_status_slot(signature).is_some()
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation

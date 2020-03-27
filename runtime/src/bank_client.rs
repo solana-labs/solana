@@ -1,4 +1,4 @@
-use crate::{bank::Bank, status_cache::SignatureConfirmationStatus};
+use crate::bank::Bank;
 use solana_sdk::{
     account::Account,
     client::{AsyncClient, Client, SyncClient},
@@ -184,26 +184,15 @@ impl SyncClient for BankClient {
         signature: &Signature,
         min_confirmed_blocks: usize,
     ) -> Result<usize> {
-        let mut now = Instant::now();
-        let mut confirmed_blocks = 0;
+        // https://github.com/solana-labs/solana/issues/7199
+        assert_eq!(min_confirmed_blocks, 1, "BankClient cannot observe the passage of multiple blocks, so min_confirmed_blocks must be 1");
+        let now = Instant::now();
+        let confirmed_blocks;
         loop {
-            let response = self.bank.get_signature_confirmation_status(signature);
-            if let Some(SignatureConfirmationStatus {
-                confirmations,
-                status,
-                ..
-            }) = response
-            {
-                if status.is_ok() {
-                    if confirmed_blocks != confirmations {
-                        now = Instant::now();
-                        confirmed_blocks = confirmations;
-                    }
-                    if confirmations >= min_confirmed_blocks {
-                        break;
-                    }
-                }
-            };
+            if self.bank.get_signature_status(signature).is_some() {
+                confirmed_blocks = 1;
+                break;
+            }
             if now.elapsed().as_secs() > 15 {
                 return Err(TransportError::IoError(io::Error::new(
                     io::ErrorKind::Other,
