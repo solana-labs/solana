@@ -5,9 +5,9 @@ use crate::{
     rpc_client_request::RpcClientRequest,
     rpc_request::{RpcError, RpcRequest},
     rpc_response::{
-        Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-        RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
-        RpcLeaderSchedule, RpcResult, RpcTransactionStatus, RpcVersionInfo, RpcVoteAccountStatus,
+        Response, RpcAccount, RpcBlockhashFeeCalculator, RpcContactInfo, RpcEpochInfo,
+        RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount, RpcLeaderSchedule,
+        RpcResult, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -27,7 +27,7 @@ use solana_sdk::{
     signers::Signers,
     transaction::{self, Transaction, TransactionError},
 };
-use solana_transaction_status::{ConfirmedBlock, TransactionEncoding, TransactionStatus};
+use solana_transaction_status::{ConfirmedBlock, TransactionStatus};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     error,

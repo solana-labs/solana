@@ -3900,6 +3900,7 @@ dependencies = [
  "solana-logger 1.0.11",
  "solana-net-utils 1.0.11",
  "solana-sdk 1.0.11",
+ "solana-transaction-status 1.0.11",
  "solana-vote-program 1.0.11",
  "thiserror 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "tungstenite 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
