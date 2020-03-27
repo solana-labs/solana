@@ -5,7 +5,7 @@ and verify you control its private key. Before you begin, you will need
 to:
 
 * [Install the Solana Tool Suite](install-solana-cli-tools.md)
-* [Choose a wallet](cli-wallets.md)
+* [Choose a Command-line wallet](../wallet/cli-wallets.md)
 
 ## Generate an FS Wallet Keypair
 
