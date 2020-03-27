@@ -52,7 +52,7 @@ the one in your keypair file, and "Failed" otherwise.
 
 ## Generate a Paper Wallet Seed Phrase
 
-See [Creating a Paper Wallet](../paper-wallet/usage.md#creating-a-paper-wallet).
+See [Creating a Paper Wallet](../paper-wallet/paper-wallet-usage.md#creating-a-paper-wallet).
 
 To verify you control the private key of that public key, use `solana-keygen verify`:
 
