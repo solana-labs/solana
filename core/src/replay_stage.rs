@@ -336,6 +336,7 @@ impl ReplayStage {
                             &lockouts_sender,
                             &accounts_hash_sender,
                             &latest_root_senders,
+                            &subscriptions,
                         )?;
                     }
                     datapoint_debug!(
@@ -607,6 +608,7 @@ impl ReplayStage {
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_hash_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -633,6 +635,7 @@ impl ReplayStage {
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
             Self::handle_new_root(new_root, &bank_forks, progress, accounts_hash_sender);
+            subscriptions.notify_roots(rooted_slots);
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
                     trace!("latest root send failed: {:?}", e);
