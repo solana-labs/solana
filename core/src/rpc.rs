@@ -409,21 +409,26 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(commitment);
 
         for signature in signatures {
-            let status = bank.get_signature_confirmation_status(&signature).map(
-                |SignatureConfirmationStatus {
-                     slot,
-                     status,
-                     confirmations,
-                 }| TransactionStatus {
-                    slot,
-                    status,
-                    confirmations: if confirmations <= MAX_LOCKOUT_HISTORY {
-                        Some(confirmations)
-                    } else {
-                        None
-                    },
-                },
-            );
+            let status = bank
+                .get_signature_status_slot(&signature)
+                .map(|(slot, status)| {
+                    let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
+                    let confirmations = r_block_commitment_cache
+                        .get_confirmation_count(slot)
+                        .and_then(|confirmations| {
+                            if confirmations <= MAX_LOCKOUT_HISTORY {
+                                Some(confirmations)
+                            } else {
+                                None
+                            }
+                        })
+                        .or(Some(0));
+                    TransactionStatus {
+                        slot,
+                        status,
+                        confirmations,
+                    }
+                });
             statuses.push(status);
         }
         Ok(Response {
@@ -1774,7 +1779,9 @@ pub mod tests {
         let result: Option<TransactionStatus> =
             serde_json::from_value(json["result"]["value"][0].clone())
                 .expect("actual response deserialization");
-        assert_eq!(expected_res, result.as_ref().unwrap().status);
+        let result = result.as_ref().unwrap();
+        assert_eq!(expected_res, result.status);
+        assert_eq!(Some(2), result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
@@ -2211,7 +2218,7 @@ pub mod tests {
                 .get_block_commitment(0)
                 .map(|block_commitment| block_commitment.commitment)
         );
-        assert_eq!(total_stake, 42);
+        assert_eq!(total_stake, 10);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}}"#);
@@ -2229,7 +2236,7 @@ pub mod tests {
                 panic!("Expected single response");
             };
         assert_eq!(commitment_response.commitment, None);
-        assert_eq!(commitment_response.total_stake, 42);
+        assert_eq!(commitment_response.total_stake, 10);
     }
 
     #[test]
