@@ -35,7 +35,12 @@ impl PreAccount {
             is_writable,
             lamports: account.lamports,
             data_len: account.data.len(),
-            data: if Self::should_verify_data(&account.owner, program_id, is_writable) {
+            data: if Self::should_verify_data(
+                &account.owner,
+                program_id,
+                is_writable,
+                account.executable,
+            ) {
                 Some(account.data.clone())
             } else {
                 None
@@ -46,11 +51,18 @@ impl PreAccount {
         }
     }
 
-    fn should_verify_data(owner: &Pubkey, program_id: &Pubkey, is_writable: bool) -> bool {
+    fn should_verify_data(
+        owner: &Pubkey,
+        program_id: &Pubkey,
+        is_writable: bool,
+        is_executable: bool,
+    ) -> bool {
         // For accounts not assigned to the program, the data may not change.
         program_id != owner
         // Read-only account data may not change.
         || !is_writable
+        // Executable account data may not change.
+        || is_executable
     }
 
     pub fn verify(&self, program_id: &Pubkey, post: &Account) -> Result<(), InstructionError> {
@@ -88,14 +100,16 @@ impl PreAccount {
             return Err(InstructionError::AccountDataSizeChanged);
         }
 
-        if Self::should_verify_data(&self.owner, program_id, self.is_writable) {
+        if Self::should_verify_data(&self.owner, program_id, self.is_writable, self.executable) {
             match &self.data {
                 Some(data) if *data == post.data => (),
                 _ => {
-                    if !self.is_writable {
-                        return Err(InstructionError::ReadonlyDataModified);
-                    } else {
+                    if self.executable {
+                        return Err(InstructionError::ExecutableDataModified);
+                    } else if self.is_writable {
                         return Err(InstructionError::ExternalAccountDataModified);
+                    } else {
+                        return Err(InstructionError::ReadonlyDataModified);
                     }
                 }
             }
@@ -476,12 +490,15 @@ mod tests {
         let change_executable = |program_id: &Pubkey,
                                  is_writable: bool,
                                  pre_executable: bool,
-                                 post_executable: bool|
+                                 post_executable: bool,
+                                 pre_data: Vec<u8>,
+                                 post_data: Vec<u8>|
          -> Result<(), InstructionError> {
             let pre = PreAccount::new(
                 &Account {
                     owner,
                     executable: pre_executable,
+                    data: pre_data,
                     ..Account::default()
                 },
                 is_writable,
@@ -491,6 +508,7 @@ mod tests {
             let post = Account {
                 owner,
                 executable: post_executable,
+                data: post_data,
                 ..Account::default()
             };
             pre.verify(&program_id, &post)
@@ -500,29 +518,44 @@ mod tests {
         let system_program_id = system_program::id();
 
         assert_eq!(
-            change_executable(&system_program_id, true, false, true),
+            change_executable(&system_program_id, true, false, true, vec![1], vec![1]),
             Err(InstructionError::ExecutableModified),
             "system program can't change executable if system doesn't own the account"
         );
         assert_eq!(
-            change_executable(&owner, true, false, true),
+            change_executable(&system_program_id, true, true, true, vec![1], vec![2]),
+            Err(InstructionError::ExecutableDataModified),
+            "system program can't change executable data if system doesn't own the account"
+        );
+        assert_eq!(
+            change_executable(&owner, true, false, true, vec![1], vec![1]),
             Ok(()),
-            "alice program should be able to change executable"
+            "owner should be able to change executable"
         );
         assert_eq!(
-            change_executable(&owner, false, false, true),
+            change_executable(&owner, false, false, true, vec![1], vec![1]),
             Err(InstructionError::ExecutableModified),
-            "system program can't modify executable of read-only accounts"
+            "owner can't modify executable of read-only accounts"
         );
         assert_eq!(
-            change_executable(&owner, true, true, false),
+            change_executable(&owner, true, true, false, vec![1], vec![1]),
             Err(InstructionError::ExecutableModified),
-            "system program can't reverse executable"
+            "owner program can't reverse executable"
         );
         assert_eq!(
-            change_executable(&mallory_program_id, true, false, true),
+            change_executable(&mallory_program_id, true, false, true, vec![1], vec![1]),
             Err(InstructionError::ExecutableModified),
             "malicious Mallory should not be able to change the account executable"
+        );
+        assert_eq!(
+            change_executable(&owner, true, false, true, vec![1], vec![2]),
+            Ok(()),
+            "account data can change in the same instruction that sets the bit"
+        );
+        assert_eq!(
+            change_executable(&owner, true, true, true, vec![1], vec![2]),
+            Err(InstructionError::ExecutableDataModified),
+            "owner should not be able to change an account's data once its marked executable"
         );
     }
 

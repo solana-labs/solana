@@ -69,7 +69,7 @@ pub enum InstructionError {
     #[error("instruction changed balance of a read-only account")]
     ReadonlyLamportChange,
 
-    /// Read-only account modified data
+    /// Read-only account's data was modified
     #[error("instruction modified data of a read-only account")]
     ReadonlyDataModified,
 
@@ -122,6 +122,10 @@ pub enum InstructionError {
     /// error value or a user-defined error in the lower 32 bits.
     #[error("program returned invalid error code")]
     InvalidError,
+
+    /// Executable account's data was modified
+    #[error("instruction changed executable accounts data")]
+    ExecutableDataModified,
 }
 
 impl InstructionError {
