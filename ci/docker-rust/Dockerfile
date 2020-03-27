@@ -32,6 +32,7 @@ RUN set -x \
  && cargo install cargo-audit \
  && cargo install svgbob_cli \
  && cargo install mdbook \
+ && cargo install mdbook-linkcheck \
  && rustc --version \
  && cargo --version \
  && curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP \
