@@ -2974,11 +2974,14 @@ mod tests {
             genesis_config.hash(),
         );
 
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(
-            bank.get_balance(&account_pubkey),
-            account_balance + transfer_lamports
+            bank.process_transaction(&tx),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ExecutableLamportChange
+            ))
         );
+        assert_eq!(bank.get_balance(&account_pubkey), account_balance);
     }
 
     #[test]

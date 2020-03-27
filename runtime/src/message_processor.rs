@@ -20,6 +20,7 @@ use libloading::os::windows::*;
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
+#[derive(Debug)]
 pub struct PreAccount {
     pub is_writable: bool,
     pub lamports: u64,
@@ -84,11 +85,14 @@ impl PreAccount {
             return Err(InstructionError::ExternalAccountLamportSpend);
         }
 
-        // The balance of read-only accounts may not change.
-        if !self.is_writable // line coverage used to get branch coverage
-        && self.lamports != post.lamports
-        {
-            return Err(InstructionError::ReadonlyLamportChange);
+        // The balance of read-only and executable accounts may not change
+        if self.lamports != post.lamports {
+            if !self.is_writable {
+                return Err(InstructionError::ReadonlyLamportChange);
+            }
+            if self.executable {
+                return Err(InstructionError::ExecutableLamportChange);
+            }
         }
 
         // Only the system program can change the size of the data
@@ -487,75 +491,137 @@ mod tests {
     #[test]
     fn test_verify_account_changes_executable() {
         let owner = Pubkey::new_rand();
-        let change_executable = |program_id: &Pubkey,
-                                 is_writable: bool,
-                                 pre_executable: bool,
-                                 post_executable: bool,
-                                 pre_data: Vec<u8>,
-                                 post_data: Vec<u8>|
-         -> Result<(), InstructionError> {
-            let pre = PreAccount::new(
-                &Account {
-                    owner,
-                    executable: pre_executable,
-                    data: pre_data,
-                    ..Account::default()
-                },
-                is_writable,
-                &program_id,
-            );
-
-            let post = Account {
-                owner,
-                executable: post_executable,
-                data: post_data,
-                ..Account::default()
-            };
-            pre.verify(&program_id, &post)
-        };
-
         let mallory_program_id = Pubkey::new_rand();
         let system_program_id = system_program::id();
 
+        struct Change {
+            pre: PreAccount,
+            post: Account,
+            program_id: Pubkey,
+        }
+        impl Change {
+            pub fn new(owner: &Pubkey, program_id: &Pubkey) -> Self {
+                Self {
+                    pre: PreAccount::new(
+                        &Account {
+                            owner: *owner,
+                            data: vec![],
+                            ..Account::default()
+                        },
+                        true,
+                        &Pubkey::new_rand(), // Force some data, ignored if not needed
+                    ),
+                    post: Account {
+                        owner: *owner,
+                        ..Account::default()
+                    },
+                    program_id: *program_id,
+                }
+            }
+            pub fn read_only(mut self) -> Self {
+                self.pre.is_writable = false;
+                self
+            }
+            pub fn executable(mut self, pre: bool, post: bool) -> Self {
+                self.pre.executable = pre;
+                self.post.executable = post;
+                self
+            }
+            pub fn lamports(mut self, pre: u64, post: u64) -> Self {
+                self.pre.lamports = pre;
+                self.post.lamports = post;
+                self
+            }
+            pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
+                self.pre.data_len = pre.len();
+                self.pre.data = Some(pre);
+                self.post.data = post;
+                self
+            }
+            pub fn verify(self) -> Result<(), InstructionError> {
+                self.pre.verify(&self.program_id, &self.post)
+            }
+        }
+
         assert_eq!(
-            change_executable(&system_program_id, true, false, true, vec![1], vec![1]),
+            Change::new(&owner, &system_program_id)
+                .executable(false, true)
+                .verify(),
             Err(InstructionError::ExecutableModified),
             "system program can't change executable if system doesn't own the account"
         );
         assert_eq!(
-            change_executable(&system_program_id, true, true, true, vec![1], vec![2]),
+            Change::new(&owner, &system_program_id)
+                .executable(true, true)
+                .data(vec![1], vec![2])
+                .verify(),
             Err(InstructionError::ExecutableDataModified),
             "system program can't change executable data if system doesn't own the account"
         );
         assert_eq!(
-            change_executable(&owner, true, false, true, vec![1], vec![1]),
+            Change::new(&owner, &owner).executable(false, true).verify(),
             Ok(()),
             "owner should be able to change executable"
         );
         assert_eq!(
-            change_executable(&owner, false, false, true, vec![1], vec![1]),
+            Change::new(&owner, &owner)
+                .executable(false, true)
+                .read_only()
+                .verify(),
             Err(InstructionError::ExecutableModified),
             "owner can't modify executable of read-only accounts"
         );
         assert_eq!(
-            change_executable(&owner, true, true, false, vec![1], vec![1]),
+            Change::new(&owner, &owner).executable(true, false).verify(),
             Err(InstructionError::ExecutableModified),
             "owner program can't reverse executable"
         );
         assert_eq!(
-            change_executable(&mallory_program_id, true, false, true, vec![1], vec![1]),
+            Change::new(&owner, &mallory_program_id)
+                .executable(false, true)
+                .verify(),
             Err(InstructionError::ExecutableModified),
             "malicious Mallory should not be able to change the account executable"
         );
         assert_eq!(
-            change_executable(&owner, true, false, true, vec![1], vec![2]),
+            Change::new(&owner, &owner)
+                .executable(false, true)
+                .data(vec![1], vec![2])
+                .verify(),
             Ok(()),
             "account data can change in the same instruction that sets the bit"
         );
         assert_eq!(
-            change_executable(&owner, true, true, true, vec![1], vec![2]),
+            Change::new(&owner, &owner)
+                .executable(true, true)
+                .data(vec![1], vec![2])
+                .verify(),
             Err(InstructionError::ExecutableDataModified),
             "owner should not be able to change an account's data once its marked executable"
+        );
+        assert_eq!(
+            Change::new(&owner, &owner)
+                .executable(true, true)
+                .lamports(1, 2)
+                .verify(),
+            Err(InstructionError::ExecutableLamportChange),
+            "owner should not be able to add lamports once makred executable"
+        );
+        assert_eq!(
+            Change::new(&owner, &owner)
+                .executable(true, true)
+                .lamports(1, 2)
+                .verify(),
+            Err(InstructionError::ExecutableLamportChange),
+            "owner should not be able to add lamports once marked executable"
+        );
+        assert_eq!(
+            Change::new(&owner, &owner)
+                .executable(true, true)
+                .lamports(2, 1)
+                .verify(),
+            Err(InstructionError::ExecutableLamportChange),
+            "owner should not be able to subtract lamports once marked executable"
         );
     }
 
