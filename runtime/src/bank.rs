@@ -2721,12 +2721,6 @@ mod tests {
         bank.rent_collector.slots_per_year = 421_812.0;
         bank.add_instruction_processor(mock_program_id, mock_process_instruction);
 
-        let system_program_id = solana_system_program().1;
-        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
-        system_program_account.lamports =
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
-        bank.store_account(&system_program_id, &system_program_account);
-
         bank
     }
 
@@ -2951,6 +2945,39 @@ mod tests {
         assert_eq!(
             previous_capitalization - current_capitalization,
             burned_portion
+        );
+    }
+
+    #[test]
+    fn test_rent_exempt_executable_account() {
+        let (mut genesis_config, mint_keypair) = create_genesis_config(100000);
+        genesis_config.rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1000.0,
+            burn_percent: 10,
+        };
+
+        let root_bank = Arc::new(Bank::new(&genesis_config));
+        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, Pubkey::new_rand());
+
+        let account_pubkey = Pubkey::new_rand();
+        let account_balance = 1;
+        let mut account = Account::new(account_balance, 0, &Pubkey::new_rand());
+        account.executable = true;
+        bank.store_account(&account_pubkey, &account);
+
+        let transfer_lamports = 1;
+        let tx = system_transaction::transfer(
+            &mint_keypair,
+            &account_pubkey,
+            transfer_lamports,
+            genesis_config.hash(),
+        );
+
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(
+            bank.get_balance(&account_pubkey),
+            account_balance + transfer_lamports
         );
     }
 
