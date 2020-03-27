@@ -51,8 +51,8 @@ Confirm it prints the same wallet ID as before.
 To learn more about keypair URLs, see
 [Specify A Hardware Wallet Key](README.md#specify-a-hardware-wallet-key)
 
-Read more about [sending and receiving tokens](../transfer-tokens.md) and
-[delegating stake](../delegate-stake.md). You can use your Ledger keypair URL
+Read more about [sending and receiving tokens](../cli/transfer-tokens.md) and
+[delegating stake](../cli/delegate-stake.md). You can use your Ledger keypair URL
 anywhere you see an option or argument that accepts a `<KEYPAIR>`.
 
 ## Support

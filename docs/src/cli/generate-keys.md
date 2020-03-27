@@ -69,7 +69,7 @@ keypair generated from your seed phrase, and "Failed" otherwise.
 ## Generate a Hardware Wallet Keypair
 
 Keypairs are automatically derived when you query a hardware wallet with a
-[keypair URL](../remote-wallet#specify-a-hardware-wallet-key).
+[keypair URL](../remote-wallet/README.md#specify-a-hardware-wallet-key).
 
 Once you have your keypair URL, use `solana-keygen pubkey` to query the hardware
 wallet for the keypair's public key:
