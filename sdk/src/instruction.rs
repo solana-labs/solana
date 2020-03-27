@@ -65,8 +65,8 @@ pub enum InstructionError {
     #[error("instruction modified data of an account it does not own")]
     ExternalAccountDataModified,
 
-    /// Read-only account modified lamports
-    #[error("instruction changed balance of a read-only account")]
+    /// Read-only account's lamports modified
+    #[error("instruction changed the balance of a read-only account")]
     ReadonlyLamportChange,
 
     /// Read-only account's data was modified
@@ -126,6 +126,10 @@ pub enum InstructionError {
     /// Executable account's data was modified
     #[error("instruction changed executable accounts data")]
     ExecutableDataModified,
+
+    /// Executable account's lamports modified
+    #[error("instruction changed the balance of a executable account")]
+    ExecutableLamportChange,
 }
 
 impl InstructionError {
