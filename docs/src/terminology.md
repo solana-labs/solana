@@ -44,7 +44,11 @@ A set of [validators](terminology.md#validator) maintaining a single [ledger](te
 
 ## confirmation time
 
-The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and recognizing a supermajority of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
+The wallclock duration between a [leader](terminology.md#leader) creating a [tick entry](terminology.md#tick) and creating a [confirmed block](terminology.md#confirmed-block).
+
+## confirmed block
+
+A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) with a ledger interpretation that matches the leader's.
 
 ## control plane
 
@@ -252,6 +256,10 @@ A transaction by a validator which indicates the set of real and fake proofs sub
 
 The number of keys and samples that a validator can verify each storage epoch.
 
+## supermajority
+
+2/3 of a [cluster](terminology.md#cluster).
+
 ## sysvar
 
 A synthetic [account](terminology.md#account) provided by the runtime to allow programs to access network state such as current tick height, rewards [points](terminology.md#point) values, etc.
@@ -282,7 +290,7 @@ One or more [instructions](terminology.md#instruction) signed by the [client](te
 
 ## transaction confirmations
 
-The number of blocks since a transaction's block (inclusive) that have a supermajority of ledger votes. A transaction is fully confirmed when its block becomes a [root](terminology.md#root).
+The number of [confirmed blocks](terminology.md#confirmed-block) since the transaction was accepted onto the [ledger](terminology.md#ledger). A transaction is finalized when its block becomes a [root](terminology.md#root).
 
 ## transactions entry
 
@@ -290,7 +298,7 @@ A set of [transactions](terminology.md#transaction) that may be executed in para
 
 ## validator
 
-A full participant in the [cluster](terminology.md#cluster) reponsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
+A full participant in the [cluster](terminology.md#cluster) responsible for validating the [ledger](terminology.md#ledger) and producing new [blocks](terminology.md#block).
 
 ## VDF
 
