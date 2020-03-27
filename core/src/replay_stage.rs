@@ -334,6 +334,7 @@ impl ReplayStage {
                                 &latest_root_senders,
                                 &mut earliest_vote_on_fork,
                                 &mut all_pubkeys,
+                                &subscriptions,
                             )?;
 
                             ancestors
@@ -712,6 +713,7 @@ impl ReplayStage {
         latest_root_senders: &[Sender<Slot>],
         earliest_vote_on_fork: &mut Slot,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -745,6 +747,7 @@ impl ReplayStage {
                 earliest_vote_on_fork,
                 all_pubkeys,
             );
+            subscriptions.notify_roots(rooted_slots);
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
                     trace!("latest root send failed: {:?}", e);
