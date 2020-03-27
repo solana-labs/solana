@@ -29,7 +29,7 @@ pub type Result<T> = std::result::Result<T, UnpackError>;
 
 const MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE: u64 = 500 * 1024 * 1024 * 1024; // 500 GiB
 const MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT: u64 = 500_000;
-const MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 10 * 1024 * 1024; // 10 MiB
+const MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 1024 * 1024 * 1024; // 1024 MiB
 const MAX_GENESIS_ARCHIVE_UNPACKED_COUNT: u64 = 100;
 
 fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> Result<u64> {
