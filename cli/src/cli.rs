@@ -1185,6 +1185,7 @@ fn process_show_account(
     );
     println_name_value("Owner:", &account.owner.to_string());
     println_name_value("Executable:", &account.executable.to_string());
+    println_name_value("Rent Epoch:", &account.rent_epoch.to_string());
 
     if let Some(output_file) = output_file {
         let mut f = File::create(output_file)?;
