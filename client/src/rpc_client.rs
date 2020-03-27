@@ -5,9 +5,9 @@ use crate::{
     rpc_client_request::RpcClientRequest,
     rpc_request::{RpcError, RpcRequest},
     rpc_response::{
-        Response, RpcAccount, RpcBlockhashFeeCalculator, RpcConfirmedBlock, RpcContactInfo,
-        RpcEpochInfo, RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount,
-        RpcLeaderSchedule, RpcResult, RpcTransactionStatus, RpcVersionInfo, RpcVoteAccountStatus,
+        Response, RpcAccount, RpcBlockhashFeeCalculator, RpcContactInfo, RpcEpochInfo,
+        RpcFeeCalculator, RpcFeeRateGovernor, RpcIdentity, RpcKeyedAccount, RpcLeaderSchedule,
+        RpcResult, RpcVersionInfo, RpcVoteAccountStatus,
     },
 };
 use bincode::serialize;
@@ -27,6 +27,7 @@ use solana_sdk::{
     signers::Signers,
     transaction::{self, Transaction, TransactionError},
 };
+use solana_transaction_status::{ConfirmedBlock, TransactionStatus};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     error,
@@ -123,9 +124,11 @@ impl RpcClient {
             json!([[signature.to_string()], commitment_config]),
             5,
         )?;
-        let result: Vec<Option<RpcTransactionStatus>> =
+        let result: Response<Vec<Option<TransactionStatus>>> =
             serde_json::from_value(signature_status).unwrap();
-        Ok(result[0].clone().map(|status_meta| status_meta.status))
+        Ok(result.value[0]
+            .clone()
+            .map(|status_meta| status_meta.status))
     }
 
     pub fn get_slot(&self) -> ClientResult<Slot> {
@@ -172,7 +175,7 @@ impl RpcClient {
             .map_err(|err| ClientError::new_with_command(err.into(), "GetClusterNodes"))
     }
 
-    pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<RpcConfirmedBlock> {
+    pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<ConfirmedBlock> {
         let response = self
             .client
             .send(&RpcRequest::GetConfirmedBlock, json!([slot]), 0)
@@ -922,14 +925,25 @@ impl RpcClient {
         let response = self
             .client
             .send(
-                &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
-                json!([signature.to_string(), CommitmentConfig::recent().ok()]),
+                &RpcRequest::GetSignatureStatus,
+                json!([[signature.to_string()], CommitmentConfig::recent().ok()]),
                 1,
             )
-            .map_err(|err| err.into_with_command("GetNumBlocksSinceSignatureConfirmation"))?;
-        serde_json::from_value(response).map_err(|err| {
-            ClientError::new_with_command(err.into(), "GetNumBlocksSinceSignatureConfirmation")
-        })
+            .map_err(|err| err.into_with_command("GetSignatureStatus"))?;
+        let result: Response<Vec<Option<TransactionStatus>>> =
+            serde_json::from_value(response).unwrap();
+
+        let confirmations = result.value[0]
+            .clone()
+            .ok_or_else(|| {
+                ClientError::new_with_command(
+                    ClientErrorKind::Custom("signature not found".to_string()),
+                    "GetSignatureStatus",
+                )
+            })?
+            .confirmations
+            .unwrap_or(MAX_LOCKOUT_HISTORY + 1);
+        Ok(confirmations)
     }
 
     pub fn send_and_confirm_transaction_with_spinner<T: Signers>(
