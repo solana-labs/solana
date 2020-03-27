@@ -1255,7 +1255,7 @@ None
 
 ### slotUnsubscribe
 
-Unsubscribe from signature confirmation notification
+Unsubscribe from slot notifications
 
 #### Parameters:
 
@@ -1270,6 +1270,58 @@ Unsubscribe from signature confirmation notification
 ```bash
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"slotUnsubscribe", "params":[0]}
+
+// Result
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
+### rootSubscribe
+
+Subscribe to receive notification anytime a new root is set by the validator.
+
+#### Parameters:
+
+None
+
+#### Results:
+
+* `integer` - subscription id \(needed to unsubscribe\)
+
+#### Example:
+
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"rootSubscribe"}
+
+// Result
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+#### Notification Format:
+
+The result is the latest root slot number.
+
+```bash
+{"jsonrpc": "2.0","method": "rootNotification", "params": {"result":42,"subscription":0}}
+```
+
+### rootUnsubscribe
+
+Unsubscribe from root notifications
+
+#### Parameters:
+
+* `<integer>` - subscription id to cancel
+
+#### Results:
+
+* `<bool>` - unsubscribe success message
+
+#### Example:
+
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"rootUnsubscribe", "params":[0]}
 
 // Result
 {"jsonrpc": "2.0","result": true,"id": 1}
