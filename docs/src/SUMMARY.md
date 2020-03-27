@@ -9,7 +9,7 @@
     * [Hardware Wallets](remote-wallet/README.md)
       * [Ledger Hardware Wallet](remote-wallet/ledger.md)
     * [Paper Wallet](paper-wallet/README.md)
-      * [Paper Wallet Usage](paper-wallet/usage.md)
+      * [Paper Wallet Usage](paper-wallet/paper-wallet-usage.md)
 * [Command Line Guide](cli/README.md)
   * [Install the Solana Command Line Tool Suite](cli/install-solana-cli-tools.md)
   * [Generate Keys](cli/generate-keys.md)
