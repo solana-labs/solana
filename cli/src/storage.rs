@@ -266,8 +266,8 @@ pub fn process_claim_storage_reward(
         &fee_calculator,
         &tx.message,
     )?;
-    let signature_str = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &signers)?;
-    Ok(signature_str)
+    let signature = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &signers)?;
+    Ok(signature.to_string())
 }
 
 pub fn process_show_storage_account(

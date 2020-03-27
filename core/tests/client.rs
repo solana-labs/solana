@@ -58,7 +58,7 @@ fn test_rpc_client() {
     let now = Instant::now();
     while now.elapsed().as_secs() <= 20 {
         let response = client
-            .confirm_transaction_with_commitment(signature.as_str(), CommitmentConfig::default())
+            .confirm_transaction_with_commitment(&signature, CommitmentConfig::default())
             .unwrap();
 
         if response.value {
