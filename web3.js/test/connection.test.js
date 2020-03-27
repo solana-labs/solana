@@ -1417,30 +1417,54 @@ test('slot notification', async () => {
 
   const connection = new Connection(url, 'recent');
 
-  // let notified = false;
+  let notified = false;
   const subscriptionId = connection.onSlotChange(slotInfo => {
     expect(slotInfo.parent).toBeDefined();
     expect(slotInfo.slot).toBeDefined();
     expect(slotInfo.root).toBeDefined();
     expect(slotInfo.slot).toBeGreaterThan(slotInfo.parent);
     expect(slotInfo.slot).toBeGreaterThanOrEqual(slotInfo.root);
-    // notified = true;
+    notified = true;
   });
 
-  //
-  // FIXME: enable this check when slotNotification is live
-  //
-  // // Wait for mockCallback to receive a call
-  // let i = 0;
-  // while (!notified) {
-  //   //for (;;) {
-  //   if (++i === 30) {
-  //     throw new Error('Slot change notification not observed');
-  //   }
-  //   // Sleep for a 1/4 of a slot, notifications only occur after a block is
-  //   // processed
-  //   await sleep((250 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
-  // }
+  // Wait for mockCallback to receive a call
+  let i = 0;
+  while (!notified) {
+    if (++i === 30) {
+      throw new Error('Slot change notification not observed');
+    }
+    // Sleep for a 1/4 of a slot, notifications only occur after a block is
+    // processed
+    await sleep((250 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+  }
 
   await connection.removeSlotChangeListener(subscriptionId);
+});
+
+test('root notification', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url, 'recent');
+
+  let roots = [];
+  const subscriptionId = connection.onRootChange(root => {
+    roots.push(root);
+  });
+
+  // Wait for mockCallback to receive a call
+  let i = 0;
+  while (roots.length < 2) {
+    if (++i === 30) {
+      throw new Error('Root change notification not observed');
+    }
+    // Sleep for a 1/4 of a slot, notifications only occur after a block is
+    // processed
+    await sleep((250 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+  }
+
+  expect(roots[1]).toBeGreaterThan(roots[0]);
+  await connection.removeRootChangeListener(subscriptionId);
 });
