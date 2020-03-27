@@ -32,8 +32,8 @@ colo_load_resources() {
       COLO_RES_RAM_GB+=( "${M}" )
       COLO_RES_STORAGE_TYPE+=( "${ST}" )
       COLO_RES_STORAGE_CAP_GB+=( "${SC}" )
-      COLO_RES_ADD_STORAGE_TYPE+=( "$(tr ',' $'\v' <<<"${AST}")" )
-      COLO_RES_ADD_STORAGE_CAP_GB+=( "$(tr ',' $'\v' <<<"${ASC}")" )
+      COLO_RES_ADD_STORAGE_TYPE+=( "$(tr ',' $'\x1f' <<<"${AST}")" )
+      COLO_RES_ADD_STORAGE_CAP_GB+=( "$(tr ',' $'\x1f' <<<"${ASC}")" )
       COLO_RES_MACHINE+=( "${G}" )
       COLO_RES_ZONE+=( "${Z}" )
       COLO_RES_N=$((COLO_RES_N+1))
@@ -51,13 +51,13 @@ colo_load_availability() {
     COLO_RES_AVAILABILITY=()
     COLO_RES_REQUISITIONED=()
     while read -r LINE; do
-      IFS=$'\v' read -r IP STATUS LOCK_USER INSTNAME PREEMPTIBLE <<< "${LINE}"
+      IFS=$'\x1f' read -r IP STATUS LOCK_USER INSTNAME PREEMPTIBLE <<< "${LINE}"
       I=$(colo_res_index_from_ip "${IP}")
       PRIV_IP="${COLO_RES_IP_PRIV[${I}]}"
       HOST_NAME="${COLO_RES_HOSTNAME[${I}]}"
       ZONE="${COLO_RES_ZONE[${I}]}"
-      COLO_RES_AVAILABILITY+=( "$(echo -e "${HOST_NAME}\v${IP}\v${PRIV_IP}\v${STATUS}\v${ZONE}\v${LOCK_USER}\v${INSTNAME}\v${PREEMPTIBLE}")" )
-    done < <(colo_node_status_all | sort -t $'\v' -k1)
+      COLO_RES_AVAILABILITY+=( "$(echo -e "${HOST_NAME}\x1f${IP}\x1f${PRIV_IP}\x1f${STATUS}\x1f${ZONE}\x1f${LOCK_USER}\x1f${INSTNAME}\x1f${PREEMPTIBLE}")" )
+    done < <(colo_node_status_all | sort -t $'\x1f' -k1)
     COLO_RES_AVAILABILITY_CACHED=true
   fi
 }
@@ -82,7 +82,7 @@ colo_instance_run() {
   declare RC=$?
   set -e
   while read -r LINE; do
-    echo -e "${IP}\v${RC}\v${LINE}"
+    echo -e "${IP}\x1f${RC}\x1f${LINE}"
     if [[ "${RC}" -ne 0 ]]; then
       echo "IP(${IP}) Err(${RC}) LINE(${LINE})" 1>&2
     fi
@@ -114,7 +114,7 @@ colo_whoami() {
   declare ME LINE SOL_USER EOL
   while read -r LINE; do
     declare IP RC
-    IFS=$'\v' read -r IP RC SOL_USER EOL <<< "${LINE}"
+    IFS=$'\x1f' read -r IP RC SOL_USER EOL <<< "${LINE}"
     if [ "${RC}" -eq 0 ]; then
       [[ "${EOL}" = "EOL" ]] || echo "${FUNCNAME[0]}: Unexpected input \"${LINE}\"" 1>&2
       if [ -z "${ME}" ] || [ "${ME}" = "${SOL_USER}" ]; then
@@ -123,7 +123,7 @@ colo_whoami() {
         echo "Found conflicting username \"${SOL_USER}\" on ${IP}, expected \"${ME}\"" 1>&2
       fi
     fi
-  done < <(colo_instance_run_foreach "[ -n \"\${SOLANA_USER}\" ] && echo -e \"\${SOLANA_USER}\\vEOL\"")
+  done < <(colo_instance_run_foreach "[ -n \"\${SOLANA_USER}\" ] && echo -e \"\${SOLANA_USER}\\x1fEOL\"")
   echo "${ME}"
 }
 
@@ -142,7 +142,7 @@ __colo_node_status_script() {
                     # the time due to ${SOLANA_LOCK_FILE} not existing and is running from a
                     # subshell where normal redirection doesn't work
   exec 9<"${SOLANA_LOCK_FILE}" && flock -s 9 && . "${SOLANA_LOCK_FILE}" && exec 9>&-
-  echo -e "\${SOLANA_LOCK_USER}\\v\${SOLANA_LOCK_INSTANCENAME}\\v\${PREEMPTIBLE}\\vEOL"
+  echo -e "\${SOLANA_LOCK_USER}\\x1f\${SOLANA_LOCK_INSTANCENAME}\\x1f\${PREEMPTIBLE}\\x1fEOL"
   exec 2>&3 # Restore stderr
 EOF
 }
@@ -150,7 +150,7 @@ EOF
 __colo_node_status_result_normalize() {
   declare IP RC US BY INSTNAME PREEMPTIBLE EOL
   declare ST="DOWN"
-  IFS=$'\v' read -r IP RC US INSTNAME PREEMPTIBLE EOL <<< "${1}"
+  IFS=$'\x1f' read -r IP RC US INSTNAME PREEMPTIBLE EOL <<< "${1}"
   if [ "${RC}" -eq 0 ]; then
     [[ "${EOL}" = "EOL" ]] || echo "${FUNCNAME[0]}: Unexpected input \"${1}\"" 1>&2
     if [ -n "${US}" ]; then
@@ -163,7 +163,7 @@ __colo_node_status_result_normalize() {
       ST="FREE"
     fi
   fi
-  echo -e $"${IP}\v${ST}\v${BY}\v${INSTNAME}\v${PREEMPTIBLE}"
+  echo -e $"${IP}\x1f${ST}\x1f${BY}\x1f${INSTNAME}\x1f${PREEMPTIBLE}"
 }
 
 colo_node_status() {
