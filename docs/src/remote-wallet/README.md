@@ -16,7 +16,7 @@ hardware wallet.
 ## Supported Hardware Wallets
 
 The Solana CLI supports the following hardware wallets:
-- [Ledger Nano S](ledger.md)
+ - [Ledger Nano S](ledger.md)
 
 ## Specify a Hardware Wallet Key
 
