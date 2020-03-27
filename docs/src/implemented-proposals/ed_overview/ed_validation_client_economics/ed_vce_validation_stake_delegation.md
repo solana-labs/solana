@@ -24,7 +24,7 @@ Running a Solana validation-client required relatively modest upfront hardware c
 Despite the low-barrier to entry as a validation-client, from a capital investment perspective, as in any developing economy, there will be much opportunity and need for trusted validation services as evidenced by node reliability, UX/UI, APIs and other software accessibility tools. Additionally, although Solana’s validator node startup costs are nominal when compared to similar networks, they may still be somewhat restrictive for some potential participants. In the spirit of developing a true decentralized, permissionless network, these interested parties still have two options to become involved in the Solana network/economy:
 
 1. Delegation of previously acquired tokens with a reliable validation node to earn a portion of interest generated
-2. Provide local storage space as a replication-client and receive rewards by submitting Proof-of-Replication \(see [Replication-client Economics](../ed_replication_client_economics/)\).
+2. Provide local storage space as a replication-client and receive rewards by submitting Proof-of-Replication \(see [Replication-client Economics](../ed_replication_client_economics/README.md)\).
 
    a. This participant has the additional option to directly delegate their earned storage rewards \([Replication-client Reward Auto-delegation](../ed_replication_client_economics/ed_rce_replication_client_reward_auto_delegation.md)\)
 

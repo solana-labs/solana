@@ -891,7 +891,7 @@ The result field will be a JSON object of `current` and `delinquent` accounts, e
 * `epochVoteAccount: <bool>` - bool, whether the vote account is staked for this epoch
 * `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
 * `lastVote: <u64>` - Most recent slot voted on by this vote account
-* `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: [epoch, credits, previousCredits]
+* `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
 
 #### Example:
 

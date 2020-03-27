@@ -2,7 +2,7 @@
 
 In order to participate in any Tour de SOL dry-runs or stages, you need to register for the Tour de SOL.
 
-See [Registration info](../../registration/).
+See [Registration info](../../registration/README.md).
 
 In order to obtain your allotment of lamports at the start of a Tour de SOL stage or dry run, you need to publish your validator's identity public key under your keybase.io account.
 

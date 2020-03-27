@@ -56,7 +56,7 @@ A gossip network connecting all [nodes](terminology.md#node) of a [cluster](term
 
 ## cooldown period
 
-Some number of epochs after stake has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of epochs after stake has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
 
 ## credit
 
@@ -182,7 +182,7 @@ See [Proof of History](terminology.md#proof-of-history).
 
 ## point
 
-A weighted [credit](terminology.md#credit) in a rewards regime. In the validator [rewards regime](proposals/staking-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
+A weighted [credit](terminology.md#credit) in a rewards regime. In the validator [rewards regime](cluster/stake-delegation-and-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
 
 ## private key
 

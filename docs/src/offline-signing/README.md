@@ -4,7 +4,7 @@ Some security models require keeping signing keys, and thus the signing
 process, separated from transaction creation and network broadcast. Examples
 include:
   * Collecting signatures from geographically disparate signers in a
-[multi-signature scheme](../api-reference/cli.md#multiple-witnesses)
+[multi-signature scheme](../cli/usage.md#multiple-witnesses)
   * Signing transactions using an [airgapped](https://en.wikipedia.org/wiki/Air_gap_(networking))
 signing device
 
