@@ -80,8 +80,8 @@ hard forks should be approached.
 
 We use some degree of macro machinery to automatically generate unit tests
 and calculate a digest from ABI items. This is doable by clever use of
-`serde::Serialize` ([1]) and `any::typename` ([2]). For a precedent for similar
-implementation, `ink` from the Parity Technologies [3] could be informational.
+`serde::Serialize` (`[1]`) and `any::typename` (`[2]`). For a precedent for similar
+implementation, `ink` from the Parity Technologies `[3]` could be informational.
 
 # References
 

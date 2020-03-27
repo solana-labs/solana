@@ -8,7 +8,7 @@ about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
 ## Usage Examples
 
 Full usage details for durable nonce CLI commands can be found in the
-[CLI reference](../api-reference/cli.md).
+[CLI reference](../cli/usage.md).
 
 ### Nonce Authority
 
@@ -52,7 +52,7 @@ instead
 {% endhint %}
 
 {% hint style="info" %}
-[Full usage documentation](../api-reference/cli.md#solana-create-nonce-account)
+[Full usage documentation](../cli/usage.md#solana-create-nonce-account)
 {% endhint %}
 
 ### Querying the Stored Nonce Value
@@ -74,7 +74,7 @@ solana nonce nonce-keypair.json
 ```
 
 {% hint style="info" %}
-[Full usage documentation](../api-reference/cli.md#solana-get-nonce)
+[Full usage documentation](../cli/usage.md#solana-get-nonce)
 {% endhint %}
 
 ### Advancing the Stored Nonce Value
@@ -95,7 +95,7 @@ solana new-nonce nonce-keypair.json
 ```
 
 {% hint style="info" %}
-[Full usage documentation](../api-reference/cli.md#solana-new-nonce)
+[Full usage documentation](../cli/usage.md#solana-new-nonce)
 {% endhint %}
 
 ### Display Nonce Account
@@ -117,7 +117,7 @@ nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 ```
 
 {% hint style="info" %}
-[Full usage documentation](../api-reference/cli.md#solana-nonce-account)
+[Full usage documentation](../cli/usage.md#solana-nonce-account)
 {% endhint %}
 
 ### Withdraw Funds from a Nonce Account
@@ -141,7 +141,7 @@ Close a nonce account by withdrawing the full balance
 {% endhint %}
 
 {% hint style="info" %}
-[Full usage documentation](../api-reference/cli.md#solana-withdraw-from-nonce-account)
+[Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
 {% endhint %}
 
 ### Assign a New Authority to a Nonce Account
@@ -161,7 +161,7 @@ solana authorize-nonce-account nonce-keypair.json nonce-authority.json
 ```
 
 {% hint style="info" %}
-[Full usage documentation](../api-reference/cli.md#solana-authorize-nonce-account)
+[Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
 {% endhint %}
 
 ## Other Commands Supporting Durable Nonces
@@ -172,9 +172,9 @@ supported.
 * `--nonce-authority`, specifies an optional [nonce authority](#nonce-authority)
 
 The following subcommands have received this treatment so far
-* [`pay`](../api-reference/cli.md#solana-pay)
-* [`delegate-stake`](../api-reference/cli.md#solana-delegate-stake)
-* [`deactivate-stake`](../api-reference/cli.md#solana-deactivate-stake)
+* [`pay`](../cli/usage.md#solana-pay)
+* [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
+* [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
 
 ### Example Pay Using Durable Nonce
 
