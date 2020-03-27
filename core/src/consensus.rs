@@ -686,13 +686,14 @@ pub mod test {
     // Setup BankForks with bank 0 and all the validator accounts
     pub(crate) fn initialize_state(
         validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
+        stake: u64,
     ) -> (BankForks, HashMap<u64, ForkProgress>) {
         let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             voting_keypair: _,
-        } = create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs);
+        } = create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs, stake);
 
         let bank0 = Bank::new(&genesis_config);
 
@@ -779,7 +780,7 @@ pub mod test {
         );
 
         // Initialize BankForks
-        let (bank_forks, mut progress) = initialize_state(&keypairs);
+        let (bank_forks, mut progress) = initialize_state(&keypairs, 10_000);
         let bank_forks = RwLock::new(bank_forks);
 
         // Create the tree of banks
@@ -859,7 +860,7 @@ pub mod test {
         votes.extend((45..=50).into_iter());
 
         let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
-        let (bank_forks, mut progress) = initialize_state(&keypairs);
+        let (bank_forks, mut progress) = initialize_state(&keypairs, 10_000);
         let bank_forks = RwLock::new(bank_forks);
 
         // Simulate the votes. Should fail on trying to come back to the main fork

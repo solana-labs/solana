@@ -43,6 +43,7 @@ pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
 pub fn create_genesis_config_with_vote_accounts(
     mint_lamports: u64,
     voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
+    stake: u64,
 ) -> GenesisConfigInfo {
     let mut genesis_config_info = create_genesis_config(mint_lamports);
     for validator_voting_keypairs in voting_keypairs {
@@ -51,13 +52,13 @@ pub fn create_genesis_config_with_vote_accounts(
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
 
         // Create accounts
-        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, 100);
+        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, stake);
         let stake_account = stake_state::create_account(
             &stake_pubkey,
             &vote_pubkey,
             &vote_account,
             &genesis_config_info.genesis_config.rent,
-            100,
+            stake,
         );
 
         // Put newly created accounts into genesis
