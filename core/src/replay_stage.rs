@@ -524,6 +524,17 @@ impl ReplayStage {
         progress_map.is_propagated(parent_slot)
     }
 
+    fn should_retransmit(poh_slot: Slot, last_retransmit_slot: &mut Slot) -> bool {
+        if poh_slot < *last_retransmit_slot
+            || poh_slot >= *last_retransmit_slot + NUM_CONSECUTIVE_LEADER_SLOTS
+        {
+            *last_retransmit_slot = poh_slot;
+            true
+        } else {
+            false
+        }
+    }
+
     fn maybe_start_leader(
         my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -603,17 +614,11 @@ impl ReplayStage {
                 .expect("In order for propagated check to fail, latest leader must exist in progress map, and thus also in BankForks").clone();
 
                 // Signal retransmit
-                if poh_slot < skipped_slots_info.last_retransmit_slot
-                    || poh_slot
-                        >= skipped_slots_info
-                            .last_retransmit_slot
-                            .saturating_sub(NUM_CONSECUTIVE_LEADER_SLOTS)
-                {
+                if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
                     datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
                     retransmit_slots_sender
                         .send(vec![(bank.slot(), bank.clone())].into_iter().collect())
                         .unwrap();
-                    skipped_slots_info.last_retransmit_slot = poh_slot;
                 }
                 return;
             }
@@ -2684,6 +2689,43 @@ pub(crate) mod tests {
             let second = progress.get_fork_stats(pair[1].slot()).unwrap().fork_weight;
             assert!(second >= first);
         }
+    }
+
+    #[test]
+    fn test_should_retransmit() {
+        let poh_slot = 4;
+        let mut last_retransmit_slot = 4;
+        // We retransmitted already at slot 4, shouldn't retransmit until
+        // >= 4 + NUM_CONSECUTIVE_LEADER_SLOTS, or if we reset to < 4
+        assert!(!ReplayStage::should_retransmit(
+            poh_slot,
+            &mut last_retransmit_slot
+        ));
+        assert_eq!(last_retransmit_slot, 4);
+
+        for poh_slot in 4..4 + NUM_CONSECUTIVE_LEADER_SLOTS {
+            assert!(!ReplayStage::should_retransmit(
+                poh_slot,
+                &mut last_retransmit_slot
+            ));
+            assert_eq!(last_retransmit_slot, 4);
+        }
+
+        let poh_slot = 4 + NUM_CONSECUTIVE_LEADER_SLOTS;
+        last_retransmit_slot = 4;
+        assert!(ReplayStage::should_retransmit(
+            poh_slot,
+            &mut last_retransmit_slot
+        ));
+        assert_eq!(last_retransmit_slot, poh_slot);
+
+        let poh_slot = 3;
+        last_retransmit_slot = 4;
+        assert!(ReplayStage::should_retransmit(
+            poh_slot,
+            &mut last_retransmit_slot
+        ));
+        assert_eq!(last_retransmit_slot, poh_slot);
     }
 
     #[test]
