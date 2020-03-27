@@ -48,7 +48,7 @@ __cloud_FindInstances() {
   fi
   INSTANCES_TEXT="$(
     for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
-      IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME PREEMPTIBLE <<<"${AVAIL}"
+      IFS=$'\x1f' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME PREEMPTIBLE <<<"${AVAIL}"
       if [[ ${INSTNAME} =~ ${filter} ]]; then
         if [[ -n $onlyPreemptible && $PREEMPTIBLE == "false" ]]; then
           continue
@@ -57,7 +57,7 @@ __cloud_FindInstances() {
           echo -e "${INSTNAME}:${IP}:${PRIV_IP}:${ZONE}"
         fi
       fi
-    done | sort -t $'\v' -k1
+    done | sort -t $'\x1f' -k1
   )"
   if [[ -n "${INSTANCES_TEXT}" ]]; then
     while read -r LINE; do
@@ -180,17 +180,17 @@ cloud_CreateInstances() {
     declare AVAILABLE_TEXT
     AVAILABLE_TEXT="$(
       for RES in "${COLO_RES_AVAILABILITY[@]}"; do
-        IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"${RES}"
+        IFS=$'\x1f' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME <<<"${RES}"
         if [[ "FREE" = "${STATUS}" ]]; then
           INDEX=$(colo_res_index_from_ip "${IP}")
           RES_MACH="${COLO_RES_MACHINE[${INDEX}]}"
           if colo_machine_types_compatible "${RES_MACH}" "${machineType}"; then
             if ! colo_node_is_requisitioned "${INDEX}" "${COLO_RES_REQUISITIONED[*]}"; then
-              echo -e "${RES_MACH}\v${IP}"
+              echo -e "${RES_MACH}\x1f${IP}"
             fi
           fi
         fi
-      done | sort -nt $'\v' -k1,1
+      done | sort -nt $'\x1f' -k1,1
     )"
 
     if [[ -n "${AVAILABLE_TEXT}" ]]; then
@@ -207,7 +207,7 @@ cloud_CreateInstances() {
     declare node
     declare AI=0
     for node in "${nodes[@]}"; do
-      IFS=$'\v' read -r _ IP <<<"${AVAILABLE[${AI}]}"
+      IFS=$'\x1f' read -r _ IP <<<"${AVAILABLE[${AI}]}"
       colo_node_requisition "${IP}" "${node}" >/dev/null
       AI=$((AI+1))
     done
@@ -284,7 +284,7 @@ cloud_StatusAll() {
     colo_load_availability false
   fi
   for AVAIL in "${COLO_RES_AVAILABILITY[@]}"; do
-    IFS=$'\v' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME PREEMPTIBLE <<<"${AVAIL}"
+    IFS=$'\x1f' read -r HOST_NAME IP PRIV_IP STATUS ZONE LOCK_USER INSTNAME PREEMPTIBLE <<<"${AVAIL}"
     printf "%-30s | publicIp=%-16s privateIp=%s status=%s who=%s zone=%s inst=%s preemptible=%s\n" "${HOST_NAME}" "${IP}" "${PRIV_IP}" "${STATUS}" "${LOCK_USER}" "${ZONE}" "${INSTNAME}" "${PREEMPTIBLE}"
   done
 }
