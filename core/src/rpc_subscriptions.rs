@@ -38,12 +38,14 @@ pub struct SlotInfo {
 
 enum NotificationEntry {
     Slot(SlotInfo),
+    Root(Slot),
     Bank((Slot, Arc<RwLock<BankForks>>)),
 }
 
 impl std::fmt::Debug for NotificationEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            NotificationEntry::Root(root) => write!(f, "Root({})", root),
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
             NotificationEntry::Bank((current_slot, _)) => {
                 write!(f, "Bank({{current_slot: {:?}}})", current_slot)
@@ -64,6 +66,7 @@ type RpcSignatureSubscriptions = RwLock<
     >,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
+type RpcRootSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Slot>>>;
 
 fn add_subscription<K, S>(
     subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
@@ -224,6 +227,7 @@ pub struct RpcSubscriptions {
     program_subscriptions: Arc<RpcProgramSubscriptions>,
     signature_subscriptions: Arc<RpcSignatureSubscriptions>,
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
+    root_subscriptions: Arc<RpcRootSubscriptions>,
     notification_sender: Arc<Mutex<Sender<NotificationEntry>>>,
     t_cleanup: Option<JoinHandle<()>>,
     notifier_runtime: Option<Runtime>,
@@ -255,6 +259,7 @@ impl RpcSubscriptions {
         let program_subscriptions = Arc::new(RpcProgramSubscriptions::default());
         let signature_subscriptions = Arc::new(RpcSignatureSubscriptions::default());
         let slot_subscriptions = Arc::new(RpcSlotSubscriptions::default());
+        let root_subscriptions = Arc::new(RpcRootSubscriptions::default());
         let notification_sender = Arc::new(Mutex::new(notification_sender));
 
         let exit_clone = exit.clone();
@@ -262,6 +267,7 @@ impl RpcSubscriptions {
         let program_subscriptions_clone = program_subscriptions.clone();
         let signature_subscriptions_clone = signature_subscriptions.clone();
         let slot_subscriptions_clone = slot_subscriptions.clone();
+        let root_subscriptions_clone = root_subscriptions.clone();
 
         let notifier_runtime = RuntimeBuilder::new()
             .core_threads(1)
@@ -281,6 +287,7 @@ impl RpcSubscriptions {
                     program_subscriptions_clone,
                     signature_subscriptions_clone,
                     slot_subscriptions_clone,
+                    root_subscriptions_clone,
                 );
             })
             .unwrap();
@@ -290,6 +297,7 @@ impl RpcSubscriptions {
             program_subscriptions,
             signature_subscriptions,
             slot_subscriptions,
+            root_subscriptions,
             notification_sender,
             notifier_runtime: Some(notifier_runtime),
             t_cleanup: Some(t_cleanup),
@@ -447,6 +455,24 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Slot(SlotInfo { slot, parent, root }));
     }
 
+    pub fn add_root_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<Slot>) {
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let mut subscriptions = self.root_subscriptions.write().unwrap();
+        subscriptions.insert(sub_id, sink);
+    }
+
+    pub fn remove_root_subscription(&self, id: &SubscriptionId) -> bool {
+        let mut subscriptions = self.root_subscriptions.write().unwrap();
+        subscriptions.remove(id).is_some()
+    }
+
+    pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
+        rooted_slots.sort();
+        rooted_slots.into_iter().for_each(|root| {
+            self.enqueue_notification(NotificationEntry::Root(root));
+        });
+    }
+
     fn enqueue_notification(&self, notification_entry: NotificationEntry) {
         match self
             .notification_sender
@@ -472,6 +498,7 @@ impl RpcSubscriptions {
         program_subscriptions: Arc<RpcProgramSubscriptions>,
         signature_subscriptions: Arc<RpcSignatureSubscriptions>,
         slot_subscriptions: Arc<RpcSlotSubscriptions>,
+        root_subscriptions: Arc<RpcRootSubscriptions>,
     ) {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -483,6 +510,12 @@ impl RpcSubscriptions {
                         let subscriptions = slot_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
                             notifier.notify(slot_info, sink);
+                        }
+                    }
+                    NotificationEntry::Root(root) => {
+                        let subscriptions = root_subscriptions.read().unwrap();
+                        for (_, sink) in subscriptions.iter() {
+                            notifier.notify(root, sink);
                         }
                     }
                     NotificationEntry::Bank((current_slot, bank_forks)) => {
@@ -576,7 +609,7 @@ pub(crate) mod tests {
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
         receiver: futures::sync::mpsc::Receiver<T>,
-    ) -> T {
+    ) -> (T, futures::sync::mpsc::Receiver<T>) {
         let (inner_sender, inner_receiver) = channel();
         let mut rt = Runtime::new().unwrap();
         rt.spawn(futures::lazy(|| {
@@ -584,7 +617,9 @@ pub(crate) mod tests {
                 .into_future()
                 .timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS))
                 .map(move |result| match result {
-                    (Some(value), _) => inner_sender.send(value).expect("send error"),
+                    (Some(value), receiver) => {
+                        inner_sender.send((value, receiver)).expect("send error")
+                    }
                     (None, _) => panic!("unexpected end of stream"),
                 })
                 .map_err(|err| panic!("stream error {:?}", err));
@@ -638,7 +673,7 @@ pub(crate) mod tests {
             .contains_key(&alice.pubkey()));
 
         subscriptions.notify_subscribers(0, &bank_forks);
-        let response = robust_poll_or_panic(transport_receiver);
+        let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
@@ -712,7 +747,7 @@ pub(crate) mod tests {
             .contains_key(&solana_budget_program::id()));
 
         subscriptions.notify_subscribers(0, &bank_forks);
-        let response = robust_poll_or_panic(transport_receiver);
+        let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "programNotification",
@@ -833,7 +868,7 @@ pub(crate) mod tests {
                 "subscription": 2,
             }
         });
-        let response = robust_poll_or_panic(past_bank_recv);
+        let (response, _) = robust_poll_or_panic(past_bank_recv);
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         let expected = json!({
@@ -847,7 +882,7 @@ pub(crate) mod tests {
                 "subscription": 3,
             }
         });
-        let response = robust_poll_or_panic(processed_recv);
+        let (response, _) = robust_poll_or_panic(processed_recv);
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
@@ -881,7 +916,7 @@ pub(crate) mod tests {
             .contains_key(&sub_id));
 
         subscriptions.notify_slot(0, 0, 0);
-        let response = robust_poll_or_panic(transport_receiver);
+        let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected_res = SlotInfo {
             parent: 0,
             slot: 0,
@@ -898,6 +933,43 @@ pub(crate) mod tests {
         subscriptions.remove_slot_subscription(&sub_id);
         assert!(!subscriptions
             .slot_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&sub_id));
+    }
+
+    #[test]
+    fn test_check_root_subscribe() {
+        let (subscriber, _id_receiver, mut transport_receiver) =
+            Subscriber::new_test("rootNotification");
+        let sub_id = SubscriptionId::Number(0 as u64);
+        let exit = Arc::new(AtomicBool::new(false));
+        let subscriptions = RpcSubscriptions::new(&exit);
+        subscriptions.add_root_subscription(sub_id.clone(), subscriber);
+
+        assert!(subscriptions
+            .root_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&sub_id));
+
+        subscriptions.notify_roots(vec![2, 1, 3]);
+
+        for expected_root in 1..=3 {
+            let (response, receiver) = robust_poll_or_panic(transport_receiver);
+            transport_receiver = receiver;
+            let expected_res_str =
+                serde_json::to_string(&serde_json::to_value(expected_root).unwrap()).unwrap();
+            let expected = format!(
+                r#"{{"jsonrpc":"2.0","method":"rootNotification","params":{{"result":{},"subscription":0}}}}"#,
+                expected_res_str
+            );
+            assert_eq!(expected, response);
+        }
+
+        subscriptions.remove_root_subscription(&sub_id);
+        assert!(!subscriptions
+            .root_subscriptions
             .read()
             .unwrap()
             .contains_key(&sub_id));

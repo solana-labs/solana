@@ -5,7 +5,7 @@ use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
 use solana_client::rpc_response::{Response as RpcResponse, RpcAccount, RpcKeyedAccount};
-use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature, transaction};
 use std::sync::{atomic, Arc};
 
 // Suppress needless_return due to
@@ -102,6 +102,18 @@ pub trait RpcSolPubSub {
         name = "slotUnsubscribe"
     )]
     fn slot_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+
+    // Get notification when a new root is set
+    #[pubsub(subscription = "rootNotification", subscribe, name = "rootSubscribe")]
+    fn root_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<Slot>);
+
+    // Unsubscribe from slot notification subscription.
+    #[pubsub(
+        subscription = "rootNotification",
+        unsubscribe,
+        name = "rootUnsubscribe"
+    )]
+    fn root_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
 
 #[derive(Default)]
@@ -274,6 +286,27 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             })
         }
     }
+
+    fn root_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<Slot>) {
+        info!("root_subscribe");
+        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
+        let sub_id = SubscriptionId::Number(id as u64);
+        info!("root_subscribe: id={:?}", sub_id);
+        self.subscriptions.add_root_subscription(sub_id, subscriber);
+    }
+
+    fn root_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
+        info!("root_unsubscribe");
+        if self.subscriptions.remove_root_subscription(&id) {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
 }
 
 #[cfg(test)]
@@ -338,7 +371,7 @@ mod tests {
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
 
         // Test signature confirmation notification
-        let response = robust_poll_or_panic(receiver);
+        let (response, _) = robust_poll_or_panic(receiver);
         let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
         let expected = json!({
            "jsonrpc": "2.0",
@@ -480,7 +513,7 @@ mod tests {
            }
         });
 
-        let response = robust_poll_or_panic(receiver);
+        let (response, _) = robust_poll_or_panic(receiver);
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         let tx = system_transaction::transfer(&alice, &witness.pubkey(), 1, blockhash);
@@ -629,7 +662,7 @@ mod tests {
                "subscription": 0,
            }
         });
-        let response = robust_poll_or_panic(receiver);
+        let (response, _) = robust_poll_or_panic(receiver);
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
     }
 
@@ -642,7 +675,7 @@ mod tests {
 
         rpc.subscriptions.notify_slot(0, 0, 0);
         // Test slot confirmation notification
-        let response = robust_poll_or_panic(receiver);
+        let (response, _) = robust_poll_or_panic(receiver);
         let expected_res = SlotInfo {
             parent: 0,
             slot: 0,
@@ -664,7 +697,7 @@ mod tests {
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
         rpc.slot_subscribe(session, subscriber);
         rpc.subscriptions.notify_slot(0, 0, 0);
-        let response = robust_poll_or_panic(receiver);
+        let (response, _) = robust_poll_or_panic(receiver);
         let expected_res = SlotInfo {
             parent: 0,
             slot: 0,
