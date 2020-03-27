@@ -8,3 +8,5 @@ create-missing = false
 
 [output.html]
 theme = "theme"
+
+[output.linkcheck]
