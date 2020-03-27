@@ -3,6 +3,8 @@
 * [Introduction](introduction.md)
 * [Wallet Guide](wallet/README.md)
   * [App Wallets](wallet/app-wallets.md)
+    * [Trust Wallet](wallet/trust-wallet.md)
+    * [Ledger Live](wallet/ledger-live.md)
   * [Command-line Wallets](wallet/cli-wallets.md)
     * [Hardware Wallets](remote-wallet/README.md)
       * [Ledger Hardware Wallet](remote-wallet/ledger.md)
