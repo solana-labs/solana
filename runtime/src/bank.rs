@@ -1853,6 +1853,14 @@ impl Bank {
         None
     }
 
+    pub fn get_signature_status_slot(
+        &self,
+        signature: &Signature
+    ) -> Option<(Slot, Result<()>)> {
+        let rcache = self.src.status_cache.read().unwrap();
+        rcache.get_signature_slot(signature, &self.ancestors)
+    }
+
     pub fn get_signature_confirmation_status(
         &self,
         signature: &Signature,

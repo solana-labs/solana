@@ -103,6 +103,25 @@ impl<T: Serialize + Clone> StatusCache<T> {
         None
     }
 
+    pub fn get_signature_slot(
+        &self,
+        signature: &Signature,
+        ancestors: &HashMap<Slot, usize>,
+    ) -> Option<(Slot, T)> {
+        let mut keys = vec![];
+        let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
+        keys.append(&mut val);
+
+        for blockhash in keys.iter() {
+            trace!("get_signature_slot: trying {}", blockhash);
+            let status = self.get_signature_status(signature, blockhash, ancestors);
+            if status.is_some() {
+                return status;
+            }
+        }
+        None
+    }
+
     pub fn get_signature_status_slow(
         &self,
         sig: &Signature,
@@ -265,6 +284,7 @@ mod tests {
             status_cache.get_signature_status(&sig, &blockhash, &HashMap::new()),
             None
         );
+        assert_eq!(status_cache.get_signature_slot(&sig, &HashMap::new()), None);
         assert_eq!(
             status_cache.get_signature_status_slow(&sig, &HashMap::new()),
             None
@@ -280,6 +300,10 @@ mod tests {
         status_cache.insert(&blockhash, &sig, 0, ());
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
+            Some((0, ()))
+        );
+        assert_eq!(
+            status_cache.get_signature_slot(&sig, &ancestors),
             Some((0, ()))
         );
         assert_eq!(
@@ -303,6 +327,7 @@ mod tests {
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
             None
         );
+        assert_eq!(status_cache.get_signature_slot(&sig, &ancestors), None);
         assert_eq!(
             status_cache.get_signature_status_slow(&sig, &ancestors),
             None
