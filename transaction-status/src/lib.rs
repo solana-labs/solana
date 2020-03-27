@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use bincode::serialize;
+use bincode;
 use solana_sdk::{
     clock::Slot,
     message::MessageHeader,
@@ -122,7 +122,18 @@ impl EncodedTransaction {
                 },
             })
         } else {
-            EncodedTransaction::Binary(bs58::encode(serialize(&transaction).unwrap()).into_string())
+            EncodedTransaction::Binary(
+                bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
+            )
+        }
+    }
+    pub fn decode(&self) -> Option<Transaction> {
+        match self {
+            EncodedTransaction::Json(_) => None,
+            EncodedTransaction::Binary(blob) => bs58::decode(blob)
+                .into_vec()
+                .ok()
+                .and_then(|bytes| bincode::deserialize(&bytes).ok()),
         }
     }
 }
