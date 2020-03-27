@@ -471,7 +471,7 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<Option<transaction::Result<()>>> {
         let status = self
             .rpc_client()
-            .get_signature_status(&signature.to_string())
+            .get_signature_status(&signature)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -488,7 +488,7 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<Option<transaction::Result<()>>> {
         let status = self
             .rpc_client()
-            .get_signature_status_with_commitment(&signature.to_string(), commitment_config)
+            .get_signature_status_with_commitment(&signature, commitment_config)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
