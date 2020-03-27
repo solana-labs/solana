@@ -98,7 +98,7 @@ sign_only="$(solana create-stake-account $stake_account_keypair 50 \
   --lockup-epoch 999 \
   --keypair $offline_system_account_keypair --url http://0.0.0.0)"
 
-signers="$(get_signers_string "${sign_only[@]})")"
+signers="$(get_signers_string "${sign_only[@]}")"
 
 solana create-stake-account $stake_account_keypair 50 \
   --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
@@ -136,7 +136,7 @@ sign_only="$(solana split-stake --blockhash $nonce --nonce $nonce_account_pubkey
   --stake-authority $offline_staker_keypair $stake_account_address $split_stake_account_keypair 10 \
   --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
-signers="$(get_signers_string "${sign_only[@]})")"
+signers="$(get_signers_string "${sign_only[@]}")"
 
 solana split-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
   --stake-authority $offline_staker_pubkey $stake_account_address $split_stake_account_keypair 10 \
@@ -166,7 +166,7 @@ sign_only="$(solana stake-set-lockup --blockhash $nonce --nonce $nonce_account_p
   $split_stake_account_address --custodian $offline_custodian_keypair --lockup-epoch 0 \
   --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
-signers="$(get_signers_string "${sign_only[@]})")"
+signers="$(get_signers_string "${sign_only[@]}")"
 
 solana stake-set-lockup --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
   $split_stake_account_address --custodian $offline_custodian_pubkey --lockup-epoch 0 \
@@ -191,7 +191,7 @@ sign_only="$(solana withdraw-stake --blockhash $nonce --nonce $nonce_account_pub
   --withdraw-authority $offline_withdrawer_keypair \
   --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
-signers="$(get_signers_string "${sign_only[@]})")"
+signers="$(get_signers_string "${sign_only[@]}")"
 
 solana withdraw-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
   $split_stake_account_address $offline_system_account_pubkey 10 \
@@ -218,7 +218,7 @@ sign_only="$(solana delegate-stake --blockhash $nonce --nonce $nonce_account_pub
 --stake-authority $offline_staker_keypair $stake_account_address $vote_account_pubkey \
 --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
-signers="$(get_signers_string "${sign_only[@]})")"
+signers="$(get_signers_string "${sign_only[@]}")"
 
 # Send the signed transaction on the cluster
 solana delegate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
@@ -244,7 +244,7 @@ sign_only="$(solana deactivate-stake --blockhash $nonce --nonce $nonce_account_p
 --stake-authority $offline_staker_keypair $stake_account_address \
 --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
-signers="$(get_signers_string "${sign_only[@]})")"
+signers="$(get_signers_string "${sign_only[@]}")"
 
 # Send the signed transaction on the cluster
 solana deactivate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
