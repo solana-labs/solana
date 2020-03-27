@@ -5,7 +5,7 @@ directly with the Solana command-line tools.
 
 **If you are unfamiliar with using command line programs and just want to be able
 to send and receive SOL tokens, we recommend setting up a third-party
-[Web Wallet](app-wallets.md)**.
+[App Wallet](app-wallets.md)**.
 
 To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
 
@@ -41,9 +41,11 @@ side of the spectrum from an FS wallet. It is terribly inconvenient to use, but
 offers excellent security. That high security is further amplified when paper
 wallets are used in conjunction with
 [offline signing](../offline-signing/index.md). Custody services such as
-[Coinbase Custody](https://custody.coinbase.com/) use this combination.  Paper wallets
-and custody services are an excellent way to secure a large number of tokens
-for a long period of time.
+[Coinbase Custody](https://custody.coinbase.com/) use this combination.
+Paper wallets and custody services are an excellent way to secure a large number
+of tokens for a long period of time.
+
+{% page-ref page="../paper-wallet/README.md" %}
 
 ## Hardware Wallet
 
@@ -58,10 +60,4 @@ security and convenience for cryptocurrencies. It effectively automates the
 process of offline signing while retaining nearly all the convenience of an FS
 wallet.
 
-## Which Wallet is Best?
-
-Different people will have different needs, but if you are still unsure what
-is best for you after reading the comparisons above, go with a
-[Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s). The
-[Nano S is well-integrated into Solana's tool suite](../remote-wallet/ledger.md)
-and offers an outstanding blend of security and convenience.
+{% page-ref page="../remote-wallet/README.md" %}
