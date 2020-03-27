@@ -193,10 +193,6 @@ impl BankForks {
                 if bank.block_height() % (config.snapshot_interval_slots as u64) == 0 {
                     // Generate a snapshot if snapshots are configured and it's been an appropriate number
                     // of banks since the last snapshot
-                    info!(
-                        "setting snapshot root: {} interval: {}",
-                        bank_slot, config.snapshot_interval_slots
-                    );
                     if bank_slot > self.last_snapshot_slot {
                         bank.squash();
                         is_root_bank_squashed = bank_slot == root;
