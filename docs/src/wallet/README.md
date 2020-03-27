@@ -4,18 +4,19 @@ of Solana who want to be able to send, receive and interact with
 SOL tokens on the Solana blockchain.
 
 ## What is a Wallet?
-A crypto *wallet* is a scheme that allows users to send, receive,
+A crypto wallet is a device or application that stores a collection of keys and
+can be used to send, receive,
 and track ownership of cryptocurrencies.  Wallets can take many forms.
 A wallet might be a directory or file in your computer's file system,
 a piece of paper, or a specialized device called a *hardware wallet*.
 There are also various smartphone apps and computer programs
-that can create and manage user-friendly wallets.
+that provide a user-friendly way to create and manage wallets.
 
-A wallet is primarily composed of a *private key* and its
+A *keypair* is a securely generated *private key* and its
 cryptographically-derived *public key*.  A private key and its corresponding
 public key are together known as a *keypair*.
-A wallet is simply a way for a user to keep track of and manage
-one or more keypairs.
+A wallet contains a collection of one or more keypairs and provides some means
+to interact with them.
 
 The *public key* (commonly shortened to *pubkey*) is known as the wallet's
 *receiving address* or simply its *address*.  The wallet address **may be shared
@@ -32,19 +33,19 @@ private key to a wallet, they can withdraw all the tokens it contains.
 If the private key for a wallet is lost, any tokens that have been sent
 to that wallet's address are **permanently lost**.
 
-Different wallet solutions are available to manage the trade offs between
-securely storing and backing up the private key and providing a convenient way
-to interact with the keypair and sign transactions to use/spend the tokens.
-
-Some wallets are easier to use than others.  Some are more secure than others.
-Multiple types of wallets support Solana from which users can choose.
+Different wallet solutions offer different approaches to keypair security and
+interacting with the keypair and sign transactions to use/spend the tokens.
+Some are easier to use than others.
+Some store and back up private keys more securely.
+Solana supports multiple types of wallets so you can choose the right balance
+of security and convenience.
 
 **If you want to be able to receive SOL tokens on the Solana blockchain,
 you first will need to create a wallet.**
 
 ## Supported Wallets
-Solana is supported by multiple third-party app wallets and also supports a
-native command-line wallet.
+Solana supports supports several types of wallets in the Solana native
+command-line app as well as wallets from third-parties.
 
 For the majority of users, we recommend using one of the
 [app wallets](app-wallets.md), which will provide a more familiar user
