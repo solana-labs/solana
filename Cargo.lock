@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "assert_cmd"
-version = "0.12.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "doc-comment 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -97,6 +97,7 @@ dependencies = [
  "predicates 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "predicates-core 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "predicates-tree 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wait-timeout 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4230,7 +4231,7 @@ dependencies = [
 name = "solana-ledger-tool"
 version = "1.1.0"
 dependencies = [
- "assert_cmd 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "assert_cmd 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "histogram 0.6.9 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6235,7 +6236,7 @@ dependencies = [
 "checksum arrayvec 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)" = "b8d73f9beda665eaa98ab9e4f7442bd4e7de6652587de55b2525e52e29c1b0ba"
 "checksum ascii 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3ae7d751998c189c1d4468cf0a39bb2eae052a9c58d50ebb3b9591ee3813ad50"
 "checksum ascii-canvas 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ff8eb72df928aafb99fe5d37b383f2fe25bd2a765e3e5f7c365916b6f2463a29"
-"checksum assert_cmd 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "35ad62275a8bda1c2c9a9303aea121eb04204272d3be0735d5dc1f49eb9ff9a9"
+"checksum assert_cmd 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "36101401a715c232f2c63a534a4b639415064b79d128d2a60d35678f8fb45204"
 "checksum assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7deb0a829ca7bcfaf5da70b073a8d128619259a7be8216a355e23f00763059e5"
 "checksum atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)" = "1803c647a3ec87095e7ae7acfca019e98de5ec9a7d01343f611cf3152ed71a90"
 "checksum autocfg 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "22130e92352b948e7e82a49cdb0aa94f2211761117f29e052dd397c1ac33542b"
