@@ -877,9 +877,52 @@ test('request airdrop - max commitment', async () => {
     },
   ]);
 
-  await connection.requestAirdrop(account.publicKey, minimumAmount + 40);
+  const signature = await connection.requestAirdrop(
+    account.publicKey,
+    minimumAmount + 40,
+  );
   const balance = await connection.getBalance(account.publicKey);
   expect(balance).toBe(minimumAmount + 40);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatus',
+      params: [
+        [
+          '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: [
+          {
+            slot: 0,
+            confirmations: null,
+            status: {Ok: null},
+          },
+        ],
+      },
+    },
+  ]);
+
+  const {value} = await connection.getSignatureStatus(signature, 'recent');
+  if (value === null) {
+    expect(value).not.toBeNull();
+    return;
+  }
+
+  // Signature should be finalized and therefore confirmations should be null
+  if (value.confirmations !== null) {
+    expect(value.confirmations).toBeNull();
+    return;
+  }
 });
 
 test('transaction', async () => {
