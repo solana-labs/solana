@@ -129,6 +129,7 @@ declare module '@solana/web3.js' {
     signatureResult: SignatureSuccess | TransactionError,
     context: Context,
   ) => void;
+  export type RootChangeCallback = (root: number) => void;
 
   export type SignatureSuccess = {
     Ok: null;
@@ -242,6 +243,8 @@ declare module '@solana/web3.js' {
       callback: SignatureResultCallback,
     ): number;
     removeSignatureListener(id: number): Promise<void>;
+    onRootChange(callback: RootChangeCallback): number;
+    removeRootChangeListener(id: number): Promise<void>;
     validatorExit(): Promise<boolean>;
     getMinimumBalanceForRentExemption(
       dataLength: number,

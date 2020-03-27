@@ -372,7 +372,7 @@ const ProgramAccountNotificationResult = struct({
 /**
  * @private
  */
-const SlotInfo = struct({
+const SlotInfoResult = struct({
   parent: 'number',
   slot: 'number',
   root: 'number',
@@ -383,7 +383,7 @@ const SlotInfo = struct({
  */
 const SlotNotificationResult = struct({
   subscription: 'number',
-  result: SlotInfo,
+  result: SlotInfoResult,
 });
 
 /**
@@ -392,6 +392,14 @@ const SlotNotificationResult = struct({
 const SignatureNotificationResult = struct({
   subscription: 'number',
   result: notificationResultAndContext(SignatureStatusResult),
+});
+
+/**
+ * Expected JSON RPC response for the "rootNotification" message
+ */
+const RootNotificationResult = struct({
+  subscription: 'number',
+  result: 'number',
 });
 
 /**
@@ -580,6 +588,20 @@ const RequestAirdropRpcResult = jsonRpcResult('string');
 const SendTransactionRpcResult = jsonRpcResult('string');
 
 /**
+ * Information about the latest slot being processed by a node
+ *
+ * @typedef {Object} SlotInfo
+ * @property {number} slot Currently processing slot
+ * @property {number} parent Parent of the current slot
+ * @property {number} root The root block of the current slot's fork
+ */
+type SlotInfo = {
+  slot: number,
+  parent: number,
+  root: number,
+};
+
+/**
  * Information describing an account
  *
  * @typedef {Object} AccountInfo
@@ -677,6 +699,19 @@ type SignatureSubscriptionInfo = {
 };
 
 /**
+ * Callback function for root change notifications
+ */
+export type RootChangeCallback = (root: number) => void;
+
+/**
+ * @private
+ */
+type RootSubscriptionInfo = {
+  callback: RootChangeCallback,
+  subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
+};
+
+/**
  * Signature status: Success
  *
  * @typedef {Object} SignatureSuccess
@@ -737,6 +772,10 @@ export class Connection {
     [number]: SignatureSubscriptionInfo,
   } = {};
   _signatureSubscriptionCounter: number = 0;
+  _rootSubscriptions: {
+    [number]: RootSubscriptionInfo,
+  } = {};
+  _rootSubscriptionCounter: number = 0;
 
   /**
    * Establish a JSON RPC connection
@@ -783,6 +822,10 @@ export class Connection {
     this._rpcWebSocket.on(
       'signatureNotification',
       this._wsOnSignatureNotification.bind(this),
+    );
+    this._rpcWebSocket.on(
+      'rootNotification',
+      this._wsOnRootNotification.bind(this),
     );
   }
 
@@ -1448,11 +1491,13 @@ export class Connection {
     ).map(Number);
     const slotKeys = Object.keys(this._slotSubscriptions).map(Number);
     const signatureKeys = Object.keys(this._signatureSubscriptions).map(Number);
+    const rootKeys = Object.keys(this._rootSubscriptions).map(Number);
     if (
       accountKeys.length === 0 &&
       programKeys.length === 0 &&
       slotKeys.length === 0 &&
-      signatureKeys.length === 0
+      signatureKeys.length === 0 &&
+      rootKeys.length === 0
     ) {
       this._rpcWebSocket.close();
       return;
@@ -1470,6 +1515,9 @@ export class Connection {
       }
       for (let id of signatureKeys) {
         this._signatureSubscriptions[id].subscriptionId = null;
+      }
+      for (let id of rootKeys) {
+        this._rootSubscriptions[id].subscriptionId = null;
       }
       this._rpcWebSocket.connect();
       return;
@@ -1493,6 +1541,11 @@ export class Connection {
     for (let id of signatureKeys) {
       const sub = this._signatureSubscriptions[id];
       this._subscribe(sub, 'signatureSubscribe', [sub.signature]);
+    }
+
+    for (let id of rootKeys) {
+      const sub = this._rootSubscriptions[id];
+      this._subscribe(sub, 'rootSubscribe', []);
     }
   }
 
@@ -1757,6 +1810,58 @@ export class Connection {
       this._updateSubscriptions();
     } else {
       throw new Error(`Unknown signature result id: ${id}`);
+    }
+  }
+
+  /**
+   * @private
+   */
+  _wsOnRootNotification(notification: Object) {
+    const res = RootNotificationResult(notification);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    const root = res.result;
+    const keys = Object.keys(this._rootSubscriptions).map(Number);
+    for (let id of keys) {
+      const sub = this._rootSubscriptions[id];
+      if (sub.subscriptionId === res.subscription) {
+        sub.callback(root);
+        return true;
+      }
+    }
+  }
+
+  /**
+   * Register a callback to be invoked upon root changes
+   *
+   * @param callback Function to invoke whenever the root changes
+   * @return subscription id
+   */
+  onRootChange(callback: RootChangeCallback): number {
+    const id = ++this._rootSubscriptionCounter;
+    this._rootSubscriptions[id] = {
+      callback,
+      subscriptionId: null,
+    };
+    this._updateSubscriptions();
+    return id;
+  }
+
+  /**
+   * Deregister a root notification callback
+   *
+   * @param id subscription id to deregister
+   */
+  async removeRootChangeListener(id: number): Promise<void> {
+    if (this._rootSubscriptions[id]) {
+      const subInfo = this._rootSubscriptions[id];
+      delete this._rootSubscriptions[id];
+      await this._unsubscribe(subInfo, 'rootUnsubscribe');
+      this._updateSubscriptions();
+    } else {
+      throw new Error(`Unknown root change id: ${id}`);
     }
   }
 }
