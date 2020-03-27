@@ -14,7 +14,7 @@ use crate::{
         deserialize_atomicbool, deserialize_atomicu64, serialize_atomicbool, serialize_atomicu64,
     },
     stakes::Stakes,
-    status_cache::{SignatureConfirmationStatus, SlotDelta, StatusCache},
+    status_cache::{SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
@@ -1856,14 +1856,6 @@ impl Bank {
     pub fn get_signature_status_slot(&self, signature: &Signature) -> Option<(Slot, Result<()>)> {
         let rcache = self.src.status_cache.read().unwrap();
         rcache.get_signature_slot(signature, &self.ancestors)
-    }
-
-    pub fn get_signature_confirmation_status(
-        &self,
-        signature: &Signature,
-    ) -> Option<SignatureConfirmationStatus<Result<()>>> {
-        let rcache = self.src.status_cache.read().unwrap();
-        rcache.get_signature_status_slow(signature, &self.ancestors)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {

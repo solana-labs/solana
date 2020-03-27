@@ -122,34 +122,6 @@ impl<T: Serialize + Clone> StatusCache<T> {
         None
     }
 
-    pub fn get_signature_status_slow(
-        &self,
-        sig: &Signature,
-        ancestors: &HashMap<Slot, usize>,
-    ) -> Option<SignatureConfirmationStatus<T>> {
-        trace!("get_signature_status_slow");
-        let mut keys = vec![];
-        let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
-        keys.append(&mut val);
-
-        for blockhash in keys.iter() {
-            trace!("get_signature_status_slow: trying {}", blockhash);
-            if let Some((forkid, res)) = self.get_signature_status(sig, blockhash, ancestors) {
-                trace!("get_signature_status_slow: got {}", forkid);
-                let confirmations = ancestors
-                    .get(&forkid)
-                    .copied()
-                    .unwrap_or_else(|| ancestors.len());
-                return Some(SignatureConfirmationStatus {
-                    slot: forkid,
-                    confirmations,
-                    status: res,
-                });
-            }
-        }
-        None
-    }
-
     /// Add a known root fork.  Roots are always valid ancestors.
     /// After MAX_CACHE_ENTRIES, roots are removed, and any old signatures are cleared.
     pub fn add_root(&mut self, fork: Slot) {
@@ -285,10 +257,6 @@ mod tests {
             None
         );
         assert_eq!(status_cache.get_signature_slot(&sig, &HashMap::new()), None);
-        assert_eq!(
-            status_cache.get_signature_status_slow(&sig, &HashMap::new()),
-            None
-        );
     }
 
     #[test]
@@ -306,14 +274,6 @@ mod tests {
             status_cache.get_signature_slot(&sig, &ancestors),
             Some((0, ()))
         );
-        assert_eq!(
-            status_cache.get_signature_status_slow(&sig, &ancestors),
-            Some(SignatureConfirmationStatus {
-                slot: 0,
-                confirmations: 1,
-                status: ()
-            })
-        );
     }
 
     #[test]
@@ -328,10 +288,6 @@ mod tests {
             None
         );
         assert_eq!(status_cache.get_signature_slot(&sig, &ancestors), None);
-        assert_eq!(
-            status_cache.get_signature_status_slow(&sig, &ancestors),
-            None
-        );
     }
 
     #[test]
@@ -345,24 +301,6 @@ mod tests {
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
             Some((0, ()))
-        );
-    }
-
-    #[test]
-    fn test_find_sig_with_root_ancestor_fork_max_len() {
-        let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
-        let blockhash = hash(Hash::default().as_ref());
-        let ancestors = vec![(2, 2)].into_iter().collect();
-        status_cache.insert(&blockhash, &sig, 0, ());
-        status_cache.add_root(0);
-        assert_eq!(
-            status_cache.get_signature_status_slow(&sig, &ancestors),
-            Some(SignatureConfirmationStatus {
-                slot: 0,
-                confirmations: ancestors.len(),
-                status: ()
-            })
         );
     }
 
@@ -394,10 +332,6 @@ mod tests {
         }
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
-            None
-        );
-        assert_eq!(
-            status_cache.get_signature_status_slow(&sig, &ancestors),
             None
         );
     }
