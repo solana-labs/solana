@@ -1153,7 +1153,7 @@ fn process_balance(
 }
 
 fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResult {
-    match rpc_client.get_signature_status(&signature.to_string()) {
+    match rpc_client.get_signature_status(&signature) {
         Ok(status) => {
             if let Some(result) = status {
                 match result {
@@ -2165,7 +2165,7 @@ pub fn request_and_confirm_airdrop(
     log_instruction_custom_error::<SystemError>(result)
 }
 
-pub fn log_instruction_custom_error<E>(result: ClientResult<String>) -> ProcessResult
+pub fn log_instruction_custom_error<E>(result: ClientResult<Signature>) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
@@ -2182,7 +2182,7 @@ where
             }
             Err(err.into())
         }
-        Ok(sig) => Ok(sig),
+        Ok(sig) => Ok(sig.to_string()),
     }
 }
 

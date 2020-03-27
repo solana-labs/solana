@@ -32,7 +32,6 @@ use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     error,
     net::SocketAddr,
-    str::FromStr,
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -71,7 +70,7 @@ impl RpcClient {
         }
     }
 
-    pub fn confirm_transaction(&self, signature: &str) -> ClientResult<bool> {
+    pub fn confirm_transaction(&self, signature: &Signature) -> ClientResult<bool> {
         Ok(self
             .confirm_transaction_with_commitment(signature, CommitmentConfig::default())?
             .value)
@@ -79,7 +78,7 @@ impl RpcClient {
 
     pub fn confirm_transaction_with_commitment(
         &self,
-        signature: &str,
+        signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<bool> {
         let Response { context, value } =
@@ -94,21 +93,25 @@ impl RpcClient {
         })
     }
 
-    pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<String> {
+    pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
         let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
-        let signature =
+        let response =
             self.client
                 .send(&RpcRequest::SendTransaction, json!([serialized_encoded]), 5)?;
-        if signature.as_str().is_none() {
-            Err(RpcError::ForUser("Received result of an unexpected type".to_string()).into())
-        } else {
-            Ok(signature.as_str().unwrap().to_string())
+
+        match response.as_str() {
+            None => {
+                Err(RpcError::ForUser("Received result of an unexpected type".to_string()).into())
+            }
+            Some(signature_base58_str) => signature_base58_str
+                .parse::<Signature>()
+                .map_err(|err| RpcError::ParseError(err.to_string()).into()),
         }
     }
 
     pub fn get_signature_status(
         &self,
-        signature: &str,
+        signature: &Signature,
     ) -> ClientResult<Option<transaction::Result<()>>> {
         self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
     }
@@ -130,7 +133,7 @@ impl RpcClient {
 
     pub fn get_signature_status_with_commitment(
         &self,
-        signature: &str,
+        signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Option<transaction::Result<()>>> {
         let signature_status = self.client.send(
@@ -348,13 +351,13 @@ impl RpcClient {
         &self,
         transaction: &mut Transaction,
         signer_keys: &T,
-    ) -> ClientResult<String> {
+    ) -> ClientResult<Signature> {
         let mut send_retries = 20;
         loop {
             let mut status_retries = 15;
-            let signature_str = self.send_transaction(transaction)?;
+            let signature = self.send_transaction(transaction)?;
             let status = loop {
-                let status = self.get_signature_status(&signature_str)?;
+                let status = self.get_signature_status(&signature)?;
                 if status.is_none() {
                     status_retries -= 1;
                     if status_retries == 0 {
@@ -370,7 +373,7 @@ impl RpcClient {
             };
             send_retries = if let Some(result) = status.clone() {
                 match result {
-                    Ok(_) => return Ok(signature_str),
+                    Ok(_) => return Ok(signature),
                     Err(TransactionError::AccountInUse) => {
                         // Fetch a new blockhash and re-sign the transaction before sending it again
                         self.resign_transaction(transaction, signer_keys)?;
@@ -832,10 +835,9 @@ impl RpcClient {
     ) -> ClientResult<()> {
         let now = Instant::now();
         loop {
-            if let Ok(Some(_)) = self.get_signature_status_with_commitment(
-                &signature.to_string(),
-                commitment_config.clone(),
-            ) {
+            if let Ok(Some(_)) =
+                self.get_signature_status_with_commitment(&signature, commitment_config.clone())
+            {
                 break;
             }
             if now.elapsed().as_secs() > 15 {
@@ -966,7 +968,7 @@ impl RpcClient {
         &self,
         transaction: &mut Transaction,
         signer_keys: &T,
-    ) -> ClientResult<String> {
+    ) -> ClientResult<Signature> {
         let mut confirmations = 0;
 
         let progress_bar = new_spinner_progress_bar();
@@ -977,23 +979,21 @@ impl RpcClient {
         ));
 
         let mut send_retries = 20;
-        let signature_str = loop {
+        let signature = loop {
             let mut status_retries = 15;
-            let (signature_str, status) = loop {
-                let signature_str = self.send_transaction(transaction)?;
+            let (signature, status) = loop {
+                let signature = self.send_transaction(transaction)?;
 
                 // Get recent commitment in order to count confirmations for successful transactions
-                let status = self.get_signature_status_with_commitment(
-                    &signature_str,
-                    CommitmentConfig::recent(),
-                )?;
+                let status = self
+                    .get_signature_status_with_commitment(&signature, CommitmentConfig::recent())?;
                 if status.is_none() {
                     status_retries -= 1;
                     if status_retries == 0 {
-                        break (signature_str, status);
+                        break (signature, status);
                     }
                 } else {
-                    break (signature_str, status);
+                    break (signature, status);
                 }
 
                 if cfg!(not(test)) {
@@ -1018,7 +1018,7 @@ impl RpcClient {
                 if let Some(result) = status {
                     match result {
                         Ok(_) => {
-                            break signature_str;
+                            break signature;
                         }
                         Err(err) => {
                             return Err(err.into());
@@ -1031,19 +1031,13 @@ impl RpcClient {
                 }
             }
         };
-        let signature = Signature::from_str(&signature_str).map_err(|_| {
-            ClientError::from(ClientErrorKind::Custom(format!(
-                "Returned string {} cannot be parsed as a signature",
-                signature_str
-            )))
-        })?;
         loop {
             // Return when default (max) commitment is reached
             // Failed transactions have already been eliminated, `is_some` check is sufficient
-            if self.get_signature_status(&signature_str)?.is_some() {
+            if self.get_signature_status(&signature)?.is_some() {
                 progress_bar.set_message("Transaction confirmed");
                 progress_bar.finish_and_clear();
-                return Ok(signature_str);
+                return Ok(signature);
             }
             progress_bar.set_message(&format!(
                 "[{}/{}] Waiting for confirmations",
@@ -1205,7 +1199,7 @@ mod tests {
         let tx = system_transaction::transfer(&key, &to, 50, blockhash);
 
         let signature = rpc_client.send_transaction(&tx);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        assert_eq!(signature.unwrap(), SIGNATURE.parse().unwrap());
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
 
@@ -1228,18 +1222,17 @@ mod tests {
 
     #[test]
     fn test_get_signature_status() {
+        let signature = Signature::default();
+
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
-        let signature = "good_signature";
         let status = rpc_client.get_signature_status(&signature).unwrap();
         assert_eq!(status, Some(Ok(())));
 
         let rpc_client = RpcClient::new_mock("sig_not_found".to_string());
-        let signature = "sig_not_found";
         let status = rpc_client.get_signature_status(&signature).unwrap();
         assert_eq!(status, None);
 
         let rpc_client = RpcClient::new_mock("account_in_use".to_string());
-        let signature = "account_in_use";
         let status = rpc_client.get_signature_status(&signature).unwrap();
         assert_eq!(status, Some(Err(TransactionError::AccountInUse)));
     }
