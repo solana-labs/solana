@@ -19,6 +19,7 @@ use std::{
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
+pub const SWITCH_FORK_THRESHOLD: f64 = 1f64 / 3f64;
 
 #[derive(Default, Debug, Clone)]
 pub struct StakeLockout {
@@ -118,7 +119,7 @@ impl Tower {
             let mut vote_state = vote_state.unwrap();
 
             for vote in &vote_state.votes {
-                let range = vote.slot..vote.slot + vote.expiration_slot();
+                let range = vote.slot..vote.expiration_slot();
                 interval_stakes
                     .entry(range)
                     .or_insert(HashMap::new())
@@ -376,13 +377,17 @@ impl Tower {
                         }
 
                         // Get last frozen banks at tip of each fork. Evaluate which
-                        // stakes are locked out in the range common_ancestor..last_vote
+                        // stakes are locked out in the range common_ancestor..last_vote,
+                        // which means finding any ranges in the `stake_ranges` tree
+                        // that overlap the range common_ancestor..last_vote,
                         let fork_tips = Self::fork_tips(*fork, descendants, progress);
                         for tip in fork_tips {
                             let stake_ranges = &progress.get(&tip).unwrap().fork_stats.stake_ranges;
+                            // Find any ranges with endpoint <= last_vote
                             for entry in stake_ranges.find(*last_vote..last_vote + 1) {
                                 let range = entry.interval();
                                 let account_stakes = entry.data();
+                                // Find any ranges with start point > common_ancestor
                                 if range.start > *common_ancestor {
                                     for (pubkey, stake) in account_stakes {
                                         if !counted_pubkeys.contains(pubkey) {
@@ -396,7 +401,7 @@ impl Tower {
                     }
                 }
 
-                (other_stake as f64 / total_stake as f64) > self.threshold_size
+                (other_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD
             })
             .unwrap_or(true)
     }
