@@ -159,8 +159,11 @@ where
             let root = if root.len() == 1 { root[0] } else { 0 };
             if desired_slot.len() == 1 {
                 let slot = desired_slot[0];
-                let desired_bank = bank_forks.read().unwrap().get(slot).unwrap().clone();
-                let results = bank_method(&desired_bank, hashmap_key);
+                let results = {
+                    let bank_forks = bank_forks.read().unwrap();
+                    let desired_bank = bank_forks.get(slot).unwrap();
+                    bank_method(&desired_bank, hashmap_key)
+                };
                 for result in filter_results(results, root) {
                     notifier.notify(
                         Response {
