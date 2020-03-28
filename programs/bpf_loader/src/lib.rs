@@ -21,7 +21,6 @@ use solana_sdk::{
     program_utils::DecodeError,
     program_utils::{is_executable, limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
-    sysvar::rent,
 };
 use std::{io::prelude::*, mem};
 use thiserror::Error;
@@ -229,7 +228,6 @@ pub fn process_instruction(
             LoaderInstruction::Finalize => {
                 let mut keyed_accounts_iter = keyed_accounts.iter();
                 let program = next_keyed_account(&mut keyed_accounts_iter)?;
-                let rent = next_keyed_account(&mut keyed_accounts_iter)?;
 
                 if program.signer_key().is_none() {
                     warn!("key[0] did not sign the transaction");
@@ -240,8 +238,6 @@ pub fn process_instruction(
                     warn!("{}", e);
                     return Err(InstructionError::InvalidAccountData);
                 }
-
-                rent::verify_rent_exemption(&program, &rent)?;
 
                 program.try_account_ref_mut()?.executable = true;
                 info!("Finalize: account {:?}", program.signer_key().unwrap());
@@ -254,8 +250,8 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::account::Account;
-    use std::{cell::RefCell, fs::File, io::Read};
+    use solana_sdk::{account::Account, rent::Rent};
+    use std::{fs::File, io::Read};
 
     #[test]
     #[should_panic(expected = "ExceededMaxInstructions(10)")]
@@ -324,14 +320,13 @@ mod tests {
     fn test_bpf_loader_finalize() {
         let program_id = Pubkey::new_rand();
         let program_key = Pubkey::new_rand();
-        let rent_key = rent::id();
         let mut file = File::open("test_elfs/noop.so").expect("file open failed");
         let mut elf = Vec::new();
-        let rent = rent::Rent::default();
+        let rent = Rent::default();
         file.read_to_end(&mut elf).unwrap();
         let program_account = Account::new_ref(rent.minimum_balance(elf.len()), 0, &program_id);
         program_account.borrow_mut().data = elf;
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
+        let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
 
         // Case: Empty keyed accounts
@@ -340,9 +335,6 @@ mod tests {
             process_instruction(&bpf_loader::id(), &vec![], &instruction_data)
         );
 
-        let rent_account = RefCell::new(rent::create_account(1, &rent));
-        keyed_accounts.push(KeyedAccount::new(&rent_key, false, &rent_account));
-
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
@@ -350,10 +342,7 @@ mod tests {
         );
 
         // Case: Finalize
-        let keyed_accounts = vec![
-            KeyedAccount::new(&program_key, true, &program_account),
-            KeyedAccount::new(&rent_key, false, &rent_account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         assert_eq!(
             Ok(()),
             process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
@@ -364,10 +353,7 @@ mod tests {
 
         // Case: Finalize
         program_account.borrow_mut().data[0] = 0; // bad elf
-        let keyed_accounts = vec![
-            KeyedAccount::new(&program_key, true, &program_account),
-            KeyedAccount::new(&rent_key, false, &rent_account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
             process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)

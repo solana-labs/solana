@@ -1375,6 +1375,7 @@ impl Bank {
                         tx.message(),
                         &loader_refcells,
                         &account_refcells,
+                        &self.rent_collector,
                     );
 
                     Self::from_refcells(accounts, loaders, account_refcells, loader_refcells);
