@@ -291,10 +291,11 @@ impl ReplayStage {
                                         progress.get_propagated_stats(latest_leader_slot)
                                     {
                                         info!(
-                                            "total staked: {}, observed staked: {}, pubkeys: {:?}, latest_leader_slot: {}, epoch: {:?}",
+                                            "total staked: {}, observed staked: {}, vote pubkeys: {:?}, node_pubkeys: {:?}, latest_leader_slot: {}, epoch: {:?}",
                                             stats.total_epoch_stake,
                                             stats.propagated_validators_stake,
                                             stats.propagated_validators,
+                                            stats.propagated_node_ids,
                                             latest_leader_slot,
                                             bank_forks.read().unwrap().get(latest_leader_slot).map(|x| x.epoch()),
                                         );
