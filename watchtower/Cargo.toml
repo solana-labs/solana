@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-watchtower"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.1.0"
+version = "1.2.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -13,12 +13,12 @@ clap = "2.33.0"
 log = "0.4.8"
 reqwest = { version = "0.10.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0"
-solana-clap-utils = { path = "../clap-utils", version = "1.1.0" }
-solana-cli-config = { path = "../cli-config", version = "1.1.0" }
-solana-client = { path = "../client", version = "1.1.0" }
-solana-logger = { path = "../logger", version = "1.1.0" }
-solana-metrics = { path = "../metrics", version = "1.1.0" }
-solana-sdk = { path = "../sdk", version = "1.1.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
+solana-cli-config = { path = "../cli-config", version = "1.2.0" }
+solana-client = { path = "../client", version = "1.2.0" }
+solana-logger = { path = "../logger", version = "1.2.0" }
+solana-metrics = { path = "../metrics", version = "1.2.0" }
+solana-sdk = { path = "../sdk", version = "1.2.0" }
 
 [[bin]]
 name = "solana-watchtower"

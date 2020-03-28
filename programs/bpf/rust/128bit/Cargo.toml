@@ -3,7 +3,7 @@
 
 [package]
 name = "solana-bpf-rust-128bit"
-version = "1.1.0"
+version = "1.2.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,11 +12,11 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk = { path = "../../../../sdk/", version = "1.1.0", default-features = false }
-solana-bpf-rust-128bit-dep = { path = "../128bit_dep", version = "1.1.0" }
+solana-sdk = { path = "../../../../sdk/", version = "1.2.0", default-features = false }
+solana-bpf-rust-128bit-dep = { path = "../128bit_dep", version = "1.2.0" }
 
 [dev_dependencies]
-solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/test", version = "1.1.0" }
+solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/test", version = "1.2.0" }
 
 [features]
 program = ["solana-sdk/program"]

@@ -3,19 +3,19 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-gossip"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.1.0"
+version = "1.2.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-solana-clap-utils = { path = "../clap-utils", version = "1.1.0" }
-solana-core = { path = "../core", version = "1.1.0" }
-solana-client = { path = "../client", version = "1.1.0" }
-solana-logger = { path = "../logger", version = "1.1.0" }
-solana-net-utils = { path = "../net-utils", version = "1.1.0" }
-solana-sdk = { path = "../sdk", version = "1.1.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
+solana-core = { path = "../core", version = "1.2.0" }
+solana-client = { path = "../client", version = "1.2.0" }
+solana-logger = { path = "../logger", version = "1.2.0" }
+solana-net-utils = { path = "../net-utils", version = "1.2.0" }
+solana-sdk = { path = "../sdk", version = "1.2.0" }
 
 
 

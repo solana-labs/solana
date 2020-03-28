@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-cli"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.1.0"
+version = "1.2.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -26,28 +26,28 @@ reqwest = { version = "0.10.4", default-features = false, features = ["blocking"
 serde = "1.0.105"
 serde_derive = "1.0.103"
 serde_json = "1.0.48"
-solana-budget-program = { path = "../programs/budget", version = "1.1.0" }
-solana-clap-utils = { path = "../clap-utils", version = "1.1.0" }
-solana-cli-config = { path = "../cli-config", version = "1.1.0" }
-solana-client = { path = "../client", version = "1.1.0" }
-solana-config-program = { path = "../programs/config", version = "1.1.0" }
-solana-faucet = { path = "../faucet", version = "1.1.0" }
-solana-logger = { path = "../logger", version = "1.1.0" }
-solana-net-utils = { path = "../net-utils", version = "1.1.0" }
-solana-remote-wallet = { path = "../remote-wallet", version = "1.1.0" }
-solana-runtime = { path = "../runtime", version = "1.1.0" }
-solana-sdk = { path = "../sdk", version = "1.1.0" }
-solana-stake-program = { path = "../programs/stake", version = "1.1.0" }
-solana-storage-program = { path = "../programs/storage", version = "1.1.0" }
-solana-vote-program = { path = "../programs/vote", version = "1.1.0" }
-solana-vote-signer = { path = "../vote-signer", version = "1.1.0" }
+solana-budget-program = { path = "../programs/budget", version = "1.2.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
+solana-cli-config = { path = "../cli-config", version = "1.2.0" }
+solana-client = { path = "../client", version = "1.2.0" }
+solana-config-program = { path = "../programs/config", version = "1.2.0" }
+solana-faucet = { path = "../faucet", version = "1.2.0" }
+solana-logger = { path = "../logger", version = "1.2.0" }
+solana-net-utils = { path = "../net-utils", version = "1.2.0" }
+solana-remote-wallet = { path = "../remote-wallet", version = "1.2.0" }
+solana-runtime = { path = "../runtime", version = "1.2.0" }
+solana-sdk = { path = "../sdk", version = "1.2.0" }
+solana-stake-program = { path = "../programs/stake", version = "1.2.0" }
+solana-storage-program = { path = "../programs/storage", version = "1.2.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
+solana-vote-signer = { path = "../vote-signer", version = "1.2.0" }
 titlecase = "1.1.0"
 thiserror = "1.0.13"
 url = "2.1.1"
 
 [dev-dependencies]
-solana-core = { path = "../core", version = "1.1.0" }
-solana-budget-program = { path = "../programs/budget", version = "1.1.0" }
+solana-core = { path = "../core", version = "1.2.0" }
+solana-budget-program = { path = "../programs/budget", version = "1.2.0" }
 tempfile = "3.1.0"
 
 [[bin]]
