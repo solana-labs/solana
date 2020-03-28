@@ -410,17 +410,14 @@ impl JsonRpcRequestProcessor {
             let status = bank
                 .get_signature_status_slot(&signature)
                 .map(|(slot, status)| {
-                    let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
-                    let confirmations = r_block_commitment_cache
-                        .get_confirmation_count(slot)
-                        .and_then(|confirmations| {
-                            if confirmations <= MAX_LOCKOUT_HISTORY {
-                                Some(confirmations)
-                            } else {
-                                None
-                            }
-                        })
-                        .or(Some(0));
+                    let confirmations = if bank.src.roots().contains(&slot) {
+                        None
+                    } else {
+                        let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
+                        r_block_commitment_cache
+                            .get_confirmation_count(slot)
+                            .or(Some(0))
+                    };
                     TransactionStatus {
                         slot,
                         status,
@@ -1779,7 +1776,7 @@ pub mod tests {
                 .expect("actual response deserialization");
         let result = result.as_ref().unwrap();
         assert_eq!(expected_res, result.status);
-        assert_eq!(Some(2), result.confirmations);
+        assert_eq!(None, result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);

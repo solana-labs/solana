@@ -349,16 +349,17 @@ impl StorageStage {
         let mut now = Instant::now();
         let mut confirmed_blocks = 0;
         loop {
-            let response = bank_forks
-                .read()
-                .unwrap()
-                .working_bank()
-                .get_signature_status_slot(signature);
+            let working_bank = bank_forks.read().unwrap().working_bank();
+            let response = working_bank.get_signature_status_slot(signature);
             if let Some((slot, status)) = response {
-                let r_block_commitment_cache = block_commitment_cache.read().unwrap();
-                let confirmations = r_block_commitment_cache
-                    .get_confirmation_count(slot)
-                    .unwrap_or(MAX_LOCKOUT_HISTORY + 1);
+                let confirmations = if working_bank.src.roots().contains(&slot) {
+                    MAX_LOCKOUT_HISTORY + 1
+                } else {
+                    let r_block_commitment_cache = block_commitment_cache.read().unwrap();
+                    r_block_commitment_cache
+                        .get_confirmation_count(slot)
+                        .unwrap_or(0)
+                };
                 if status.is_ok() {
                     if confirmed_blocks != confirmations {
                         now = Instant::now();
