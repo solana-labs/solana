@@ -52,6 +52,7 @@ members = [
     "sdk",
     "sdk-c",
     "scripts",
+    "stake-monitor",
     "sys-tuner",
     "transaction-status",
     "upload-perf",

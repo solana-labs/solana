@@ -96,6 +96,7 @@ else
     solana-ledger-tool
     solana-log-analyzer
     solana-net-shaper
+    solana-stake-monitor
     solana-sys-tuner
     solana-validator
     solana-watchtower
