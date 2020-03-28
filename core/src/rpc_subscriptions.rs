@@ -141,6 +141,16 @@ where
         .unwrap()
         .ancestors
         .clone();
+
+    let mut confirmation_slots: HashMap<usize, Slot> = HashMap::new();
+    let r_block_commitment_cache = block_commitment_cache.read().unwrap();
+    for (slot, _) in current_ancestors.iter() {
+        if let Some(confirmations) = r_block_commitment_cache.get_confirmation_count(*slot) {
+            confirmation_slots.entry(confirmations).or_insert(*slot);
+        }
+    }
+    drop(r_block_commitment_cache);
+
     let root = current_ancestors
         .iter()
         .min_by_key(|(&s, _)| s)
@@ -155,20 +165,7 @@ where
             } else if *confirmations == MAX_LOCKOUT_HISTORY + 1 {
                 Some(&root)
             } else {
-                current_ancestors
-                    .iter()
-                    .find(|(&slot, _)| {
-                        if let Some(confirmation_count) = block_commitment_cache
-                            .read()
-                            .unwrap()
-                            .get_confirmation_count(slot)
-                        {
-                            confirmation_count == *confirmations
-                        } else {
-                            false
-                        }
-                    })
-                    .map(|(slot, _)| slot)
+                confirmation_slots.get(confirmations)
             };
             if let Some(&slot) = desired_slot {
                 let results = {
