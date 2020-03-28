@@ -867,21 +867,24 @@ pub(crate) mod tests {
         let subscriptions =
             RpcSubscriptions::new(&exit, Arc::new(RwLock::new(block_commitment_cache)));
 
-        let (past_bank_sub, _id_receiver, past_bank_recv) =
+        let (past_bank_sub1, _id_receiver, past_bank_recv1) =
+            Subscriber::new_test("signatureNotification");
+        let (past_bank_sub2, _id_receiver, past_bank_recv2) =
             Subscriber::new_test("signatureNotification");
         let (processed_sub, _id_receiver, processed_recv) =
             Subscriber::new_test("signatureNotification");
+
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
             Some(0),
             SubscriptionId::Number(1 as u64),
-            Subscriber::new_test("signatureNotification").0,
+            past_bank_sub1,
         );
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
             Some(1),
             SubscriptionId::Number(2 as u64),
-            past_bank_sub,
+            past_bank_sub2,
         );
         subscriptions.add_signature_subscription(
             processed_tx.signatures[0],
@@ -906,41 +909,46 @@ pub(crate) mod tests {
         subscriptions.notify_subscribers(1, &bank_forks);
         let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
 
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "method": "signatureNotification",
-            "params": {
-                "result": {
-                    "context": { "slot": 0 },
-                    "value": expected_res,
-                },
-                "subscription": 2,
-            }
-        });
-        let (response, _) = robust_poll_or_panic(past_bank_recv);
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        struct Notification {
+            slot: Slot,
+            id: u64,
+        }
 
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "method": "signatureNotification",
-            "params": {
-                "result": {
-                    "context": { "slot": 1 },
-                    "value": expected_res,
-                },
-                "subscription": 3,
-            }
-        });
+        let expected_notification = |exp: Notification| -> String {
+            let json = json!({
+                "jsonrpc": "2.0",
+                "method": "signatureNotification",
+                "params": {
+                    "result": {
+                        "context": { "slot": exp.slot },
+                        "value": &expected_res,
+                    },
+                    "subscription": exp.id,
+                }
+            });
+            serde_json::to_string(&json).unwrap()
+        };
+
+        // Expect to receive a notification from bank 1 because this subscription is
+        // looking for 0 confirmations and so checks the current bank
+        let expected = expected_notification(Notification { slot: 1, id: 1 });
+        let (response, _) = robust_poll_or_panic(past_bank_recv1);
+        assert_eq!(expected, response);
+
+        // Expect to receive a notification from bank 0 because this subscription is
+        // looking for 1 confirmation and so checks the past bank
+        let expected = expected_notification(Notification { slot: 0, id: 2 });
+        let (response, _) = robust_poll_or_panic(past_bank_recv2);
+        assert_eq!(expected, response);
+
+        let expected = expected_notification(Notification { slot: 1, id: 3 });
         let (response, _) = robust_poll_or_panic(processed_recv);
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-
-        let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
+        assert_eq!(expected, response);
 
         // Subscription should be automatically removed after notification
+        let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
         assert!(!sig_subs.contains_key(&processed_tx.signatures[0]));
-
-        // Only one notification is expected for signature processed in previous bank
-        assert_eq!(sig_subs.get(&past_bank_tx.signatures[0]).unwrap().len(), 1);
+        assert!(!sig_subs.contains_key(&past_bank_tx.signatures[0]));
 
         // Unprocessed signature subscription should not be removed
         assert_eq!(
