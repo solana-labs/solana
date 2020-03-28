@@ -161,7 +161,7 @@ pub struct VoteState {
     pub commission: u8,
 
     pub votes: VecDeque<Lockout>,
-    pub root_slot: Option<u64>,
+    pub root_slot: Option<Slot>,
 
     /// the signer for vote transactions
     authorized_voters: AuthorizedVoters,
@@ -190,7 +190,7 @@ impl VoteState {
         }
     }
 
-    pub fn get_authorized_voter(&self, epoch: u64) -> Option<Pubkey> {
+    pub fn get_authorized_voter(&self, epoch: Epoch) -> Option<Pubkey> {
         self.authorized_voters.get_authorized_voter(epoch)
     }
 
@@ -436,8 +436,8 @@ impl VoteState {
     fn set_new_authorized_voter<F>(
         &mut self,
         authorized_pubkey: &Pubkey,
-        current_epoch: u64,
-        target_epoch: u64,
+        current_epoch: Epoch,
+        target_epoch: Epoch,
         verify: F,
     ) -> Result<(), InstructionError>
     where
@@ -494,7 +494,7 @@ impl VoteState {
         Ok(())
     }
 
-    fn get_and_update_authorized_voter(&mut self, current_epoch: u64) -> Option<Pubkey> {
+    fn get_and_update_authorized_voter(&mut self, current_epoch: Epoch) -> Option<Pubkey> {
         let pubkey = self
             .authorized_voters
             .get_and_cache_authorized_voter_for_epoch(current_epoch)
