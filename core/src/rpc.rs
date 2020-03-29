@@ -1232,8 +1232,12 @@ pub mod tests {
         block_commitment
             .entry(1)
             .or_insert(commitment_slot1.clone());
-        let block_commitment_cache =
-            Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
+            block_commitment,
+            42,
+            0,
+            1,
+        )));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let blockstore = Arc::new(blockstore);
@@ -2128,8 +2132,12 @@ pub mod tests {
         block_commitment
             .entry(1)
             .or_insert(commitment_slot1.clone());
-        let block_commitment_cache =
-            Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
+            block_commitment,
+            42,
+            0,
+            0,
+        )));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
 

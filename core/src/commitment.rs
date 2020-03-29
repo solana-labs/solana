@@ -35,13 +35,22 @@ impl BlockCommitment {
 pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
     total_stake: u64,
+    slot: Slot,
+    root: Slot,
 }
 
 impl BlockCommitmentCache {
-    pub fn new(block_commitment: HashMap<Slot, BlockCommitment>, total_stake: u64) -> Self {
+    pub fn new(
+        block_commitment: HashMap<Slot, BlockCommitment>,
+        total_stake: u64,
+        root: Slot,
+        slot: Slot,
+    ) -> Self {
         Self {
             block_commitment,
             total_stake,
+            root,
+            slot,
         }
     }
 
@@ -51,6 +60,14 @@ impl BlockCommitmentCache {
 
     pub fn total_stake(&self) -> u64 {
         self.total_stake
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.slot
+    }
+
+    pub fn root(&self) -> Slot {
+        self.root
     }
 
     pub fn get_block_with_depth_commitment(
@@ -79,12 +96,17 @@ impl BlockCommitmentCache {
 
 pub struct CommitmentAggregationData {
     bank: Arc<Bank>,
+    root: Slot,
     total_staked: u64,
 }
 
 impl CommitmentAggregationData {
-    pub fn new(bank: Arc<Bank>, total_staked: u64) -> Self {
-        Self { bank, total_staked }
+    pub fn new(bank: Arc<Bank>, root: Slot, total_staked: u64) -> Self {
+        Self {
+            bank,
+            root,
+            total_staked,
+        }
     }
 }
 
@@ -146,8 +168,12 @@ impl AggregateCommitmentService {
 
             let block_commitment = Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
 
-            let mut new_block_commitment =
-                BlockCommitmentCache::new(block_commitment, aggregation_data.total_staked);
+            let mut new_block_commitment = BlockCommitmentCache::new(
+                block_commitment,
+                aggregation_data.total_staked,
+                aggregation_data.root,
+                aggregation_data.bank.slot(),
+            );
 
             let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
 
@@ -259,7 +285,7 @@ mod tests {
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 50);
+        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 50, 0, 1);
 
         // Neither slot has rooted votes
         assert_eq!(
@@ -307,7 +333,7 @@ mod tests {
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 50);
+        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 50, 0, 0);
 
         // Only slot 0 meets the minimum level of commitment 0.66 at root
         assert_eq!(
