@@ -189,11 +189,11 @@ const GetEpochInfoResult = struct({
  * (see https://docs.solana.com/terminology#epoch)
  *
  * @typedef {Object} EpochSchedule
- * @property {number} slots_per_epoch
- * @property {number} leader_schedule_slot_offset
- * @property {boolean} warmup
- * @property {number} first_normal_epoch
- * @property {number} first_normal_slot
+ * @property {number} slotsPerEpoch The maximum number of slots in each epoch
+ * @property {number} leaderScheduleSlotOffset The number of slots before beginning of an epoch to calculate a leader schedule for that epoch
+ * @property {boolean} warmup Indicates whether epochs start short and grow
+ * @property {number} firstNormalEpoch The first epoch with `slotsPerEpoch` slots
+ * @property {number} firstNormalSlot The first slot of `firstNormalEpoch`
  */
 const GetEpochScheduleResult = struct({
   slotsPerEpoch: 'number',
