@@ -649,14 +649,9 @@ mod tests {
 
         let mut rpc = RpcSolPubSubImpl::default();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut cache0 = BlockCommitment::default();
-        cache0.increase_confirmation_stake(2, 10);
-        let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 10);
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests()));
 
-        let subscriptions =
-            RpcSubscriptions::new(&exit, Arc::new(RwLock::new(block_commitment_cache)));
+        let subscriptions = RpcSubscriptions::new(&exit, block_commitment_cache.clone());
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
@@ -675,10 +670,32 @@ mod tests {
         let bank0 = bank_forks.read().unwrap()[0].clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
-        rpc.subscriptions.notify_subscribers(1, &bank_forks);
         let bank1 = bank_forks.read().unwrap()[1].clone();
+
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_confirmation_stake(1, 10);
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(0).or_insert(cache0.clone());
+        let mut new_block_commitment =
+            BlockCommitmentCache::new(block_commitment, 10, bank1.clone(), 0);
+        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
+        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+        drop(w_block_commitment_cache);
+
+        rpc.subscriptions.notify_subscribers(1, &bank_forks);
         let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
+        let bank2 = bank_forks.read().unwrap()[2].clone();
+
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_confirmation_stake(2, 10);
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(0).or_insert(cache0.clone());
+        let mut new_block_commitment = BlockCommitmentCache::new(block_commitment, 10, bank2, 0);
+        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
+        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+        drop(w_block_commitment_cache);
+
         rpc.subscriptions.notify_subscribers(2, &bank_forks);
         let expected = json!({
            "jsonrpc": "2.0",

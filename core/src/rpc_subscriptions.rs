@@ -120,7 +120,6 @@ where
 fn check_confirmations_and_notify<K, S, B, F, X>(
     subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<Response<S>>, Confirmations)>>,
     hashmap_key: &K,
-    current_slot: Slot,
     bank_forks: &Arc<RwLock<BankForks>>,
     block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
     bank_method: B,
@@ -134,6 +133,10 @@ where
     F: Fn(X, u64) -> Box<dyn Iterator<Item = S>>,
     X: Clone + Serialize,
 {
+    let mut confirmation_slots: HashMap<usize, Slot> = HashMap::new();
+    let r_block_commitment_cache = block_commitment_cache.read().unwrap();
+    let current_slot = r_block_commitment_cache.slot();
+    let root = r_block_commitment_cache.root();
     let current_ancestors = bank_forks
         .read()
         .unwrap()
@@ -141,21 +144,12 @@ where
         .unwrap()
         .ancestors
         .clone();
-
-    let mut confirmation_slots: HashMap<usize, Slot> = HashMap::new();
-    let r_block_commitment_cache = block_commitment_cache.read().unwrap();
     for (slot, _) in current_ancestors.iter() {
         if let Some(confirmations) = r_block_commitment_cache.get_confirmation_count(*slot) {
             confirmation_slots.entry(confirmations).or_insert(*slot);
         }
     }
     drop(r_block_commitment_cache);
-
-    let root = current_ancestors
-        .iter()
-        .min_by_key(|(&s, _)| s)
-        .map(|(&s, _)| s)
-        .unwrap_or(0);
 
     let mut notified_set: HashSet<SubscriptionId> = HashSet::new();
     if let Some(hashmap) = subscriptions.get(hashmap_key) {
@@ -326,7 +320,6 @@ impl RpcSubscriptions {
 
     fn check_account(
         pubkey: &Pubkey,
-        current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         account_subscriptions: Arc<RpcAccountSubscriptions>,
@@ -336,7 +329,6 @@ impl RpcSubscriptions {
         check_confirmations_and_notify(
             &subscriptions,
             pubkey,
-            current_slot,
             bank_forks,
             block_commitment_cache,
             Bank::get_account_modified_since_parent,
@@ -347,7 +339,6 @@ impl RpcSubscriptions {
 
     fn check_program(
         program_id: &Pubkey,
-        current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         program_subscriptions: Arc<RpcProgramSubscriptions>,
@@ -357,7 +348,6 @@ impl RpcSubscriptions {
         check_confirmations_and_notify(
             &subscriptions,
             program_id,
-            current_slot,
             bank_forks,
             block_commitment_cache,
             Bank::get_program_accounts_modified_since_parent,
@@ -368,7 +358,6 @@ impl RpcSubscriptions {
 
     fn check_signature(
         signature: &Signature,
-        current_slot: Slot,
         bank_forks: &Arc<RwLock<BankForks>>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         signature_subscriptions: Arc<RpcSignatureSubscriptions>,
@@ -378,7 +367,6 @@ impl RpcSubscriptions {
         let notified_ids = check_confirmations_and_notify(
             &subscriptions,
             signature,
-            current_slot,
             bank_forks,
             block_commitment_cache,
             Bank::get_signature_status_processed_since_parent,
@@ -544,7 +532,7 @@ impl RpcSubscriptions {
                             notifier.notify(root, sink);
                         }
                     }
-                    NotificationEntry::Bank((current_slot, bank_forks)) => {
+                    NotificationEntry::Bank((_current_slot, bank_forks)) => {
                         let pubkeys: Vec<_> = {
                             let subs = account_subscriptions.read().unwrap();
                             subs.keys().cloned().collect()
@@ -552,7 +540,6 @@ impl RpcSubscriptions {
                         for pubkey in &pubkeys {
                             Self::check_account(
                                 pubkey,
-                                current_slot,
                                 &bank_forks,
                                 &block_commitment_cache,
                                 account_subscriptions.clone(),
@@ -567,7 +554,6 @@ impl RpcSubscriptions {
                         for program_id in &programs {
                             Self::check_program(
                                 program_id,
-                                current_slot,
                                 &bank_forks,
                                 &block_commitment_cache,
                                 program_subscriptions.clone(),
@@ -582,7 +568,6 @@ impl RpcSubscriptions {
                         for signature in &signatures {
                             Self::check_signature(
                                 signature,
-                                current_slot,
                                 &bank_forks,
                                 &block_commitment_cache,
                                 signature_subscriptions.clone(),
@@ -848,6 +833,7 @@ pub(crate) mod tests {
             .unwrap()
             .process_transaction(&processed_tx)
             .unwrap();
+        let bank1 = bank_forks[1].clone();
 
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
@@ -858,7 +844,7 @@ pub(crate) mod tests {
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 10);
+        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 10, bank1, 0);
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions =

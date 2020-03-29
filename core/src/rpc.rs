@@ -410,10 +410,11 @@ impl JsonRpcRequestProcessor {
             let status = bank
                 .get_signature_status_slot(&signature)
                 .map(|(slot, status)| {
-                    let confirmations = if bank.src.roots().contains(&slot) {
+                    let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
+
+                    let confirmations = if r_block_commitment_cache.root() >= slot {
                         None
                     } else {
-                        let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
                         r_block_commitment_cache
                             .get_confirmation_count(slot)
                             .or(Some(0))
@@ -1237,8 +1238,10 @@ pub mod tests {
             blockstore.clone(),
         );
 
-        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
-        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
+        let mut commitment_slot0 = BlockCommitment::default();
+        commitment_slot0.increase_confirmation_stake(2, 9);
+        let mut commitment_slot1 = BlockCommitment::default();
+        commitment_slot1.increase_confirmation_stake(1, 9);
         let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
         block_commitment
             .entry(0)
@@ -1248,7 +1251,7 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
-            42,
+            10,
             bank.clone(),
             0,
         )));
