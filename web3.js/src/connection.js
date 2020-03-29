@@ -148,7 +148,7 @@ type VoteAccountStatus = {
 
 /**
  * Network Inflation parameters
- * (see https://docs.solana.com/book/v/master/implemented-proposals/ed_overview)
+ * (see https://docs.solana.com/implemented-proposals/ed_overview)
  *
  * @typedef {Object} Inflation
  * @property {number} foundation
@@ -169,7 +169,7 @@ const GetInflationResult = struct({
 
 /**
  * EpochInfo parameters
- * (see https://docs.solana.com/book/v/master/terminology#epoch)
+ * (see https://docs.solana.com/terminology#epoch)
  *
  * @typedef {Object} EpochInfo
  * @property {number} epoch
@@ -186,7 +186,7 @@ const GetEpochInfoResult = struct({
 
 /**
  * EpochSchedule parameters
- * (see https://docs.solana.com/book/v/master/terminology#epoch)
+ * (see https://docs.solana.com/terminology#epoch)
  *
  * @typedef {Object} EpochSchedule
  * @property {number} slots_per_epoch
