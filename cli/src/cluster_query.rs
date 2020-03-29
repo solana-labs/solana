@@ -410,19 +410,34 @@ pub fn process_catchup(
     node_pubkey: &Pubkey,
     node_json_rpc_url: &Option<String>,
 ) -> ProcessResult {
-    let cluster_nodes = rpc_client.get_cluster_nodes()?;
+    let sleep_interval = 5;
+
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message("Connecting...");
 
     let node_client = if let Some(node_json_rpc_url) = node_json_rpc_url {
         RpcClient::new(node_json_rpc_url.to_string())
     } else {
-        RpcClient::new_socket(
-            cluster_nodes
+        let rpc_addr = loop {
+            let cluster_nodes = rpc_client.get_cluster_nodes()?;
+            if let Some(contact_info) = cluster_nodes
                 .iter()
                 .find(|contact_info| contact_info.pubkey == node_pubkey.to_string())
-                .ok_or_else(|| format!("Contact information not found for {}", node_pubkey))?
-                .rpc
-                .ok_or_else(|| format!("RPC service not found for {}", node_pubkey))?,
-        )
+            {
+                if let Some(rpc_addr) = contact_info.rpc {
+                    break rpc_addr;
+                }
+                progress_bar.set_message(&format!("RPC service not found for {}", node_pubkey));
+            } else {
+                progress_bar.set_message(&format!(
+                    "Contact information not found for {}",
+                    node_pubkey
+                ));
+            }
+            sleep(Duration::from_secs(sleep_interval as u64));
+        };
+
+        RpcClient::new_socket(rpc_addr)
     };
 
     let reported_node_pubkey = node_client.get_identity()?;
@@ -438,12 +453,8 @@ pub fn process_catchup(
         return Err("Both RPC URLs reference the same node, unable to monitor for catchup.  Try a different --url".into());
     }
 
-    let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message("Connecting...");
-
     let mut previous_rpc_slot = std::u64::MAX;
     let mut previous_slot_distance = 0;
-    let sleep_interval = 5;
     loop {
         let rpc_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
         let node_slot = node_client.get_slot_with_commitment(CommitmentConfig::recent())?;
