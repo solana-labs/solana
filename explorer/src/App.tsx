@@ -5,6 +5,7 @@ import { TransactionsProvider } from "./providers/transactions";
 import NetworkStatusButton from "./components/NetworkStatusButton";
 import TransactionsCard from "./components/TransactionsCard";
 import NetworkModal from "./components/NetworkModal";
+import Logo from "./img/logos-solana/light-explorer-logo.svg";
 
 function App() {
   const [showModal, setShowModal] = React.useState(false);
@@ -17,8 +18,7 @@ function App() {
             <div className="header-body">
               <div className="row align-items-end">
                 <div className="col">
-                  <h6 className="header-pretitle">Beta</h6>
-                  <h1 className="header-title">Solana Explorer</h1>
+                  <img src={Logo} width="250" alt="Solana Explorer" />
                 </div>
                 <div className="col-auto">
                   <NetworkStatusButton onClick={() => setShowModal(true)} />

@@ -29,19 +29,7 @@ function NetworkModal({ show, onClose }: Props) {
               &times;
             </span>
 
-            <h2 className="text-center mb-2 mt-4">Explorer Settings</h2>
-
-            <p className="text-center mb-4">
-              Preferences will not be saved (yet).
-            </p>
-
-            <hr className="mb-4" />
-
-            <h4 className="mb-1">Cluster</h4>
-
-            <p className="small text-muted mb-3">
-              Connect to your preferred cluster.
-            </p>
+            <h2 className="text-center mb-4 mt-4">Choose a Cluster</h2>
 
             <NetworkToggle />
           </div>
@@ -82,7 +70,7 @@ function CustomNetworkInput({ activeSuffix, active }: InputProps) {
       />
       <div className="input-group-prepend">
         <div className={`input-group-text pr-0 ${customClass("border")}`}>
-          <span className={customClass("text") || "text-dark"}>Custom:</span>
+          <span className={customClass("text") || "text-dark"}>Custom</span>
         </div>
       </div>
     </div>
@@ -135,8 +123,8 @@ function NetworkToggle() {
               checked={active}
               onChange={() => updateNetwork(dispatch, net, customUrl)}
             />
-            {`${networkName(net)}: `}
-            <span className="text-muted">{networkUrl(net, customUrl)}</span>
+            {`${networkName(net)}`}
+            <h6 className="text-muted">{networkUrl(net, customUrl)}</h6>
           </label>
         );
       })}

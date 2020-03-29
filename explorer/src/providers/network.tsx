@@ -27,7 +27,7 @@ export function networkName(network: Network): string {
     case Network.MainnetBeta:
       return "Mainnet Beta";
     case Network.TdS:
-      return "Tour de SOL";
+      return "Testnet";
     case Network.Devnet:
       return "Devnet";
     case Network.Custom:

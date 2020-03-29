@@ -51,9 +51,6 @@ function TransactionsCard() {
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
-              <th className="text-muted">
-                <span className="fe fe-hash"></span>
-              </th>
               <th className="text-muted">Status</th>
               <th className="text-muted">Signature</th>
               <th className="text-muted">Confirmations</th>
@@ -63,13 +60,7 @@ function TransactionsCard() {
           <tbody className="list">
             <tr>
               <td>
-                <span className="badge badge-soft-dark badge-pill">
-                  {idCounter + 1}
-                </span>
-              </td>
-
-              <td>
-                <span className={`badge badge-soft-primary`}>New</span>
+                <span className={`badge badge-primary`}>New</span>
               </td>
               <td>
                 <input
@@ -83,7 +74,7 @@ function TransactionsCard() {
                   className={`form-control text-signature text-monospace ${
                     error ? "is-invalid" : ""
                   }`}
-                  placeholder="abcd..."
+                  placeholder="input transaction signature"
                 />
                 {error ? <div className="invalid-feedback">{error}</div> : null}
               </td>
@@ -103,7 +94,7 @@ const renderHeader = () => {
     <div className="card-header">
       <div className="row align-items-center">
         <div className="col">
-          <h4 className="card-header-title">Transactions</h4>
+          <h4 className="card-header-title">Look Up Transaction(s)</h4>
         </div>
       </div>
     </div>

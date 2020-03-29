@@ -11,8 +11,7 @@ function NetworkStatusButton({ onClick }: { onClick: () => void }) {
 
 function Button() {
   const { status, network, name, customUrl } = useNetwork();
-  const statusName =
-    network !== Network.Custom ? `${name} Cluster` : `${customUrl}`;
+  const statusName = network !== Network.Custom ? `${name}` : `${customUrl}`;
 
   switch (status) {
     case NetworkStatus.Connected:
