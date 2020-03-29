@@ -1,12 +1,101 @@
-// 
+//
 // solana-variables.scss
 // Use this to overwrite Bootstrap and Dashkit variables
 //
 
 // Example of a variable override to change Dashkit's background color
 // Remove the "//" to comment it in and see it in action!
-// $body-bg: #12263F;
+$body-bg: #ffffff;
 
 // Dashkit scss needs to know where img masks are stored
-$path-to-img: '../../img/dashkit' !default;
-$path-to-fonts: '../../fonts' !default;
+$path-to-img: "../../img/dashkit" !default;
+$path-to-fonts: "../../fonts" !default;
+
+// Colors
+
+$white: #ffffff;
+$gray-100: #f9fdfc;
+$gray-200: #f1f8f6;
+$gray-300: #d9efe7;
+$gray-400: #c6e6de;
+$gray-500: #abd5c6;
+$gray-600: #86b8b6;
+$gray-700: #409088;
+$gray-800: #387462;
+$gray-900: #1b4e3f;
+$black: #232323;
+
+$rainbow-1: #fa62fc;
+$rainbow-2: #be84e8;
+$rainbow-3: #79abd2;
+$rainbow-4: #38d0bd;
+$rainbow-5: #1dd79b;
+
+$primary: #00ffbd;
+$primary-desat: #42ba96;
+$secondary: $gray-700;
+$success: #42ba96;
+$info: #b45be1;
+$info-muted: #9272a3;
+$warning: #d83aeb;
+$danger: #43b5c5;
+$light: $gray-100;
+$dark: $gray-900;
+
+$text-info-muted: $info-muted;
+$navbar-light-active-color: $primary;
+$theme-colors: (
+  "primary-desat": $primary-desat,
+  "black": $black,
+  "white": $white
+);
+
+// Global
+
+$font-family-base: "Rubik";
+.display-2 {
+  font-family: Saira, Helvetica, sans-serif;
+}
+
+.text-rainbow {
+  background: linear-gradient(0.3turn, #e400ff, #00ffbd);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-rainbow {
+  background: linear-gradient(0.3turn, #e400ff, #00ffbd);
+}
+
+.bg-rainbow-1 {
+  background: #fa62fc;
+}
+.bg-rainbow-2 {
+  background: #be84e8;
+}
+.bg-rainbow-3 {
+  background: #79abd2;
+}
+.bg-rainbow-4 {
+  background: #38d0bd;
+}
+.bg-rainbow-5 {
+  background: #1dd79b;
+}
+
+.text-rainbow-1 {
+  color: #fa62fc;
+}
+.text-rainbow-2 {
+  color: #be84e8;
+}
+.text-rainbow-3 {
+  color: #79abd2;
+}
+.text-rainbow-4 {
+  color: #38d0bd;
+}
+.text-rainbow-5 {
+  color: #1dd79b;
+}
