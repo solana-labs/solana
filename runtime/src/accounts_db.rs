@@ -775,14 +775,23 @@ impl AccountsDB {
             }
         }
 
-        for account_infos in purges.values() {
-            let mut no_delete = false;
-            for (_slot, account_info) in account_infos {
-                if *store_counts.get(&account_info.store_id).unwrap() != 0 {
-                    no_delete = true;
-                    break;
-                }
-            }
+        // Another pass to check if there are some filtered accounts which
+        // do not match the criteria of deleting all appendvecs which contain them
+        // then increment their storage count.
+        for (pubkey, account_infos) in &purges {
+            let no_delete =
+                if account_infos.len() as u64 != accounts_index.ref_count_from_storage(&pubkey) {
+                    true
+                } else {
+                    let mut no_delete = false;
+                    for (_slot, account_info) in account_infos {
+                        if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                            no_delete = true;
+                            break;
+                        }
+                    }
+                    no_delete
+                };
             if no_delete {
                 for (_slot, account_info) in account_infos {
                     *store_counts.get_mut(&account_info.store_id).unwrap() += 1;
@@ -794,17 +803,13 @@ impl AccountsDB {
         // Only keep purges where the entire history of the account in the root set
         // can be purged. All AppendVecs for those updates are dead.
         let mut purge_filter = Measure::start("purge_filter");
-        purges.retain(|pubkey, account_infos| {
-            let mut would_unref_count = 0;
-            for (_slot, account_info) in account_infos {
-                if *store_counts.get(&account_info.store_id).unwrap() == 0 {
-                    would_unref_count += 1;
-                } else {
+        purges.retain(|_pubkey, account_infos| {
+            for (_slot, account_info) in account_infos.iter() {
+                if *store_counts.get(&account_info.store_id).unwrap() != 0 {
                     return false;
                 }
             }
-
-            would_unref_count == accounts_index.ref_count_from_storage(&pubkey)
+            true
         });
         purge_filter.stop();
 
