@@ -1222,18 +1222,6 @@ pub mod tests {
     ) -> RpcHandler {
         let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
-
-        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
-        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
-        let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
-        block_commitment
-            .entry(0)
-            .or_insert(commitment_slot0.clone());
-        block_commitment
-            .entry(1)
-            .or_insert(commitment_slot1.clone());
-        let block_commitment_cache =
-            Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let blockstore = Arc::new(blockstore);
@@ -1248,6 +1236,22 @@ pub mod tests {
             bank.clone(),
             blockstore.clone(),
         );
+
+        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
+        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
+        let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
+        block_commitment
+            .entry(0)
+            .or_insert(commitment_slot0.clone());
+        block_commitment
+            .entry(1)
+            .or_insert(commitment_slot1.clone());
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
+            block_commitment,
+            42,
+            bank.clone(),
+            0,
+        )));
 
         // Add timestamp vote to blockstore
         let vote = Vote {
@@ -2119,6 +2123,8 @@ pub mod tests {
     fn test_rpc_processor_get_block_commitment() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
+        let bank_forks = new_bank_forks().0;
+
         let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
         let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
         let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
@@ -2128,8 +2134,12 @@ pub mod tests {
         block_commitment
             .entry(1)
             .or_insert(commitment_slot1.clone());
-        let block_commitment_cache =
-            Arc::new(RwLock::new(BlockCommitmentCache::new(block_commitment, 42)));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
+            block_commitment,
+            42,
+            bank_forks.read().unwrap().working_bank(),
+            0,
+        )));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
 
@@ -2137,7 +2147,7 @@ pub mod tests {
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             config,
-            new_bank_forks().0,
+            bank_forks,
             block_commitment_cache,
             Arc::new(blockstore),
             StorageState::default(),
