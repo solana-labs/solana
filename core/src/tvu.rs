@@ -185,7 +185,7 @@ impl Tvu {
             leader_schedule_cache: leader_schedule_cache.clone(),
             latest_root_senders: vec![ledger_cleanup_slot_sender],
             accounts_hash_sender: Some(accounts_hash_sender),
-            block_commitment_cache,
+            block_commitment_cache: block_commitment_cache.clone(),
             transaction_status_sender,
             rewards_recorder_sender,
         };
@@ -221,6 +221,7 @@ impl Tvu {
             &exit,
             &bank_forks,
             &cluster_info,
+            block_commitment_cache,
         );
 
         Tvu {
@@ -307,7 +308,10 @@ pub mod tests {
             blockstore,
             &StorageState::default(),
             l_receiver,
-            &Arc::new(RpcSubscriptions::new(&exit)),
+            &Arc::new(RpcSubscriptions::new(
+                &exit,
+                Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            )),
             &poh_recorder,
             &leader_schedule_cache,
             &exit,

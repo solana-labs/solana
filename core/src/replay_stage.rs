@@ -136,7 +136,7 @@ impl ReplayStage {
 
         // Start the replay stage loop
         let (lockouts_sender, commitment_service) =
-            AggregateCommitmentService::new(&exit, block_commitment_cache);
+            AggregateCommitmentService::new(&exit, block_commitment_cache.clone());
 
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
@@ -306,7 +306,7 @@ impl ReplayStage {
                     // Vote on a fork
                     let voted_on_different_fork = {
                         if let Some(ref vote_bank) = vote_bank {
-                            subscriptions.notify_subscribers(vote_bank.slot(), &bank_forks);
+                            subscriptions.notify_subscribers(block_commitment_cache.read().unwrap().slot(), &bank_forks);
                             if let Some(votable_leader) = leader_schedule_cache
                                 .slot_leader_at(vote_bank.slot(), Some(vote_bank))
                             {
@@ -1904,7 +1904,10 @@ pub(crate) mod tests {
             );
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let exit = Arc::new(AtomicBool::new(false));
-            let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
+            let subscriptions = Arc::new(RpcSubscriptions::new(
+                &exit,
+                Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            ));
             let mut bank_forks = BankForks::new(0, bank0);
 
             // Insert a non-root bank so that the propagation logic will update this

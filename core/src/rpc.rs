@@ -13,7 +13,7 @@ use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, rooted_slot_iterator::RootedSlotIterator,
 };
 use solana_perf::packet::PACKET_DATA_SIZE;
-use solana_runtime::{bank::Bank, status_cache::SignatureConfirmationStatus};
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -196,11 +196,9 @@ impl JsonRpcRequestProcessor {
         match signature {
             Err(e) => Err(e),
             Ok(sig) => {
-                let status = bank.get_signature_confirmation_status(&sig);
+                let status = bank.get_signature_status(&sig);
                 match status {
-                    Some(SignatureConfirmationStatus { status, .. }) => {
-                        new_response(bank, status.is_ok())
-                    }
+                    Some(status) => new_response(bank, status.is_ok()),
                     None => new_response(bank, false),
                 }
             }
@@ -409,21 +407,24 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(commitment);
 
         for signature in signatures {
-            let status = bank.get_signature_confirmation_status(&signature).map(
-                |SignatureConfirmationStatus {
-                     slot,
-                     status,
-                     confirmations,
-                 }| TransactionStatus {
-                    slot,
-                    status,
-                    confirmations: if confirmations <= MAX_LOCKOUT_HISTORY {
-                        Some(confirmations)
-                    } else {
+            let status = bank
+                .get_signature_status_slot(&signature)
+                .map(|(slot, status)| {
+                    let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
+
+                    let confirmations = if r_block_commitment_cache.root() >= slot {
                         None
-                    },
-                },
-            );
+                    } else {
+                        r_block_commitment_cache
+                            .get_confirmation_count(slot)
+                            .or(Some(0))
+                    };
+                    TransactionStatus {
+                        slot,
+                        status,
+                        confirmations,
+                    }
+                });
             statuses.push(status);
         }
         Ok(Response {
@@ -1237,8 +1238,10 @@ pub mod tests {
             blockstore.clone(),
         );
 
-        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
-        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
+        let mut commitment_slot0 = BlockCommitment::default();
+        commitment_slot0.increase_confirmation_stake(2, 9);
+        let mut commitment_slot1 = BlockCommitment::default();
+        commitment_slot1.increase_confirmation_stake(1, 9);
         let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
         block_commitment
             .entry(0)
@@ -1248,7 +1251,7 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
-            42,
+            10,
             bank.clone(),
             0,
         )));
@@ -1774,7 +1777,9 @@ pub mod tests {
         let result: Option<TransactionStatus> =
             serde_json::from_value(json["result"]["value"][0].clone())
                 .expect("actual response deserialization");
-        assert_eq!(expected_res, result.as_ref().unwrap().status);
+        let result = result.as_ref().unwrap();
+        assert_eq!(expected_res, result.status);
+        assert_eq!(None, result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
@@ -2211,7 +2216,7 @@ pub mod tests {
                 .get_block_commitment(0)
                 .map(|block_commitment| block_commitment.commitment)
         );
-        assert_eq!(total_stake, 42);
+        assert_eq!(total_stake, 10);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getBlockCommitment","params":[2]}}"#);
@@ -2229,7 +2234,7 @@ pub mod tests {
                 panic!("Expected single response");
             };
         assert_eq!(commitment_response.commitment, None);
-        assert_eq!(commitment_response.total_stake, 42);
+        assert_eq!(commitment_response.total_stake, 10);
     }
 
     #[test]
