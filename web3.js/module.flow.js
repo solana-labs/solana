@@ -676,11 +676,14 @@ declare module '@solana/web3.js' {
     commitment: ?Commitment,
   ): Promise<TransactionSignature>;
 
-  // === src/util/testnet.js ===
-  declare export function testnetChannelEndpoint(
-    channel?: string,
+  // === src/util/cluster.js ===
+  declare export type Cluster = 'devnet' | 'testnet' | 'mainnet-beta';
+
+  declare export function clusterApiUrl(
+    cluster?: Cluster,
     tls?: boolean,
   ): string;
 
+  // === src/index.js ===
   declare export var LAMPORTS_PER_SOL: number;
 }
