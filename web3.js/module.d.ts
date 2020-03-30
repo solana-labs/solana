@@ -662,11 +662,11 @@ declare module '@solana/web3.js' {
     commitment?: Commitment,
   ): Promise<TransactionSignature>;
 
-  // === src/util/testnet.js ===
-  export function testnetChannelEndpoint(
-    channel?: string,
-    tls?: boolean,
-  ): string;
+  // === src/util/cluster.js ===
+  export type Cluster = 'devnet' | 'testnet' | 'mainnet-beta';
 
+  export function clusterApiUrl(cluster?: Cluster, tls?: boolean): string;
+
+  // === src/index.js ===
   export const LAMPORTS_PER_SOL: number;
 }
