@@ -12,6 +12,7 @@ pub(crate) struct NewCommandConfig {
     pub lamports: u64,
     pub stake_authority: String,
     pub withdraw_authority: String,
+    pub index: usize,
 }
 
 pub(crate) struct CountCommandConfig {
@@ -213,6 +214,14 @@ where
                         .value_name("PUBKEY")
                         .validator(is_valid_pubkey)
                         .help("Withdraw authority"),
+                )
+                .arg(
+                    Arg::with_name("index")
+                        .long("index")
+                        .takes_value(true)
+                        .default_value("0")
+                        .value_name("NUMBER")
+                        .help("Index of the derived account to create"),
                 ),
         )
         .subcommand(
@@ -274,6 +283,7 @@ fn parse_new_args(matches: &ArgMatches<'_>) -> NewCommandConfig {
     let base_keypair = value_t_or_exit!(matches, "base_keypair", String);
     let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
     let withdraw_authority = value_t_or_exit!(matches, "withdraw_authority", String);
+    let index = value_t_or_exit!(matches, "index", usize);
     NewCommandConfig {
         fee_payer,
         funding_keypair,
@@ -281,6 +291,7 @@ fn parse_new_args(matches: &ArgMatches<'_>) -> NewCommandConfig {
         base_keypair,
         stake_authority,
         withdraw_authority,
+        index,
     }
 }
 
