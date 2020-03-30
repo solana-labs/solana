@@ -62,6 +62,21 @@ pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
     }
 }
 
+pub fn keypairs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Keypair>> {
+    matches.values_of(name).map(|values| {
+        values
+            .filter_map(|value| {
+                if value == ASK_KEYWORD {
+                    let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                    keypair_from_seed_phrase(name, skip_validation, true).ok()
+                } else {
+                    read_keypair_file(value).ok()
+                }
+            })
+            .collect()
+    })
+}
+
 // Return a pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair
 pub fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
