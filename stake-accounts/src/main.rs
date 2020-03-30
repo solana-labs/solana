@@ -102,10 +102,10 @@ fn process_new_stake_account(
 ) -> Result<Signature, Box<dyn Error>> {
     let matches = ArgMatches::default();
     let fee_payer_keypair = resolve_fee_payer(wallet_manager, &new_config.fee_payer)?;
-    let sender_keypair = signer_from_path(
+    let funding_keypair = signer_from_path(
         &matches,
-        &new_config.sender_keypair,
-        "sender keypair",
+        &new_config.funding_keypair,
+        "funding keypair",
         wallet_manager,
     )?;
     let base_keypair = signer_from_path(
@@ -128,13 +128,13 @@ fn process_new_stake_account(
     )?;
     let message = stake_accounts::new_stake_account(
         &fee_payer_keypair.pubkey(),
-        &sender_keypair.pubkey(),
+        &funding_keypair.pubkey(),
         &base_keypair.pubkey(),
         new_config.lamports,
         &stake_authority_pubkey,
         &withdraw_authority_pubkey,
     );
-    let signers = vec![&*fee_payer_keypair, &*sender_keypair, &*base_keypair];
+    let signers = vec![&*fee_payer_keypair, &*funding_keypair, &*base_keypair];
     let signature = send_message(client, message, &signers)?;
     Ok(signature)
 }
@@ -282,11 +282,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Command::Balance(query_config) => {
             let base_pubkey = resolve_base_pubkey(wallet_manager, &query_config.base_pubkey)?;
-            let pubkeys = stake_accounts::derive_stake_account_addresses(
+            let addresses = stake_accounts::derive_stake_account_addresses(
                 &base_pubkey,
                 query_config.num_accounts,
             );
-            let balances = get_balances(&client, pubkeys)?;
+            let balances = get_balances(&client, addresses)?;
             let lamports: u64 = balances.into_iter().map(|(_, bal)| bal).sum();
             let sol = lamports_to_sol(lamports);
             println!("{} SOL", sol);

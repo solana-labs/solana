@@ -20,7 +20,7 @@ pub(crate) fn derive_stake_account_addresses(
 
 pub(crate) fn new_stake_account(
     fee_payer_pubkey: &Pubkey,
-    sender_pubkey: &Pubkey,
+    funding_pubkey: &Pubkey,
     base_pubkey: &Pubkey,
     lamports: u64,
     stake_authority_pubkey: &Pubkey,
@@ -33,7 +33,7 @@ pub(crate) fn new_stake_account(
         withdrawer: *withdraw_authority_pubkey,
     };
     let instructions = stake_instruction::create_account_with_seed(
-        sender_pubkey,
+        funding_pubkey,
         &stake_account_address,
         &base_pubkey,
         &seed.to_string(),
@@ -219,12 +219,12 @@ mod tests {
 
     fn create_account<C: SyncClient>(
         client: &C,
-        sender_keypair: &Keypair,
+        funding_keypair: &Keypair,
         lamports: u64,
     ) -> Keypair {
         let fee_payer_keypair = Keypair::new();
         client
-            .transfer(lamports, &sender_keypair, &fee_payer_keypair.pubkey())
+            .transfer(lamports, &funding_keypair, &fee_payer_keypair.pubkey())
             .unwrap();
         fee_payer_keypair
     }
@@ -250,10 +250,10 @@ mod tests {
 
     #[test]
     fn test_new_derived_stake_account() {
-        let (bank, sender_keypair, rent) = create_bank(10_000_000);
-        let sender_pubkey = sender_keypair.pubkey();
+        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &sender_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
@@ -264,14 +264,14 @@ mod tests {
 
         let message = new_stake_account(
             &fee_payer_pubkey,
-            &sender_pubkey,
+            &funding_pubkey,
             &base_pubkey,
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
         );
 
-        let signers = [&sender_keypair, &fee_payer_keypair, &base_keypair];
+        let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
         bank_client.send_message(&signers, message).unwrap();
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
@@ -283,10 +283,10 @@ mod tests {
 
     #[test]
     fn test_authorize_stake_accounts() {
-        let (bank, sender_keypair, rent) = create_bank(10_000_000);
-        let sender_pubkey = sender_keypair.pubkey();
+        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &sender_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
@@ -300,14 +300,14 @@ mod tests {
 
         let message = new_stake_account(
             &fee_payer_pubkey,
-            &sender_pubkey,
+            &funding_pubkey,
             &base_pubkey,
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
         );
 
-        let signers = [&sender_keypair, &fee_payer_keypair, &base_keypair];
+        let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
         bank_client.send_message(&signers, message).unwrap();
 
         let new_stake_authority_pubkey = Pubkey::new_rand();
@@ -339,10 +339,10 @@ mod tests {
 
     #[test]
     fn test_rebase_stake_accounts() {
-        let (bank, sender_keypair, rent) = create_bank(10_000_000);
-        let sender_pubkey = sender_keypair.pubkey();
+        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &sender_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
@@ -357,14 +357,14 @@ mod tests {
         let num_accounts = 1;
         let message = new_stake_account(
             &fee_payer_pubkey,
-            &sender_pubkey,
+            &funding_pubkey,
             &base_pubkey,
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
         );
 
-        let signers = [&sender_keypair, &fee_payer_keypair, &base_keypair];
+        let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
         bank_client.send_message(&signers, message).unwrap();
 
         let new_base_keypair = Keypair::new();
@@ -396,10 +396,10 @@ mod tests {
 
     #[test]
     fn test_move_stake_accounts() {
-        let (bank, sender_keypair, rent) = create_bank(10_000_000);
-        let sender_pubkey = sender_keypair.pubkey();
+        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &sender_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
@@ -414,14 +414,14 @@ mod tests {
         let num_accounts = 1;
         let message = new_stake_account(
             &fee_payer_pubkey,
-            &sender_pubkey,
+            &funding_pubkey,
             &base_pubkey,
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
         );
 
-        let signers = [&sender_keypair, &fee_payer_keypair, &base_keypair];
+        let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
         bank_client.send_message(&signers, message).unwrap();
 
         let new_base_keypair = Keypair::new();

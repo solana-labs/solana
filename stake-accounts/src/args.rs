@@ -7,7 +7,7 @@ use std::process::exit;
 
 pub(crate) struct NewCommandConfig {
     pub fee_payer: String,
-    pub sender_keypair: String,
+    pub funding_keypair: String,
     pub base_keypair: String,
     pub lamports: u64,
     pub stake_authority: String,
@@ -72,11 +72,11 @@ fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("Fee payer")
 }
 
-fn sender_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("sender_keypair")
+fn funding_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("funding_keypair")
         .required(true)
         .takes_value(true)
-        .value_name("SENDER_KEYPAIR")
+        .value_name("FUNDING_KEYPAIR")
         .validator(is_valid_signer)
         .help("Keypair to fund accounts")
 }
@@ -177,7 +177,7 @@ where
             SubCommand::with_name("new")
                 .about("Create derived stake accounts")
                 .arg(fee_payer_arg())
-                .arg(sender_keypair_arg().index(1))
+                .arg(funding_keypair_arg().index(1))
                 .arg(
                     Arg::with_name("base_keypair")
                         .required(true)
@@ -269,14 +269,14 @@ where
 
 fn parse_new_args(matches: &ArgMatches<'_>) -> NewCommandConfig {
     let fee_payer = value_t_or_exit!(matches, "fee_payer", String);
-    let sender_keypair = value_t_or_exit!(matches, "sender_keypair", String);
+    let funding_keypair = value_t_or_exit!(matches, "funding_keypair", String);
     let lamports = sol_to_lamports(value_t_or_exit!(matches, "amount", f64));
     let base_keypair = value_t_or_exit!(matches, "base_keypair", String);
     let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
     let withdraw_authority = value_t_or_exit!(matches, "withdraw_authority", String);
     NewCommandConfig {
         fee_payer,
-        sender_keypair,
+        funding_keypair,
         lamports,
         base_keypair,
         stake_authority,
