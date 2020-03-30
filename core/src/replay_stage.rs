@@ -1358,52 +1358,31 @@ impl ReplayStage {
             return false;
         }
 
-        // Remove the valdators that we already know voted for this slot
-        // Those validators are safe to drop because they don't to be ported back any
-        // further because parents must have:
-        // 1) Also recorded this validator already, or
+        // Remove the vote/node pubkeys that we already know voted for this
+        // slot. These vote accounts/validator identities are safe to drop
+        // because they don't to be ported back any further because earler
+        // parents must have:
+        // 1) Also recorded these pubkeyss already, or
         // 2) Already reached the propagation threshold, in which case
         //    they no longer need to track the set of propagated validators
         newly_voted_pubkeys.retain(|vote_pubkey| {
+            let exists = leader_propagated_stats
+                .propagated_validators
+                .contains(&**vote_pubkey);
             leader_propagated_stats.add_vote_pubkey(
                 &*vote_pubkey,
                 all_pubkeys,
                 leader_bank.epoch_vote_account_stake(&vote_pubkey),
-            )
+            );
+            !exists
         });
 
         cluster_slot_pubkeys.retain(|node_pubkey| {
-            if !leader_propagated_stats
+            let exists = leader_propagated_stats
                 .propagated_node_ids
-                .contains(&**node_pubkey)
-            {
-                let mut cached_pubkey: Option<Rc<Pubkey>> =
-                    all_pubkeys.get(&**node_pubkey).cloned();
-                if cached_pubkey.is_none() {
-                    let new_pubkey = Rc::new(**node_pubkey);
-                    all_pubkeys.insert(new_pubkey.clone());
-                    cached_pubkey = Some(new_pubkey);
-                }
-                let node_pubkey = cached_pubkey.unwrap();
-                leader_propagated_stats
-                    .propagated_node_ids
-                    .insert(node_pubkey.clone());
-                for vote_pubkey in leader_bank
-                    .epoch_vote_accounts_for_node_id(&node_pubkey)
-                    .map(|v| &v.vote_accounts)
-                    .unwrap_or(&vec![])
-                    .iter()
-                {
-                    leader_propagated_stats.add_vote_pubkey(
-                        &*vote_pubkey,
-                        all_pubkeys,
-                        leader_bank.epoch_vote_account_stake(&vote_pubkey),
-                    );
-                }
-                true
-            } else {
-                false
-            }
+                .contains(&**node_pubkey);
+            leader_propagated_stats.add_node_pubkey(&*node_pubkey, all_pubkeys, leader_bank);
+            !exists
         });
 
         if leader_propagated_stats.total_epoch_stake == 0
