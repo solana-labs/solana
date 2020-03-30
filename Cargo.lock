@@ -4586,6 +4586,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-stake-accounts"
+version = "1.2.0"
+dependencies = [
+ "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-clap-utils 1.2.0",
+ "solana-cli-config 1.2.0",
+ "solana-client 1.2.0",
+ "solana-remote-wallet 1.2.0",
+ "solana-runtime 1.2.0",
+ "solana-sdk 1.2.0",
+ "solana-stake-program 1.2.0",
+]
+
+[[package]]
 name = "solana-stake-monitor"
 version = "1.2.0"
 dependencies = [
