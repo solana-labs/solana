@@ -49,11 +49,11 @@ pub(crate) struct MoveCommandConfig {
 pub(crate) enum Command {
     New(NewCommandConfig),
     Count(CountCommandConfig),
-    Pubkeys(QueryCommandConfig),
+    Addresses(QueryCommandConfig),
     Balance(QueryCommandConfig),
     Authorize(AuthorizeCommandConfig),
     Rebase(RebaseCommandConfig),
-    Move(MoveCommandConfig),
+    Move(Box<MoveCommandConfig>),
 }
 
 pub(crate) struct CommandConfig {
@@ -221,7 +221,7 @@ where
                 .arg(base_pubkey_arg().index(1)),
         )
         .subcommand(
-            SubCommand::with_name("pubkeys")
+            SubCommand::with_name("addresses")
                 .about("Show public keys of all derived stake accounts")
                 .arg(base_pubkey_arg().index(1))
                 .arg(num_accounts_arg()),
@@ -341,7 +341,7 @@ fn parse_move_args(matches: &ArgMatches<'_>) -> MoveCommandConfig {
     }
 }
 
-pub(crate) fn parse_args<'a, I, T>(args: I) -> CommandConfig
+pub(crate) fn parse_args<I, T>(args: I) -> CommandConfig
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -353,11 +353,11 @@ where
     let command = match matches.subcommand() {
         ("new", Some(matches)) => Command::New(parse_new_args(matches)),
         ("count", Some(matches)) => Command::Count(parse_count_args(matches)),
-        ("pubkeys", Some(matches)) => Command::Pubkeys(parse_query_args(matches)),
+        ("addresses", Some(matches)) => Command::Addresses(parse_query_args(matches)),
         ("balance", Some(matches)) => Command::Balance(parse_query_args(matches)),
         ("authorize", Some(matches)) => Command::Authorize(parse_authorize_args(matches)),
         ("rebase", Some(matches)) => Command::Rebase(parse_rebase_args(matches)),
-        ("move", Some(matches)) => Command::Move(parse_move_args(matches)),
+        ("move", Some(matches)) => Command::Move(Box::new(parse_move_args(matches))),
         _ => {
             eprintln!("{}", matches.usage());
             exit(1);

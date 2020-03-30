@@ -87,9 +87,9 @@ fn count_stake_accounts(client: &RpcClient, base_pubkey: &Pubkey) -> Result<usiz
 
 fn get_balances(
     client: &RpcClient,
-    pubkeys: Vec<Pubkey>,
+    addresses: Vec<Pubkey>,
 ) -> Result<Vec<(Pubkey, u64)>, ClientError> {
-    pubkeys
+    addresses
         .into_iter()
         .map(|pubkey| client.get_balance(&pubkey).map(|bal| (pubkey, bal)))
         .collect()
@@ -184,9 +184,9 @@ fn process_rebase_stake_accounts(
     let base_pubkey = resolve_base_pubkey(wallet_manager, &rebase_config.base_pubkey)?;
     let stake_authority_keypair =
         resolve_stake_authority(wallet_manager, &rebase_config.stake_authority)?;
-    let pubkeys =
+    let addresses =
         stake_accounts::derive_stake_account_addresses(&base_pubkey, rebase_config.num_accounts);
-    let balances = get_balances(&client, pubkeys)?;
+    let balances = get_balances(&client, addresses)?;
 
     let messages = stake_accounts::rebase_stake_accounts(
         &fee_payer_keypair.pubkey(),
@@ -218,9 +218,9 @@ fn process_move_stake_accounts(
         resolve_new_stake_authority(wallet_manager, &authorize_config.new_stake_authority)?;
     let new_withdraw_authority_pubkey =
         resolve_new_withdraw_authority(wallet_manager, &authorize_config.new_withdraw_authority)?;
-    let pubkeys =
+    let addresses =
         stake_accounts::derive_stake_account_addresses(&base_pubkey, authorize_config.num_accounts);
-    let balances = get_balances(&client, pubkeys)?;
+    let balances = get_balances(&client, addresses)?;
 
     let messages = stake_accounts::move_stake_accounts(
         &fee_payer_keypair.pubkey(),
@@ -270,14 +270,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             let num_accounts = count_stake_accounts(&client, &base_pubkey)?;
             println!("{}", num_accounts);
         }
-        Command::Pubkeys(query_config) => {
+        Command::Addresses(query_config) => {
             let base_pubkey = resolve_base_pubkey(wallet_manager, &query_config.base_pubkey)?;
-            let pubkeys = stake_accounts::derive_stake_account_addresses(
+            let addresses = stake_accounts::derive_stake_account_addresses(
                 &base_pubkey,
                 query_config.num_accounts,
             );
-            for pubkey in pubkeys {
-                println!("{:?}", pubkey);
+            for address in addresses {
+                println!("{:?}", address);
             }
         }
         Command::Balance(query_config) => {
