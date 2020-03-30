@@ -23,7 +23,7 @@ use solana_core::{
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
 use solana_ledger::{
     bank_forks::{CompressionType, SnapshotConfig},
-    hardened_unpack::unpack_genesis_archive,
+    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::{
@@ -366,11 +366,17 @@ fn download_then_check_genesis_hash(
     rpc_addr: &SocketAddr,
     ledger_path: &std::path::Path,
     expected_genesis_hash: Option<Hash>,
+    max_genesis_archive_unpacked_size: u64,
 ) -> Result<Hash, String> {
     let genesis_package = ledger_path.join("genesis.tar.bz2");
     let genesis_config =
         if let Ok(tmp_genesis_package) = download_genesis_if_missing(rpc_addr, &genesis_package) {
-            unpack_genesis_archive(&tmp_genesis_package, &ledger_path)?;
+            unpack_genesis_archive(
+                &tmp_genesis_package,
+                &ledger_path,
+                max_genesis_archive_unpacked_size,
+            )
+            .map_err(|err| format!("Failed to unpack downloaded genesis config: {}", err))?;
 
             let downloaded_genesis = GenesisConfig::load(&ledger_path)
                 .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
@@ -463,6 +469,7 @@ pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_limit_ledger_size = &DEFAULT_MAX_LEDGER_SHREDS.to_string();
+    let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_clap_utils::version!())
@@ -797,12 +804,22 @@ pub fn main() {
                        other than increasing the account balance"),
         )
         .arg(
-            Arg::with_name("snapshot_compression")
+            clap::Arg::with_name("snapshot_compression")
                 .long("snapshot-compression")
                 .possible_values(&["bz2", "gzip", "zstd", "none"])
                 .value_name("COMPRESSION_TYPE")
                 .takes_value(true)
                 .help("Type of snapshot compression to use."),
+        )
+        .arg(
+            clap::Arg::with_name("max_genesis_archive_unpacked_size")
+                .long("max-genesis-archive-unpacked-size")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(&default_genesis_archive_unpacked_size)
+                .help(
+                    "maximum total uncompressed file size of downloaded genesis archive",
+                ),
         )
         .get_matches();
 
@@ -1058,6 +1075,8 @@ pub fn main() {
             )
         }),
     );
+    let max_genesis_archive_unpacked_size =
+        value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
 
     let cluster_entrypoint = entrypoint_addr
         .as_ref()
@@ -1141,6 +1160,7 @@ pub fn main() {
                         &rpc_contact_info.rpc,
                         &ledger_path,
                         validator_config.expected_genesis_hash,
+                        max_genesis_archive_unpacked_size,
                     );
 
                     if let Ok(genesis_hash) = genesis_hash {

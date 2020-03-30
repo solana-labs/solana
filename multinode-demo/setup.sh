@@ -27,6 +27,7 @@ $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/
 
 args=(
   "$@"
+  --max-genesis-archive-unpacked-size 1073741824
   --enable-warmup-epochs
   --bootstrap-validator "$SOLANA_CONFIG_DIR"/bootstrap-validator/identity.json
                         "$SOLANA_CONFIG_DIR"/bootstrap-validator/vote-account.json

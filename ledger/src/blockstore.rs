@@ -10,6 +10,7 @@ use crate::{
     blockstore_meta::*,
     entry::{create_ticks, Entry},
     erasure::ErasureConfig,
+    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule_cache::LeaderScheduleCache,
     next_slots_iterator::NextSlotsIterator,
     shred::{Result as ShredResult, Shred, Shredder},
@@ -2622,7 +2623,11 @@ fn calculate_stake_weighted_timestamp(
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
 // Returns the blockhash that can be used to append entries with.
-pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> Result<Hash> {
+pub fn create_new_ledger(
+    ledger_path: &Path,
+    genesis_config: &GenesisConfig,
+    max_genesis_archive_unpacked_size: u64,
+) -> Result<Hash> {
     Blockstore::destroy(ledger_path)?;
     genesis_config.write(&ledger_path)?;
 
@@ -2670,6 +2675,29 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
                 output.status
             ),
         )));
+    }
+    {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let unpack_check = unpack_genesis_archive(
+            &archive_path,
+            &temp_dir.into_path(),
+            max_genesis_archive_unpacked_size,
+        );
+        if unpack_check.is_err() {
+            fs::rename(
+                &ledger_path.join("genesis.tar.bz2"),
+                ledger_path.join("genesis.tar.bz2.failed"),
+            )?;
+            fs::rename(
+                &ledger_path.join("genesis.bin"),
+                ledger_path.join("genesis.bin.failed"),
+            )?;
+            fs::rename(
+                &ledger_path.join("rocksdb"),
+                ledger_path.join("rocksdb.failed"),
+            )?;
+            unpack_check?
+        }
     }
 
     Ok(last_hash)
@@ -2739,7 +2767,12 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: Slot) -> boo
 // ticks)
 pub fn create_new_ledger_from_name(name: &str, genesis_config: &GenesisConfig) -> (PathBuf, Hash) {
     let ledger_path = get_ledger_path_from_name(name);
-    let blockhash = create_new_ledger(&ledger_path, genesis_config).unwrap();
+    let blockhash = create_new_ledger(
+        &ledger_path,
+        genesis_config,
+        MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    )
+    .unwrap();
     (ledger_path, blockhash)
 }
 
