@@ -78,7 +78,8 @@ function networkReducer(state: State, action: Action): State {
 }
 
 function initState(): State {
-  const networkUrlParam = findGetParameter("networkUrl");
+  const networkUrlParam =
+    findGetParameter("clusterUrl") || findGetParameter("networkUrl");
 
   let network;
   let customUrl = DEFAULT_CUSTOM_URL;

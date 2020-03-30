@@ -1,6 +1,6 @@
 import React from "react";
 import { TransactionSignature, Connection } from "@solana/web3.js";
-import { findGetParameter } from "../utils";
+import { findGetParameter, findPathSegment } from "../utils";
 import { useNetwork } from "../providers/network";
 
 export enum Status {
@@ -85,9 +85,22 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
+function urlSignatures(): Array<string> {
+  const signatures: Array<string> = [];
+  return signatures
+    .concat(findGetParameter("tx")?.split(",") || [])
+    .concat(findGetParameter("txn")?.split(",") || [])
+    .concat(findGetParameter("txs")?.split(",") || [])
+    .concat(findGetParameter("txns")?.split(",") || [])
+    .concat(findGetParameter("transaction")?.split(",") || [])
+    .concat(findGetParameter("transactions")?.split(",") || [])
+    .concat(findPathSegment("transaction")?.split(",") || [])
+    .concat(findPathSegment("transactions")?.split(",") || []);
+}
+
 function initState(): State {
   let idCounter = 0;
-  const signatures = findGetParameter("txs")?.split(",") || [];
+  const signatures = urlSignatures();
   const transactions = signatures.reduce(
     (transactions: Transactions, signature) => {
       const id = ++idCounter;
