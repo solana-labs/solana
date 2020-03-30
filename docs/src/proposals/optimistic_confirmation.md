@@ -25,12 +25,11 @@ vote should have been of the form `vote(X', S)`, not `vote(X, S)`
 
 To enforce this, we define the "Optimistic Slashing" slashing conditions. Given
 any two distinct votes `vote(X, S)`and `vote(X', S')` by the same validator,
-the votes must satisfy (namely the last two rules imply the ranges cannot
-overlap):
+the votes must satisfy:
 
 * `X <= S.last`, `X' <= S'.last`
-* All `s` in `S.last` are ancestors/descendants of one another, 
-all `s'` in `S'.last` areancsestors/desccendants of one another,
+* All `s` in `S` are ancestors/descendants of one another, 
+all `s'` in `S'` areancsestors/descendants of one another,
 * 
 * `X == X'` implies `S` is parent of `S'` or `S'` is a parent of `S`
 * `X' > X` implies `X' > S.last` and `S'.last > S.last` 
@@ -38,6 +37,7 @@ and for all `s` in `S`, `s + lockout(s) < X'`
 * `X > X'` implies `X > S'.last` and `S.last > S'.last` 
 and for all `s` in `S'`, `s + lockout(s) < X`
 
+(The last two rules imply the ranges cannot overlap):
 Otherwise the validator is slashed. 
 
 `Range(vote)` - Given a vote `v = vote(X, S)`, define `Range(v)` to be the range
@@ -72,7 +72,7 @@ Optimistic Confirmation - A block `B` is then said to have achieved
 where `Range(v)` for each such `v` includes `B.slot`.
 
 Finalized - A block `B` is said to be finalized if at least one 
-correct validator has rooted `B` or a descedant of `B`.
+correct validator has rooted `B` or a descendant of `B`.
 
 Reverted - A block `B` is said to be reverted if another block `B'` that
 is not a parent or descendant of `B` was finalized.
@@ -189,7 +189,7 @@ Recall also this delinquent validator `V` must also have made some vote
 set (all votes optimistically confirmed `B`), we know `S.last >= B >= X`
 
 By `Lemma 2` we know `B' > X`, and from above `S_v.last > B'`, so then
-`S_v.last > X`. Because `X_v != X` (cannot be a descedant or ancestor of 
+`S_v.last > X`. Because `X_v != X` (cannot be a descendant or ancestor of 
 `B` from above), then by the slashing rules then, we know `X_v > S.last`.
 From above, `S.last >= B >= X` so for all such "switching votes", `X_v > B`.
 
