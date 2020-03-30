@@ -96,7 +96,7 @@ waitForNodeToInit() {
   echo "--- waiting for $hostname to boot up"
   SECONDS=
   while [[ ! -r $initCompleteFile ]]; do
-    if [[ $SECONDS -ge 240 ]]; then
+    if [[ $SECONDS -ge 600 ]]; then
       echo "^^^ +++"
       echo "Error: $initCompleteFile not found in $SECONDS seconds"
       exit 1
@@ -284,6 +284,7 @@ EOF
       --gossip-port 8001
       --rpc-port 8899
       --expected-shred-version "$(cat config/shred-version)"
+      --snapshot-interval-slots 500
     )
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
