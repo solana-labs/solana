@@ -1,29 +1,11 @@
-use solana_sdk::{hash::hashv, instruction::Instruction, message::Message, pubkey::Pubkey};
+use solana_sdk::{instruction::Instruction, message::Message, pubkey::Pubkey};
 use solana_stake_program::{
     stake_instruction,
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 
-pub const MAX_SEED_LEN: usize = 32;
-
-#[derive(Debug)]
-pub enum PubkeyError {
-    MaxSeedLengthExceeded,
-}
-
-// TODO: Once solana-1.1 is released, use `Pubkey::create_with_seed`.
-fn create_with_seed(base: &Pubkey, seed: &str, program_id: &Pubkey) -> Result<Pubkey, PubkeyError> {
-    if seed.len() > MAX_SEED_LEN {
-        return Err(PubkeyError::MaxSeedLengthExceeded);
-    }
-
-    Ok(Pubkey::new(
-        hashv(&[base.as_ref(), seed.as_ref(), program_id.as_ref()]).as_ref(),
-    ))
-}
-
 pub(crate) fn derive_stake_account_address(base_pubkey: &Pubkey, i: usize) -> Pubkey {
-    create_with_seed(base_pubkey, &i.to_string(), &solana_stake_program::id()).unwrap()
+    Pubkey::create_with_seed(base_pubkey, &i.to_string(), &solana_stake_program::id()).unwrap()
 }
 
 // Return derived addresses
