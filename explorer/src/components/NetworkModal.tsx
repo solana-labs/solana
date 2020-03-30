@@ -70,7 +70,7 @@ function CustomNetworkInput({ activeSuffix, active }: InputProps) {
       />
       <div className="input-group-prepend">
         <div className={`input-group-text pr-0 ${customClass("border")}`}>
-          <span className={customClass("text") || "text-dark"}>Custom</span>
+          <span className={customClass("text") || "text-dark"}>Custom:</span>
         </div>
       </div>
     </div>
@@ -123,8 +123,10 @@ function NetworkToggle() {
               checked={active}
               onChange={() => updateNetwork(dispatch, net, customUrl)}
             />
-            {`${networkName(net)}`}
-            <h6 className="text-muted">{networkUrl(net, customUrl)}</h6>
+            {`${networkName(net)}: `}
+            <span className="text-muted d-inline-block">
+              {networkUrl(net, customUrl)}
+            </span>
           </label>
         );
       })}

@@ -51,6 +51,9 @@ function TransactionsCard() {
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
+              <th className="text-muted">
+                <span className="fe fe-hash"></span>
+              </th>
               <th className="text-muted">Status</th>
               <th className="text-muted">Signature</th>
               <th className="text-muted">Confirmations</th>
@@ -60,7 +63,12 @@ function TransactionsCard() {
           <tbody className="list">
             <tr>
               <td>
-                <span className={`badge badge-primary`}>New</span>
+                <span className="badge badge-soft-dark badge-pill">
+                  {idCounter + 1}
+                </span>
+              </td>
+              <td>
+                <span className={`badge badge-soft-dark`}>New</span>
               </td>
               <td>
                 <input
@@ -132,7 +140,7 @@ const renderTransactionRow = (transaction: Transaction) => {
   const slotText = `${transaction.slot || "-"}`;
 
   return (
-    <tr key={transaction.signature}>
+    <tr key={transaction.id}>
       <td>
         <span className="badge badge-soft-dark badge-pill">
           {transaction.id}
