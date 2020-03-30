@@ -1,3 +1,6 @@
+use crate::consensus::VOTE_THRESHOLD_SIZE;
+use solana_measure::measure::Measure;
+use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
@@ -88,27 +91,34 @@ impl BlockCommitmentCache {
         self.root
     }
 
-    pub fn get_block_with_depth_commitment(
-        &self,
-        minimum_depth: usize,
-        minimum_stake_percentage: f64,
-    ) -> Option<Slot> {
-        self.block_commitment
-            .iter()
-            .filter(|&(_, block_commitment)| {
-                let fork_stake_minimum_depth: u64 = block_commitment.commitment[minimum_depth..]
-                    .iter()
-                    .cloned()
-                    .sum();
-                fork_stake_minimum_depth as f64 / self.total_stake as f64
-                    >= minimum_stake_percentage
-            })
-            .map(|(slot, _)| *slot)
-            .max()
+    pub fn get_confirmation_count(&self, slot: Slot) -> Option<usize> {
+        self.get_lockout_count(slot, VOTE_THRESHOLD_SIZE)
     }
 
-    pub fn get_rooted_block_with_commitment(&self, minimum_stake_percentage: f64) -> Option<u64> {
-        self.get_block_with_depth_commitment(MAX_LOCKOUT_HISTORY - 1, minimum_stake_percentage)
+    // Returns the lowest level at which at least `minimum_stake_percentage` of the total epoch
+    // stake is locked out
+    fn get_lockout_count(&self, slot: Slot, minimum_stake_percentage: f64) -> Option<usize> {
+        self.get_block_commitment(slot).map(|block_commitment| {
+            let iterator = block_commitment.commitment.iter().enumerate().rev();
+            let mut sum = 0;
+            for (i, stake) in iterator {
+                sum += stake;
+                if (sum as f64 / self.total_stake as f64) > minimum_stake_percentage {
+                    return i + 1;
+                }
+            }
+            0
+        })
+    }
+    #[cfg(test)]
+    pub fn new_for_tests() -> Self {
+        let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
+        block_commitment.insert(0, BlockCommitment::default());
+        Self {
+            block_commitment,
+            total_stake: 42,
+            ..Self::default()
+        }
     }
 }
 
@@ -184,6 +194,7 @@ impl AggregateCommitmentService {
                 continue;
             }
 
+            let mut aggregate_commitment_time = Measure::start("aggregate-commitment-ms");
             let block_commitment = Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
 
             let mut new_block_commitment = BlockCommitmentCache::new(
@@ -196,6 +207,11 @@ impl AggregateCommitmentService {
             let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
 
             std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+            aggregate_commitment_time.stop();
+            inc_new_counter_info!(
+                "aggregate-commitment-ms",
+                aggregate_commitment_time.as_ms() as usize
+            );
         }
     }
 
@@ -290,86 +306,31 @@ mod tests {
     }
 
     #[test]
-    fn test_get_block_with_depth_commitment() {
+    fn test_get_confirmations() {
         let bank = Arc::new(Bank::default());
         // Build BlockCommitmentCache with votes at depths 0 and 1 for 2 slots
         let mut cache0 = BlockCommitment::default();
-        cache0.increase_confirmation_stake(1, 15);
-        cache0.increase_confirmation_stake(2, 25);
+        cache0.increase_confirmation_stake(1, 5);
+        cache0.increase_confirmation_stake(2, 40);
 
         let mut cache1 = BlockCommitment::default();
-        cache1.increase_confirmation_stake(1, 10);
-        cache1.increase_confirmation_stake(2, 20);
+        cache1.increase_confirmation_stake(1, 40);
+        cache1.increase_confirmation_stake(2, 5);
+
+        let mut cache2 = BlockCommitment::default();
+        cache2.increase_confirmation_stake(1, 20);
+        cache2.increase_confirmation_stake(2, 5);
 
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
+        block_commitment.entry(2).or_insert(cache2.clone());
         let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 50, bank, 0);
 
-        // Neither slot has rooted votes
-        assert_eq!(
-            block_commitment_cache.get_rooted_block_with_commitment(0.1),
-            None
-        );
-        // Neither slot meets the minimum level of commitment 0.6 at depth 1
-        assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(1, 0.6),
-            None
-        );
-        // Only slot 0 meets the minimum level of commitment 0.5 at depth 1
-        assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(1, 0.5),
-            Some(0)
-        );
-        // If multiple slots meet the minimum level of commitment, method should return the most recent
-        assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(1, 0.4),
-            Some(1)
-        );
-        // If multiple slots meet the minimum level of commitment, method should return the most recent
-        assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(0, 0.6),
-            Some(1)
-        );
-        // Neither slot meets the minimum level of commitment 0.9 at depth 0
-        assert_eq!(
-            block_commitment_cache.get_block_with_depth_commitment(0, 0.9),
-            None
-        );
-    }
-
-    #[test]
-    fn test_get_rooted_block_with_commitment() {
-        let bank = Arc::new(Bank::default());
-        // Build BlockCommitmentCache with rooted votes
-        let mut cache0 = BlockCommitment::new([0; MAX_LOCKOUT_HISTORY]);
-        cache0.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, 40);
-        cache0.increase_confirmation_stake(MAX_LOCKOUT_HISTORY - 1, 10);
-        let mut cache1 = BlockCommitment::new([0; MAX_LOCKOUT_HISTORY]);
-        cache1.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, 30);
-        cache1.increase_confirmation_stake(MAX_LOCKOUT_HISTORY - 1, 10);
-        cache1.increase_confirmation_stake(MAX_LOCKOUT_HISTORY - 2, 10);
-
-        let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
-        block_commitment.entry(1).or_insert(cache1.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 50, bank, 0);
-
-        // Only slot 0 meets the minimum level of commitment 0.66 at root
-        assert_eq!(
-            block_commitment_cache.get_rooted_block_with_commitment(0.66),
-            Some(0)
-        );
-        // If multiple slots meet the minimum level of commitment, method should return the most recent
-        assert_eq!(
-            block_commitment_cache.get_rooted_block_with_commitment(0.6),
-            Some(1)
-        );
-        // Neither slot meets the minimum level of commitment 0.9 at root
-        assert_eq!(
-            block_commitment_cache.get_rooted_block_with_commitment(0.9),
-            None
-        );
+        assert_eq!(block_commitment_cache.get_confirmation_count(0), Some(2));
+        assert_eq!(block_commitment_cache.get_confirmation_count(1), Some(1));
+        assert_eq!(block_commitment_cache.get_confirmation_count(2), Some(0),);
+        assert_eq!(block_commitment_cache.get_confirmation_count(3), None,);
     }
 
     #[test]

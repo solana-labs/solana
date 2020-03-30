@@ -1,14 +1,20 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl};
-use crate::rpc_subscriptions::RpcSubscriptions;
+use crate::{
+    rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+    rpc_subscriptions::RpcSubscriptions,
+};
 use jsonrpc_pubsub::{PubSubHandler, Session};
 use jsonrpc_ws_server::{RequestContext, ServerBuilder};
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
+use std::{
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::{self, sleep, Builder, JoinHandle},
+    time::Duration,
+};
 
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
@@ -66,13 +72,20 @@ impl PubSubService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr};
+    use crate::commitment::BlockCommitmentCache;
+    use std::{
+        net::{IpAddr, Ipv4Addr},
+        sync::RwLock,
+    };
 
     #[test]
     fn test_pubsub_new() {
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
-        let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
+        let subscriptions = Arc::new(RpcSubscriptions::new(
+            &exit,
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+        ));
         let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");

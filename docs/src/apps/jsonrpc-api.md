@@ -118,7 +118,7 @@ Many methods that take a commitment parameter return an RpcResponse JSON object 
 
 ### confirmTransaction
 
-Returns a transaction receipt
+Returns a transaction receipt. This method only searches the recent status cache of signatures, which retains all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
 #### Parameters:
 
@@ -656,14 +656,13 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getSignatureStatus
 
-Returns the status of a given signature. This method is similar to [confirmTransaction](jsonrpc-api.md#confirmtransaction) but provides more resolution for error events.
+Returns the status of a given signature. This method is similar to [confirmTransaction](jsonrpc-api.md#confirmtransaction) but provides more resolution for error events. This method only searches the recent status cache of signatures, which retains all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
 #### Parameters:
 
 * `<array>` - An array of transaction signatures to confirm, as base-58 encoded strings
 * `<object>` - (optional) Extended Rpc configuration, containing the following optional fields:
   * `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  * `searchTransactionHistory: <bool>` - whether to search the ledger transaction status cache, which may be expensive
 
 #### Results:
 

@@ -312,7 +312,10 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rpc_subscriptions::tests::robust_poll_or_panic;
+    use crate::{
+        commitment::{BlockCommitment, BlockCommitmentCache},
+        rpc_subscriptions::tests::robust_poll_or_panic,
+    };
     use jsonrpc_core::{futures::sync::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_budget_program::{self, budget_instruction};
@@ -325,7 +328,12 @@ mod tests {
         system_program, system_transaction,
         transaction::{self, Transaction},
     };
-    use std::{sync::RwLock, thread::sleep, time::Duration};
+    use std::{
+        collections::HashMap,
+        sync::{atomic::AtomicBool, RwLock},
+        thread::sleep,
+        time::Duration,
+    };
 
     fn process_transaction_and_notify(
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -358,8 +366,13 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl {
+            subscriptions: Arc::new(RpcSubscriptions::new(
+                &Arc::new(AtomicBool::new(false)),
+                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            )),
+            ..RpcSolPubSubImpl::default()
+        };
 
         // Test signature subscriptions
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
@@ -457,7 +470,13 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
 
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl {
+            subscriptions: Arc::new(RpcSubscriptions::new(
+                &Arc::new(AtomicBool::new(false)),
+                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            )),
+            ..RpcSolPubSubImpl::default()
+        };
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(
@@ -591,7 +610,13 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let bob = Keypair::new();
 
-        let rpc = RpcSolPubSubImpl::default();
+        let mut rpc = RpcSolPubSubImpl::default();
+        let exit = Arc::new(AtomicBool::new(false));
+        let subscriptions = RpcSubscriptions::new(
+            &exit,
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+        );
+        rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
@@ -622,7 +647,12 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let bob = Keypair::new();
 
-        let rpc = RpcSolPubSubImpl::default();
+        let mut rpc = RpcSolPubSubImpl::default();
+        let exit = Arc::new(AtomicBool::new(false));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests()));
+
+        let subscriptions = RpcSubscriptions::new(&exit, block_commitment_cache.clone());
+        rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
@@ -640,10 +670,32 @@ mod tests {
         let bank0 = bank_forks.read().unwrap()[0].clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
-        rpc.subscriptions.notify_subscribers(1, &bank_forks);
         let bank1 = bank_forks.read().unwrap()[1].clone();
+
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_confirmation_stake(1, 10);
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(0).or_insert(cache0.clone());
+        let mut new_block_commitment =
+            BlockCommitmentCache::new(block_commitment, 10, bank1.clone(), 0);
+        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
+        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+        drop(w_block_commitment_cache);
+
+        rpc.subscriptions.notify_subscribers(1, &bank_forks);
         let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
+        let bank2 = bank_forks.read().unwrap()[2].clone();
+
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_confirmation_stake(2, 10);
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(0).or_insert(cache0.clone());
+        let mut new_block_commitment = BlockCommitmentCache::new(block_commitment, 10, bank2, 0);
+        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
+        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+        drop(w_block_commitment_cache);
+
         rpc.subscriptions.notify_subscribers(2, &bank_forks);
         let expected = json!({
            "jsonrpc": "2.0",
