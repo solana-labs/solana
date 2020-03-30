@@ -50,6 +50,12 @@ where `<PUBKEY>` is the public key output from the previous command.
 The command will output "Success" if the given public key matches the
 the one in your keypair file, and "Failed" otherwise.
 
+Configure solana to use the keypair file.
+
+```bash
+solana config set --keypair ~/my-solana-wallet/my-keypair.json 
+```
+
 ## Generate a Paper Wallet Seed Phrase
 
 See [Creating a Paper Wallet](../paper-wallet/paper-wallet-usage.md#creating-a-paper-wallet).
