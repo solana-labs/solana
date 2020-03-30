@@ -762,6 +762,7 @@ impl ReplayStage {
 
         Self::update_commitment_cache(
             bank.clone(),
+            bank_forks.read().unwrap().root(),
             progress.get_fork_stats(bank.slot()).unwrap().total_staked,
             lockouts_sender,
         );
@@ -792,10 +793,13 @@ impl ReplayStage {
 
     fn update_commitment_cache(
         bank: Arc<Bank>,
+        root: Slot,
         total_staked: u64,
         lockouts_sender: &Sender<CommitmentAggregationData>,
     ) {
-        if let Err(e) = lockouts_sender.send(CommitmentAggregationData::new(bank, total_staked)) {
+        if let Err(e) =
+            lockouts_sender.send(CommitmentAggregationData::new(bank, root, total_staked))
+        {
             trace!("lockouts_sender failed: {:?}", e);
         }
     }
@@ -2350,7 +2354,12 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank1);
         let arc_bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
         leader_vote(&arc_bank1, &leader_voting_pubkey);
-        ReplayStage::update_commitment_cache(arc_bank1.clone(), leader_lamports, &lockouts_sender);
+        ReplayStage::update_commitment_cache(
+            arc_bank1.clone(),
+            0,
+            leader_lamports,
+            &lockouts_sender,
+        );
 
         let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
         let _res = bank2.transfer(10, &genesis_config_info.mint_keypair, &Pubkey::new_rand());
@@ -2361,7 +2370,12 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank2);
         let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
         leader_vote(&arc_bank2, &leader_voting_pubkey);
-        ReplayStage::update_commitment_cache(arc_bank2.clone(), leader_lamports, &lockouts_sender);
+        ReplayStage::update_commitment_cache(
+            arc_bank2.clone(),
+            0,
+            leader_lamports,
+            &lockouts_sender,
+        );
         thread::sleep(Duration::from_millis(200));
 
         let mut expected0 = BlockCommitment::default();
