@@ -126,6 +126,7 @@ fn process_new_stake_account(
         "withdraw authority",
         wallet_manager,
     )?;
+    let index = 0;
     let message = stake_accounts::new_stake_account(
         &fee_payer_keypair.pubkey(),
         &funding_keypair.pubkey(),
@@ -133,6 +134,7 @@ fn process_new_stake_account(
         new_config.lamports,
         &stake_authority_pubkey,
         &withdraw_authority_pubkey,
+        index,
     );
     let signers = vec![&*fee_payer_keypair, &*funding_keypair, &*base_keypair];
     let signature = send_message(client, message, &signers)?;

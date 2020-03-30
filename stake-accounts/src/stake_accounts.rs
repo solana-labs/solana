@@ -25,9 +25,9 @@ pub(crate) fn new_stake_account(
     lamports: u64,
     stake_authority_pubkey: &Pubkey,
     withdraw_authority_pubkey: &Pubkey,
+    index: usize,
 ) -> Message {
-    let seed = 0;
-    let stake_account_address = derive_stake_account_address(base_pubkey, seed);
+    let stake_account_address = derive_stake_account_address(base_pubkey, index);
     let authorized = Authorized {
         staker: *stake_authority_pubkey,
         withdrawer: *withdraw_authority_pubkey,
@@ -36,7 +36,7 @@ pub(crate) fn new_stake_account(
         funding_pubkey,
         &stake_account_address,
         &base_pubkey,
-        &seed.to_string(),
+        &index.to_string(),
         &authorized,
         &Lockup::default(),
         lamports,
@@ -269,6 +269,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            0,
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
@@ -305,6 +306,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            0,
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
@@ -362,6 +364,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            0,
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
@@ -419,6 +422,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            0,
         );
 
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
