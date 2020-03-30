@@ -71,8 +71,8 @@ Optimistic Confirmation - A block `B` is then said to have achieved
 "optimistic confirmation" if `>2/3` of stake have voted with votes `v`
 where `Range(v)` for each such `v` includes `B.slot`.
 
-Finalized - A block `B` is said to be finalized if `>1/3` of the stake
-has rooted `B` or a descedant of `B`.
+Finalized - A block `B` is said to be finalized if at least one 
+correct validator has rooted `B` or a descedant of `B`.
 
 Reverted - A block `B` is said to be reverted if another block `B'` that
 is not a parent or descendant of `B` was finalized.
@@ -94,10 +94,10 @@ By the definition of `optimistic confirmation`, this means `> 2/3` of validators
 have each shown some vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
 Call this set of votes `Optimistic Votes`.
 
-In order for `B'` to have been rooted, there must have been `> 1/3` stake that 
+In order for `B'` to have been rooted, there must have been `> 2/3` stake that 
 voted on `B'` or a descendant of `B'`. 
 
-Together, this means `> 0` of the staked validators:
+Together, this means `> 1/3` of the staked validators:
 
 * Rooted `B'` or a descendant of `B'`
 * Also submitted a vote `v` of the form `Vote(X, S)` where `X <= B <= v.last`.
@@ -151,11 +151,11 @@ and the claim is proven.
 
 ###Lemma 2: 
 Recall `B'` was the block finalized on a different fork than 
-"optimistcally confirmed" block `B`.
+"optimistically" confirmed" block `B`.
 
 `Claim`: For any vote `Vote(X, S)` in the `Delinquent Optimistic Votes` set,
 it must be true that `B' > X`
-s
+
 `Proof`: Let `Vote(X, S)` be a vote in the `Delinquent Optimistic Votes` set,
 where the for the "optimistcally confirmed" block `B`, `X <= B <= S.last`.
 
