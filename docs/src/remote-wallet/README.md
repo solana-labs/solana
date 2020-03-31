@@ -76,3 +76,29 @@ but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_ID`.
 
 With your fully qualified URL, you can connect multiple hardware wallets to
 the same computer and uniquely identify a keypair from any of them.
+
+## Troubleshooting
+
+### Keypair URL parameters are ignored in zsh
+
+The question mark character is a special character in zsh. If that's not a
+feature you use, add the following line to your `~/.zshrc` to treat it as a
+normal character:
+
+```bash
+unsetopt nomatch
+```
+
+Then either restart your shell window or run `~/.zshrc`:
+
+```bash
+source ~/.zshrc
+```
+
+If you would prefer not to disable zsh's special handling of the question mark
+character, you can disable it explictly with a backslash in your keypair URLs.
+For example:
+
+```bash
+solana-keygen pubkey usb://ledger\?key=0
+```
