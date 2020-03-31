@@ -1065,7 +1065,7 @@ test('transaction', async () => {
   ]);
 
   // Wait for one confirmation
-  await sleep(500);
+  await sleep(1000);
 
   let i = 0;
   for (;;) {
