@@ -1,5 +1,5 @@
 import React from "react";
-import { testnetChannelEndpoint, Connection } from "@solana/web3.js";
+import { clusterApiUrl, Connection } from "@solana/web3.js";
 import { findGetParameter } from "../utils";
 
 export enum ClusterStatus {
@@ -35,9 +35,9 @@ export function clusterName(cluster: Cluster): string {
   }
 }
 
-export const MAINNET_BETA_URL = "https://api.mainnet-beta.solana.com";
-export const TESTNET_URL = "https://testnet.solana.com";
-export const DEVNET_URL = testnetChannelEndpoint("stable");
+export const MAINNET_BETA_URL = clusterApiUrl("mainnet-beta");
+export const TESTNET_URL = clusterApiUrl("testnet");
+export const DEVNET_URL = clusterApiUrl("devnet");
 
 export const DEFAULT_CLUSTER = Cluster.MainnetBeta;
 export const DEFAULT_CUSTOM_URL = "http://localhost:8899";
