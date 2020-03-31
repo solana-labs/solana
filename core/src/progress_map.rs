@@ -225,7 +225,7 @@ impl PropagatedStats {
                     node_pubkey,
                     all_pubkeys,
                     node_vote_accounts,
-                    bank.epoch_vote_accounts(bank.slot())
+                    bank.epoch_vote_accounts(bank.epoch())
                         .expect("Epoch stakes for bank's own epoch must exist"),
                 );
             }
