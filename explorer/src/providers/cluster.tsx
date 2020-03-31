@@ -2,35 +2,35 @@ import React from "react";
 import { testnetChannelEndpoint, Connection } from "@solana/web3.js";
 import { findGetParameter } from "../utils";
 
-export enum NetworkStatus {
+export enum ClusterStatus {
   Connected,
   Connecting,
   Failure
 }
 
-export enum Network {
+export enum Cluster {
   MainnetBeta,
   Testnet,
   Devnet,
   Custom
 }
 
-export const NETWORKS = [
-  Network.MainnetBeta,
-  Network.Testnet,
-  Network.Devnet,
-  Network.Custom
+export const CLUSTERS = [
+  Cluster.MainnetBeta,
+  Cluster.Testnet,
+  Cluster.Devnet,
+  Cluster.Custom
 ];
 
-export function networkName(network: Network): string {
-  switch (network) {
-    case Network.MainnetBeta:
+export function clusterName(cluster: Cluster): string {
+  switch (cluster) {
+    case Cluster.MainnetBeta:
       return "Mainnet Beta";
-    case Network.Testnet:
+    case Cluster.Testnet:
       return "Testnet";
-    case Network.Devnet:
+    case Cluster.Devnet:
       return "Devnet";
-    case Network.Custom:
+    case Cluster.Custom:
       return "Custom";
   }
 }
@@ -39,39 +39,39 @@ export const MAINNET_BETA_URL = "https://api.mainnet-beta.solana.com";
 export const TESTNET_URL = "https://testnet.solana.com";
 export const DEVNET_URL = testnetChannelEndpoint("stable");
 
-export const DEFAULT_NETWORK = Network.MainnetBeta;
+export const DEFAULT_CLUSTER = Cluster.MainnetBeta;
 export const DEFAULT_CUSTOM_URL = "http://localhost:8899";
 
 interface State {
-  network: Network;
+  cluster: Cluster;
   customUrl: string;
-  status: NetworkStatus;
+  status: ClusterStatus;
 }
 
 interface Connecting {
-  status: NetworkStatus.Connecting;
-  network: Network;
+  status: ClusterStatus.Connecting;
+  cluster: Cluster;
   customUrl: string;
 }
 
 interface Connected {
-  status: NetworkStatus.Connected;
+  status: ClusterStatus.Connected;
 }
 
 interface Failure {
-  status: NetworkStatus.Failure;
+  status: ClusterStatus.Failure;
 }
 
 type Action = Connected | Connecting | Failure;
 type Dispatch = (action: Action) => void;
 
-function networkReducer(state: State, action: Action): State {
+function clusterReducer(state: State, action: Action): State {
   switch (action.status) {
-    case NetworkStatus.Connected:
-    case NetworkStatus.Failure: {
+    case ClusterStatus.Connected:
+    case ClusterStatus.Failure: {
       return Object.assign({}, state, { status: action.status });
     }
-    case NetworkStatus.Connecting: {
+    case ClusterStatus.Connecting: {
       return action;
     }
   }
@@ -83,62 +83,62 @@ function initState(): State {
   const clusterUrlParam =
     findGetParameter("clusterUrl") || findGetParameter("networkUrl");
 
-  let network;
+  let cluster;
   let customUrl = DEFAULT_CUSTOM_URL;
   switch (clusterUrlParam) {
     case MAINNET_BETA_URL:
-      network = Network.MainnetBeta;
+      cluster = Cluster.MainnetBeta;
       break;
     case DEVNET_URL:
-      network = Network.Devnet;
+      cluster = Cluster.Devnet;
       break;
     case TESTNET_URL:
-      network = Network.Testnet;
+      cluster = Cluster.Testnet;
       break;
   }
 
   switch (clusterParam) {
     case "mainnet-beta":
-      network = Network.MainnetBeta;
+      cluster = Cluster.MainnetBeta;
       break;
     case "devnet":
-      network = Network.Devnet;
+      cluster = Cluster.Devnet;
       break;
     case "testnet":
-      network = Network.Testnet;
+      cluster = Cluster.Testnet;
       break;
   }
 
-  if (!network) {
+  if (!cluster) {
     if (!clusterUrlParam) {
-      network = DEFAULT_NETWORK;
+      cluster = DEFAULT_CLUSTER;
     } else {
-      network = Network.Custom;
+      cluster = Cluster.Custom;
       customUrl = clusterUrlParam;
     }
   }
 
   return {
-    network,
+    cluster,
     customUrl,
-    status: NetworkStatus.Connecting
+    status: ClusterStatus.Connecting
   };
 }
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
-type NetworkProviderProps = { children: React.ReactNode };
-export function NetworkProvider({ children }: NetworkProviderProps) {
+type ClusterProviderProps = { children: React.ReactNode };
+export function ClusterProvider({ children }: ClusterProviderProps) {
   const [state, dispatch] = React.useReducer(
-    networkReducer,
+    clusterReducer,
     undefined,
     initState
   );
 
   React.useEffect(() => {
-    // Connect to network immediately
-    updateNetwork(dispatch, state.network, state.customUrl);
+    // Connect to cluster immediately
+    updateCluster(dispatch, state.cluster, state.customUrl);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -150,56 +150,56 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
   );
 }
 
-export function networkUrl(network: Network, customUrl: string): string {
-  switch (network) {
-    case Network.Devnet:
+export function clusterUrl(cluster: Cluster, customUrl: string): string {
+  switch (cluster) {
+    case Cluster.Devnet:
       return DEVNET_URL;
-    case Network.MainnetBeta:
+    case Cluster.MainnetBeta:
       return MAINNET_BETA_URL;
-    case Network.Testnet:
+    case Cluster.Testnet:
       return TESTNET_URL;
-    case Network.Custom:
+    case Cluster.Custom:
       return customUrl;
   }
 }
 
-export async function updateNetwork(
+export async function updateCluster(
   dispatch: Dispatch,
-  network: Network,
+  cluster: Cluster,
   customUrl: string
 ) {
   dispatch({
-    status: NetworkStatus.Connecting,
-    network,
+    status: ClusterStatus.Connecting,
+    cluster,
     customUrl
   });
 
   try {
-    const connection = new Connection(networkUrl(network, customUrl));
+    const connection = new Connection(clusterUrl(cluster, customUrl));
     await connection.getRecentBlockhash();
-    dispatch({ status: NetworkStatus.Connected });
+    dispatch({ status: ClusterStatus.Connected });
   } catch (error) {
-    console.error("Failed to update network", error);
-    dispatch({ status: NetworkStatus.Failure });
+    console.error("Failed to update cluster", error);
+    dispatch({ status: ClusterStatus.Failure });
   }
 }
 
-export function useNetwork() {
+export function useCluster() {
   const context = React.useContext(StateContext);
   if (!context) {
-    throw new Error(`useNetwork must be used within a NetworkProvider`);
+    throw new Error(`useCluster must be used within a ClusterProvider`);
   }
   return {
     ...context,
-    url: networkUrl(context.network, context.customUrl),
-    name: networkName(context.network)
+    url: clusterUrl(context.cluster, context.customUrl),
+    name: clusterName(context.cluster)
   };
 }
 
-export function useNetworkDispatch() {
+export function useClusterDispatch() {
   const context = React.useContext(DispatchContext);
   if (!context) {
-    throw new Error(`useNetworkDispatch must be used within a NetworkProvider`);
+    throw new Error(`useClusterDispatch must be used within a ClusterProvider`);
   }
   return context;
 }

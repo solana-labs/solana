@@ -1,7 +1,7 @@
 import React from "react";
-import { useNetwork, NetworkStatus, Network } from "../providers/network";
+import { useCluster, ClusterStatus, Cluster } from "../providers/cluster";
 
-function NetworkStatusButton({ onClick }: { onClick: () => void }) {
+function ClusterStatusButton({ onClick }: { onClick: () => void }) {
   return (
     <div onClick={onClick}>
       <Button />
@@ -10,11 +10,11 @@ function NetworkStatusButton({ onClick }: { onClick: () => void }) {
 }
 
 function Button() {
-  const { status, network, name, customUrl } = useNetwork();
-  const statusName = network !== Network.Custom ? `${name}` : `${customUrl}`;
+  const { status, cluster, name, customUrl } = useCluster();
+  const statusName = cluster !== Cluster.Custom ? `${name}` : `${customUrl}`;
 
   switch (status) {
-    case NetworkStatus.Connected:
+    case ClusterStatus.Connected:
       return (
         <span className="btn btn-outline-success lift">
           <span className="fe fe-check-circle mr-2"></span>
@@ -22,7 +22,7 @@ function Button() {
         </span>
       );
 
-    case NetworkStatus.Connecting:
+    case ClusterStatus.Connecting:
       return (
         <span className="btn btn-outline-warning lift">
           <span
@@ -34,7 +34,7 @@ function Button() {
         </span>
       );
 
-    case NetworkStatus.Failure:
+    case ClusterStatus.Failure:
       return (
         <span className="btn btn-outline-danger lift">
           <span className="fe fe-alert-circle mr-2"></span>
@@ -44,4 +44,4 @@ function Button() {
   }
 }
 
-export default NetworkStatusButton;
+export default ClusterStatusButton;
