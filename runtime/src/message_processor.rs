@@ -1,4 +1,4 @@
-use crate::{native_loader, system_instruction_processor};
+use crate::{native_loader, rent_collector::RentCollector, system_instruction_processor};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
@@ -66,7 +66,12 @@ impl PreAccount {
         || is_executable
     }
 
-    pub fn verify(&self, program_id: &Pubkey, post: &Account) -> Result<(), InstructionError> {
+    pub fn verify(
+        &self,
+        program_id: &Pubkey,
+        rent_collector: &RentCollector,
+        post: &Account,
+    ) -> Result<(), InstructionError> {
         // Only the owner of the account may change owner and
         //   only if the account is writable and
         //   only if the data is zero-initialized or empty
@@ -120,12 +125,19 @@ impl PreAccount {
         }
 
         // executable is one-way (false->true) and only the account owner may set it.
-        if self.executable != post.executable
-            && (!self.is_writable // line coverage used to get branch coverage
-            || self.executable // line coverage used to get branch coverage
-            || *program_id != self.owner)
-        {
-            return Err(InstructionError::ExecutableModified);
+        if self.executable != post.executable {
+            if !rent_collector
+                .rent
+                .is_exempt(post.lamports, post.data.len())
+            {
+                return Err(InstructionError::ExecutableAccountNotRentExempt);
+            }
+            if !self.is_writable // line coverage used to get branch coverage
+                || self.executable // line coverage used to get branch coverage
+                || *program_id != self.owner
+            {
+                return Err(InstructionError::ExecutableModified);
+            }
         }
 
         // No one modifies rent_epoch (yet).
@@ -156,7 +168,6 @@ pub struct MessageProcessor {
     #[serde(skip)]
     symbol_cache: SymbolCache,
 }
-
 impl Default for MessageProcessor {
     fn default() -> Self {
         let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![(
@@ -170,7 +181,6 @@ impl Default for MessageProcessor {
         }
     }
 }
-
 impl MessageProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_instruction_processor(
@@ -275,6 +285,7 @@ impl MessageProcessor {
         pre_accounts: &[PreAccount],
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
+        rent_collector: &RentCollector,
     ) -> Result<(), InstructionError> {
         // Verify all accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts, accounts)?;
@@ -285,7 +296,7 @@ impl MessageProcessor {
             let program_id = instruction.program_id(&message.account_keys);
             let mut work = |unique_index: usize, account_index: usize| {
                 let account = accounts[account_index].borrow();
-                pre_accounts[unique_index].verify(&program_id, &account)?;
+                pre_accounts[unique_index].verify(&program_id, rent_collector, &account)?;
                 pre_sum += u128::from(pre_accounts[unique_index].lamports);
                 post_sum += u128::from(account.lamports);
                 Ok(())
@@ -310,6 +321,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
+        rent_collector: &RentCollector,
     ) -> Result<(), InstructionError> {
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         self.process_instruction(message, instruction, executable_accounts, accounts)?;
@@ -319,6 +331,7 @@ impl MessageProcessor {
             &pre_accounts,
             executable_accounts,
             accounts,
+            rent_collector,
         )?;
         Ok(())
     }
@@ -331,6 +344,7 @@ impl MessageProcessor {
         message: &Message,
         loaders: &[Vec<(Pubkey, RefCell<Account>)>],
         accounts: &[Rc<RefCell<Account>>],
+        rent_collector: &RentCollector,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
@@ -338,8 +352,14 @@ impl MessageProcessor {
                 .ok_or(TransactionError::InvalidAccountIndex)?;
             let executable_accounts = &loaders[executable_index];
 
-            self.execute_instruction(message, instruction, executable_accounts, accounts)
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            self.execute_instruction(
+                message,
+                instruction,
+                executable_accounts,
+                accounts,
+                rent_collector,
+            )
+            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(())
     }
@@ -410,8 +430,11 @@ mod tests {
             post: &Pubkey,
             is_writable: bool,
         ) -> Result<(), InstructionError> {
-            PreAccount::new(&Account::new(0, 0, pre), is_writable, ix)
-                .verify(ix, &Account::new(0, 0, post))
+            PreAccount::new(&Account::new(0, 0, pre), is_writable, ix).verify(
+                ix,
+                &RentCollector::default(),
+                &Account::new(0, 0, post),
+            )
         }
 
         let system_program_id = system_program::id();
@@ -448,7 +471,6 @@ mod tests {
             Err(InstructionError::ModifiedProgramId),
             "system program should not be able to change the account owner of a non-system account"
         );
-
         assert_eq!(
             change_owner(
                 &mallory_program_id,
@@ -459,7 +481,6 @@ mod tests {
             Ok(()),
             "mallory should be able to change the account owner, if she leaves clear data"
         );
-
         assert_eq!(
             PreAccount::new(
                 &Account::new_data(0, &[42], &mallory_program_id).unwrap(),
@@ -468,6 +489,7 @@ mod tests {
             )
             .verify(
                 &mallory_program_id,
+                &RentCollector::default(),
                 &Account::new_data(0, &[0], &alice_program_id).unwrap(),
             ),
             Ok(()),
@@ -481,6 +503,7 @@ mod tests {
             )
             .verify(
                 &mallory_program_id,
+                &RentCollector::default(),
                 &Account::new_data(0, &[42], &alice_program_id).unwrap(),
             ),
             Err(InstructionError::ModifiedProgramId),
@@ -505,6 +528,7 @@ mod tests {
                     pre: PreAccount::new(
                         &Account {
                             owner: *owner,
+                            lamports: std::u64::MAX,
                             data: vec![],
                             ..Account::default()
                         },
@@ -513,6 +537,7 @@ mod tests {
                     ),
                     post: Account {
                         owner: *owner,
+                        lamports: std::u64::MAX,
                         ..Account::default()
                     },
                     program_id: *program_id,
@@ -539,7 +564,8 @@ mod tests {
                 self
             }
             pub fn verify(self) -> Result<(), InstructionError> {
-                self.pre.verify(&self.program_id, &self.post)
+                self.pre
+                    .verify(&self.program_id, &RentCollector::default(), &self.post)
             }
         }
 
@@ -623,6 +649,25 @@ mod tests {
             Err(InstructionError::ExecutableLamportChange),
             "owner should not be able to subtract lamports once marked executable"
         );
+        let data = vec![1; 100];
+        let min_lamports = RentCollector::default().rent.minimum_balance(data.len());
+        assert_eq!(
+            Change::new(&owner, &owner)
+                .executable(false, true)
+                .lamports(0, min_lamports)
+                .data(data.clone(), data.clone())
+                .verify(),
+            Ok(()),
+        );
+        assert_eq!(
+            Change::new(&owner, &owner)
+                .executable(false, true)
+                .lamports(0, min_lamports - 1)
+                .data(data.clone(), data.clone())
+                .verify(),
+            Err(InstructionError::ExecutableAccountNotRentExempt),
+            "owner should not be able to change an account's data once its marked executable"
+        );
     }
 
     #[test]
@@ -635,6 +680,7 @@ mod tests {
             )
             .verify(
                 &system_program::id(),
+                &RentCollector::default(),
                 &Account::new_data(0, &[0, 0], &system_program::id()).unwrap()
             ),
             Ok(()),
@@ -648,7 +694,7 @@ mod tests {
                     true,
                     &system_program::id(),
                 ).verify(
-                &system_program::id(),
+                &system_program::id(), &RentCollector::default(),
                 &Account::new_data(0, &[0, 0], &alice_program_id).unwrap(),
             ),
             Err(InstructionError::AccountDataSizeChanged),
@@ -659,7 +705,6 @@ mod tests {
     #[test]
     fn test_verify_account_changes_data() {
         let alice_program_id = Pubkey::new_rand();
-
         let change_data =
             |program_id: &Pubkey, is_writable: bool| -> Result<(), InstructionError> {
                 let pre = PreAccount::new(
@@ -668,7 +713,7 @@ mod tests {
                     &program_id,
                 );
                 let post = Account::new_data(0, &[42], &alice_program_id).unwrap();
-                pre.verify(&program_id, &post)
+                pre.verify(&program_id, &RentCollector::default(), &post)
             };
 
         let mallory_program_id = Pubkey::new_rand();
@@ -694,6 +739,7 @@ mod tests {
     #[test]
     fn test_verify_account_changes_rent_epoch() {
         let alice_program_id = Pubkey::new_rand();
+        let rent_collector = RentCollector::default();
         let pre = PreAccount::new(
             &Account::new(0, 0, &alice_program_id),
             false,
@@ -702,14 +748,14 @@ mod tests {
         let mut post = Account::new(0, 0, &alice_program_id);
 
         assert_eq!(
-            pre.verify(&system_program::id(), &post),
+            pre.verify(&system_program::id(), &rent_collector, &post),
             Ok(()),
             "nothing changed!"
         );
 
         post.rent_epoch += 1;
         assert_eq!(
-            pre.verify(&system_program::id(), &post),
+            pre.verify(&system_program::id(), &rent_collector, &post),
             Err(InstructionError::RentEpochModified),
             "no one touches rent_epoch"
         );
@@ -728,7 +774,7 @@ mod tests {
 
         // positive test of this capability
         assert_eq!(
-            pre.verify(&alice_program_id, &post),
+            pre.verify(&alice_program_id, &RentCollector::default(), &post),
             Ok(()),
             "alice should be able to deduct lamports and give the account to bob if the data is zeroed",
         );
@@ -737,6 +783,7 @@ mod tests {
     #[test]
     fn test_verify_account_changes_lamports() {
         let alice_program_id = Pubkey::new_rand();
+        let rent_collector = RentCollector::default();
         let pre = PreAccount::new(
             &Account::new(42, 0, &alice_program_id),
             false,
@@ -745,7 +792,7 @@ mod tests {
         let post = Account::new(0, 0, &alice_program_id);
 
         assert_eq!(
-            pre.verify(&system_program::id(), &post),
+            pre.verify(&system_program::id(), &rent_collector, &post),
             Err(InstructionError::ExternalAccountLamportSpend),
             "debit should fail, even if system program"
         );
@@ -757,7 +804,7 @@ mod tests {
         );
 
         assert_eq!(
-            pre.verify(&alice_program_id, &post,),
+            pre.verify(&alice_program_id, &rent_collector, &post),
             Err(InstructionError::ReadonlyLamportChange),
             "debit should fail, even if owning program"
         );
@@ -769,7 +816,7 @@ mod tests {
         );
         let post = Account::new(0, 0, &system_program::id());
         assert_eq!(
-            pre.verify(&system_program::id(), &post),
+            pre.verify(&system_program::id(), &rent_collector, &post),
             Err(InstructionError::ModifiedProgramId),
             "system program can't debit the account unless it was the pre.owner"
         );
@@ -781,7 +828,7 @@ mod tests {
         );
         let post = Account::new(0, 0, &alice_program_id);
         assert_eq!(
-            pre.verify(&system_program::id(), &post),
+            pre.verify(&system_program::id(), &rent_collector, &post),
             Ok(()),
             "system can spend (and change owner)"
         );
@@ -789,6 +836,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_data_size_changed() {
+        let rent_collector = RentCollector::default();
         let alice_program_id = Pubkey::new_rand();
         let pre = PreAccount::new(
             &Account::new_data(42, &[0], &alice_program_id).unwrap(),
@@ -797,7 +845,7 @@ mod tests {
         );
         let post = Account::new_data(42, &[0, 0], &alice_program_id).unwrap();
         assert_eq!(
-            pre.verify(&system_program::id(), &post),
+            pre.verify(&system_program::id(), &rent_collector, &post),
             Err(InstructionError::AccountDataSizeChanged),
             "system program should not be able to change another program's account data size"
         );
@@ -807,7 +855,7 @@ mod tests {
             &alice_program_id,
         );
         assert_eq!(
-            pre.verify(&alice_program_id, &post),
+            pre.verify(&alice_program_id, &rent_collector, &post),
             Err(InstructionError::AccountDataSizeChanged),
             "non-system programs cannot change their data size"
         );
@@ -817,7 +865,7 @@ mod tests {
             &system_program::id(),
         );
         assert_eq!(
-            pre.verify(&system_program::id(), &post),
+            pre.verify(&system_program::id(), &rent_collector, &post),
             Ok(()),
             "system program should be able to change acount data size"
         );
@@ -857,6 +905,7 @@ mod tests {
         }
 
         let mock_system_program_id = Pubkey::new(&[2u8; 32]);
+        let rent_collector = RentCollector::default();
         let mut message_processor = MessageProcessor::default();
         message_processor
             .add_instruction_processor(mock_system_program_id, mock_system_process_instruction);
@@ -883,7 +932,8 @@ mod tests {
             account_metas.clone(),
         )]);
 
-        let result = message_processor.process_message(&message, &loaders, &accounts);
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
@@ -894,7 +944,8 @@ mod tests {
             account_metas.clone(),
         )]);
 
-        let result = message_processor.process_message(&message, &loaders, &accounts);
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -909,7 +960,8 @@ mod tests {
             account_metas,
         )]);
 
-        let result = message_processor.process_message(&message, &loaders, &accounts);
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -976,6 +1028,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let rent_collector = RentCollector::default();
         let mut message_processor = MessageProcessor::default();
         message_processor
             .add_instruction_processor(mock_program_id, mock_system_process_instruction);
@@ -1005,7 +1058,8 @@ mod tests {
             &MockSystemInstruction::BorrowFail,
             account_metas.clone(),
         )]);
-        let result = message_processor.process_message(&message, &loaders, &accounts);
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1020,7 +1074,8 @@ mod tests {
             &MockSystemInstruction::MultiBorrowMut,
             account_metas.clone(),
         )]);
-        let result = message_processor.process_message(&message, &loaders, &accounts);
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
@@ -1032,7 +1087,8 @@ mod tests {
             },
             account_metas,
         )]);
-        let result = message_processor.process_message(&message, &loaders, &accounts);
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);

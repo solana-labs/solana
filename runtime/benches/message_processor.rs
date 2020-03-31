@@ -3,7 +3,7 @@
 extern crate test;
 
 use log::*;
-use solana_runtime::message_processor::PreAccount;
+use solana_runtime::{message_processor::PreAccount, rent_collector::RentCollector};
 use solana_sdk::{account::Account, pubkey::Pubkey};
 use test::Bencher;
 
@@ -15,11 +15,12 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     let non_owner = Pubkey::new_rand();
     let pre = PreAccount::new(&Account::new(0, BUFSIZE, &owner), true, &owner);
     let post = Account::new(0, BUFSIZE, &owner);
-    assert_eq!(pre.verify(&owner, &post), Ok(()));
+    assert_eq!(pre.verify(&owner, &RentCollector::default(), &post), Ok(()));
 
     // this one should be faster
     bencher.iter(|| {
-        pre.verify(&owner, &post).unwrap();
+        pre.verify(&owner, &RentCollector::default(), &post)
+            .unwrap();
     });
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by owner: {} ns/iter", summary.median);
@@ -32,7 +33,8 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data compare {} ns/iter", summary.median);
     bencher.iter(|| {
-        pre.verify(&non_owner, &post).unwrap();
+        pre.verify(&non_owner, &RentCollector::default(), &post)
+            .unwrap();
     });
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data no change by non owner: {} ns/iter", summary.median);
