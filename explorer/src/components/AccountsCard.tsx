@@ -16,7 +16,6 @@ function AccountsCard() {
   const dispatch = useAccountsDispatch();
   const addressInput = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState("");
-  const [showSOL, setShowSOL] = React.useState(true);
   const { url } = useCluster();
 
   const onNew = (address: string) => {
@@ -40,7 +39,7 @@ function AccountsCard() {
 
   return (
     <div className="card">
-      {renderHeader(showSOL, setShowSOL)}
+      {renderHeader()}
 
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
@@ -51,9 +50,7 @@ function AccountsCard() {
               </th>
               <th className="text-muted">Status</th>
               <th className="text-muted">Address</th>
-              <th className="text-muted">
-                Balance ({showSOL ? "SOL" : "lamports"})
-              </th>
+              <th className="text-muted">Balance (SOL)</th>
               <th className="text-muted">Data (bytes)</th>
               <th className="text-muted">Owner</th>
             </tr>
@@ -88,7 +85,7 @@ function AccountsCard() {
               <td>-</td>
               <td>-</td>
             </tr>
-            {accounts.map(account => renderAccountRow(account, showSOL))}
+            {accounts.map(account => renderAccountRow(account))}
           </tbody>
         </table>
       </div>
@@ -96,36 +93,19 @@ function AccountsCard() {
   );
 }
 
-const renderHeader = (
-  showSOL: boolean,
-  setShowSOL: (show: boolean) => void
-) => {
+const renderHeader = () => {
   return (
     <div className="card-header">
       <div className="row align-items-center">
         <div className="col">
           <h4 className="card-header-title">Look Up Account(s)</h4>
         </div>
-
-        <span className="text-muted mr-3">Display SOL</span>
-
-        <div className="custom-control custom-switch">
-          <input
-            type="checkbox"
-            className="custom-control-input"
-            checked={showSOL}
-          />
-          <label
-            className="custom-control-label"
-            onClick={() => setShowSOL(!showSOL)}
-          ></label>
-        </div>
       </div>
     </div>
   );
 };
 
-const renderAccountRow = (account: Account, showSOL: boolean) => {
+const renderAccountRow = (account: Account) => {
   let statusText;
   let statusClass;
   switch (account.status) {
@@ -155,11 +135,7 @@ const renderAccountRow = (account: Account, showSOL: boolean) => {
   let owner = "-";
   if (account.details) {
     data = `${account.details.space}`;
-    if (showSOL) {
-      balance = `${(1.0 * account.details.lamports) / LAMPORTS_PER_SOL}`;
-    } else {
-      balance = `${account.details.lamports}`;
-    }
+    balance = `◎${(1.0 * account.details.lamports) / LAMPORTS_PER_SOL}`;
     owner = `${account.details.owner.toBase58()}`;
   }
 
