@@ -11,17 +11,69 @@ being voted for.
 
 Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 
-* `Claim`: if a validator submits `vote(X, S)`, the same validator
-should not have voted on a slot `s'` where  `X < s' < S.last` and `s'`
-is not a descendant of `X` and an ancestor of `S.last`. 
+Now we define some "Optimistic Slashing" slashing conditions. The intuition
+for these is described below:
 
-* `Proof`: First note that the vote for `S` must have come after the vote
-for `S'` (due to lockouts, the higher vote must have after). Thus, the sequence 
-of votes must have been: `X ... S' ... S`. This means after the second vote the
-validator must have switched back to the original fork at some `X' > X`. This 
-means the vote for `S` should have used `X'` as the "reference" point, so the 
-vote should have been of the form `vote(X', S)`, not `vote(X, S)`
-(Recall the vote should contain the `latest` switch).
+* `Intuition`: If a validator submits `vote(X, S)`, the same validator
+should not have voted on a different fork that "overlaps" this fork. 
+More concretely, this validator should not have cast another vote
+`vote(X', S')` where the range `[X, S.last]` overlaps the range
+`[X', S'.last]`, as shown below:
+
+
+                                  +-------+
+                                  |       |
+                        +---------+       +--------+
+                        |         |       |        |
+                        |         +-------+        |
+                        |                          |
+                        |                          |
+                        |                          |
+                    +---+---+                      |
+                    |       |                      |
+                X   |       |                      |
+                    |       |                      |
+                    +---+---+                      |
+                        |                          |
+                        |                      +---+---+
+                        |                      |       |
+                        |                      |       |  X'
+                        |                      |       |
+                        |                      +---+---+
+                        |                          |
+                        |                          |
+                        |                          |
+                        |                          |
+                        |                      +---+---+
+                        |                      |       |
+                        |                      |       |  S'.last
+                        |                      |       |
+                        |                      +-------+
+                        |
+                    +---+---+
+                    |       |
+                X'' |       |
+                    |       |
+                    +---+---+
+                        |
+                        |
+                        |
+                        |
+                    +---+---+
+                    |       |
+             S.last |       |
+                    |       |
+                    +-------+
+                    
+(Example of slashable votes vote(X', S') and vote(X, S))
+
+In the diagram above, note that the vote for `S.last` must have come after the
+vote for `S'.last` (due to lockouts, the higher vote must have after). Thus, the
+sequence  of votes must have been: `X ... S'.last ... S.last`. This means after
+the vote on `S'.last`, the validator must have switched back to the other
+fork at some slot `X'' > S'.last > X`. Thus, the vote for `S.last` should have
+used `X''` as the "reference" point, not `X`, because that was the last "switch"
+on the fork.
 
 To enforce this, we define the "Optimistic Slashing" slashing conditions. Given
 any two distinct votes `vote(X, S)`and `vote(X', S')` by the same validator,
@@ -44,9 +96,11 @@ Otherwise the validator is slashed.
  of slots `[X, S.last]`.
 
 `SP(old_vote, new_vote)` - This is the "Switching Proof" for `old_vote`, the
-validator's latest vote. Such a proof is necessary for a validator to vote 
-on any slot `new_vote.last` that is not a descendant of `old_vote.last`. Note 
-switching must still respect lockouts.
+validator's latest vote. Such a proof is necessary anytime a validator switches
+their "reference" slot (see vote section above). The switching proof includes
+a reference to `old_vote`, so that there's a record of what the "range" of that
+`old_vote` was (to make other conflicting switches in this range slashable).
+Such a switch must still respect lockouts.
 
 A switching proof shows that `> 1/3` of the network is locked out at slot
 `old_vote.last`.
@@ -107,7 +161,7 @@ criteria. Let `Delinquent Optimistic Votes`, be the subset of `Optimistic Votes`
 containing the **latest** votes from `Optimistic Votes` made by each of these
 delinquent validators.
 
-###Lemma 1: 
+### Lemma 1: 
 `Claim:` Given a vote `Vote(X, S)` made by a validator `V` in the
 `Delinquent` set, and `S` contains a vote for a slot `s` for which:
 
@@ -116,15 +170,70 @@ delinquent validators.
 
 then `X > B`.
 
+                                  +-------+
+                                  |       |
+                        +---------+       +--------+
+                        |         |       |        |
+                        |         +-------+        |
+                        |                          |
+                        |                          |
+                        |                          |
+                        |                      +---+---+
+                        |                      |       |
+                        |                      |       |  X'
+                        |                      |       |
+                        |                      +---+---+
+                        |                          |
+                        |                          |
+                        |                      +---+---+
+                        |                      |       |
+                        |                      |       |  B (Optimistically Confirmed)
+                        |                      |       |
+                        |                      +---+---+
+                        |                          |
+                        |                          |
+                        |                          |
+                        |                      +---+---+
+                        |                      |       |
+                        |                      |       |  S'.last
+                        |                      |       |
+                        |                      +-------+
+                        |
+                    +---+---+
+                    |       |
+                 X  |       |
+                    |       |
+                    +---+---+
+                        |
+                        |
+                        |
+                        |
+                        |
+                        |
+                    +---+---+
+                    |       |
+            S.last  |       |
+                    |       |
+                    +---+---+
+                        |
+                        |
+                        |
+                        |
+                    +---+---+
+                    |       |
+    s + s.lockout   |       |
+                    +-------+
+
+
 `Proof`: Assume for the sake of contradiction a delinquent validator `V` made
 such a vote `Vote(X, S)` where `S` contains a vote for a slot `s` not an 
 ancestor or descendant of `B`, where `s + s.lockout > B`, but `X <= B`.
 
 Let `Vote(X', S')` be the vote in `Delinquent Optimistic Votes`
 made by validator `V`. By definition of that set (all votes optimistically 
-confirmed `B`), `X' <= B <= S'.last`.
+confirmed `B`), `X' <= B <= S'.last` (see diagram above).
 
-This implies that because its' assumed above `X <= B`, then `X <= S'.last`,
+This implies that because it's assumed above `X <= B`, then `X <= S'.last`,
 so by the slashing rules, either `X == X'` or `X < X'` (otherwise would
 overlap the range `(X', S'.last)`).
 
@@ -143,18 +252,54 @@ Intuitively, this implies that `Vote(X, S)` was made "before" `Vote(X', S')`.
 
 From the assumption above, `s + s.lockout > B > X'`. Because `s` is not an 
 ancestor of `X'`, lockouts would have been violated when this validator
-fiirst attempted to submit a switching vote to `X'` with some vote of the
+first attempted to submit a switching vote to `X'` with some vote of the
 form `Vote(X', S'')`. 
 
 Since none of these cases are valid, the assumption must have been invalid,
 and the claim is proven.
 
-###Lemma 2: 
+### Lemma 2: 
 Recall `B'` was the block finalized on a different fork than 
 "optimistically" confirmed" block `B`.
 
 `Claim`: For any vote `Vote(X, S)` in the `Delinquent Optimistic Votes` set,
 it must be true that `B' > X`
+
+                                +-------+
+                                |       |
+                       +--------+       +---------+
+                       |        |       |         |
+                       |        +-------+         |
+                       |                          |
+                       |                          |
+                       |                          |
+                       |                      +---+---+
+                       |                      |       |
+                       |                      |       |  X
+                       |                      |       |
+                       |                      +---+---+
+                       |                          |
+                       |                          |
+                       |                      +---+---+
+                       |                      |       |
+                       |                      |       |  B (Optimistically Confirmed)
+                       |                      |       |
+                       |                      +---+---+
+                       |                          |
+                       |                          |
+                       |                          |
+                       |                      +---+---+
+                       |                      |       |
+                       |                      |       |  S.last
+                       |                      |       |
+                       |                      +-------+
+                       |
+                   +---+---+
+                   |       |
+    B'(Finalized)  |       |
+                   |       |
+                   +-------+
+
 
 `Proof`: Let `Vote(X, S)` be a vote in the `Delinquent Optimistic Votes` set,
 where the for the "optimistcally confirmed" block `B`, `X <= B <= S.last`.
