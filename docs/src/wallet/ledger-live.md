@@ -38,5 +38,5 @@ line tools](../remote-wallet/ledger.md).
 
 ##Interact with Solana network
 - To interact with your Ledger wallet on our live network, please see our
-instructions on how to [use a Ledger Nano S with the Solana command
-line tools](../remote-wallet/ledger.md).
+instructions on how to
+[use a Ledger Nano S with the Solana command line tools](../remote-wallet/ledger.md).
