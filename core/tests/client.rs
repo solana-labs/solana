@@ -3,8 +3,8 @@ use solana_client::{
     rpc_client::RpcClient,
 };
 use solana_core::{
-    rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
-    validator::TestValidator,
+    commitment::BlockCommitmentCache, rpc_pubsub_service::PubSubService,
+    rpc_subscriptions::RpcSubscriptions, validator::TestValidator,
 };
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::Signer,
@@ -15,7 +15,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, RwLock,
     },
     thread::sleep,
     time::{Duration, Instant},
@@ -85,7 +85,10 @@ fn test_slot_subscription() {
         rpc_port::DEFAULT_RPC_PUBSUB_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
-    let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
+    let subscriptions = Arc::new(RpcSubscriptions::new(
+        &exit,
+        Arc::new(RwLock::new(BlockCommitmentCache::default())),
+    ));
     let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
     std::thread::sleep(Duration::from_millis(400));
 

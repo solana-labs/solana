@@ -4,6 +4,7 @@
 
 use crate::{
     cluster_info::ClusterInfo,
+    commitment::BlockCommitmentCache,
     contact_info::ContactInfo,
     result::{Error, Result},
 };
@@ -11,9 +12,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_chacha_cuda::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
-use solana_runtime::{
-    bank::Bank, status_cache::SignatureConfirmationStatus, storage_utils::archiver_accounts,
-};
+use solana_runtime::{bank::Bank, storage_utils::archiver_accounts};
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
@@ -30,6 +29,7 @@ use solana_storage_program::{
     storage_instruction,
     storage_instruction::proof_validation,
 };
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     cmp,
     collections::HashMap,
@@ -185,6 +185,7 @@ impl StorageStage {
         exit: &Arc<AtomicBool>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     ) -> Self {
         let (instruction_sender, instruction_receiver) = channel();
 
@@ -256,6 +257,7 @@ impl StorageStage {
                                     &keypair,
                                     &storage_keypair,
                                     &transactions_socket,
+                                    &block_commitment_cache,
                                 )
                                 .unwrap_or_else(|err| {
                                     info!("failed to send storage transaction: {:?}", err)
@@ -289,6 +291,7 @@ impl StorageStage {
         keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         transactions_socket: &UdpSocket,
+        block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
     ) -> io::Result<()> {
         let working_bank = bank_forks.read().unwrap().working_bank();
         let blockhash = working_bank.confirmed_last_blockhash().0;
@@ -323,8 +326,13 @@ impl StorageStage {
                 cluster_info.read().unwrap().my_data().tpu,
             )?;
             sleep(Duration::from_millis(100));
-            if Self::poll_for_signature_confirmation(bank_forks, &transaction.signatures[0], 0)
-                .is_ok()
+            if Self::poll_for_signature_confirmation(
+                bank_forks,
+                block_commitment_cache,
+                &transaction.signatures[0],
+                0,
+            )
+            .is_ok()
             {
                 break;
             };
@@ -334,23 +342,24 @@ impl StorageStage {
 
     fn poll_for_signature_confirmation(
         bank_forks: &Arc<RwLock<BankForks>>,
+        block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         signature: &Signature,
         min_confirmed_blocks: usize,
     ) -> Result<()> {
         let mut now = Instant::now();
         let mut confirmed_blocks = 0;
         loop {
-            let response = bank_forks
-                .read()
-                .unwrap()
-                .working_bank()
-                .get_signature_confirmation_status(signature);
-            if let Some(SignatureConfirmationStatus {
-                confirmations,
-                status,
-                ..
-            }) = response
-            {
+            let working_bank = bank_forks.read().unwrap().working_bank();
+            let response = working_bank.get_signature_status_slot(signature);
+            if let Some((slot, status)) = response {
+                let confirmations = if working_bank.src.roots().contains(&slot) {
+                    MAX_LOCKOUT_HISTORY + 1
+                } else {
+                    let r_block_commitment_cache = block_commitment_cache.read().unwrap();
+                    r_block_commitment_cache
+                        .get_confirmation_count(slot)
+                        .unwrap_or(0)
+                };
                 if status.is_ok() {
                     if confirmed_blocks != confirmations {
                         now = Instant::now();
@@ -655,12 +664,18 @@ mod tests {
     use rayon::prelude::*;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_runtime::bank::Bank;
-    use solana_sdk::hash::Hasher;
-    use solana_sdk::signature::{Keypair, Signer};
-    use std::cmp::{max, min};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
+    use solana_sdk::{
+        hash::Hasher,
+        signature::{Keypair, Signer},
+    };
+    use std::{
+        cmp::{max, min},
+        sync::{
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            mpsc::channel,
+            Arc, RwLock,
+        },
+    };
 
     #[test]
     fn test_storage_stage_none_ledger() {
@@ -675,6 +690,7 @@ mod tests {
             &[bank.clone()],
             vec![0],
         )));
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (_slot_sender, slot_receiver) = channel();
         let storage_state = StorageState::new(
             &bank.last_blockhash(),
@@ -690,6 +706,7 @@ mod tests {
             &exit.clone(),
             &bank_forks,
             &cluster_info,
+            block_commitment_cache,
         );
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
