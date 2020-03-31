@@ -22,7 +22,11 @@ _ cargo +"$rust_stable" clippy --all --exclude solana-sdk-c -- --deny=warnings
 _ cargo +"$rust_stable" clippy --manifest-path sdk-c/Cargo.toml -- --deny=warnings
 
 _ cargo +"$rust_stable" audit --version
+<<<<<<< HEAD
 _ cargo +"$rust_stable" audit --ignore RUSTSEC-2020-0002
+=======
+_ cargo +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
+>>>>>>> 62e12e3af... Remove unecessary exception and add a new one (#9200)
 _ ci/nits.sh
 _ ci/order-crates-for-publishing.py
 _ docs/build.sh
