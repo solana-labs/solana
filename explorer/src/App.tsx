@@ -2,7 +2,9 @@ import React from "react";
 
 import { ClusterProvider } from "./providers/cluster";
 import { TransactionsProvider } from "./providers/transactions";
+import { AccountsProvider } from "./providers/accounts";
 import ClusterStatusButton from "./components/ClusterStatusButton";
+import AccountsCard from "./components/AccountsCard";
 import TransactionsCard from "./components/TransactionsCard";
 import ClusterModal from "./components/ClusterModal";
 import Logo from "./img/logos-solana/light-explorer-logo.svg";
@@ -34,6 +36,13 @@ function App() {
               <TransactionsProvider>
                 <TransactionsCard />
               </TransactionsProvider>
+            </div>
+          </div>
+          <div className="row">
+            <div className="col-12">
+              <AccountsProvider>
+                <AccountsCard />
+              </AccountsProvider>
             </div>
           </div>
         </div>

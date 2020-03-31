@@ -23,7 +23,7 @@ function TransactionsCard() {
     try {
       const length = bs58.decode(signature).length;
       if (length > 64) {
-        setError("Signature is too short");
+        setError("Signature is too long");
         return;
       } else if (length < 64) {
         setError("Signature is too short");
