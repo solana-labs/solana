@@ -15,6 +15,30 @@ _ git show HEAD --check --oneline
 
 _ cargo +"$rust_stable" fmt --all -- --check
 
+(
+  set -x
+  if [[ -n $CI_WITH_DEPENDABOT ]]; then
+    commit_range="$(git merge-base HEAD origin/master)..HEAD"
+    parsed_update_args="$(
+      git log "$commit_range" --author "dependabot-preview" --oneline -n1 |
+        grep -o 'Bump.*$' |
+        sed -r 's/Bump ([^ ]+) from [^ ]+ to ([^ ]+)/-p \1 --precise \2/'
+    )"
+    if [[ -n $parsed_update_args ]]; then
+      # shellcheck disable=SC2086
+      _ scripts/cargo-for-all-lock-files.sh update $parsed_update_args
+    fi
+  fi
+  if _ scripts/cargo-for-all-lock-files.sh check --locked; then
+    true
+  else
+    check_status=$?
+    echo "Some Cargo.lock is outdated; please update them as well"
+    echo "protip: you can use ./scripts/cargo-for-all-lock-files.sh update ..."
+    exit "$check_status"
+  fi
+)
+
 # Clippy gets stuck for unknown reasons if sdk-c is included in the build, so check it separately.
 # See https://github.com/solana-labs/solana/issues/5503
 _ cargo +"$rust_stable" clippy --version
