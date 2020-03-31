@@ -29,7 +29,7 @@ the votes must satisfy:
 
 * `X <= S.last`, `X' <= S'.last`
 * All `s` in `S` are ancestors/descendants of one another, 
-all `s'` in `S'` areancsestors/descendants of one another,
+all `s'` in `S'` are ancsestors/descendants of one another,
 * 
 * `X == X'` implies `S` is parent of `S'` or `S'` is a parent of `S`
 * `X' > X` implies `X' > S.last` and `S'.last > S.last` 
