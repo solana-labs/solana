@@ -151,7 +151,7 @@ impl Validator {
         keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
-        authorized_voter: &Arc<Keypair>,
+        mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
         poh_verify: bool,
@@ -162,7 +162,15 @@ impl Validator {
 
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
-        warn!("authorized voter: {}", authorized_voter.pubkey());
+
+        if config.voting_disabled {
+            warn!("voting disabled");
+            authorized_voter_keypairs.clear();
+        } else {
+            for authorized_voter_keypair in &authorized_voter_keypairs {
+                warn!("authorized voter: {}", authorized_voter_keypair.pubkey());
+            }
+        }
         report_target_features();
 
         info!("entrypoint: {:?}", entrypoint_info_option);
@@ -386,11 +394,7 @@ impl Validator {
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
-            if config.voting_disabled {
-                None
-            } else {
-                Some(authorized_voter.clone())
-            },
+            authorized_voter_keypairs,
             storage_keypair,
             &bank_forks,
             &cluster_info,
@@ -728,7 +732,7 @@ impl TestValidator {
             &node_keypair,
             &ledger_path,
             &leader_voting_keypair.pubkey(),
-            &leader_voting_keypair,
+            vec![leader_voting_keypair.clone()],
             &storage_keypair,
             None,
             true,
@@ -836,7 +840,7 @@ mod tests {
             &Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
-            &voting_keypair,
+            vec![voting_keypair.clone()],
             &storage_keypair,
             Some(&leader_node.info),
             true,
@@ -861,7 +865,7 @@ mod tests {
                         .genesis_config;
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
-                let voting_keypair = Arc::new(Keypair::new());
+                let vote_account_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
                 let config = ValidatorConfig {
                     rpc_ports: Some((
@@ -874,8 +878,8 @@ mod tests {
                     validator_node,
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
-                    &voting_keypair.pubkey(),
-                    &voting_keypair,
+                    &vote_account_keypair.pubkey(),
+                    vec![vote_account_keypair.clone()],
                     &storage_keypair,
                     Some(&leader_node.info),
                     true,
