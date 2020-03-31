@@ -3,7 +3,7 @@
 extern crate test;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_rbpf::{EbpfVm};
+use solana_rbpf::EbpfVm;
 use std::{env, fs::File, io::Read, mem, path::PathBuf};
 use test::Bencher;
 
