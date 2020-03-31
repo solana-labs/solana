@@ -180,7 +180,7 @@ declare module '@solana/web3.js' {
     ): Promise<RpcResponseAndContext<number>>;
     getBalance(publicKey: PublicKey, commitment?: Commitment): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
-    getConfirmedBlock(): Promise<ConfirmedBlock>;
+    getConfirmedBlock(slot: number): Promise<ConfirmedBlock>;
     getVoteAccounts(commitment?: Commitment): Promise<VoteAccountStatus>;
     confirmTransactionAndContext(
       signature: TransactionSignature,
