@@ -28,9 +28,11 @@ secure transaction signing.
 1. Ensure the Ledger Live application is closed
 2. Plug your Ledger device into your computer's USB port
 3. Enter your pin and start the Solana app on the Ledger device
-4. On your computer, run:
+4. Press both buttons to advance past the "Pending Ledger review" screen
+5. Ensure the screen reads "Application is ready"
+6. On your computer, run:
 
-```text
+```bash
 solana-keygen pubkey usb://ledger
 ```
 
@@ -41,7 +43,7 @@ computer, you can use your wallet key to specify which Ledger hardware wallet
 you want to use. Run the same command again, but this time, with its fully
 qualified URL:
 
-```text
+```bash
 solana-keygen pubkey usb://ledger/<WALLET_ID>
 ```
 
