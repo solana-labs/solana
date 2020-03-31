@@ -157,13 +157,13 @@ export async function checkTransactionStatus(
   let status;
   let slot;
   try {
-    const result = await new Connection(url).getSignatureStatus(signature);
+    const { value } = await new Connection(url).getSignatureStatus(signature);
 
-    if (result === null) {
+    if (value === null) {
       status = Status.Missing;
     } else {
-      slot = result.slot;
-      if ("Ok" in result.status) {
+      slot = value.slot;
+      if ("Ok" in value.status) {
         status = Status.Success;
       } else {
         status = Status.Failure;
