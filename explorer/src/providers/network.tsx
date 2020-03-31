@@ -10,14 +10,14 @@ export enum NetworkStatus {
 
 export enum Network {
   MainnetBeta,
-  TdS,
+  Testnet,
   Devnet,
   Custom
 }
 
 export const NETWORKS = [
   Network.MainnetBeta,
-  Network.TdS,
+  Network.Testnet,
   Network.Devnet,
   Network.Custom
 ];
@@ -26,7 +26,7 @@ export function networkName(network: Network): string {
   switch (network) {
     case Network.MainnetBeta:
       return "Mainnet Beta";
-    case Network.TdS:
+    case Network.Testnet:
       return "Testnet";
     case Network.Devnet:
       return "Devnet";
@@ -36,7 +36,7 @@ export function networkName(network: Network): string {
 }
 
 export const MAINNET_BETA_URL = "https://api.mainnet-beta.solana.com";
-export const TDS_URL = "https://tds.solana.com";
+export const TESTNET_URL = "https://testnet.solana.com";
 export const DEVNET_URL = testnetChannelEndpoint("stable");
 
 export const DEFAULT_NETWORK = Network.MainnetBeta;
@@ -78,28 +78,44 @@ function networkReducer(state: State, action: Action): State {
 }
 
 function initState(): State {
-  const networkUrlParam =
+  const clusterParam =
+    findGetParameter("cluster") || findGetParameter("network");
+  const clusterUrlParam =
     findGetParameter("clusterUrl") || findGetParameter("networkUrl");
 
   let network;
   let customUrl = DEFAULT_CUSTOM_URL;
-  switch (networkUrlParam) {
-    case null:
-      network = DEFAULT_NETWORK;
-      break;
+  switch (clusterUrlParam) {
     case MAINNET_BETA_URL:
       network = Network.MainnetBeta;
       break;
     case DEVNET_URL:
       network = Network.Devnet;
       break;
-    case TDS_URL:
-      network = Network.TdS;
+    case TESTNET_URL:
+      network = Network.Testnet;
       break;
-    default:
+  }
+
+  switch (clusterParam) {
+    case "mainnet-beta":
+      network = Network.MainnetBeta;
+      break;
+    case "devnet":
+      network = Network.Devnet;
+      break;
+    case "testnet":
+      network = Network.Testnet;
+      break;
+  }
+
+  if (!network) {
+    if (!clusterUrlParam) {
+      network = DEFAULT_NETWORK;
+    } else {
       network = Network.Custom;
-      customUrl = networkUrlParam || DEFAULT_CUSTOM_URL;
-      break;
+      customUrl = clusterUrlParam;
+    }
   }
 
   return {
@@ -140,8 +156,8 @@ export function networkUrl(network: Network, customUrl: string): string {
       return DEVNET_URL;
     case Network.MainnetBeta:
       return MAINNET_BETA_URL;
-    case Network.TdS:
-      return TDS_URL;
+    case Network.Testnet:
+      return TESTNET_URL;
     case Network.Custom:
       return customUrl;
   }
