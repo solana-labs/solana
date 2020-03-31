@@ -76,6 +76,19 @@ ARGS+=(
   --env CRATES_IO_TOKEN
 )
 
+if [[ $BUILDKITE_LABEL == "checks" ]] && echo "$BUILDKITE_BRANCH" | grep -E '^pull/[0-9]+/head$'; then
+  api_base="https://api.github.com/repos/solana-labs/solana/pulls"
+  pr_num=$(echo "$BUILDKITE_BRANCH" | grep -Eo '[0-9]+')
+  branch=$(curl -s "$api_base/$pr_num" | ruby -r json -e 'puts JSON.parse(STDIN.read())["head"]["ref"]')
+  source_repo=$(curl -s "$api_base/$pr_num" | ruby -r json -e 'puts JSON.parse(STDIN.read())["head"]["repo"]["full_name"]')
+
+  if [[ $source_repo == "solana-labs/solana" ]] && echo "$branch" | grep "^dependabot/cargo/"; then
+    export CI_WITH_DEPENDABOT=true
+    ARGS+=(--env CI_WITH_DEPENDABOT)
+  fi
+fi
+
+
 # Also propagate environment variables needed for codecov
 # https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
 # We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...
@@ -96,4 +109,28 @@ fi
 
 set -x
 # shellcheck disable=SC2086
-exec docker run "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" "$@"
+if docker run "${ARGS[@]}" $CODECOV_ENVS "$IMAGE" "$@"; then
+  docker_status=0
+else
+  docker_status=$?
+fi
+
+if [[ -n $CI_WITH_DEPENDABOT && $(git status --short :**/Cargo.lock | wc -l) -gt 0 ]]; then
+  (
+    echo --- "(FAILING) Backpropagating dependabot-triggered Cargo.lock updates"
+    set -x
+
+    git add :**/Cargo.lock
+    NAME="dependabot-buildkite"
+    GIT_AUTHOR_NAME="$NAME" \
+      GIT_COMMITTER_NAME="$NAME" \
+      EMAIL="dependabot-buildkite@noreply.solana.com" \
+      git commit -m "Update all Cargo lock files"
+    git push origin "HEAD:$branch"
+
+    echo "Source branch is updated; failing this build for the next"
+    exit 1
+  )
+fi
+
+exit $docker_status
