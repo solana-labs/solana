@@ -9,14 +9,14 @@ import {
 } from "../providers/transactions";
 import bs58 from "bs58";
 import { assertUnreachable } from "../utils";
-import { useNetwork } from "../providers/network";
+import { useCluster } from "../providers/cluster";
 
 function TransactionsCard() {
   const { transactions, idCounter } = useTransactions();
   const dispatch = useTransactionsDispatch();
   const signatureInput = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState("");
-  const { url } = useNetwork();
+  const { url } = useCluster();
 
   const onNew = (signature: string) => {
     if (signature.length === 0) return;
@@ -115,7 +115,7 @@ const renderTransactionRow = (transaction: Transaction) => {
   switch (transaction.status) {
     case Status.CheckFailed:
       statusClass = "dark";
-      statusText = "Network Error";
+      statusText = "Cluster Error";
       break;
     case Status.Checking:
       statusClass = "info";

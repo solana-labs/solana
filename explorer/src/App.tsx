@@ -1,17 +1,17 @@
 import React from "react";
 
-import { NetworkProvider } from "./providers/network";
+import { ClusterProvider } from "./providers/cluster";
 import { TransactionsProvider } from "./providers/transactions";
-import NetworkStatusButton from "./components/NetworkStatusButton";
+import ClusterStatusButton from "./components/ClusterStatusButton";
 import TransactionsCard from "./components/TransactionsCard";
-import NetworkModal from "./components/NetworkModal";
+import ClusterModal from "./components/ClusterModal";
 import Logo from "./img/logos-solana/light-explorer-logo.svg";
 
 function App() {
   const [showModal, setShowModal] = React.useState(false);
   return (
-    <NetworkProvider>
-      <NetworkModal show={showModal} onClose={() => setShowModal(false)} />
+    <ClusterProvider>
+      <ClusterModal show={showModal} onClose={() => setShowModal(false)} />
       <div className="main-content">
         <div className="header">
           <div className="container">
@@ -21,7 +21,7 @@ function App() {
                   <img src={Logo} width="250" alt="Solana Explorer" />
                 </div>
                 <div className="col-auto">
-                  <NetworkStatusButton onClick={() => setShowModal(true)} />
+                  <ClusterStatusButton onClick={() => setShowModal(true)} />
                 </div>
               </div>
             </div>
@@ -39,7 +39,7 @@ function App() {
         </div>
       </div>
       <Overlay show={showModal} onClick={() => setShowModal(false)} />
-    </NetworkProvider>
+    </ClusterProvider>
   );
 }
 

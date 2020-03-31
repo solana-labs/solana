@@ -1,14 +1,14 @@
 import React from "react";
 import {
-  useNetwork,
-  useNetworkDispatch,
-  updateNetwork,
-  NetworkStatus,
-  networkUrl,
-  networkName,
-  NETWORKS,
-  Network
-} from "../providers/network";
+  useCluster,
+  useClusterDispatch,
+  updateCluster,
+  ClusterStatus,
+  clusterUrl,
+  clusterName,
+  CLUSTERS,
+  Cluster
+} from "../providers/cluster";
 import { assertUnreachable } from "../utils";
 
 type Props = {
@@ -16,7 +16,7 @@ type Props = {
   onClose: () => void;
 };
 
-function NetworkModal({ show, onClose }: Props) {
+function ClusterModal({ show, onClose }: Props) {
   return (
     <div
       className={`modal fade fixed-right${show ? " show" : ""}`}
@@ -31,7 +31,7 @@ function NetworkModal({ show, onClose }: Props) {
 
             <h2 className="text-center mb-4 mt-4">Choose a Cluster</h2>
 
-            <NetworkToggle />
+            <ClusterToggle />
           </div>
         </div>
       </div>
@@ -40,9 +40,9 @@ function NetworkModal({ show, onClose }: Props) {
 }
 
 type InputProps = { activeSuffix: string; active: boolean };
-function CustomNetworkInput({ activeSuffix, active }: InputProps) {
-  const { customUrl } = useNetwork();
-  const dispatch = useNetworkDispatch();
+function CustomClusterInput({ activeSuffix, active }: InputProps) {
+  const { customUrl } = useCluster();
+  const dispatch = useClusterDispatch();
   const [editing, setEditing] = React.useState(false);
 
   const customClass = (prefix: string) =>
@@ -53,7 +53,7 @@ function CustomNetworkInput({ activeSuffix, active }: InputProps) {
     <div
       className="btn input-group input-group-merge p-0"
       onClick={() =>
-        !active && updateNetwork(dispatch, Network.Custom, customUrl)
+        !active && updateCluster(dispatch, Cluster.Custom, customUrl)
       }
     >
       <input
@@ -65,7 +65,7 @@ function CustomNetworkInput({ activeSuffix, active }: InputProps) {
         onFocus={() => setEditing(true)}
         onBlur={() => setEditing(false)}
         onInput={e =>
-          updateNetwork(dispatch, Network.Custom, e.currentTarget.value)
+          updateCluster(dispatch, Cluster.Custom, e.currentTarget.value)
         }
       />
       <div className="input-group-prepend">
@@ -77,19 +77,19 @@ function CustomNetworkInput({ activeSuffix, active }: InputProps) {
   );
 }
 
-function NetworkToggle() {
-  const { status, network, customUrl } = useNetwork();
-  const dispatch = useNetworkDispatch();
+function ClusterToggle() {
+  const { status, cluster, customUrl } = useCluster();
+  const dispatch = useClusterDispatch();
 
   let activeSuffix = "";
   switch (status) {
-    case NetworkStatus.Connected:
+    case ClusterStatus.Connected:
       activeSuffix = "success";
       break;
-    case NetworkStatus.Connecting:
+    case ClusterStatus.Connecting:
       activeSuffix = "warning";
       break;
-    case NetworkStatus.Failure:
+    case ClusterStatus.Failure:
       activeSuffix = "danger";
       break;
     default:
@@ -98,11 +98,11 @@ function NetworkToggle() {
 
   return (
     <div className="btn-group-toggle d-flex flex-wrap mb-4">
-      {NETWORKS.map((net, index) => {
-        const active = net === network;
-        if (net === Network.Custom)
+      {CLUSTERS.map((net, index) => {
+        const active = net === cluster;
+        if (net === Cluster.Custom)
           return (
-            <CustomNetworkInput
+            <CustomClusterInput
               key={index}
               activeSuffix={activeSuffix}
               active={active}
@@ -121,11 +121,11 @@ function NetworkToggle() {
             <input
               type="radio"
               checked={active}
-              onChange={() => updateNetwork(dispatch, net, customUrl)}
+              onChange={() => updateCluster(dispatch, net, customUrl)}
             />
-            {`${networkName(net)}: `}
+            {`${clusterName(net)}: `}
             <span className="text-muted d-inline-block">
-              {networkUrl(net, customUrl)}
+              {clusterUrl(net, customUrl)}
             </span>
           </label>
         );
@@ -134,4 +134,4 @@ function NetworkToggle() {
   );
 }
 
-export default NetworkModal;
+export default ClusterModal;

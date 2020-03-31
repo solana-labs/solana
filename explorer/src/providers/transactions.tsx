@@ -1,7 +1,7 @@
 import React from "react";
 import { TransactionSignature, Connection } from "@solana/web3.js";
 import { findGetParameter, findPathSegment } from "../utils";
-import { useNetwork } from "../providers/network";
+import { useCluster } from "../providers/cluster";
 
 export enum Status {
   Checking,
@@ -124,9 +124,9 @@ type TransactionsProviderProps = { children: React.ReactNode };
 export function TransactionsProvider({ children }: TransactionsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, undefined, initState);
 
-  const { status, url } = useNetwork();
+  const { status, url } = useCluster();
 
-  // Check transaction statuses on startup and whenever network updates
+  // Check transaction statuses on startup and whenever cluster updates
   React.useEffect(() => {
     Object.values(state.transactions).forEach(tx => {
       checkTransactionStatus(dispatch, tx.id, tx.signature, url);
