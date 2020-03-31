@@ -10,7 +10,7 @@ use solana_clap_utils::{
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
 use solana_client::rpc_client::RpcClient;
-use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SLOTS;
+use solana_core::ledger_cleanup_service::DEFAULT_MAX_LEDGER_SHREDS;
 use solana_core::{
     cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
@@ -401,7 +401,7 @@ fn download_then_check_genesis_hash(
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
-    let default_limit_ledger_size = &DEFAULT_MAX_LEDGER_SLOTS.to_string();
+    let default_limit_ledger_size = &DEFAULT_MAX_LEDGER_SHREDS.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_clap_utils::version!())
@@ -615,12 +615,12 @@ pub fn main() {
         .arg(
             clap::Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
-                .value_name("SLOT_COUNT")
+                .value_name("SHRED_COUNT")
                 .takes_value(true)
                 .min_values(0)
                 .max_values(1)
                 .default_value(default_limit_ledger_size)
-                .help("Drop ledger data for slots older than this value"),
+                .help("Keep this amount of shreds in root slots."),
         )
         .arg(
             clap::Arg::with_name("skip_poh_verify")
@@ -878,10 +878,10 @@ pub fn main() {
 
     if matches.is_present("limit_ledger_size") {
         let limit_ledger_size = value_t_or_exit!(matches, "limit_ledger_size", u64);
-        if limit_ledger_size < DEFAULT_MAX_LEDGER_SLOTS {
+        if limit_ledger_size < DEFAULT_MAX_LEDGER_SHREDS {
             eprintln!(
                 "The provided --limit-ledger-size value was too small, the minimum value is {}",
-                DEFAULT_MAX_LEDGER_SLOTS
+                DEFAULT_MAX_LEDGER_SHREDS
             );
             exit(1);
         }
