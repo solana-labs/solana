@@ -4,6 +4,7 @@ use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
+    cluster_slots::ClusterSlots,
     commitment::{AggregateCommitmentService, BlockCommitmentCache, CommitmentAggregationData},
     consensus::{StakeLockout, Tower},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -114,6 +115,7 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
+        cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
@@ -231,6 +233,7 @@ impl ReplayStage {
                         &tower,
                         &mut progress,
                         &vote_tracker,
+                        &cluster_slots,
                         &bank_forks,
                         &mut all_pubkeys,
                     );
@@ -288,10 +291,11 @@ impl ReplayStage {
                                         progress.get_propagated_stats(latest_leader_slot)
                                     {
                                         info!(
-                                            "total staked: {}, observed staked: {}, pubkeys: {:?}, latest_leader_slot: {}, epoch: {:?}",
+                                            "total staked: {}, observed staked: {}, vote pubkeys: {:?}, node_pubkeys: {:?}, latest_leader_slot: {}, epoch: {:?}",
                                             stats.total_epoch_stake,
                                             stats.propagated_validators_stake,
                                             stats.propagated_validators,
+                                            stats.propagated_node_ids,
                                             latest_leader_slot,
                                             bank_forks.read().unwrap().get(latest_leader_slot).map(|x| x.epoch()),
                                         );
@@ -916,6 +920,7 @@ impl ReplayStage {
         tower: &Tower,
         progress: &mut ProgressMap,
         vote_tracker: &VoteTracker,
+        cluster_slots: &ClusterSlots,
         bank_forks: &RwLock<BankForks>,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
     ) -> Vec<Slot> {
@@ -976,6 +981,7 @@ impl ReplayStage {
                 all_pubkeys,
                 bank_forks,
                 vote_tracker,
+                cluster_slots,
             );
 
             let stats = progress
@@ -1000,6 +1006,7 @@ impl ReplayStage {
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
         bank_forks: &RwLock<BankForks>,
         vote_tracker: &VoteTracker,
+        cluster_slots: &ClusterSlots,
     ) {
         // If propagation has already been confirmed, return
         if progress.is_propagated(slot) {
@@ -1021,14 +1028,33 @@ impl ReplayStage {
                 .slot_vote_tracker = slot_vote_tracker.clone();
         }
 
+        let mut cluster_slot_pubkeys = progress
+            .get_propagated_stats(slot)
+            .expect("All frozen banks must exist in the Progress map")
+            .cluster_slot_pubkeys
+            .clone();
+
+        if cluster_slot_pubkeys.is_none() {
+            cluster_slot_pubkeys = cluster_slots.lookup(slot);
+            progress
+                .get_propagated_stats_mut(slot)
+                .expect("All frozen banks must exist in the Progress map")
+                .cluster_slot_pubkeys = cluster_slot_pubkeys.clone();
+        }
+
         let newly_voted_pubkeys = slot_vote_tracker
             .as_ref()
             .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
             .unwrap_or_else(|| vec![]);
 
+        let cluster_slot_pubkeys = cluster_slot_pubkeys
+            .map(|v| v.read().unwrap().keys().cloned().collect())
+            .unwrap_or_else(|| vec![]);
+
         Self::update_fork_propagated_threshold_from_votes(
             progress,
             newly_voted_pubkeys,
+            cluster_slot_pubkeys,
             slot,
             bank_forks,
             all_pubkeys,
@@ -1252,6 +1278,7 @@ impl ReplayStage {
     fn update_fork_propagated_threshold_from_votes(
         progress: &mut ProgressMap,
         mut newly_voted_pubkeys: Vec<impl Deref<Target = Pubkey>>,
+        mut cluster_slot_pubkeys: Vec<impl Deref<Target = Pubkey>>,
         fork_tip: Slot,
         bank_forks: &RwLock<BankForks>,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
@@ -1271,14 +1298,15 @@ impl ReplayStage {
                 .expect("current_leader_slot > root, so must exist in the progress map");
 
             // If a descendant has reached propagation threshold, then
-            // all its ancestor banks have alsso reached propagation
+            // all its ancestor banks have also reached propagation
             // threshold as well (Validators can't have voted for a
             // descendant without also getting the ancestor block)
             if leader_propagated_stats.is_propagated ||
                 // If there's no new validators to record, and there's no
                 // newly achieved threshold, then there's no further
                 // information to propagate backwards to past leader blocks
-                (newly_voted_pubkeys.is_empty() && !did_newly_reach_threshold)
+                (newly_voted_pubkeys.is_empty() && cluster_slot_pubkeys.is_empty() &&
+                !did_newly_reach_threshold)
             {
                 break;
             }
@@ -1296,6 +1324,7 @@ impl ReplayStage {
 
             did_newly_reach_threshold = Self::update_slot_propagated_threshold_from_votes(
                 &mut newly_voted_pubkeys,
+                &mut cluster_slot_pubkeys,
                 &leader_bank,
                 leader_propagated_stats,
                 all_pubkeys,
@@ -1309,6 +1338,7 @@ impl ReplayStage {
 
     fn update_slot_propagated_threshold_from_votes(
         newly_voted_pubkeys: &mut Vec<impl Deref<Target = Pubkey>>,
+        cluster_slot_pubkeys: &mut Vec<impl Deref<Target = Pubkey>>,
         leader_bank: &Bank,
         leader_propagated_stats: &mut PropagatedStats,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
@@ -1335,44 +1365,41 @@ impl ReplayStage {
             return false;
         }
 
-        // Remove the valdators that we already know voted for this slot
-        // Those validators are safe to drop because they don't to be ported back any
-        // further because parents must have:
-        // 1) Also recorded this validator already, or
+        // Remove the vote/node pubkeys that we already know voted for this
+        // slot. These vote accounts/validator identities are safe to drop
+        // because they don't to be ported back any further because earler
+        // parents must have:
+        // 1) Also recorded these pubkeyss already, or
         // 2) Already reached the propagation threshold, in which case
         //    they no longer need to track the set of propagated validators
-        newly_voted_pubkeys.retain(|voting_pubkey| {
-            if !leader_propagated_stats
+        newly_voted_pubkeys.retain(|vote_pubkey| {
+            let exists = leader_propagated_stats
                 .propagated_validators
-                .contains(&**voting_pubkey)
-            {
-                let mut cached_pubkey: Option<Rc<Pubkey>> =
-                    all_pubkeys.get(&**voting_pubkey).cloned();
-                if cached_pubkey.is_none() {
-                    let new_pubkey = Rc::new(**voting_pubkey);
-                    all_pubkeys.insert(new_pubkey.clone());
-                    cached_pubkey = Some(new_pubkey);
-                }
-                let voting_pubkey = cached_pubkey.unwrap();
-                leader_propagated_stats
-                    .propagated_validators
-                    .insert(voting_pubkey.clone());
-                leader_propagated_stats.propagated_validators_stake +=
-                    leader_bank.epoch_vote_account_stake(&voting_pubkey);
-
-                if leader_propagated_stats.total_epoch_stake == 0
-                    || leader_propagated_stats.propagated_validators_stake as f64
-                        / leader_propagated_stats.total_epoch_stake as f64
-                        > SUPERMINORITY_THRESHOLD
-                {
-                    leader_propagated_stats.is_propagated = true;
-                    did_newly_reach_threshold = true
-                }
-                true
-            } else {
-                false
-            }
+                .contains(&**vote_pubkey);
+            leader_propagated_stats.add_vote_pubkey(
+                &*vote_pubkey,
+                all_pubkeys,
+                leader_bank.epoch_vote_account_stake(&vote_pubkey),
+            );
+            !exists
         });
+
+        cluster_slot_pubkeys.retain(|node_pubkey| {
+            let exists = leader_propagated_stats
+                .propagated_node_ids
+                .contains(&**node_pubkey);
+            leader_propagated_stats.add_node_pubkey(&*node_pubkey, all_pubkeys, leader_bank);
+            !exists
+        });
+
+        if leader_propagated_stats.total_epoch_stake == 0
+            || leader_propagated_stats.propagated_validators_stake as f64
+                / leader_propagated_stats.total_epoch_stake as f64
+                > SUPERMINORITY_THRESHOLD
+        {
+            leader_propagated_stats.is_propagated = true;
+            did_newly_reach_threshold = true
+        }
 
         did_newly_reach_threshold
     }
@@ -1484,20 +1511,15 @@ impl ReplayStage {
                     &rewards_recorder_sender,
                     subscriptions,
                 );
-                if let Some(leader_vote_accounts) =
-                    child_bank.epoch_vote_accounts_for_node_id(&leader)
-                {
-                    Self::update_fork_propagated_threshold_from_votes(
-                        progress,
-                        leader_vote_accounts
-                            .vote_accounts
-                            .iter()
-                            .collect::<Vec<_>>(),
-                        parent_bank.slot(),
-                        bank_forks,
-                        all_pubkeys,
-                    );
-                }
+                let empty: Vec<&Pubkey> = vec![];
+                Self::update_fork_propagated_threshold_from_votes(
+                    progress,
+                    empty,
+                    vec![&leader],
+                    parent_bank.slot(),
+                    bank_forks,
+                    all_pubkeys,
+                );
                 new_banks.insert(child_slot, child_bank);
             }
         }
@@ -1623,6 +1645,7 @@ pub(crate) mod tests {
         }
 
         let vote_tracker = VoteTracker::default();
+        let cluster_slots = ClusterSlots::default();
         let mut towers: Vec<Tower> = iter::repeat_with(|| Tower::new_for_tests(8, 0.67))
             .take(validators.len())
             .collect();
@@ -1789,6 +1812,7 @@ pub(crate) mod tests {
                     &towers[i],
                     &mut fork_progresses[i],
                     &vote_tracker,
+                    &cluster_slots,
                     &wrapped_bank_fork,
                     &mut all_pubkeys,
                 );
@@ -2572,6 +2596,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2609,6 +2634,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2641,6 +2667,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2699,6 +2726,7 @@ pub(crate) mod tests {
             &tower,
             &mut progress,
             &VoteTracker::default(),
+            &ClusterSlots::default(),
             &bank_forks,
             &mut HashSet::new(),
         );
@@ -2763,27 +2791,76 @@ pub(crate) mod tests {
         .take(10)
         .collect();
 
-        let vote_pubkeys: Vec<_> = keypairs
+        let new_vote_pubkeys: Vec<_> = keypairs
             .values()
             .map(|keys| keys.vote_keypair.pubkey())
             .collect();
+        let new_node_pubkeys: Vec<_> = keypairs
+            .values()
+            .map(|keys| keys.node_keypair.pubkey())
+            .collect();
 
+        // Once 4/10 validators have voted, we have hit threshold
+        run_test_update_slot_propagated_threshold_from_votes(&keypairs, &new_vote_pubkeys, &[], 4);
+        // Adding the same node pubkey's instead of the corresponding
+        // vote pubkeys should be equivalent
+        run_test_update_slot_propagated_threshold_from_votes(&keypairs, &[], &new_node_pubkeys, 4);
+        // Adding the same node pubkey's in the same order as their
+        // corresponding vote accounts is redundant, so we don't
+        // reach the threshold any sooner.
+        run_test_update_slot_propagated_threshold_from_votes(
+            &keypairs,
+            &new_vote_pubkeys,
+            &new_node_pubkeys,
+            4,
+        );
+        // However, if we add different node pubkey's than the
+        // vote accounts, we should hit threshold much faster
+        // because now we are getting 2 new pubkeys on each
+        // iteration instead of 1, so by the 2nd iteration
+        // we should have 4/10 validators voting
+        run_test_update_slot_propagated_threshold_from_votes(
+            &keypairs,
+            &new_vote_pubkeys[0..5],
+            &new_node_pubkeys[5..],
+            2,
+        );
+    }
+
+    fn run_test_update_slot_propagated_threshold_from_votes(
+        all_keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
+        new_vote_pubkeys: &[Pubkey],
+        new_node_pubkeys: &[Pubkey],
+        success_index: usize,
+    ) {
         let stake = 10_000;
-        let (bank_forks, _) = initialize_state(&keypairs, stake);
+        let (bank_forks, _) = initialize_state(&all_keypairs, stake);
         let root_bank = bank_forks.root_bank().clone();
         let mut propagated_stats = PropagatedStats {
-            total_epoch_stake: stake * 10,
+            total_epoch_stake: stake * all_keypairs.len() as u64,
             ..PropagatedStats::default()
         };
 
         let mut all_pubkeys = HashSet::new();
-        let mut child_reached_threshold = false;
-        for i in 0..10 {
+        let child_reached_threshold = false;
+        for i in 0..std::cmp::max(new_vote_pubkeys.len(), new_node_pubkeys.len()) {
             propagated_stats.is_propagated = false;
-            let mut newly_voted_pubkeys = vote_pubkeys[..i].iter().cloned().map(Arc::new).collect();
+            let len = std::cmp::min(i, new_vote_pubkeys.len());
+            let mut voted_pubkeys = new_vote_pubkeys[..len]
+                .iter()
+                .cloned()
+                .map(Arc::new)
+                .collect();
+            let len = std::cmp::min(i, new_node_pubkeys.len());
+            let mut node_pubkeys = new_node_pubkeys[..len]
+                .iter()
+                .cloned()
+                .map(Arc::new)
+                .collect();
             let did_newly_reach_threshold =
                 ReplayStage::update_slot_propagated_threshold_from_votes(
-                    &mut newly_voted_pubkeys,
+                    &mut voted_pubkeys,
+                    &mut node_pubkeys,
                     &root_bank,
                     &mut propagated_stats,
                     &mut all_pubkeys,
@@ -2792,20 +2869,28 @@ pub(crate) mod tests {
 
             // Only the i'th voted pubkey should be new (everything else was
             // inserted in previous iteration of the loop), so those redundant
-            // pubkeys should be filtered out
-            let added_pubkeys = {
-                if i == 0 {
+            // pubkeys should have been filtered out
+            let remaining_vote_pubkeys = {
+                if i == 0 || i >= new_vote_pubkeys.len() {
                     vec![]
                 } else {
-                    vec![Arc::new(vote_pubkeys[i - 1])]
+                    vec![Arc::new(new_vote_pubkeys[i - 1])]
                 }
             };
-            assert_eq!(newly_voted_pubkeys, added_pubkeys);
+            let remaining_node_pubkeys = {
+                if i == 0 || i >= new_node_pubkeys.len() {
+                    vec![]
+                } else {
+                    vec![Arc::new(new_node_pubkeys[i - 1])]
+                }
+            };
+            assert_eq!(voted_pubkeys, remaining_vote_pubkeys);
+            assert_eq!(node_pubkeys, remaining_node_pubkeys);
 
             // If we crossed the superminority threshold, then
             // `did_newly_reach_threshold == true`, otherwise the
             // threshold has not been reached
-            if i >= 4 {
+            if i >= success_index {
                 assert!(propagated_stats.is_propagated);
                 assert!(did_newly_reach_threshold);
             } else {
@@ -2813,21 +2898,29 @@ pub(crate) mod tests {
                 assert!(!did_newly_reach_threshold);
             }
         }
+    }
 
+    #[test]
+    fn test_update_slot_propagated_threshold_from_votes2() {
+        let mut empty: Vec<&Pubkey> = vec![];
+        let genesis_config = create_genesis_config(100_000_000).genesis_config;
+        let root_bank = Bank::new(&genesis_config);
+        let stake = 10_000;
         // Simulate a child slot seeing threshold (`child_reached_threshold` = true),
         // then the parent should also be marked as having reached threshold,
         // even if there are no new pubkeys to add (`newly_voted_pubkeys.is_empty()`)
-        propagated_stats = PropagatedStats {
+        let mut propagated_stats = PropagatedStats {
             total_epoch_stake: stake * 10,
             ..PropagatedStats::default()
         };
         propagated_stats.total_epoch_stake = stake * 10;
-        all_pubkeys = HashSet::new();
-        child_reached_threshold = true;
+        let mut all_pubkeys = HashSet::new();
+        let child_reached_threshold = true;
         let mut newly_voted_pubkeys: Vec<Arc<Pubkey>> = vec![];
 
         assert!(ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
+            &mut empty,
             &root_bank,
             &mut propagated_stats,
             &mut all_pubkeys,
@@ -2842,19 +2935,20 @@ pub(crate) mod tests {
         };
         propagated_stats.is_propagated = true;
         all_pubkeys = HashSet::new();
-        child_reached_threshold = true;
         newly_voted_pubkeys = vec![];
         assert!(!ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
+            &mut empty,
             &root_bank,
             &mut propagated_stats,
             &mut all_pubkeys,
             child_reached_threshold,
         ));
 
-        child_reached_threshold = false;
+        let child_reached_threshold = false;
         assert!(!ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
+            &mut empty,
             &root_bank,
             &mut propagated_stats,
             &mut all_pubkeys,
@@ -2923,6 +3017,7 @@ pub(crate) mod tests {
             &mut HashSet::new(),
             &RwLock::new(bank_forks),
             &vote_tracker,
+            &ClusterSlots::default(),
         );
 
         let propagated_stats = &progress_map.get(&10).unwrap().propagated_stats;
@@ -3009,6 +3104,7 @@ pub(crate) mod tests {
             &mut HashSet::new(),
             &RwLock::new(bank_forks),
             &vote_tracker,
+            &ClusterSlots::default(),
         );
 
         for i in 1..=10 {
@@ -3096,6 +3192,7 @@ pub(crate) mod tests {
             &mut HashSet::new(),
             &RwLock::new(bank_forks),
             &vote_tracker,
+            &ClusterSlots::default(),
         );
 
         // Only the first 5 banks should have reached the threshold
