@@ -3,10 +3,7 @@ mod args;
 mod stake_accounts;
 
 use crate::arg_parser::parse_args;
-use crate::args::{
-    resolve_command, AuthorizeCommandConfig, Command, MoveCommandConfig, NewCommandConfig,
-    RebaseCommandConfig,
-};
+use crate::args::{resolve_command, AuthorizeArgs, Command, MoveArgs, NewArgs, RebaseArgs};
 use solana_cli_config::Config;
 use solana_client::client_error::ClientError;
 use solana_client::rpc_client::RpcClient;
@@ -47,21 +44,21 @@ fn get_balances(
 
 fn process_new_stake_account(
     client: &RpcClient,
-    config: &NewCommandConfig<Pubkey, Box<dyn Signer>>,
+    args: &NewArgs<Pubkey, Box<dyn Signer>>,
 ) -> Result<Signature, ClientError> {
     let message = stake_accounts::new_stake_account(
-        &config.fee_payer.pubkey(),
-        &config.funding_keypair.pubkey(),
-        &config.base_keypair.pubkey(),
-        config.lamports,
-        &config.stake_authority,
-        &config.withdraw_authority,
-        config.index,
+        &args.fee_payer.pubkey(),
+        &args.funding_keypair.pubkey(),
+        &args.base_keypair.pubkey(),
+        args.lamports,
+        &args.stake_authority,
+        &args.withdraw_authority,
+        args.index,
     );
     let signers = vec![
-        &*config.fee_payer,
-        &*config.funding_keypair,
-        &*config.base_keypair,
+        &*args.fee_payer,
+        &*args.funding_keypair,
+        &*args.base_keypair,
     ];
     let signature = send_message(client, message, &signers)?;
     Ok(signature)
@@ -69,21 +66,21 @@ fn process_new_stake_account(
 
 fn process_authorize_stake_accounts(
     client: &RpcClient,
-    config: &AuthorizeCommandConfig<Pubkey, Box<dyn Signer>>,
+    args: &AuthorizeArgs<Pubkey, Box<dyn Signer>>,
 ) -> Result<(), ClientError> {
     let messages = stake_accounts::authorize_stake_accounts(
-        &config.fee_payer.pubkey(),
-        &config.base_pubkey,
-        &config.stake_authority.pubkey(),
-        &config.withdraw_authority.pubkey(),
-        &config.new_stake_authority,
-        &config.new_withdraw_authority,
-        config.num_accounts,
+        &args.fee_payer.pubkey(),
+        &args.base_pubkey,
+        &args.stake_authority.pubkey(),
+        &args.withdraw_authority.pubkey(),
+        &args.new_stake_authority,
+        &args.new_withdraw_authority,
+        args.num_accounts,
     );
     let signers = vec![
-        &*config.fee_payer,
-        &*config.stake_authority,
-        &*config.withdraw_authority,
+        &*args.fee_payer,
+        &*args.stake_authority,
+        &*args.withdraw_authority,
     ];
     for message in messages {
         let signature = send_message(client, message, &signers)?;
@@ -94,22 +91,22 @@ fn process_authorize_stake_accounts(
 
 fn process_rebase_stake_accounts(
     client: &RpcClient,
-    config: &RebaseCommandConfig<Pubkey, Box<dyn Signer>>,
+    args: &RebaseArgs<Pubkey, Box<dyn Signer>>,
 ) -> Result<(), ClientError> {
     let addresses =
-        stake_accounts::derive_stake_account_addresses(&config.base_pubkey, config.num_accounts);
+        stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
     let balances = get_balances(&client, addresses)?;
 
     let messages = stake_accounts::rebase_stake_accounts(
-        &config.fee_payer.pubkey(),
-        &config.new_base_keypair.pubkey(),
-        &config.stake_authority.pubkey(),
+        &args.fee_payer.pubkey(),
+        &args.new_base_keypair.pubkey(),
+        &args.stake_authority.pubkey(),
         &balances,
     );
     let signers = vec![
-        &*config.fee_payer,
-        &*config.new_base_keypair,
-        &*config.stake_authority,
+        &*args.fee_payer,
+        &*args.new_base_keypair,
+        &*args.stake_authority,
     ];
     for message in messages {
         let signature = send_message(client, message, &signers)?;
@@ -120,28 +117,28 @@ fn process_rebase_stake_accounts(
 
 fn process_move_stake_accounts(
     client: &RpcClient,
-    move_config: &MoveCommandConfig<Pubkey, Box<dyn Signer>>,
+    move_args: &MoveArgs<Pubkey, Box<dyn Signer>>,
 ) -> Result<(), ClientError> {
-    let authorize_config = &move_config.authorize_config;
-    let config = &move_config.rebase_config;
+    let authorize_args = &move_args.authorize_args;
+    let args = &move_args.rebase_args;
     let addresses =
-        stake_accounts::derive_stake_account_addresses(&config.base_pubkey, config.num_accounts);
+        stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
     let balances = get_balances(&client, addresses)?;
 
     let messages = stake_accounts::move_stake_accounts(
-        &config.fee_payer.pubkey(),
-        &config.new_base_keypair.pubkey(),
-        &config.stake_authority.pubkey(),
-        &authorize_config.withdraw_authority.pubkey(),
-        &authorize_config.new_stake_authority,
-        &authorize_config.new_withdraw_authority,
+        &args.fee_payer.pubkey(),
+        &args.new_base_keypair.pubkey(),
+        &args.stake_authority.pubkey(),
+        &authorize_args.withdraw_authority.pubkey(),
+        &authorize_args.new_stake_authority,
+        &authorize_args.new_withdraw_authority,
         &balances,
     );
     let signers = vec![
-        &*config.fee_payer,
-        &*config.new_base_keypair,
-        &*config.stake_authority,
-        &*authorize_config.withdraw_authority,
+        &*args.fee_payer,
+        &*args.new_base_keypair,
+        &*args.stake_authority,
+        &*authorize_args.withdraw_authority,
     ];
     for message in messages {
         let signature = send_message(client, message, &signers)?;
@@ -161,46 +158,46 @@ fn send_message<S: Signers>(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let command_config = parse_args(env::args_os());
-    let app_config = Config::load(&command_config.config_file)?;
-    let json_rpc_url = command_config.url.unwrap_or(app_config.json_rpc_url);
+    let command_args = parse_args(env::args_os());
+    let config = Config::load(&command_args.config_file)?;
+    let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
     let client = RpcClient::new(json_rpc_url);
 
-    match resolve_command(&command_config.command)? {
-        Command::New(config) => {
-            process_new_stake_account(&client, &config)?;
+    match resolve_command(&command_args.command)? {
+        Command::New(args) => {
+            process_new_stake_account(&client, &args)?;
         }
-        Command::Count(config) => {
-            let num_accounts = count_stake_accounts(&client, &config.base_pubkey)?;
+        Command::Count(args) => {
+            let num_accounts = count_stake_accounts(&client, &args.base_pubkey)?;
             println!("{}", num_accounts);
         }
-        Command::Addresses(config) => {
+        Command::Addresses(args) => {
             let addresses = stake_accounts::derive_stake_account_addresses(
-                &config.base_pubkey,
-                config.num_accounts,
+                &args.base_pubkey,
+                args.num_accounts,
             );
             for address in addresses {
                 println!("{:?}", address);
             }
         }
-        Command::Balance(config) => {
+        Command::Balance(args) => {
             let addresses = stake_accounts::derive_stake_account_addresses(
-                &config.base_pubkey,
-                config.num_accounts,
+                &args.base_pubkey,
+                args.num_accounts,
             );
             let balances = get_balances(&client, addresses)?;
             let lamports: u64 = balances.into_iter().map(|(_, bal)| bal).sum();
             let sol = lamports_to_sol(lamports);
             println!("{} SOL", sol);
         }
-        Command::Authorize(config) => {
-            process_authorize_stake_accounts(&client, &config)?;
+        Command::Authorize(args) => {
+            process_authorize_stake_accounts(&client, &args)?;
         }
-        Command::Rebase(config) => {
-            process_rebase_stake_accounts(&client, &config)?;
+        Command::Rebase(args) => {
+            process_rebase_stake_accounts(&client, &args)?;
         }
-        Command::Move(config) => {
-            process_move_stake_accounts(&client, &config)?;
+        Command::Move(args) => {
+            process_move_stake_accounts(&client, &args)?;
         }
     }
     Ok(())

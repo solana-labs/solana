@@ -1,6 +1,5 @@
 use crate::args::{
-    AuthorizeCommandConfig, Command, CommandConfig, CountCommandConfig, MoveCommandConfig,
-    NewCommandConfig, QueryCommandConfig, RebaseCommandConfig,
+    Args, AuthorizeArgs, Command, CountArgs, MoveArgs, NewArgs, QueryArgs, RebaseArgs,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::input_validators::{is_amount, is_valid_pubkey, is_valid_signer};
@@ -222,83 +221,61 @@ where
         .get_matches_from(args)
 }
 
-fn parse_new_args(matches: &ArgMatches<'_>) -> NewCommandConfig<String, String> {
-    let fee_payer = value_t_or_exit!(matches, "fee_payer", String);
-    let funding_keypair = value_t_or_exit!(matches, "funding_keypair", String);
-    let lamports = sol_to_lamports(value_t_or_exit!(matches, "amount", f64));
-    let base_keypair = value_t_or_exit!(matches, "base_keypair", String);
-    let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
-    let withdraw_authority = value_t_or_exit!(matches, "withdraw_authority", String);
-    let index = value_t_or_exit!(matches, "index", usize);
-    NewCommandConfig {
-        fee_payer,
-        funding_keypair,
-        lamports,
-        base_keypair,
-        stake_authority,
-        withdraw_authority,
-        index,
+fn parse_new_args(matches: &ArgMatches<'_>) -> NewArgs<String, String> {
+    NewArgs {
+        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
+        funding_keypair: value_t_or_exit!(matches, "funding_keypair", String),
+        lamports: sol_to_lamports(value_t_or_exit!(matches, "amount", f64)),
+        base_keypair: value_t_or_exit!(matches, "base_keypair", String),
+        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
+        withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),
+        index: value_t_or_exit!(matches, "index", usize),
     }
 }
 
-fn parse_count_args(matches: &ArgMatches<'_>) -> CountCommandConfig<String> {
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    CountCommandConfig { base_pubkey }
-}
-
-fn parse_query_args(matches: &ArgMatches<'_>) -> QueryCommandConfig<String> {
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    let num_accounts = value_t_or_exit!(matches, "num_accounts", usize);
-    QueryCommandConfig {
-        base_pubkey,
-        num_accounts,
+fn parse_count_args(matches: &ArgMatches<'_>) -> CountArgs<String> {
+    CountArgs {
+        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
     }
 }
 
-fn parse_authorize_args(matches: &ArgMatches<'_>) -> AuthorizeCommandConfig<String, String> {
-    let fee_payer = value_t_or_exit!(matches, "fee_payer", String);
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
-    let withdraw_authority = value_t_or_exit!(matches, "withdraw_authority", String);
-    let new_stake_authority = value_t_or_exit!(matches, "new_stake_authority", String);
-    let new_withdraw_authority = value_t_or_exit!(matches, "new_withdraw_authority", String);
-    let num_accounts = value_t_or_exit!(matches, "num_accounts", usize);
-    AuthorizeCommandConfig {
-        fee_payer,
-        base_pubkey,
-        stake_authority,
-        withdraw_authority,
-        new_stake_authority,
-        new_withdraw_authority,
-        num_accounts,
+fn parse_query_args(matches: &ArgMatches<'_>) -> QueryArgs<String> {
+    QueryArgs {
+        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
+        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
     }
 }
 
-fn parse_rebase_args(matches: &ArgMatches<'_>) -> RebaseCommandConfig<String, String> {
-    let fee_payer = value_t_or_exit!(matches, "fee_payer", String);
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    let new_base_keypair = value_t_or_exit!(matches, "new_base_keypair", String);
-    let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
-    let num_accounts = value_t_or_exit!(matches, "num_accounts", usize);
-    RebaseCommandConfig {
-        fee_payer,
-        base_pubkey,
-        new_base_keypair,
-        stake_authority,
-        num_accounts,
+fn parse_authorize_args(matches: &ArgMatches<'_>) -> AuthorizeArgs<String, String> {
+    AuthorizeArgs {
+        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
+        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
+        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
+        withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),
+        new_stake_authority: value_t_or_exit!(matches, "new_stake_authority", String),
+        new_withdraw_authority: value_t_or_exit!(matches, "new_withdraw_authority", String),
+        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
     }
 }
 
-fn parse_move_args(matches: &ArgMatches<'_>) -> MoveCommandConfig<String, String> {
-    let rebase_config = parse_rebase_args(matches);
-    let authorize_config = parse_authorize_args(matches);
-    MoveCommandConfig {
-        rebase_config,
-        authorize_config,
+fn parse_rebase_args(matches: &ArgMatches<'_>) -> RebaseArgs<String, String> {
+    RebaseArgs {
+        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
+        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
+        new_base_keypair: value_t_or_exit!(matches, "new_base_keypair", String),
+        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
+        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
     }
 }
 
-pub(crate) fn parse_args<I, T>(args: I) -> CommandConfig<String, String>
+fn parse_move_args(matches: &ArgMatches<'_>) -> MoveArgs<String, String> {
+    MoveArgs {
+        rebase_args: parse_rebase_args(matches),
+        authorize_args: parse_authorize_args(matches),
+    }
+}
+
+pub(crate) fn parse_args<I, T>(args: I) -> Args<String, String>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -320,7 +297,7 @@ where
             exit(1);
         }
     };
-    CommandConfig {
+    Args {
         config_file,
         url,
         command,
