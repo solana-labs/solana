@@ -70,7 +70,7 @@ pub struct ValidatorConfig {
     pub rpc_config: JsonRpcConfig,
     pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
     pub snapshot_config: Option<SnapshotConfig>,
-    pub max_ledger_slots: Option<u64>,
+    pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub enable_partition: Option<Arc<AtomicBool>>,
     pub fixed_leader_schedule: Option<FixedSchedule>,
@@ -92,7 +92,7 @@ impl Default for ValidatorConfig {
             expected_shred_version: None,
             voting_disabled: false,
             storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
-            max_ledger_slots: None,
+            max_ledger_shreds: None,
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
             rpc_ports: None,
@@ -439,7 +439,7 @@ impl Validator {
             vote_tracker.clone(),
             retransmit_slots_sender,
             TvuConfig {
-                max_ledger_slots: config.max_ledger_slots,
+                max_ledger_shreds: config.max_ledger_shreds,
                 sigverify_disabled: config.dev_sigverify_disabled,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
                     .halt_on_trusted_validators_accounts_hash_mismatch,
