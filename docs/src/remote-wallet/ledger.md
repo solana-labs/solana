@@ -32,7 +32,7 @@ secure transaction signing.
 5. Ensure the screen reads "Application is ready"
 6. On your computer, run:
 
-```text
+```bash
 solana-keygen pubkey usb://ledger
 ```
 
@@ -43,7 +43,7 @@ computer, you can use your wallet key to specify which Ledger hardware wallet
 you want to use. Run the same command again, but this time, with its fully
 qualified URL:
 
-```text
+```bash
 solana-keygen pubkey usb://ledger/<WALLET_ID>
 ```
 
