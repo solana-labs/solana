@@ -81,7 +81,7 @@ impl Tvu {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         vote_account: &Pubkey,
-        voting_keypair: Option<Arc<Keypair>>,
+        authorized_voter_keypairs: Vec<Arc<Keypair>>,
         storage_keypair: &Arc<Keypair>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -179,7 +179,7 @@ impl Tvu {
         let replay_stage_config = ReplayStageConfig {
             my_pubkey: keypair.pubkey(),
             vote_account: *vote_account,
-            voting_keypair,
+            authorized_voter_keypairs,
             exit: exit.clone(),
             subscriptions: subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
@@ -287,14 +287,14 @@ pub mod tests {
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&bank, &blockstore, None);
-        let voting_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let tvu = Tvu::new(
-            &voting_keypair.pubkey(),
-            Some(Arc::new(voting_keypair)),
+            &vote_keypair.pubkey(),
+            vec![Arc::new(vote_keypair)],
             &storage_keypair,
             &Arc::new(RwLock::new(bank_forks)),
             &cref1,
