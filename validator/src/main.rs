@@ -5,7 +5,7 @@ use clap::{
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_clap_utils::{
-    input_parsers::{keypair_of, pubkey_of},
+    input_parsers::{keypair_of, keypairs_of, pubkey_of},
     input_validators::{is_keypair_or_ask_keyword, is_pubkey, is_pubkey_or_keypair, is_slot},
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
@@ -271,70 +271,58 @@ fn get_rpc_node(
 
 fn check_vote_account(
     rpc_client: &RpcClient,
-    vote_pubkey: &Pubkey,
-    voting_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
+    identity_pubkey: &Pubkey,
+    vote_account_address: &Pubkey,
+    authorized_voter_pubkeys: &[Pubkey],
 ) -> Result<(), String> {
-    let found_vote_account = rpc_client
-        .get_account(vote_pubkey)
-        .map_err(|err| format!("Vote account not found: {}", err.to_string()))?;
+    let vote_account = rpc_client
+        .get_account(vote_account_address)
+        .map_err(|err| format!("vote account not found: {}", err.to_string()))?;
 
-    if found_vote_account.owner != solana_vote_program::id() {
+    if vote_account.owner != solana_vote_program::id() {
         return Err(format!(
             "not a vote account (owned by {}): {}",
-            found_vote_account.owner, vote_pubkey
+            vote_account.owner, vote_account_address
         ));
     }
 
-    let found_node_account = rpc_client
-        .get_account(node_pubkey)
+    let identity_account = rpc_client
+        .get_account(identity_pubkey)
         .map_err(|err| format!("Identity account not found: {}", err.to_string()))?;
 
-    let found_vote_account = solana_vote_program::vote_state::VoteState::from(&found_vote_account);
-    if let Some(found_vote_account) = found_vote_account {
-        if found_vote_account.authorized_voters().is_empty() {
+    let vote_state = solana_vote_program::vote_state::VoteState::from(&vote_account);
+    if let Some(vote_state) = vote_state {
+        if vote_state.authorized_voters().is_empty() {
             return Err("Vote account not yet initialized".to_string());
         }
 
-        let epoch_info = rpc_client
-            .get_epoch_info()
-            .map_err(|err| format!("Failed to get epoch info: {}", err.to_string()))?;
-
-        let mut authorized_voter;
-        authorized_voter = found_vote_account.get_authorized_voter(epoch_info.epoch);
-        if authorized_voter.is_none() {
-            // Must have gotten a clock on the boundary
-            authorized_voter = found_vote_account.get_authorized_voter(epoch_info.epoch + 1);
-        }
-
-        let authorized_voter = authorized_voter.expect(
-            "Could not get the authorized voter, which only happens if the
-            client gets an epoch earlier than the current epoch,
-            but the received epoch should not be off by more than
-            one epoch",
-        );
-
-        if authorized_voter != *voting_pubkey {
+        if vote_state.node_pubkey != *identity_pubkey {
             return Err(format!(
-                "account's authorized voter ({}) does not match to the given voting keypair ({}).",
-                authorized_voter, voting_pubkey
+                "vote account's identity ({}) does not match the validator's identity {}).",
+                vote_state.node_pubkey, identity_pubkey
             ));
         }
-        if found_vote_account.node_pubkey != *node_pubkey {
-            return Err(format!(
-                "account's node pubkey ({}) does not match to the given identity keypair ({}).",
-                found_vote_account.node_pubkey, node_pubkey
-            ));
+
+        for (_, vote_account_authorized_voter_pubkey) in vote_state.authorized_voters().iter() {
+            if !authorized_voter_pubkeys.contains(&vote_account_authorized_voter_pubkey) {
+                return Err(format!(
+                    "authorized voter {} not available",
+                    vote_account_authorized_voter_pubkey
+                ));
+            }
         }
     } else {
-        return Err(format!("invalid vote account data: {}", vote_pubkey));
+        return Err(format!(
+            "invalid vote account data for {}",
+            vote_account_address
+        ));
     }
 
     // Maybe we can calculate minimum voting fee; rather than 1 lamport
-    if found_node_account.lamports <= 1 {
+    if identity_account.lamports <= 1 {
         return Err(format!(
-            "unfunded identity account ({}): only {} lamports (needs more fund to vote)",
-            node_pubkey, found_node_account.lamports
+            "underfunded identity account ({}): only {} lamports available",
+            identity_pubkey, identity_account.lamports
         ));
     }
 
@@ -414,29 +402,22 @@ pub fn main() {
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
-                .alias("identity-keypair") // --identity-keypair is legacy for <= v1.0.6 users
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .help("Validator identity keypair"),
         )
         .arg(
-            Arg::with_name("authorized_voter")
+            Arg::with_name("authorized_voter_keypairs")
                 .long("authorized-voter")
                 .value_name("PATH")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .requires("vote_account")
-                .help("Authorized voter keypair [default: value of --identity]"),
-        )
-        .arg(
-            Arg::with_name("deprecated_voting_keypair")
-                .long("voting-keypair")
-                .value_name("PATH")
-                .takes_value(true)
-                .hidden(true) // Don't document this argument, it's legacy for <= v1.0.6 users
-                .conflicts_with_all(&["authorized_voter", "vote_account"])
-                .validator(is_keypair_or_ask_keyword),
+                .multiple(true)
+                .help("Include an additional authorized voter keypair. \
+                       May be specified multiple times. \
+                       [default: the --identity keypair]"),
         )
         .arg(
             Arg::with_name("vote_account")
@@ -445,7 +426,9 @@ pub fn main() {
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .requires("identity")
-                .help("Validator vote account public key.  If unspecified voting will be disabled")
+                .help("Validator vote account public key.  If unspecified voting will be disabled. \
+                       The authorized voter for the account must either be the --identity keypair \
+                       or with the --authorized-voter argument")
         )
         .arg(
             Arg::with_name("storage_keypair")
@@ -734,13 +717,9 @@ pub fn main() {
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
 
-    let authorized_voter = keypair_of(&matches, "authorized_voter")
-        .or_else(|| {
-            // Legacy v1.0.6 argument support
-            keypair_of(&matches, "deprecated_voting_keypair")
-        })
-        .map(Arc::new)
-        .unwrap_or_else(|| identity_keypair.clone());
+    let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
+        .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
+        .unwrap_or_else(|| vec![identity_keypair.clone()]);
 
     let storage_keypair = keypair_of(&matches, "storage_keypair").unwrap_or_else(Keypair::new);
 
@@ -808,16 +787,9 @@ pub fn main() {
     };
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
-        if matches.is_present("deprecated_voting_keypair") {
-            // Legacy v1.0.6 behaviour of using `--voting-keypair` as `--vote-account`
-            keypair_of(&matches, "deprecated_voting_keypair")
-                .unwrap()
-                .pubkey()
-        } else {
-            warn!("--vote-account not specified, validator will not vote");
-            validator_config.voting_disabled = true;
-            Keypair::new().pubkey()
-        }
+        warn!("--vote-account not specified, validator will not vote");
+        validator_config.voting_disabled = true;
+        Keypair::new().pubkey()
     });
 
     let dynamic_port_range =
@@ -1032,7 +1004,6 @@ pub fn main() {
             tcp_listeners,
             &udp_sockets,
         );
-
         if !no_genesis_fetch {
             let (cluster_info, gossip_exit_flag, gossip_service) = start_gossip_node(
                 &identity_keypair,
@@ -1109,13 +1080,22 @@ pub fn main() {
                     if !validator_config.voting_disabled && !no_check_vote_account {
                         check_vote_account(
                             &rpc_client,
-                            &vote_account,
-                            &authorized_voter.pubkey(),
                             &identity_keypair.pubkey(),
-                        )
-                    } else {
-                        Ok(())
+                            &vote_account,
+                            &authorized_voter_keypairs.iter().map(|k| k.pubkey()).collect::<Vec<_>>(),
+
+                        ).unwrap_or_else(|err| {
+                            // Consider failures here to be more likely due to user error (eg,
+                            // incorrect `solana-validator` command-line arguments) rather than the
+                            // RPC node failing.
+                            //
+                            // Power users can always use the `--no-check-vote-account` option to
+                            // bypass this check entirely
+                            error!("{}", err);
+                            exit(1);
+                        });
                     }
+                    Ok(())
                 });
 
                 if result.is_ok() {
@@ -1153,7 +1133,7 @@ pub fn main() {
         &identity_keypair,
         &ledger_path,
         &vote_account,
-        &authorized_voter,
+        authorized_voter_keypairs,
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
         !skip_poh_verify,

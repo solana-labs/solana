@@ -33,7 +33,10 @@ use solana_sdk::{
     timing::{self, duration_as_ms},
     transaction::Transaction,
 };
-use solana_vote_program::vote_instruction;
+use solana_vote_program::{
+    vote_instruction,
+    vote_state::{Vote, VoteState},
+};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
@@ -89,7 +92,7 @@ struct SkippedSlotsInfo {
 pub struct ReplayStageConfig {
     pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
-    pub voting_keypair: Option<Arc<Keypair>>,
+    pub authorized_voter_keypairs: Vec<Arc<Keypair>>,
     pub exit: Arc<AtomicBool>,
     pub subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -121,7 +124,7 @@ impl ReplayStage {
         let ReplayStageConfig {
             my_pubkey,
             vote_account,
-            voting_keypair,
+            authorized_voter_keypairs,
             exit,
             subscriptions,
             leader_schedule_cache,
@@ -328,7 +331,7 @@ impl ReplayStage {
                                 &mut tower,
                                 &mut progress,
                                 &vote_account,
-                                &voting_keypair,
+                                &authorized_voter_keypairs,
                                 &cluster_info,
                                 &blockstore,
                                 &leader_schedule_cache,
@@ -706,8 +709,8 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &mut Tower,
         progress: &mut ProgressMap,
-        vote_account: &Pubkey,
-        voting_keypair: &Option<Arc<Keypair>>,
+        vote_account_pubkey: &Pubkey,
+        authorized_voter_keypairs: &[Arc<Keypair>],
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -723,7 +726,7 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account);
+        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account_pubkey);
         if let Some(new_root) = tower.record_bank_vote(vote) {
             // get the root bank before squash
             let root_bank = bank_forks
@@ -771,28 +774,89 @@ impl ReplayStage {
             lockouts_sender,
         );
 
-        if let Some(ref voting_keypair) = voting_keypair {
-            let node_keypair = cluster_info.read().unwrap().keypair.clone();
-
-            // Send our last few votes along with the new one
-            let vote_ix = vote_instruction::vote(
-                &vote_account,
-                &voting_keypair.pubkey(),
-                tower.last_vote_and_timestamp(),
-            );
-
-            let mut vote_tx =
-                Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
-
-            let blockhash = bank.last_blockhash();
-            vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
-            vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
-            cluster_info
-                .write()
-                .unwrap()
-                .push_vote(tower_index, vote_tx);
-        }
+        Self::push_vote(
+            cluster_info,
+            bank,
+            vote_account_pubkey,
+            authorized_voter_keypairs,
+            tower.last_vote_and_timestamp(),
+            tower_index,
+        );
         Ok(())
+    }
+
+    fn push_vote(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        bank: &Arc<Bank>,
+        vote_account_pubkey: &Pubkey,
+        authorized_voter_keypairs: &[Arc<Keypair>],
+        vote: Vote,
+        tower_index: usize,
+    ) {
+        if authorized_voter_keypairs.is_empty() {
+            return;
+        }
+
+        let vote_state =
+            if let Some((_, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
+                if let Some(vote_state) = VoteState::from(&vote_account) {
+                    vote_state
+                } else {
+                    warn!(
+                        "Vote account {} is unreadable.  Unable to vote",
+                        vote_account_pubkey,
+                    );
+                    return;
+                }
+            } else {
+                warn!(
+                    "Vote account {} does not exist.  Unable to vote",
+                    vote_account_pubkey,
+                );
+                return;
+            };
+
+        let authorized_voter_pubkey =
+            if let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) {
+                authorized_voter_pubkey
+            } else {
+                warn!(
+                    "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
+                    vote_account_pubkey,
+                    bank.epoch()
+                );
+                return;
+            };
+
+        let authorized_voter_keypair = match authorized_voter_keypairs
+            .iter()
+            .find(|keypair| keypair.pubkey() == authorized_voter_pubkey)
+        {
+            None => {
+                warn!("The authorized keypair {} for vote account {} is not available.  Unable to vote",
+                      authorized_voter_pubkey, vote_account_pubkey);
+                return;
+            }
+            Some(authorized_voter_keypair) => authorized_voter_keypair,
+        };
+        let node_keypair = cluster_info.read().unwrap().keypair.clone();
+
+        // Send our last few votes along with the new one
+        let vote_ix = vote_instruction::vote(
+            &vote_account_pubkey,
+            &authorized_voter_keypair.pubkey(),
+            vote,
+        );
+
+        let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
+
+        let blockhash = bank.last_blockhash();
+        vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+        vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
+        cluster_info
+            .write()
+            .unwrap()
+            .push_vote(tower_index, vote_tx);
     }
 
     fn update_commitment_cache(
@@ -1621,7 +1685,7 @@ pub(crate) mod tests {
     struct ValidatorInfo {
         stake: u64,
         keypair: Keypair,
-        voting_keypair: Keypair,
+        authorized_voter_keypair: Keypair,
         staking_keypair: Keypair,
     }
 
@@ -1676,7 +1740,7 @@ pub(crate) mod tests {
             .iter()
             .map(|validator| {
                 vote_state::create_account(
-                    &validator.voting_keypair.pubkey(),
+                    &validator.authorized_voter_keypair.pubkey(),
                     &validator.keypair.pubkey(),
                     0,
                     validator.stake,
@@ -1690,7 +1754,7 @@ pub(crate) mod tests {
             .map(|(i, validator)| {
                 stake_state::create_account(
                     &validator.staking_keypair.pubkey(),
-                    &validator.voting_keypair.pubkey(),
+                    &validator.authorized_voter_keypair.pubkey(),
                     &genesis_vote_accounts[i],
                     &Rent::default(),
                     validator.stake,
@@ -1703,7 +1767,7 @@ pub(crate) mod tests {
 
         for i in 0..validators.len() {
             genesis_config.accounts.insert(
-                validators[i].voting_keypair.pubkey(),
+                validators[i].authorized_voter_keypair.pubkey(),
                 genesis_vote_accounts[i].clone(),
             );
             genesis_config.accounts.insert(
@@ -1737,7 +1801,7 @@ pub(crate) mod tests {
             for validator in validators.iter() {
                 vote(
                     &bank_forks.banks[&neutral_fork.fork[index]].clone(),
-                    &validator.voting_keypair.pubkey(),
+                    &validator.authorized_voter_keypair.pubkey(),
                     neutral_fork.fork[index - 1],
                 );
             }
@@ -1777,7 +1841,7 @@ pub(crate) mod tests {
                 for voter_index in fork_info.voters.iter() {
                     vote(
                         &bank_forks.banks[&fork_info.fork[index]].clone(),
-                        &validators[*voter_index].voting_keypair.pubkey(),
+                        &validators[*voter_index].authorized_voter_keypair.pubkey(),
                         last_bank.slot(),
                     );
                 }
@@ -1863,20 +1927,20 @@ pub(crate) mod tests {
             ValidatorInfo {
                 stake: 34_000_000,
                 keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
+                authorized_voter_keypair: Keypair::new(),
                 staking_keypair: Keypair::new(),
             },
             ValidatorInfo {
                 stake: 33_000_000,
                 keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
+                authorized_voter_keypair: Keypair::new(),
                 staking_keypair: Keypair::new(),
             },
             // Malicious Node
             ValidatorInfo {
                 stake: 33_000_000,
                 keypair: Keypair::new(),
-                voting_keypair: Keypair::new(),
+                authorized_voter_keypair: Keypair::new(),
                 staking_keypair: Keypair::new(),
             },
         ];
@@ -1906,18 +1970,18 @@ pub(crate) mod tests {
                 Blockstore::open(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
-            let validator_voting_keypairs: Vec<_> = (0..20)
+            let validator_authorized_voter_keypairs: Vec<_> = (0..20)
                 .map(|_| ValidatorVoteKeypairs::new(Keypair::new(), Keypair::new(), Keypair::new()))
                 .collect();
 
-            let validator_voting_keys: HashMap<_, _> = validator_voting_keypairs
+            let validator_voting_keys: HashMap<_, _> = validator_authorized_voter_keypairs
                 .iter()
                 .map(|v| (v.node_keypair.pubkey(), v.vote_keypair.pubkey()))
                 .collect();
             let GenesisConfigInfo { genesis_config, .. } =
                 genesis_utils::create_genesis_config_with_vote_accounts(
                     10_000,
-                    &validator_voting_keypairs,
+                    &validator_authorized_voter_keypairs,
                     100,
                 );
             let bank0 = Bank::new(&genesis_config);
