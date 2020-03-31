@@ -15,7 +15,7 @@ pub enum ProgramError {
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
     #[error("Custom program error: {0}")]
-    CustomError(u32),
+    Custom(u32),
     #[error("The arguments provided to a program instruction where invalid")]
     InvalidArgument,
     #[error("An instruction's data contents was invalid")]
@@ -52,7 +52,7 @@ impl PrintProgramError for ProgramError {
         E: 'static + std::error::Error + DecodeError<E> + PrintProgramError + FromPrimitive,
     {
         match self {
-            ProgramError::CustomError(error) => {
+            ProgramError::Custom(error) => {
                 if let Some(custom_error) = E::decode_custom_error_to_enum(*error) {
                     custom_error.print::<E>();
                 } else {
@@ -109,7 +109,7 @@ impl From<ProgramError> for u64 {
             ProgramError::UninitializedAccount => UNINITIALIZED_ACCOUNT,
             ProgramError::NotEnoughAccountKeys => NOT_ENOUGH_ACCOUNT_KEYS,
             ProgramError::AccountBorrowFailed => ACCOUNT_BORROW_FAILED,
-            ProgramError::CustomError(error) => {
+            ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
                 } else {
