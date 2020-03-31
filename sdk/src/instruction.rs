@@ -130,6 +130,10 @@ pub enum InstructionError {
     /// Executable account's lamports modified
     #[error("instruction changed the balance of a executable account")]
     ExecutableLamportChange,
+
+    /// Executable accounts must be rent exempt
+    #[error("executable accounts must be rent exempt")]
+    ExecutableAccountNotRentExempt,
 }
 
 impl InstructionError {

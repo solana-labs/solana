@@ -13,7 +13,6 @@ use solana_sdk::{
     program_utils::DecodeError,
     program_utils::{is_executable, limited_deserialize, next_keyed_account},
     pubkey::Pubkey,
-    sysvar::rent,
 };
 use thiserror::Error;
 use types::{
@@ -73,7 +72,6 @@ pub enum MoveLoaderInstruction {
     /// bit of the Account
     ///
     /// * key[0] - the account to prepare for execution
-    /// * key[1] - rent sysvar account
     ///
     /// The transaction must be signed by key[0]
     Finalize,
@@ -301,14 +299,11 @@ impl MoveProcessor {
     pub fn do_finalize(keyed_accounts: &[KeyedAccount]) -> Result<(), InstructionError> {
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let finalized = next_keyed_account(&mut keyed_accounts_iter)?;
-        let rent = next_keyed_account(&mut keyed_accounts_iter)?;
 
         if finalized.signer_key().is_none() {
             debug!("Error: account to finalize did not sign the transaction");
             return Err(InstructionError::MissingRequiredSignature);
         }
-
-        rent::verify_rent_exemption(&finalized, &rent)?;
 
         match finalized.state()? {
             LibraAccountState::CompiledScript(string) => {
@@ -479,8 +474,6 @@ impl MoveProcessor {
 mod tests {
     use super::*;
     use solana_sdk::account::Account;
-    use solana_sdk::rent::Rent;
-    use solana_sdk::sysvar::rent;
     use std::cell::RefCell;
 
     const BIG_ENOUGH: usize = 10_000;
@@ -518,11 +511,8 @@ mod tests {
         let code = "main() { return; }";
         let sender_address = AccountAddress::default();
         let script = LibraAccount::create_script(&sender_address, code, vec![]);
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &script.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
         let _ = MoveProcessor::deserialize_verified_script(&script.account.borrow().data).unwrap();
@@ -561,11 +551,8 @@ mod tests {
         let script = LibraAccount::create_script(&sender_address, code, vec![]);
         let genesis = LibraAccount::create_genesis(1_000_000_000);
 
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &script.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
@@ -591,11 +578,8 @@ mod tests {
             }
         ";
         let module = LibraAccount::create_module(code, vec![]);
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&module.key, true, &module.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
         keyed_accounts[0]
             .account
@@ -620,11 +604,8 @@ mod tests {
         let script = LibraAccount::create_script(&sender_address, code, vec![]);
         let genesis = LibraAccount::create_genesis(1_000_000_000);
 
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &script.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
@@ -695,11 +676,8 @@ mod tests {
         let script = LibraAccount::create_script(&genesis.address, code, vec![]);
         let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &script.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
@@ -753,11 +731,8 @@ mod tests {
         );
         let module = LibraAccount::create_module(&code, vec![]);
 
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&module.key, true, &module.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
         keyed_accounts[0]
             .account
@@ -799,11 +774,8 @@ mod tests {
         );
         let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &script.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
@@ -849,11 +821,8 @@ mod tests {
         let script = LibraAccount::create_script(&genesis.address.clone(), code, vec![]);
         let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
-        let rent_id = rent::id();
-        let rent_account = RefCell::new(rent::create_account(1, &Rent::free()));
         let keyed_accounts = vec![
             KeyedAccount::new(&script.key, true, &script.account),
-            KeyedAccount::new(&rent_id, false, &rent_account),
         ];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
