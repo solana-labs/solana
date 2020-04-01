@@ -9,6 +9,7 @@ use crate::{
 use bincode::serialize;
 use rand::{thread_rng, Rng};
 use solana_ledger::blockstore::Blockstore;
+use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug};
 use solana_perf::packet::{Packets, PacketsRecycler};
@@ -45,6 +46,20 @@ impl RepairType {
     }
 }
 
+<<<<<<< HEAD
+=======
+#[derive(Default)]
+pub struct ServeRepairStats {
+    pub total_packets: usize,
+    pub dropped_packets: usize,
+    pub processed: usize,
+    pub self_repair: usize,
+    pub window_index: usize,
+    pub highest_window_index: usize,
+    pub orphan: usize,
+}
+
+>>>>>>> 7605f1f54... Fix repair dos (#9056)
 /// Window protocol messages
 #[derive(Serialize, Deserialize, Debug)]
 enum RepairProtocol {
@@ -184,6 +199,7 @@ impl ServeRepair {
         blockstore: Option<&Arc<Blockstore>>,
         requests_receiver: &PacketReceiver,
         response_sender: &PacketSender,
+<<<<<<< HEAD
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
@@ -193,6 +209,73 @@ impl ServeRepair {
         Ok(())
     }
 
+=======
+        stats: &mut ServeRepairStats,
+        max_packets: &mut usize,
+    ) -> Result<()> {
+        //TODO cache connections
+        let timeout = Duration::new(1, 0);
+        let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
+        let mut total_packets = reqs_v[0].packets.len();
+
+        let mut dropped_packets = 0;
+        while let Ok(more) = requests_receiver.try_recv() {
+            total_packets += more.packets.len();
+            if total_packets < *max_packets {
+                // Drop the rest in the channel in case of dos
+                reqs_v.push(more);
+            } else {
+                dropped_packets += more.packets.len();
+            }
+        }
+
+        stats.dropped_packets += dropped_packets;
+        stats.total_packets += total_packets;
+
+        let mut time = Measure::start("repair::handle_packets");
+        for reqs in reqs_v {
+            Self::handle_packets(obj, &recycler, blockstore, reqs, response_sender, stats);
+        }
+        time.stop();
+        if total_packets >= *max_packets {
+            if time.as_ms() > 1000 {
+                *max_packets = (*max_packets * 9) / 10;
+            } else {
+                *max_packets = (*max_packets * 10) / 9;
+            }
+        }
+        Ok(())
+    }
+
+    fn report_reset_stats(me: &Arc<RwLock<Self>>, stats: &mut ServeRepairStats) {
+        if stats.self_repair > 0 {
+            let my_id = me.read().unwrap().keypair.pubkey();
+            warn!(
+                "{}: Ignored received repair requests from ME: {}",
+                my_id, stats.self_repair,
+            );
+            inc_new_counter_debug!("serve_repair-handle-repair--eq", stats.self_repair);
+        }
+
+        inc_new_counter_info!("serve_repair-total_packets", stats.total_packets);
+        inc_new_counter_info!("serve_repair-dropped_packets", stats.dropped_packets);
+
+        debug!(
+            "repair_listener: total_packets: {} passed: {}",
+            stats.total_packets, stats.processed
+        );
+
+        inc_new_counter_debug!("serve_repair-request-window-index", stats.window_index);
+        inc_new_counter_debug!(
+            "serve_repair-request-highest-window-index",
+            stats.highest_window_index
+        );
+        inc_new_counter_debug!("serve_repair-request-orphan", stats.orphan);
+
+        *stats = ServeRepairStats::default();
+    }
+
+>>>>>>> 7605f1f54... Fix repair dos (#9056)
     pub fn listen(
         me: Arc<RwLock<Self>>,
         blockstore: Option<Arc<Blockstore>>,
@@ -204,6 +287,7 @@ impl ServeRepair {
         let recycler = PacketsRecycler::default();
         Builder::new()
             .name("solana-repair-listen".to_string())
+<<<<<<< HEAD
             .spawn(move || loop {
                 let result = Self::run_listen(
                     &me,
@@ -218,6 +302,34 @@ impl ServeRepair {
                 };
                 if exit.load(Ordering::Relaxed) {
                     return;
+=======
+            .spawn(move || {
+                let mut last_print = Instant::now();
+                let mut stats = ServeRepairStats::default();
+                let mut max_packets = 1024;
+                loop {
+                    let result = Self::run_listen(
+                        &me,
+                        &recycler,
+                        blockstore.as_ref(),
+                        &requests_receiver,
+                        &response_sender,
+                        &mut stats,
+                        &mut max_packets,
+                    );
+                    match result {
+                        Err(Error::RecvTimeoutError(_)) | Ok(_) => {}
+                        Err(err) => info!("repair listener error: {:?}", err),
+                    };
+                    if exit.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    if last_print.elapsed().as_secs() > 2 {
+                        Self::report_reset_stats(&me, &mut stats);
+                        last_print = Instant::now();
+                    }
+                    thread_mem_usage::datapoint("solana-repair-listen");
+>>>>>>> 7605f1f54... Fix repair dos (#9056)
                 }
                 thread_mem_usage::datapoint("solana-repair-listen");
             })
