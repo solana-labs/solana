@@ -136,7 +136,8 @@ function urlSignatures(): Array<string> {
     .concat(findGetParameter("transactions")?.split(",") || [])
     .concat(findPathSegment("tx")?.split(",") || [])
     .concat(findPathSegment("txn")?.split(",") || [])
-    .concat(findPathSegment("transaction")?.split(",") || []);
+    .concat(findPathSegment("transaction")?.split(",") || [])
+    .concat(findPathSegment("transactions")?.split(",") || []);
 }
 
 function initState(): State {
