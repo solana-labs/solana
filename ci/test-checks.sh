@@ -10,12 +10,6 @@ source ci/rust-version.sh nightly
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-annotate() {
-  ${BUILDKITE:-false} && {
-    buildkite-agent annotate "$@"
-  }
-}
-
 # Look for failed mergify.io backports
 _ git show HEAD --check --oneline
 
@@ -49,16 +43,4 @@ _ ci/check-ssh-keys.sh
   done
 }
 
-echo --- checks ok
-
-# Skip if only the docs have been modified
-ci/affects-files.sh \
-  \!^docs/ \
-|| {
-  annotate --style info \
-    "Skipping all further tests as only docs/ files were modified"
-  exit 0
-}
-
-echo --- "Triggering tests"
-buildkite-agent pipeline upload ci/buildkite-tests.yml
+echo --- ok
