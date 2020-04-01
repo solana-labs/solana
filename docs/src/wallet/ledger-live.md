@@ -40,3 +40,7 @@ line tools](../remote-wallet/ledger.md).
 - To interact with your Ledger wallet on our live network, please see our
 instructions on how to
 [use a Ledger Nano S with the Solana command line tools](../remote-wallet/ledger.md).
+
+## Support
+
+Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
