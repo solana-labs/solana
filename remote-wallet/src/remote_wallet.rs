@@ -60,16 +60,16 @@ impl From<hidapi::HidError> for RemoteWalletError {
 impl From<RemoteWalletError> for SignerError {
     fn from(err: RemoteWalletError) -> SignerError {
         match err {
-            RemoteWalletError::Hid(hid_error) => SignerError::ConnectionError(hid_error),
-            RemoteWalletError::DeviceTypeMismatch => SignerError::ConnectionError(err.to_string()),
-            RemoteWalletError::InvalidDevice => SignerError::ConnectionError(err.to_string()),
+            RemoteWalletError::Hid(hid_error) => SignerError::Connection(hid_error),
+            RemoteWalletError::DeviceTypeMismatch => SignerError::Connection(err.to_string()),
+            RemoteWalletError::InvalidDevice => SignerError::Connection(err.to_string()),
             RemoteWalletError::InvalidInput(input) => SignerError::InvalidInput(input),
             RemoteWalletError::NoDeviceFound => SignerError::NoDeviceFound,
             RemoteWalletError::Protocol(e) => SignerError::Protocol(e.to_string()),
             RemoteWalletError::UserCancel => {
                 SignerError::UserCancel("remote wallet operation rejected by the user".to_string())
             }
-            _ => SignerError::CustomError(err.to_string()),
+            _ => SignerError::Custom(err.to_string()),
         }
     }
 }

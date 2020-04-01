@@ -537,7 +537,7 @@ impl CliConfig<'_> {
         if !self.signers.is_empty() {
             self.signers[0].try_pubkey()
         } else {
-            Err(SignerError::CustomError(
+            Err(SignerError::Custom(
                 "Default keypair must be set if pubkey arg not provided".to_string(),
             ))
         }
