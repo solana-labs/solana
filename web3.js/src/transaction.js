@@ -530,7 +530,7 @@ export class Transaction {
     let instructions = [];
     for (let i = 0; i < instructionCount; i++) {
       let instruction = {};
-      instruction.programIndex = byteArray.shift();
+      instruction.programIdIndex = byteArray.shift();
       const accountCount = shortvec.decodeLength(byteArray);
       instruction.accounts = byteArray.slice(0, accountCount);
       byteArray = byteArray.slice(accountCount);
@@ -619,7 +619,7 @@ export class Transaction {
     for (let i = 0; i < instructions.length; i++) {
       let instructionData = {
         keys: [],
-        programId: new PublicKey(accounts[instructions[i].programIndex]),
+        programId: new PublicKey(accounts[instructions[i].programIdIndex]),
         data: bs58.decode(instructions[i].data),
       };
       for (let j = 0; j < instructions[i].accounts.length; j++) {
