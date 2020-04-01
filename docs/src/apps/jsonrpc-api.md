@@ -34,6 +34,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
 * [getSignatureStatus](jsonrpc-api.md#getsignaturestatus)
+* [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
 * [getSlotsPerSegment](jsonrpc-api.md#getslotspersegment)
@@ -657,6 +658,32 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 ### getSignatureStatus
 
 Returns the status of a given signature. This method is similar to [confirmTransaction](jsonrpc-api.md#confirmtransaction) but provides more resolution for error events. This method only searches the recent status cache of signatures, which retains all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
+
+#### Parameters:
+
+* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+* `<null>` - Unknown transaction
+* `<object>` - Transaction status:
+  * `"Ok": <null>` - Transaction was successful
+  * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"Ok": null},"id":1}
+```
+
+### getSignatureStatuses
+
+Returns the statuses of a list of signatures. This method is similar to [confirmTransaction](jsonrpc-api.md#confirmtransaction) but provides more resolution for error events. This method only searches the recent status cache of signatures, which retains all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
 #### Parameters:
 

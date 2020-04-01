@@ -23,7 +23,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
     timing::slot_duration_from_slots_per_year,
-    transaction::Transaction,
+    transaction::{self, Transaction},
 };
 use solana_transaction_status::{ConfirmedBlock, TransactionEncoding, TransactionStatus};
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
@@ -399,6 +399,16 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_signature_status(
         &self,
+        signature: Signature,
+        commitment: Option<CommitmentConfig>,
+    ) -> Option<transaction::Result<()>> {
+        self.bank(commitment)
+            .get_signature_status_slot(&signature)
+            .map(|(_, status)| status)
+    }
+
+    pub fn get_signature_statuses(
+        &self,
         signatures: Vec<Signature>,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
@@ -556,6 +566,14 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<transaction::Result<()>>>;
+
+    #[rpc(meta, name = "getSignatureStatuses")]
+    fn get_signature_statuses(
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
@@ -888,6 +906,20 @@ impl RpcSol for RpcSolImpl {
     fn get_signature_status(
         &self,
         meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<transaction::Result<()>>> {
+        let signature = verify_signature(&signature_str)?;
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_signature_status(signature, commitment))
+    }
+
+    fn get_signature_statuses(
+        &self,
+        meta: Self::Metadata,
         signature_strs: Vec<String>,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
@@ -898,7 +930,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_signature_status(signatures, commitment)
+            .get_signature_statuses(signatures, commitment)
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -991,7 +1023,7 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_status(vec![signature], commitment.clone())?
+                .get_signature_statuses(vec![signature], commitment.clone())?
                 .value[0]
                 .clone()
                 .map(|x| x.status);
@@ -1763,12 +1795,82 @@ pub mod tests {
             meta,
             blockhash,
             alice,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
+            tx.signatures[0]
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": expected_res,
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Test getSignatureStatus request on unprocessed tx
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
+            tx.signatures[0]
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected_res: Option<String> = None;
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": expected_res,
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Test getSignatureStatus request on a TransactionError
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, std::u64::MAX, blockhash);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
+            tx.signatures[0]
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected_res: Option<transaction::Result<()>> = Some(Err(
+            TransactionError::InstructionError(0, InstructionError::Custom(1)),
+        ));
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": expected_res,
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_signature_statuses() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            blockhash,
+            alice,
             confirmed_block_signatures,
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":[["{}"]]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}"]]}}"#,
             confirmed_block_signatures[0]
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -1784,7 +1886,7 @@ pub mod tests {
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":[["{}"]]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}"]]}}"#,
             tx.signatures[0]
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -1796,7 +1898,7 @@ pub mod tests {
 
         // Test getSignatureStatus request on a TransactionError
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":[["{}"]]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}"]]}}"#,
             confirmed_block_signatures[1]
         );
         let res = io.handle_request_sync(&req, meta.clone());
