@@ -2207,6 +2207,10 @@ impl Bank {
     pub fn compact_stale_slots(&self) {
         self.rc.accounts.accounts_db.compact_stale_slots();
     }
+
+    pub fn compact_stale_slot(&self, slot: Slot) {
+        self.rc.accounts.accounts_db.compact_stale_slot(slot);
+    }
 }
 
 impl Drop for Bank {
