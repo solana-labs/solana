@@ -339,69 +339,72 @@ impl Tower {
     // TODO: optimize this by caching results from branches
     pub(crate) fn check_switch_threshold(
         &self,
-        slot: u64,
+        switch_slot: u64,
         ancestors: &HashMap<Slot, HashSet<u64>>,
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
         total_stake: u64,
+        //epoch_stakes:
     ) -> bool {
         self.last_vote()
             .slots
             .last()
             .map(|last_vote| {
                 let last_vote_ancestors = ancestors.get(&last_vote).unwrap();
-                let slot_ancestors = ancestors.get(&slot).unwrap();
-                // Ancestors doesn't contain the slot itself, so have to check
-                // manually
-                if slot_ancestors.contains(last_vote) {
+                let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
+
+                if switch_slot_ancestors.contains(last_vote) {
+                    // If the `switch_slot is a descendant of the last vote,
+                    // no switching proof is neceessary
                     return true;
-                } else if last_vote_ancestors.contains(&slot) {
-                    // Should never vote on ancestor of your last vote
+                } else if last_vote_ancestors.contains(&switch_slot) {
+                    // Should never consider switching to an ancestor
+                    // of your last vote
                     return false;
                 }
-                let mut common_ancestors: Vec<_> = last_vote_ancestors
-                    .intersection(slot_ancestors)
-                    .into_iter()
-                    .collect();
-                common_ancestors.sort();
-                let mut other_stake = 0;
-                let mut counted_pubkeys = HashSet::new();
-                for ancestors in common_ancestors.windows(2) {
-                    let common_ancestor = ancestors[0];
-                    let next_common_ancestor = ancestors[1];
 
-                    // For each common ancestor iterate over the forks to count lockout
-                    for fork in descendants.get(common_ancestor).unwrap() {
-                        if fork == next_common_ancestor {
-                            continue;
-                        }
+                let mut locked_out_stake = 0;
+                let mut locked_out_vote_accounts = HashSet::new();
+                for (candidate_slot, descendants) in descendants.iter() {
+                    // 1) Only consider lockouts a tips of forks as that
+                    //    includes all ancestors of that fork.
+                    // 2) Don't consider lockouts on the `switch_slot` itself
+                    if !descendants.is_empty() || candidate_slot == slot {
+                        continue;
+                    }
 
-                        // Get last frozen banks at tip of each fork. Evaluate which
-                        // stakes are locked out in the range common_ancestor..last_vote,
-                        // which means finding any ranges in the `stake_ranges` tree
-                        // that overlap the range common_ancestor..last_vote,
-                        let fork_tips = Self::fork_tips(*fork, descendants, progress);
-                        for tip in fork_tips {
-                            let stake_ranges = &progress.get(&tip).unwrap().fork_stats.stake_ranges;
-                            // Find any ranges with endpoint <= last_vote
-                            for entry in stake_ranges.find(*last_vote..last_vote + 1) {
-                                let range = entry.interval();
-                                let account_stakes = entry.data();
-                                // Find any ranges with start point > common_ancestor
-                                if range.start > *common_ancestor {
-                                    for (pubkey, stake) in account_stakes {
-                                        if !counted_pubkeys.contains(pubkey) {
-                                            other_stake += stake;
-                                            counted_pubkeys.insert(pubkey);
-                                        }
-                                    }
+                    // By the time we reach here, any ancestors of the `switch_slot`,
+                    // should have been filtered out, as they all have a descendant,
+                    // namely the `switch_slot` itself.
+                    assert!(!switch_slot_ancestors.contains(candidate_slot));
+
+                    // Evaluate which vote accounts in the bank are locked out
+                    // in the range candidate_slot..last_vote, which means
+                    // finding any lockout ranges in the `stake_ranges` tree
+                    // for this bank that contain `last_vote`.
+                    let stake_ranges = &progress
+                        .get(&candidate_slot)
+                        .unwrap()
+                        .fork_stats
+                        .stake_ranges;
+                    // Find any locked out ranges in this bank with endpoint <= last_vote
+                    for entry in stake_ranges.find(*last_vote..last_vote + 1) {
+                        let range = entry.interval();
+                        let account_stakes = entry.data();
+                        // We don't want to count lockouts on ancestors, so
+                        // find any ranges starting at a non-ancestor of
+                        // `switch_slot`
+                        if !slot_ancestors.contains(range.start) {
+                            for (pubkey, stake) in account_stakes {
+                                if !locked_out_vote_accounts.contains(pubkey) {
+                                    other_stake += stake;
+                                    locked_out_vote_accounts.insert(pubkey);
                                 }
                             }
                         }
                     }
                 }
-
-                (other_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD
+                (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD
             })
             .unwrap_or(true)
     }
