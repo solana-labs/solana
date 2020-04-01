@@ -88,6 +88,21 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
             })?,
             RpcRequest::GetSignatureStatus => {
+                let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {
+                    Some(Err(TransactionError::AccountInUse))
+                } else if self.url == "instruction_error" {
+                    Some(Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::UninitializedAccount,
+                    )))
+                } else if self.url == "sig_not_found" {
+                    None
+                } else {
+                    Some(Ok(()))
+                };
+                serde_json::to_value(response).unwrap()
+            }
+            RpcRequest::GetSignatureStatuses => {
                 let status: transaction::Result<()> = if self.url == "account_in_use" {
                     Err(TransactionError::AccountInUse)
                 } else if self.url == "instruction_error" {
