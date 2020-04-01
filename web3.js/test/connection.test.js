@@ -98,7 +98,7 @@ test('get program accounts', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatus',
+      method: 'getSignatureStatuses',
       params: [
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -142,7 +142,7 @@ test('get program accounts', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatus',
+      method: 'getSignatureStatuses',
       params: [
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -496,7 +496,7 @@ test('confirm transaction - error', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatus',
+      method: 'getSignatureStatuses',
       params: [[badTransactionSignature]],
     },
     errorResponse,
@@ -887,7 +887,7 @@ test('request airdrop - max commitment', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatus',
+      method: 'getSignatureStatuses',
       params: [
         [
           '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -1081,7 +1081,7 @@ test('transaction', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatus',
+      method: 'getSignatureStatuses',
       params: [
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -1127,7 +1127,7 @@ test('transaction', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatus',
+      method: 'getSignatureStatuses',
       params: [
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
@@ -1155,7 +1155,7 @@ test('transaction', async () => {
   ]);
 
   const responses = (
-    await connection.getSignatureStatusBatch([signature, unprocessedSignature])
+    await connection.getSignatureStatuses([signature, unprocessedSignature])
   ).value;
   expect(responses.length).toEqual(2);
 

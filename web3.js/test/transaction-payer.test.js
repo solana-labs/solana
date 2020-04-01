@@ -146,7 +146,7 @@ test('transaction-payer', async () => {
   mockRpc.push([
     url,
     {
-      method: 'getSignatureStatus',
+      method: 'getSignatureStatuses',
       params: [
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',

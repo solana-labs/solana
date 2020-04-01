@@ -477,9 +477,9 @@ const GetVoteAccounts = jsonRpcResult(
 );
 
 /**
- * Expected JSON RPC response for the "getSignatureStatus" message
+ * Expected JSON RPC response for the "getSignatureStatuses" message
  */
-const GetSignatureStatusRpcResult = jsonRpcResultAndContext(
+const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
   struct.array([
     struct.union([
       'null',
@@ -1036,7 +1036,7 @@ export class Connection {
     signature: TransactionSignature,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<SignatureStatus | null>> {
-    const {context, value} = await this.getSignatureStatusBatch(
+    const {context, value} = await this.getSignatureStatuses(
       [signature],
       commitment,
     );
@@ -1047,13 +1047,13 @@ export class Connection {
   /**
    * Fetch the current status of a signature
    */
-  async getSignatureStatusBatch(
+  async getSignatureStatuses(
     signatures: Array<TransactionSignature>,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<Array<SignatureStatus | null>>> {
     const args = this._argsWithCommitment([signatures], commitment);
-    const unsafeRes = await this._rpcRequest('getSignatureStatus', args);
-    const res = GetSignatureStatusRpcResult(unsafeRes);
+    const unsafeRes = await this._rpcRequest('getSignatureStatuses', args);
+    const res = GetSignatureStatusesRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }

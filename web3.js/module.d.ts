@@ -196,7 +196,7 @@ declare module '@solana/web3.js' {
       signature: TransactionSignature,
       commitment?: Commitment,
     ): Promise<RpcResponseAndContext<SignatureStatus | null>>;
-    getSignatureStatusBatch(
+    getSignatureStatuses(
       signatures: Array<TransactionSignature>,
       commitment?: Commitment,
     ): Promise<RpcResponseAndContext<Array<SignatureStatus | null>>>;
