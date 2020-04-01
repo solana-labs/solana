@@ -145,8 +145,15 @@ const renderTransactionRow = (
       return assertUnreachable(transaction.status);
   }
 
-  const slotText = `${transaction.slot || "-"}`;
-  const confirmationsText = `${transaction.confirmations || "-"}`;
+  let slotText = "-";
+  if (transaction.slot !== undefined) {
+    slotText = `${transaction.slot}`;
+  }
+
+  let confirmationsText = "-";
+  if (transaction.confirmations !== undefined) {
+    confirmationsText = `${transaction.confirmations}`;
+  }
 
   const renderDetails = () => {
     let onClick, icon;
