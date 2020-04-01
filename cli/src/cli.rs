@@ -188,6 +188,9 @@ pub enum CliCommand {
         commitment_config: CommitmentConfig,
     },
     GetGenesisHash,
+    GetEpoch {
+        commitment_config: CommitmentConfig,
+    },
     GetSlot {
         commitment_config: CommitmentConfig,
     },
@@ -586,6 +589,7 @@ pub fn parse_command(
             command: CliCommand::GetGenesisHash,
             signers: vec![],
         }),
+        ("epoch", Some(matches)) => parse_get_epoch(matches),
         ("slot", Some(matches)) => parse_get_slot(matches),
         ("total-supply", Some(matches)) => parse_total_supply(matches),
         ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
@@ -1601,6 +1605,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetEpochInfo { commitment_config } => {
             process_get_epoch_info(&rpc_client, *commitment_config)
+        }
+        CliCommand::GetEpoch { commitment_config } => {
+            process_get_epoch(&rpc_client, *commitment_config)
         }
         CliCommand::GetSlot { commitment_config } => {
             process_get_slot(&rpc_client, *commitment_config)
