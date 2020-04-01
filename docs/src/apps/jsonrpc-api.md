@@ -666,12 +666,6 @@ Returns the status of a given signature. This method is similar to [confirmTrans
 
 #### Results:
 
-An RpcResponse containing a JSON object consisting of an array of TransactionStatus objects.
-
-* `RpcResponse<object>` - RpcResponse JSON object with `value` field:
-
-An array of:
-
 * `<null>` - Unknown transaction
 * `<object>` - Transaction status:
   * `"Ok": <null>` - Transaction was successful
