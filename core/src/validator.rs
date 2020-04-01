@@ -711,6 +711,8 @@ impl TestValidator {
             42,
             bootstrap_validator_lamports,
         );
+        genesis_config.ticks_per_slot = 4;
+        genesis_config.poh_config.target_tick_duration = Duration::from_millis(10);
         genesis_config
             .native_instruction_processors
             .push(solana_budget_program!());
