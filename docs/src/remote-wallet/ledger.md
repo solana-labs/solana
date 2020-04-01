@@ -59,4 +59,4 @@ anywhere you see an option or argument that accepts a `<KEYPAIR>`.
 
 ## Support
 
-Email maintainers@solana.com
+Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.

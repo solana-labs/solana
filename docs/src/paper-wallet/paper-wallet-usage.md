@@ -289,3 +289,7 @@ Refer to the following page for a comprehensive guide on delegating stake:
 ---
 
 {% page-ref page="../api-reference/cli.md" %}
+
+## Support
+
+Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
