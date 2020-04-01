@@ -35,3 +35,7 @@ to that address, **those tokens will be lost forever**.
 ##Troubleshooting
 If you are having trouble setting up your Trust Wallet app, check out their
  [Community Help Center](https://community.trustwallet.com/c/helpcenter)
+
+## Support
+
+Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
