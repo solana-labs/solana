@@ -71,6 +71,14 @@ fn resolve_base_pubkey(
     pubkey_from_path(&matches, key_url, "base pubkey", wallet_manager)
 }
 
+fn resolve_new_base_keypair(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Box<dyn Signer>, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    signer_from_path(&matches, key_url, "new base pubkey", wallet_manager)
+}
+
 fn get_balance_at(client: &RpcClient, pubkey: &Pubkey, i: usize) -> Result<u64, ClientError> {
     let address = stake_accounts::derive_stake_account_address(pubkey, i);
     client.get_balance(&address)
@@ -183,6 +191,8 @@ fn process_rebase_stake_accounts(
 ) -> Result<(), Box<dyn Error>> {
     let fee_payer_keypair = resolve_fee_payer(wallet_manager, &rebase_config.fee_payer)?;
     let base_pubkey = resolve_base_pubkey(wallet_manager, &rebase_config.base_pubkey)?;
+    let new_base_keypair =
+        resolve_new_base_keypair(wallet_manager, &rebase_config.new_base_keypair)?;
     let stake_authority_keypair =
         resolve_stake_authority(wallet_manager, &rebase_config.stake_authority)?;
     let addresses =
@@ -191,11 +201,15 @@ fn process_rebase_stake_accounts(
 
     let messages = stake_accounts::rebase_stake_accounts(
         &fee_payer_keypair.pubkey(),
-        &base_pubkey,
+        &new_base_keypair.pubkey(),
         &stake_authority_keypair.pubkey(),
         &balances,
     );
-    let signers = vec![&*fee_payer_keypair, &*stake_authority_keypair];
+    let signers = vec![
+        &*fee_payer_keypair,
+        &*new_base_keypair,
+        &*stake_authority_keypair,
+    ];
     for message in messages {
         let signature = send_message(client, message, &signers)?;
         println!("{}", signature);
@@ -209,8 +223,11 @@ fn process_move_stake_accounts(
     move_config: &MoveCommandConfig,
 ) -> Result<(), Box<dyn Error>> {
     let authorize_config = &move_config.authorize_config;
+    let rebase_config = &move_config.rebase_config;
     let fee_payer_keypair = resolve_fee_payer(wallet_manager, &authorize_config.fee_payer)?;
     let base_pubkey = resolve_base_pubkey(wallet_manager, &authorize_config.base_pubkey)?;
+    let new_base_keypair =
+        resolve_new_base_keypair(wallet_manager, &rebase_config.new_base_keypair)?;
     let stake_authority_keypair =
         resolve_stake_authority(wallet_manager, &authorize_config.stake_authority)?;
     let withdraw_authority_keypair =
@@ -225,7 +242,7 @@ fn process_move_stake_accounts(
 
     let messages = stake_accounts::move_stake_accounts(
         &fee_payer_keypair.pubkey(),
-        &base_pubkey,
+        &new_base_keypair.pubkey(),
         &stake_authority_keypair.pubkey(),
         &withdraw_authority_keypair.pubkey(),
         &new_stake_authority_pubkey,
@@ -234,6 +251,7 @@ fn process_move_stake_accounts(
     );
     let signers = vec![
         &*fee_payer_keypair,
+        &*new_base_keypair,
         &*stake_authority_keypair,
         &*withdraw_authority_keypair,
     ];
