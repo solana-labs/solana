@@ -35,7 +35,7 @@ function TransactionsCard() {
     }
 
     dispatch({ type: ActionType.InputSignature, signature });
-    checkTransactionStatus(dispatch, idCounter + 1, signature, url);
+    checkTransactionStatus(dispatch, signature, url);
 
     const inputEl = signatureInput.current;
     if (inputEl) {
@@ -141,7 +141,7 @@ const renderTransactionRow = (transaction: Transaction) => {
   const confirmationsText = `${transaction.confirmations || "-"}`;
 
   return (
-    <tr key={transaction.id}>
+    <tr key={transaction.signature}>
       <td>
         <span className="badge badge-soft-dark badge-pill">
           {transaction.id}

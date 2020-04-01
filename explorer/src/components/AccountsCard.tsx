@@ -29,7 +29,7 @@ function AccountsCard() {
     }
 
     dispatch({ type: ActionType.Input, pubkey });
-    fetchAccountInfo(dispatch, idCounter + 1, pubkey, url);
+    fetchAccountInfo(dispatch, address, url);
 
     const inputEl = addressInput.current;
     if (inputEl) {

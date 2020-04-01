@@ -29,7 +29,7 @@ export interface Account {
   details?: Details;
 }
 
-type Accounts = { [id: number]: Account };
+type Accounts = { [address: string]: Account };
 interface State {
   idCounter: number;
   accounts: Accounts;
@@ -42,7 +42,7 @@ export enum ActionType {
 
 interface Update {
   type: ActionType.Update;
-  id: number;
+  address: string;
   status: Status;
   details?: Details;
 }
@@ -58,10 +58,12 @@ type Dispatch = (action: Action) => void;
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case ActionType.Input: {
+      const address = action.pubkey.toBase58();
+      if (!!state.accounts[address]) return state;
       const idCounter = state.idCounter + 1;
       const accounts = {
         ...state.accounts,
-        [idCounter]: {
+        [address]: {
           id: idCounter,
           status: Status.Checking,
           source: Source.Input,
@@ -71,7 +73,7 @@ function reducer(state: State, action: Action): State {
       return { ...state, accounts, idCounter };
     }
     case ActionType.Update: {
-      let account = state.accounts[action.id];
+      let account = state.accounts[action.address];
       if (account) {
         account = {
           ...account,
@@ -80,7 +82,7 @@ function reducer(state: State, action: Action): State {
         };
         const accounts = {
           ...state.accounts,
-          [action.id]: account
+          [action.address]: account
         };
         return { ...state, accounts };
       }
@@ -90,9 +92,9 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
-function urlPublicKeys(): Array<PublicKey> {
-  const keys: Array<string> = [];
-  return keys
+function urlAddresses(): Array<string> {
+  const addresses: Array<string> = [];
+  return addresses
     .concat(findGetParameter("account")?.split(",") || [])
     .concat(findGetParameter("accounts")?.split(",") || [])
     .concat(findPathSegment("account")?.split(",") || [])
@@ -100,21 +102,27 @@ function urlPublicKeys(): Array<PublicKey> {
     .concat(findGetParameter("address")?.split(",") || [])
     .concat(findGetParameter("addresses")?.split(",") || [])
     .concat(findPathSegment("address")?.split(",") || [])
-    .concat(findPathSegment("addresses")?.split(",") || [])
-    .map(key => new PublicKey(key));
+    .concat(findPathSegment("addresses")?.split(",") || []);
 }
 
 function initState(): State {
   let idCounter = 0;
-  const pubkeys = urlPublicKeys();
-  const accounts = pubkeys.reduce((accounts: Accounts, pubkey) => {
-    const id = ++idCounter;
-    accounts[id] = {
-      id,
-      status: Status.Checking,
-      source: Source.Url,
-      pubkey
-    };
+  const addresses = urlAddresses();
+  const accounts = addresses.reduce((accounts: Accounts, address) => {
+    if (!!accounts[address]) return accounts;
+    try {
+      const pubkey = new PublicKey(address);
+      const id = ++idCounter;
+      accounts[address] = {
+        id,
+        status: Status.Checking,
+        source: Source.Url,
+        pubkey
+      };
+    } catch (err) {
+      // TODO display to user
+      console.error(err);
+    }
     return accounts;
   }, {});
   return { idCounter, accounts };
@@ -133,8 +141,8 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
   React.useEffect(() => {
     if (status !== ClusterStatus.Connected) return;
 
-    Object.values(state.accounts).forEach(account => {
-      fetchAccountInfo(dispatch, account.id, account.pubkey, url);
+    Object.keys(state.accounts).forEach(address => {
+      fetchAccountInfo(dispatch, address, url);
     });
   }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -149,20 +157,21 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
 
 export async function fetchAccountInfo(
   dispatch: Dispatch,
-  id: number,
-  pubkey: PublicKey,
+  address: string,
   url: string
 ) {
   dispatch({
     type: ActionType.Update,
     status: Status.Checking,
-    id
+    address
   });
 
   let status;
   let details;
   try {
-    const result = await new Connection(url).getAccountInfo(pubkey);
+    const result = await new Connection(url).getAccountInfo(
+      new PublicKey(address)
+    );
     details = {
       space: result.data.length,
       executable: result.executable,
@@ -174,7 +183,7 @@ export async function fetchAccountInfo(
     console.error("Failed to fetch account info", error);
     status = Status.CheckFailed;
   }
-  dispatch({ type: ActionType.Update, status, details, id });
+  dispatch({ type: ActionType.Update, status, details, address });
 }
 
 export function useAccounts() {
