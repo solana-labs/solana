@@ -5065,7 +5065,7 @@ mod tests {
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }
-            Err(InstructionError::CustomError(42))
+            Err(InstructionError::Custom(42))
         }
 
         assert!(bank.get_account(&mock_vote_program_id()).is_none());
@@ -5099,7 +5099,7 @@ mod tests {
             bank.process_transaction(&transaction),
             Err(TransactionError::InstructionError(
                 1,
-                InstructionError::CustomError(42)
+                InstructionError::Custom(42)
             ))
         );
     }
@@ -5118,7 +5118,7 @@ mod tests {
             _ka: &[KeyedAccount],
             _data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
-            Err(InstructionError::CustomError(42))
+            Err(InstructionError::Custom(42))
         }
 
         let mock_account = Keypair::new();
@@ -5152,7 +5152,7 @@ mod tests {
             bank.process_transaction(&transaction),
             Err(TransactionError::InstructionError(
                 1,
-                InstructionError::CustomError(42)
+                InstructionError::Custom(42)
             ))
         );
     }
@@ -5168,7 +5168,7 @@ mod tests {
             _ka: &[KeyedAccount],
             _data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
-            Err(InstructionError::CustomError(42))
+            Err(InstructionError::Custom(42))
         }
 
         // Non-native loader accounts can not be used for instruction processing

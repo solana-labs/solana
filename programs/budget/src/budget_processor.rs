@@ -426,7 +426,7 @@ mod tests {
                 .unwrap(),
             TransactionError::InstructionError(
                 0,
-                InstructionError::CustomError(BudgetError::DestinationMissing as u32)
+                InstructionError::Custom(BudgetError::DestinationMissing as u32)
             )
         );
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);

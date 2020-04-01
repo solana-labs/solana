@@ -13,5 +13,5 @@ fn process_instruction(
     _keyed_accounts: &[KeyedAccount],
     _data: &[u8],
 ) -> Result<(), InstructionError> {
-    Err(InstructionError::CustomError(0))
+    Err(InstructionError::Custom(0))
 }
