@@ -4,7 +4,7 @@
 // hash on gossip. Monitor gossip for messages from validators in the --trusted-validators
 // set and halt the node if a mismatch is detected.
 
-use crate::cluster_info::ClusterInfo;
+use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_ledger::{
     snapshot_package::SnapshotPackage, snapshot_package::SnapshotPackageReceiver,
     snapshot_package::SnapshotPackageSender,
@@ -94,6 +94,10 @@ impl AccountsHashVerifier {
             hashes.push((snapshot_package.root, snapshot_package.hash));
         }
 
+        while hashes.len() > MAX_SNAPSHOT_HASHES {
+            hashes.remove(0);
+        }
+
         if halt_on_trusted_validator_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
             for (slot, hash) in hashes.iter() {
@@ -119,6 +123,7 @@ impl AccountsHashVerifier {
         slot_to_hash: &mut HashMap<Slot, Hash>,
     ) -> bool {
         let mut verified_count = 0;
+        let mut highest_slot = 0;
         if let Some(trusted_validators) = trusted_validators.as_ref() {
             for trusted_validator in trusted_validators {
                 let cluster_info_r = cluster_info.read().unwrap();
@@ -140,6 +145,7 @@ impl AccountsHashVerifier {
                                 verified_count += 1;
                             }
                         } else {
+                            highest_slot = std::cmp::max(*slot, highest_slot);
                             slot_to_hash.insert(*slot, *hash);
                         }
                     }
@@ -147,6 +153,10 @@ impl AccountsHashVerifier {
             }
         }
         inc_new_counter_info!("accounts_hash_verifier-hashes_verified", verified_count);
+        datapoint_info!(
+            "accounts_hash_verifier",
+            ("highest_slot_verified", highest_slot, i64),
+        );
         false
     }
 
@@ -196,5 +206,58 @@ mod tests {
             &Some(trusted_validators.clone()),
             &mut slot_to_hash,
         ));
+    }
+
+    #[test]
+    fn test_max_hashes() {
+        solana_logger::setup();
+        use std::path::PathBuf;
+        use tempfile::TempDir;
+        let keypair = Keypair::new();
+
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+
+        let trusted_validators = HashSet::new();
+        let exit = Arc::new(AtomicBool::new(false));
+        let mut hashes = vec![];
+        for i in 0..MAX_SNAPSHOT_HASHES + 1 {
+            let snapshot_links = TempDir::new().unwrap();
+            let snapshot_package = SnapshotPackage {
+                hash: hash(&[i as u8]),
+                root: 100 + i as u64,
+                slot_deltas: vec![],
+                snapshot_links,
+                tar_output_file: PathBuf::from("."),
+                storages: vec![],
+            };
+
+            AccountsHashVerifier::process_snapshot(
+                snapshot_package,
+                &cluster_info,
+                &Some(trusted_validators.clone()),
+                false,
+                &None,
+                &mut hashes,
+                &exit,
+                0,
+            );
+        }
+        let cluster_info_r = cluster_info.read().unwrap();
+        let cluster_hashes = cluster_info_r
+            .get_accounts_hash_for_node(&keypair.pubkey())
+            .unwrap();
+        info!("{:?}", cluster_hashes);
+        assert_eq!(hashes.len(), MAX_SNAPSHOT_HASHES);
+        assert_eq!(cluster_hashes.len(), MAX_SNAPSHOT_HASHES);
+        assert_eq!(cluster_hashes[0], (101, hash(&[1])));
+        assert_eq!(
+            cluster_hashes[MAX_SNAPSHOT_HASHES - 1],
+            (
+                100 + MAX_SNAPSHOT_HASHES as u64,
+                hash(&[MAX_SNAPSHOT_HASHES as u8])
+            )
+        );
     }
 }
