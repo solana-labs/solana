@@ -124,7 +124,8 @@ impl RpcClient {
             5,
         )?;
         let result: Response<Vec<Option<TransactionStatus>>> =
-            serde_json::from_value(signature_status).unwrap();
+            serde_json::from_value(signature_status)
+                .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatus"))?;
         Ok(result.value[0]
             .clone()
             .map(|status_meta| status_meta.status))
@@ -953,8 +954,8 @@ impl RpcClient {
                 1,
             )
             .map_err(|err| err.into_with_command("GetSignatureStatus"))?;
-        let result: Response<Vec<Option<TransactionStatus>>> =
-            serde_json::from_value(response).unwrap();
+        let result: Response<Vec<Option<TransactionStatus>>> = serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatus"))?;
 
         let confirmations = result.value[0]
             .clone()
