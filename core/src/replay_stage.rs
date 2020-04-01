@@ -1165,11 +1165,12 @@ impl ReplayStage {
                     .expect("All frozen banks must exist in the Progress map");
 
                 if !stats.computed {
-                    let (stake_lockouts, total_staked, bank_weight) = tower.collect_vote_lockouts(
-                        bank_slot,
-                        bank.vote_accounts().into_iter(),
-                        &ancestors,
-                    );
+                    let (stake_lockouts, total_staked, bank_weight, lockout_intervals) = tower
+                        .collect_vote_lockouts(
+                            bank_slot,
+                            bank.vote_accounts().into_iter(),
+                            &ancestors,
+                        );
                     stats.total_staked = total_staked;
                     stats.weight = bank_weight;
                     stats.fork_weight = stats.weight + parent_weight;
@@ -1189,6 +1190,7 @@ impl ReplayStage {
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
                     );
                     stats.stake_lockouts = stake_lockouts;
+                    stats.lockout_intervals = lockout_intervals;
                     stats.block_height = bank.block_height();
                     stats.computed = true;
                     new_stats.push(bank_slot);

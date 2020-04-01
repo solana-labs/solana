@@ -2,7 +2,6 @@ use crate::{
     cluster_info_vote_listener::SlotVoteTracker, cluster_slots::SlotPubkeys,
     consensus::StakeLockout, replay_stage::SUPERMINORITY_THRESHOLD,
 };
-use bio::data_structures::interval_tree::IntervalTree;
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
@@ -10,12 +9,12 @@ use solana_ledger::{
 use solana_runtime::bank::Bank;
 use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     rc::Rc,
     sync::{Arc, RwLock},
 };
 
-pub(crate) type StakeRanges = IntervalTree<Slot, HashMap<Pubkey, u64>>;
+pub(crate) type LockoutIntervals = BTreeMap<Slot, Vec<(Slot, Pubkey)>>;
 
 #[derive(Default)]
 pub(crate) struct ReplaySlotStats(ConfirmationTiming);
@@ -195,6 +194,7 @@ pub(crate) struct ForkStats {
     pub(crate) stake_lockouts: HashMap<u64, StakeLockout>,
     pub(crate) confirmation_reported: bool,
     pub(crate) computed: bool,
+    pub(crate) lockout_intervals: LockoutIntervals,
 }
 
 #[derive(Clone, Default)]

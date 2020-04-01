@@ -1,4 +1,4 @@
-use crate::replay_stage::{ProgressMap, StakeRanges};
+use crate::progress_map::{LockoutIntervals, ProgressMap};
 use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -12,8 +12,8 @@ use solana_vote_program::vote_state::{
     BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
 };
 use std::{
-    collections::{HashMap, HashSet},
-    ops::Range,
+    collections::{BTreeMap, HashMap, HashSet},
+    ops::Bound::{Included, Unbounded},
     sync::Arc,
 };
 
@@ -91,14 +91,16 @@ impl Tower {
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
-    ) -> (HashMap<Slot, StakeLockout>, u64, u128, StakeRanges)
+    ) -> (HashMap<Slot, StakeLockout>, u64, u128, LockoutIntervals)
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
         let mut stake_lockouts = HashMap::new();
         let mut total_stake = 0;
         let mut total_weight = 0;
-        let mut interval_stakes: HashMap<Range<u64>, HashMap<Pubkey, u64>> = HashMap::new();
+        // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
+        // keyed by end of the range
+        let mut lockout_intervals: BTreeMap<u64, Vec<(u64, Pubkey)>> = BTreeMap::new();
         for (key, (lamports, account)) in vote_accounts {
             if lamports == 0 {
                 continue;
@@ -119,11 +121,10 @@ impl Tower {
             let mut vote_state = vote_state.unwrap();
 
             for vote in &vote_state.votes {
-                let range = vote.slot..vote.expiration_slot();
-                interval_stakes
-                    .entry(range)
-                    .or_insert(HashMap::new())
-                    .insert(key, lamports);
+                lockout_intervals
+                    .entry(vote.expiration_slot())
+                    .or_insert_with(|| vec![])
+                    .push((vote.slot, key));
             }
 
             if key == self.node_pubkey || vote_state.node_pubkey == self.node_pubkey {
@@ -195,7 +196,7 @@ impl Tower {
             stake_lockouts,
             total_stake,
             total_weight,
-            interval_stakes.into_iter().collect(),
+            lockout_intervals.into_iter().collect(),
         )
     }
 
@@ -336,7 +337,6 @@ impl Tower {
         false
     }
 
-    // TODO: optimize this by caching results from branches
     pub(crate) fn check_switch_threshold(
         &self,
         switch_slot: u64,
@@ -344,7 +344,7 @@ impl Tower {
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
         total_stake: u64,
-        //epoch_stakes:
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> bool {
         self.last_vote()
             .slots
@@ -357,49 +357,58 @@ impl Tower {
                     // If the `switch_slot is a descendant of the last vote,
                     // no switching proof is neceessary
                     return true;
-                } else if last_vote_ancestors.contains(&switch_slot) {
-                    // Should never consider switching to an ancestor
-                    // of your last vote
-                    return false;
                 }
+
+                // Should never consider switching to an ancestor
+                // of your last vote
+                assert!(!last_vote_ancestors.contains(&switch_slot));
 
                 let mut locked_out_stake = 0;
                 let mut locked_out_vote_accounts = HashSet::new();
                 for (candidate_slot, descendants) in descendants.iter() {
                     // 1) Only consider lockouts a tips of forks as that
                     //    includes all ancestors of that fork.
-                    // 2) Don't consider lockouts on the `switch_slot` itself
-                    if !descendants.is_empty() || candidate_slot == slot {
+                    // 2) Don't consider lockouts on the `last_vote` itself
+                    //    or any of its descendants
+                    if !descendants.is_empty()
+                        || candidate_slot == last_vote
+                        || ancestors.get(&candidate_slot).unwrap().contains(last_vote)
+                    {
                         continue;
                     }
 
-                    // By the time we reach here, any ancestors of the `switch_slot`,
+                    // By the time we reach here, any ancestors of the `last_vote`,
                     // should have been filtered out, as they all have a descendant,
-                    // namely the `switch_slot` itself.
-                    assert!(!switch_slot_ancestors.contains(candidate_slot));
+                    // namely the `last_vote` itself.
+                    assert!(!last_vote_ancestors.contains(candidate_slot));
 
                     // Evaluate which vote accounts in the bank are locked out
-                    // in the range candidate_slot..last_vote, which means
-                    // finding any lockout ranges in the `stake_ranges` tree
+                    // in the interval candidate_slot..last_vote, which means
+                    // finding any lockout intervals in the `lockout_intervals` tree
                     // for this bank that contain `last_vote`.
-                    let stake_ranges = &progress
+                    let lockout_intervals = &progress
                         .get(&candidate_slot)
                         .unwrap()
                         .fork_stats
-                        .stake_ranges;
-                    // Find any locked out ranges in this bank with endpoint <= last_vote
-                    for entry in stake_ranges.find(*last_vote..last_vote + 1) {
-                        let range = entry.interval();
-                        let account_stakes = entry.data();
-                        // We don't want to count lockouts on ancestors, so
-                        // find any ranges starting at a non-ancestor of
-                        // `switch_slot`
-                        if !slot_ancestors.contains(range.start) {
-                            for (pubkey, stake) in account_stakes {
-                                if !locked_out_vote_accounts.contains(pubkey) {
-                                    other_stake += stake;
-                                    locked_out_vote_accounts.insert(pubkey);
-                                }
+                        .lockout_intervals;
+                    // Find any locked out intervals in this bank with endpoint >= last_vote,
+                    // implies they are locked out at last_vote
+                    for (_, value) in lockout_intervals.range((Included(last_vote), Unbounded)) {
+                        for (lockout_interval_start, vote_account_pubkey) in value {
+                            // Only count lockouts on slots that are:
+                            // 1) Not ancestors of `last_vote`
+                            // 2) Not from before the current root as we can't determine if
+                            // anything before the root was an ancestor of `last_vote` or not
+                            if !last_vote_ancestors.contains(lockout_interval_start)
+                                && ancestors.contains_key(lockout_interval_start)
+                                && !locked_out_vote_accounts.contains(vote_account_pubkey)
+                            {
+                                let stake = epoch_vote_accounts
+                                    .get(vote_account_pubkey)
+                                    .map(|(stake, _)| *stake)
+                                    .unwrap_or(0);
+                                locked_out_stake += stake;
+                                locked_out_vote_accounts.insert(vote_account_pubkey);
                             }
                         }
                     }
@@ -683,7 +692,7 @@ pub mod test {
                 .cloned()
                 .collect();
 
-            let (_, last_votable_on_same_fork) = ReplayStage::compute_bank_stats(
+            let _ = ReplayStage::compute_bank_stats(
                 &my_pubkey,
                 &ancestors,
                 &mut frozen_banks,
