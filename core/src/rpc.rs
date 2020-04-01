@@ -398,6 +398,25 @@ impl JsonRpcRequestProcessor {
             .unwrap_or(None))
     }
 
+    pub fn get_signature_confirmation_status(
+        &self,
+        signature: Signature,
+        commitment: Option<CommitmentConfig>,
+    ) -> Option<RpcSignatureConfirmation> {
+        self.bank(commitment)
+            .get_signature_confirmation_status(&signature)
+            .map(
+                |SignatureConfirmationStatus {
+                     confirmations,
+                     status,
+                     ..
+                 }| RpcSignatureConfirmation {
+                    confirmations,
+                    status,
+                },
+            )
+    }
+
     pub fn get_signature_status(
         &self,
         signature: Signature,
@@ -559,6 +578,14 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
+
+    #[rpc(meta, name = "getSignatureConfirmation")]
+    fn get_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<RpcSignatureConfirmation>>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
@@ -897,6 +924,24 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_fee_rate_governor()
+    }
+
+    fn get_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<RpcSignatureConfirmation>> {
+        debug!(
+            "get_signature_confirmation rpc request received: {:?}",
+            signature_str
+        );
+        let signature = verify_signature(&signature_str)?;
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_signature_confirmation_status(signature, commitment))
     }
 
     fn get_signature_status(
