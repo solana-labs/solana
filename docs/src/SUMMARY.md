@@ -1,6 +1,6 @@
 # Table of contents
 
-* [Introduction](introduction.md)
+* [Introduction FOO](introduction.md)
 * [Wallet Guide](wallet/README.md)
   * [App Wallets](wallet/app-wallets.md)
     * [Trust Wallet](wallet/trust-wallet.md)
