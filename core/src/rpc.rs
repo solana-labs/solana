@@ -1802,7 +1802,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let expected_res: transaction::Result<()> = Err(TransactionError::InstructionError(
             0,
-            InstructionError::CustomError(1),
+            InstructionError::Custom(1),
         ));
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let result: Option<TransactionStatus> =
@@ -2270,7 +2270,7 @@ pub mod tests {
                         meta.unwrap().status,
                         Err(TransactionError::InstructionError(
                             0,
-                            InstructionError::CustomError(1)
+                            InstructionError::Custom(1)
                         ))
                     );
                 } else {
@@ -2304,7 +2304,7 @@ pub mod tests {
                         meta.unwrap().status,
                         Err(TransactionError::InstructionError(
                             0,
-                            InstructionError::CustomError(1)
+                            InstructionError::Custom(1)
                         ))
                     );
                 } else {

@@ -24,7 +24,7 @@ pub enum MyError {
 }
 impl From<MyError> for ProgramError {
     fn from(e: MyError) -> Self {
-        ProgramError::CustomError(e as u32)
+        ProgramError::Custom(e as u32)
     }
 }
 impl<T> DecodeError<T> for MyError {

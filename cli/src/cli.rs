@@ -2173,7 +2173,7 @@ where
         Err(err) => {
             if let ClientErrorKind::TransactionError(TransactionError::InstructionError(
                 _,
-                InstructionError::CustomError(code),
+                InstructionError::Custom(code),
             )) = err.kind()
             {
                 if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
