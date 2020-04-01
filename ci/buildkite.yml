@@ -2,6 +2,11 @@
 #
 # Release tags use buildkite-release.yml instead
 steps:
+  - command: "true"
+    name: "dependabot"
+    timeout_in_minutes: 5
+    if: build.env("GITHUB_USER") == "dependabot-preview[bot]"
+  - wait
   - command: "ci/shellcheck.sh"
     name: "shellcheck"
     timeout_in_minutes: 5
