@@ -84,10 +84,10 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 ```bash
-solana transfer --from <SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url http://devnet.solana.com
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5--url http://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
-where you replace `<SENDER_KEYPAIR>` with the path to a keypair in your wallet,
+where you replace `<KEYPAIR>` with the path to a keypair in your wallet,
 and replace `<RECIPIENT_ACCOUNT_ADDRESS>` with the output of `solana-keygen new` above.
 
 Confirm the updated balances with `solana balance`:
@@ -107,7 +107,7 @@ tokens to transfer. Once you have that collected, you can transfer tokens
 with the `solana transfer` command:
 
 ```bash
-solana transfer --from <SENDER_KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT> --fee-payer <KEYPAIR>
 ```
 
 Confirm the updated balances with `solana balance`:
