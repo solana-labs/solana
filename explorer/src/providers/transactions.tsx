@@ -27,7 +27,7 @@ export interface Transaction {
   signature: TransactionSignature;
 }
 
-type Transactions = { [id: number]: Transaction };
+type Transactions = { [signature: string]: Transaction };
 interface State {
   idCounter: number;
   transactions: Transactions;
@@ -40,7 +40,7 @@ export enum ActionType {
 
 interface UpdateStatus {
   type: ActionType.UpdateStatus;
-  id: number;
+  signature: TransactionSignature;
   status: Status;
   slot?: number;
   confirmations?: Confirmations;
@@ -57,10 +57,12 @@ type Dispatch = (action: Action) => void;
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case ActionType.InputSignature: {
+      if (!!state.transactions[action.signature]) return state;
+
       const idCounter = state.idCounter + 1;
       const transactions = {
         ...state.transactions,
-        [idCounter]: {
+        [action.signature]: {
           id: idCounter,
           status: Status.Checking,
           source: Source.Input,
@@ -70,7 +72,7 @@ function reducer(state: State, action: Action): State {
       return { ...state, transactions, idCounter };
     }
     case ActionType.UpdateStatus: {
-      let transaction = state.transactions[action.id];
+      let transaction = state.transactions[action.signature];
       if (transaction) {
         transaction = {
           ...transaction,
@@ -80,7 +82,7 @@ function reducer(state: State, action: Action): State {
         };
         const transactions = {
           ...state.transactions,
-          [action.id]: transaction
+          [action.signature]: transaction
         };
         return { ...state, transactions };
       }
@@ -108,12 +110,13 @@ function initState(): State {
   const signatures = urlSignatures();
   const transactions = signatures.reduce(
     (transactions: Transactions, signature) => {
-      const id = ++idCounter;
-      transactions[id] = {
-        id,
+      if (!!transactions[signature]) return transactions;
+      idCounter++;
+      transactions[signature] = {
+        id: idCounter,
+        signature,
         status: Status.Checking,
-        source: Source.Url,
-        signature
+        source: Source.Url
       };
       return transactions;
     },
@@ -140,8 +143,8 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
       createDevTransaction(dispatch, url);
     }
 
-    Object.values(state.transactions).forEach(tx => {
-      checkTransactionStatus(dispatch, tx.id, tx.signature, url);
+    Object.keys(state.transactions).forEach(signature => {
+      checkTransactionStatus(dispatch, signature, url);
     });
   }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -158,11 +161,12 @@ async function createDevTransaction(dispatch: Dispatch, url: string) {
   try {
     const connection = new Connection(url);
     const signature = await connection.requestAirdrop(
-      new PublicKey(0),
+      new PublicKey(1),
       1,
       "recent"
     );
     dispatch({ type: ActionType.InputSignature, signature });
+    checkTransactionStatus(dispatch, signature, url);
   } catch (error) {
     console.error("Failed to create dev transaction", error);
   }
@@ -170,14 +174,13 @@ async function createDevTransaction(dispatch: Dispatch, url: string) {
 
 export async function checkTransactionStatus(
   dispatch: Dispatch,
-  id: number,
   signature: TransactionSignature,
   url: string
 ) {
   dispatch({
     type: ActionType.UpdateStatus,
     status: Status.Checking,
-    id
+    signature
   });
 
   let status;
@@ -206,7 +209,13 @@ export async function checkTransactionStatus(
     console.error("Failed to check transaction status", error);
     status = Status.CheckFailed;
   }
-  dispatch({ type: ActionType.UpdateStatus, status, slot, confirmations, id });
+  dispatch({
+    type: ActionType.UpdateStatus,
+    status,
+    slot,
+    confirmations,
+    signature
+  });
 }
 
 export function useTransactions() {
