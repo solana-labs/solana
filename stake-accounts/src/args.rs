@@ -1,382 +1,233 @@
-use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::input_validators::{is_amount, is_valid_pubkey, is_valid_signer};
-use solana_cli_config::CONFIG_FILE;
-use solana_sdk::native_token::sol_to_lamports;
-use std::ffi::OsString;
-use std::process::exit;
+use clap::ArgMatches;
+use solana_clap_utils::keypair::{pubkey_from_path, signer_from_path};
+use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
+use solana_sdk::{pubkey::Pubkey, signature::Signer};
+use std::error::Error;
+use std::sync::Arc;
 
-pub(crate) struct NewCommandConfig {
-    pub fee_payer: String,
-    pub funding_keypair: String,
-    pub base_keypair: String,
+pub(crate) struct NewArgs<P, K> {
+    pub fee_payer: K,
+    pub funding_keypair: K,
+    pub base_keypair: K,
     pub lamports: u64,
-    pub stake_authority: String,
-    pub withdraw_authority: String,
+    pub stake_authority: P,
+    pub withdraw_authority: P,
     pub index: usize,
 }
 
-pub(crate) struct CountCommandConfig {
-    pub base_pubkey: String,
+pub(crate) struct CountArgs<P> {
+    pub base_pubkey: P,
 }
 
-pub(crate) struct QueryCommandConfig {
-    pub base_pubkey: String,
+pub(crate) struct QueryArgs<P> {
+    pub base_pubkey: P,
     pub num_accounts: usize,
 }
 
-pub(crate) struct AuthorizeCommandConfig {
-    pub fee_payer: String,
-    pub base_pubkey: String,
-    pub stake_authority: String,
-    pub withdraw_authority: String,
-    pub new_stake_authority: String,
-    pub new_withdraw_authority: String,
+pub(crate) struct AuthorizeArgs<P, K> {
+    pub fee_payer: K,
+    pub base_pubkey: P,
+    pub stake_authority: K,
+    pub withdraw_authority: K,
+    pub new_stake_authority: P,
+    pub new_withdraw_authority: P,
     pub num_accounts: usize,
 }
 
-pub(crate) struct RebaseCommandConfig {
-    pub fee_payer: String,
-    pub base_pubkey: String,
-    pub new_base_keypair: String,
-    pub stake_authority: String,
+pub(crate) struct RebaseArgs<P, K> {
+    pub fee_payer: K,
+    pub base_pubkey: P,
+    pub new_base_keypair: K,
+    pub stake_authority: K,
     pub num_accounts: usize,
 }
 
-pub(crate) struct MoveCommandConfig {
-    pub rebase_config: RebaseCommandConfig,
-    pub authorize_config: AuthorizeCommandConfig,
+pub(crate) struct MoveArgs<P, K> {
+    pub rebase_args: RebaseArgs<P, K>,
+    pub authorize_args: AuthorizeArgs<P, K>,
 }
 
-pub(crate) enum Command {
-    New(NewCommandConfig),
-    Count(CountCommandConfig),
-    Addresses(QueryCommandConfig),
-    Balance(QueryCommandConfig),
-    Authorize(AuthorizeCommandConfig),
-    Rebase(RebaseCommandConfig),
-    Move(Box<MoveCommandConfig>),
+pub(crate) enum Command<P, K> {
+    New(NewArgs<P, K>),
+    Count(CountArgs<P>),
+    Addresses(QueryArgs<P>),
+    Balance(QueryArgs<P>),
+    Authorize(AuthorizeArgs<P, K>),
+    Rebase(RebaseArgs<P, K>),
+    Move(Box<MoveArgs<P, K>>),
 }
 
-pub(crate) struct CommandConfig {
+pub(crate) struct Args<P, K> {
     pub config_file: String,
     pub url: Option<String>,
-    pub command: Command,
+    pub command: Command<P, K>,
 }
 
-fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("fee_payer")
-        .long("fee-payer")
-        .required(true)
-        .takes_value(true)
-        .value_name("KEYPAIR")
-        .validator(is_valid_signer)
-        .help("Fee payer")
+fn resolve_stake_authority(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Box<dyn Signer>, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    signer_from_path(&matches, key_url, "stake authority", wallet_manager)
 }
 
-fn funding_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("funding_keypair")
-        .required(true)
-        .takes_value(true)
-        .value_name("FUNDING_KEYPAIR")
-        .validator(is_valid_signer)
-        .help("Keypair to fund accounts")
+fn resolve_withdraw_authority(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Box<dyn Signer>, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    signer_from_path(&matches, key_url, "withdraw authority", wallet_manager)
 }
 
-fn base_pubkey_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("base_pubkey")
-        .required(true)
-        .takes_value(true)
-        .value_name("BASE_PUBKEY")
-        .validator(is_valid_pubkey)
-        .help("Public key which stake account addresses are derived from")
+fn resolve_new_stake_authority(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Pubkey, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    pubkey_from_path(&matches, key_url, "new stake authority", wallet_manager)
 }
 
-fn new_base_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("new_base_keypair")
-        .required(true)
-        .takes_value(true)
-        .value_name("NEW_BASE_KEYPAIR")
-        .validator(is_valid_signer)
-        .help("New keypair which stake account addresses are derived from")
+fn resolve_new_withdraw_authority(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Pubkey, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    pubkey_from_path(&matches, key_url, "new withdraw authority", wallet_manager)
 }
 
-fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("stake_authority")
-        .long("stake-authority")
-        .required(true)
-        .takes_value(true)
-        .value_name("KEYPAIR")
-        .validator(is_valid_signer)
-        .help("Stake authority")
+fn resolve_fee_payer(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Box<dyn Signer>, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    signer_from_path(&matches, key_url, "fee-payer", wallet_manager)
 }
 
-fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("withdraw_authority")
-        .long("withdraw-authority")
-        .required(true)
-        .takes_value(true)
-        .value_name("KEYPAIR")
-        .validator(is_valid_signer)
-        .help("Withdraw authority")
+fn resolve_base_pubkey(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Pubkey, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    pubkey_from_path(&matches, key_url, "base pubkey", wallet_manager)
 }
 
-fn new_stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("new_stake_authority")
-        .long("new-stake-authority")
-        .required(true)
-        .takes_value(true)
-        .value_name("PUBKEY")
-        .validator(is_valid_pubkey)
-        .help("New stake authority")
+fn resolve_new_base_keypair(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Box<dyn Signer>, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    signer_from_path(&matches, key_url, "new base pubkey", wallet_manager)
 }
 
-fn new_withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("new_withdraw_authority")
-        .long("new-withdraw-authority")
-        .required(true)
-        .takes_value(true)
-        .value_name("PUBKEY")
-        .validator(is_valid_pubkey)
-        .help("New withdraw authority")
-}
-
-fn num_accounts_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name("num_accounts")
-        .long("num-accounts")
-        .required(true)
-        .takes_value(true)
-        .value_name("NUMBER")
-        .help("Number of derived stake accounts")
-}
-
-pub(crate) fn get_matches<'a, I, T>(args: I) -> ArgMatches<'a>
-where
-    I: IntoIterator<Item = T>,
-    T: Into<OsString> + Clone,
-{
-    let default_config_file = CONFIG_FILE.as_ref().unwrap();
-    App::new("solana-stake-accounts")
-        .about("about")
-        .version("version")
-        .arg(
-            Arg::with_name("config_file")
-                .long("config")
-                .takes_value(true)
-                .value_name("FILEPATH")
-                .default_value(default_config_file)
-                .help("Config file"),
-        )
-        .arg(
-            Arg::with_name("url")
-                .long("url")
-                .global(true)
-                .takes_value(true)
-                .value_name("URL")
-                .help("RPC entrypoint address. i.e. http://devnet.solana.com"),
-        )
-        .subcommand(
-            SubCommand::with_name("new")
-                .about("Create derived stake accounts")
-                .arg(fee_payer_arg())
-                .arg(funding_keypair_arg().index(1))
-                .arg(
-                    Arg::with_name("base_keypair")
-                        .required(true)
-                        .index(2)
-                        .takes_value(true)
-                        .value_name("BASE_KEYPAIR")
-                        .validator(is_valid_signer)
-                        .help("Keypair which stake account addresses are derived from"),
-                )
-                .arg(
-                    Arg::with_name("amount")
-                        .required(true)
-                        .index(3)
-                        .takes_value(true)
-                        .value_name("AMOUNT")
-                        .validator(is_amount)
-                        .help("Amount to move into the new stake accounts, in SOL"),
-                )
-                .arg(
-                    Arg::with_name("stake_authority")
-                        .long("stake-authority")
-                        .required(true)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .validator(is_valid_pubkey)
-                        .help("Stake authority"),
-                )
-                .arg(
-                    Arg::with_name("withdraw_authority")
-                        .long("withdraw-authority")
-                        .required(true)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .validator(is_valid_pubkey)
-                        .help("Withdraw authority"),
-                )
-                .arg(
-                    Arg::with_name("index")
-                        .long("index")
-                        .takes_value(true)
-                        .default_value("0")
-                        .value_name("NUMBER")
-                        .help("Index of the derived account to create"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("count")
-                .about("Count derived stake accounts")
-                .arg(base_pubkey_arg().index(1)),
-        )
-        .subcommand(
-            SubCommand::with_name("addresses")
-                .about("Show public keys of all derived stake accounts")
-                .arg(base_pubkey_arg().index(1))
-                .arg(num_accounts_arg()),
-        )
-        .subcommand(
-            SubCommand::with_name("balance")
-                .about("Sum balances of all derived stake accounts")
-                .arg(base_pubkey_arg().index(1))
-                .arg(num_accounts_arg()),
-        )
-        .subcommand(
-            SubCommand::with_name("authorize")
-                .about("Set new authorities in all derived stake accounts")
-                .arg(fee_payer_arg())
-                .arg(base_pubkey_arg().index(1))
-                .arg(stake_authority_arg())
-                .arg(withdraw_authority_arg())
-                .arg(new_stake_authority_arg())
-                .arg(new_withdraw_authority_arg())
-                .arg(num_accounts_arg()),
-        )
-        .subcommand(
-            SubCommand::with_name("rebase")
-                .about("Relocate derived stake accounts")
-                .arg(fee_payer_arg())
-                .arg(base_pubkey_arg().index(1))
-                .arg(new_base_keypair_arg().index(2))
-                .arg(stake_authority_arg())
-                .arg(num_accounts_arg()),
-        )
-        .subcommand(
-            SubCommand::with_name("move")
-                .about("Rebase and set new authorities in all derived stake accounts")
-                .arg(fee_payer_arg())
-                .arg(base_pubkey_arg().index(1))
-                .arg(new_base_keypair_arg().index(2))
-                .arg(stake_authority_arg())
-                .arg(withdraw_authority_arg())
-                .arg(new_stake_authority_arg())
-                .arg(new_withdraw_authority_arg())
-                .arg(num_accounts_arg()),
-        )
-        .get_matches_from(args)
-}
-
-fn parse_new_args(matches: &ArgMatches<'_>) -> NewCommandConfig {
-    let fee_payer = value_t_or_exit!(matches, "fee_payer", String);
-    let funding_keypair = value_t_or_exit!(matches, "funding_keypair", String);
-    let lamports = sol_to_lamports(value_t_or_exit!(matches, "amount", f64));
-    let base_keypair = value_t_or_exit!(matches, "base_keypair", String);
-    let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
-    let withdraw_authority = value_t_or_exit!(matches, "withdraw_authority", String);
-    let index = value_t_or_exit!(matches, "index", usize);
-    NewCommandConfig {
-        fee_payer,
-        funding_keypair,
-        lamports,
-        base_keypair,
-        stake_authority,
-        withdraw_authority,
-        index,
-    }
-}
-
-fn parse_count_args(matches: &ArgMatches<'_>) -> CountCommandConfig {
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    CountCommandConfig { base_pubkey }
-}
-
-fn parse_query_args(matches: &ArgMatches<'_>) -> QueryCommandConfig {
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    let num_accounts = value_t_or_exit!(matches, "num_accounts", usize);
-    QueryCommandConfig {
-        base_pubkey,
-        num_accounts,
-    }
-}
-
-fn parse_authorize_args(matches: &ArgMatches<'_>) -> AuthorizeCommandConfig {
-    let fee_payer = value_t_or_exit!(matches, "fee_payer", String);
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
-    let withdraw_authority = value_t_or_exit!(matches, "withdraw_authority", String);
-    let new_stake_authority = value_t_or_exit!(matches, "new_stake_authority", String);
-    let new_withdraw_authority = value_t_or_exit!(matches, "new_withdraw_authority", String);
-    let num_accounts = value_t_or_exit!(matches, "num_accounts", usize);
-    AuthorizeCommandConfig {
-        fee_payer,
-        base_pubkey,
-        stake_authority,
-        withdraw_authority,
-        new_stake_authority,
-        new_withdraw_authority,
-        num_accounts,
-    }
-}
-
-fn parse_rebase_args(matches: &ArgMatches<'_>) -> RebaseCommandConfig {
-    let fee_payer = value_t_or_exit!(matches, "fee_payer", String);
-    let base_pubkey = value_t_or_exit!(matches, "base_pubkey", String);
-    let new_base_keypair = value_t_or_exit!(matches, "new_base_keypair", String);
-    let stake_authority = value_t_or_exit!(matches, "stake_authority", String);
-    let num_accounts = value_t_or_exit!(matches, "num_accounts", usize);
-    RebaseCommandConfig {
-        fee_payer,
-        base_pubkey,
-        new_base_keypair,
-        stake_authority,
-        num_accounts,
-    }
-}
-
-fn parse_move_args(matches: &ArgMatches<'_>) -> MoveCommandConfig {
-    let rebase_config = parse_rebase_args(matches);
-    let authorize_config = parse_authorize_args(matches);
-    MoveCommandConfig {
-        rebase_config,
-        authorize_config,
-    }
-}
-
-pub(crate) fn parse_args<I, T>(args: I) -> CommandConfig
-where
-    I: IntoIterator<Item = T>,
-    T: Into<OsString> + Clone,
-{
-    let matches = get_matches(args);
-    let config_file = matches.value_of("config_file").unwrap().to_string();
-    let url = matches.value_of("url").map(|x| x.to_string());
-
-    let command = match matches.subcommand() {
-        ("new", Some(matches)) => Command::New(parse_new_args(matches)),
-        ("count", Some(matches)) => Command::Count(parse_count_args(matches)),
-        ("addresses", Some(matches)) => Command::Addresses(parse_query_args(matches)),
-        ("balance", Some(matches)) => Command::Balance(parse_query_args(matches)),
-        ("authorize", Some(matches)) => Command::Authorize(parse_authorize_args(matches)),
-        ("rebase", Some(matches)) => Command::Rebase(parse_rebase_args(matches)),
-        ("move", Some(matches)) => Command::Move(Box::new(parse_move_args(matches))),
-        _ => {
-            eprintln!("{}", matches.usage());
-            exit(1);
-        }
+fn resolve_authorize_args(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    args: &AuthorizeArgs<String, String>,
+) -> Result<AuthorizeArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
+    let resolved_args = AuthorizeArgs {
+        fee_payer: resolve_fee_payer(wallet_manager, &args.fee_payer)?,
+        base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+        stake_authority: resolve_stake_authority(wallet_manager, &args.stake_authority)?,
+        withdraw_authority: resolve_withdraw_authority(wallet_manager, &args.withdraw_authority)?,
+        new_stake_authority: resolve_new_stake_authority(
+            wallet_manager,
+            &args.new_stake_authority,
+        )?,
+        new_withdraw_authority: resolve_new_withdraw_authority(
+            wallet_manager,
+            &args.new_withdraw_authority,
+        )?,
+        num_accounts: args.num_accounts,
     };
-    CommandConfig {
-        config_file,
-        url,
-        command,
+    Ok(resolved_args)
+}
+
+fn resolve_rebase_args(
+    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    args: &RebaseArgs<String, String>,
+) -> Result<RebaseArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
+    let resolved_args = RebaseArgs {
+        fee_payer: resolve_fee_payer(wallet_manager, &args.fee_payer)?,
+        base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+        new_base_keypair: resolve_new_base_keypair(wallet_manager, &args.new_base_keypair)?,
+        stake_authority: resolve_stake_authority(wallet_manager, &args.stake_authority)?,
+        num_accounts: args.num_accounts,
+    };
+    Ok(resolved_args)
+}
+
+pub(crate) fn resolve_command(
+    command: &Command<String, String>,
+) -> Result<Command<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
+    let wallet_manager = maybe_wallet_manager()?;
+    let wallet_manager = wallet_manager.as_ref();
+    let matches = ArgMatches::default();
+    match command {
+        Command::New(args) => {
+            let resolved_args = NewArgs {
+                fee_payer: resolve_fee_payer(wallet_manager, &args.fee_payer)?,
+                funding_keypair: signer_from_path(
+                    &matches,
+                    &args.funding_keypair,
+                    "funding keypair",
+                    wallet_manager,
+                )?,
+                base_keypair: signer_from_path(
+                    &matches,
+                    &args.base_keypair,
+                    "base keypair",
+                    wallet_manager,
+                )?,
+                stake_authority: pubkey_from_path(
+                    &matches,
+                    &args.stake_authority,
+                    "stake authority",
+                    wallet_manager,
+                )?,
+                withdraw_authority: pubkey_from_path(
+                    &matches,
+                    &args.withdraw_authority,
+                    "withdraw authority",
+                    wallet_manager,
+                )?,
+                lamports: args.lamports,
+                index: args.index,
+            };
+            Ok(Command::New(resolved_args))
+        }
+        Command::Count(args) => {
+            let resolved_args = CountArgs {
+                base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+            };
+            Ok(Command::Count(resolved_args))
+        }
+        Command::Addresses(args) => {
+            let resolved_args = QueryArgs {
+                base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+                num_accounts: args.num_accounts,
+            };
+            Ok(Command::Addresses(resolved_args))
+        }
+        Command::Balance(args) => {
+            let resolved_args = QueryArgs {
+                base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+                num_accounts: args.num_accounts,
+            };
+            Ok(Command::Balance(resolved_args))
+        }
+        Command::Authorize(args) => {
+            let resolved_args = resolve_authorize_args(wallet_manager, &args)?;
+            Ok(Command::Authorize(resolved_args))
+        }
+        Command::Rebase(args) => {
+            let resolved_args = resolve_rebase_args(wallet_manager, &args)?;
+            Ok(Command::Rebase(resolved_args))
+        }
+        Command::Move(args) => {
+            let resolved_args = MoveArgs {
+                authorize_args: resolve_authorize_args(wallet_manager, &args.authorize_args)?,
+                rebase_args: resolve_rebase_args(wallet_manager, &args.rebase_args)?,
+            };
+            Ok(Command::Move(Box::new(resolved_args)))
+        }
     }
 }
