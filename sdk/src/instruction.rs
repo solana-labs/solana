@@ -116,7 +116,7 @@ pub enum InstructionError {
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
     #[error("program error: {0:#x}")]
-    CustomError(u32),
+    Custom(u32),
 
     /// The return value from the program was invalid.  Valid errors are either a defined builtin
     /// error value or a user-defined error in the lower 32 bits.

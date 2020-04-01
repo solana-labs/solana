@@ -134,8 +134,8 @@ impl From<u64> for ProgramError {
             UNINITIALIZED_ACCOUNT => ProgramError::UninitializedAccount,
             NOT_ENOUGH_ACCOUNT_KEYS => ProgramError::NotEnoughAccountKeys,
             ACCOUNT_BORROW_FAILED => ProgramError::AccountBorrowFailed,
-            CUSTOM_ZERO => ProgramError::CustomError(0),
-            _ => ProgramError::CustomError(error as u32),
+            CUSTOM_ZERO => ProgramError::Custom(0),
+            _ => ProgramError::Custom(error as u32),
         }
     }
 }
@@ -145,7 +145,7 @@ impl TryFrom<InstructionError> for ProgramError {
 
     fn try_from(error: InstructionError) -> Result<Self, Self::Error> {
         match error {
-            Self::Error::CustomError(err) => Ok(Self::CustomError(err)),
+            Self::Error::Custom(err) => Ok(Self::Custom(err)),
             Self::Error::InvalidArgument => Ok(Self::InvalidArgument),
             Self::Error::InvalidInstructionData => Ok(Self::InvalidInstructionData),
             Self::Error::InvalidAccountData => Ok(Self::InvalidAccountData),
@@ -169,7 +169,7 @@ where
     fn from(error: T) -> Self {
         let error = error.to_u64().unwrap_or(0xbad_c0de);
         match error {
-            CUSTOM_ZERO => InstructionError::CustomError(0),
+            CUSTOM_ZERO => InstructionError::Custom(0),
             INVALID_ARGUMENT => InstructionError::InvalidArgument,
             INVALID_INSTRUCTION_DATA => InstructionError::InvalidInstructionData,
             INVALID_ACCOUNT_DATA => InstructionError::InvalidAccountData,
@@ -184,7 +184,7 @@ where
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
-                    InstructionError::CustomError(error as u32)
+                    InstructionError::Custom(error as u32)
                 } else {
                     InstructionError::InvalidError
                 }

@@ -2602,7 +2602,7 @@ pub(crate) mod tests {
                             meta.unwrap().status,
                             Err(TransactionError::InstructionError(
                                 0,
-                                InstructionError::CustomError(1)
+                                InstructionError::Custom(1)
                             ))
                         );
                     } else {
