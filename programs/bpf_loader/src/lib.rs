@@ -185,17 +185,17 @@ pub fn process_instruction(
                 }
             };
 
-            info!("Call BPF program");
+            info!("Call BPF program {}", program.unsigned_key());
             match vm.execute_program(parameter_bytes.as_slice(), &[], &[heap_region]) {
                 Ok(status) => {
                     if status != SUCCESS {
                         let error: InstructionError = status.into();
-                        warn!("BPF program failed: {}", error);
+                        warn!("BPF program {} failed: {}", program.unsigned_key(), error);
                         return Err(error);
                     }
                 }
                 Err(error) => {
-                    warn!("BPF program failed: {}", error);
+                    warn!("BPF program {} failed: {}", program.unsigned_key(), error);
                     return match error {
                         EbpfError::UserError(BPFError::HelperError(
                             HelperError::InstructionError(error),
@@ -206,7 +206,7 @@ pub fn process_instruction(
             }
         }
         deserialize_parameters(parameter_accounts, &parameter_bytes)?;
-        info!("BPF program success");
+        info!("BPF program {} success", program.unsigned_key());
     } else if !keyed_accounts.is_empty() {
         match limited_deserialize(instruction_data)? {
             LoaderInstruction::Write { offset, bytes } => {
