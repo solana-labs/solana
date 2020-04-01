@@ -27,15 +27,32 @@ export interface Transaction {
   signature: TransactionSignature;
 }
 
+export interface Selected {
+  slot: number;
+  signature: TransactionSignature;
+}
+
 type Transactions = { [signature: string]: Transaction };
 interface State {
   idCounter: number;
+  selected?: Selected;
   transactions: Transactions;
 }
 
 export enum ActionType {
   UpdateStatus,
-  InputSignature
+  InputSignature,
+  Select,
+  Deselect
+}
+
+interface SelectTransaction {
+  type: ActionType.Select;
+  signature: TransactionSignature;
+}
+
+interface DeselectTransaction {
+  type: ActionType.Deselect;
 }
 
 interface UpdateStatus {
@@ -51,11 +68,27 @@ interface InputSignature {
   signature: TransactionSignature;
 }
 
-type Action = UpdateStatus | InputSignature;
+type Action =
+  | UpdateStatus
+  | InputSignature
+  | SelectTransaction
+  | DeselectTransaction;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case ActionType.Deselect: {
+      return { ...state, selected: undefined };
+    }
+    case ActionType.Select: {
+      const tx = state.transactions[action.signature];
+      if (!tx.slot) return state;
+      const selected = {
+        slot: tx.slot,
+        signature: tx.signature
+      };
+      return { ...state, selected };
+    }
     case ActionType.InputSignature: {
       if (!!state.transactions[action.signature]) return state;
 
@@ -101,8 +134,9 @@ function urlSignatures(): Array<string> {
     .concat(findGetParameter("txns")?.split(",") || [])
     .concat(findGetParameter("transaction")?.split(",") || [])
     .concat(findGetParameter("transactions")?.split(",") || [])
-    .concat(findPathSegment("transaction")?.split(",") || [])
-    .concat(findPathSegment("transactions")?.split(",") || []);
+    .concat(findPathSegment("tx")?.split(",") || [])
+    .concat(findPathSegment("txn")?.split(",") || [])
+    .concat(findPathSegment("transaction")?.split(",") || []);
 }
 
 function initState(): State {
@@ -227,6 +261,7 @@ export function useTransactions() {
   }
   return {
     idCounter: context.idCounter,
+    selected: context.selected,
     transactions: Object.values(context.transactions).sort((a, b) =>
       a.id <= b.id ? 1 : -1
     )

@@ -58,6 +58,7 @@ function TransactionsCard() {
               <th className="text-muted">Signature</th>
               <th className="text-muted">Confirmations</th>
               <th className="text-muted">Slot Number</th>
+              <th className="text-muted">Details</th>
             </tr>
           </thead>
           <tbody className="list">
@@ -88,8 +89,11 @@ function TransactionsCard() {
               </td>
               <td>-</td>
               <td>-</td>
+              <td></td>
             </tr>
-            {transactions.map(transaction => renderTransactionRow(transaction))}
+            {transactions.map(transaction =>
+              renderTransactionRow(transaction, dispatch, url)
+            )}
           </tbody>
         </table>
       </div>
@@ -109,7 +113,11 @@ const renderHeader = () => {
   );
 };
 
-const renderTransactionRow = (transaction: Transaction) => {
+const renderTransactionRow = (
+  transaction: Transaction,
+  dispatch: any,
+  url: string
+) => {
   let statusText;
   let statusClass;
   switch (transaction.status) {
@@ -140,6 +148,32 @@ const renderTransactionRow = (transaction: Transaction) => {
   const slotText = `${transaction.slot || "-"}`;
   const confirmationsText = `${transaction.confirmations || "-"}`;
 
+  const renderDetails = () => {
+    let onClick, icon;
+    if (transaction.confirmations === "max") {
+      icon = "more-horizontal";
+      onClick = () =>
+        dispatch({
+          type: ActionType.Select,
+          signature: transaction.signature
+        });
+    } else {
+      icon = "refresh-cw";
+      onClick = () => {
+        checkTransactionStatus(dispatch, transaction.signature, url);
+      };
+    }
+
+    return (
+      <button
+        className="btn btn-rounded-circle btn-white btn-sm"
+        onClick={onClick}
+      >
+        <span className={`fe fe-${icon}`}></span>
+      </button>
+    );
+  };
+
   return (
     <tr key={transaction.signature}>
       <td>
@@ -155,6 +189,7 @@ const renderTransactionRow = (transaction: Transaction) => {
       </td>
       <td className="text-uppercase">{confirmationsText}</td>
       <td>{slotText}</td>
+      <td>{renderDetails()}</td>
     </tr>
   );
 };
