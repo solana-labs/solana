@@ -193,7 +193,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 
 async function createDevTransaction(dispatch: Dispatch, url: string) {
   try {
-    const connection = new Connection(url);
+    const connection = new Connection(url, "recent");
     const signature = await connection.requestAirdrop(
       new PublicKey(1),
       1,
@@ -221,7 +221,9 @@ export async function checkTransactionStatus(
   let slot;
   let confirmations: Confirmations | undefined;
   try {
-    const { value } = await new Connection(url).getSignatureStatus(signature);
+    const { value } = await new Connection(url, "recent").getSignatureStatus(
+      signature
+    );
 
     if (value === null) {
       status = Status.Missing;
