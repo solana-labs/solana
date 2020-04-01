@@ -2203,6 +2203,10 @@ impl Bank {
     pub fn clean_dead_slots(&self) {
         self.rc.accounts.accounts_db.process_dead_slots();
     }
+
+    pub fn compact_stale_slots(&self) {
+        self.rc.accounts.accounts_db.compact_stale_slots();
+    }
 }
 
 impl Drop for Bank {
