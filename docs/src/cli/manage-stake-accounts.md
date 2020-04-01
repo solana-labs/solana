@@ -16,7 +16,8 @@ Create and fund a derived stake account at the stake authority public key:
 
 ```bash
 solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
-    --stake-authority <PUBKEY> --withdraw-authority <PUBKEY>
+    --stake-authority <PUBKEY> --withdraw-authority <PUBKEY> \
+    --fee-payer <KEYPAIR>
 ```
 
 ### Count accounts
@@ -51,7 +52,7 @@ Set new authorities on each derived stake account:
 solana-stake-accounts authorize <BASE_PUBKEY> \
     --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> \
     --new-stake-authority <PUBKEY> --new-withdraw-authority <PUBKEY> \
-    --num-accounts <NUMBER>
+    --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
 
 ### Relocate stake accounts
@@ -60,7 +61,8 @@ Relocate stake accounts:
 
 ```bash
 solana-stake-accounts rebase <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
-    --stake-authority <KEYPAIR> --num-accounts <NUMBER>
+    --stake-authority <KEYPAIR> --num-accounts <NUMBER> \
+    --fee-payer <KEYPAIR>
 ```
 
 To atomically rebase and authorize each stake account, use the 'move'
@@ -70,5 +72,5 @@ command:
 solana-stake-accounts move <BASE_PUBKEY> <NEW_BASE_KEYPAIR> \
     --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> \
     --new-stake-authority <PUBKEY> --new-withdraw-authority <PUBKEY> \
-    --num-accounts <NUMBER>
+    --num-accounts <NUMBER> --fee-payer <KEYPAIR>
 ```
