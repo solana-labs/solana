@@ -1,5 +1,6 @@
 use crate::{instruction::InstructionError, program_utils::DecodeError};
 use num_traits::{FromPrimitive, ToPrimitive};
+use std::convert::TryFrom;
 use thiserror::Error;
 
 #[cfg(feature = "program")]
@@ -58,17 +59,17 @@ impl PrintProgramError for ProgramError {
                     info!("Error: Unknown");
                 }
             }
-            ProgramError::InvalidArgument => info!("Error: InvalidArgument"),
-            ProgramError::InvalidInstructionData => info!("Error: InvalidInstructionData"),
-            ProgramError::InvalidAccountData => info!("Error: InvalidAccountData"),
-            ProgramError::AccountDataTooSmall => info!("Error: AccountDataTooSmall"),
-            ProgramError::InsufficientFunds => info!("Error: InsufficientFunds"),
-            ProgramError::IncorrectProgramId => info!("Error: IncorrectProgramId"),
-            ProgramError::MissingRequiredSignature => info!("Error: MissingRequiredSignature"),
-            ProgramError::AccountAlreadyInitialized => info!("Error: AccountAlreadyInitialized"),
-            ProgramError::UninitializedAccount => info!("Error: UninitializedAccount"),
-            ProgramError::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
-            ProgramError::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
+            Self::InvalidArgument => info!("Error: InvalidArgument"),
+            Self::InvalidInstructionData => info!("Error: InvalidInstructionData"),
+            Self::InvalidAccountData => info!("Error: InvalidAccountData"),
+            Self::AccountDataTooSmall => info!("Error: AccountDataTooSmall"),
+            Self::InsufficientFunds => info!("Error: InsufficientFunds"),
+            Self::IncorrectProgramId => info!("Error: IncorrectProgramId"),
+            Self::MissingRequiredSignature => info!("Error: MissingRequiredSignature"),
+            Self::AccountAlreadyInitialized => info!("Error: AccountAlreadyInitialized"),
+            Self::UninitializedAccount => info!("Error: UninitializedAccount"),
+            Self::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
+            Self::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
         }
     }
 }
@@ -115,6 +116,48 @@ impl From<ProgramError> for u64 {
                     error as u64
                 }
             }
+        }
+    }
+}
+
+impl From<u64> for ProgramError {
+    fn from(error: u64) -> Self {
+        match error {
+            INVALID_ARGUMENT => ProgramError::InvalidArgument,
+            INVALID_INSTRUCTION_DATA => ProgramError::InvalidInstructionData,
+            INVALID_ACCOUNT_DATA => ProgramError::InvalidAccountData,
+            ACCOUNT_DATA_TOO_SMALL => ProgramError::AccountDataTooSmall,
+            INSUFFICIENT_FUNDS => ProgramError::InsufficientFunds,
+            INCORRECT_PROGRAM_ID => ProgramError::IncorrectProgramId,
+            MISSING_REQUIRED_SIGNATURES => ProgramError::MissingRequiredSignature,
+            ACCOUNT_ALREADY_INITIALIZED => ProgramError::AccountAlreadyInitialized,
+            UNINITIALIZED_ACCOUNT => ProgramError::UninitializedAccount,
+            NOT_ENOUGH_ACCOUNT_KEYS => ProgramError::NotEnoughAccountKeys,
+            ACCOUNT_BORROW_FAILED => ProgramError::AccountBorrowFailed,
+            CUSTOM_ZERO => ProgramError::CustomError(0),
+            _ => ProgramError::CustomError(error as u32),
+        }
+    }
+}
+
+impl TryFrom<InstructionError> for ProgramError {
+    type Error = InstructionError;
+
+    fn try_from(error: InstructionError) -> Result<Self, Self::Error> {
+        match error {
+            Self::Error::CustomError(err) => Ok(Self::CustomError(err)),
+            Self::Error::InvalidArgument => Ok(Self::InvalidArgument),
+            Self::Error::InvalidInstructionData => Ok(Self::InvalidInstructionData),
+            Self::Error::InvalidAccountData => Ok(Self::InvalidAccountData),
+            Self::Error::AccountDataTooSmall => Ok(Self::AccountDataTooSmall),
+            Self::Error::InsufficientFunds => Ok(Self::InsufficientFunds),
+            Self::Error::IncorrectProgramId => Ok(Self::IncorrectProgramId),
+            Self::Error::MissingRequiredSignature => Ok(Self::MissingRequiredSignature),
+            Self::Error::AccountAlreadyInitialized => Ok(Self::AccountAlreadyInitialized),
+            Self::Error::UninitializedAccount => Ok(Self::UninitializedAccount),
+            Self::Error::NotEnoughAccountKeys => Ok(Self::NotEnoughAccountKeys),
+            Self::Error::AccountBorrowFailed => Ok(Self::AccountBorrowFailed),
+            _ => Err(error),
         }
     }
 }
