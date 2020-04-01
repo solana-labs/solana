@@ -2255,24 +2255,20 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The airdrop amount to request, in SOL"),
                 )
                 .arg(
-                    Arg::with_name("to")
+                    pubkey!(Arg::with_name("to")
                         .index(2)
-                        .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .validator(is_valid_pubkey)
-                        .help("The account address of airdrop recipient"),
+                        .value_name("RECIPIENT_ADDRESS"),
+                        "The account address of airdrop recipient. "),
                 ),
         )
         .subcommand(
             SubCommand::with_name("balance")
                 .about("Get your balance")
                 .arg(
-                    Arg::with_name("pubkey")
+                    pubkey!(Arg::with_name("pubkey")
                         .index(1)
-                        .value_name("ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .validator(is_valid_pubkey)
-                        .help("The account address of the balance to check"),
+                        .value_name("ACCOUNT_ADDRESS"),
+                        "The account address of the balance to check. ")
                 )
                 .arg(
                     Arg::with_name("lamports")
@@ -2329,13 +2325,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         ),
                 )
                 .arg(
-                    Arg::with_name("from")
+                    pubkey!(Arg::with_name("from")
                         .long("from")
                         .value_name("FROM_PUBKEY")
-                        .takes_value(true)
-                        .required(false)
-                        .validator(is_valid_pubkey)
-                        .help("From (base) key, [default: cli config keypair]"),
+                        .required(false),
+                        "From (base) key, [default: cli config keypair]. "),
                 ),
         )
         .subcommand(
@@ -2354,13 +2348,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(
-                    Arg::with_name("to")
+                    pubkey!(Arg::with_name("to")
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("The account address of recipient"),
+                        .required(true),
+                        "The account address of recipient. "),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -2423,13 +2415,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("send-signature")
                 .about("Send a signature to authorize a transfer")
                 .arg(
-                    Arg::with_name("to")
+                    pubkey!(Arg::with_name("to")
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("The account address of recipient"),
+                        .required(true),
+                        "The account address of recipient. "),
                 )
                 .arg(
                     Arg::with_name("process_id")
@@ -2444,13 +2434,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("send-timestamp")
                 .about("Send a timestamp to unlock a transfer")
                 .arg(
-                    Arg::with_name("to")
+                    pubkey!(Arg::with_name("to")
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_pubkey)
-                        .help("The account address of recipient"),
+                        .required(true),
+                        "The account address of recipient. "),
                 )
                 .arg(
                     Arg::with_name("process_id")
@@ -2472,13 +2460,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("transfer")
                 .about("Transfer funds between system accounts")
                 .arg(
-                    Arg::with_name("to")
+                    pubkey!(Arg::with_name("to")
                         .index(1)
                         .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("The account address of recipient"),
+                        .required(true),
+                        "The account address of recipient. "),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -2490,12 +2476,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The amount to send, in SOL"),
                 )
                 .arg(
-                    Arg::with_name("from")
+                    pubkey!(Arg::with_name("from")
                         .long("from")
-                        .takes_value(true)
-                        .value_name("KEYPAIR")
-                        .validator(is_valid_signer)
-                        .help("Source account of funds (if different from client local account)"),
+                        .value_name("FROM_ADDRESS"),
+                        "Source account of funds (if different from client local account). "),
                 )
                 .offline_args()
                 .arg(nonce_arg())
@@ -2507,13 +2491,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .about("Show the contents of an account")
                 .alias("account")
                 .arg(
-                    Arg::with_name("account_pubkey")
+                    pubkey!(Arg::with_name("account_pubkey")
                         .index(1)
                         .value_name("ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Account pubkey"),
+                        .required(true),
+                        "Account key URI. ")
                 )
                 .arg(
                     Arg::with_name("output_file")

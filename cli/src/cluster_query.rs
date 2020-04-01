@@ -54,13 +54,11 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("catchup")
                 .about("Wait for a validator to catch up to the cluster")
                 .arg(
-                    Arg::with_name("node_pubkey")
+                    pubkey!(Arg::with_name("node_pubkey")
                         .index(1)
-                        .takes_value(true)
                         .value_name("VALIDATOR_PUBKEY")
-                        .validator(is_valid_pubkey)
-                        .required(true)
-                        .help("Identity pubkey of the validator"),
+                        .required(true),
+                        "Identity pubkey of the validator"),
                 )
                 .arg(
                     Arg::with_name("node_json_rpc_url")
@@ -219,13 +217,11 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("stakes")
                 .about("Show stake account information")
                 .arg(
-                    Arg::with_name("vote_account_pubkeys")
+                    pubkey!(Arg::with_name("vote_account_pubkeys")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_PUBKEYS")
-                        .takes_value(true)
-                        .multiple(true)
-                        .validator(is_valid_pubkey)
-                        .help("Only show stake accounts delegated to the provided vote accounts"),
+                        .multiple(true),
+                        "Only show stake accounts delegated to the provided vote accounts. "),
                 )
                 .arg(
                     Arg::with_name("lamports")
