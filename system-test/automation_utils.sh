@@ -18,6 +18,14 @@ function execution_step {
 
 function collect_logs {
   execution_step "Collect logs from remote nodes"
+
+  ls -lR "${REPO_ROOT}"/net/log/
+  for logfile in "${REPO_ROOT}"/net/log/*validator*; do
+    (
+      upload-ci-artifact "$logfile"
+    )
+  done
+
   rm -rf "${REPO_ROOT}"/net/log
   "${REPO_ROOT}"/net/net.sh logs
   for logfile in "${REPO_ROOT}"/net/log/*; do

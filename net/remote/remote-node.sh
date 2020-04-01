@@ -283,8 +283,12 @@ EOF
       --entrypoint "$entrypointIp:8001"
       --gossip-port 8001
       --rpc-port 8899
-      --expected-shred-version "$(cat config/shred-version)"
     )
+    if [[ -f config/shred-version && -s config/shred-version ]]; then
+      args+=(
+        --expected-shred-version "$(cat config/shred-version)"
+      )
+    fi
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
         --blockstream /tmp/solana-blockstream.sock
@@ -374,6 +378,7 @@ cat >> ~/solana/on-reboot <<EOF
     oom_score_adj "\$pid" 1000
     disown
 EOF
+    grep -H ^ ~/solana/on-reboot
     ~/solana/on-reboot
     waitForNodeToInit
 
@@ -423,6 +428,7 @@ cat >> ~/solana/on-reboot <<EOF
     oom_score_adj "\$pid" 1000
     disown
 EOF
+    grep -H ^ ~/solana/on-reboot
     ~/solana/on-reboot
     sleep 1
     ;;

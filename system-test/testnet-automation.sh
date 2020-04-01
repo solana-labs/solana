@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+NDEBUG="${NDEBUG-1}"
+export NDEBUG
+
 # shellcheck disable=SC1090
 # shellcheck disable=SC1091
 source "$(dirname "$0")"/automation_utils.sh
@@ -121,9 +124,17 @@ function launch_testnet() {
 
   execution_step "Starting bootstrap node and ${NUMBER_OF_VALIDATOR_NODES} validator nodes"
   if [[ -n $CHANNEL ]]; then
+    if [[ -z $NDEBUG ]]; then
+      maybeDebug=--debug
+    fi
+    # Our build machne is on Azure which supports AVX512 but colos don't support AVX512.
+    # So, turn off simd at all as a work around to correctly cross-compile
+    if [[ -n $CI && $CLOUD_PROVIDER == "colo" && $CHANNEL == "local" ]]; then
+      sed -i 's/"simd-accel"//g' "${REPO_ROOT}"/ledger/Cargo.toml
+    fi
     # shellcheck disable=SC2068
     # shellcheck disable=SC2086
-    "${REPO_ROOT}"/net/net.sh start -t "$CHANNEL" \
+    "${REPO_ROOT}"/net/net.sh start -t "$CHANNEL" $maybeDebug \
       -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
       --gpu-mode $startGpuMode
   else
