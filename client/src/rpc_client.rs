@@ -119,13 +119,13 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Option<transaction::Result<()>>> {
         let signature_status = self.client.send(
-            &RpcRequest::GetSignatureStatus,
+            &RpcRequest::GetSignatureStatuses,
             json!([[signature.to_string()], commitment_config]),
             5,
         )?;
         let result: Response<Vec<Option<TransactionStatus>>> =
             serde_json::from_value(signature_status)
-                .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatus"))?;
+                .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?;
         Ok(result.value[0]
             .clone()
             .map(|status_meta| status_meta.status))
@@ -949,20 +949,20 @@ impl RpcClient {
         let response = self
             .client
             .send(
-                &RpcRequest::GetSignatureStatus,
+                &RpcRequest::GetSignatureStatuses,
                 json!([[signature.to_string()], CommitmentConfig::recent().ok()]),
                 1,
             )
-            .map_err(|err| err.into_with_command("GetSignatureStatus"))?;
+            .map_err(|err| err.into_with_command("GetSignatureStatuses"))?;
         let result: Response<Vec<Option<TransactionStatus>>> = serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatus"))?;
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?;
 
         let confirmations = result.value[0]
             .clone()
             .ok_or_else(|| {
                 ClientError::new_with_command(
                     ClientErrorKind::Custom("signature not found".to_string()),
-                    "GetSignatureStatus",
+                    "GetSignatureStatuses",
                 )
             })?
             .confirmations
