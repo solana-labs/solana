@@ -114,6 +114,9 @@ fn main() {
 
     let user = value_t_or_exit!(matches, "user", String);
 
+    #[cfg(target_os = "linux")]
+    tune_kernel_udp_buffers_and_vmmap();
+
     info!("Tune will service requests only from user {}", user);
 
     unsafe { libc::umask(0o077) };
@@ -148,7 +151,7 @@ fn main() {
             info!("Tuning the system now");
             #[cfg(target_os = "linux")]
             {
-                tune_kernel_udp_buffers_and_vmmap();
+                // tune_poh_service_priority(peer_uid);
             }
         }
     }
