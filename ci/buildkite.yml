@@ -11,7 +11,7 @@ steps:
 
   - wait
 
-  - command: "ci/determine-test-skips.sh"
+  - command: "ci/maybe-trigger-tests.sh"
     name: "maybe-trigger-tests"
     timeout_in_minutes: 2
 
