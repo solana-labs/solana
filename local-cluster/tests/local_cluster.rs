@@ -46,7 +46,7 @@ fn test_ledger_cleanup_service() {
     error!("test_ledger_cleanup_service");
     let num_nodes = 3;
     let mut validator_config = ValidatorConfig::default();
-    validator_config.max_ledger_slots = Some(100);
+    validator_config.max_ledger_shreds = Some(100);
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         poh_config: PohConfig::new_sleep(Duration::from_millis(50)),

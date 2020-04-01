@@ -17,7 +17,7 @@ mod tests {
 
     const DEFAULT_BENCHMARK_SLOTS: u64 = 50;
     const DEFAULT_BATCH_SIZE: u64 = 1;
-    const DEFAULT_MAX_LEDGER_SLOTS: u64 = 50;
+    const DEFAULT_MAX_LEDGER_SHREDS: u64 = 50;
     const DEFAULT_ENTRIES_PER_SLOT: u64 = 500;
     const DEFAULT_STOP_SIZE_BYTES: u64 = 0;
     const DEFAULT_STOP_SIZE_ITERATIONS: u64 = 0;
@@ -28,7 +28,7 @@ mod tests {
     struct BenchmarkConfig {
         pub benchmark_slots: u64,
         pub batch_size: u64,
-        pub max_ledger_slots: u64,
+        pub max_ledger_shreds: u64,
         pub entries_per_slot: u64,
         pub stop_size_bytes: u64,
         pub stop_size_iterations: u64,
@@ -145,7 +145,7 @@ mod tests {
     fn get_benchmark_config() -> BenchmarkConfig {
         let benchmark_slots = read_env("BENCHMARK_SLOTS", DEFAULT_BENCHMARK_SLOTS);
         let batch_size = read_env("BATCH_SIZE", DEFAULT_BATCH_SIZE);
-        let max_ledger_slots = read_env("MAX_LEDGER_SLOTS", DEFAULT_MAX_LEDGER_SLOTS);
+        let max_ledger_shreds = read_env("MAX_LEDGER_SHREDS", DEFAULT_MAX_LEDGER_SHREDS);
         let entries_per_slot = read_env("ENTRIES_PER_SLOT", DEFAULT_ENTRIES_PER_SLOT);
         let stop_size_bytes = read_env("STOP_SIZE_BYTES", DEFAULT_STOP_SIZE_BYTES);
         let stop_size_iterations = read_env("STOP_SIZE_ITERATIONS", DEFAULT_STOP_SIZE_ITERATIONS);
@@ -158,7 +158,7 @@ mod tests {
         BenchmarkConfig {
             benchmark_slots,
             batch_size,
-            max_ledger_slots,
+            max_ledger_shreds,
             entries_per_slot,
             stop_size_bytes,
             stop_size_iterations,
@@ -217,7 +217,7 @@ mod tests {
 
         let benchmark_slots = config.benchmark_slots;
         let batch_size = config.batch_size;
-        let max_ledger_slots = config.max_ledger_slots;
+        let max_ledger_shreds = config.max_ledger_shreds;
         let entries_per_slot = config.entries_per_slot;
         let stop_size_bytes = config.stop_size_bytes;
         let stop_size_iterations = config.stop_size_iterations;
@@ -227,7 +227,7 @@ mod tests {
         let (sender, receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let cleaner =
-            LedgerCleanupService::new(receiver, blockstore.clone(), max_ledger_slots, &exit);
+            LedgerCleanupService::new(receiver, blockstore.clone(), max_ledger_shreds, &exit);
 
         let exit_cpu = Arc::new(AtomicBool::new(false));
         let sys = CpuStatsUpdater::new(&exit_cpu);
@@ -282,7 +282,7 @@ mod tests {
                 x,
                 batch_size,
                 batch_size,
-                max_ledger_slots as i64,
+                max_ledger_shreds as i64,
                 &blockstore,
                 &sys.get_stats(),
             );
@@ -312,7 +312,7 @@ mod tests {
             benchmark_slots,
             0,
             0,
-            max_ledger_slots as i64,
+            max_ledger_shreds as i64,
             &blockstore,
             &sys.get_stats(),
         );
@@ -333,7 +333,7 @@ mod tests {
             benchmark_slots,
             0,
             0,
-            max_ledger_slots as i64,
+            max_ledger_shreds as i64,
             &blockstore,
             &sys.get_stats(),
         );

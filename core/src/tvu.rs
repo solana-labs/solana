@@ -63,7 +63,7 @@ pub struct Sockets {
 
 #[derive(Default)]
 pub struct TvuConfig {
-    pub max_ledger_slots: Option<u64>,
+    pub max_ledger_shreds: Option<u64>,
     pub sigverify_disabled: bool,
     pub shred_version: u16,
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
@@ -202,11 +202,11 @@ impl Tvu {
             retransmit_slots_sender,
         );
 
-        let ledger_cleanup_service = tvu_config.max_ledger_slots.map(|max_ledger_slots| {
+        let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             LedgerCleanupService::new(
                 ledger_cleanup_slot_receiver,
                 blockstore.clone(),
-                max_ledger_slots,
+                max_ledger_shreds,
                 &exit,
             )
         });

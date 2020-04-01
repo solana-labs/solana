@@ -39,12 +39,12 @@ impl LedgerCleanupService {
     pub fn new(
         new_root_receiver: Receiver<Slot>,
         blockstore: Arc<Blockstore>,
-        max_ledger_slots: u64,
+        max_ledger_shreds: u64,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!(
             "LedgerCleanupService active. Max Ledger Slots {}",
-            max_ledger_slots
+            max_ledger_shreds
         );
         let exit = exit.clone();
         let mut last_purge_slot = 0;
@@ -57,7 +57,7 @@ impl LedgerCleanupService {
                 if let Err(e) = Self::cleanup_ledger(
                     &new_root_receiver,
                     &blockstore,
-                    max_ledger_slots,
+                    max_ledger_shreds,
                     &mut last_purge_slot,
                     DEFAULT_PURGE_SLOT_INTERVAL,
                 ) {

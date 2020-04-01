@@ -857,7 +857,7 @@ pub fn main() {
             );
             exit(1);
         }
-        validator_config.max_ledger_slots = Some(limit_ledger_size);
+        validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
 
     if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
