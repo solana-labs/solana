@@ -26,7 +26,8 @@ impl AccountsCleanupService {
                 }
                 let bank = bank_forks.read().unwrap().working_bank();
                 bank.clean_dead_slots();
-                bank.compact_stale_slots();
+                // consider slots duration 250ms or customized?
+                bank.shrink_some_stale_slots();
                 sleep(Duration::from_millis(100));
             })
             .unwrap();

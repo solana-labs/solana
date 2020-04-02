@@ -372,7 +372,7 @@ impl<'a, 'b> Serialize for AccountsDBSerialize<'a, 'b> {
     {
         use serde::ser::Error;
         let mut wr = Cursor::new(vec![]);
-        let version: u64 = self.accounts_db.write_version.load(Ordering::Relaxed) as u64;
+        let version = self.accounts_db.write_version.load(Ordering::Relaxed);
         let account_storage_serialize = AccountStorageSerialize {
             account_storage_entries: self.account_storage_entries,
         };
@@ -652,8 +652,7 @@ impl AccountsDB {
         }
 
         self.next_id.store(max_id + 1, Ordering::Relaxed);
-        self.write_version
-            .fetch_add(version, Ordering::Relaxed);
+        self.write_version.fetch_add(version, Ordering::Relaxed);
         self.generate_index();
         Ok(())
     }
@@ -892,7 +891,6 @@ impl AccountsDB {
                 for store in stores.values() {
                     let mut start = 0;
                     while let Some((account, next)) = store.accounts.get_account(start) {
-                        // inherit write version?
                         stored_accounts.push((
                             account.meta.pubkey,
                             account.clone_account(),
@@ -913,7 +911,14 @@ impl AccountsDB {
             stored_accounts
                 .iter()
                 .filter(
-                    |(pubkey, _account, _hash, _storage_size, (store_id, offset), _write_version)| {
+                    |(
+                        pubkey,
+                        _account,
+                        _hash,
+                        _storage_size,
+                        (store_id, offset),
+                        _write_version,
+                    )| {
                         if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
                             list.iter()
                                 .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
@@ -934,9 +939,9 @@ impl AccountsDB {
             alive_account_storage_total,
             aligned
         );
-        // more smart predicate to shrink or not; don't do this when already shrank or there is
-        // little room for shrinking
-        if aligned > 0 {
+
+        if aligned > 0 && (alive_accounts.len() as f64 / stored_accounts.len() as f64) < 0.80 {
+            error!("shrinkging!");
             let store = self.create_and_insert_store(next_compact_slot, aligned);
             let mut accounts = vec![];
             let mut hashes = vec![];
@@ -946,16 +951,26 @@ impl AccountsDB {
                 hashes.push(*hash);
                 write_versions.push(*write_version);
             }
-            let infos =
-                self.store_accounts_to(next_compact_slot, &accounts, &hashes, store, write_versions.into_iter());
+            let infos = self.store_accounts_to(
+                next_compact_slot,
+                &accounts,
+                &hashes,
+                store,
+                write_versions.into_iter(),
+            );
             let reclaims = self.update_index(next_compact_slot, infos, &accounts);
             trace!("reclaim: {}", reclaims.len());
 
             self.handle_reclaims(&reclaims);
+
+            let mut storage = self.storage.write().unwrap();
+            if let Some(slot_storage) = storage.0.get_mut(&next_compact_slot) {
+                slot_storage.retain(|_key, store| store.count() != 0);
+            }
         }
     }
 
-    pub fn compact_stale_slots(&self) {
+    pub fn shrink_some_stale_slots(&self) {
         // move this into its own method and directly called from the background service
         error!("compact!");
         let recent_root = {
@@ -964,14 +979,27 @@ impl AccountsDB {
         };
         if let Some(recent_root) = recent_root {
             let next_compact_slot = self.next_compact_slot.load(Ordering::Relaxed);
-            if next_compact_slot < recent_root - 100 {
+            if next_compact_slot < recent_root {
+                error!("next: {}, recent: {}", next_compact_slot, recent_root);
                 self.compact_stale_slot(next_compact_slot);
 
                 // loop to the first scan from first
                 // introduce one more level of loop and abort on the certain index look-up count?
                 self.next_compact_slot.fetch_add(1, Ordering::Relaxed);
-                error!("next: {}, recent: {}", next_compact_slot, recent_root);
+            } else {
+                self.next_compact_slot.store(0, Ordering::Relaxed);
             }
+        }
+    }
+
+    pub fn shrink_all_stale_slots(&self) {
+        let all_slots: Vec<_> = {
+            let storage = self.storage.read().unwrap();
+            storage.0.keys().cloned().collect()
+        };
+        for slot in all_slots {
+            error!("next: {}", slot);
+            self.compact_stale_slot(slot);
         }
     }
 
@@ -1242,6 +1270,7 @@ impl AccountsDB {
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
     ) -> Vec<AccountInfo> {
+        // bulk allocate write_versions!
         let mut write_version = self
             .write_version
             .fetch_add(accounts.len() as u64, Ordering::Relaxed);
@@ -1263,8 +1292,6 @@ impl AccountsDB {
         mut write_versions: I,
     ) -> Vec<AccountInfo> {
         let default_account = Account::default();
-        let mut i = 0;
-
         let with_meta: Vec<(StoredMeta, &Account)> = accounts
             .iter()
             .map(|(pubkey, account)| {
@@ -1280,7 +1307,6 @@ impl AccountsDB {
                     pubkey: **pubkey,
                     data_len,
                 };
-                i += 1;
                 (meta, account)
             })
             .collect();

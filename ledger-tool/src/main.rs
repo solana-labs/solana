@@ -1027,10 +1027,6 @@ fn main() {
 
                     println!("Creating a snapshot of slot {}", bank.slot());
                     bank.squash();
-                    for slot in 0..=(snapshot_slot - 1000) {
-                        println!("shrink: {}", slot);
-                        bank.compact_stale_slot(slot);
-                    }
 
                     let temp_dir = tempfile::TempDir::new().unwrap_or_else(|err| {
                         eprintln!("Unable to create temporary directory: {}", err);

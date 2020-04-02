@@ -1959,6 +1959,7 @@ impl Bank {
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
         self.clean_accounts();
+        self.shrink_all_stale_slots();
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }
@@ -2204,12 +2205,12 @@ impl Bank {
         self.rc.accounts.accounts_db.process_dead_slots();
     }
 
-    pub fn compact_stale_slots(&self) {
-        self.rc.accounts.accounts_db.compact_stale_slots();
+    pub fn shrink_some_stale_slots(&self) {
+        self.rc.accounts.accounts_db.shrink_some_stale_slots();
     }
 
-    pub fn compact_stale_slot(&self, slot: Slot) {
-        self.rc.accounts.accounts_db.compact_stale_slot(slot);
+    pub fn shrink_all_stale_slots(&self) {
+        self.rc.accounts.accounts_db.shrink_all_stale_slots();
     }
 }
 
