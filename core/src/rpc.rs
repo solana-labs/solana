@@ -397,6 +397,24 @@ impl JsonRpcRequestProcessor {
             .unwrap_or(None))
     }
 
+    pub fn get_signature_confirmation_status(
+        &self,
+        signature: Signature,
+        commitment: Option<CommitmentConfig>,
+    ) -> Option<RpcSignatureConfirmation> {
+        self.get_transaction_status(signature, &self.bank(commitment))
+            .map(
+                |TransactionStatus {
+                     status,
+                     confirmations,
+                     ..
+                 }| RpcSignatureConfirmation {
+                    confirmations: confirmations.unwrap_or(MAX_LOCKOUT_HISTORY + 1),
+                    status,
+                },
+            )
+    }
+
     pub fn get_signature_status(
         &self,
         signature: Signature,
@@ -417,30 +435,37 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(commitment);
 
         for signature in signatures {
-            let status = bank
-                .get_signature_status_slot(&signature)
-                .map(|(slot, status)| {
-                    let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
-
-                    let confirmations = if r_block_commitment_cache.root() >= slot {
-                        None
-                    } else {
-                        r_block_commitment_cache
-                            .get_confirmation_count(slot)
-                            .or(Some(0))
-                    };
-                    TransactionStatus {
-                        slot,
-                        status,
-                        confirmations,
-                    }
-                });
+            let status = self.get_transaction_status(signature, &bank);
             statuses.push(status);
         }
         Ok(Response {
             context: RpcResponseContext { slot: bank.slot() },
             value: statuses,
         })
+    }
+
+    fn get_transaction_status(
+        &self,
+        signature: Signature,
+        bank: &Arc<Bank>,
+    ) -> Option<TransactionStatus> {
+        bank.get_signature_status_slot(&signature)
+            .map(|(slot, status)| {
+                let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
+
+                let confirmations = if r_block_commitment_cache.root() >= slot {
+                    None
+                } else {
+                    r_block_commitment_cache
+                        .get_confirmation_count(slot)
+                        .or(Some(0))
+                };
+                TransactionStatus {
+                    slot,
+                    status,
+                    confirmations,
+                }
+            })
     }
 }
 
@@ -563,6 +588,14 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
+
+    #[rpc(meta, name = "getSignatureConfirmation")]
+    fn get_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<RpcSignatureConfirmation>>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
@@ -901,6 +934,24 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_fee_rate_governor()
+    }
+
+    fn get_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<RpcSignatureConfirmation>> {
+        debug!(
+            "get_signature_confirmation rpc request received: {:?}",
+            signature_str
+        );
+        let signature = verify_signature(&signature_str)?;
+        Ok(meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_signature_confirmation_status(signature, commitment))
     }
 
     fn get_signature_status(
