@@ -118,6 +118,17 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             ),
         )
         .subcommand(
+            SubCommand::with_name("epoch").about("Get current epoch")
+            .arg(
+                Arg::with_name("confirmed")
+                    .long("confirmed")
+                    .takes_value(false)
+                    .help(
+                        "Return epoch at maximum-lockout commitment level",
+                    ),
+            ),
+        )
+        .subcommand(
             SubCommand::with_name("total-supply").about("Get total number of SOL")
             .arg(
                 Arg::with_name("confirmed")
@@ -330,6 +341,18 @@ pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliErr
     };
     Ok(CliCommandInfo {
         command: CliCommand::GetSlot { commitment_config },
+        signers: vec![],
+    })
+}
+
+pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
+    Ok(CliCommandInfo {
+        command: CliCommand::GetEpoch { commitment_config },
         signers: vec![],
     })
 }
@@ -611,6 +634,14 @@ pub fn process_get_slot(
 ) -> ProcessResult {
     let slot = rpc_client.get_slot_with_commitment(commitment_config.clone())?;
     Ok(slot.to_string())
+}
+
+pub fn process_get_epoch(
+    rpc_client: &RpcClient,
+    commitment_config: CommitmentConfig,
+) -> ProcessResult {
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config.clone())?;
+    Ok(epoch_info.epoch.to_string())
 }
 
 pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
@@ -1320,6 +1351,19 @@ mod tests {
             parse_command(&test_get_slot, &default_keypair_file, None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::GetSlot {
+                    commitment_config: CommitmentConfig::recent(),
+                },
+                signers: vec![],
+            }
+        );
+
+        let test_get_epoch = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "epoch"]);
+        assert_eq!(
+            parse_command(&test_get_epoch, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::GetEpoch {
                     commitment_config: CommitmentConfig::recent(),
                 },
                 signers: vec![],
