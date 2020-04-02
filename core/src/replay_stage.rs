@@ -192,7 +192,7 @@ impl ReplayStage {
         // Start the replay stage loop
 
         let (lockouts_sender, commitment_service) =
-            AggregateCommitmentService::new(&exit, block_commitment_cache);
+            AggregateCommitmentService::new(&exit, block_commitment_cache.clone());
 
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
@@ -309,7 +309,10 @@ impl ReplayStage {
                     let start = allocated.get();
                     if !is_locked_out && vote_threshold {
                         info!("voting: {} {}", bank.slot(), fork_weight);
-                        subscriptions.notify_subscribers(bank.slot(), &bank_forks);
+                        subscriptions.notify_subscribers(
+                            block_commitment_cache.read().unwrap().slot(),
+                            &bank_forks,
+                        );
                         if let Some(votable_leader) =
                             leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
                         {
@@ -647,7 +650,13 @@ impl ReplayStage {
                 return Err(e.into());
             }
         }
-        Self::update_commitment_cache(bank.clone(), total_staked, lockouts_sender);
+
+        Self::update_commitment_cache(
+            bank.clone(),
+            bank_forks.read().unwrap().root(),
+            total_staked,
+            lockouts_sender,
+        );
 
         if let Some(ref voting_keypair) = voting_keypair {
             let node_keypair = cluster_info.read().unwrap().keypair.clone();
@@ -675,10 +684,13 @@ impl ReplayStage {
 
     fn update_commitment_cache(
         bank: Arc<Bank>,
+        root: Slot,
         total_staked: u64,
         lockouts_sender: &Sender<CommitmentAggregationData>,
     ) {
-        if let Err(e) = lockouts_sender.send(CommitmentAggregationData::new(bank, total_staked)) {
+        if let Err(e) =
+            lockouts_sender.send(CommitmentAggregationData::new(bank, root, total_staked))
+        {
             trace!("lockouts_sender failed: {:?}", e);
         }
     }
@@ -1397,7 +1409,10 @@ pub(crate) mod tests {
             let bank0 = Bank::new(&genesis_config);
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let exit = Arc::new(AtomicBool::new(false));
-            let subscriptions = Arc::new(RpcSubscriptions::new(&exit));
+            let subscriptions = Arc::new(RpcSubscriptions::new(
+                &exit,
+                Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            ));
             let bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
 
@@ -1766,7 +1781,12 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank1);
         let arc_bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
         leader_vote(&arc_bank1, &leader_voting_pubkey);
-        ReplayStage::update_commitment_cache(arc_bank1.clone(), leader_lamports, &lockouts_sender);
+        ReplayStage::update_commitment_cache(
+            arc_bank1.clone(),
+            0,
+            leader_lamports,
+            &lockouts_sender,
+        );
 
         let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
         let _res = bank2.transfer(10, &genesis_config_info.mint_keypair, &Pubkey::new_rand());
@@ -1777,7 +1797,12 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank2);
         let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
         leader_vote(&arc_bank2, &leader_voting_pubkey);
-        ReplayStage::update_commitment_cache(arc_bank2.clone(), leader_lamports, &lockouts_sender);
+        ReplayStage::update_commitment_cache(
+            arc_bank2.clone(),
+            0,
+            leader_lamports,
+            &lockouts_sender,
+        );
         thread::sleep(Duration::from_millis(200));
 
         let mut expected0 = BlockCommitment::default();
