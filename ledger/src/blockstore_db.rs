@@ -256,7 +256,7 @@ pub trait Column {
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
-    fn slot(index: Self::Index) -> Slot;
+    fn primary_index(index: Self::Index) -> Slot;
     fn as_index(slot: Slot) -> Self::Index;
 }
 
@@ -287,7 +287,7 @@ impl<T: SlotColumn> Column for T {
         BigEndian::read_u64(&key[..8])
     }
 
-    fn slot(index: u64) -> Slot {
+    fn primary_index(index: u64) -> Slot {
         index
     }
 
@@ -312,7 +312,7 @@ impl Column for columns::TransactionStatus {
         (slot, index)
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -344,7 +344,7 @@ impl Column for columns::ShredCode {
         columns::ShredData::index(key)
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -373,7 +373,7 @@ impl Column for columns::ShredData {
         (slot, index)
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -451,7 +451,7 @@ impl Column for columns::ErasureMeta {
         key
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -583,7 +583,7 @@ impl Database {
         let max_slot = self
             .iter::<C>(IteratorMode::End)?
             .next()
-            .map(|(i, _)| C::slot(i))
+            .map(|(i, _)| C::primary_index(i))
             .unwrap_or(0);
         let end = max_slot <= to;
         result.map(|_| end)
@@ -624,7 +624,7 @@ where
         let iter = self.iter(iter_config)?;
         for (index, _) in iter {
             if let Some(to) = to {
-                if C::slot(index) > to {
+                if C::primary_index(index) > to {
                     end = false;
                     break;
                 }
