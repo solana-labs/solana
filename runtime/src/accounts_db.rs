@@ -882,6 +882,7 @@ impl AccountsDB {
     }
 
     pub fn compact_stale_slot(&self, next_compact_slot: Slot) {
+        // tighten locked code
         let mut stored_accounts = vec![];
         {
             let storage = self.storage.read().unwrap();
@@ -904,7 +905,7 @@ impl AccountsDB {
                 }
             }
         }
-        error!("found {} stored accounts!", stored_accounts.len());
+        info!("found {} stored accounts!", stored_accounts.len());
         let no_ancestors = HashMap::new();
         let alive_accounts: Vec<_> = {
             let accounts_index = self.accounts_index.read().unwrap();
@@ -933,7 +934,7 @@ impl AccountsDB {
             .iter()
             .fold(0, |t, (_, _, _, a, _, _)| t + *a as u64);
         let aligned: u64 = (alive_account_storage_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
-        error!(
+        info!(
             "found {} alive alive_accounts! ({} bytes/{} aligned bytes)",
             alive_accounts.len(),
             alive_account_storage_total,
@@ -941,7 +942,7 @@ impl AccountsDB {
         );
 
         if aligned > 0 && (alive_accounts.len() as f64 / stored_accounts.len() as f64) < 0.80 {
-            error!("shrinkging!");
+            info!("shrinking!");
             let store = self.create_and_insert_store(next_compact_slot, aligned);
             let mut accounts = vec![];
             let mut hashes = vec![];
@@ -972,7 +973,7 @@ impl AccountsDB {
 
     pub fn shrink_some_stale_slots(&self) {
         // move this into its own method and directly called from the background service
-        error!("compact!");
+        info!("compact!");
         let recent_root = {
             let accounts_index = self.accounts_index.read().unwrap();
             accounts_index.uncleaned_roots.iter().next().cloned()
@@ -980,7 +981,7 @@ impl AccountsDB {
         if let Some(recent_root) = recent_root {
             let next_compact_slot = self.next_compact_slot.load(Ordering::Relaxed);
             if next_compact_slot < recent_root {
-                error!("next: {}, recent: {}", next_compact_slot, recent_root);
+                info!("next: {}, recent: {}", next_compact_slot, recent_root);
                 self.compact_stale_slot(next_compact_slot);
 
                 // loop to the first scan from first
@@ -998,7 +999,7 @@ impl AccountsDB {
             storage.0.keys().cloned().collect()
         };
         for slot in all_slots {
-            error!("next: {}", slot);
+            info!("next: {}", slot);
             self.compact_stale_slot(slot);
         }
     }
