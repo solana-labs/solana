@@ -6,22 +6,8 @@ secure transaction signing.
 
 ## Before You Begin
 
+- [Set up a Ledger Nano S with the Solana App](../wallet/ledger-live.md)
 - [Install the Solana command-line tools](../cli/install-solana-cli-tools.md)
-- [Initialize your Ledger Nano S](https://support.ledger.com/hc/en-us/articles/360000613793)
-- [Install the latest device firmware](https://support.ledgerwallet.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
-- [Install Ledger Live](https://support.ledger.com/hc/en-us/articles/360006395553/) software on your computer
-
-## Install the Solana App on Ledger Nano S
-
-1. Open Ledger Live
-2. Click Experimental Features and enable Developer Mode
-3. Open the Manager in Ledger Live
-4. Connect your Ledger device via USB and enter your pin to unlock it
-5. When prompted, approve the manager on your device
-6. Find Solana in the app catalog and click Install
-7. An installation window appears and your device will display Processing…
-8. The app installation is confirmed
-9. Close Ledger Live
 
 ## Use Ledger Device with Solana CLI
 
