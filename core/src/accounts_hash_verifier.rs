@@ -184,9 +184,11 @@ mod tests {
 
     #[test]
     fn test_should_halt() {
+        let validator_keypair = Keypair::new();
         let keypair = Keypair::new();
 
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let contact_info =
+            ContactInfo::new_localhost(&validator_keypair.pubkey(), &keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         let cluster_info = Arc::new(cluster_info);
 
@@ -219,9 +221,11 @@ mod tests {
         solana_logger::setup();
         use std::path::PathBuf;
         use tempfile::TempDir;
-        let keypair = Keypair::new();
+        let validator_keypair = Keypair::new();
+        let node_keypair = Keypair::new();
 
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let contact_info =
+            ContactInfo::new_localhost(&validator_keypair.pubkey(), &node_keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         let cluster_info = Arc::new(cluster_info);
 
@@ -254,7 +258,7 @@ mod tests {
             );
         }
         let cluster_hashes = cluster_info
-            .get_accounts_hash_for_node(&keypair.pubkey(), |c| c.clone())
+            .get_accounts_hash_for_node(&node_keypair.pubkey(), |c| c.clone())
             .unwrap();
         info!("{:?}", cluster_hashes);
         assert_eq!(hashes.len(), MAX_SNAPSHOT_HASHES);

@@ -429,7 +429,7 @@ mod tests {
         let leader_schedule_cache = Arc::new(cached_leader_schedule);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
-        let mut me = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
+        let mut me = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), 0);
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
         let me_retransmit = UdpSocket::bind(format!("127.0.0.1:{}", port)).unwrap();
@@ -441,7 +441,7 @@ mod tests {
             .local_addr()
             .unwrap();
 
-        let other = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
+        let other = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 

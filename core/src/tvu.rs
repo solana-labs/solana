@@ -98,7 +98,7 @@ impl Tvu {
         retransmit_slots_sender: RetransmitSlotsSender,
         tvu_config: TvuConfig,
     ) -> Self {
-        let keypair: Arc<Keypair> = cluster_info.keypair.clone();
+        let keypair: Arc<Keypair> = cluster_info.id_keypair.clone();
 
         let Sockets {
             repair: repair_socket,
@@ -250,8 +250,12 @@ pub mod tests {
     fn test_tvu_exit() {
         solana_logger::setup();
         let leader = Node::new_localhost();
+        let target1_id_keypair = Keypair::new();
         let target1_keypair = Keypair::new();
-        let target1 = Node::new_localhost_with_pubkey(&target1_keypair.pubkey());
+        let target1 = Node::new_localhost_with_pubkey(
+            &target1_id_keypair.pubkey(),
+            &target1_keypair.pubkey(),
+        );
 
         let starting_balance = 10_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(starting_balance);

@@ -12,6 +12,9 @@ use std::net::{IpAddr, SocketAddr};
 /// Structure representing a node on the network
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContactInfo {
+    /// validator identity
+    pub validator_id: Pubkey,
+    /// gossip identity
     pub id: Pubkey,
     /// gossip address
     pub gossip: SocketAddr,
@@ -88,6 +91,7 @@ macro_rules! socketaddr_any {
 impl Default for ContactInfo {
     fn default() -> Self {
         ContactInfo {
+            validator_id: Pubkey::default(),
             id: Pubkey::default(),
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
@@ -106,8 +110,9 @@ impl Default for ContactInfo {
 }
 
 impl ContactInfo {
-    pub fn new_localhost(id: &Pubkey, now: u64) -> Self {
+    pub fn new_localhost(validator_id: &Pubkey, id: &Pubkey, now: u64) -> Self {
         Self {
+            validator_id: *validator_id,
             id: *id,
             gossip: socketaddr!("127.0.0.1:1234"),
             tvu: socketaddr!("127.0.0.1:1235"),
@@ -130,6 +135,7 @@ impl ContactInfo {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
         Self {
+            validator_id: Pubkey::new_rand(),
             id: Pubkey::new_rand(),
             gossip: addr,
             tvu: addr,
@@ -147,7 +153,11 @@ impl ContactInfo {
     }
 
     #[cfg(test)]
-    pub(crate) fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
+    pub(crate) fn new_with_pubkey_socketaddr(
+        validator_id: &Pubkey,
+        id: &Pubkey,
+        bind_addr: &SocketAddr,
+    ) -> Self {
         fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
             let mut nxt_addr = *addr;
             nxt_addr.set_port(addr.port() + nxt);
@@ -164,7 +174,8 @@ impl ContactInfo {
         let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         let serve_repair = next_port(&bind_addr, 6);
         Self {
-            id: *pubkey,
+            validator_id: *validator_id,
+            id: *id,
             gossip,
             tvu,
             tvu_forwards,
@@ -182,8 +193,9 @@ impl ContactInfo {
 
     #[cfg(test)]
     pub(crate) fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
+        let validator_keypair = Keypair::new();
         let keypair = Keypair::new();
-        Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
+        Self::new_with_pubkey_socketaddr(&validator_keypair.pubkey(), &keypair.pubkey(), bind_addr)
     }
 
     // Construct a ContactInfo that's only usable for gossip
@@ -292,8 +304,10 @@ mod tests {
 
     #[test]
     fn replayed_data_new_with_socketaddr_with_pubkey() {
+        let validator_keypair = Keypair::new();
         let keypair = Keypair::new();
         let d1 = ContactInfo::new_with_pubkey_socketaddr(
+            &validator_keypair.pubkey(),
             &keypair.pubkey(),
             &socketaddr!("127.0.0.1:1234"),
         );

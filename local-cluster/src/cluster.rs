@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct ValidatorInfo {
+    pub validator_keypair: Arc<Keypair>,
     pub keypair: Arc<Keypair>,
     pub voting_keypair: Arc<Keypair>,
     pub ledger_path: PathBuf,

@@ -822,7 +822,7 @@ mod test {
 
     #[test]
     pub fn test_update_lowest_slot() {
-        let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
+        let node_info = Node::new_localhost_with_pubkey(&Pubkey::default(), &Pubkey::default());
         let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info);
         RepairService::update_lowest_slot(&Pubkey::default(), 5, &cluster_info);
         let lowest = cluster_info

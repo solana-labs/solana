@@ -1766,6 +1766,7 @@ pub mod tests {
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,
+            &leader_pubkey,
             &socketaddr!("127.0.0.1:1234"),
         ));
 

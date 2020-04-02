@@ -46,7 +46,7 @@ pub struct ClusterConfig {
     /// Number of nodes that are unstaked and not voting (a.k.a listening)
     pub num_listeners: u64,
     /// The specific pubkeys of each node if specified
-    pub validator_keys: Option<Vec<Arc<Keypair>>>,
+    pub validator_keys: Option<Vec<(Arc<Keypair>, Arc<Keypair>)>>,
     /// The stakes of each node
     pub node_stakes: Vec<u64>,
     /// The total lamports available to the cluster
@@ -109,15 +109,18 @@ impl LocalCluster {
                 assert_eq!(config.validator_configs.len(), keys.len());
                 keys.clone()
             } else {
-                iter::repeat_with(|| Arc::new(Keypair::new()))
+                iter::repeat_with(|| (Arc::new(Keypair::new()), Arc::new(Keypair::new())))
                     .take(config.validator_configs.len())
                     .collect()
             }
         };
 
-        let leader_keypair = &validator_keys[0];
+        let leader_keypair = &validator_keys[0].0;
         let leader_pubkey = leader_keypair.pubkey();
-        let leader_node = Node::new_localhost_with_pubkey(&leader_pubkey);
+        let leader_node_keypair = &validator_keys[0].1;
+        let leader_node_pubkey = leader_node_keypair.pubkey();
+
+        let leader_node = Node::new_localhost_with_pubkey(&leader_pubkey, &leader_node_pubkey);
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
@@ -172,6 +175,7 @@ impl LocalCluster {
         let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
+            &leader_node_keypair,
             &leader_ledger_path,
             &leader_voting_keypair.pubkey(),
             vec![leader_voting_keypair.clone()],
@@ -183,7 +187,8 @@ impl LocalCluster {
         let mut validators = HashMap::new();
         error!("leader_pubkey: {}", leader_pubkey);
         let leader_info = ValidatorInfo {
-            keypair: leader_keypair.clone(),
+            validator_keypair: leader_keypair.clone(),
+            keypair: leader_node_keypair.clone(),
             voting_keypair: leader_voting_keypair,
             ledger_path: leader_ledger_path,
             contact_info: leader_contact_info.clone(),
@@ -209,7 +214,7 @@ impl LocalCluster {
             config.validator_configs[1..].iter(),
             validator_keys[1..].iter(),
         ) {
-            cluster.add_validator(validator_config, *stake, key.clone());
+            cluster.add_validator(validator_config, *stake, key.0.clone(), key.1.clone());
         }
 
         let listener_config = ValidatorConfig {
@@ -217,7 +222,12 @@ impl LocalCluster {
             ..config.validator_configs[0].clone()
         };
         (0..config.num_listeners).for_each(|_| {
-            cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()));
+            cluster.add_validator(
+                &listener_config,
+                0,
+                Arc::new(Keypair::new()),
+                Arc::new(Keypair::new()),
+            );
         });
 
         discover_cluster(
@@ -253,6 +263,7 @@ impl LocalCluster {
         validator_config: &ValidatorConfig,
         stake: u64,
         validator_keypair: Arc<Keypair>,
+        node_keypair: Arc<Keypair>,
     ) -> Pubkey {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
@@ -262,7 +273,8 @@ impl LocalCluster {
         // Must have enough tokens to fund vote account and set delegate
         let voting_keypair = Keypair::new();
         let validator_pubkey = validator_keypair.pubkey();
-        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+        let validator_node =
+            Node::new_localhost_with_pubkey(&validator_keypair.pubkey(), &node_keypair.pubkey());
         let contact_info = validator_node.info.clone();
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_config);
 
@@ -300,6 +312,7 @@ impl LocalCluster {
         let validator_server = Validator::new(
             validator_node,
             &validator_keypair,
+            &node_keypair,
             &ledger_path,
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
@@ -311,7 +324,8 @@ impl LocalCluster {
         let validator_pubkey = validator_keypair.pubkey();
         let validator_info = ClusterValidatorInfo::new(
             ValidatorInfo {
-                keypair: validator_keypair,
+                validator_keypair,
+                keypair: node_keypair,
                 voting_keypair,
                 ledger_path,
                 contact_info,
@@ -514,15 +528,16 @@ impl Cluster for LocalCluster {
         node
     }
 
-    fn restart_node(&mut self, pubkey: &Pubkey, mut cluster_validator_info: ClusterValidatorInfo) {
+    fn restart_node(&mut self, id: &Pubkey, mut cluster_validator_info: ClusterValidatorInfo) {
         // Update the stored ContactInfo for this node
-        let node = Node::new_localhost_with_pubkey(&pubkey);
+        let validator_id = cluster_validator_info.info.contact_info.validator_id;
+        let node = Node::new_localhost_with_pubkey(&validator_id, &id);
         cluster_validator_info.info.contact_info = node.info.clone();
         cluster_validator_info.config.rpc_ports =
             Some((node.info.rpc.port(), node.info.rpc_pubsub.port()));
 
         let entry_point_info = {
-            if *pubkey == self.entry_point_info.id {
+            if *id == self.entry_point_info.id {
                 self.entry_point_info = node.info.clone();
                 None
             } else {
@@ -535,6 +550,7 @@ impl Cluster for LocalCluster {
 
         let restarted_node = Validator::new(
             node,
+            &validator_info.validator_keypair,
             &validator_info.keypair,
             &validator_info.ledger_path,
             &validator_info.voting_keypair.pubkey(),
@@ -545,7 +561,7 @@ impl Cluster for LocalCluster {
         );
 
         cluster_validator_info.validator = Some(restarted_node);
-        self.validators.insert(*pubkey, cluster_validator_info);
+        self.validators.insert(*id, cluster_validator_info);
     }
 
     fn exit_restart_node(&mut self, pubkey: &Pubkey, validator_config: ValidatorConfig) {

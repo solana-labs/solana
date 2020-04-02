@@ -203,10 +203,12 @@ mod test {
         let mut crds = Crds::default();
         let original = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::default(),
+            &Pubkey::default(),
             0,
         )));
         assert_matches!(crds.insert(original.clone(), 0), Ok(_));
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &Pubkey::default(),
             &Pubkey::default(),
             1,
         )));
@@ -220,6 +222,7 @@ mod test {
     fn test_update_timestamp() {
         let mut crds = Crds::default();
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &Pubkey::default(),
             &Pubkey::default(),
             0,
         )));
@@ -332,11 +335,13 @@ mod test {
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &Pubkey::default(),
+                &Pubkey::default(),
                 0,
             ))),
         );
         let v2 = VersionedCrdsValue::new(1, {
-            let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
+            let mut contact_info =
+                ContactInfo::new_localhost(&Pubkey::default(), &Pubkey::default(), 0);
             contact_info.rpc = socketaddr!("0.0.0.0:0");
             CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info))
         });
@@ -367,12 +372,14 @@ mod test {
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &Pubkey::default(),
+                &Pubkey::default(),
                 1,
             ))),
         );
         let v2 = VersionedCrdsValue::new(
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+                &Pubkey::default(),
                 &Pubkey::default(),
                 0,
             ))),
@@ -392,12 +399,14 @@ mod test {
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
                 &Pubkey::new_rand(),
+                &Pubkey::new_rand(),
                 0,
             ))),
         );
         let v2 = VersionedCrdsValue::new(
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+                &Pubkey::new_rand(),
                 &Pubkey::new_rand(),
                 0,
             ))),

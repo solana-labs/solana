@@ -422,9 +422,11 @@ mod test {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
+        let leader_id_keypair = Arc::new(Keypair::new());
+        let leader_id_pubkey = leader_id_keypair.pubkey();
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
-        let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
+        let leader_info = Node::new_localhost_with_pubkey(&leader_id_pubkey, &leader_pubkey);
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(leader_info.info));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;

@@ -15,9 +15,15 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
+    let validator_keypair = Arc::new(Keypair::new());
     let keypair = Arc::new(Keypair::new());
-    let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
+    let mut test_node =
+        Node::new_localhost_with_pubkey(&validator_keypair.pubkey(), &keypair.pubkey());
+    let cluster_info = Arc::new(ClusterInfo::new(
+        test_node.info.clone(),
+        validator_keypair,
+        keypair,
+    ));
     let gossip_service = GossipService::new(&cluster_info, None, test_node.sockets.gossip, exit);
     let _ = cluster_info.my_contact_info();
     (
@@ -66,7 +72,9 @@ fn gossip_ring() {
             let y = n % listen.len();
             let x = (n + 1) % listen.len();
             let yv = &listen[y].0;
-            let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
+            let mut d = yv
+                .lookup_contact_info(&yv.id(), |mut ci| ci.pop().cloned())
+                .unwrap();
             d.wallclock = timestamp();
             listen[x].0.insert_info(d);
         }
@@ -84,7 +92,9 @@ fn gossip_ring_large() {
             let y = n % listen.len();
             let x = (n + 1) % listen.len();
             let yv = &listen[y].0;
-            let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
+            let mut d = yv
+                .lookup_contact_info(&yv.id(), |mut ci| ci.pop().cloned())
+                .unwrap();
             d.wallclock = timestamp();
             listen[x].0.insert_info(d);
         }
@@ -100,7 +110,9 @@ fn gossip_star() {
             let x = 0;
             let y = (n + 1) % listen.len();
             let yv = &listen[y].0;
-            let mut yd = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
+            let mut yd = yv
+                .lookup_contact_info(&yv.id(), |mut ci| ci.pop().cloned())
+                .unwrap();
             yd.wallclock = timestamp();
             let xv = &listen[x].0;
             xv.insert_info(yd);
@@ -117,7 +129,8 @@ fn gossip_rstar() {
         let num = listen.len();
         let xd = {
             let xv = &listen[0].0;
-            xv.lookup_contact_info(&xv.id(), |ci| ci.clone()).unwrap()
+            xv.lookup_contact_info(&xv.id(), |mut ci| ci.pop().cloned())
+                .unwrap()
         };
         trace!("rstar leader {}", xd.id);
         for n in 0..(num - 1) {

@@ -330,8 +330,9 @@ impl BankingStage {
                         .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
                     next_leader.map_or((), |leader_pubkey| {
                         let leader_addr = {
-                            cluster_info
-                                .lookup_contact_info(&leader_pubkey, |leader| leader.tpu_forwards)
+                            cluster_info.lookup_contact_info(&leader_pubkey, |leader_nodes| {
+                                leader_nodes.get(0).map(|node| node.tpu_forwards)
+                            })
                         };
 
                         leader_addr.map_or((), |leader_addr| {

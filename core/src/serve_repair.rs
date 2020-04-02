@@ -91,7 +91,12 @@ impl ServeRepair {
     }
 
     pub fn new(cluster_info: Arc<ClusterInfo>) -> Self {
-        let (keypair, my_info) = { (cluster_info.keypair.clone(), cluster_info.my_contact_info()) };
+        let (keypair, my_info) = {
+            (
+                cluster_info.id_keypair.clone(),
+                cluster_info.my_contact_info(),
+            )
+        };
         Self {
             keypair,
             my_info,
@@ -642,6 +647,7 @@ mod tests {
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
             let me = ContactInfo {
+                validator_id: Pubkey::new_rand(),
                 id: Pubkey::new_rand(),
                 gossip: socketaddr!("127.0.0.1:1234"),
                 tvu: socketaddr!("127.0.0.1:1235"),
@@ -712,7 +718,7 @@ mod tests {
     #[test]
     fn window_index_request() {
         let cluster_slots = ClusterSlots::default();
-        let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let me = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me));
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let rv = serve_repair.repair_request(
@@ -725,6 +731,7 @@ mod tests {
 
         let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
         let nxt = ContactInfo {
+            validator_id: Pubkey::new_rand(),
             id: Pubkey::new_rand(),
             gossip: socketaddr!([127, 0, 0, 1], 1234),
             tvu: socketaddr!([127, 0, 0, 1], 1235),
@@ -753,6 +760,7 @@ mod tests {
 
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
         let nxt = ContactInfo {
+            validator_id: Pubkey::new_rand(),
             id: Pubkey::new_rand(),
             gossip: socketaddr!([127, 0, 0, 1], 1234),
             tvu: socketaddr!([127, 0, 0, 1], 1235),

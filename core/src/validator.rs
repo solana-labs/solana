@@ -146,7 +146,8 @@ impl Validator {
     #[allow(clippy::cognitive_complexity)]
     pub fn new(
         mut node: Node,
-        keypair: &Arc<Keypair>,
+        validator_keypair: &Arc<Keypair>,
+        node_keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
@@ -154,10 +155,13 @@ impl Validator {
         poh_verify: bool,
         config: &ValidatorConfig,
     ) -> Self {
-        let id = keypair.pubkey();
-        assert_eq!(id, node.info.id);
+        let validator_id = validator_keypair.pubkey();
+        let node_id = node_keypair.pubkey();
+        assert_eq!(validator_id, node.info.validator_id);
+        assert_eq!(node_id, node.info.id);
 
-        warn!("identity: {}", id);
+        warn!("identity: {}", validator_id);
+        warn!("node: {}", node_id);
         warn!("vote account: {}", vote_account);
 
         if config.voting_disabled {
@@ -222,7 +226,12 @@ impl Validator {
             }
         }
 
-        let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info.clone(),
+            validator_keypair.clone(),
+            node_keypair.clone(),
+        ));
+
         let blockstore = Arc::new(blockstore);
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
@@ -322,14 +331,14 @@ impl Validator {
             bank.last_blockhash(),
             bank.slot(),
             leader_schedule_cache.next_leader_slot(
-                &id,
+                &validator_id,
                 bank.slot(),
                 &bank,
                 Some(&blockstore),
                 GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
             ),
             bank.ticks_per_slot(),
-            &id,
+            &validator_id,
             &blockstore,
             blockstore.new_shreds_signals.first().cloned(),
             &leader_schedule_cache,
@@ -458,9 +467,9 @@ impl Validator {
             bank_forks,
         );
 
-        datapoint_info!("validator-new", ("id", id.to_string(), String));
+        datapoint_info!("validator-new", ("id", validator_id.to_string(), String));
         Self {
-            id,
+            id: validator_id,
             gossip_service,
             serve_repair_service,
             rpc_service,
@@ -681,8 +690,10 @@ impl TestValidator {
             bootstrap_validator_lamports,
             mint_lamports,
         } = options;
+        let validator_keypair = Arc::new(Keypair::new());
         let node_keypair = Arc::new(Keypair::new());
-        let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
+        let node =
+            Node::new_localhost_with_pubkey(&validator_keypair.pubkey(), &node_keypair.pubkey());
         let contact_info = node.info.clone();
 
         let GenesisConfigInfo {
@@ -691,7 +702,7 @@ impl TestValidator {
             voting_keypair,
         } = create_genesis_config_with_leader_ex(
             mint_lamports,
-            &contact_info.id,
+            &contact_info.validator_id,
             42,
             bootstrap_validator_lamports,
         );
@@ -715,6 +726,7 @@ impl TestValidator {
         };
         let node = Validator::new(
             node,
+            &validator_keypair,
             &node_keypair,
             &ledger_path,
             &leader_voting_keypair.pubkey(),
@@ -855,10 +867,18 @@ mod tests {
     fn validator_exit() {
         solana_logger::setup();
         let leader_keypair = Keypair::new();
-        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+        let leader_node_keypair = Keypair::new();
+        let leader_node = Node::new_localhost_with_pubkey(
+            &leader_keypair.pubkey(),
+            &leader_node_keypair.pubkey(),
+        );
 
         let validator_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+        let validator_node_keypair = Keypair::new();
+        let validator_node = Node::new_localhost_with_pubkey(
+            &validator_keypair.pubkey(),
+            &validator_node_keypair.pubkey(),
+        );
         let genesis_config =
             create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
                 .genesis_config;
@@ -875,6 +895,7 @@ mod tests {
         let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
+            &Arc::new(validator_node_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
@@ -888,14 +909,20 @@ mod tests {
 
     #[test]
     fn validator_parallel_exit() {
+        let leader_id_keypair = Keypair::new();
         let leader_keypair = Keypair::new();
-        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+        let leader_node =
+            Node::new_localhost_with_pubkey(&leader_id_keypair.pubkey(), &leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
         let mut validators: Vec<Validator> = (0..2)
             .map(|_| {
                 let validator_keypair = Keypair::new();
-                let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+                let validator_node_keypair = Keypair::new();
+                let validator_node = Node::new_localhost_with_pubkey(
+                    &validator_keypair.pubkey(),
+                    &validator_node_keypair.pubkey(),
+                );
                 let genesis_config =
                     create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1000)
                         .genesis_config;
@@ -912,6 +939,7 @@ mod tests {
                 Validator::new(
                     validator_node,
                     &Arc::new(validator_keypair),
+                    &Arc::new(validator_node_keypair),
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     vec![vote_account_keypair.clone()],

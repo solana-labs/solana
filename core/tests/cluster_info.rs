@@ -72,7 +72,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     let timeout = 60 * 5;
 
     // describe the leader
-    let leader_info = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
+    let leader_info = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), 0);
     let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.clone());
 
     // setup staked nodes
@@ -91,19 +91,40 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
         .insert(leader_info.id, (false, HashSet::new(), r));
     let range: Vec<_> = (1..=stakes.len()).collect();
     let chunk_size = (stakes.len() + num_threads - 1) / num_threads;
+
+    // Set 5% of nodes running multiple nodes per vote identity.
+    let multi_node_count = (stakes.len() as f64 * 0.05) as usize;
+
+    let mut ids = HashMap::new();
+    let mut nodes = HashMap::new();
     range.chunks(chunk_size).for_each(|chunk| {
         chunk.iter().for_each(|i| {
             //distribute neighbors across threads to maximize parallel compute
             let batch_ix = *i as usize % batches.len();
-            let node = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
-            staked_nodes.insert(node.id, stakes[*i - 1]);
-            cluster_info.insert_info(node.clone());
-            let (s, r) = channel();
-            batches
-                .get_mut(batch_ix)
-                .unwrap()
-                .insert(node.id, (false, HashSet::new(), r));
-            senders.lock().unwrap().insert(node.id, s);
+
+            // Every nth node has an additional id, distributed evenly.
+            let mut nodes_per_identity = if *i % (stakes.len() / multi_node_count) == 0 {
+                2
+            } else {
+                1
+            };
+
+            // Create nodes, sharing id, but with random node identifiers.
+            let identity = Pubkey::new_rand();
+            while nodes_per_identity > 0 {
+                nodes_per_identity -= 1;
+                let node = ContactInfo::new_localhost(&identity, &Pubkey::new_rand(), 0);
+                ids.insert(node.validator_id, 1);
+                nodes.insert(node.id, 1);
+                staked_nodes.insert(node.id, stakes[*i - 1]);
+                cluster_info.insert_info(node.clone());
+                let (s, r) = channel();
+                batches
+                    .get_mut(batch_ix)
+                    .unwrap()
+                    .insert(node.id, (false, HashSet::new(), r));
+                senders.lock().unwrap().insert(node.id, s);
+            }
         })
     });
     let c_info = cluster_info.clone_with_id(&cluster_info.id());

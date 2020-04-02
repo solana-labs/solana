@@ -975,7 +975,7 @@ impl ReplayStage {
             }
             Some(authorized_voter_keypair) => authorized_voter_keypair,
         };
-        let node_keypair = cluster_info.keypair.clone();
+        let node_keypair = cluster_info.id_keypair.clone();
 
         // Send our last few votes along with the new one
         let vote_ix = vote_instruction::vote(
