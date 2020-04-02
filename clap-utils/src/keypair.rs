@@ -47,6 +47,16 @@ pub fn parse_keypair_path(path: &str) -> KeypairUrl {
     }
 }
 
+pub fn check_for_usb<S>(mut items: impl Iterator<Item = S>) -> bool
+where
+    S: Into<String>,
+{
+    items.any(|arg| match parse_keypair_path(&arg.into()) {
+        KeypairUrl::Usb(_) => true,
+        _ => false,
+    })
+}
+
 pub fn presigner_from_pubkey_sigs(
     pubkey: &Pubkey,
     signers: &[(Pubkey, Signature)],
