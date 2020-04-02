@@ -67,6 +67,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_url)
                         .help("JSON RPC URL for validator, which is useful for validators with a private RPC service")
+                )
+                .arg(
+                    Arg::with_name("follow")
+                        .long("follow")
+                        .takes_value(false)
+                        .help("Continue reporting progress even after the validator has caught up"),
                 ),
         )
         .subcommand(
@@ -269,10 +275,12 @@ pub fn parse_catchup(
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?.unwrap();
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
+    let follow = matches.is_present("follow");
     Ok(CliCommandInfo {
         command: CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
+            follow,
         },
         signers: vec![],
     })
@@ -428,6 +436,7 @@ pub fn process_catchup(
     rpc_client: &RpcClient,
     node_pubkey: &Pubkey,
     node_json_rpc_url: &Option<String>,
+    follow: bool,
 ) -> ProcessResult {
     let sleep_interval = 5;
 
@@ -477,7 +486,7 @@ pub fn process_catchup(
     loop {
         let rpc_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
         let node_slot = node_client.get_slot_with_commitment(CommitmentConfig::recent())?;
-        if node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
+        if !follow && node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
             progress_bar.finish_and_clear();
             return Ok(format!(
                 "{} has caught up (us:{} them:{})",
@@ -491,7 +500,7 @@ pub fn process_catchup(
             slot_distance,
             node_slot,
             rpc_slot,
-            if previous_rpc_slot == std::u64::MAX {
+            if slot_distance == 0 || previous_rpc_slot == std::u64::MAX {
                 "".to_string()
             } else {
                 let slots_per_second =
