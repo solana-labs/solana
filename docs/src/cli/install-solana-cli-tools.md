@@ -1,6 +1,18 @@
 # Install the Solana Tool Suite
 
-Install the Solana release
+There are multiple ways to install the Solana tools on your computer
+depending on your preferred workflow:
+ - [Use Solana's Install Tool (Simplest option)](#use-solanas-install-tool)
+ - [Download Prebuilt Binaries](#download-prebuilt-binaries)
+ - [Build from Source](#build-from-source)
+
+## Use Solana's Install Tool
+
+### MacOS & Linux
+
+ - Open your favorite Terminal application
+
+ - Install the Solana release
 [LATEST_SOLANA_RELEASE_VERSION](https://github.com/solana-labs/solana/releases/tag/LATEST_SOLANA_RELEASE_VERSION) on your
 machine by running:
 
@@ -8,11 +20,11 @@ machine by running:
 curl -sSf https://raw.githubusercontent.com/solana-labs/solana/LATEST_SOLANA_RELEASE_VERSION/install/solana-install-init.sh | sh -s - LATEST_SOLANA_RELEASE_VERSION
 ```
 
-If you are connecting to a different testnet, you can replace `LATEST_SOLANA_RELEASE_VERSION` with the
+ - If you are connecting to a different testnet, you can replace `LATEST_SOLANA_RELEASE_VERSION` with the
 release tag matching the software version of your desired testnet, or replace it
 with the named channel `stable`, `beta`, or `edge`.
 
-The following output indicates a successful update:
+- The following output indicates a successful update:
 
 ```text
 looking for latest release
@@ -24,8 +36,59 @@ Active release directory: /home/solana/.local/share/solana/install/active_releas
 Update successful
 ```
 
-After a successful install, `solana-install update` may be used to easily update
-the cluster software to a newer version at any time.
+ - Depending on your system, the end of the installer messaging may prompt you
+ to
+ ```bash
+Please update your PATH environment variable to include the solana programs:
+```
+ - If you get the above message, copy and paste the recommended command below
+   it to update `PATH`
+ - Confirm you have the desired version of `solana` installed by running:
+ ```bash
+ solana --version
+```
+
+ - After a successful install, `solana-install update` may be used to easily
+update the Solana software to a newer version at any time.
+
+***
+
+###Windows
+
+ - Open a Command Prompt (`cmd.exe`) as an Administrator
+   - Search for Command Prompt in the Windows search bar.  When the Command
+   Prompt app appears, right-click and select “Open as Administrator”.
+If you are prompted by a pop-up window asking “Do you want to allow this app to
+make changes to your device?”, click Yes.
+
+ - Copy and paste the following command, then press Enter to download the Solana
+ installer into a temporary directory:
+
+```bash
+curl http://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-gnu.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs
+```
+
+ - Copy and paste the following command, then press Enter to install the latest
+ version of Solana.  If you see a security pop-up by your system, please select
+ to allow the program to run.
+
+```bash
+C:\solana-install-tmp\solana-install-init.exe LATEST_SOLANA_RELEASE_VERSION
+```
+
+ - When the installer is finished, press Enter.
+
+ - Close the command prompt window and re-open a new command prompt window as a
+normal user
+   - Search for "Command Prompt" in the search bar, then left click on the
+Command Prompt app icon, no need to run as Administrator)
+ - Confirm you have the desired version of `solana` installed by entering:
+ ```bash
+ solana --version
+```
+
+ - After a successful install, `solana-install update` may be used to easily
+update the Solana software to a newer version at any time.
 
 ## Download Prebuilt Binaries
 
@@ -45,7 +108,7 @@ cd solana-release/
 export PATH=$PWD/bin:$PATH
 ```
 
-### macOS
+### MacOS
 
 Download the binaries by navigating to
 [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
@@ -56,6 +119,21 @@ archive:
 tar jxf solana-release-x86_64-apple-darwin.tar.bz2
 cd solana-release/
 export PATH=$PWD/bin:$PATH
+```
+
+### Windows
+
+- Download the binaries by navigating to
+[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
+download **solana-release-x86\_64-pc-windows-gnu.tar.bz2**, then extract the
+archive using WinZip or similar.
+
+- Open a Command Prompt and navigate to the directory into which you extracted
+the binaries and run:
+
+```bash
+cd solana-release/
+set PATH=%cd%/bin;%PATH%
 ```
 
 ## Build From Source
