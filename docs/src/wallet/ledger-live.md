@@ -16,6 +16,7 @@ line tools](../remote-wallet/ledger.md).
  - Order a [Nano S from Ledger](https://shop.ledger.com/products/ledger-nano-s)
  - Follow the instructions for device setup included in the package,
  or [Ledger's Start page](https://www.ledger.com/start/)
+- [Install the latest device firmware](https://support.ledgerwallet.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
 
 ##Install Ledger Live
  - Install [Ledger Live desktop software](https://www.ledger.com/ledger-live/),
@@ -30,11 +31,14 @@ line tools](../remote-wallet/ledger.md).
  - Open Ledger Live
  - Currently Ledger Live needs to be in "Developer Mode"
  (Settings > Experimental Features > Developer Mode) to see our app.
+ ![Enabling Developer Mode](../.gitbook/assets/ledger-live-enable-developer-mode.png)
+
  - Go to Manager in the app and find "Solana" in the App Catalog and
  click Install
    - Make sure your device is plugged in via USB and is unlocked with its PIN
  - You may be prompted on the Nano S to confirm the install of Solana App
  - "Solana" should now show as "Installed" in the Ledger Live Manager
+ ![Installed Solana App in Manager](../.gitbook/assets/ledger-live-install-solana-app.png)
 
 ##Interact with Solana network
 - To interact with your Ledger wallet on our live network, please see our
