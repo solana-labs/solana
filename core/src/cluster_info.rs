@@ -77,7 +77,7 @@ pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
 /// The maximum size of a protocol payload
 const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
 /// The largest protocol header size
-const MAX_PROTOCOL_HEADER_SIZE: u64 = 214;
+const MAX_PROTOCOL_HEADER_SIZE: u64 = 246;
 /// A hard limit on incoming gossip messages
 /// Chosen to be able to handle 1Gbps of pure gossip traffic
 /// 128MB/PACKET_DATA_SIZE
@@ -97,8 +97,10 @@ pub enum ClusterInfoError {
 pub struct ClusterInfo {
     /// The network
     pub gossip: CrdsGossip,
-    /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
+    /// set the keypair that identifies the validator
     pub(crate) keypair: Arc<Keypair>,
+    /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
+    pub(crate) node_keypair: Arc<Keypair>,
     /// The network entrypoint
     entrypoint: Option<ContactInfo>,
 }
@@ -200,13 +202,22 @@ enum Protocol {
 impl ClusterInfo {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
-        Self::new(contact_info, Arc::new(Keypair::new()))
+        Self::new(
+            contact_info,
+            Arc::new(Keypair::new()),
+            Arc::new(Keypair::new()),
+        )
     }
 
-    pub fn new(contact_info: ContactInfo, keypair: Arc<Keypair>) -> Self {
+    pub fn new(
+        contact_info: ContactInfo,
+        validator_id: Arc<Keypair>,
+        node_id: Arc<Keypair>,
+    ) -> Self {
         let mut me = Self {
             gossip: CrdsGossip::default(),
-            keypair,
+            keypair: validator_id,
+            node_keypair: node_id,
             entrypoint: None,
         };
         let id = contact_info.id;
@@ -218,7 +229,8 @@ impl ClusterInfo {
 
     pub fn insert_self(&mut self, contact_info: ContactInfo) {
         if self.id() == contact_info.id {
-            let value = CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.keypair);
+            let value =
+                CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.node_keypair);
             let _ = self.gossip.crds.insert(value, timestamp());
         }
     }
@@ -227,7 +239,7 @@ impl ClusterInfo {
         let mut my_data = self.my_data();
         let now = timestamp();
         my_data.wallclock = now;
-        let entry = CrdsValue::new_signed(CrdsData::ContactInfo(my_data), &self.keypair);
+        let entry = CrdsValue::new_signed(CrdsData::ContactInfo(my_data), &self.node_keypair);
         self.gossip.refresh_push_active_set(stakes);
         self.gossip
             .process_push_message(&self.id(), vec![entry], now);
@@ -235,7 +247,7 @@ impl ClusterInfo {
 
     // TODO kill insert_info, only used by tests
     pub fn insert_info(&mut self, contact_info: ContactInfo) {
-        let value = CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.keypair);
+        let value = CrdsValue::new_signed(CrdsData::ContactInfo(contact_info), &self.node_keypair);
         let _ = self.gossip.crds.insert(value, timestamp());
     }
 
@@ -245,6 +257,19 @@ impl ClusterInfo {
 
     pub fn id(&self) -> Pubkey {
         self.gossip.id
+    }
+
+    pub fn lookup_nodes(&self, id: &Pubkey) -> Vec<&ContactInfo> {
+        let nodes: Vec<&ContactInfo> = self
+            .gossip
+            .crds
+            .table
+            .iter()
+            .filter_map(|(_, x)| x.value.contact_info())
+            .filter(|x| x.validator_id == *id)
+            .collect();
+
+        nodes
     }
 
     pub fn lookup(&self, id: &Pubkey) -> Option<&ContactInfo> {
@@ -355,7 +380,7 @@ impl ClusterInfo {
         if min > last {
             let entry = CrdsValue::new_signed(
                 CrdsData::LowestSlot(0, LowestSlot::new(id, min, now)),
-                &self.keypair,
+                &self.node_keypair,
             );
             self.gossip
                 .process_push_message(&self.id(), vec![entry], now);
@@ -407,7 +432,8 @@ impl ClusterInfo {
             };
             let n = slots.fill(&update[num..], now);
             if n > 0 {
-                let entry = CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.keypair);
+                let entry =
+                    CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.node_keypair);
                 self.gossip
                     .process_push_message(&self.id(), vec![entry], now);
             }
@@ -435,7 +461,7 @@ impl ClusterInfo {
         }
 
         let message = CrdsData::AccountsHashes(SnapshotHash::new(self.id(), accounts_hashes));
-        self.push_message(CrdsValue::new_signed(message, &self.keypair));
+        self.push_message(CrdsValue::new_signed(message, &self.node_keypair));
     }
 
     pub fn push_snapshot_hashes(&mut self, snapshot_hashes: Vec<(Slot, Hash)>) {
@@ -448,7 +474,7 @@ impl ClusterInfo {
         }
 
         let message = CrdsData::SnapshotHashes(SnapshotHash::new(self.id(), snapshot_hashes));
-        self.push_message(CrdsValue::new_signed(message, &self.keypair));
+        self.push_message(CrdsValue::new_signed(message, &self.node_keypair));
     }
 
     pub fn push_vote(&mut self, tower_index: usize, vote: Transaction) {
@@ -462,7 +488,7 @@ impl ClusterInfo {
             })
             .collect();
         let vote_ix = CrdsValue::compute_vote_index(tower_index, current_votes);
-        let entry = CrdsValue::new_signed(CrdsData::Vote(vote_ix, vote), &self.keypair);
+        let entry = CrdsValue::new_signed(CrdsData::Vote(vote_ix, vote), &self.node_keypair);
         self.gossip
             .process_push_message(&self.id(), vec![entry], now);
     }
@@ -1516,7 +1542,7 @@ impl ClusterInfo {
                         destination: from,
                         wallclock: timestamp(),
                     };
-                    prune_msg.sign(&me.read().unwrap().keypair);
+                    prune_msg.sign(&me.read().unwrap().node_keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
                     Some((ci.gossip, rsp))
                 })
@@ -1632,8 +1658,13 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    pub fn gossip_contact_info(id: &Pubkey, gossip: SocketAddr) -> ContactInfo {
+    pub fn gossip_contact_info(
+        validator_id: &Pubkey,
+        id: &Pubkey,
+        gossip: SocketAddr,
+    ) -> ContactInfo {
         ContactInfo {
+            validator_id: *validator_id,
             id: *id,
             gossip,
             wallclock: timestamp(),
@@ -1641,30 +1672,35 @@ impl ClusterInfo {
         }
     }
 
-    pub fn spy_contact_info(id: &Pubkey) -> ContactInfo {
+    pub fn spy_contact_info(validator_id: &Pubkey, id: &Pubkey) -> ContactInfo {
         let dummy_addr = socketaddr_any!();
 
-        Self::gossip_contact_info(id, dummy_addr)
+        Self::gossip_contact_info(validator_id, id, dummy_addr)
     }
 
     /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
     pub fn gossip_node(
+        validator_id: &Pubkey,
         id: &Pubkey,
         gossip_addr: &SocketAddr,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (port, (gossip_socket, ip_echo)) =
             Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE, bind_ip_addr);
-        let contact_info = Self::gossip_contact_info(id, SocketAddr::new(gossip_addr.ip(), port));
+        let contact_info =
+            Self::gossip_contact_info(validator_id, id, SocketAddr::new(gossip_addr.ip(), port));
 
         (contact_info, gossip_socket, Some(ip_echo))
     }
 
     /// A Node with dummy ports to spy on gossip via pull requests
-    pub fn spy_node(id: &Pubkey) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
+    pub fn spy_node(
+        validator_id: &Pubkey,
+        id: &Pubkey,
+    ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_, gossip_socket) = bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE).unwrap();
-        let contact_info = Self::spy_contact_info(id);
+        let contact_info = Self::spy_contact_info(validator_id, id);
 
         (contact_info, gossip_socket, None)
     }
@@ -1730,10 +1766,11 @@ pub struct Node {
 
 impl Node {
     pub fn new_localhost() -> Self {
-        let pubkey = Pubkey::new_rand();
-        Self::new_localhost_with_pubkey(&pubkey)
+        let validator_id = Pubkey::new_rand();
+        let id = Pubkey::new_rand();
+        Self::new_localhost_with_pubkey(&validator_id, &id)
     }
-    pub fn new_localhost_archiver(pubkey: &Pubkey) -> Self {
+    pub fn new_localhost_archiver(validator_id: &Pubkey, id: &Pubkey) -> Self {
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1745,7 +1782,8 @@ impl Node {
         let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
 
         let info = ContactInfo {
-            id: *pubkey,
+            validator_id: *validator_id,
+            id: *id,
             gossip: gossip.local_addr().unwrap(),
             tvu: tvu.local_addr().unwrap(),
             tvu_forwards: tvu_forwards.local_addr().unwrap(),
@@ -1777,7 +1815,7 @@ impl Node {
             },
         }
     }
-    pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
+    pub fn new_localhost_with_pubkey(validator_id: &Pubkey, id: &Pubkey) -> Self {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let (gossip_port, (gossip, ip_echo)) =
@@ -1798,7 +1836,8 @@ impl Node {
         let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let info = ContactInfo {
-            id: *pubkey,
+            validator_id: *validator_id,
+            id: *id,
             gossip: gossip_addr,
             tvu: tvu.local_addr().unwrap(),
             tvu_forwards: tvu_forwards.local_addr().unwrap(),
@@ -1850,7 +1889,8 @@ impl Node {
     }
 
     pub fn new_with_external_ip(
-        pubkey: &Pubkey,
+        validator_id: &Pubkey,
+        id: &Pubkey,
         gossip_addr: &SocketAddr,
         port_range: PortRange,
         bind_ip_addr: IpAddr,
@@ -1880,7 +1920,8 @@ impl Node {
             multi_bind_in_range(bind_ip_addr, port_range, 4).expect("broadcast multi_bind");
 
         let info = ContactInfo {
-            id: *pubkey,
+            validator_id: *validator_id,
+            id: *id,
             gossip: SocketAddr::new(gossip_addr.ip(), gossip_port),
             tvu: SocketAddr::new(gossip_addr.ip(), tvu_port),
             tvu_forwards: SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
@@ -1914,12 +1955,14 @@ impl Node {
         }
     }
     pub fn new_archiver_with_external_ip(
-        pubkey: &Pubkey,
+        validator_id: &Pubkey,
+        id: &Pubkey,
         gossip_addr: &SocketAddr,
         port_range: PortRange,
         bind_ip_addr: IpAddr,
     ) -> Node {
-        let mut new = Self::new_with_external_ip(pubkey, gossip_addr, port_range, bind_ip_addr);
+        let mut new =
+            Self::new_with_external_ip(validator_id, id, gossip_addr, port_range, bind_ip_addr);
         let (storage_port, storage_socket) = Self::bind(bind_ip_addr, port_range);
 
         new.info.storage_addr = SocketAddr::new(gossip_addr.ip(), storage_port);
@@ -1956,10 +1999,13 @@ mod tests {
     #[test]
     fn test_gossip_node() {
         //check that a gossip nodes always show up as spies
-        let (node, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
+        let (node, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand(), &Pubkey::new_rand());
         assert!(ClusterInfo::is_spy_node(&node));
-        let (node, _, _) =
-            ClusterInfo::gossip_node(&Pubkey::new_rand(), &"1.1.1.1:1111".parse().unwrap());
+        let (node, _, _) = ClusterInfo::gossip_node(
+            &Pubkey::new_rand(),
+            &Pubkey::new_rand(),
+            &"1.1.1.1:1111".parse().unwrap(),
+        );
         assert!(ClusterInfo::is_spy_node(&node));
     }
 
@@ -1967,7 +2013,7 @@ mod tests {
     fn test_cluster_spy_gossip() {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-        let (spy, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
+        let (spy, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand(), &Pubkey::new_rand());
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             node.info,
         )));
@@ -1991,29 +2037,29 @@ mod tests {
 
     #[test]
     fn test_cluster_info_new() {
-        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), timestamp());
         let cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         assert_eq!(d.id, cluster_info.my_data().id);
     }
 
     #[test]
     fn insert_info_test() {
-        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d);
-        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
         assert!(cluster_info.gossip.crds.lookup(&label).is_some());
     }
     #[test]
     fn test_insert_self() {
-        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         let entry_label = CrdsValueLabel::ContactInfo(cluster_info.id());
         assert!(cluster_info.gossip.crds.lookup(&entry_label).is_some());
 
         // inserting something else shouldn't work
-        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), &Pubkey::new_rand(), timestamp());
         cluster_info.insert_self(d.clone());
         let label = CrdsValueLabel::ContactInfo(d.id);
         assert!(cluster_info.gossip.crds.lookup(&label).is_none());
@@ -2052,6 +2098,7 @@ mod tests {
         let ip = Ipv4Addr::from(0);
         let node = Node::new_with_external_ip(
             &Pubkey::new_rand(),
+            &Pubkey::new_rand(),
             &socketaddr!(ip, 0),
             VALIDATOR_PORT_RANGE,
             IpAddr::V4(ip),
@@ -2070,6 +2117,7 @@ mod tests {
         };
         let node = Node::new_with_external_ip(
             &Pubkey::new_rand(),
+            &Pubkey::new_rand(),
             &socketaddr!(0, port),
             VALIDATOR_PORT_RANGE,
             ip,
@@ -2084,6 +2132,7 @@ mod tests {
     fn new_archiver_external_ip_test() {
         let ip = Ipv4Addr::from(0);
         let node = Node::new_archiver_with_external_ip(
+            &Pubkey::new_rand(),
             &Pubkey::new_rand(),
             &socketaddr!(ip, 0),
             VALIDATOR_PORT_RANGE,
@@ -2103,11 +2152,19 @@ mod tests {
     #[test]
     fn test_gossip_signature_verification() {
         //create new cluster info, leader, and peer
+        let validator_keypair = Keypair::new();
         let keypair = Keypair::new();
+        let validator_peer_keypair = Keypair::new();
         let peer_keypair = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let peer = ContactInfo::new_localhost(&peer_keypair.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
+        let contact_info =
+            ContactInfo::new_localhost(&validator_keypair.pubkey(), &keypair.pubkey(), 0);
+        let peer =
+            ContactInfo::new_localhost(&validator_peer_keypair.pubkey(), &peer_keypair.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new(
+            contact_info.clone(),
+            Arc::new(validator_keypair),
+            Arc::new(keypair),
+        );
         cluster_info.insert_info(peer.clone());
         cluster_info.gossip.refresh_push_active_set(&HashMap::new());
         //check that all types of gossip messages are signed correctly
@@ -2272,8 +2329,9 @@ mod tests {
 
     #[test]
     fn test_push_vote() {
+        let validator_keys = Keypair::new();
         let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let contact_info = ContactInfo::new_localhost(&validator_keys.pubkey(), &keys.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
 
         // make sure empty crds is handled correctly
@@ -2308,8 +2366,9 @@ mod tests {
 
     #[test]
     fn test_push_epoch_slots() {
+        let validator_keys = Keypair::new();
         let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let contact_info = ContactInfo::new_localhost(&validator_keys.pubkey(), &keys.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         let (slots, since) = cluster_info.get_epoch_slots_since(None);
         assert!(slots.is_empty());
@@ -2331,13 +2390,24 @@ mod tests {
 
     #[test]
     fn test_add_entrypoint() {
+        let validator_node_keypair = Arc::new(Keypair::new());
         let node_keypair = Arc::new(Keypair::new());
         let mut cluster_info = ClusterInfo::new(
-            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            ContactInfo::new_localhost(
+                &validator_node_keypair.pubkey(),
+                &node_keypair.pubkey(),
+                timestamp(),
+            ),
+            validator_node_keypair,
             node_keypair,
         );
+        let validator_entrypoint_pubkey = Pubkey::new_rand();
         let entrypoint_pubkey = Pubkey::new_rand();
-        let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
+        let entrypoint = ContactInfo::new_localhost(
+            &validator_entrypoint_pubkey,
+            &entrypoint_pubkey,
+            timestamp(),
+        );
         cluster_info.set_entrypoint(entrypoint.clone());
         let pulls = cluster_info.new_pull_requests(&HashMap::new());
         assert_eq!(1, pulls.len() as u64);
@@ -2445,18 +2515,21 @@ mod tests {
 
     #[test]
     fn test_tvu_peers_and_stakes() {
-        let d = ContactInfo::new_localhost(&Pubkey::new(&[0; 32]), timestamp());
+        let d =
+            ContactInfo::new_localhost(&Pubkey::new(&[0; 32]), &Pubkey::new(&[0; 32]), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         let mut stakes = HashMap::new();
 
         // no stake
+        let validator_id = Pubkey::new(&[1u8; 32]);
         let id = Pubkey::new(&[1u8; 32]);
-        let contact_info = ContactInfo::new_localhost(&id, timestamp());
+        let contact_info = ContactInfo::new_localhost(&validator_id, &id, timestamp());
         cluster_info.insert_info(contact_info);
 
         // normal
+        let validator_id2 = Pubkey::new(&[2u8; 32]);
         let id2 = Pubkey::new(&[2u8; 32]);
-        let mut contact_info = ContactInfo::new_localhost(&id2, timestamp());
+        let mut contact_info = ContactInfo::new_localhost(&validator_id2, &id2, timestamp());
         cluster_info.insert_info(contact_info.clone());
         stakes.insert(id2, 10);
 
@@ -2465,15 +2538,17 @@ mod tests {
         cluster_info.insert_info(contact_info);
 
         // no tvu
+        let validator_id3 = Pubkey::new(&[3u8; 32]);
         let id3 = Pubkey::new(&[3u8; 32]);
-        let mut contact_info = ContactInfo::new_localhost(&id3, timestamp());
+        let mut contact_info = ContactInfo::new_localhost(&validator_id3, &id3, timestamp());
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         cluster_info.insert_info(contact_info);
         stakes.insert(id3, 10);
 
         // normal but with different shred version
+        let validator_id4 = Pubkey::new(&[4u8; 32]);
         let id4 = Pubkey::new(&[4u8; 32]);
-        let mut contact_info = ContactInfo::new_localhost(&id4, timestamp());
+        let mut contact_info = ContactInfo::new_localhost(&validator_id4, &id4, timestamp());
         contact_info.shred_version = 1;
         assert_ne!(contact_info.shred_version, d.shred_version);
         cluster_info.insert_info(contact_info.clone());
@@ -2491,20 +2566,36 @@ mod tests {
 
     #[test]
     fn test_pull_from_entrypoint_if_not_present() {
+        let validator_node_keypair = Arc::new(Keypair::new());
         let node_keypair = Arc::new(Keypair::new());
         let mut cluster_info = ClusterInfo::new(
-            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            ContactInfo::new_localhost(
+                &validator_node_keypair.pubkey(),
+                &node_keypair.pubkey(),
+                timestamp(),
+            ),
+            validator_node_keypair,
             node_keypair,
         );
+        let validator_entrypoint_pubkey = Pubkey::new_rand();
         let entrypoint_pubkey = Pubkey::new_rand();
-        let mut entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
+        let mut entrypoint = ContactInfo::new_localhost(
+            &validator_entrypoint_pubkey,
+            &entrypoint_pubkey,
+            timestamp(),
+        );
         entrypoint.gossip = socketaddr!("127.0.0.2:1234");
         cluster_info.set_entrypoint(entrypoint.clone());
 
         let mut stakes = HashMap::new();
 
+        let validator_other_node_pubkey = Pubkey::new_rand();
         let other_node_pubkey = Pubkey::new_rand();
-        let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
+        let other_node = ContactInfo::new_localhost(
+            &validator_other_node_pubkey,
+            &other_node_pubkey,
+            timestamp(),
+        );
         assert_ne!(other_node.gossip, entrypoint.gossip);
         cluster_info.insert_info(other_node.clone());
         stakes.insert(other_node_pubkey, 10);
@@ -2532,9 +2623,15 @@ mod tests {
 
     #[test]
     fn test_repair_peers() {
+        let validator_node_keypair = Arc::new(Keypair::new());
         let node_keypair = Arc::new(Keypair::new());
         let mut cluster_info = ClusterInfo::new(
-            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            ContactInfo::new_localhost(
+                &validator_node_keypair.pubkey(),
+                &node_keypair.pubkey(),
+                timestamp(),
+            ),
+            validator_node_keypair,
             node_keypair,
         );
         for i in 0..10 {
@@ -2543,8 +2640,13 @@ mod tests {
                 // make these invalid for the upcoming repair request
                 peer_lowest = 10;
             }
+            let validator_other_node_pubkey = Pubkey::new_rand();
             let other_node_pubkey = Pubkey::new_rand();
-            let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
+            let other_node = ContactInfo::new_localhost(
+                &validator_other_node_pubkey,
+                &other_node_pubkey,
+                timestamp(),
+            );
             cluster_info.insert_info(other_node.clone());
             let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
                 0,
@@ -2614,9 +2716,15 @@ mod tests {
     #[test]
     fn test_push_epoch_slots_large() {
         use rand::Rng;
+        let validator_node_keypair = Arc::new(Keypair::new());
         let node_keypair = Arc::new(Keypair::new());
         let mut cluster_info = ClusterInfo::new(
-            ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
+            ContactInfo::new_localhost(
+                &validator_node_keypair.pubkey(),
+                &node_keypair.pubkey(),
+                timestamp(),
+            ),
+            validator_node_keypair,
             node_keypair,
         );
         let mut range: Vec<Slot> = vec![];

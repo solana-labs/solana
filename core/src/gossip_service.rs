@@ -257,18 +257,19 @@ fn make_gossip_node(
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
 ) -> (GossipService, Option<TcpListener>, Arc<RwLock<ClusterInfo>>) {
+    let validator_keypair = Arc::new(Keypair::new());
     let keypair = Arc::new(Keypair::new());
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
-        ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr)
+        ClusterInfo::gossip_node(&validator_keypair.pubkey(), &keypair.pubkey(), gossip_addr)
     } else {
-        ClusterInfo::spy_node(&keypair.pubkey())
+        ClusterInfo::spy_node(&validator_keypair.pubkey(), &keypair.pubkey())
     };
-    let mut cluster_info = ClusterInfo::new(node, keypair);
+    let mut cluster_info = ClusterInfo::new(node, validator_keypair, keypair);
     if let Some(entrypoint) = entrypoint {
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
     let cluster_info = Arc::new(RwLock::new(cluster_info));
-    let gossip_service = GossipService::new(&cluster_info.clone(), None, gossip_socket, &exit);
+    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, &exit);
     (gossip_service, ip_echo, cluster_info)
 }
 
@@ -294,13 +295,21 @@ mod tests {
 
     #[test]
     fn test_gossip_services_spy() {
+        let validator_keypair = Keypair::new();
         let keypair = Keypair::new();
+        let validator_peer0 = Pubkey::new_rand();
         let peer0 = Pubkey::new_rand();
+        let validator_peer1 = Pubkey::new_rand();
         let peer1 = Pubkey::new_rand();
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let peer0_info = ContactInfo::new_localhost(&peer0, 0);
-        let peer1_info = ContactInfo::new_localhost(&peer1, 0);
-        let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
+        let contact_info =
+            ContactInfo::new_localhost(&validator_keypair.pubkey(), &keypair.pubkey(), 0);
+        let peer0_info = ContactInfo::new_localhost(&validator_peer0, &peer0, 0);
+        let peer1_info = ContactInfo::new_localhost(&validator_peer1, &peer1, 0);
+        let mut cluster_info = ClusterInfo::new(
+            contact_info.clone(),
+            Arc::new(validator_keypair),
+            Arc::new(keypair),
+        );
         cluster_info.insert_info(peer0_info.clone());
         cluster_info.insert_info(peer1_info);
 

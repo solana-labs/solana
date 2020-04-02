@@ -33,9 +33,10 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();
     for _ in 0..NUM_PEERS {
+        let validator_id = Pubkey::new_rand();
         let id = Pubkey::new_rand();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
+        let mut contact_info = ContactInfo::new_localhost(&validator_id, &id, timestamp());
         contact_info.tvu = socket.local_addr().unwrap();
         contact_info.tvu.set_ip("127.0.0.1".parse().unwrap());
         contact_info.tvu_forwards = contact_info.tvu;

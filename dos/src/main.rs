@@ -167,7 +167,11 @@ pub mod test {
 
     #[test]
     fn test_dos() {
-        let nodes = [ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp())];
+        let nodes = [ContactInfo::new_localhost(
+            &Pubkey::new_rand(),
+            &Pubkey::new_rand(),
+            timestamp(),
+        )];
         let entrypoint_addr = nodes[0].gossip.clone();
         run_dos(
             &nodes,

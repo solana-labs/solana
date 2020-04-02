@@ -208,7 +208,7 @@ fn test_leader_failure_4() {
 /// run with a fixed, predetermined leader schedule
 fn run_cluster_partition(
     partitions: &[&[(usize, bool)]],
-    leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
+    leader_schedule: Option<(LeaderSchedule, Vec<(Arc<Keypair>, Arc<Keypair>)>)>,
 ) {
     solana_logger::setup();
     info!("PARTITION_TEST!");
@@ -243,7 +243,7 @@ fn run_cluster_partition(
             )
         } else {
             (
-                iter::repeat_with(|| Arc::new(Keypair::new()))
+                iter::repeat_with(|| (Arc::new(Keypair::new()), Arc::new(Keypair::new())))
                     .take(partitions.len())
                     .collect(),
                 10_000,
@@ -251,7 +251,7 @@ fn run_cluster_partition(
         }
     };
 
-    let validator_pubkeys: Vec<_> = validator_keys.iter().map(|v| v.pubkey()).collect();
+    let validator_pubkeys: Vec<_> = validator_keys.iter().map(|v| v.1.pubkey()).collect();
     let config = ClusterConfig {
         cluster_lamports,
         node_stakes,
@@ -406,9 +406,10 @@ fn test_kill_partition() {
     let mut leader_schedule = vec![];
     let num_slots_per_validator = 8;
     let partitions: [&[(usize, bool)]; 3] = [&[(9, true)], &[(10, false)], &[(10, false)]];
-    let validator_keys: Vec<_> = iter::repeat_with(|| Arc::new(Keypair::new()))
-        .take(partitions.len())
-        .collect();
+    let validator_keys: Vec<_> =
+        iter::repeat_with(|| (Arc::new(Keypair::new()), Arc::new(Keypair::new())))
+            .take(partitions.len())
+            .collect();
     for (i, k) in validator_keys.iter().enumerate() {
         let num_slots = {
             if i == 0 {
@@ -419,7 +420,7 @@ fn test_kill_partition() {
             }
         };
         for _ in 0..num_slots {
-            leader_schedule.push(k.pubkey())
+            leader_schedule.push(k.1.pubkey())
         }
     }
     info!("leader_schedule: {}", leader_schedule.len());
@@ -655,9 +656,10 @@ fn test_frozen_account_from_genesis() {
     solana_logger::setup();
     let validator_identity =
         Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
+    let identity = Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
 
     let config = ClusterConfig {
-        validator_keys: Some(vec![validator_identity.clone()]),
+        validator_keys: Some(vec![(validator_identity.clone(), identity.clone())]),
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![
@@ -679,13 +681,14 @@ fn test_frozen_account_from_snapshot() {
     solana_logger::setup();
     let validator_identity =
         Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
+    let identity = Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
 
     let mut snapshot_test_config = setup_snapshot_validator_config(5, 1);
     // Freeze the validator identity account
-    snapshot_test_config.validator_config.frozen_accounts = vec![validator_identity.pubkey()];
+    snapshot_test_config.validator_config.frozen_accounts = vec![identity.pubkey()];
 
     let config = ClusterConfig {
-        validator_keys: Some(vec![validator_identity.clone()]),
+        validator_keys: Some(vec![(validator_identity.clone(), identity.clone())]),
         node_stakes: vec![100; 1],
         cluster_lamports: 1_000,
         validator_configs: vec![snapshot_test_config.validator_config.clone()],
@@ -760,6 +763,7 @@ fn test_consistency_halt() {
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
         validator_stake as u64,
+        Arc::new(Keypair::new()),
         Arc::new(Keypair::new()),
     );
     let num_nodes = 2;
@@ -855,6 +859,7 @@ fn test_snapshot_download() {
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
         stake,
+        Arc::new(Keypair::new()),
         Arc::new(Keypair::new()),
     );
 }
@@ -991,6 +996,7 @@ fn test_snapshots_blockstore_floor() {
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
         validator_stake,
+        Arc::new(Keypair::new()),
         Arc::new(Keypair::new()),
     );
     let all_pubkeys = cluster.get_node_pubkeys();

@@ -13,8 +13,9 @@ use test::Bencher;
 #[bench]
 fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
+    let leader_id_pubkey = Pubkey::new_rand();
     let leader_pubkey = Pubkey::new_rand();
-    let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
+    let leader_info = Node::new_localhost_with_pubkey(&leader_id_pubkey, &leader_pubkey);
     let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 

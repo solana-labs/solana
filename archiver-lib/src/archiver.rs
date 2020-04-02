@@ -171,21 +171,23 @@ impl Archiver {
     /// Causes panic if none
     /// * `node` - The archiver node
     /// * `cluster_entrypoint` - ContactInfo representing an entry into the network
-    /// * `keypair` - Keypair for this archiver
+    /// * `archiver_keypair` - Keypair for this archiver
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: &Path,
         node: Node,
         cluster_entrypoint: ContactInfo,
-        keypair: Arc<Keypair>,
+        archiver_keypair: Arc<Keypair>,
+        node_keypair: Arc<Keypair>,
         storage_keypair: Arc<Keypair>,
         client_commitment: CommitmentConfig,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
 
-        info!("Archiver: id: {}", keypair.pubkey());
+        info!("Archiver: id: {}", archiver_keypair.pubkey());
         info!("Creating cluster info....");
-        let mut cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
+        let mut cluster_info =
+            ClusterInfo::new(node.info.clone(), archiver_keypair.clone(), node_keypair);
         cluster_info.set_entrypoint(cluster_entrypoint.clone());
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let cluster_slots = Arc::new(ClusterSlots::default());
@@ -212,9 +214,12 @@ impl Archiver {
         let client = solana_core::gossip_service::get_client(&nodes);
 
         info!("Setting up mining account...");
-        if let Err(e) =
-            Self::setup_mining_account(&client, &keypair, &storage_keypair, client_commitment)
-        {
+        if let Err(e) = Self::setup_mining_account(
+            &client,
+            &archiver_keypair,
+            &storage_keypair,
+            client_commitment,
+        ) {
             //shutdown services before exiting
             exit.store(true, Ordering::Relaxed);
             gossip_service.join()?;
@@ -285,7 +290,7 @@ impl Archiver {
                     &mut meta,
                     &blockstore,
                     cluster_info,
-                    &keypair,
+                    &archiver_keypair,
                     &storage_keypair,
                     &exit,
                 );

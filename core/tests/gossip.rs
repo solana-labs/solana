@@ -15,10 +15,13 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
+    let validator_keypair = Arc::new(Keypair::new());
     let keypair = Arc::new(Keypair::new());
-    let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+    let mut test_node =
+        Node::new_localhost_with_pubkey(&validator_keypair.pubkey(), &keypair.pubkey());
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
         test_node.info.clone(),
+        validator_keypair,
         keypair,
     )));
     let gossip_service = GossipService::new(&cluster_info, None, test_node.sockets.gossip, exit);

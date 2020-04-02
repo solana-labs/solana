@@ -333,8 +333,15 @@ impl BankingStage {
                             cluster_info
                                 .read()
                                 .unwrap()
-                                .lookup(&leader_pubkey)
-                                .map(|leader| leader.tpu_forwards)
+                                .lookup_nodes(&leader_pubkey)
+                                .get(0)
+                                .and_then(|leader_node| {
+                                    cluster_info
+                                        .read()
+                                        .unwrap()
+                                        .lookup(&leader_node.id)
+                                        .map(|leader| leader.tpu_forwards)
+                                })
                         };
 
                         leader_addr.map_or((), |leader_addr| {

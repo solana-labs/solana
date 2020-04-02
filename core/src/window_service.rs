@@ -634,7 +634,7 @@ mod test {
         let blockstore = Arc::new(blockstore);
         let (retransmit_sender, _retransmit_receiver) = channel();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::new_localhost(&Pubkey::default(), 0),
+            ContactInfo::new_localhost(&Pubkey::default(), &Pubkey::default(), 0),
         )));
         let cluster_slots = Arc::new(ClusterSlots::default());
         let repair_sock = Arc::new(UdpSocket::bind(socketaddr_any!()).unwrap());

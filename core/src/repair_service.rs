@@ -588,7 +588,7 @@ mod test {
 
     #[test]
     pub fn test_update_lowest_slot() {
-        let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
+        let node_info = Node::new_localhost_with_pubkey(&Pubkey::default(), &Pubkey::default());
         let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
             node_info.info.clone(),
         ));

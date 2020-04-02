@@ -468,6 +468,7 @@ pub mod test {
     }
 
     fn setup_dummy_broadcast_service(
+        leader_id_pubkey: &Pubkey,
         leader_pubkey: &Pubkey,
         ledger_path: &Path,
         entry_receiver: Receiver<WorkingBankEntry>,
@@ -477,11 +478,13 @@ pub mod test {
         let blockstore = Arc::new(Blockstore::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
-        let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
+        let leader_info = Node::new_localhost_with_pubkey(leader_id_pubkey, leader_pubkey);
 
         // Make a node to broadcast to
+        let buddy_id_keypair = Keypair::new();
         let buddy_keypair = Keypair::new();
-        let broadcast_buddy = Node::new_localhost_with_pubkey(&buddy_keypair.pubkey());
+        let broadcast_buddy =
+            Node::new_localhost_with_pubkey(&buddy_id_keypair.pubkey(), &buddy_keypair.pubkey());
 
         // Fill the cluster_info with the buddy's info
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
@@ -519,11 +522,13 @@ pub mod test {
 
         {
             // Create the leader scheduler
+            let leader_validator_keypair = Keypair::new();
             let leader_keypair = Keypair::new();
 
             let (entry_sender, entry_receiver) = channel();
             let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
             let broadcast_service = setup_dummy_broadcast_service(
+                &leader_validator_keypair.pubkey(),
                 &leader_keypair.pubkey(),
                 &ledger_path,
                 entry_receiver,

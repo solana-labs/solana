@@ -72,6 +72,7 @@ fn main() {
     let ledger_path = PathBuf::from(matches.value_of("ledger").unwrap());
 
     let identity_keypair = keypair_of(&matches, "identity_keypair").unwrap_or_else(Keypair::new);
+    let node_keypair = keypair_of(&matches, "node_keypair").unwrap_or_else(Keypair::new);
 
     let storage_keypair = keypair_of(&matches, "storage_keypair").unwrap_or_else(|| {
         clap::Error::with_description(
@@ -97,6 +98,7 @@ fn main() {
     };
     let node = Node::new_archiver_with_external_ip(
         &identity_keypair.pubkey(),
+        &node_keypair.pubkey(),
         &gossip_addr,
         VALIDATOR_PORT_RANGE,
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -122,6 +124,7 @@ fn main() {
         node,
         entrypoint_info,
         Arc::new(identity_keypair),
+        Arc::new(node_keypair),
         Arc::new(storage_keypair),
         CommitmentConfig::recent(),
     )

@@ -360,9 +360,11 @@ mod test {
 
     #[test]
     fn test_signature() {
+        let validator_keypair = Keypair::new();
         let keypair = Keypair::new();
         let wrong_keypair = Keypair::new();
         let mut v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &validator_keypair.pubkey(),
             &keypair.pubkey(),
             timestamp(),
         )));

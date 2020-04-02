@@ -652,8 +652,8 @@ impl StorageStage {
     }
 }
 
-pub fn test_cluster_info(id: &Pubkey) -> Arc<RwLock<ClusterInfo>> {
-    let contact_info = ContactInfo::new_localhost(id, 0);
+pub fn test_cluster_info(validator_id: &Pubkey, id: &Pubkey) -> Arc<RwLock<ClusterInfo>> {
+    let contact_info = ContactInfo::new_localhost(validator_id, id, 0);
     let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
     Arc::new(RwLock::new(cluster_info))
 }
@@ -679,11 +679,12 @@ mod tests {
 
     #[test]
     fn test_storage_stage_none_ledger() {
+        let validator_keypair = Arc::new(Keypair::new());
         let keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let cluster_info = test_cluster_info(&keypair.pubkey());
+        let cluster_info = test_cluster_info(&validator_keypair.pubkey(), &keypair.pubkey());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
