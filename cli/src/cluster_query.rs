@@ -69,6 +69,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("JSON RPC URL for validator, which is useful for validators with a private RPC service")
                 )
                 .arg(
+                    Arg::with_name("confirmed")
+                        .long("confirmed")
+                        .takes_value(false)
+                        .help(
+                            "Return information at maximum-lockout commitment level",
+                        ),
+                )
+                .arg(
                     Arg::with_name("follow")
                         .long("follow")
                         .takes_value(false)
@@ -275,11 +283,17 @@ pub fn parse_catchup(
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?.unwrap();
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
+    let commitment_config = if matches.is_present("confirmed") {
+        CommitmentConfig::default()
+    } else {
+        CommitmentConfig::recent()
+    };
     let follow = matches.is_present("follow");
     Ok(CliCommandInfo {
         command: CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
+            commitment_config,
             follow,
         },
         signers: vec![],
@@ -436,6 +450,7 @@ pub fn process_catchup(
     rpc_client: &RpcClient,
     node_pubkey: &Pubkey,
     node_json_rpc_url: &Option<String>,
+    commitment_config: CommitmentConfig,
     follow: bool,
 ) -> ProcessResult {
     let sleep_interval = 5;
@@ -484,8 +499,8 @@ pub fn process_catchup(
     let mut previous_rpc_slot = std::u64::MAX;
     let mut previous_slot_distance = 0;
     loop {
-        let rpc_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
-        let node_slot = node_client.get_slot_with_commitment(CommitmentConfig::recent())?;
+        let rpc_slot = rpc_client.get_slot_with_commitment(commitment_config)?;
+        let node_slot = node_client.get_slot_with_commitment(commitment_config)?;
         if !follow && node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
             progress_bar.finish_and_clear();
             return Ok(format!(
