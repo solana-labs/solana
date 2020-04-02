@@ -118,27 +118,10 @@ impl ClusterSlots {
     }
 
     pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<(u64, usize)> {
-        let slot_peers = self.lookup(slot);
         repair_peers
             .iter()
             .enumerate()
-            .map(|(i, x)| {
-                let peer_stake = slot_peers
-                    .as_ref()
-                    .and_then(|v| v.read().unwrap().get(&x.id).cloned())
-                    .unwrap_or(0);
-                (
-                    1 + peer_stake
-                        + self
-                            .validator_stakes
-                            .read()
-                            .unwrap()
-                            .get(&x.id)
-                            .map(|v| v.total_stake)
-                            .unwrap_or(0),
-                    i,
-                )
-            })
+            .map(|(i, x)| (1, i))
             .collect()
     }
 
