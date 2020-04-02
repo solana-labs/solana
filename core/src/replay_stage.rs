@@ -177,10 +177,6 @@ impl ReplayStage {
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
                 let mut partition = false;
-                let mut earliest_vote_on_fork = {
-                    let slots = tower.last_vote().slots;
-                    slots.last().cloned().unwrap_or(0)
-                };
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
@@ -308,46 +304,36 @@ impl ReplayStage {
                     let start = allocated.get();
 
                     // Vote on a fork
-                    let voted_on_different_fork = {
-                        if let Some(ref vote_bank) = vote_bank {
-                            subscriptions.notify_subscribers(block_commitment_cache.read().unwrap().slot(), &bank_forks);
-                            if let Some(votable_leader) = leader_schedule_cache
-                                .slot_leader_at(vote_bank.slot(), Some(vote_bank))
-                            {
-                                Self::log_leader_change(
-                                    &my_pubkey,
-                                    vote_bank.slot(),
-                                    &mut current_leader,
-                                    &votable_leader,
-                                );
-                            }
-
-                            Self::handle_votable_bank(
-                                &vote_bank,
-                                &bank_forks,
-                                &mut tower,
-                                &mut progress,
-                                &vote_account,
-                                &authorized_voter_keypairs,
-                                &cluster_info,
-                                &blockstore,
-                                &leader_schedule_cache,
-                                &root_bank_sender,
-                                &lockouts_sender,
-                                &accounts_hash_sender,
-                                &latest_root_senders,
-                                &mut earliest_vote_on_fork,
-                                &mut all_pubkeys,
-                                &subscriptions,
-                            )?;
-
-                            ancestors
-                                .get(&vote_bank.slot())
-                                .unwrap()
-                                .contains(&earliest_vote_on_fork)
-                        } else {
-                            false
+                    if let Some(ref vote_bank) = vote_bank {
+                        subscriptions.notify_subscribers(block_commitment_cache.read().unwrap().slot(), &bank_forks);
+                        if let Some(votable_leader) = leader_schedule_cache
+                            .slot_leader_at(vote_bank.slot(), Some(vote_bank))
+                        {
+                            Self::log_leader_change(
+                                &my_pubkey,
+                                vote_bank.slot(),
+                                &mut current_leader,
+                                &votable_leader,
+                            );
                         }
+
+                        Self::handle_votable_bank(
+                            &vote_bank,
+                            &bank_forks,
+                            &mut tower,
+                            &mut progress,
+                            &vote_account,
+                            &authorized_voter_keypairs,
+                            &cluster_info,
+                            &blockstore,
+                            &leader_schedule_cache,
+                            &root_bank_sender,
+                            &lockouts_sender,
+                            &accounts_hash_sender,
+                            &latest_root_senders,
+                            &mut all_pubkeys,
+                            &subscriptions,
+                        )?;
                     };
 
                     Self::report_memory(&allocated, "votable_bank", start);
@@ -404,14 +390,6 @@ impl ReplayStage {
                         );
                     }
                     Self::report_memory(&allocated, "reset_bank", start);
-
-                    // If we voted on a different fork, update the earliest vote
-                    // to this slot, clear the switch threshold
-                    if voted_on_different_fork {
-                        earliest_vote_on_fork = vote_bank
-                            .expect("voted_on_different_fork only set if vote_bank.is_some()")
-                            .slot();
-                    }
 
                     let start = allocated.get();
                     if !tpu_has_bank {
@@ -707,7 +685,6 @@ impl ReplayStage {
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_hash_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
-        earliest_vote_on_fork: &mut Slot,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
         subscriptions: &Arc<RpcSubscriptions>,
     ) -> Result<()> {
@@ -740,7 +717,6 @@ impl ReplayStage {
                 &bank_forks,
                 progress,
                 accounts_hash_sender,
-                earliest_vote_on_fork,
                 all_pubkeys,
             );
             subscriptions.notify_roots(rooted_slots);
@@ -1488,7 +1464,6 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
         accounts_hash_sender: &Option<SnapshotPackageSender>,
-        earliest_vote_on_fork: &mut u64,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
     ) {
         let old_epoch = bank_forks.read().unwrap().root_bank().epoch();
@@ -1501,7 +1476,6 @@ impl ReplayStage {
         if old_epoch != new_epoch {
             all_pubkeys.retain(|x| Rc::strong_count(x) > 1);
         }
-        *earliest_vote_on_fork = std::cmp::max(new_root, *earliest_vote_on_fork);
         progress.handle_new_root(&r_bank_forks);
     }
 
@@ -2088,30 +2062,10 @@ pub(crate) mod tests {
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default(), None, None));
         }
-        let mut earliest_vote_on_fork = root - 1;
-        ReplayStage::handle_new_root(
-            root,
-            &bank_forks,
-            &mut progress,
-            &None,
-            &mut earliest_vote_on_fork,
-            &mut HashSet::new(),
-        );
+        ReplayStage::handle_new_root(root, &bank_forks, &mut progress, &None, &mut HashSet::new());
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
-        assert_eq!(earliest_vote_on_fork, root);
         assert!(progress.get(&root).is_some());
-
-        earliest_vote_on_fork = root + 1;
-        ReplayStage::handle_new_root(
-            root,
-            &bank_forks,
-            &mut progress,
-            &None,
-            &mut earliest_vote_on_fork,
-            &mut HashSet::new(),
-        );
-        assert_eq!(earliest_vote_on_fork, root + 1);
     }
 
     #[test]

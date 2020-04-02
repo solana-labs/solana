@@ -648,7 +648,6 @@ pub mod test {
                     bank_forks,
                     progress,
                     &None,
-                    &mut 0,
                     &mut HashSet::new(),
                 );
             }
