@@ -48,7 +48,7 @@ use std::{
     fmt,
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicUsize, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, RwLock},
 };
 use tempfile::TempDir;
@@ -453,7 +453,7 @@ pub struct AccountsDB {
     pub next_id: AtomicUsize,
     pub next_compact_slot: AtomicU64,
 
-    write_version: AtomicUsize,
+    write_version: AtomicU64,
 
     /// Set of storage paths to pick from
     paths: Vec<PathBuf>,
@@ -502,7 +502,7 @@ impl Default for AccountsDB {
             storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
             next_compact_slot: AtomicU64::new(0),
-            write_version: AtomicUsize::new(0),
+            write_version: AtomicU64::new(0),
             paths: vec![],
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
@@ -653,7 +653,7 @@ impl AccountsDB {
 
         self.next_id.store(max_id + 1, Ordering::Relaxed);
         self.write_version
-            .fetch_add(version as usize, Ordering::Relaxed);
+            .fetch_add(version, Ordering::Relaxed);
         self.generate_index();
         Ok(())
     }
@@ -874,7 +874,6 @@ impl AccountsDB {
         self.purge_slots(&dead_slots);
         purge_slots.stop();
 
-
         debug!(
             "process_dead_slots({}): {} {}",
             dead_slots.len(),
@@ -894,7 +893,14 @@ impl AccountsDB {
                     let mut start = 0;
                     while let Some((account, next)) = store.accounts.get_account(start) {
                         // inherit write version?
-                        stored_accounts.push((account.meta.pubkey, account.clone_account(), *account.hash, next - start, (store.id, account.offset)));
+                        stored_accounts.push((
+                            account.meta.pubkey,
+                            account.clone_account(),
+                            *account.hash,
+                            next - start,
+                            (store.id, account.offset),
+                            account.meta.write_version,
+                        ));
                         start = next;
                     }
                 }
@@ -904,30 +910,44 @@ impl AccountsDB {
         let no_ancestors = HashMap::new();
         let alive_accounts: Vec<_> = {
             let accounts_index = self.accounts_index.read().unwrap();
-            stored_accounts.iter().filter(|(pubkey, account, _hash, _storage_size, (store_id, offset))| {
-                if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
-                    // consider offset!!
-                    list.iter().any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
-                } else {
-                    false
-                }
-            }).collect()
+            stored_accounts
+                .iter()
+                .filter(
+                    |(pubkey, _account, _hash, _storage_size, (store_id, offset), _write_version)| {
+                        if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
+                            list.iter()
+                                .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
+                        } else {
+                            false
+                        }
+                    },
+                )
+                .collect()
         };
-        let alive_account_storage_total: u64 = alive_accounts.iter().fold(0, |t, (_, _, _, a, _)| t + *a as u64);
+        let alive_account_storage_total: u64 = alive_accounts
+            .iter()
+            .fold(0, |t, (_, _, _, a, _, _)| t + *a as u64);
         let aligned: u64 = (alive_account_storage_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
-        error!("found {} alive alive_accounts! ({} bytes/{} aligned bytes)", alive_accounts.len(), alive_account_storage_total, aligned);
+        error!(
+            "found {} alive alive_accounts! ({} bytes/{} aligned bytes)",
+            alive_accounts.len(),
+            alive_account_storage_total,
+            aligned
+        );
         // more smart predicate to shrink or not; don't do this when already shrank or there is
         // little room for shrinking
         if aligned > 0 {
             let store = self.create_and_insert_store(next_compact_slot, aligned);
             let mut accounts = vec![];
             let mut hashes = vec![];
-            for (pubkey, account, hash, _size, _location) in alive_accounts {
-               accounts.push((pubkey, account)); 
-               hashes.push(*hash); 
+            let mut write_versions = vec![];
+            for (pubkey, account, hash, _size, _location, write_version) in alive_accounts {
+                accounts.push((pubkey, account));
+                hashes.push(*hash);
+                write_versions.push(*write_version);
             }
-            let write_version = self.write_version.fetch_add(accounts.len(), Ordering::Relaxed) as u64;
-            let infos = self.store_accounts_to(next_compact_slot, &accounts, &hashes, store, write_version);
+            let infos =
+                self.store_accounts_to(next_compact_slot, &accounts, &hashes, store, write_versions.into_iter());
             let reclaims = self.update_index(next_compact_slot, infos, &accounts);
             trace!("reclaim: {}", reclaims.len());
 
@@ -953,7 +973,6 @@ impl AccountsDB {
                 error!("next: {}, recent: {}", next_compact_slot, recent_root);
             }
         }
-        
     }
 
     pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Slot, usize>, scan_func: F) -> A
@@ -1223,18 +1242,25 @@ impl AccountsDB {
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
     ) -> Vec<AccountInfo> {
-        let write_version = self.write_version.fetch_add(accounts.len(), Ordering::Relaxed) as u64;
+        let mut write_version = self
+            .write_version
+            .fetch_add(accounts.len() as u64, Ordering::Relaxed);
         let storage = self.find_storage_candidate(slot);
-        self.store_accounts_to(slot, accounts, hashes, storage, write_version)
+        let versions = std::iter::from_fn(move || {
+            let ret = write_version;
+            write_version += 1;
+            Some(ret)
+        });
+        self.store_accounts_to(slot, accounts, hashes, storage, versions)
     }
 
-    fn store_accounts_to(
+    fn store_accounts_to<I: Iterator<Item = u64>>(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
         storage: Arc<AccountStorageEntry>,
-        write_version: u64,
+        mut write_versions: I,
     ) -> Vec<AccountInfo> {
         let default_account = Account::default();
         let mut i = 0;
@@ -1250,7 +1276,7 @@ impl AccountsDB {
                 let data_len = account.data.len() as u64;
 
                 let meta = StoredMeta {
-                    write_version: write_version + i,
+                    write_version: write_versions.next().unwrap(),
                     pubkey: **pubkey,
                     data_len,
                 };
