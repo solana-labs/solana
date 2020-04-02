@@ -69,8 +69,8 @@ pub enum CrdsData {
     Vote(VoteIndex, Vote),
     LowestSlot(u8, LowestSlot),
     SnapshotHashes(SnapshotHash),
-    EpochSlots(EpochSlotsIndex, EpochSlots),
     AccountsHashes(SnapshotHash),
+    EpochSlots(EpochSlotsIndex, EpochSlots),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -189,8 +189,8 @@ impl CrdsValue {
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::LowestSlot(_, obj) => obj.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
-            CrdsData::EpochSlots(_, p) => p.wallclock,
             CrdsData::AccountsHashes(hash) => hash.wallclock,
+            CrdsData::EpochSlots(_, p) => p.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -199,8 +199,8 @@ impl CrdsValue {
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::LowestSlot(_, slots) => slots.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
-            CrdsData::EpochSlots(_, p) => p.from,
             CrdsData::AccountsHashes(hash) => hash.from,
+            CrdsData::EpochSlots(_, p) => p.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -209,8 +209,8 @@ impl CrdsValue {
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::LowestSlot(_, _) => CrdsValueLabel::LowestSlot(self.pubkey()),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
-            CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
             CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
+            CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
