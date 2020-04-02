@@ -8,7 +8,7 @@ use num_cpus;
 use solana_clap_utils::{
     input_validators::is_derivation,
     keypair::{
-        keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
+        check_for_usb, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     DisplayError,
@@ -407,7 +407,11 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
         Config::default()
     };
 
-    let wallet_manager = maybe_wallet_manager()?;
+    let wallet_manager = if check_for_usb(std::env::args()) {
+        maybe_wallet_manager()?
+    } else {
+        None
+    };
 
     match matches.subcommand() {
         ("pubkey", Some(matches)) => {

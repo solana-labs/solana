@@ -47,6 +47,13 @@ pub fn parse_keypair_path(path: &str) -> KeypairUrl {
     }
 }
 
+pub fn check_for_usb<S>(mut items: impl Iterator<Item = S>) -> bool
+where
+    S: Into<String>,
+{
+    items.any(|arg| matches!(parse_keypair_path(&arg.into()), KeypairUrl::Usb(_)))
+}
+
 pub fn presigner_from_pubkey_sigs(
     pubkey: &Pubkey,
     signers: &[(Pubkey, Signature)],
@@ -255,5 +262,21 @@ mod tests {
             "Mary had a little lamb".to_owned(),
             sanitize_seed_phrase(seed_phrase)
         );
+    }
+
+    #[test]
+    fn test_check_for_usb() {
+        let args: Vec<&str> = vec![];
+        assert_eq!(check_for_usb(args.into_iter()), false);
+        let args = vec!["usb://"];
+        assert_eq!(check_for_usb(args.into_iter()), true);
+        let args = vec!["other"];
+        assert_eq!(check_for_usb(args.into_iter()), false);
+        let args = vec!["other", "usb://", "another"];
+        assert_eq!(check_for_usb(args.into_iter()), true);
+        let args = vec!["other", "another"];
+        assert_eq!(check_for_usb(args.into_iter()), false);
+        let args = vec!["usb://", "usb://"];
+        assert_eq!(check_for_usb(args.into_iter()), true);
     }
 }
