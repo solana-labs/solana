@@ -53,20 +53,16 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("The commission taken on reward redemption (0-100)"),
                 )
                 .arg(
-                    Arg::with_name("authorized_voter")
+                    pubkey!(Arg::with_name("authorized_voter")
                         .long("authorized-voter")
-                        .value_name("VOTER_PUBKEY")
-                        .takes_value(true)
-                        .validator(is_valid_pubkey)
-                        .help("Public key of the authorized voter [default: validator identity pubkey]"),
+                        .value_name("VOTER_PUBKEY"),
+                        "Public key of the authorized voter [default: validator identity pubkey]. "),
                 )
                 .arg(
-                    Arg::with_name("authorized_withdrawer")
+                    pubkey!(Arg::with_name("authorized_withdrawer")
                         .long("authorized-withdrawer")
-                        .value_name("WITHDRAWER_PUBKEY")
-                        .takes_value(true)
-                        .validator(is_valid_pubkey)
-                        .help("Public key of the authorized withdrawer [default: validator identity pubkey]"),
+                        .value_name("WITHDRAWER_PUBKEY"),
+                        "Public key of the authorized withdrawer [default: validator identity pubkey]. "),
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -80,57 +76,47 @@ impl VoteSubCommands for App<'_, '_> {
             SubCommand::with_name("vote-authorize-voter")
                 .about("Authorize a new vote signing keypair for the given vote account")
                 .arg(
-                    Arg::with_name("vote_account_pubkey")
+                    pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Vote account in which to set the authorized voter"),
+                        .required(true),
+                        "Vote account in which to set the authorized voter. "),
                 )
                 .arg(
-                    Arg::with_name("new_authorized_pubkey")
+                    pubkey!(Arg::with_name("new_authorized_pubkey")
                         .index(2)
                         .value_name("AUTHORIZED_PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("New authorized vote signer"),
+                        .required(true),
+                        "New authorized vote signer. "),
                 ),
         )
         .subcommand(
             SubCommand::with_name("vote-authorize-withdrawer")
                 .about("Authorize a new withdraw signing keypair for the given vote account")
                 .arg(
-                    Arg::with_name("vote_account_pubkey")
+                    pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Vote account in which to set the authorized withdrawer"),
+                        .required(true),
+                        "Vote account in which to set the authorized withdrawer. "),
                 )
                 .arg(
-                    Arg::with_name("new_authorized_pubkey")
+                    pubkey!(Arg::with_name("new_authorized_pubkey")
                         .index(2)
                         .value_name("AUTHORIZED_PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("New authorized withdrawer"),
+                        .required(true),
+                        "New authorized withdrawer. "),
                 ),
         )
         .subcommand(
             SubCommand::with_name("vote-update-validator")
                 .about("Update the vote account's validator identity")
                 .arg(
-                    Arg::with_name("vote_account_pubkey")
+                    pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Vote account to update"),
+                        .required(true),
+                        "Vote account to update. "),
                 )
                 .arg(
                     Arg::with_name("new_identity_account")
@@ -164,13 +150,11 @@ impl VoteSubCommands for App<'_, '_> {
                         ),
                 )
                 .arg(
-                    Arg::with_name("vote_account_pubkey")
+                    pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Vote account pubkey"),
+                        .required(true),
+                        "Vote account pubkey. "),
                 )
                 .arg(
                     Arg::with_name("lamports")
@@ -183,22 +167,18 @@ impl VoteSubCommands for App<'_, '_> {
             SubCommand::with_name("withdraw-from-vote-account")
                 .about("Withdraw lamports from a vote account into a specified account")
                 .arg(
-                    Arg::with_name("vote_account_pubkey")
+                    pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Vote account from which to withdraw"),
+                        .required(true),
+                        "Vote account from which to withdraw. "),
                 )
                 .arg(
-                    Arg::with_name("destination_account_pubkey")
+                    pubkey!(Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("The recipient of withdrawn SOL"),
+                        .required(true),
+                        "The recipient of withdrawn SOL. "),
                 )
                 .arg(
                     Arg::with_name("amount")

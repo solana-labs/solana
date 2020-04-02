@@ -92,22 +92,18 @@ impl NonceSubCommands for App<'_, '_> {
             SubCommand::with_name("authorize-nonce-account")
                 .about("Assign account authority to a new entity")
                 .arg(
-                    Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Address of the nonce account"),
+                        .required(true),
+                        "Address of the nonce account. "),
                 )
                 .arg(
-                    Arg::with_name("new_authority")
+                    pubkey!(Arg::with_name("new_authority")
                         .index(2)
                         .value_name("AUTHORITY_PUBKEY")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Account to be granted authority of the nonce account"),
+                        .required(true),
+                        "Account to be granted authority of the nonce account. "),
                 )
                 .arg(nonce_authority_arg()),
         )
@@ -133,12 +129,10 @@ impl NonceSubCommands for App<'_, '_> {
                         .help("The amount to load the nonce account with, in SOL"),
                 )
                 .arg(
-                    Arg::with_name(NONCE_AUTHORITY_ARG.name)
+                    pubkey!(Arg::with_name(NONCE_AUTHORITY_ARG.name)
                         .long(NONCE_AUTHORITY_ARG.long)
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .validator(is_valid_pubkey)
-                        .help("Assign noncing authority to another entity"),
+                        .value_name("PUBKEY"),
+                        "Assign noncing authority to another entity. "),
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -153,26 +147,22 @@ impl NonceSubCommands for App<'_, '_> {
                 .about("Get the current nonce value")
                 .alias("get-nonce")
                 .arg(
-                    Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Address of the nonce account to display"),
+                        .required(true),
+                        "Address of the nonce account to display. "),
                 ),
         )
         .subcommand(
             SubCommand::with_name("new-nonce")
                 .about("Generate a new nonce, rendering the existing nonce useless")
                 .arg(
-                    Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Address of the nonce account"),
+                        .required(true),
+                        "Address of the nonce account. "),
                 )
                 .arg(nonce_authority_arg()),
         )
@@ -181,13 +171,11 @@ impl NonceSubCommands for App<'_, '_> {
                 .about("Show the contents of a nonce account")
                 .alias("show-nonce-account")
                 .arg(
-                    Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Address of the nonce account to display"),
+                        .required(true),
+                        "Address of the nonce account to display. "),
                 )
                 .arg(
                     Arg::with_name("lamports")
@@ -200,22 +188,18 @@ impl NonceSubCommands for App<'_, '_> {
             SubCommand::with_name("withdraw-from-nonce-account")
                 .about("Withdraw SOL from the nonce account")
                 .arg(
-                    Arg::with_name("nonce_account_pubkey")
+                    pubkey!(Arg::with_name("nonce_account_pubkey")
                         .index(1)
                         .value_name("NONCE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Nonce account to withdraw from"),
+                        .required(true),
+                        "Nonce account to withdraw from. "),
                 )
                 .arg(
-                    Arg::with_name("destination_account_pubkey")
+                    pubkey!(Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("The account to which the SOL should be transferred"),
+                        .required(true),
+                        "The account to which the SOL should be transferred. "),
                 )
                 .arg(
                     Arg::with_name("amount")

@@ -89,12 +89,10 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("The amount to send to the stake account, in SOL")
                 )
                 .arg(
-                    Arg::with_name("custodian")
+                    pubkey!(Arg::with_name("custodian")
                         .long("custodian")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .validator(is_valid_pubkey)
-                        .help("Authority to modify lockups")
+                        .value_name("PUBKEY"),
+                        "Authority to modify lockups. ")
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -158,22 +156,18 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Override vote account sanity checks (use carefully!)")
                 )
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Stake account to delegate")
+                        .required(true),
+                        "Stake account to delegate")
                 )
                 .arg(
-                    Arg::with_name("vote_account_pubkey")
+                    pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(2)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("The vote account to which the stake will be delegated")
+                        .required(true),
+                        "The vote account to which the stake will be delegated")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -185,31 +179,25 @@ impl StakeSubCommands for App<'_, '_> {
             SubCommand::with_name("stake-authorize")
                 .about("Authorize a new signing keypair for the given stake account")
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::with_name("stake_account_pubkey")
                         .required(true)
                         .index(1)
-                        .takes_value(true)
-                        .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .validator(is_valid_pubkey)
-                        .help("Stake account in which to set a new authority")
+                        .value_name("STAKE_ACCOUNT_ADDRESS"),
+                        "Stake account in which to set a new authority. ")
                 )
                 .arg(
-                    Arg::with_name("new_stake_authority")
+                    pubkey!(Arg::with_name("new_stake_authority")
                         .long("new-stake-authority")
                         .required_unless("new_withdraw_authority")
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .validator(is_valid_pubkey)
-                        .help("New authorized staker")
+                        .value_name("PUBKEY"),
+                        "New authorized staker")
                 )
                 .arg(
-                    Arg::with_name("new_withdraw_authority")
+                    pubkey!(Arg::with_name("new_withdraw_authority")
                         .long("new-withdraw-authority")
                         .required_unless("new_stake_authority")
-                        .takes_value(true)
-                        .value_name("PUBKEY")
-                        .validator(is_valid_pubkey)
-                        .help("New authorized withdrawer")
+                        .value_name("PUBKEY"),
+                        "New authorized withdrawer. ")
                 )
                 .arg(stake_authority_arg())
                 .arg(withdraw_authority_arg())
@@ -222,13 +210,11 @@ impl StakeSubCommands for App<'_, '_> {
             SubCommand::with_name("deactivate-stake")
                 .about("Deactivate the delegated stake from the stake account")
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Stake account to be deactivated.")
+                        .required(true),
+                        "Stake account to be deactivated. ")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -240,13 +226,11 @@ impl StakeSubCommands for App<'_, '_> {
             SubCommand::with_name("split-stake")
                 .about("Duplicate a stake account, splitting the tokens between the two")
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Stake account to split (or base of derived address if --seed is used)")
+                        .required(true),
+                        "Stake account to split (or base of derived address if --seed is used). ")
                 )
                 .arg(
                     Arg::with_name("split_stake_account")
@@ -283,22 +267,18 @@ impl StakeSubCommands for App<'_, '_> {
             SubCommand::with_name("withdraw-stake")
                 .about("Withdraw the unstaked SOL from the stake account")
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Stake account from which to withdraw")
+                        .required(true),
+                        "Stake account from which to withdraw")
                 )
                 .arg(
-                    Arg::with_name("destination_account_pubkey")
+                    pubkey!(Arg::with_name("destination_account_pubkey")
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Recipient of withdrawn SOL")
+                        .required(true),
+                        "Recipient of withdrawn SOL")
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -319,13 +299,11 @@ impl StakeSubCommands for App<'_, '_> {
             SubCommand::with_name("stake-set-lockup")
                 .about("Set Lockup for the stake account")
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Stake account for which to set lockup parameters")
+                        .required(true),
+                        "Stake account for which to set lockup parameters. ")
                 )
                 .arg(
                     Arg::with_name("lockup_epoch")
@@ -343,12 +321,10 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("The date and time at which this account will be available for withdrawal")
                 )
                 .arg(
-                    Arg::with_name("new_custodian")
+                    pubkey!(Arg::with_name("new_custodian")
                         .long("new-custodian")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
-                        .validator(is_valid_pubkey)
-                        .help("Identity of a new lockup custodian")
+                        .value_name("PUBKEY"),
+                        "Identity of a new lockup custodian. ")
                 )
                 .group(ArgGroup::with_name("lockup_details")
                     .args(&["lockup_epoch", "lockup_date", "new_custodian"])
@@ -371,13 +347,11 @@ impl StakeSubCommands for App<'_, '_> {
                 .about("Show the contents of a stake account")
                 .alias("show-stake-account")
                 .arg(
-                    Arg::with_name("stake_account_pubkey")
+                    pubkey!(Arg::with_name("stake_account_pubkey")
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("The stake account to display")
+                        .required(true),
+                        "The stake account to display. ")
                 )
                 .arg(
                     Arg::with_name("lamports")
