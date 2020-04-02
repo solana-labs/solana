@@ -2,7 +2,9 @@ use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches
 use console::style;
 
 use solana_clap_utils::{
-    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, offline::SIGN_ONLY_ARG,
+    input_validators::is_url,
+    keypair::{check_for_usb, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    offline::SIGN_ONLY_ARG,
     DisplayError,
 };
 use solana_cli::{
@@ -233,12 +235,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .get_matches();
 
-    do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
+    do_main(&matches, check_for_usb(std::env::args()))
+        .map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
-fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
+fn do_main(
+    matches: &ArgMatches<'_>,
+    need_wallet_manager: bool,
+) -> Result<(), Box<dyn error::Error>> {
     if parse_settings(&matches)? {
-        let wallet_manager = maybe_wallet_manager()?;
+        let wallet_manager = if need_wallet_manager {
+            maybe_wallet_manager()?
+        } else {
+            None
+        };
 
         let (mut config, signers) = parse_args(&matches, wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
