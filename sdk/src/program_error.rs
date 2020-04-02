@@ -14,7 +14,7 @@ pub enum ProgramError {
     /// Allows on-chain programs to implement program-specific error types and see them returned
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
-    #[error("Custom program error: {0}")]
+    #[error("Custom program error: {0:#x}")]
     Custom(u32),
     #[error("The arguments provided to a program instruction where invalid")]
     InvalidArgument,
@@ -52,7 +52,7 @@ impl PrintProgramError for ProgramError {
         E: 'static + std::error::Error + DecodeError<E> + PrintProgramError + FromPrimitive,
     {
         match self {
-            ProgramError::Custom(error) => {
+            Self::Custom(error) => {
                 if let Some(custom_error) = E::decode_custom_error_to_enum(*error) {
                     custom_error.print::<E>();
                 } else {
@@ -186,7 +186,7 @@ where
                 if error >> BUILTIN_BIT_SHIFT == 0 {
                     InstructionError::Custom(error as u32)
                 } else {
-                    InstructionError::InvalidError
+                    Self::InvalidError
                 }
             }
         }
