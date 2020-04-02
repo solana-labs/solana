@@ -38,6 +38,8 @@ const DATA_SHRED_CF: &str = "data_shred";
 const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
+/// Column family for Transaction Status
+const TRANSACTION_STATUS_INDEX_CF: &str = "transaction_status_index";
 /// Column family for Rewards
 const REWARDS_CF: &str = "rewards";
 
@@ -109,6 +111,10 @@ pub mod columns {
     pub struct TransactionStatus;
 
     #[derive(Debug)]
+    /// The transaction status index column
+    pub struct TransactionStatusIndex;
+
+    #[derive(Debug)]
     /// The rewards column
     pub struct Rewards;
 }
@@ -120,7 +126,7 @@ impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
         use columns::{
             DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
-            ShredData, SlotMeta, TransactionStatus,
+            ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         fs::create_dir_all(&path)?;
@@ -145,6 +151,8 @@ impl Rocks {
             ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options());
         let transaction_status_cf_descriptor =
             ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options());
+        let transaction_status_index_cf_descriptor =
+            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options());
         let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
 
         let cfs = vec![
@@ -158,6 +166,7 @@ impl Rocks {
             shred_data_cf_descriptor,
             shred_code_cf_descriptor,
             transaction_status_cf_descriptor,
+            transaction_status_index_cf_descriptor,
             rewards_cf_descriptor,
         ];
 
@@ -170,7 +179,7 @@ impl Rocks {
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
             DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
-            ShredData, SlotMeta, TransactionStatus,
+            ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         vec![
@@ -184,6 +193,7 @@ impl Rocks {
             ShredData::NAME,
             ShredCode::NAME,
             TransactionStatus::NAME,
+            TransactionStatusIndex::NAME,
             Rewards::NAME,
         ]
     }
@@ -272,6 +282,10 @@ impl TypedColumn for columns::TransactionStatus {
     type Type = TransactionStatusMeta;
 }
 
+impl TypedColumn for columns::TransactionStatusIndex {
+    type Type = blockstore_meta::TransactionStatusIndexMeta;
+}
+
 pub trait SlotColumn<Index = u64> {}
 
 impl<T: SlotColumn> Column for T {
@@ -323,6 +337,32 @@ impl Column for columns::TransactionStatus {
 
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
+}
+
+impl Column for columns::TransactionStatusIndex {
+    type Index = u64;
+
+    fn key(index: u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], index);
+        key
+    }
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+
+    fn primary_index(index: u64) -> u64 {
+        index
+    }
+
+    fn as_index(slot: u64) -> u64 {
+        slot
+    }
+}
+
+impl ColumnName for columns::TransactionStatusIndex {
+    const NAME: &'static str = TRANSACTION_STATUS_INDEX_CF;
 }
 
 impl SlotColumn for columns::Rewards {}
