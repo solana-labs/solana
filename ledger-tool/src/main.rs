@@ -5,6 +5,7 @@ use clap::{
 use histogram;
 use serde_json::json;
 use solana_clap_utils::input_validators::is_slot;
+use solana_ledger::bank_forks::CompressionType;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
@@ -615,6 +616,7 @@ fn load_bank_forks(
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path: ledger_path.clone(),
             snapshot_path: ledger_path.clone().join("snapshot"),
+            compression: CompressionType::Bzip2,
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
@@ -1043,6 +1045,7 @@ fn main() {
                                 &bank.src.roots(),
                                 output_directory,
                                 storages,
+                                CompressionType::Bzip2,
                             )
                         })
                         .and_then(|package| {

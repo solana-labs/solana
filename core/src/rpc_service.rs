@@ -43,8 +43,10 @@ impl RpcRequestMiddleware {
     pub fn new(ledger_path: PathBuf, snapshot_config: Option<SnapshotConfig>) -> Self {
         Self {
             ledger_path,
-            snapshot_archive_path_regex: Regex::new(r"/snapshot-\d+-[[:alnum:]]+\.tar\.bz2$")
-                .unwrap(),
+            snapshot_archive_path_regex: Regex::new(
+                r"/snapshot-\d+-[[:alnum:]]+\.tar\.(bz2|zst|gz)$",
+            )
+            .unwrap(),
             snapshot_config,
         }
     }
@@ -249,6 +251,7 @@ impl JsonRpcService {
 mod tests {
     use super::*;
     use crate::{contact_info::ContactInfo, rpc::tests::create_validator_exit};
+    use solana_ledger::bank_forks::CompressionType;
     use solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
@@ -319,6 +322,7 @@ mod tests {
                 snapshot_interval_slots: 0,
                 snapshot_package_output_path: PathBuf::from("/"),
                 snapshot_path: PathBuf::from("/"),
+                compression: CompressionType::Bzip2,
             }),
         );
 

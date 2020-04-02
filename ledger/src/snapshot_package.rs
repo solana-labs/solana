@@ -1,3 +1,4 @@
+use crate::bank_forks::CompressionType;
 use solana_runtime::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
@@ -19,6 +20,7 @@ pub struct SnapshotPackage {
     pub storages: SnapshotStorages,
     pub tar_output_file: PathBuf,
     pub hash: Hash,
+    pub compression: CompressionType,
 }
 
 impl SnapshotPackage {
@@ -29,6 +31,7 @@ impl SnapshotPackage {
         storages: SnapshotStorages,
         tar_output_file: PathBuf,
         hash: Hash,
+        compression: CompressionType,
     ) -> Self {
         Self {
             root,
@@ -37,6 +40,7 @@ impl SnapshotPackage {
             storages,
             tar_output_file,
             hash,
+            compression,
         }
     }
 }

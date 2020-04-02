@@ -170,6 +170,7 @@ mod tests {
     use super::*;
     use crate::cluster_info::make_accounts_hashes_message;
     use crate::contact_info::ContactInfo;
+    use solana_ledger::bank_forks::CompressionType;
     use solana_sdk::{
         hash::hash,
         signature::{Keypair, Signer},
@@ -231,6 +232,7 @@ mod tests {
                 snapshot_links,
                 tar_output_file: PathBuf::from("."),
                 storages: vec![],
+                compression: CompressionType::Bzip2,
             };
 
             AccountsHashVerifier::process_snapshot(

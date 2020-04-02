@@ -55,7 +55,7 @@ pub fn load(
         match snapshot_utils::get_highest_snapshot_archive_path(
             &snapshot_config.snapshot_package_output_path,
         ) {
-            Some((archive_filename, archive_snapshot_hash)) => {
+            Some((archive_filename, (archive_slot, archive_snapshot_hash, compression))) => {
                 info!("Loading snapshot package: {:?}", archive_filename);
                 // Fail hard here if snapshot fails to load, don't silently continue
 
@@ -69,6 +69,7 @@ pub fn load(
                     &process_options.frozen_accounts,
                     &snapshot_config.snapshot_path,
                     &archive_filename,
+                    compression,
                 )
                 .expect("Load from snapshot failed");
 
@@ -77,7 +78,7 @@ pub fn load(
                     deserialized_bank.get_accounts_hash(),
                 );
 
-                if deserialized_snapshot_hash != archive_snapshot_hash {
+                if deserialized_snapshot_hash != (archive_slot, archive_snapshot_hash) {
                     error!(
                         "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",
                         archive_snapshot_hash, deserialized_snapshot_hash

@@ -8,6 +8,7 @@ use solana_core::{
     gossip_service::discover_cluster, validator::ValidatorConfig,
 };
 use solana_download_utils::download_snapshot;
+use solana_ledger::bank_forks::CompressionType;
 use solana_ledger::{
     bank_forks::SnapshotConfig, blockstore::Blockstore, leader_schedule::FixedSchedule,
     leader_schedule::LeaderSchedule, snapshot_utils,
@@ -840,6 +841,7 @@ fn test_snapshot_download() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &archive_snapshot_hash,
+        &CompressionType::Bzip2,
     );
 
     // Download the snapshot, then boot a validator from it.
@@ -906,6 +908,7 @@ fn test_snapshot_restart_tower() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &archive_snapshot_hash,
+        &CompressionType::Bzip2,
     );
     fs::hard_link(archive_filename, &validator_archive_path).unwrap();
 
@@ -956,7 +959,7 @@ fn test_snapshots_blockstore_floor() {
 
     trace!("Waiting for snapshot tar to be generated with slot",);
 
-    let (archive_filename, (archive_slot, archive_hash)) = loop {
+    let (archive_filename, (archive_slot, archive_hash, _)) = loop {
         let archive =
             snapshot_utils::get_highest_snapshot_archive_path(&snapshot_package_output_path);
         if archive.is_some() {
@@ -970,6 +973,7 @@ fn test_snapshots_blockstore_floor() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &(archive_slot, archive_hash),
+        &CompressionType::Bzip2,
     );
     fs::hard_link(archive_filename, &validator_archive_path).unwrap();
     let slot_floor = archive_slot;
@@ -1224,7 +1228,7 @@ fn wait_for_next_snapshot(
         last_slot
     );
     loop {
-        if let Some((filename, (slot, hash))) =
+        if let Some((filename, (slot, hash, _))) =
             snapshot_utils::get_highest_snapshot_archive_path(snapshot_package_output_path)
         {
             trace!("snapshot for slot {} exists", slot);
@@ -1266,6 +1270,7 @@ fn setup_snapshot_validator_config(
         snapshot_interval_slots,
         snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
         snapshot_path: PathBuf::from(snapshot_dir.path()),
+        compression: CompressionType::Bzip2,
     };
 
     // Create the account paths

@@ -84,6 +84,7 @@ impl SnapshotPackagerService {
 mod tests {
     use super::*;
     use bincode::serialize_into;
+    use solana_ledger::bank_forks::CompressionType;
     use solana_ledger::{
         snapshot_package::SnapshotPackage,
         snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME},
@@ -169,6 +170,7 @@ mod tests {
         let output_tar_path = snapshot_utils::get_snapshot_archive_path(
             &snapshot_package_output_path,
             &(42, Hash::default()),
+            &CompressionType::Bzip2,
         );
         let snapshot_package = SnapshotPackage::new(
             5,
@@ -177,6 +179,7 @@ mod tests {
             vec![storage_entries],
             output_tar_path.clone(),
             Hash::default(),
+            CompressionType::Bzip2,
         );
 
         // Make tarball from packageable snapshot
@@ -197,6 +200,11 @@ mod tests {
         .unwrap();
 
         // Check archive is correct
-        snapshot_utils::verify_snapshot_archive(output_tar_path, snapshots_dir, accounts_dir);
+        snapshot_utils::verify_snapshot_archive(
+            output_tar_path,
+            snapshots_dir,
+            accounts_dir,
+            CompressionType::Bzip2,
+        );
     }
 }

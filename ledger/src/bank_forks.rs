@@ -17,6 +17,14 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CompressionType {
+    Bzip2,
+    Gzip,
+    Zstd,
+    NoCompression,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
     // Generate a new snapshot every this many slots
     pub snapshot_interval_slots: usize,
@@ -26,6 +34,8 @@ pub struct SnapshotConfig {
 
     // Where to place the snapshots for recent slots
     pub snapshot_path: PathBuf,
+
+    pub compression: CompressionType,
 }
 
 #[derive(Error, Debug)]
@@ -288,6 +298,7 @@ impl BankForks {
             slots_to_snapshot,
             &config.snapshot_package_output_path,
             storages,
+            config.compression.clone(),
         )?;
 
         // Send the package to the packaging thread
