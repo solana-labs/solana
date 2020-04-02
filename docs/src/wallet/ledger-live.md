@@ -1,4 +1,4 @@
-#Ledger Live and Ledger Nano S
+# Ledger Live and Ledger Nano S
 This document describes how to set up a
 [Ledger Nano S hardware wallet](https://shop.ledger.com/products/ledger-nano-s)
 with the [Ledger Live](https://www.ledger.com/ledger-live) software.
@@ -12,13 +12,13 @@ will be available in the future.**
 Users may [use a Ledger Nano S with the Solana command
 line tools](../remote-wallet/ledger.md).
 
-##Set up a Ledger Nano S
+## Set up a Ledger Nano S
  - Order a [Nano S from Ledger](https://shop.ledger.com/products/ledger-nano-s)
  - Follow the instructions for device setup included in the package,
  or [Ledger's Start page](https://www.ledger.com/start/)
 - [Install the latest device firmware](https://support.ledgerwallet.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
 
-##Install Ledger Live
+## Install Ledger Live
  - Install [Ledger Live desktop software](https://www.ledger.com/ledger-live/),
  or
  - Install the [Ledger Live app for iOS](https://apps.apple.com/app/id1361671700)
@@ -27,10 +27,11 @@ line tools](../remote-wallet/ledger.md).
    - Requires Android 7.0 or later.
  - Connect your Nano S to your device and follow the instructions
 
-##Install the Solana App on your Nano S
+## Install the Solana App on your Nano S
  - Open Ledger Live
  - Currently Ledger Live needs to be in "Developer Mode"
  (Settings > Experimental Features > Developer Mode) to see our app.
+
  ![Enabling Developer Mode](../.gitbook/assets/ledger-live-enable-developer-mode.png)
 
  - Go to Manager in the app and find "Solana" in the App Catalog and
@@ -38,9 +39,10 @@ line tools](../remote-wallet/ledger.md).
    - Make sure your device is plugged in via USB and is unlocked with its PIN
  - You may be prompted on the Nano S to confirm the install of Solana App
  - "Solana" should now show as "Installed" in the Ledger Live Manager
+
  ![Installed Solana App in Manager](../.gitbook/assets/ledger-live-install-solana-app.png)
 
-##Interact with Solana network
+## Interact with Solana network
 - To interact with your Ledger wallet on our live network, please see our
 instructions on how to
 [use a Ledger Nano S with the Solana command line tools](../remote-wallet/ledger.md).
