@@ -180,7 +180,6 @@ impl LocalCluster {
                     .push(solana_storage_program!());
             }
         }
-        genesis_config.add_native_instruction_processor(solana_bpf_loader_program!());
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);

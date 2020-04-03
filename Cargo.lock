@@ -4261,7 +4261,6 @@ dependencies = [
  "serial_test 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial_test_derive 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-archiver-lib 1.2.0",
- "solana-bpf-loader-program 1.2.0",
  "solana-client 1.2.0",
  "solana-config-program 1.2.0",
  "solana-core 1.2.0",
