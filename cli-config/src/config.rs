@@ -1,10 +1,6 @@
 // Wallet settings that can be configured for long-term use
 use serde_derive::{Deserialize, Serialize};
-use std::{
-    fs::{create_dir_all, File},
-    io::{self, Write},
-    path::Path,
-};
+use std::io;
 use url::Url;
 
 lazy_static! {
@@ -46,23 +42,11 @@ impl Default for Config {
 
 impl Config {
     pub fn load(config_file: &str) -> Result<Self, io::Error> {
-        let file = File::open(config_file.to_string())?;
-        let config = serde_yaml::from_reader(file)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
-        Ok(config)
+        crate::load_config_file(config_file)
     }
 
     pub fn save(&self, config_file: &str) -> Result<(), io::Error> {
-        let serialized = serde_yaml::to_string(self)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
-
-        if let Some(outdir) = Path::new(&config_file).parent() {
-            create_dir_all(outdir)?;
-        }
-        let mut file = File::create(config_file)?;
-        file.write_all(&serialized.into_bytes())?;
-
-        Ok(())
+        crate::save_config_file(self, config_file)
     }
 
     pub fn compute_websocket_url(json_rpc_url: &str) -> String {
