@@ -26,7 +26,7 @@ use std::{
     process::exit,
     sync::{
         atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
-        Arc, RwLock,
+        Arc, Mutex, RwLock,
     },
     thread::{sleep, Builder},
     time::{Duration, Instant},
@@ -603,7 +603,9 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
         let too_many_failures = Arc::new(AtomicBool::new(false));
         let loops = if starting_txs < 1000 { 3 } else { 1 };
         // Only loop multiple times for small (quick) transaction batches
+        let time = Arc::new(Mutex::new(Instant::now()));
         for _ in 0..loops {
+            let time = time.clone();
             let failed_verify = Arc::new(AtomicUsize::new(0));
             let client = client.clone();
             let verified_txs = &verified_txs;
@@ -634,11 +636,15 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
                             remaining_count, verified_txs, failed_verify
                         );
                     }
-                    if remaining_count % 100 == 0 {
-                        info!(
-                            "Verifying transfers... {} remaining, {} verified, {} failures",
-                            remaining_count, verified_txs, failed_verify
-                        );
+                    if remaining_count > 0 {
+                        let mut time_l = time.lock().unwrap();
+                        if time_l.elapsed().as_secs() > 2 {
+                            info!(
+                                "Verifying transfers... {} remaining, {} verified, {} failures",
+                                remaining_count, verified_txs, failed_verify
+                            );
+                            *time_l = Instant::now();
+                        }
                     }
 
                     verified
