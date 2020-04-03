@@ -7,19 +7,22 @@ use console::style;
 use csv::{ReaderBuilder, Trim};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use solana_cli_config::Config;
+use solana_client::client_error::ClientError;
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::{
+    message::Message,
+    native_token::sol_to_lamports,
+    signature::{Signature, Signer},
+    signers::Signers,
+    system_instruction,
+    transaction::Transaction,
+};
+use std::env;
+use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::Path;
-//use solana_cli_config::Config;
-//use solana_client::client_error::ClientError;
-//use solana_client::rpc_client::RpcClient;
-//use solana_sdk::{
-//    message::Message, pubkey::Pubkey, signature::Signature, signers::Signers,
-//    transaction::Transaction,
-//};
-use solana_sdk::signature::Signature;
-use std::env;
-use std::error::Error;
 
 #[derive(Deserialize, Debug)]
 struct Purchase {
@@ -69,6 +72,7 @@ fn process_scrub(args: &ScrubArgs) -> Result<(), csv::Error> {
 fn find_new_transfers(transfers: &[Transfer], state: &[Transfer]) -> Vec<Transfer> {
     let mut needed = vec![];
     for transfer in transfers {
+        // TODO: This should be a filter, not a find.
         if let Some(prev_transfer) = state.iter().find(|x| x.recipient == transfer.recipient) {
             if transfer.amount > prev_transfer.amount {
                 needed.push(Transfer {
@@ -84,7 +88,10 @@ fn find_new_transfers(transfers: &[Transfer], state: &[Transfer]) -> Vec<Transfe
     needed
 }
 
-fn process_transfer(args: &TransferArgs) -> Result<(), csv::Error> {
+fn process_transfer(
+    client: &RpcClient,
+    args: &TransferArgs<Box<dyn Signer>>,
+) -> Result<(), csv::Error> {
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
         .from_path(&args.input_csv)?;
@@ -109,7 +116,29 @@ fn process_transfer(args: &TransferArgs) -> Result<(), csv::Error> {
         println!("{:<44}  {}", transfer.recipient, transfer.amount);
     }
 
+    let messages: Vec<Message> = needed
+        .iter()
+        .map(|transfer| {
+            let from = args.sender_keypair.as_ref().unwrap().pubkey();
+            let to = transfer.recipient.parse().unwrap();
+            let lamports = sol_to_lamports(transfer.amount);
+            let instruction = system_instruction::transfer(&from, &to, lamports);
+            Message::new(&[instruction])
+        })
+        .collect();
+
+    let signers = vec![
+        &**args.sender_keypair.as_ref().unwrap(),
+        &**args.fee_payer.as_ref().unwrap(),
+    ];
+
     if !args.dry_run && !needed.is_empty() {
+        let _signatures: Vec<_> = messages
+            .into_iter()
+            .map(|message| send_message(&client, message, &signers).unwrap())
+            .collect();
+
+        // TODO: Add signatures to 'needed' and append it to state_csv.
         let state_bak = format!("{}.bak", &args.state_csv);
         fs::rename(&args.state_csv, state_bak)?;
         let mut wtr = csv::Writer::from_path(&args.state_csv)?;
@@ -122,28 +151,28 @@ fn process_transfer(args: &TransferArgs) -> Result<(), csv::Error> {
     Ok(())
 }
 
-//fn send_message<S: Signers>(
-//    client: &RpcClient,
-//    message: Message,
-//    signers: &S,
-//) -> Result<Signature, ClientError> {
-//    let mut transaction = Transaction::new_unsigned(message);
-//    client.resign_transaction(&mut transaction, signers)?;
-//    client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
-//}
+fn send_message<S: Signers>(
+    client: &RpcClient,
+    message: Message,
+    signers: &S,
+) -> Result<Signature, ClientError> {
+    let mut transaction = Transaction::new_unsigned(message);
+    client.resign_transaction(&mut transaction, signers)?;
+    client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let command_args = parse_args(env::args_os());
-    //let config = Config::load(&command_args.config_file)?;
-    //let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
-    //let client = RpcClient::new(json_rpc_url);
+    let config = Config::load(&command_args.config_file)?;
+    let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
+    let client = RpcClient::new(json_rpc_url);
 
     match resolve_command(&command_args.command)? {
         Command::Scrub(args) => {
             process_scrub(&args)?;
         }
         Command::Transfer(args) => {
-            process_transfer(&args)?;
+            process_transfer(&client, &args)?;
         }
     }
     Ok(())
