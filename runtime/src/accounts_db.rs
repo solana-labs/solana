@@ -905,6 +905,11 @@ impl AccountsDB {
                     }
                 }
                 if (alive_count as f64 / stored_accounts.len() as f64) >= 0.80 {
+                    trace!(
+                        "shrink_stale_slot: not enough space to shrink: {} / {}",
+                        alive_count,
+                        stored_accounts.len()
+                    );
                     return;
                 }
             }
@@ -979,12 +984,6 @@ impl AccountsDB {
         }
     }
 
-    pub fn process_stale_slot(&self) {
-        if let Some(shrink_slot) = self.next_shrink_slot() {
-            self.shrink_stale_slot(shrink_slot);
-        }
-    }
-
     fn next_shrink_slot(&self) -> Option<Slot> {
         let mut candidates = self.shrink_candidate_slots.lock().unwrap();
         let next = candidates.pop();
@@ -1006,6 +1005,12 @@ impl AccountsDB {
     fn all_slots_in_storage(&self) -> Vec<Slot> {
         let storage = self.storage.read().unwrap();
         storage.0.keys().cloned().collect()
+    }
+
+    pub fn process_stale_slot(&self) {
+        if let Some(slot) = self.next_shrink_slot() {
+            self.shrink_stale_slot(slot);
+        }
     }
 
     pub fn shrink_all_stale_slots(&self) {
@@ -2391,6 +2396,23 @@ pub mod tests {
             }
         }
 
+        fn append_vec_count_for_slot(&self, slot: Slot) -> usize {
+            let storage = self.storage.read().unwrap();
+
+            let slot_storage = storage.0.get(&slot);
+            if let Some(slot_storage) = slot_storage {
+                slot_storage
+                    .values()
+                    .nth(0)
+                    .unwrap()
+                    .accounts
+                    .accounts(0)
+                    .len()
+            } else {
+                0
+            }
+        }
+
         fn ref_count_for_pubkey(&self, pubkey: &Pubkey) -> RefCount {
             self.accounts_index
                 .read()
@@ -3654,10 +3676,154 @@ pub mod tests {
     }
 
     #[test]
-    fn clean_dead_slots_empty() {
+    fn test_clean_dead_slots_empty() {
         let accounts = AccountsDB::new_single();
         let mut dead_slots = HashSet::new();
         dead_slots.insert(10);
         accounts.clean_dead_slots(&dead_slots);
+    }
+
+    #[test]
+    fn test_shrink_stale_slots_none() {
+        let accounts = AccountsDB::new_single();
+
+        for _ in 0..10 {
+            accounts.process_stale_slot();
+        }
+
+        accounts.shrink_all_stale_slots();
+    }
+
+    #[test]
+    fn test_shrink_next_slots() {
+        let accounts = AccountsDB::new_single();
+
+        let mut current_slot = 7;
+
+        assert_eq!(
+            vec![None, None, None],
+            (0..3)
+                .map({ |_| accounts.next_shrink_slot() })
+                .collect::<Vec<_>>()
+        );
+
+        accounts.add_root(current_slot);
+
+        assert_eq!(
+            vec![Some(7), Some(7), Some(7)],
+            (0..3)
+                .map({ |_| accounts.next_shrink_slot() })
+                .collect::<Vec<_>>()
+        );
+
+        current_slot += 1;
+        accounts.add_root(current_slot);
+
+        let slots = (0..6)
+            .map({ |_| accounts.next_shrink_slot() })
+            .collect::<Vec<_>>();
+        assert!(
+            vec![Some(7), Some(8), Some(7), Some(8), Some(7), Some(8)] == slots
+                || vec![Some(8), Some(7), Some(8), Some(7), Some(8), Some(7)] == slots
+        );
+    }
+
+    #[test]
+    fn test_shrink_stale_slots_processed() {
+        solana_logger::setup();
+
+        let accounts = AccountsDB::new_single();
+
+        let pubkey_count = 100;
+        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| Pubkey::new_rand()).collect();
+
+        let some_lamport = 223;
+        let no_data = 0;
+        let owner = Account::default().owner;
+
+        let account = Account::new(some_lamport, no_data, &owner);
+
+        let mut current_slot = 0;
+
+        current_slot += 1;
+        for pubkey in &pubkeys {
+            accounts.store(current_slot, &[(&pubkey, &account)]);
+        }
+        let shrink_slot = current_slot;
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        let reduce_count = 10;
+        let reduced_pubkeys = &pubkeys[0..pubkey_count - reduce_count];
+
+        for pubkey in reduced_pubkeys {
+            accounts.store(current_slot, &[(&pubkey, &account)]);
+        }
+        accounts.add_root(current_slot);
+
+        accounts.clean_accounts();
+
+        assert_eq!(
+            pubkey_count,
+            accounts.append_vec_count_for_slot(shrink_slot)
+        );
+        accounts.shrink_all_stale_slots();
+        assert_eq!(
+            reduce_count,
+            accounts.append_vec_count_for_slot(shrink_slot)
+        );
+
+        // repeating should be no-op
+        accounts.shrink_all_stale_slots();
+        assert_eq!(
+            reduce_count,
+            accounts.append_vec_count_for_slot(shrink_slot)
+        );
+    }
+
+    #[test]
+    fn test_shrink_stale_slots_skipped() {
+        solana_logger::setup();
+
+        let accounts = AccountsDB::new_single();
+
+        let pubkey_count = 100;
+        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| Pubkey::new_rand()).collect();
+
+        let some_lamport = 223;
+        let no_data = 0;
+        let owner = Account::default().owner;
+
+        let account = Account::new(some_lamport, no_data, &owner);
+
+        let mut current_slot = 0;
+
+        current_slot += 1;
+        for pubkey in &pubkeys {
+            accounts.store(current_slot, &[(&pubkey, &account)]);
+        }
+        let shrink_slot = current_slot;
+        accounts.add_root(current_slot);
+
+        current_slot += 1;
+        let reduce_count = 90;
+        let reduced_pubkeys = &pubkeys[0..pubkey_count - reduce_count];
+
+        for pubkey in reduced_pubkeys {
+            accounts.store(current_slot, &[(&pubkey, &account)]);
+        }
+        accounts.add_root(current_slot);
+
+        accounts.clean_accounts();
+
+        assert_eq!(
+            pubkey_count,
+            accounts.append_vec_count_for_slot(shrink_slot)
+        );
+        accounts.shrink_all_stale_slots();
+        assert_eq!(
+            pubkey_count,
+            accounts.append_vec_count_for_slot(shrink_slot)
+        );
     }
 }
