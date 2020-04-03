@@ -72,6 +72,7 @@ fn distribute_tokens<T: Client>(
     let messages: Vec<Message> = allocations
         .iter()
         .map(|allocation| {
+            println!("{:<44}  {}", allocation.recipient, allocation.amount);
             let from = args.sender_keypair.as_ref().unwrap().pubkey();
             let to = allocation.recipient.parse().unwrap();
             let lamports = sol_to_lamports(allocation.amount);
@@ -153,12 +154,9 @@ fn process_distribute<T: Client>(
         "{}",
         style(format!("{:<44}  {}", "Recipient", "Amount")).bold()
     );
-    for allocation in &allocations {
-        println!("{:<44}  {}", allocation.recipient, allocation.amount);
-    }
 
+    let signatures = distribute_tokens(&client, &allocations, &args);
     if !args.dry_run {
-        let signatures = distribute_tokens(&client, &allocations, &args);
         append_transaction_infos(&allocations, &signatures, &args.transactions_csv)?;
     }
 
@@ -168,13 +166,17 @@ fn process_distribute<T: Client>(
 fn main() -> Result<(), Box<dyn Error>> {
     let command_args = parse_args(env::args_os());
     let config = Config::load(&command_args.config_file)?;
-    let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
-    let rpc_client = RpcClient::new(json_rpc_url);
-    let client = ThinClient(rpc_client);
 
     match resolve_command(&command_args.command)? {
         Command::Distribute(args) => {
-            process_distribute(&client, &args)?;
+            let client = if args.dry_run {
+                let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
+                RpcClient::new(json_rpc_url);
+            } else {
+                ()
+            };
+            let thin_client = ThinClient(client);
+            process_distribute(&thin_client, &args)?;
         }
     }
     Ok(())
