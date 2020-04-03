@@ -811,6 +811,7 @@ fn test_stake_authorize_with_fee_payer() {
     } = TestValidator::run_with_options(TestValidatorOptions {
         fees: SIG_FEE,
         bootstrap_validator_lamports: 42_000,
+        ..TestValidatorOptions::default()
     });
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
@@ -938,6 +939,7 @@ fn test_stake_split() {
     } = TestValidator::run_with_options(TestValidatorOptions {
         fees: 1,
         bootstrap_validator_lamports: 42_000,
+        ..TestValidatorOptions::default()
     });
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
@@ -1085,6 +1087,7 @@ fn test_stake_set_lockup() {
     } = TestValidator::run_with_options(TestValidatorOptions {
         fees: 1,
         bootstrap_validator_lamports: 42_000,
+        ..TestValidatorOptions::default()
     });
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
