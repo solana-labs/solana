@@ -8,6 +8,7 @@ use solana_sdk::{
     native_token::sol_to_lamports,
     signature::{Signature, Signer},
     system_instruction,
+    transport::TransportError,
 };
 use std::fs;
 use std::path::Path;
@@ -59,7 +60,7 @@ fn distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     allocations: &[Allocation],
     args: &DistributeArgs<Box<dyn Signer>>,
-) -> Vec<Signature> {
+) -> Vec<Result<Signature, TransportError>> {
     let messages: Vec<Message> = allocations
         .iter()
         .map(|allocation| {
@@ -79,13 +80,13 @@ fn distribute_tokens<T: Client>(
 
     messages
         .into_iter()
-        .map(|message| client.send_message(message, &signers).unwrap())
+        .map(|message| client.send_message(message, &signers))
         .collect()
 }
 
 fn append_transaction_infos(
     allocations: &[Allocation],
-    signatures: &[Signature],
+    results: &[Result<Signature, TransportError>],
     transactions_csv: &str,
 ) -> Result<(), csv::Error> {
     let existed = Path::new(&transactions_csv).exists();
@@ -103,12 +104,19 @@ fn append_transaction_infos(
         .from_writer(file);
 
     for (i, allocation) in allocations.iter().enumerate() {
-        let transaction_info = TransactionInfo {
-            recipient: allocation.recipient.clone(),
-            amount: allocation.amount,
-            signature: signatures[i].to_string(),
-        };
-        wtr.serialize(transaction_info)?;
+        match &results[i] {
+            Ok(signature) => {
+                let transaction_info = TransactionInfo {
+                    recipient: allocation.recipient.clone(),
+                    amount: allocation.amount,
+                    signature: signature.to_string(),
+                };
+                wtr.serialize(transaction_info)?;
+            }
+            Err(e) => {
+                eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
+            }
+        }
     }
     wtr.flush()?;
     Ok(())
@@ -146,9 +154,9 @@ pub(crate) fn process_distribute<T: Client>(
         style(format!("{:<44}  {}", "Recipient", "Amount")).bold()
     );
 
-    let signatures = distribute_tokens(&client, &allocations, &args);
+    let results = distribute_tokens(&client, &allocations, &args);
     if !args.dry_run {
-        append_transaction_infos(&allocations, &signatures, &args.transactions_csv)?;
+        append_transaction_infos(&allocations, &results, &args.transactions_csv)?;
     }
 
     Ok(())
