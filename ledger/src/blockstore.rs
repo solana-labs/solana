@@ -50,7 +50,7 @@ use std::{
     rc::Rc,
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
-        Arc, Mutex, RwLock,
+        Arc, Mutex, RwLock, RwLockWriteGuard,
     },
     time::Duration,
 };
@@ -88,6 +88,7 @@ pub struct Blockstore {
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
+    active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
@@ -228,6 +229,7 @@ impl Blockstore {
             code_shred_cf,
             transaction_status_cf,
             transaction_status_index_cf,
+            active_transaction_status_index: RwLock::new(0),
             rewards_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
@@ -1532,18 +1534,21 @@ impl Blockstore {
         if index0.is_none() {
             return Ok(None);
         }
-        let mut index0 = self.transaction_status_index_cf.get(0)?.unwrap();
+        let mut index0 = index0.unwrap();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap();
 
+        let mut w_active_transaction_status_index =
+            self.active_transaction_status_index.write().unwrap();
         if !index0.frozen && !index1.frozen {
             index0.frozen = true;
+            *w_active_transaction_status_index = 1;
             batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
             Ok(None)
         } else {
-            let result = if index0.frozen && to_slot >= index0.max_slot {
+            let result = if index0.frozen && to_slot > index0.max_slot {
                 debug!("Pruning transaction index 0 at slot {}", index0.max_slot);
                 Some(0)
-            } else if index1.frozen && to_slot >= index1.max_slot {
+            } else if index1.frozen && to_slot > index1.max_slot {
                 debug!("Pruning transaction index 1 at slot {}", index1.max_slot);
                 Some(1)
             } else {
@@ -1551,6 +1556,7 @@ impl Blockstore {
             };
 
             if result.is_some() {
+                *w_active_transaction_status_index = if index0.frozen { 0 } else { 1 };
                 if index0.frozen {
                     index0.max_slot = 0
                 };
@@ -1570,20 +1576,14 @@ impl Blockstore {
     fn make_transaction_status_index(
         &self,
         index: (Signature, Slot),
+        w_active_transaction_status_index: RwLockWriteGuard<u64>,
     ) -> Result<(u64, Signature, Slot)> {
         let (signature, slot) = index;
         if self.transaction_status_index_cf.get(0)?.is_none() {
             self.initialize_transaction_status_index()?;
         }
-        let (i, mut index_meta) = self
-            .db
-            .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
-            .map(|(i, bytes)| {
-                let value: TransactionStatusIndexMeta = deserialize(&bytes).unwrap();
-                (i, value)
-            })
-            .find(|(_, meta)| !meta.frozen)
-            .expect("One of the transaction_status indexes should always be unfrozen");
+        let i = *w_active_transaction_status_index;
+        let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
         if slot > index_meta.max_slot {
             index_meta.max_slot = slot;
             self.transaction_status_index_cf.put(i, &index_meta)?;
@@ -1609,7 +1609,11 @@ impl Blockstore {
         index: (Signature, Slot),
         status: &TransactionStatusMeta,
     ) -> Result<()> {
-        let index = self.make_transaction_status_index(index)?;
+        // This write lock prevents interleaving issues with the transactions_status_index_cf by
+        // gating writes to that column
+        let w_active_transaction_status_index =
+            self.active_transaction_status_index.write().unwrap();
+        let index = self.make_transaction_status_index(index, w_active_transaction_status_index)?;
         self.transaction_status_cf.put(index, status)
     }
 
@@ -5449,6 +5453,118 @@ pub mod tests {
                 .0;
             assert_eq!(first_status_entry.0, 1);
             assert_eq!(first_status_entry.2, slot1);
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_purge_transaction_status() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let transaction_status_index_cf = blockstore.db.column::<cf::TransactionStatusIndex>();
+            let slot = 10;
+            for _ in 0..5 {
+                let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+                blockstore
+                    .write_transaction_status(
+                        (Signature::new(&random_bytes), slot),
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            // Purge to freeze index 0
+            blockstore.run_purge(0, 1).unwrap();
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::From(
+                    (0, Signature::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            for _ in 0..5 {
+                let entry = status_entry_iterator.next().unwrap().0;
+                assert_eq!(entry.0, 0);
+                assert_eq!(entry.2, slot);
+            }
+            assert_eq!(
+                transaction_status_index_cf.get(0).unwrap().unwrap(),
+                TransactionStatusIndexMeta {
+                    max_slot: 10,
+                    frozen: true,
+                }
+            );
+
+            // Low purge should not affect state
+            blockstore.run_purge(0, 5).unwrap();
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::From(
+                    (0, Signature::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            for _ in 0..5 {
+                let entry = status_entry_iterator.next().unwrap().0;
+                assert_eq!(entry.0, 0);
+                assert_eq!(entry.2, slot);
+            }
+            assert_eq!(
+                transaction_status_index_cf.get(0).unwrap().unwrap(),
+                TransactionStatusIndexMeta {
+                    max_slot: 10,
+                    frozen: true,
+                }
+            );
+
+            // Test boundary conditions: < slot should not purge statuses; <= slot should
+            blockstore.run_purge(0, 9).unwrap();
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::From(
+                    (0, Signature::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            for _ in 0..5 {
+                let entry = status_entry_iterator.next().unwrap().0;
+                assert_eq!(entry.0, 0);
+                assert_eq!(entry.2, slot);
+            }
+            assert_eq!(
+                transaction_status_index_cf.get(0).unwrap().unwrap(),
+                TransactionStatusIndexMeta {
+                    max_slot: 10,
+                    frozen: true,
+                }
+            );
+
+            blockstore.run_purge(0, 10).unwrap();
+            let mut status_entry_iterator = blockstore
+                .db
+                .iter::<cf::TransactionStatus>(IteratorMode::From(
+                    (0, Signature::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            let padding_entry = status_entry_iterator.next().unwrap().0;
+            assert_eq!(padding_entry.0, 2);
+            assert_eq!(padding_entry.2, 0);
+            assert!(status_entry_iterator.next().is_none());
+            assert_eq!(
+                transaction_status_index_cf.get(0).unwrap().unwrap(),
+                TransactionStatusIndexMeta {
+                    max_slot: 0,
+                    frozen: false,
+                }
+            );
+            assert_eq!(
+                transaction_status_index_cf.get(1).unwrap().unwrap(),
+                TransactionStatusIndexMeta {
+                    max_slot: 0,
+                    frozen: true,
+                }
+            );
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
