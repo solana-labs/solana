@@ -17,7 +17,7 @@ pub enum Kind {
 #[macro_export]
 macro_rules! native_program_info(
     ($name:expr) => (
-        $crate::native_loader::Info{
+        $crate::native_loader::Info {
             kind: $crate::native_loader::Kind::Program,
             name: $name.to_string(),
         }
@@ -26,7 +26,7 @@ macro_rules! native_program_info(
 #[macro_export]
 macro_rules! native_loader_info(
     ($name:expr) => (
-        $crate::native_loader::Info{
+        $crate::native_loader::Info {
             kind: $crate::native_loader::Kind::Loader,
             name: $name.to_string(),
         }
