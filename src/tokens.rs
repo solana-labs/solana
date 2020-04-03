@@ -87,10 +87,11 @@ fn distribute_tokens<T: Client>(
     let signers = if args.dry_run {
         vec![]
     } else {
-        vec![
-            &**args.sender_keypair.as_ref().unwrap(),
-            &**args.fee_payer.as_ref().unwrap(),
-        ]
+        let mut signers = vec![&**args.sender_keypair.as_ref().unwrap()];
+        if args.sender_keypair != args.fee_payer {
+            signers.push(&**args.fee_payer.as_ref().unwrap());
+        }
+        signers
     };
 
     allocations
@@ -106,7 +107,11 @@ fn distribute_tokens<T: Client>(
             if args.dry_run {
                 Ok(Signature::default())
             } else {
-                client.send_message(message, &signers)
+                let result = client.send_message(message, &signers);
+                if let Ok(signature) = result {
+                    println!("{:?}", signature);
+                }
+                result
             }
         })
         .collect()
