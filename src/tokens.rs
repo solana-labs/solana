@@ -165,8 +165,34 @@ pub fn process_distribute<T: Client>(
     } else {
         vec![]
     };
+
+    let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
+    println!(
+        "{} ◎{}",
+        style(format!("{}", "Total in allocations_csv:")).bold(),
+        starting_total_tokens
+    );
+
     let mut allocations = merge_allocations(&allocations);
     apply_previous_transactions(&mut allocations, &transaction_infos);
+
+    let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
+    let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
+    println!(
+        "{} ◎{}",
+        style(format!("{}", "Distributed:")).bold(),
+        distributed_tokens
+    );
+    println!(
+        "{} ◎{}",
+        style(format!("{}", "Undistributed:")).bold(),
+        undistributed_tokens
+    );
+    println!(
+        "{} ◎{}\n",
+        style(format!("{}", "Total:")).bold(),
+        distributed_tokens + undistributed_tokens
+    );
 
     if allocations.is_empty() {
         eprintln!("No work to do");

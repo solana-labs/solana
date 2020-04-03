@@ -18,7 +18,7 @@ fn test_process_distribute_with_rpc_client() {
     let rpc_client = RpcClient::new_socket(validator.leader_data.rpc);
     let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash().unwrap();
     let funding_keypair = Keypair::new();
-    let lamports = sol_to_lamports(9_000_000.0);
+    let lamports = 1_000;
     let mut transaction =
         request_airdrop_transaction(&faucet_addr, &funding_keypair.pubkey(), lamports, blockhash)
             .unwrap();
