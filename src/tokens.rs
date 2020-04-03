@@ -2,6 +2,7 @@ use crate::args::DistributeArgs;
 use crate::thin_client::{Client, ThinClient};
 use console::style;
 use csv::{ReaderBuilder, Trim};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     message::Message,
@@ -19,6 +20,7 @@ struct Bid {
     primary_address: String,
 }
 
+#[derive(Debug, Clone)]
 struct Allocation {
     recipient: String,
     amount: f64,
@@ -29,6 +31,20 @@ struct TransactionInfo {
     recipient: String,
     amount: f64,
     signature: String,
+}
+
+fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
+    let mut allocation_map = IndexMap::new();
+    for allocation in allocations {
+        allocation_map
+            .entry(&allocation.recipient)
+            .or_insert(Allocation {
+                recipient: allocation.recipient.clone(),
+                amount: 0.0,
+            })
+            .amount += allocation.amount;
+    }
+    allocation_map.values().cloned().collect()
 }
 
 fn apply_previous_transactions(
@@ -129,7 +145,7 @@ pub(crate) fn process_distribute<T: Client>(
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
         .from_path(&args.allocations_csv)?;
-    let mut allocations: Vec<Allocation> = rdr
+    let allocations: Vec<Allocation> = rdr
         .deserialize()
         .map(|bid| create_allocation(&bid.unwrap(), args.dollars_per_sol))
         .collect();
@@ -142,6 +158,7 @@ pub(crate) fn process_distribute<T: Client>(
     } else {
         vec![]
     };
+    let mut allocations = merge_allocations(&allocations);
     apply_previous_transactions(&mut allocations, &transaction_infos);
 
     if allocations.is_empty() {

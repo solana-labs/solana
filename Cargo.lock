@@ -2197,7 +2197,7 @@ dependencies = [
  "clap",
  "console",
  "csv",
- "itertools 0.9.0",
+ "indexmap",
  "serde",
  "solana-clap-utils",
  "solana-cli-config",
