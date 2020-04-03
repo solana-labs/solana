@@ -14,6 +14,16 @@ transactions have already been sent.
 solana-tokens distribute --dollars-per-sol <NUMBER> --dry-run <ALLOCATIONS_CSV> <TRANSACTION_LOG>
 ```
 
+Example allocations.csv:
+
+```text
+primary_address,bid_amount_dollars
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,6.6
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,15.4
+3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM,9.24
+UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k,9.46
+```
+
 Example output:
 
 ```text
