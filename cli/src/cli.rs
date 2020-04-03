@@ -173,6 +173,8 @@ pub enum CliCommand {
     Catchup {
         node_pubkey: Pubkey,
         node_json_rpc_url: Option<String>,
+        commitment_config: CommitmentConfig,
+        follow: bool,
     },
     ClusterVersion,
     CreateAddressWithSeed {
@@ -1593,7 +1595,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
-        } => process_catchup(&rpc_client, node_pubkey, node_json_rpc_url),
+            commitment_config,
+            follow,
+        } => process_catchup(
+            &rpc_client,
+            node_pubkey,
+            node_json_rpc_url,
+            *commitment_config,
+            *follow,
+        ),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::CreateAddressWithSeed {
             from_pubkey,
