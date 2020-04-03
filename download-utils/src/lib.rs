@@ -1,6 +1,7 @@
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
+use solana_ledger::bank_forks::CompressionType;
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use std::fs::{self, File};
@@ -133,32 +134,49 @@ pub fn download_snapshot(
 ) -> Result<(), String> {
     // Remove all snapshot not matching the desired hash
     let snapshot_packages = solana_ledger::snapshot_utils::get_snapshot_archives(ledger_path);
-    for (snapshot_package, snapshot_hash) in snapshot_packages.iter() {
-        if *snapshot_hash != desired_snapshot_hash {
+    let mut found_package = false;
+    for (snapshot_package, (snapshot_slot, snapshot_hash, _compression)) in snapshot_packages.iter()
+    {
+        if (*snapshot_slot, *snapshot_hash) != desired_snapshot_hash {
             info!("Removing old snapshot: {:?}", snapshot_package);
             fs::remove_file(snapshot_package)
                 .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
+        } else {
+            found_package = true;
         }
     }
 
-    let desired_snapshot_package = solana_ledger::snapshot_utils::get_snapshot_archive_path(
-        ledger_path,
-        &desired_snapshot_hash,
-    );
-    if desired_snapshot_package.exists() {
+    if found_package {
         Ok(())
     } else {
-        download_file(
-            &format!(
-                "http://{}/{}",
-                rpc_addr,
-                desired_snapshot_package
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-            ),
-            &desired_snapshot_package,
-        )
+        for compression in &[
+            CompressionType::Zstd,
+            CompressionType::Gzip,
+            CompressionType::Bzip2,
+        ] {
+            let desired_snapshot_package = solana_ledger::snapshot_utils::get_snapshot_archive_path(
+                ledger_path,
+                &desired_snapshot_hash,
+                compression,
+            );
+
+            if download_file(
+                &format!(
+                    "http://{}/{}",
+                    rpc_addr,
+                    desired_snapshot_package
+                        .file_name()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                ),
+                &desired_snapshot_package,
+            )
+            .is_ok()
+            {
+                return Ok(());
+            }
+        }
+        Err("Snapshot couldn't be downloaded".to_string())
     }
 }

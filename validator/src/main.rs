@@ -19,7 +19,10 @@ use solana_core::{
     validator::{Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
-use solana_ledger::{bank_forks::SnapshotConfig, hardened_unpack::unpack_genesis_archive};
+use solana_ledger::{
+    bank_forks::{CompressionType, SnapshotConfig},
+    hardened_unpack::unpack_genesis_archive,
+};
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::{
     clock::Slot,
@@ -713,6 +716,14 @@ pub fn main() {
                        intentionally crash should any transaction modify the frozen account in any way \
                        other than increasing the account balance"),
         )
+        .arg(
+            Arg::with_name("snapshot_compression")
+                .long("snapshot-compression")
+                .possible_values(&["bz2", "gzip", "zstd", "none"])
+                .value_name("COMPRESSION_TYPE")
+                .takes_value(true)
+                .help("Type of snapshot compression to use."),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -838,6 +849,16 @@ pub fn main() {
         exit(1);
     });
 
+    let mut snapshot_compression = CompressionType::Bzip2;
+    if let Ok(compression_str) = value_t!(matches, "snapshot_compression", String) {
+        match compression_str.as_str() {
+            "bz2" => snapshot_compression = CompressionType::Bzip2,
+            "gzip" => snapshot_compression = CompressionType::Gzip,
+            "zstd" => snapshot_compression = CompressionType::Zstd,
+            "none" => snapshot_compression = CompressionType::NoCompression,
+            _ => panic!("Compression type not recognized: {}", compression_str),
+        }
+    }
     validator_config.snapshot_config = Some(SnapshotConfig {
         snapshot_interval_slots: if snapshot_interval_slots > 0 {
             snapshot_interval_slots
@@ -846,6 +867,7 @@ pub fn main() {
         },
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
+        compression: snapshot_compression,
     });
 
     if matches.is_present("limit_ledger_size") {

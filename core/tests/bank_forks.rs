@@ -8,6 +8,7 @@ mod tests {
     use solana_core::cluster_info::ClusterInfo;
     use solana_core::contact_info::ContactInfo;
     use solana_core::snapshot_packager_service::SnapshotPackagerService;
+    use solana_ledger::bank_forks::CompressionType;
     use solana_ledger::{
         bank_forks::{BankForks, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -54,6 +55,7 @@ mod tests {
             snapshot_interval_slots,
             snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
             snapshot_path: PathBuf::from(snapshot_dir.path()),
+            compression: CompressionType::Bzip2,
         };
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         SnapshotTestConfig {
@@ -90,7 +92,9 @@ mod tests {
             snapshot_utils::get_snapshot_archive_path(
                 snapshot_package_output_path,
                 &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
+                &CompressionType::Bzip2,
             ),
+            CompressionType::Bzip2,
         )
         .unwrap();
 
@@ -152,6 +156,7 @@ mod tests {
             &last_bank.src.roots(),
             &snapshot_config.snapshot_package_output_path,
             storages,
+            CompressionType::Bzip2,
         )
         .unwrap();
 
@@ -290,6 +295,7 @@ mod tests {
                 saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
                     &snapshot_config.snapshot_package_output_path,
                     &(slot, accounts_hash),
+                    &CompressionType::Bzip2,
                 ));
             }
         }
@@ -352,6 +358,7 @@ mod tests {
             saved_accounts_dir
                 .path()
                 .join(accounts_dir.path().file_name().unwrap()),
+            CompressionType::Bzip2,
         );
     }
 

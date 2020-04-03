@@ -1,7 +1,9 @@
+use crate::bank_forks::CompressionType;
 use crate::hardened_unpack::{unpack_snapshot, UnpackError};
 use crate::snapshot_package::SnapshotPackage;
 use bincode::serialize_into;
 use bzip2::bufread::BzDecoder;
+use flate2::read::GzDecoder;
 use fs_extra::dir::CopyOptions;
 use log::*;
 use regex::Regex;
@@ -16,7 +18,6 @@ use solana_runtime::{
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
-    env,
     fs::{self, File},
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -25,6 +26,7 @@ use std::{
 use tar::Archive;
 use tempfile::TempDir;
 use thiserror::Error;
+use zstd;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
@@ -90,6 +92,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     slots_to_snapshot: &[Slot],
     snapshot_package_output_path: P,
     snapshot_storages: SnapshotStorages,
+    compression: CompressionType,
 ) -> Result<SnapshotPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -108,6 +111,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     let snapshot_package_output_file = get_snapshot_archive_path(
         &snapshot_package_output_path,
         &(bank.slot(), bank.get_accounts_hash()),
+        &compression,
     );
 
     let package = SnapshotPackage::new(
@@ -117,9 +121,19 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_storages,
         snapshot_package_output_file,
         bank.get_accounts_hash(),
+        compression,
     );
 
     Ok(package)
+}
+
+fn get_compression_ext(compression: &CompressionType) -> (&'static str, &'static str) {
+    match compression {
+        CompressionType::Bzip2 => ("bzip2", ".tar.bz2"),
+        CompressionType::Gzip => ("gzip", ".tar.gz"),
+        CompressionType::Zstd => ("zstd", ".tar.zst"),
+        CompressionType::NoCompression => ("", ".tar"),
+    }
 }
 
 pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()> {
@@ -181,23 +195,22 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
         f.write_all(&SNAPSHOT_VERSION.to_string().into_bytes())?;
     }
 
-    let archive_compress_options = if is_snapshot_compression_disabled() {
-        ""
-    } else {
-        "j"
-    };
-    let archive_options = format!("{}cfhS", archive_compress_options);
+    let (compression_option, file_ext) = get_compression_ext(&snapshot_package.compression);
+    let archive_options = "cfhS";
 
     // Tar the staging directory into the archive at `archive_path`
-    let archive_path = tar_dir.join("new_state.tar.bz2");
+    let archive_file = format!("new_state{}", file_ext);
+    let archive_path = tar_dir.join(archive_file);
     let args = vec![
-        archive_options.as_str(),
+        archive_options,
         archive_path.to_str().unwrap(),
         "-C",
         staging_dir.path().to_str().unwrap(),
         TAR_ACCOUNTS_DIR,
         TAR_SNAPSHOTS_DIR,
         TAR_VERSION_FILE,
+        "-I",
+        compression_option,
     ];
 
     let output = std::process::Command::new("tar").args(&args).output()?;
@@ -439,10 +452,11 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     frozen_account_pubkeys: &[Pubkey],
     snapshot_path: &PathBuf,
     snapshot_tar: P,
+    compression: CompressionType,
 ) -> Result<Bank> {
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
-    untar_snapshot_in(&snapshot_tar, &unpack_dir)?;
+    untar_snapshot_in(&snapshot_tar, &unpack_dir, compression)?;
 
     let mut measure = Measure::start("bank rebuild from snapshot");
     let unpacked_accounts_dir = unpack_dir.as_ref().join(TAR_ACCOUNTS_DIR);
@@ -483,33 +497,43 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     Ok(bank)
 }
 
-fn is_snapshot_compression_disabled() -> bool {
-    if let Ok(flag) = env::var("SOLANA_DISABLE_SNAPSHOT_COMPRESSION") {
-        !(flag == "0" || flag == "false")
-    } else {
-        false
-    }
-}
-
 pub fn get_snapshot_archive_path<P: AsRef<Path>>(
     snapshot_output_dir: P,
     snapshot_hash: &(Slot, Hash),
+    compression: &CompressionType,
 ) -> PathBuf {
     snapshot_output_dir.as_ref().join(format!(
-        "snapshot-{}-{}.tar.bz2",
-        snapshot_hash.0, snapshot_hash.1
+        "snapshot-{}-{}{}",
+        snapshot_hash.0,
+        snapshot_hash.1,
+        get_compression_ext(compression).1,
     ))
 }
 
-fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash)> {
-    let snapshot_filename_regex = Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.tar\.bz2$").unwrap();
+fn compression_type_from_str(compress: &str) -> Option<CompressionType> {
+    match compress {
+        "bz2" => Some(CompressionType::Bzip2),
+        "gz" => Some(CompressionType::Gzip),
+        "zst" => Some(CompressionType::Zstd),
+        _ => None,
+    }
+}
+
+fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash, CompressionType)> {
+    let snapshot_filename_regex =
+        Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.tar\.(bz2|zst|gz)$").unwrap();
 
     if let Some(captures) = snapshot_filename_regex.captures(archive_filename) {
         let slot_str = captures.get(1).unwrap().as_str();
         let hash_str = captures.get(2).unwrap().as_str();
+        let ext = captures.get(3).unwrap().as_str();
 
-        if let (Ok(slot), Ok(hash)) = (slot_str.parse::<Slot>(), hash_str.parse::<Hash>()) {
-            return Some((slot, hash));
+        if let (Ok(slot), Ok(hash), Some(compression)) = (
+            slot_str.parse::<Slot>(),
+            hash_str.parse::<Hash>(),
+            compression_type_from_str(ext),
+        ) {
+            return Some((slot, hash, compression));
         }
     }
     None
@@ -517,7 +541,7 @@ fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash)> {
 
 pub fn get_snapshot_archives<P: AsRef<Path>>(
     snapshot_output_dir: P,
-) -> Vec<(PathBuf, (Slot, Hash))> {
+) -> Vec<(PathBuf, (Slot, Hash, CompressionType))> {
     match fs::read_dir(&snapshot_output_dir) {
         Err(err) => {
             info!("Unable to read snapshot directory: {}", err);
@@ -548,7 +572,7 @@ pub fn get_snapshot_archives<P: AsRef<Path>>(
 
 pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
     snapshot_output_dir: P,
-) -> Option<(PathBuf, (Slot, Hash))> {
+) -> Option<(PathBuf, (Slot, Hash, CompressionType))> {
     let archives = get_snapshot_archives(snapshot_output_dir);
     archives.into_iter().next()
 }
@@ -556,23 +580,32 @@ pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: Q,
+    compression: CompressionType,
 ) -> Result<()> {
     let mut measure = Measure::start("snapshot untar");
-    let tar_bz2 = File::open(&snapshot_tar)?;
-    let tar = BzDecoder::new(BufReader::new(tar_bz2));
-    let mut archive = Archive::new(tar);
-    if !is_snapshot_compression_disabled() {
-        unpack_snapshot(&mut archive, unpack_dir)?;
-    } else if let Err(e) = archive.unpack(&unpack_dir) {
-        warn!(
-            "Trying to unpack as uncompressed tar because an error occurred: {:?}",
-            e
-        );
-        let tar_bz2 = File::open(snapshot_tar)?;
-        let tar = BufReader::new(tar_bz2);
-        let mut archive = Archive::new(tar);
-        unpack_snapshot(&mut archive, unpack_dir)?;
-    }
+    let tar_name = File::open(&snapshot_tar)?;
+    match compression {
+        CompressionType::Bzip2 => {
+            let tar = BzDecoder::new(BufReader::new(tar_name));
+            let mut archive = Archive::new(tar);
+            unpack_snapshot(&mut archive, unpack_dir)?;
+        }
+        CompressionType::Gzip => {
+            let tar = GzDecoder::new(BufReader::new(tar_name));
+            let mut archive = Archive::new(tar);
+            unpack_snapshot(&mut archive, unpack_dir)?;
+        }
+        CompressionType::Zstd => {
+            let tar = zstd::stream::read::Decoder::new(BufReader::new(tar_name))?;
+            let mut archive = Archive::new(tar);
+            unpack_snapshot(&mut archive, unpack_dir)?;
+        }
+        CompressionType::NoCompression => {
+            let tar = BufReader::new(tar_name);
+            let mut archive = Archive::new(tar);
+            unpack_snapshot(&mut archive, unpack_dir)?;
+        }
+    };
     measure.stop();
     info!("{}", measure);
     Ok(())
@@ -661,6 +694,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
     snapshot_archive: P,
     snapshots_to_verify: Q,
     storages_to_verify: R,
+    compression: CompressionType,
 ) where
     P: AsRef<Path>,
     Q: AsRef<Path>,
@@ -668,7 +702,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    untar_snapshot_in(snapshot_archive, &unpack_dir).unwrap();
+    untar_snapshot_in(snapshot_archive, &unpack_dir, compression).unwrap();
 
     // Check snapshots are the same
     let unpacked_snapshots = unpack_dir.join(&TAR_SNAPSHOTS_DIR);
@@ -795,8 +829,13 @@ mod tests {
     fn test_snapshot_hash_of() {
         assert_eq!(
             snapshot_hash_of(&format!("snapshot-42-{}.tar.bz2", Hash::default())),
-            Some((42, Hash::default()))
+            Some((42, Hash::default(), CompressionType::Bzip2))
         );
+        assert_eq!(
+            snapshot_hash_of(&format!("snapshot-43-{}.tar.zst", Hash::default())),
+            Some((43, Hash::default(), CompressionType::Zstd))
+        );
+
         assert!(snapshot_hash_of("invalid").is_none());
     }
 }
