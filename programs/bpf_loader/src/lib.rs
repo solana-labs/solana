@@ -25,7 +25,7 @@ use solana_sdk::{
 use std::{io::prelude::*, mem};
 use thiserror::Error;
 
-solana_sdk::declare_program!(
+solana_sdk::declare_loader!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
     process_instruction

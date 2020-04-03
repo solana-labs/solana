@@ -39,7 +39,8 @@ use solana_sdk::{
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
     inflation::Inflation,
-    native_loader, nonce,
+    native_loader::{self, create_loadable_account},
+    native_program_info, nonce,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
@@ -898,14 +899,18 @@ impl Bank {
         );
 
         // Add additional native programs specified in the genesis config
-        for (name, program_id) in &genesis_config.native_instruction_processors {
-            self.register_native_instruction_processor(name, program_id);
+        for (info, program_id) in &genesis_config.native_instruction_processors {
+            self.register_native_instruction_processor(&info, program_id);
         }
     }
 
-    pub fn register_native_instruction_processor(&self, name: &str, program_id: &Pubkey) {
-        debug!("Adding native program {} under {:?}", name, program_id);
-        let account = native_loader::create_loadable_account(name);
+    pub fn register_native_instruction_processor(
+        &self,
+        info: &native_loader::Info,
+        program_id: &Pubkey,
+    ) {
+        debug!("Adding {:?} under {:?}", info, program_id);
+        let account = create_loadable_account(info);
         self.store_account(program_id, &account);
     }
 
@@ -2155,7 +2160,7 @@ impl Bank {
             assert_eq!(program_account.owner, solana_sdk::native_loader::id());
         } else {
             // Register a bogus executable account, which will be loaded and ignored.
-            self.register_native_instruction_processor("", &program_id);
+            self.register_native_instruction_processor(&native_program_info!(""), &program_id);
         }
     }
 
