@@ -180,6 +180,7 @@ impl Blockstore {
 
         // Open the database
         let mut measure = Measure::start("open");
+        info!("Opening database at {:?}", blockstore_path);
         let db = Database::open(&blockstore_path)?;
 
         // Create the metadata column family
