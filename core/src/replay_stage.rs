@@ -10,6 +10,7 @@ use crate::{
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ForkStats, ProgressMap, PropagatedStats},
     repair_service::DuplicateSlotsResetReceiver,
+    pubkey_references::PubkeyReferences,
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -41,7 +42,6 @@ use solana_vote_program::{
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
-    rc::Rc,
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -184,7 +184,7 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
-                let mut all_pubkeys: HashSet<Rc<Pubkey>> = HashSet::new();
+                let mut all_pubkeys = PubkeyReferences::default();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut progress = ProgressMap::default();
@@ -856,7 +856,7 @@ impl ReplayStage {
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_hash_sender: &Option<AccountsPackageSender>,
         latest_root_senders: &[Sender<Slot>],
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
         subscriptions: &Arc<RpcSubscriptions>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
     ) -> Result<()> {
@@ -1144,7 +1144,7 @@ impl ReplayStage {
         vote_tracker: &VoteTracker,
         cluster_slots: &ClusterSlots,
         bank_forks: &RwLock<BankForks>,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
@@ -1170,6 +1170,7 @@ impl ReplayStage {
                             bank_slot,
                             bank.vote_accounts().into_iter(),
                             &ancestors,
+                            all_pubkeys,
                         );
                     stats.total_staked = total_staked;
                     stats.weight = bank_weight;
@@ -1225,7 +1226,7 @@ impl ReplayStage {
     fn update_propagation_status(
         progress: &mut ProgressMap,
         slot: Slot,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
         bank_forks: &RwLock<BankForks>,
         vote_tracker: &VoteTracker,
         cluster_slots: &ClusterSlots,
@@ -1494,7 +1495,7 @@ impl ReplayStage {
         mut cluster_slot_pubkeys: Vec<impl Deref<Target = Pubkey>>,
         fork_tip: Slot,
         bank_forks: &RwLock<BankForks>,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
     ) {
         let mut current_leader_slot = progress.get_latest_leader_slot(fork_tip);
         let mut did_newly_reach_threshold = false;
@@ -1554,7 +1555,7 @@ impl ReplayStage {
         cluster_slot_pubkeys: &mut Vec<impl Deref<Target = Pubkey>>,
         leader_bank: &Bank,
         leader_propagated_stats: &mut PropagatedStats,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
         did_child_reach_threshold: bool,
     ) -> bool {
         // Track whether this slot newly confirm propagation
@@ -1657,7 +1658,7 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
         accounts_hash_sender: &Option<AccountsPackageSender>,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
         largest_confirmed_root: Option<Slot>,
     ) {
         let old_epoch = bank_forks.read().unwrap().root_bank().epoch();
@@ -1669,7 +1670,7 @@ impl ReplayStage {
         let r_bank_forks = bank_forks.read().unwrap();
         let new_epoch = bank_forks.read().unwrap().root_bank().epoch();
         if old_epoch != new_epoch {
-            all_pubkeys.retain(|x| Rc::strong_count(x) > 1);
+            all_pubkeys.purge();
         }
         progress.handle_new_root(&r_bank_forks);
     }
@@ -1681,7 +1682,7 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         progress: &mut ProgressMap,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
     ) {
         // Find the next slot that chains to the old slot
         let forks = bank_forks.read().unwrap();
@@ -1825,6 +1826,7 @@ pub(crate) mod tests {
     use std::{
         fs::remove_dir_all,
         iter,
+        rc::Rc,
         sync::{Arc, RwLock},
     };
     use trees::tr;
@@ -2014,7 +2016,7 @@ pub(crate) mod tests {
 
         let bank_fork_ancestors = bank_forks.ancestors();
         let wrapped_bank_fork = Arc::new(RwLock::new(bank_forks));
-        let mut all_pubkeys = HashSet::new();
+        let mut all_pubkeys = PubkeyReferences::default();
         (0..validators.len())
             .map(|i| {
                 let mut frozen_banks: Vec<_> = wrapped_bank_fork
@@ -2202,7 +2204,7 @@ pub(crate) mod tests {
                 &subscriptions,
                 None,
                 &mut progress,
-                &mut HashSet::new(),
+                &mut PubkeyReferences::default(),
             );
             assert!(bank_forks
                 .read()
@@ -2226,7 +2228,7 @@ pub(crate) mod tests {
                 &subscriptions,
                 None,
                 &mut progress,
-                &mut HashSet::new(),
+                &mut PubkeyReferences::default(),
             );
             assert!(bank_forks
                 .read()
@@ -2280,7 +2282,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut progress,
             &None,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
             None,
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
@@ -2877,7 +2879,7 @@ pub(crate) mod tests {
             &VoteTracker::default(),
             &ClusterSlots::default(),
             &bank_forks,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
         );
         assert_eq!(newly_computed, vec![0]);
         // The only vote is in bank 1, and bank_forks does not currently contain
@@ -2918,7 +2920,7 @@ pub(crate) mod tests {
             &VoteTracker::default(),
             &ClusterSlots::default(),
             &bank_forks,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
         );
 
         assert_eq!(newly_computed, vec![1]);
@@ -2951,7 +2953,7 @@ pub(crate) mod tests {
             &VoteTracker::default(),
             &ClusterSlots::default(),
             &bank_forks,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
         );
         // No new stats should have been computed
         assert!(newly_computed.is_empty());
@@ -3047,7 +3049,7 @@ pub(crate) mod tests {
             &VoteTracker::default(),
             &ClusterSlots::default(),
             &vote_simulator.bank_forks,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
         );
 
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -3168,7 +3170,7 @@ pub(crate) mod tests {
             ..PropagatedStats::default()
         };
 
-        let mut all_pubkeys = HashSet::new();
+        let mut all_pubkeys = PubkeyReferences::default();
         let child_reached_threshold = false;
         for i in 0..std::cmp::max(new_vote_pubkeys.len(), new_node_pubkeys.len()) {
             propagated_stats.is_propagated = false;
@@ -3241,7 +3243,7 @@ pub(crate) mod tests {
             ..PropagatedStats::default()
         };
         propagated_stats.total_epoch_stake = stake * 10;
-        let mut all_pubkeys = HashSet::new();
+        let mut all_pubkeys = PubkeyReferences::default();
         let child_reached_threshold = true;
         let mut newly_voted_pubkeys: Vec<Arc<Pubkey>> = vec![];
 
@@ -3261,7 +3263,7 @@ pub(crate) mod tests {
             ..PropagatedStats::default()
         };
         propagated_stats.is_propagated = true;
-        all_pubkeys = HashSet::new();
+        all_pubkeys = PubkeyReferences::default();
         newly_voted_pubkeys = vec![];
         assert!(!ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
@@ -3345,7 +3347,7 @@ pub(crate) mod tests {
         ReplayStage::update_propagation_status(
             &mut progress_map,
             10,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
             &RwLock::new(bank_forks),
             &vote_tracker,
             &ClusterSlots::default(),
@@ -3438,7 +3440,7 @@ pub(crate) mod tests {
         ReplayStage::update_propagation_status(
             &mut progress_map,
             10,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
             &RwLock::new(bank_forks),
             &vote_tracker,
             &ClusterSlots::default(),
@@ -3528,7 +3530,7 @@ pub(crate) mod tests {
         ReplayStage::update_propagation_status(
             &mut progress_map,
             10,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
             &RwLock::new(bank_forks),
             &vote_tracker,
             &ClusterSlots::default(),

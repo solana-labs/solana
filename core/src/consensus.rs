@@ -1,4 +1,7 @@
-use crate::progress_map::{LockoutIntervals, ProgressMap};
+use crate::{
+    progress_map::{LockoutIntervals, ProgressMap},
+    pubkey_references::PubkeyReferences,
+};
 use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -91,6 +94,7 @@ impl Tower {
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
+        all_pubkeys: &mut PubkeyReferences,
     ) -> (HashMap<Slot, StakeLockout>, u64, u128, LockoutIntervals)
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
@@ -100,7 +104,7 @@ impl Tower {
         let mut total_weight = 0;
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
-        let mut lockout_intervals: BTreeMap<u64, Vec<(u64, Pubkey)>> = BTreeMap::new();
+        let mut lockout_intervals = BTreeMap::new();
         for (key, (lamports, account)) in vote_accounts {
             if lamports == 0 {
                 continue;
@@ -121,6 +125,7 @@ impl Tower {
             let mut vote_state = vote_state.unwrap();
 
             for vote in &vote_state.votes {
+                let key = all_pubkeys.get_or_insert(&key);
                 lockout_intervals
                     .entry(vote.expiration_slot())
                     .or_insert_with(|| vec![])
@@ -192,12 +197,7 @@ impl Tower {
             }
             total_stake += lamports;
         }
-        (
-            stake_lockouts,
-            total_stake,
-            total_weight,
-            lockout_intervals.into_iter().collect(),
-        )
+        (stake_lockouts, total_stake, total_weight, lockout_intervals)
     }
 
     pub fn is_slot_confirmed(
@@ -512,8 +512,12 @@ impl Tower {
     }
 
     fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<Slot, HashSet<Slot>>) -> u128 {
-        let (_, _, bank_weight, _) =
-            self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), ancestors);
+        let (_, _, bank_weight, _) = self.collect_vote_lockouts(
+            bank.slot(),
+            bank.vote_accounts().into_iter(),
+            ancestors,
+            &mut PubkeyReferences::default(),
+        );
         bank_weight
     }
 
@@ -603,9 +607,12 @@ pub mod test {
         vote_state::{Vote, VoteStateVersions},
         vote_transaction,
     };
-    use std::collections::HashMap;
-    use std::sync::RwLock;
-    use std::{thread::sleep, time::Duration};
+    use std::{
+        collections::HashMap,
+        rc::Rc,
+        sync::RwLock,
+        {thread::sleep, time::Duration},
+    };
     use trees::{tr, Tree, TreeWalk};
 
     pub(crate) struct VoteSimulator {
@@ -704,7 +711,7 @@ pub mod test {
                 &VoteTracker::default(),
                 &ClusterSlots::default(),
                 &self.bank_forks,
-                &mut HashSet::new(),
+                &mut PubkeyReferences::default(),
             );
 
             let vote_bank = self
@@ -738,7 +745,7 @@ pub mod test {
                     &self.bank_forks,
                     &mut self.progress,
                     &None,
-                    &mut HashSet::new(),
+                    &mut PubkeyReferences::default(),
                     None,
                 );
             }
@@ -782,7 +789,7 @@ pub mod test {
                 .lockout_intervals
                 .entry(lockout_interval.1)
                 .or_default()
-                .push((lockout_interval.0, *vote_account_pubkey));
+                .push((lockout_interval.0, Rc::new(*vote_account_pubkey)));
         }
 
         fn can_progress_on_fork(
@@ -1199,8 +1206,12 @@ pub mod test {
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
-        let (staked_lockouts, total_staked, bank_weight, _) =
-            tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
+        let (staked_lockouts, total_staked, bank_weight, _) = tower.collect_vote_lockouts(
+            1,
+            accounts.into_iter(),
+            &ancestors,
+            &mut PubkeyReferences::default(),
+        );
         assert_eq!(staked_lockouts[&0].stake, 2);
         assert_eq!(staked_lockouts[&0].lockout, 2 + 2 + 4 + 4);
         assert_eq!(total_staked, 2);
@@ -1240,6 +1251,7 @@ pub mod test {
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
+            &mut PubkeyReferences::default(),
         );
         for i in 0..MAX_LOCKOUT_HISTORY {
             assert_eq!(staked_lockouts[&(i as u64)].stake, 2);
@@ -1644,16 +1656,24 @@ pub mod test {
         for vote in &tower_votes {
             tower.record_vote(*vote, Hash::default());
         }
-        let (staked_lockouts, total_staked, _, _) =
-            tower.collect_vote_lockouts(vote_to_evaluate, accounts.clone().into_iter(), &ancestors);
+        let (staked_lockouts, total_staked, _, _) = tower.collect_vote_lockouts(
+            vote_to_evaluate,
+            accounts.clone().into_iter(),
+            &ancestors,
+            &mut PubkeyReferences::default(),
+        );
         assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts, total_staked));
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
         // will expire the vote in one of the vote accounts, so we should have insufficient
         // stake to pass the threshold
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
-        let (staked_lockouts, total_staked, _, _) =
-            tower.collect_vote_lockouts(vote_to_evaluate, accounts.into_iter(), &ancestors);
+        let (staked_lockouts, total_staked, _, _) = tower.collect_vote_lockouts(
+            vote_to_evaluate,
+            accounts.into_iter(),
+            &ancestors,
+            &mut PubkeyReferences::default(),
+        );
         assert!(!tower.check_vote_stake_threshold(
             vote_to_evaluate,
             &staked_lockouts,

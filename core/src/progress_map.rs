@@ -1,6 +1,7 @@
 use crate::{
     cluster_info_vote_listener::SlotVoteTracker, cluster_slots::SlotPubkeys,
-    consensus::StakeLockout, replay_stage::SUPERMINORITY_THRESHOLD,
+    consensus::StakeLockout, pubkey_references::PubkeyReferences,
+    replay_stage::SUPERMINORITY_THRESHOLD,
 };
 use solana_ledger::{
     bank_forks::BankForks,
@@ -14,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-pub(crate) type LockoutIntervals = BTreeMap<Slot, Vec<(Slot, Pubkey)>>;
+pub(crate) type LockoutIntervals = BTreeMap<Slot, Vec<(Slot, Rc<Pubkey>)>>;
 
 #[derive(Default)]
 pub(crate) struct ReplaySlotStats(ConfirmationTiming);
@@ -214,18 +215,12 @@ impl PropagatedStats {
     pub fn add_vote_pubkey(
         &mut self,
         vote_pubkey: &Pubkey,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
         stake: u64,
     ) {
         if !self.propagated_validators.contains(vote_pubkey) {
-            let mut cached_pubkey: Option<Rc<Pubkey>> = all_pubkeys.get(vote_pubkey).cloned();
-            if cached_pubkey.is_none() {
-                let new_pubkey = Rc::new(*vote_pubkey);
-                all_pubkeys.insert(new_pubkey.clone());
-                cached_pubkey = Some(new_pubkey);
-            }
-            let vote_pubkey = cached_pubkey.unwrap();
-            self.propagated_validators.insert(vote_pubkey);
+            let cached_pubkey = all_pubkeys.get_or_insert(vote_pubkey);
+            self.propagated_validators.insert(cached_pubkey);
             self.propagated_validators_stake += stake;
         }
     }
@@ -233,7 +228,7 @@ impl PropagatedStats {
     pub fn add_node_pubkey(
         &mut self,
         node_pubkey: &Pubkey,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
         bank: &Bank,
     ) {
         if !self.propagated_node_ids.contains(node_pubkey) {
@@ -256,18 +251,12 @@ impl PropagatedStats {
     fn add_node_pubkey_internal(
         &mut self,
         node_pubkey: &Pubkey,
-        all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        all_pubkeys: &mut PubkeyReferences,
         vote_account_pubkeys: &[Pubkey],
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) {
-        let mut cached_pubkey: Option<Rc<Pubkey>> = all_pubkeys.get(node_pubkey).cloned();
-        if cached_pubkey.is_none() {
-            let new_pubkey = Rc::new(*node_pubkey);
-            all_pubkeys.insert(new_pubkey.clone());
-            cached_pubkey = Some(new_pubkey);
-        }
-        let node_pubkey = cached_pubkey.unwrap();
-        self.propagated_node_ids.insert(node_pubkey);
+        let cached_pubkey = all_pubkeys.get_or_insert(node_pubkey);
+        self.propagated_node_ids.insert(cached_pubkey);
         for vote_account_pubkey in vote_account_pubkeys.iter() {
             let stake = epoch_vote_accounts
                 .get(vote_account_pubkey)
@@ -402,16 +391,19 @@ mod test {
     #[test]
     fn test_add_vote_pubkey() {
         let mut stats = PropagatedStats::default();
-        let mut all_pubkeys = HashSet::new();
+        let mut all_pubkeys = PubkeyReferences::default();
         let mut vote_pubkey = Pubkey::new_rand();
-        all_pubkeys.insert(Rc::new(vote_pubkey.clone()));
+        all_pubkeys.get_or_insert(&vote_pubkey);
 
         // Add a vote pubkey, the number of references in all_pubkeys
         // should be 2
         stats.add_vote_pubkey(&vote_pubkey, &mut all_pubkeys, 1);
         assert!(stats.propagated_validators.contains(&vote_pubkey));
         assert_eq!(stats.propagated_validators_stake, 1);
-        assert_eq!(Rc::strong_count(all_pubkeys.get(&vote_pubkey).unwrap()), 2);
+        assert_eq!(
+            Rc::strong_count(&all_pubkeys.get_or_insert(&vote_pubkey)),
+            3
+        );
 
         // Adding it again should change no state since the key already existed
         stats.add_vote_pubkey(&vote_pubkey, &mut all_pubkeys, 1);
@@ -423,7 +415,10 @@ mod test {
         stats.add_vote_pubkey(&vote_pubkey, &mut all_pubkeys, 2);
         assert!(stats.propagated_validators.contains(&vote_pubkey));
         assert_eq!(stats.propagated_validators_stake, 3);
-        assert_eq!(Rc::strong_count(all_pubkeys.get(&vote_pubkey).unwrap()), 2);
+        assert_eq!(
+            Rc::strong_count(&all_pubkeys.get_or_insert(&vote_pubkey)),
+            3
+        );
     }
 
     #[test]
@@ -440,9 +435,9 @@ mod test {
             .collect();
 
         let mut stats = PropagatedStats::default();
-        let mut all_pubkeys = HashSet::new();
+        let mut all_pubkeys = PubkeyReferences::default();
         let mut node_pubkey = Pubkey::new_rand();
-        all_pubkeys.insert(Rc::new(node_pubkey.clone()));
+        all_pubkeys.get_or_insert(&node_pubkey);
 
         // Add a vote pubkey, the number of references in all_pubkeys
         // should be 2
@@ -457,7 +452,10 @@ mod test {
             stats.propagated_validators_stake,
             staked_vote_accounts as u64
         );
-        assert_eq!(Rc::strong_count(all_pubkeys.get(&node_pubkey).unwrap()), 2);
+        assert_eq!(
+            Rc::strong_count(&all_pubkeys.get_or_insert(&node_pubkey)),
+            3
+        );
 
         // Adding it again should not change any state
         stats.add_node_pubkey_internal(
@@ -486,7 +484,10 @@ mod test {
             stats.propagated_validators_stake,
             staked_vote_accounts as u64
         );
-        assert_eq!(Rc::strong_count(all_pubkeys.get(&node_pubkey).unwrap()), 2);
+        assert_eq!(
+            Rc::strong_count(&all_pubkeys.get_or_insert(&node_pubkey)),
+            3
+        );
 
         // Addding another pubkey with different vote accounts should succeed
         // and increase stake
@@ -510,7 +511,10 @@ mod test {
             stats.propagated_validators_stake,
             2 * staked_vote_accounts as u64
         );
-        assert_eq!(Rc::strong_count(all_pubkeys.get(&node_pubkey).unwrap()), 2);
+        assert_eq!(
+            Rc::strong_count(&all_pubkeys.get_or_insert(&node_pubkey)),
+            3
+        );
     }
 
     #[test]
