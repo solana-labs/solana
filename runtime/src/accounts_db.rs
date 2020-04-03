@@ -881,6 +881,8 @@ impl AccountsDB {
         );
     }
 
+    // Reads all accounts in given slot's AppendVecs and filter only to alive,
+    // then create a minimum AppendVed filled with the alive.
     fn shrink_stale_slot(&self, slot: Slot) {
         trace!("shrink_stale_slot: slot: {}", slot);
 
@@ -904,7 +906,7 @@ impl AccountsDB {
                         start = next;
                     }
                 }
-                if (alive_count as f64 / stored_accounts.len() as f64) >= 0.80 {
+                if (alive_count as f32 / stored_accounts.len() as f32) >= 0.80 {
                     trace!(
                         "shrink_stale_slot: not enough space to shrink: {} / {}",
                         alive_count,
@@ -942,7 +944,12 @@ impl AccountsDB {
 
         let alive_total: u64 = alive_accounts
             .iter()
-            .fold(0, |t, (_, _, _, a, _, _)| t + *a as u64);
+            .map(
+                |(_pubkey, _account, _hash, account_size, _location, _write_verion)| {
+                    *account_size as u64
+                },
+            )
+            .sum();
         let aligned_total: u64 = (alive_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
 
         debug!(
@@ -965,12 +972,12 @@ impl AccountsDB {
                 write_versions.push(*write_version);
             }
 
-            let shrank_store = self.create_and_insert_store(slot, aligned_total);
+            let shrunken_store = self.create_and_insert_store(slot, aligned_total);
             let infos = self.store_accounts_to(
                 slot,
                 &accounts,
                 &hashes,
-                |_| shrank_store.clone(),
+                |_| shrunken_store.clone(),
                 write_versions.into_iter(),
             );
             let reclaims = self.update_index(slot, infos, &accounts);
@@ -984,15 +991,22 @@ impl AccountsDB {
         }
     }
 
+    // Infinitely returns rooted roots in cyclic order
     fn next_shrink_slot(&self) -> Option<Slot> {
-        let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-        let next = candidates.pop();
+        let next = {
+            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
+            candidates.pop()
+        };
+
         if next.is_some() {
             next
         } else {
             let mut new_all_slots = self.all_root_slots_in_index();
             let next = new_all_slots.pop();
-            std::mem::replace(&mut *candidates, new_all_slots);
+
+            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
+            *candidates = new_all_slots;
+
             next
         }
     }
@@ -2385,29 +2399,26 @@ pub mod tests {
     }
 
     impl AccountsDB {
-        fn store_count_for_slot(&self, slot: Slot) -> usize {
+        fn alive_account_count_in_store(&self, slot: Slot) -> usize {
             let storage = self.storage.read().unwrap();
 
             let slot_storage = storage.0.get(&slot);
             if let Some(slot_storage) = slot_storage {
-                slot_storage.values().nth(0).unwrap().count()
+                slot_storage.values().map(|store| store.count()).sum()
             } else {
                 0
             }
         }
 
-        fn append_vec_count_for_slot(&self, slot: Slot) -> usize {
+        fn all_acount_count_in_append_vec(&self, slot: Slot) -> usize {
             let storage = self.storage.read().unwrap();
 
             let slot_storage = storage.0.get(&slot);
             if let Some(slot_storage) = slot_storage {
                 slot_storage
                     .values()
-                    .nth(0)
-                    .unwrap()
-                    .accounts
-                    .accounts(0)
-                    .len()
+                    .map(|store| store.accounts.accounts(0).len())
+                    .sum()
             } else {
                 0
             }
@@ -2441,14 +2452,14 @@ pub mod tests {
         accounts.add_root(1);
 
         //even if rooted, old state isn't cleaned up
-        assert_eq!(accounts.store_count_for_slot(0), 1);
-        assert_eq!(accounts.store_count_for_slot(1), 1);
+        assert_eq!(accounts.alive_account_count_in_store(0), 1);
+        assert_eq!(accounts.alive_account_count_in_store(1), 1);
 
         accounts.clean_accounts();
 
         //now old state is cleaned up
-        assert_eq!(accounts.store_count_for_slot(0), 0);
-        assert_eq!(accounts.store_count_for_slot(1), 1);
+        assert_eq!(accounts.alive_account_count_in_store(0), 0);
+        assert_eq!(accounts.alive_account_count_in_store(1), 1);
     }
 
     #[test]
@@ -2471,14 +2482,14 @@ pub mod tests {
         accounts.add_root(1);
 
         //even if rooted, old state isn't cleaned up
-        assert_eq!(accounts.store_count_for_slot(0), 2);
-        assert_eq!(accounts.store_count_for_slot(1), 2);
+        assert_eq!(accounts.alive_account_count_in_store(0), 2);
+        assert_eq!(accounts.alive_account_count_in_store(1), 2);
 
         accounts.clean_accounts();
 
         //still old state behind zero-lamport account isn't cleaned up
-        assert_eq!(accounts.store_count_for_slot(0), 1);
-        assert_eq!(accounts.store_count_for_slot(1), 2);
+        assert_eq!(accounts.alive_account_count_in_store(0), 1);
+        assert_eq!(accounts.alive_account_count_in_store(1), 2);
     }
 
     #[test]
@@ -2502,16 +2513,16 @@ pub mod tests {
         accounts.add_root(2);
 
         //even if rooted, old state isn't cleaned up
-        assert_eq!(accounts.store_count_for_slot(0), 2);
-        assert_eq!(accounts.store_count_for_slot(1), 1);
-        assert_eq!(accounts.store_count_for_slot(2), 1);
+        assert_eq!(accounts.alive_account_count_in_store(0), 2);
+        assert_eq!(accounts.alive_account_count_in_store(1), 1);
+        assert_eq!(accounts.alive_account_count_in_store(2), 1);
 
         accounts.clean_accounts();
 
         //both zero lamport and normal accounts are cleaned up
-        assert_eq!(accounts.store_count_for_slot(0), 0);
-        assert_eq!(accounts.store_count_for_slot(1), 0);
-        assert_eq!(accounts.store_count_for_slot(2), 1);
+        assert_eq!(accounts.alive_account_count_in_store(0), 0);
+        assert_eq!(accounts.alive_account_count_in_store(1), 0);
+        assert_eq!(accounts.alive_account_count_in_store(2), 1);
     }
 
     #[test]
@@ -3614,11 +3625,11 @@ pub mod tests {
 
         // B: Test multiple updates to pubkey1 in a single slot/storage
         current_slot += 1;
-        assert_eq!(0, accounts.store_count_for_slot(current_slot));
+        assert_eq!(0, accounts.alive_account_count_in_store(current_slot));
         assert_eq!(1, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &account2)]);
         accounts.store(current_slot, &[(&pubkey1, &account2)]);
-        assert_eq!(1, accounts.store_count_for_slot(current_slot));
+        assert_eq!(1, accounts.alive_account_count_in_store(current_slot));
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.add_root(current_slot);
 
@@ -3722,6 +3733,8 @@ pub mod tests {
         let slots = (0..6)
             .map({ |_| accounts.next_shrink_slot() })
             .collect::<Vec<_>>();
+
+        // Because the origin of this data is HashMap (not BTreeMap), key order is arbitrary per cycle.
         assert!(
             vec![Some(7), Some(8), Some(7), Some(8), Some(7), Some(8)] == slots
                 || vec![Some(8), Some(7), Some(8), Some(7), Some(8), Some(7)] == slots
@@ -3753,10 +3766,10 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         current_slot += 1;
-        let reduce_count = 10;
-        let reduced_pubkeys = &pubkeys[0..pubkey_count - reduce_count];
+        let pubkey_count_after_shrink = 10;
+        let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
 
-        for pubkey in reduced_pubkeys {
+        for pubkey in updated_pubkeys {
             accounts.store(current_slot, &[(&pubkey, &account)]);
         }
         accounts.add_root(current_slot);
@@ -3765,19 +3778,19 @@ pub mod tests {
 
         assert_eq!(
             pubkey_count,
-            accounts.append_vec_count_for_slot(shrink_slot)
+            accounts.all_acount_count_in_append_vec(shrink_slot)
         );
         accounts.shrink_all_stale_slots();
         assert_eq!(
-            reduce_count,
-            accounts.append_vec_count_for_slot(shrink_slot)
+            pubkey_count_after_shrink,
+            accounts.all_acount_count_in_append_vec(shrink_slot)
         );
 
         // repeating should be no-op
         accounts.shrink_all_stale_slots();
         assert_eq!(
-            reduce_count,
-            accounts.append_vec_count_for_slot(shrink_slot)
+            pubkey_count_after_shrink,
+            accounts.all_acount_count_in_append_vec(shrink_slot)
         );
     }
 
@@ -3806,10 +3819,10 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         current_slot += 1;
-        let reduce_count = 90;
-        let reduced_pubkeys = &pubkeys[0..pubkey_count - reduce_count];
+        let pubkey_count_after_shrink = 90;
+        let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
 
-        for pubkey in reduced_pubkeys {
+        for pubkey in updated_pubkeys {
             accounts.store(current_slot, &[(&pubkey, &account)]);
         }
         accounts.add_root(current_slot);
@@ -3818,12 +3831,12 @@ pub mod tests {
 
         assert_eq!(
             pubkey_count,
-            accounts.append_vec_count_for_slot(shrink_slot)
+            accounts.all_acount_count_in_append_vec(shrink_slot)
         );
         accounts.shrink_all_stale_slots();
         assert_eq!(
             pubkey_count,
-            accounts.append_vec_count_for_slot(shrink_slot)
+            accounts.all_acount_count_in_append_vec(shrink_slot)
         );
     }
 }
