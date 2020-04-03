@@ -961,6 +961,10 @@ impl AccountsDB {
             }
 
             let shrunken_store = self.create_and_insert_store(slot, aligned_total);
+
+            // here, we're writing back alive_accounts. That should be an atomic operation
+            // without use of rather wide locks in this whole function, because we're
+            // mutating rooted slots; There should be no writers to them.
             let infos = self.store_accounts_to(
                 slot,
                 &accounts,
