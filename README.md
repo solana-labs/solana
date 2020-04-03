@@ -17,7 +17,7 @@ solana-tokens distribute --dollars-per-sol <NUMBER> --dry-run <ALLOCATIONS_CSV> 
 Example output:
 
 ```text
-`**Recipient**`                                     `**Amount**`
+Recipient                                     Amount
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv  70
 3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM  42
 UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
@@ -35,7 +35,7 @@ solana-tokens distribute --from <KEYPAIR> --dollars-per-sol <NUMBER> <ALLOCATION
 Example output:
 
 ```text
-`**Recipient**`                                     `**Amount**`
+Recipient                                     Amount
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv  70
 3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM  42
 UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
