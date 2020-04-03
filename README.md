@@ -11,7 +11,7 @@ List the differences between a list of expected payments and the record of what
 payments have already been made.
 
 ```bash
-solana-tokens distribute --dollars-per-sol 0.22 --dryrun <ALLOCATIONS_CSV> <TRANSACTIONS_CSV>
+solana-tokens distribute --dollars-per-sol <NUMBER> --dryrun <ALLOCATIONS_CSV> <TRANSACTIONS_CSV>
 ```
 
 Example output:
@@ -25,26 +25,26 @@ nadanadanada          43
 
 
 ```bash
-solana-tokens distribute --from <SENDER_KEYPAIR> --dollars-per-sol <ALLOCATIONS_CSV> <TRANSACTIONS_CSV> --fee-payer <KEYPAIR>
+solana-tokens distribute --from <SENDER_KEYPAIR> --dollars-per-sol <NUMBER> <ALLOCATIONS_CSV> <TRANSACTIONS_CSV> --fee-payer <KEYPAIR>
 ```
 
 Example output:
 
 ```text
-Recipient             Amount    Signature
-blahblahblah          70        blah
-yayayayayada          42        yada
-nadanadanada          43        nada
+Recipient             Amount
+blahblahblah          70
+yayayayayada          42
+nadanadanada          43
 ```
 
-Example state before:
+Example transaction log before:
 
 ```text
 recipient,amount,signature
 blahblahblah,30,blah,orig
 ```
 
-Example state after:
+Example transaction log after:
 
 ```text
 recipient,amount,signature
