@@ -2398,7 +2398,7 @@ pub mod tests {
             }
         }
 
-        fn all_acount_count_in_append_vec(&self, slot: Slot) -> usize {
+        fn all_account_count_in_append_vec(&self, slot: Slot) -> usize {
             let storage = self.storage.read().unwrap();
 
             let slot_storage = storage.0.get(&slot);
@@ -3766,12 +3766,12 @@ pub mod tests {
 
         assert_eq!(
             pubkey_count,
-            accounts.all_acount_count_in_append_vec(shrink_slot)
+            accounts.all_account_count_in_append_vec(shrink_slot)
         );
         accounts.shrink_all_stale_slots();
         assert_eq!(
             pubkey_count_after_shrink,
-            accounts.all_acount_count_in_append_vec(shrink_slot)
+            accounts.all_account_count_in_append_vec(shrink_slot)
         );
 
         let no_ancestors = HashMap::default();
@@ -3789,7 +3789,7 @@ pub mod tests {
         accounts.shrink_all_stale_slots();
         assert_eq!(
             pubkey_count_after_shrink,
-            accounts.all_acount_count_in_append_vec(shrink_slot)
+            accounts.all_account_count_in_append_vec(shrink_slot)
         );
     }
 
@@ -3830,12 +3830,12 @@ pub mod tests {
 
         assert_eq!(
             pubkey_count,
-            accounts.all_acount_count_in_append_vec(shrink_slot)
+            accounts.all_account_count_in_append_vec(shrink_slot)
         );
         accounts.shrink_all_stale_slots();
         assert_eq!(
             pubkey_count,
-            accounts.all_acount_count_in_append_vec(shrink_slot)
+            accounts.all_account_count_in_append_vec(shrink_slot)
         );
     }
 }
