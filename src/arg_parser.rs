@@ -1,4 +1,4 @@
-use crate::args::{Args, Command, ScrubArgs, TransferArgs};
+use crate::args::{Args, Command, DistributeArgs};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::input_validators::is_valid_signer;
 use solana_cli_config::CONFIG_FILE;
@@ -31,35 +31,31 @@ where
                 .help("RPC entrypoint address. i.e. http://devnet.solana.com"),
         )
         .subcommand(
-            SubCommand::with_name("scrub")
-                .about("Scrub a data file")
+            SubCommand::with_name("distribute")
+                .about("Distribute tokens")
                 .arg(
-                    Arg::with_name("input_csv")
+                    Arg::with_name("allocations_csv")
                         .required(true)
                         .index(1)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Input CSV file"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("transfer")
-                .about("Scrub a data file")
-                .arg(
-                    Arg::with_name("input_csv")
-                        .required(true)
-                        .index(1)
-                        .takes_value(true)
-                        .value_name("FILE")
-                        .help("Scrubbed CSV file"),
+                        .help("Allocations CSV file"),
                 )
                 .arg(
-                    Arg::with_name("state_csv")
+                    Arg::with_name("transactions_csv")
                         .required(true)
                         .index(2)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("State CSV file"),
+                        .help("Transactions CSV file"),
+                )
+                .arg(
+                    Arg::with_name("dollars_per_sol")
+                        .long("dollars-per-sol")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("NUMBER")
+                        .help("Dollars per SOL"),
                 )
                 .arg(
                     Arg::with_name("dry_run")
@@ -86,16 +82,11 @@ where
         .get_matches_from(args)
 }
 
-fn parse_scrub_args(matches: &ArgMatches<'_>) -> ScrubArgs {
-    ScrubArgs {
-        input_csv: value_t_or_exit!(matches, "input_csv", String),
-    }
-}
-
-fn parse_transfer_args(matches: &ArgMatches<'_>) -> TransferArgs<String> {
-    TransferArgs {
-        input_csv: value_t_or_exit!(matches, "input_csv", String),
-        state_csv: value_t_or_exit!(matches, "state_csv", String),
+fn parse_distribute_args(matches: &ArgMatches<'_>) -> DistributeArgs<String> {
+    DistributeArgs {
+        allocations_csv: value_t_or_exit!(matches, "allocations_csv", String),
+        transactions_csv: value_t_or_exit!(matches, "transactions_csv", String),
+        dollars_per_sol: value_t_or_exit!(matches, "dollars_per_sol", f64),
         dry_run: matches.is_present("dry_run"),
         sender_keypair: value_t!(matches, "sender_keypair", String).ok(),
         fee_payer: value_t!(matches, "fee_payer", String).ok(),
@@ -112,8 +103,7 @@ where
     let url = matches.value_of("url").map(|x| x.to_string());
 
     let command = match matches.subcommand() {
-        ("scrub", Some(matches)) => Command::Scrub(parse_scrub_args(matches)),
-        ("transfer", Some(matches)) => Command::Transfer(parse_transfer_args(matches)),
+        ("distribute", Some(matches)) => Command::Distribute(parse_distribute_args(matches)),
         _ => {
             eprintln!("{}", matches.usage());
             exit(1);

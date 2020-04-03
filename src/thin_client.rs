@@ -40,6 +40,16 @@ impl NetworkClient for BankClient {
     }
 }
 
+impl NetworkClient for () {
+    fn send_and_confirm_message<S: Signers>(
+        &self,
+        _message: Message,
+        _signers: &S,
+    ) -> Result<Signature, TransportError> {
+        Ok(Signature::default())
+    }
+}
+
 pub struct ThinClient<C: NetworkClient>(pub C);
 
 impl<C: NetworkClient> ThinClient<C> {

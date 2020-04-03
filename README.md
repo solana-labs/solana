@@ -1,35 +1,17 @@
-# Reconcile total payments with current payments
+# Distribute Solana tokens
 
 A user may want to make payments to multiple accounts over multiple iterations.
-The user will have a spreadsheet listing public keys and expected balances, and
+The user will have a spreadsheet listing public keys and token amounts, and
 some process for transferring tokens to them, and ensuring that no more than the
-expected amount of tokens are sent. The command-line tool here automates that
-process.
+expected amount are sent. The command-line tool here automates that process.
 
-## Scrub input
-
-Clean, group, filter as needed.
-
-```bash
-solana-batch scrub <INPUT_CSV>
-```
-
-Example output:
-
-```text
-recipient,amount
-blahblahblah,100
-yayayayayada,42
-nadanadanada,43
-```
-
-## Reconcile
+## Distribute tokens
 
 List the differences between a list of expected payments and the record of what
 payments have already been made.
 
 ```bash
-solana-batch transfer --dryrun <INPUT_CSV> <STATE_CSV>
+solana-tokens distribute --dollars-per-sol 0.22 --dryrun <ALLOCATIONS_CSV> <TRANSACTIONS_CSV>
 ```
 
 Example output:
@@ -43,7 +25,7 @@ nadanadanada          43
 
 
 ```bash
-solana-batch transfer --from <SENDER_KEYPAIR> <INPUT_CSV> <STATE_CSV> --fee-payer <KEYPAIR>
+solana-tokens distribute --from <SENDER_KEYPAIR> --dollars-per-sol <ALLOCATIONS_CSV> <TRANSACTIONS_CSV> --fee-payer <KEYPAIR>
 ```
 
 Example output:
