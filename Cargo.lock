@@ -2191,24 +2191,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-batch"
-version = "0.1.0"
-dependencies = [
- "clap",
- "console",
- "csv",
- "indexmap",
- "serde",
- "solana-clap-utils",
- "solana-cli-config",
- "solana-client",
- "solana-remote-wallet",
- "solana-runtime",
- "solana-sdk",
- "solana-stake-program",
-]
-
-[[package]]
 name = "solana-bpf-loader-program"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2527,6 +2509,24 @@ dependencies = [
  "serde_derive",
  "solana-logger",
  "solana-sdk",
+]
+
+[[package]]
+name = "solana-tokens"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console",
+ "csv",
+ "indexmap",
+ "serde",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-client",
+ "solana-remote-wallet",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-stake-program",
 ]
 
 [[package]]
