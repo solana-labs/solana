@@ -358,11 +358,12 @@ impl Tower {
 
     pub(crate) fn check_switch_threshold(
         &self,
-        _slot: u64,
+        _slot: Slot,
         _ancestors: &HashMap<Slot, HashSet<u64>>,
         _descendants: &HashMap<Slot, HashSet<u64>>,
         _progress: &ProgressMap,
-        _total_stake: u64,
+        _total_epoch_stake: u64,
+        _epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> bool {
         true
     }
@@ -647,7 +648,6 @@ pub mod test {
                     bank_forks,
                     progress,
                     &None,
-                    &mut 0,
                     &mut HashSet::new(),
                 );
             }
