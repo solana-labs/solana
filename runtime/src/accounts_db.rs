@@ -898,7 +898,6 @@ impl AccountsDB {
                         stored_accounts.push((
                             account.meta.pubkey,
                             account.clone_account(),
-                            *account.hash,
                             next - start,
                             (store.id, account.offset),
                             account.meta.write_version,
@@ -923,14 +922,7 @@ impl AccountsDB {
             stored_accounts
                 .iter()
                 .filter(
-                    |(
-                        pubkey,
-                        _account,
-                        _hash,
-                        _storage_size,
-                        (store_id, offset),
-                        _write_version,
-                    )| {
+                    |(pubkey, _account, _storage_size, (store_id, offset), _write_version)| {
                         if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
                             list.iter()
                                 .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
@@ -944,11 +936,7 @@ impl AccountsDB {
 
         let alive_total: u64 = alive_accounts
             .iter()
-            .map(
-                |(_pubkey, _account, _hash, account_size, _location, _write_verion)| {
-                    *account_size as u64
-                },
-            )
+            .map(|(_pubkey, _account, account_size, _location, _write_verion)| *account_size as u64)
             .sum();
         let aligned_total: u64 = (alive_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
 
@@ -966,9 +954,9 @@ impl AccountsDB {
             let mut hashes = Vec::with_capacity(alive_accounts.len());
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
-            for (pubkey, account, hash, _size, _location, write_version) in alive_accounts {
+            for (pubkey, account, _size, _location, write_version) in alive_accounts {
                 accounts.push((pubkey, account));
-                hashes.push(*hash);
+                hashes.push(account.hash);
                 write_versions.push(*write_version);
             }
 
@@ -3785,6 +3773,17 @@ pub mod tests {
             pubkey_count_after_shrink,
             accounts.all_acount_count_in_append_vec(shrink_slot)
         );
+
+        let no_ancestors = HashMap::default();
+        accounts.update_accounts_hash(current_slot, &no_ancestors);
+        accounts
+            .verify_bank_hash(current_slot, &no_ancestors)
+            .unwrap();
+
+        let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
+        accounts
+            .verify_bank_hash(current_slot, &no_ancestors)
+            .unwrap();
 
         // repeating should be no-op
         accounts.shrink_all_stale_slots();
