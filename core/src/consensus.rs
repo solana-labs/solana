@@ -455,18 +455,6 @@ impl Tower {
         }
     }
 
-    pub(crate) fn check_switch_threshold(
-        &self,
-        _slot: Slot,
-        _ancestors: &HashMap<Slot, HashSet<u64>>,
-        _descendants: &HashMap<Slot, HashSet<u64>>,
-        _progress: &ProgressMap,
-        _total_epoch_stake: u64,
-        _epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
-    ) -> bool {
-        true
-    }
-
     /// Update lockouts for all the ancestors
     fn update_ancestor_lockouts(
         stake_lockouts: &mut HashMap<Slot, StakeLockout>,
