@@ -80,7 +80,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized voter."),
+                        "Vote account in which to set the authorized voter. "),
                 )
                 .arg(
                     Arg::with_name("authorized")
@@ -95,7 +95,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(3)
                         .value_name("NEW_AUTHORIZED_PUBKEY")
                         .required(true),
-                        "New authorized vote signer."),
+                        "New authorized vote signer. "),
                 ),
         )
         .subcommand(
@@ -106,7 +106,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized withdrawer."),
+                        "Vote account in which to set the authorized withdrawer. "),
                 )
                 .arg(
                     Arg::with_name("authorized")
@@ -121,7 +121,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(3)
                         .value_name("AUTHORIZED_PUBKEY")
                         .required(true),
-                        "New authorized withdrawer."),
+                        "New authorized withdrawer. "),
                 ),
         )
         .subcommand(
