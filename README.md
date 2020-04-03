@@ -5,10 +5,10 @@ The user will have a spreadsheet listing public keys and token amounts, and
 some process for transferring tokens to them, and ensuring that no more than the
 expected amount are sent. The command-line tool here automates that process.
 
-## Distribute tokens
+## Calculate what tokens should be sent
 
-List the differences between a list of expected payments and the record of what
-payments have already been made.
+List the differences between a list of expected distributions and the record of what
+transactions have already been sent.
 
 ```bash
 solana-tokens distribute --dollars-per-sol <NUMBER> --dryrun <ALLOCATIONS_CSV> <TRANSACTIONS_CSV>
@@ -23,6 +23,10 @@ yayayayayada          42
 nadanadanada          43
 ```
 
+## Distribute tokens
+
+Send tokens to the recipients in `<ALLOCATIONS_CSV>` if the distribution is
+not already recordered in the transaction log.
 
 ```bash
 solana-tokens distribute --from <SENDER_KEYPAIR> --dollars-per-sol <NUMBER> <ALLOCATIONS_CSV> <TRANSACTIONS_CSV> --fee-payer <KEYPAIR>
