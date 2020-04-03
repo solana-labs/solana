@@ -11,16 +11,16 @@ List the differences between a list of expected distributions and the record of 
 transactions have already been sent.
 
 ```bash
-solana-tokens distribute --dollars-per-sol <NUMBER> --dryrun <ALLOCATIONS_CSV> <TRANSACTIONS_CSV>
+solana-tokens distribute --dollars-per-sol <NUMBER> --dry-run <ALLOCATIONS_CSV> <TRANSACTION_LOG>
 ```
 
 Example output:
 
 ```text
-Recipient             Amount
-blahblahblah          70
-yayayayayada          42
-nadanadanada          43
+`**Recipient**`                                     `**Amount**`
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv  70
+3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM  42
+UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
 ```
 
 ## Distribute tokens
@@ -29,31 +29,31 @@ Send tokens to the recipients in `<ALLOCATIONS_CSV>` if the distribution is
 not already recordered in the transaction log.
 
 ```bash
-solana-tokens distribute --from <SENDER_KEYPAIR> --dollars-per-sol <NUMBER> <ALLOCATIONS_CSV> <TRANSACTIONS_CSV> --fee-payer <KEYPAIR>
+solana-tokens distribute --from <KEYPAIR> --dollars-per-sol <NUMBER> <ALLOCATIONS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
 ```
 
 Example output:
 
 ```text
-Recipient             Amount
-blahblahblah          70
-yayayayayada          42
-nadanadanada          43
+`**Recipient**`                                     `**Amount**`
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv  70
+3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM  42
+UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
 ```
 
 Example transaction log before:
 
 ```text
 recipient,amount,signature
-blahblahblah,30,blah,orig
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,30,orig
 ```
 
 Example transaction log after:
 
 ```text
 recipient,amount,signature
-blahblahblah,30,orig
-blahblahblah,70,blah
-yayayayayada,42,yada
-nadanadanada,43,nada
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,30,1111111111111111111111111111111111111111111111111111111111111111
+6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,70,1111111111111111111111111111111111111111111111111111111111111111
+3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM,42,1111111111111111111111111111111111111111111111111111111111111111
+UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k,43,1111111111111111111111111111111111111111111111111111111111111111
 ```
