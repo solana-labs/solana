@@ -1,6 +1,6 @@
 use crate::bank_forks::CompressionType;
 use crate::hardened_unpack::{unpack_snapshot, UnpackError};
-use crate::snapshot_package::SnapshotPackage;
+use crate::snapshot_package::AccountsPackage;
 use bincode::serialize_into;
 use bzip2::bufread::BzDecoder;
 use flate2::read::GzDecoder;
@@ -93,7 +93,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_path: P,
     snapshot_storages: SnapshotStorages,
     compression: CompressionType,
-) -> Result<SnapshotPackage> {
+) -> Result<AccountsPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
 
@@ -104,8 +104,8 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_storages.len()
     );
 
-    // Any errors from this point on will cause the above SnapshotPackage to drop, clearing
-    // any temporary state created for the SnapshotPackage (like the snapshot_hard_links_dir)
+    // Any errors from this point on will cause the above AccountsPackage to drop, clearing
+    // any temporary state created for the AccountsPackage (like the snapshot_hard_links_dir)
     snapshot_files.copy_snapshot_directory(snapshot_hard_links_dir.path())?;
 
     let snapshot_package_output_file = get_snapshot_archive_path(
@@ -114,8 +114,9 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         &compression,
     );
 
-    let package = SnapshotPackage::new(
+    let package = AccountsPackage::new(
         bank.slot(),
+        bank.block_height(),
         bank.src.slot_deltas(slots_to_snapshot),
         snapshot_hard_links_dir,
         snapshot_storages,
@@ -136,7 +137,7 @@ fn get_compression_ext(compression: &CompressionType) -> (&'static str, &'static
     }
 }
 
-pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()> {
+pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
         snapshot_package.root
@@ -354,8 +355,6 @@ pub fn add_snapshot<P: AsRef<Path>>(
     bank: &Bank,
     snapshot_storages: &[SnapshotStorage],
 ) -> Result<SlotSnapshotPaths> {
-    bank.clean_accounts();
-    bank.update_accounts_hash();
     let slot = bank.slot();
     // snapshot_path/slot
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);

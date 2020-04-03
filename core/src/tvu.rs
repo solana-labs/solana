@@ -26,7 +26,7 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
-    snapshot_package::SnapshotPackageSender,
+    snapshot_package::AccountsPackageSender,
 };
 use solana_sdk::{
     pubkey::Pubkey,
@@ -98,7 +98,7 @@ impl Tvu {
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
-        snapshot_package_sender: Option<SnapshotPackageSender>,
+        snapshot_package_sender: Option<AccountsPackageSender>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
         tvu_config: TvuConfig,
@@ -165,6 +165,14 @@ impl Tvu {
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
 
+        let snapshot_interval_slots = {
+            if let Some(config) = bank_forks.read().unwrap().snapshot_config() {
+                config.snapshot_interval_slots
+            } else {
+                std::u64::MAX
+            }
+        };
+        info!("snapshot_interval_slots: {}", snapshot_interval_slots);
         let (accounts_hash_sender, accounts_hash_receiver) = channel();
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_hash_receiver,
@@ -174,6 +182,7 @@ impl Tvu {
             tvu_config.trusted_validators.clone(),
             tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
+            snapshot_interval_slots,
         );
 
         let replay_stage_config = ReplayStageConfig {

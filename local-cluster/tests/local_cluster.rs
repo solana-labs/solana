@@ -1260,7 +1260,7 @@ struct SnapshotValidatorConfig {
 }
 
 fn setup_snapshot_validator_config(
-    snapshot_interval_slots: usize,
+    snapshot_interval_slots: u64,
     num_account_paths: usize,
 ) -> SnapshotValidatorConfig {
     // Create the snapshot config
@@ -1281,6 +1281,7 @@ fn setup_snapshot_validator_config(
     validator_config.rpc_config.enable_validator_exit = true;
     validator_config.snapshot_config = Some(snapshot_config);
     validator_config.account_paths = account_storage_paths;
+    validator_config.accounts_hash_interval_slots = snapshot_interval_slots;
 
     SnapshotValidatorConfig {
         _snapshot_dir: snapshot_dir,

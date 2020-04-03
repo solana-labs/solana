@@ -81,6 +81,7 @@ pub struct ValidatorConfig {
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
+    pub accounts_hash_interval_slots: u64,
 }
 
 impl Default for ValidatorConfig {
@@ -107,6 +108,7 @@ impl Default for ValidatorConfig {
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
             no_rocksdb_compaction: false,
+            accounts_hash_interval_slots: std::u64::MAX,
         }
     }
 }
@@ -622,6 +624,7 @@ fn new_banks_from_blockstore(
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
 
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
+    bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
 
     (
         genesis_config,

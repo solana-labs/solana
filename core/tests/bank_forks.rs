@@ -38,7 +38,7 @@ mod tests {
         genesis_config_info: GenesisConfigInfo,
     }
 
-    fn setup_snapshot_test(snapshot_interval_slots: usize) -> SnapshotTestConfig {
+    fn setup_snapshot_test(snapshot_interval_slots: u64) -> SnapshotTestConfig {
         let accounts_dir = TempDir::new().unwrap();
         let snapshot_dir = TempDir::new().unwrap();
         let snapshot_output_path = TempDir::new().unwrap();
@@ -50,6 +50,7 @@ mod tests {
         );
         bank0.freeze();
         let mut bank_forks = BankForks::new(0, bank0);
+        bank_forks.accounts_hash_interval_slots = snapshot_interval_slots;
 
         let snapshot_config = SnapshotConfig {
             snapshot_interval_slots,
@@ -265,7 +266,7 @@ mod tests {
             };
 
             bank_forks
-                .generate_snapshot(slot, &vec![], &package_sender)
+                .generate_accounts_package(slot, &vec![], &package_sender)
                 .unwrap();
 
             if slot == saved_slot as u64 {
@@ -371,7 +372,7 @@ mod tests {
             let (snapshot_sender, _snapshot_receiver) = channel();
             // Make sure this test never clears bank.slots_since_snapshot
             let mut snapshot_test_config =
-                setup_snapshot_test(add_root_interval * num_set_roots * 2);
+                setup_snapshot_test((add_root_interval * num_set_roots * 2) as u64);
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
             let snapshot_sender = Some(snapshot_sender);
             for _ in 0..num_set_roots {
