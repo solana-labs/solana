@@ -1,8 +1,13 @@
 use solana_client::rpc_client::RpcClient;
 use solana_runtime::bank_client::BankClient;
-use solana_sdk::client::SyncClient;
 use solana_sdk::{
-    message::Message, signature::Signature, signers::Signers, transaction::Transaction,
+    client::SyncClient,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Signature, Signer},
+    signers::Signers,
+    system_instruction,
+    transaction::Transaction,
     transport::TransportError,
 };
 
@@ -12,6 +17,8 @@ pub trait Client {
         message: Message,
         signers: &S,
     ) -> Result<Signature, TransportError>;
+
+    fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64, TransportError>;
 }
 
 impl Client for RpcClient {
@@ -28,6 +35,13 @@ impl Client for RpcClient {
             .map_err(|e| TransportError::Custom(e.to_string()))?;
         Ok(signature)
     }
+
+    fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64, TransportError> {
+        let balance = self
+            .get_balance(pubkey)
+            .map_err(|e| TransportError::Custom(e.to_string()))?;
+        Ok(balance)
+    }
 }
 
 impl Client for BankClient {
@@ -37,6 +51,10 @@ impl Client for BankClient {
         signers: &S,
     ) -> Result<Signature, TransportError> {
         self.send_message(signers, message)
+    }
+
+    fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64, TransportError> {
+        self.get_balance(pubkey)
     }
 }
 
@@ -48,9 +66,27 @@ impl Client for () {
     ) -> Result<Signature, TransportError> {
         Ok(Signature::default())
     }
+
+    fn get_balance1(&self, _pubkey: &Pubkey) -> Result<u64, TransportError> {
+        Ok(0)
+    }
 }
 
 pub struct ThinClient<C: Client>(pub C);
+
+impl<C: Client> ThinClient<C> {
+    pub fn transfer<S: Signer>(
+        &self,
+        lamports: u64,
+        sender_keypair: &S,
+        to_pubkey: &Pubkey,
+    ) -> Result<Signature, TransportError> {
+        let create_instruction =
+            system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
+        let message = Message::new(&[create_instruction]);
+        self.send_message(message, &[sender_keypair])
+    }
+}
 
 impl<C: Client> ThinClient<C> {
     pub fn send_message<S: Signers>(
@@ -59,5 +95,9 @@ impl<C: Client> ThinClient<C> {
         signers: &S,
     ) -> Result<Signature, TransportError> {
         self.0.send_and_confirm_message(message, signers)
+    }
+
+    pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64, TransportError> {
+        self.0.get_balance1(pubkey)
     }
 }

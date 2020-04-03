@@ -5,7 +5,7 @@ use solana_cli_config::CONFIG_FILE;
 use std::ffi::OsString;
 use std::process::exit;
 
-pub(crate) fn get_matches<'a, I, T>(args: I) -> ArgMatches<'a>
+fn get_matches<'a, I, T>(args: I) -> ArgMatches<'a>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -93,7 +93,7 @@ fn parse_distribute_args(matches: &ArgMatches<'_>) -> DistributeArgs<String> {
     }
 }
 
-pub(crate) fn parse_args<I, T>(args: I) -> Args<String>
+pub fn parse_args<I, T>(args: I) -> Args<String>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,

@@ -14,7 +14,7 @@ use solana_sdk::{
 use std::fs;
 use std::path::Path;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
     bid_amount_dollars: f64,
     primary_address: String,
@@ -72,11 +72,13 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
         amount: bid.bid_amount_dollars / dollars_per_sol,
     }
 }
+
 fn distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     allocations: &[Allocation],
     args: &DistributeArgs<Box<dyn Signer>>,
 ) -> Vec<Result<Signature, TransportError>> {
+    let fee_payer_pubkey = args.fee_payer.as_ref().unwrap().pubkey();
     let messages: Vec<Message> = allocations
         .iter()
         .map(|allocation| {
@@ -85,7 +87,7 @@ fn distribute_tokens<T: Client>(
             let to = allocation.recipient.parse().unwrap();
             let lamports = sol_to_lamports(allocation.amount);
             let instruction = system_instruction::transfer(&from, &to, lamports);
-            Message::new(&[instruction])
+            Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey))
         })
         .collect();
 
@@ -98,6 +100,14 @@ fn distribute_tokens<T: Client>(
         .into_iter()
         .map(|message| client.send_message(message, &signers))
         .collect()
+}
+
+fn read_transaction_infos(path: &str) -> Vec<TransactionInfo> {
+    let mut rdr = ReaderBuilder::new()
+        .trim(Trim::All)
+        .from_path(&path)
+        .unwrap();
+    rdr.deserialize().map(|x| x.unwrap()).collect()
 }
 
 fn append_transaction_infos(
@@ -138,7 +148,7 @@ fn append_transaction_infos(
     Ok(())
 }
 
-pub(crate) fn process_distribute<T: Client>(
+pub fn process_distribute<T: Client>(
     client: &ThinClient<T>,
     args: &DistributeArgs<Box<dyn Signer>>,
 ) -> Result<(), csv::Error> {
@@ -151,10 +161,7 @@ pub(crate) fn process_distribute<T: Client>(
         .collect();
 
     let transaction_infos: Vec<TransactionInfo> = if Path::new(&args.transactions_csv).exists() {
-        let mut state_rdr = ReaderBuilder::new()
-            .trim(Trim::All)
-            .from_path(&args.transactions_csv)?;
-        state_rdr.deserialize().map(|x| x.unwrap()).collect()
+        read_transaction_infos(&args.transactions_csv)
     } else {
         vec![]
     };
@@ -177,4 +184,84 @@ pub(crate) fn process_distribute<T: Client>(
     }
 
     Ok(())
+}
+
+use solana_sdk::{pubkey::Pubkey, signature::Keypair};
+use tempfile::{tempdir, NamedTempFile};
+pub fn test_process_distribute_with_client<C: Client>(
+    thin_client: &ThinClient<C>,
+    sender_keypair: Keypair,
+) {
+    let fee_payer = Keypair::new();
+    thin_client
+        .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
+        .unwrap();
+
+    let alice_pubkey = Pubkey::new_rand();
+    let bid = Bid {
+        primary_address: alice_pubkey.to_string(),
+        bid_amount_dollars: 1000.0,
+    };
+    let allocations_file = NamedTempFile::new().unwrap();
+    let allocations_csv = allocations_file.path().to_str().unwrap().to_string();
+    let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
+    wtr.serialize(&bid).unwrap();
+    wtr.flush().unwrap();
+
+    let dir = tempdir().unwrap();
+    let transactions_csv = dir
+        .path()
+        .join("transactions.csv")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let args: DistributeArgs<Box<dyn Signer>> = DistributeArgs {
+        sender_keypair: Some(Box::new(sender_keypair)),
+        fee_payer: Some(Box::new(fee_payer)),
+        dry_run: false,
+        allocations_csv,
+        transactions_csv: transactions_csv.clone(),
+        dollars_per_sol: 0.22,
+    };
+    process_distribute(&thin_client, &args).unwrap();
+    let transaction_infos = read_transaction_infos(&transactions_csv);
+    assert_eq!(transaction_infos.len(), 1);
+    assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
+    let expected_amount = bid.bid_amount_dollars / args.dollars_per_sol;
+    assert_eq!(transaction_infos[0].amount, expected_amount);
+
+    assert_eq!(
+        thin_client.get_balance(&alice_pubkey).unwrap(),
+        sol_to_lamports(expected_amount),
+    );
+
+    // Now, run it again, and check there's no double-spend.
+    process_distribute(&thin_client, &args).unwrap();
+    let transaction_infos = read_transaction_infos(&transactions_csv);
+    assert_eq!(transaction_infos.len(), 1);
+    assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
+    let expected_amount = bid.bid_amount_dollars / args.dollars_per_sol;
+    assert_eq!(transaction_infos[0].amount, expected_amount);
+
+    assert_eq!(
+        thin_client.get_balance(&alice_pubkey).unwrap(),
+        sol_to_lamports(expected_amount),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_runtime::{bank::Bank, bank_client::BankClient};
+    use solana_sdk::genesis_config::create_genesis_config;
+
+    #[test]
+    fn test_process_distribute() {
+        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
+        let bank = Bank::new(&genesis_config);
+        let bank_client = BankClient::new(bank);
+        let thin_client = ThinClient(bank_client);
+        test_process_distribute_with_client(&thin_client, sender_keypair);
+    }
 }

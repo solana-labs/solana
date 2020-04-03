@@ -1,14 +1,11 @@
-mod arg_parser;
-mod args;
-mod thin_client;
-mod tokens;
-
-use crate::arg_parser::parse_args;
-use crate::args::{resolve_command, Command};
-use crate::thin_client::ThinClient;
-use crate::tokens::process_distribute;
 use solana_cli_config::Config;
 use solana_client::rpc_client::RpcClient;
+use solana_tokens::{
+    arg_parser::parse_args,
+    args::{resolve_command, Command},
+    thin_client::ThinClient,
+    tokens::process_distribute,
+};
 use std::env;
 use std::error::Error;
 

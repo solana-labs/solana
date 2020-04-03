@@ -4,7 +4,7 @@ use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
 use solana_sdk::signature::Signer;
 use std::error::Error;
 
-pub(crate) struct DistributeArgs<K> {
+pub struct DistributeArgs<K> {
     pub allocations_csv: String,
     pub transactions_csv: String,
     pub dollars_per_sol: f64,
@@ -13,17 +13,17 @@ pub(crate) struct DistributeArgs<K> {
     pub fee_payer: Option<K>,
 }
 
-pub(crate) enum Command<K> {
+pub enum Command<K> {
     Distribute(DistributeArgs<K>),
 }
 
-pub(crate) struct Args<K> {
+pub struct Args<K> {
     pub config_file: String,
     pub url: Option<String>,
     pub command: Command<K>,
 }
 
-pub(crate) fn resolve_command(
+pub fn resolve_command(
     command: &Command<String>,
 ) -> Result<Command<Box<dyn Signer>>, Box<dyn Error>> {
     match command {
