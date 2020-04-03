@@ -1,10 +1,11 @@
+#![cfg(target_os = "linux")]
+
 use solana_streamer::packet::Packet;
 use solana_streamer::packet::PACKET_DATA_SIZE;
 use solana_streamer::recvmmsg::*;
 use std::net::UdpSocket;
 use std::time::Instant;
 
-#[cfg(target_os = "linux")]
 #[test]
 pub fn test_recv_mmsg_batch_size() {
     let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
