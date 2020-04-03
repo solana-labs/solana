@@ -883,6 +883,7 @@ impl AccountsDB {
 
     pub fn compact_stale_slot(&self, next_compact_slot: Slot) {
         // tighten locked code
+
         let mut stored_accounts = vec![];
         {
             let storage = self.storage.read().unwrap();
@@ -944,6 +945,7 @@ impl AccountsDB {
         if aligned > 0 && (alive_accounts.len() as f64 / stored_accounts.len() as f64) < 0.80 {
             info!("shrinking!");
             let store = self.create_and_insert_store(next_compact_slot, aligned);
+            // use collect or with_capacity
             let mut accounts = vec![];
             let mut hashes = vec![];
             let mut write_versions = vec![];
@@ -956,11 +958,11 @@ impl AccountsDB {
                 next_compact_slot,
                 &accounts,
                 &hashes,
-                store,
+                |_| store.clone(),
                 write_versions.into_iter(),
             );
             let reclaims = self.update_index(next_compact_slot, infos, &accounts);
-            trace!("reclaim: {}", reclaims.len());
+            trace!("reclaim22222: {}", reclaims.len());
 
             self.handle_reclaims(&reclaims);
 
@@ -1275,21 +1277,21 @@ impl AccountsDB {
         let mut write_version = self
             .write_version
             .fetch_add(accounts.len() as u64, Ordering::Relaxed);
-        let storage = self.find_storage_candidate(slot);
+        let f = |slot| self.find_storage_candidate(slot);
         let versions = std::iter::from_fn(move || {
             let ret = write_version;
             write_version += 1;
             Some(ret)
         });
-        self.store_accounts_to(slot, accounts, hashes, storage, versions)
+        self.store_accounts_to(slot, accounts, hashes, f, versions)
     }
 
-    fn store_accounts_to<I: Iterator<Item = u64>>(
+    fn store_accounts_to<F: FnMut(Slot) -> Arc<AccountStorageEntry>, I: Iterator<Item = u64>>(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
-        storage: Arc<AccountStorageEntry>,
+        mut storage_finder: F,
         mut write_versions: I,
     ) -> Vec<AccountInfo> {
         let default_account = Account::default();
@@ -1313,6 +1315,7 @@ impl AccountsDB {
             .collect();
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(with_meta.len());
         while infos.len() < with_meta.len() {
+            let storage = storage_finder(slot);
             let rvs = storage
                 .accounts
                 .append_accounts(&with_meta[infos.len()..], &hashes[infos.len()..]);

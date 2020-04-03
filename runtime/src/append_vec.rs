@@ -160,7 +160,9 @@ impl AppendVec {
         data.seek(SeekFrom::Start(0)).unwrap();
         data.flush().unwrap();
         //UNSAFE: Required to create a Mmap
-        let map = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
+        let map = unsafe { MmapMut::map_mut(&data) };
+        let map =
+            map.unwrap_or_else(|e| panic!("failed to map the data file (size: {}): {}", size, e));
 
         AppendVec {
             path: file.to_path_buf(),
