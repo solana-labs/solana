@@ -123,3 +123,4 @@
   * [Block Confirmation](proposals/block-confirmation.md)
   * [ABI Management](proposals/abi-management.md)
   * [Rust Clients](proposals/rust-clients.md)
+  * [Optimistic Confirmation](proposals/optimistic_confirmation.md)
