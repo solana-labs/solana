@@ -3,7 +3,7 @@
 ## Primitives
 
 `vote(X, S)` - Votes will be augmented with a "reference" slot, `X` 
-which is the **last** ancestor at which this validator voted on this fork
+which is the **latest** ancestor of this fork that this validator voted on
 with a proof of switching. Thus as long as a validator keeps voting on the 
 same fork, `X` will remain unchanged.All votes will then be of the form
 `vote(X, S)`, where `S` is the sorted list of slots `(s, s.lockout)`
@@ -18,7 +18,7 @@ for these is described below:
 should not have voted on a different fork that "overlaps" this fork. 
 More concretely, this validator should not have cast another vote
 `vote(X', S')` where the range `[X, S.last]` overlaps the range
-`[X', S'.last]`, as shown below:
+`[X', S'.last]`, `X != X'`, as shown below:
 
 
                                   +-------+
@@ -52,7 +52,7 @@ More concretely, this validator should not have cast another vote
                         |
                     +---+---+
                     |       |
-                X'' |       |
+                 s  |       |
                     |       |
                     +---+---+
                         |
@@ -67,13 +67,13 @@ More concretely, this validator should not have cast another vote
                     
 (Example of slashable votes vote(X', S') and vote(X, S))
 
-In the diagram above, note that the vote for `S.last` must have come after the
-vote for `S'.last` (due to lockouts, the higher vote must have after). Thus, the
-sequence  of votes must have been: `X ... S'.last ... S.last`. This means after
-the vote on `S'.last`, the validator must have switched back to the other
-fork at some slot `X'' > S'.last > X`. Thus, the vote for `S.last` should have
-used `X''` as the "reference" point, not `X`, because that was the last "switch"
-on the fork.
+In the diagram above, note that the vote for `S.last` must have been sent after
+the vote for `S'.last` (due to lockouts, the higher vote must have been sent
+later). Thus, the sequence  of votes must have been: `X ... S'.last ... S.last`.
+This means after the vote on `S'.last`, the validator must have switched back
+to the other fork at some slot `s > S'.last > X`. Thus, the vote for `S.last`
+should have used `s` as the "reference" point, not `X`, because that was the
+last "switch" on the fork.
 
 To enforce this, we define the "Optimistic Slashing" slashing conditions. Given
 any two distinct votes `vote(X, S)`and `vote(X', S')` by the same validator,
@@ -114,7 +114,7 @@ in `S` where:
     * a.`s` is not a common ancestor of both `validator_vote.last` and
     `old_vote.last` and `new_vote.last`.
     * b. `s` is not a descendant of `validator_vote.last`.
-    * c. `s + s.lockout() >= old_vote.last` (implies valdator is still locked
+    * c. `s + s.lockout() >= old_vote.last` (implies validator is still locked
     out on slot `s` at slot `old_vote.last`).
 
 Switching forks without a valid switching proof is slashable.
@@ -321,7 +321,7 @@ to vote on the higher slot `X` that does not descend from `B'`.
 We now aim to show at least one of the validators in the `Delinquent` set
 violated a slashing rule.
 
-By definition, in order to root `B'`, each valdator `V` in `Delinquent`
+By definition, in order to root `B'`, each validator `V` in `Delinquent`
 must have each made some "switching vote" of the form `Vote(X_v, S_v)` where:
 
 * `S_v.last > B'`
@@ -345,11 +345,11 @@ properties derived from above, `X' > B`
 Now let `Vote(X, S)` be the vote in `Delinquent Optimistic Votes` made by
 validator `V`. 
 
-Given `Vote(X, S)` and the the "Optimistic Slashing" rules, because
+Given `Vote(X, S)` and the "Optimistic Slashing" rules, because
 `X' > B > X`, then `X' > S.last`.
 
 In order to perform such a "switching vote" to `X'`, a switching proof
-`SP(Vote(X, S), Vote(X', S')` must show `> 1/3` of stake being locked
+`SP(Vote(X, S), Vote(X', S'))` must show `> 1/3` of stake being locked
 out at this validator's latest vote, `S.last`. Combine this `>1/3` with the
 fact that the set of validators in `Delinquent` consists of `> 2/3` of the
 stake, implies at least one validator `W` in `Delinquent` must have submitted
