@@ -1,7 +1,7 @@
 use crate::cli::{
     build_balance_message, check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, CliSignerInfo,
-    ProcessResult, SignerIndex,
+    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+    SignerIndex,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
@@ -80,14 +80,22 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized voter. "),
+                        "Vote account in which to set the authorized voter."),
+                )
+                .arg(
+                    Arg::with_name("authorized")
+                        .index(2)
+                        .value_name("AUTHORIZED_KEYPAIR")
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Current authorized vote signer."),
                 )
                 .arg(
                     pubkey!(Arg::with_name("new_authorized_pubkey")
-                        .index(2)
-                        .value_name("AUTHORIZED_PUBKEY")
+                        .index(3)
+                        .value_name("NEW_AUTHORIZED_PUBKEY")
                         .required(true),
-                        "New authorized vote signer. "),
+                        "New authorized vote signer."),
                 ),
         )
         .subcommand(
@@ -98,14 +106,22 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Vote account in which to set the authorized withdrawer. "),
+                        "Vote account in which to set the authorized withdrawer."),
+                )
+                .arg(
+                    Arg::with_name("authorized")
+                        .index(2)
+                        .value_name("AUTHORIZED_KEYPAIR")
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Current authorized withdrawer."),
                 )
                 .arg(
                     pubkey!(Arg::with_name("new_authorized_pubkey")
-                        .index(2)
+                        .index(3)
                         .value_name("AUTHORIZED_PUBKEY")
                         .required(true),
-                        "New authorized withdrawer. "),
+                        "New authorized withdrawer."),
                 ),
         )
         .subcommand(
@@ -244,10 +260,11 @@ pub fn parse_vote_authorize(
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let new_authorized_pubkey =
         pubkey_of_signer(matches, "new_authorized_pubkey", wallet_manager)?.unwrap();
+    let (authorized, _) = signer_of(matches, "authorized", wallet_manager)?;
 
-    let authorized_voter_provided = None;
-    let CliSignerInfo { signers } = generate_unique_signers(
-        vec![authorized_voter_provided],
+    let payer_provided = None;
+    let signer_info = generate_unique_signers(
+        vec![payer_provided, authorized],
         matches,
         default_signer_path,
         wallet_manager,
@@ -259,7 +276,7 @@ pub fn parse_vote_authorize(
             new_authorized_pubkey,
             vote_authorize,
         },
-        signers,
+        signers: signer_info.signers,
     })
 }
 
@@ -435,16 +452,24 @@ pub fn process_vote_authorize(
     new_authorized_pubkey: &Pubkey,
     vote_authorize: VoteAuthorize,
 ) -> ProcessResult {
+    // If the `authorized_account` is also the fee payer, `config.signers` will only have one
+    // keypair in it
+    let authorized = if config.signers.len() == 2 {
+        config.signers[1]
+    } else {
+        config.signers[0]
+    };
+
     check_unique_pubkeys(
-        (vote_account_pubkey, "vote_account_pubkey".to_string()),
+        (&authorized.pubkey(), "authorized_account".to_string()),
         (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize(
-        vote_account_pubkey,         // vote account to update
-        &config.signers[0].pubkey(), // current authorized voter
-        new_authorized_pubkey,       // new vote signer/withdrawer
-        vote_authorize,              // vote or withdraw
+        vote_account_pubkey,   // vote account to update
+        &authorized.pubkey(),  // current authorized
+        new_authorized_pubkey, // new vote signer/withdrawer
+        vote_authorize,        // vote or withdraw
     )];
 
     let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
@@ -638,6 +663,7 @@ mod tests {
             "test",
             "vote-authorize-voter",
             &pubkey_string,
+            &default_keypair_file,
             &pubkey2_string,
         ]);
         assert_eq!(
@@ -649,6 +675,32 @@ mod tests {
                     vote_authorize: VoteAuthorize::Voter
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        let authorized_keypair = Keypair::new();
+        let (authorized_keypair_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&authorized_keypair, tmp_file.as_file_mut()).unwrap();
+
+        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-authorize-voter",
+            &pubkey_string,
+            &authorized_keypair_file,
+            &pubkey2_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_voter, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VoteAuthorize {
+                    vote_account_pubkey: pubkey,
+                    new_authorized_pubkey: pubkey2,
+                    vote_authorize: VoteAuthorize::Voter
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authorized_keypair_file).unwrap().into(),
+                ],
             }
         );
 
