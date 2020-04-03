@@ -1,22 +1,21 @@
 mod arg_parser;
 mod args;
+mod thin_client;
 
 use crate::arg_parser::parse_args;
 use crate::args::{resolve_command, Command, ScrubArgs, TransferArgs};
+use crate::thin_client::{NetworkClient, ThinClient};
 use console::style;
 use csv::{ReaderBuilder, Trim};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use solana_cli_config::Config;
-use solana_client::client_error::ClientError;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     message::Message,
     native_token::sol_to_lamports,
     signature::{Signature, Signer},
-    signers::Signers,
     system_instruction,
-    transaction::Transaction,
 };
 use std::env;
 use std::error::Error;
@@ -88,8 +87,8 @@ fn find_new_transfers(transfers: &[Transfer], state: &[Transfer]) -> Vec<Transfe
     needed
 }
 
-fn process_transfer(
-    client: &RpcClient,
+fn process_transfer<T: NetworkClient>(
+    client: &ThinClient<T>,
     args: &TransferArgs<Box<dyn Signer>>,
 ) -> Result<(), csv::Error> {
     let mut rdr = ReaderBuilder::new()
@@ -116,26 +115,26 @@ fn process_transfer(
         println!("{:<44}  {}", transfer.recipient, transfer.amount);
     }
 
-    let messages: Vec<Message> = needed
-        .iter()
-        .map(|transfer| {
-            let from = args.sender_keypair.as_ref().unwrap().pubkey();
-            let to = transfer.recipient.parse().unwrap();
-            let lamports = sol_to_lamports(transfer.amount);
-            let instruction = system_instruction::transfer(&from, &to, lamports);
-            Message::new(&[instruction])
-        })
-        .collect();
-
-    let signers = vec![
-        &**args.sender_keypair.as_ref().unwrap(),
-        &**args.fee_payer.as_ref().unwrap(),
-    ];
-
     if !args.dry_run && !needed.is_empty() {
+        let messages: Vec<Message> = needed
+            .iter()
+            .map(|transfer| {
+                let from = args.sender_keypair.as_ref().unwrap().pubkey();
+                let to = transfer.recipient.parse().unwrap();
+                let lamports = sol_to_lamports(transfer.amount);
+                let instruction = system_instruction::transfer(&from, &to, lamports);
+                Message::new(&[instruction])
+            })
+            .collect();
+
+        let signers = vec![
+            &**args.sender_keypair.as_ref().unwrap(),
+            &**args.fee_payer.as_ref().unwrap(),
+        ];
+
         let _signatures: Vec<_> = messages
             .into_iter()
-            .map(|message| send_message(&client, message, &signers).unwrap())
+            .map(|message| client.send_message(message, &signers).unwrap())
             .collect();
 
         // TODO: Add signatures to 'needed' and append it to state_csv.
@@ -151,21 +150,12 @@ fn process_transfer(
     Ok(())
 }
 
-fn send_message<S: Signers>(
-    client: &RpcClient,
-    message: Message,
-    signers: &S,
-) -> Result<Signature, ClientError> {
-    let mut transaction = Transaction::new_unsigned(message);
-    client.resign_transaction(&mut transaction, signers)?;
-    client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     let command_args = parse_args(env::args_os());
     let config = Config::load(&command_args.config_file)?;
     let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
-    let client = RpcClient::new(json_rpc_url);
+    let rpc_client = RpcClient::new(json_rpc_url);
+    let client = ThinClient(rpc_client);
 
     match resolve_command(&command_args.command)? {
         Command::Scrub(args) => {

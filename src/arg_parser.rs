@@ -69,7 +69,6 @@ where
                 .arg(
                     Arg::with_name("sender_keypair")
                         .long("from")
-                        .required(true)
                         .takes_value(true)
                         .value_name("SENDING_KEYPAIR")
                         .validator(is_valid_signer)
@@ -78,7 +77,6 @@ where
                 .arg(
                     Arg::with_name("fee_payer")
                         .long("fee-payer")
-                        .required(true)
                         .takes_value(true)
                         .value_name("KEYPAIR")
                         .validator(is_valid_signer)
