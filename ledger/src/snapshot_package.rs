@@ -8,13 +8,14 @@ use std::{
 };
 use tempfile::TempDir;
 
-pub type SnapshotPackageSender = Sender<SnapshotPackage>;
-pub type SnapshotPackageReceiver = Receiver<SnapshotPackage>;
-pub type SnapshotPackageSendError = SendError<SnapshotPackage>;
+pub type AccountsPackageSender = Sender<AccountsPackage>;
+pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
+pub type AccountsPackageSendError = SendError<AccountsPackage>;
 
 #[derive(Debug)]
-pub struct SnapshotPackage {
+pub struct AccountsPackage {
     pub root: Slot,
+    pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub storages: SnapshotStorages,
@@ -23,9 +24,10 @@ pub struct SnapshotPackage {
     pub compression: CompressionType,
 }
 
-impl SnapshotPackage {
+impl AccountsPackage {
     pub fn new(
         root: Slot,
+        block_height: u64,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
         storages: SnapshotStorages,
@@ -35,6 +37,7 @@ impl SnapshotPackage {
     ) -> Self {
         Self {
             root,
+            block_height,
             slot_deltas,
             snapshot_links,
             storages,

@@ -1,5 +1,5 @@
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_ledger::{snapshot_package::SnapshotPackageReceiver, snapshot_utils};
+use solana_ledger::{snapshot_package::AccountsPackageReceiver, snapshot_utils};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
@@ -17,7 +17,7 @@ pub struct SnapshotPackagerService {
 
 impl SnapshotPackagerService {
     pub fn new(
-        snapshot_package_receiver: SnapshotPackageReceiver,
+        snapshot_package_receiver: AccountsPackageReceiver,
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -86,7 +86,7 @@ mod tests {
     use bincode::serialize_into;
     use solana_ledger::bank_forks::CompressionType;
     use solana_ledger::{
-        snapshot_package::SnapshotPackage,
+        snapshot_package::AccountsPackage,
         snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_runtime::{
@@ -172,7 +172,8 @@ mod tests {
             &(42, Hash::default()),
             &CompressionType::Bzip2,
         );
-        let snapshot_package = SnapshotPackage::new(
+        let snapshot_package = AccountsPackage::new(
+            5,
             5,
             vec![],
             link_snapshots_dir,
