@@ -161,9 +161,17 @@ pub fn process_distribute<T: Client>(
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
         .from_path(&args.allocations_csv)?;
-    let allocations: Vec<Allocation> = rdr
-        .deserialize()
-        .map(|bid| create_allocation(&bid.unwrap(), args.dollars_per_sol))
+    let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
+    let starting_total_dollars: f64 = bids.iter().map(|x| x.bid_amount_dollars).sum();
+    println!(
+        "{} ${}",
+        style(format!("{}", "Total in allocations_csv:")).bold(),
+        starting_total_dollars
+    );
+
+    let allocations: Vec<Allocation> = bids
+        .into_iter()
+        .map(|bid| create_allocation(&bid, args.dollars_per_sol))
         .collect();
 
     let transaction_infos: Vec<TransactionInfo> = if Path::new(&args.transactions_csv).exists() {
