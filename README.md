@@ -6,7 +6,7 @@ some process for transferring tokens to them, and ensuring that no more than the
 expected amount of tokens are sent. The command-line tool here automates that
 process.
 
-## Scrup input
+## Scrub input
 
 Clean, group, filter as needed.
 
@@ -35,7 +35,7 @@ solana-batch transfer --dryrun <INPUT_CSV> <STATE_CSV>
 Example output:
 
 ```text
-Recipient Address     Amount
+Recipient             Amount
 blahblahblah          70
 yayayayayada          42
 nadanadanada          43
@@ -49,7 +49,7 @@ solana-batch transfer --from <SENDER_KEYPAIR> <INPUT_CSV> <STATE_CSV> --fee-paye
 Example output:
 
 ```text
-Recipient Address     Amount    Signature
+Recipient             Amount    Signature
 blahblahblah          70        blah
 yayayayayada          42        yada
 nadanadanada          43        nada
