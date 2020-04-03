@@ -8,7 +8,7 @@ use solana_ledger::sigverify_shreds::{
 };
 use solana_perf::packet::{Packet, Packets};
 use solana_perf::recycler_cache::RecyclerCache;
-use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::signature::Keypair;
 use std::sync::Arc;
 use test::Bencher;
 
