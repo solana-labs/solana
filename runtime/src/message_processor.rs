@@ -233,7 +233,7 @@ impl MessageProcessor {
                 &instruction.data,
             )
         } else {
-            Err(InstructionError::IncorrectProgramId) // TODO probably not the right error
+            Err(InstructionError::UnsupportedProgramId)
         }
     }
 
