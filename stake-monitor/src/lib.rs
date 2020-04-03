@@ -266,11 +266,18 @@ pub fn process_slots(
             Ok(blocks) => {
                 info!("Loaded {} blocks", blocks.len());
 
-                for (slot, block) in blocks.into_iter() {
-                    process_confirmed_block(slot, block, &mut stake_accounts_info.account_info);
-                    stake_accounts_info.slot = slot;
-                    datapoint_info!("stake-monitor-slot", ("slot", slot, i64));
+                if blocks.is_empty() && end_slot < latest_available_slot {
+                    stake_accounts_info.slot = end_slot;
+                } else {
+                    for (slot, block) in blocks.into_iter() {
+                        process_confirmed_block(slot, block, &mut stake_accounts_info.account_info);
+                        stake_accounts_info.slot = slot;
+                    }
                 }
+                datapoint_info!(
+                    "stake-monitor-slot",
+                    ("slot", stake_accounts_info.slot, i64)
+                );
             }
             Err(err) => {
                 datapoint_error!(
