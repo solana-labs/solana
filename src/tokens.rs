@@ -98,7 +98,13 @@ fn distribute_tokens<T: Client>(
 
     messages
         .into_iter()
-        .map(|message| client.send_message(message, &signers))
+        .map(|message| {
+            if args.dry_run {
+                Ok(Signature::default())
+            } else {
+                client.send_message(message, &signers)
+            }
+        })
         .collect()
 }
 

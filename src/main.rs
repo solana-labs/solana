@@ -15,12 +15,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match resolve_command(&command_args.command)? {
         Command::Distribute(args) => {
-            let client = if args.dry_run {
-                ()
-            } else {
-                let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
-                RpcClient::new(json_rpc_url);
-            };
+            let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
+            let client = RpcClient::new(json_rpc_url);
             let thin_client = ThinClient(client);
             process_distribute(&thin_client, &args)?;
         }
