@@ -1,14 +1,12 @@
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
 use solana_faucet::faucet::{request_airdrop_transaction, run_local_faucet};
-use solana_sdk::{
-    native_token::sol_to_lamports,
-    signature::{Keypair, Signer},
-};
+use solana_sdk::signature::{Keypair, Signer};
 use solana_tokens::{thin_client::ThinClient, tokens::test_process_distribute_with_client};
 use std::sync::mpsc::channel;
 
 #[test]
+#[ignore]
 fn test_process_distribute_with_rpc_client() {
     let validator = TestValidator::run();
     let (sender, receiver) = channel();

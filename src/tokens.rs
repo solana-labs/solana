@@ -78,8 +78,22 @@ fn distribute_tokens<T: Client>(
     allocations: &[Allocation],
     args: &DistributeArgs<Box<dyn Signer>>,
 ) -> Vec<Result<Signature, TransportError>> {
-    let fee_payer_pubkey = args.fee_payer.as_ref().unwrap().pubkey();
-    let messages: Vec<Message> = allocations
+    let fee_payer_pubkey = if args.dry_run {
+        Pubkey::default()
+    } else {
+        args.fee_payer.as_ref().unwrap().pubkey()
+    };
+
+    let signers = if args.dry_run {
+        vec![]
+    } else {
+        vec![
+            &**args.sender_keypair.as_ref().unwrap(),
+            &**args.fee_payer.as_ref().unwrap(),
+        ]
+    };
+
+    allocations
         .iter()
         .map(|allocation| {
             println!("{:<44}  {}", allocation.recipient, allocation.amount);
@@ -87,18 +101,8 @@ fn distribute_tokens<T: Client>(
             let to = allocation.recipient.parse().unwrap();
             let lamports = sol_to_lamports(allocation.amount);
             let instruction = system_instruction::transfer(&from, &to, lamports);
-            Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey))
-        })
-        .collect();
+            let message = Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey));
 
-    let signers = vec![
-        &**args.sender_keypair.as_ref().unwrap(),
-        &**args.fee_payer.as_ref().unwrap(),
-    ];
-
-    messages
-        .into_iter()
-        .map(|message| {
             if args.dry_run {
                 Ok(Signature::default())
             } else {
