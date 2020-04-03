@@ -2,7 +2,7 @@
 //! validation pipeline in software.
 
 use crate::{
-    accounts_cleanup_service::AccountsCleanupService,
+    accounts_background_service::AccountsBackgroundService,
     accounts_hash_verifier::AccountsHashVerifier,
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
@@ -49,7 +49,7 @@ pub struct Tvu {
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
     ledger_cleanup_service: Option<LedgerCleanupService>,
-    accounts_cleanup_service: AccountsCleanupService,
+    accounts_cleanup_service: AccountsBackgroundService,
     storage_stage: StorageStage,
     accounts_hash_verifier: AccountsHashVerifier,
 }
@@ -211,7 +211,7 @@ impl Tvu {
             )
         });
 
-        let accounts_cleanup_service = AccountsCleanupService::new(bank_forks.clone(), &exit);
+        let accounts_cleanup_service = AccountsBackgroundService::new(bank_forks.clone(), &exit);
 
         let storage_stage = StorageStage::new(
             storage_state,

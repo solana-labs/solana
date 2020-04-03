@@ -2201,12 +2201,12 @@ impl Bank {
         self.rc.accounts.accounts_db.clean_accounts();
     }
 
-    pub fn clean_dead_slots(&self) {
+    pub fn process_dead_slots(&self) {
         self.rc.accounts.accounts_db.process_dead_slots();
     }
 
-    pub fn shrink_some_stale_slots(&self) {
-        self.rc.accounts.accounts_db.shrink_some_stale_slots();
+    pub fn process_stale_slot(&self) {
+        self.rc.accounts.accounts_db.process_stale_slot();
     }
 
     pub fn shrink_all_stale_slots(&self) {

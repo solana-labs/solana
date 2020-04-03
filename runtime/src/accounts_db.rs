@@ -49,7 +49,7 @@ use std::{
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 use tempfile::TempDir;
 
@@ -451,7 +451,7 @@ pub struct AccountsDB {
 
     /// distribute the accounts across storage lists
     pub next_id: AtomicUsize,
-    pub next_compact_slot: AtomicU64,
+    pub shrink_candidate_slots: Mutex<Vec<Slot>>,
 
     write_version: AtomicU64,
 
@@ -501,7 +501,7 @@ impl Default for AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
             storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
-            next_compact_slot: AtomicU64::new(0),
+            shrink_candidate_slots: Mutex::new(Vec::new()),
             write_version: AtomicU64::new(0),
             paths: vec![],
             temp_paths: None,
@@ -881,16 +881,16 @@ impl AccountsDB {
         );
     }
 
-    pub fn compact_stale_slot(&self, next_compact_slot: Slot) {
-        // tighten locked code
+    fn shrink_stale_slot(&self, slot: Slot) {
+        trace!("shrink_stale_slot: slot: {}", slot);
 
         let mut stored_accounts = vec![];
         {
             let storage = self.storage.read().unwrap();
-            // older than recent_root stores must be root!
-            if let Some(stores) = storage.0.get(&next_compact_slot) {
-                // bail out early if the total alive account in count_and_status is big.
+            if let Some(stores) = storage.0.get(&slot) {
+                let mut alive_count = 0;
                 for store in stores.values() {
+                    alive_count += store.count();
                     let mut start = 0;
                     while let Some((account, next)) = store.accounts.get_account(start) {
                         stored_accounts.push((
@@ -904,11 +904,14 @@ impl AccountsDB {
                         start = next;
                     }
                 }
+                if (alive_count as f64 / stored_accounts.len() as f64) >= 0.80 {
+                    return;
+                }
             }
         }
-        info!("found {} stored accounts!", stored_accounts.len());
-        let no_ancestors = HashMap::new();
+
         let alive_accounts: Vec<_> = {
+            let no_ancestors = HashMap::new();
             let accounts_index = self.accounts_index.read().unwrap();
             stored_accounts
                 .iter()
@@ -931,78 +934,83 @@ impl AccountsDB {
                 )
                 .collect()
         };
-        let alive_account_storage_total: u64 = alive_accounts
+
+        let alive_total: u64 = alive_accounts
             .iter()
             .fold(0, |t, (_, _, _, a, _, _)| t + *a as u64);
-        let aligned: u64 = (alive_account_storage_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
-        info!(
-            "found {} alive alive_accounts! ({} bytes/{} aligned bytes)",
+        let aligned_total: u64 = (alive_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
+
+        debug!(
+            "shrinking: slot: {}, stored_accounts: {} => alive_accounts: {} ({} bytes; aligned to: {})",
+            slot,
+            stored_accounts.len(),
             alive_accounts.len(),
-            alive_account_storage_total,
-            aligned
+            alive_total,
+            aligned_total
         );
 
-        if aligned > 0 && (alive_accounts.len() as f64 / stored_accounts.len() as f64) < 0.80 {
-            info!("shrinking!");
-            let store = self.create_and_insert_store(next_compact_slot, aligned);
-            // use collect or with_capacity
-            let mut accounts = vec![];
-            let mut hashes = vec![];
-            let mut write_versions = vec![];
+        if aligned_total > 0 {
+            let mut accounts = Vec::with_capacity(alive_accounts.len());
+            let mut hashes = Vec::with_capacity(alive_accounts.len());
+            let mut write_versions = Vec::with_capacity(alive_accounts.len());
+
             for (pubkey, account, hash, _size, _location, write_version) in alive_accounts {
                 accounts.push((pubkey, account));
                 hashes.push(*hash);
                 write_versions.push(*write_version);
             }
+
+            let shrank_store = self.create_and_insert_store(slot, aligned_total);
             let infos = self.store_accounts_to(
-                next_compact_slot,
+                slot,
                 &accounts,
                 &hashes,
-                |_| store.clone(),
+                |_| shrank_store.clone(),
                 write_versions.into_iter(),
             );
-            let reclaims = self.update_index(next_compact_slot, infos, &accounts);
-            trace!("reclaim22222: {}", reclaims.len());
+            let reclaims = self.update_index(slot, infos, &accounts);
 
             self.handle_reclaims(&reclaims);
 
             let mut storage = self.storage.write().unwrap();
-            if let Some(slot_storage) = storage.0.get_mut(&next_compact_slot) {
-                slot_storage.retain(|_key, store| store.count() != 0);
+            if let Some(slot_storage) = storage.0.get_mut(&slot) {
+                slot_storage.retain(|_key, store| store.count() > 0);
             }
         }
     }
 
-    pub fn shrink_some_stale_slots(&self) {
-        // move this into its own method and directly called from the background service
-        info!("compact!");
-        let recent_root = {
-            let accounts_index = self.accounts_index.read().unwrap();
-            accounts_index.uncleaned_roots.iter().next().cloned()
-        };
-        if let Some(recent_root) = recent_root {
-            let next_compact_slot = self.next_compact_slot.load(Ordering::Relaxed);
-            if next_compact_slot < recent_root {
-                info!("next: {}, recent: {}", next_compact_slot, recent_root);
-                self.compact_stale_slot(next_compact_slot);
-
-                // loop to the first scan from first
-                // introduce one more level of loop and abort on the certain index look-up count?
-                self.next_compact_slot.fetch_add(1, Ordering::Relaxed);
-            } else {
-                self.next_compact_slot.store(0, Ordering::Relaxed);
-            }
+    pub fn process_stale_slot(&self) {
+        if let Some(shrink_slot) = self.next_shrink_slot() {
+            self.shrink_stale_slot(shrink_slot);
         }
+    }
+
+    fn next_shrink_slot(&self) -> Option<Slot> {
+        let mut candidates = self.shrink_candidate_slots.lock().unwrap();
+        let next = candidates.pop();
+        if next.is_some() {
+            next
+        } else {
+            let mut new_all_slots = self.all_root_slots_in_index();
+            let next = new_all_slots.pop();
+            std::mem::replace(&mut *candidates, new_all_slots);
+            next
+        }
+    }
+
+    fn all_root_slots_in_index(&self) -> Vec<Slot> {
+        let index = self.accounts_index.read().unwrap();
+        index.roots.iter().cloned().collect()
+    }
+
+    fn all_slots_in_storage(&self) -> Vec<Slot> {
+        let storage = self.storage.read().unwrap();
+        storage.0.keys().cloned().collect()
     }
 
     pub fn shrink_all_stale_slots(&self) {
-        let all_slots: Vec<_> = {
-            let storage = self.storage.read().unwrap();
-            storage.0.keys().cloned().collect()
-        };
-        for slot in all_slots {
-            info!("next: {}", slot);
-            self.compact_stale_slot(slot);
+        for slot in self.all_slots_in_storage() {
+            self.shrink_stale_slot(slot);
         }
     }
 
@@ -1267,32 +1275,41 @@ impl AccountsDB {
         hasher.result()
     }
 
+    fn bulk_assign_write_version(&self, count: usize) -> u64 {
+        self.write_version
+            .fetch_add(count as u64, Ordering::Relaxed)
+    }
+
     fn store_accounts(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
     ) -> Vec<AccountInfo> {
-        // bulk allocate write_versions!
-        let mut write_version = self
-            .write_version
-            .fetch_add(accounts.len() as u64, Ordering::Relaxed);
-        let f = |slot| self.find_storage_candidate(slot);
-        let versions = std::iter::from_fn(move || {
-            let ret = write_version;
-            write_version += 1;
+        let mut current_version = self.bulk_assign_write_version(accounts.len());
+        let write_version_producer = std::iter::from_fn(move || {
+            let ret = current_version;
+            current_version += 1;
             Some(ret)
         });
-        self.store_accounts_to(slot, accounts, hashes, f, versions)
+
+        let storage_finder = |slot| self.find_storage_candidate(slot);
+        self.store_accounts_to(
+            slot,
+            accounts,
+            hashes,
+            storage_finder,
+            write_version_producer,
+        )
     }
 
-    fn store_accounts_to<F: FnMut(Slot) -> Arc<AccountStorageEntry>, I: Iterator<Item = u64>>(
+    fn store_accounts_to<F: FnMut(Slot) -> Arc<AccountStorageEntry>, P: Iterator<Item = u64>>(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
         mut storage_finder: F,
-        mut write_versions: I,
+        mut write_version_producer: P,
     ) -> Vec<AccountInfo> {
         let default_account = Account::default();
         let with_meta: Vec<(StoredMeta, &Account)> = accounts
@@ -1306,7 +1323,7 @@ impl AccountsDB {
                 let data_len = account.data.len() as u64;
 
                 let meta = StoredMeta {
-                    write_version: write_versions.next().unwrap(),
+                    write_version: write_version_producer.next().unwrap(),
                     pubkey: **pubkey,
                     data_len,
                 };
