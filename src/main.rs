@@ -4,7 +4,7 @@ mod thin_client;
 
 use crate::arg_parser::parse_args;
 use crate::args::{resolve_command, Command, DistributeArgs};
-use crate::thin_client::{NetworkClient, ThinClient};
+use crate::thin_client::{Client, ThinClient};
 use console::style;
 use csv::{ReaderBuilder, Trim};
 use serde::{Deserialize, Serialize};
@@ -64,7 +64,7 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
         amount: bid.bid_amount_dollars / dollars_per_sol,
     }
 }
-fn distribute_tokens<T: NetworkClient>(
+fn distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     allocations: &[Allocation],
     args: &DistributeArgs<Box<dyn Signer>>,
@@ -122,7 +122,7 @@ fn append_transaction_infos(
     Ok(())
 }
 
-fn process_distribute<T: NetworkClient>(
+fn process_distribute<T: Client>(
     client: &ThinClient<T>,
     args: &DistributeArgs<Box<dyn Signer>>,
 ) -> Result<(), csv::Error> {

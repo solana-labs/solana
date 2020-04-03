@@ -6,7 +6,7 @@ use solana_sdk::{
     transport::TransportError,
 };
 
-pub trait NetworkClient {
+pub trait Client {
     fn send_and_confirm_message<S: Signers>(
         &self,
         message: Message,
@@ -14,7 +14,7 @@ pub trait NetworkClient {
     ) -> Result<Signature, TransportError>;
 }
 
-impl NetworkClient for RpcClient {
+impl Client for RpcClient {
     fn send_and_confirm_message<S: Signers>(
         &self,
         message: Message,
@@ -30,7 +30,7 @@ impl NetworkClient for RpcClient {
     }
 }
 
-impl NetworkClient for BankClient {
+impl Client for BankClient {
     fn send_and_confirm_message<S: Signers>(
         &self,
         message: Message,
@@ -40,7 +40,7 @@ impl NetworkClient for BankClient {
     }
 }
 
-impl NetworkClient for () {
+impl Client for () {
     fn send_and_confirm_message<S: Signers>(
         &self,
         _message: Message,
@@ -50,9 +50,9 @@ impl NetworkClient for () {
     }
 }
 
-pub struct ThinClient<C: NetworkClient>(pub C);
+pub struct ThinClient<C: Client>(pub C);
 
-impl<C: NetworkClient> ThinClient<C> {
+impl<C: Client> ThinClient<C> {
     pub fn send_message<S: Signers>(
         &self,
         message: Message,
