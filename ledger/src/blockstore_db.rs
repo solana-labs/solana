@@ -311,27 +311,29 @@ impl<T: SlotColumn> Column for T {
 }
 
 impl Column for columns::TransactionStatus {
-    type Index = (Slot, Signature);
+    type Index = (u64, Signature, Slot);
 
-    fn key((slot, index): (Slot, Signature)) -> Vec<u8> {
-        let mut key = vec![0; 8 + 64];
-        BigEndian::write_u64(&mut key[..8], slot);
-        key[8..72].clone_from_slice(&index.as_ref()[0..64]);
+    fn key((index, signature, slot): (u64, Signature, Slot)) -> Vec<u8> {
+        let mut key = vec![0; 8 + 8 + 64];
+        BigEndian::write_u64(&mut key[0..8], index);
+        key[8..72].clone_from_slice(&signature.as_ref()[0..64]);
+        BigEndian::write_u64(&mut key[72..80], slot);
         key
     }
 
-    fn index(key: &[u8]) -> (Slot, Signature) {
-        let slot = BigEndian::read_u64(&key[..8]);
-        let index = Signature::new(&key[8..72]);
-        (slot, index)
+    fn index(key: &[u8]) -> (u64, Signature, Slot) {
+        let index = BigEndian::read_u64(&key[0..8]);
+        let signature = Signature::new(&key[8..72]);
+        let slot = BigEndian::read_u64(&key[72..80]);
+        (index, signature, slot)
     }
 
-    fn primary_index(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> u64 {
         index.0
     }
 
-    fn as_index(slot: Slot) -> Self::Index {
-        (slot, Signature::default())
+    fn as_index(index: u64) -> Self::Index {
+        (index, Signature::default(), 0)
     }
 }
 

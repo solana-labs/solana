@@ -146,7 +146,7 @@ fn output_slot(
                             println!("        Data: {:?}", instruction.data);
                         }
                     }
-                    match blockstore.read_transaction_status((slot, transaction.signatures[0])) {
+                    match blockstore.read_transaction_status((transaction.signatures[0], slot)) {
                         Ok(transaction_status) => {
                             if let Some(transaction_status) = transaction_status {
                                 println!(
