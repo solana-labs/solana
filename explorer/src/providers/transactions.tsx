@@ -1,7 +1,13 @@
 import React from "react";
-import { TransactionSignature, Connection, PublicKey } from "@solana/web3.js";
+import {
+  TransactionSignature,
+  Connection,
+  SystemProgram,
+  Account
+} from "@solana/web3.js";
 import { findGetParameter, findPathSegment } from "../utils";
 import { useCluster, ClusterStatus } from "../providers/cluster";
+import base58 from "bs58";
 
 export enum Status {
   Checking,
@@ -137,7 +143,8 @@ function urlSignatures(): Array<string> {
     .concat(findPathSegment("tx")?.split(",") || [])
     .concat(findPathSegment("txn")?.split(",") || [])
     .concat(findPathSegment("transaction")?.split(",") || [])
-    .concat(findPathSegment("transactions")?.split(",") || []);
+    .concat(findPathSegment("transactions")?.split(",") || [])
+    .filter(s => s.length > 0);
 }
 
 function initState(): State {
@@ -174,8 +181,8 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
     if (status !== ClusterStatus.Connected) return;
 
     // Create a test transaction
-    if (findGetParameter("dev")) {
-      createDevTransaction(dispatch, url);
+    if (findGetParameter("test") !== null) {
+      createTestTransaction(dispatch, url);
     }
 
     Object.keys(state.transactions).forEach(signature => {
@@ -192,18 +199,38 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   );
 }
 
-async function createDevTransaction(dispatch: Dispatch, url: string) {
+async function createTestTransaction(dispatch: Dispatch, url: string) {
+  const testKey = process.env.REACT_APP_TEST_KEY;
+  let testAccount = new Account();
+  if (testKey) {
+    testAccount = new Account(base58.decode(testKey));
+  }
+
   try {
     const connection = new Connection(url, "recent");
     const signature = await connection.requestAirdrop(
-      new PublicKey(1),
-      1,
+      testAccount.publicKey,
+      100000,
       "recent"
     );
     dispatch({ type: ActionType.InputSignature, signature });
     checkTransactionStatus(dispatch, signature, url);
   } catch (error) {
-    console.error("Failed to create dev transaction", error);
+    console.error("Failed to create test success transaction", error);
+  }
+
+  try {
+    const connection = new Connection(url, "recent");
+    const tx = SystemProgram.transfer({
+      fromPubkey: testAccount.publicKey,
+      toPubkey: testAccount.publicKey,
+      lamports: 1
+    });
+    const signature = await connection.sendTransaction(tx, testAccount);
+    dispatch({ type: ActionType.InputSignature, signature });
+    checkTransactionStatus(dispatch, signature, url);
+  } catch (error) {
+    console.error("Failed to create test failure transaction", error);
   }
 }
 
