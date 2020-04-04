@@ -37,7 +37,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, EncodedTransaction, Rewards, TransactionEncoding, TransactionStatusMeta,
+    ConfirmedBlock, EncodedTransaction, Rewards, TransactionEncoding, TransactionStatusMeta, RpcTransactionStatusMeta,
     TransactionWithStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
@@ -1500,7 +1500,8 @@ impl Blockstore {
                     meta: self
                         .transaction_status_cf
                         .get((slot, signature))
-                        .expect("Expect database get to succeed"),
+                        .expect("Expect database get to succeed")
+                        .map(RpcTransactionStatusMeta::from),
                 }
             })
             .collect()
@@ -4892,7 +4893,7 @@ pub mod tests {
                         fee: 42,
                         pre_balances,
                         post_balances,
-                    }),
+                    }.into()),
                 )
             })
             .collect();

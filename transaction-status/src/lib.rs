@@ -28,6 +28,28 @@ pub struct TransactionStatusMeta {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcTransactionStatusMeta {
+    pub err: Option<TransactionError>,
+    pub status: Result<()>,
+    pub fee: u64,
+    pub pre_balances: Vec<u64>,
+    pub post_balances: Vec<u64>,
+}
+
+impl From<TransactionStatusMeta> for RpcTransactionStatusMeta {
+    fn from(meta: TransactionStatusMeta) -> Self {
+        Self {
+            err: meta.status.clone().err(),
+            status: meta.status,
+            fee: meta.fee,
+            pre_balances: meta.pre_balances,
+            post_balances: meta.post_balances,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>,
@@ -75,7 +97,7 @@ pub struct RpcMessage {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionWithStatusMeta {
     pub transaction: EncodedTransaction,
-    pub meta: Option<TransactionStatusMeta>,
+    pub meta: Option<RpcTransactionStatusMeta>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
