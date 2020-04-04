@@ -1,6 +1,7 @@
 //! The `validator` module hosts all the validator microservices.
 
 use crate::{
+    accounts_hash_verifier::HashVerifierConfig,
     broadcast_stage::BroadcastStageType,
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
@@ -47,7 +48,6 @@ use solana_sdk::{
     timing::timestamp,
 };
 use std::{
-    collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     process,
@@ -76,12 +76,10 @@ pub struct ValidatorConfig {
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
-    pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
-    pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
-    pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
     pub accounts_hash_interval_slots: u64,
+    pub hash_verifier_config: HashVerifierConfig,
 }
 
 impl Default for ValidatorConfig {
@@ -103,12 +101,10 @@ impl Default for ValidatorConfig {
             fixed_leader_schedule: None,
             wait_for_supermajority: None,
             new_hard_forks: None,
-            trusted_validators: None,
-            halt_on_trusted_validators_accounts_hash_mismatch: false,
-            accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
             no_rocksdb_compaction: false,
             accounts_hash_interval_slots: std::u64::MAX,
+            hash_verifier_config: HashVerifierConfig::default(),
         }
     }
 }
@@ -267,7 +263,7 @@ impl Validator {
                     ledger_path,
                     storage_state.clone(),
                     validator_exit.clone(),
-                    config.trusted_validators.clone(),
+                    config.hash_verifier_config.trusted_validators.clone(),
                 ),
                 PubSubService::new(
                     &subscriptions,
@@ -444,11 +440,8 @@ impl Validator {
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 sigverify_disabled: config.dev_sigverify_disabled,
-                halt_on_trusted_validators_accounts_hash_mismatch: config
-                    .halt_on_trusted_validators_accounts_hash_mismatch,
                 shred_version: node.info.shred_version,
-                trusted_validators: config.trusted_validators.clone(),
-                accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
+                hash_verifier_config: config.hash_verifier_config.clone(),
             },
         );
 

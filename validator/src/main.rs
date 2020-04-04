@@ -14,6 +14,7 @@ use solana_core::ledger_cleanup_service::{
     DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
 };
 use solana_core::{
+    accounts_hash_verifier::HashVerifierConfig,
     cluster_info::{ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
@@ -187,7 +188,10 @@ fn get_rpc_node(
         let rpc_peers_trusted = rpc_peers
             .iter()
             .filter(|rpc_peer| {
-                is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+                is_trusted_validator(
+                    &rpc_peer.id,
+                    &validator_config.hash_verifier_config.trusted_validators,
+                )
             })
             .count();
 
@@ -211,14 +215,19 @@ fn get_rpc_node(
         let eligible_rpc_peers = if snapshot_not_required {
             rpc_peers
         } else {
-            let trusted_snapshot_hashes =
-                get_trusted_snapshot_hashes(&cluster_info, &validator_config.trusted_validators);
+            let trusted_snapshot_hashes = get_trusted_snapshot_hashes(
+                &cluster_info,
+                &validator_config.hash_verifier_config.trusted_validators,
+            );
 
             let mut eligible_rpc_peers = vec![];
 
             for rpc_peer in rpc_peers.iter() {
                 if no_untrusted_rpc
-                    && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+                    && !is_trusted_validator(
+                        &rpc_peer.id,
+                        &validator_config.hash_verifier_config.trusted_validators,
+                    )
                 {
                     continue;
                 }
@@ -734,6 +743,12 @@ pub fn main() {
                 .help("Abort the validator if a bank hash mismatch is detected within trusted validator set"),
         )
         .arg(
+            clap::Arg::with_name("halt_supermajority_accounts_hash_mismatch")
+                .long("halt-on-supermajority-accounts-hash-mismatch")
+                .takes_value(false)
+                .help("Abort the validator if a bank hash mismatch is detected with with a supermajority (2/3+) of the network by stake."),
+        )
+        .arg(
             clap::Arg::with_name("frozen_accounts")
                 .long("frozen-account")
                 .validator(is_pubkey)
@@ -819,9 +834,12 @@ pub fn main() {
             .map(|rpc_port| (rpc_port, rpc_port + 1)),
         voting_disabled: matches.is_present("no_voting"),
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
-        trusted_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         no_rocksdb_compaction,
+        hash_verifier_config: HashVerifierConfig {
+            trusted_validators,
+            ..HashVerifierConfig::default()
+        },
         ..ValidatorConfig::default()
     };
 
@@ -928,7 +946,15 @@ pub fn main() {
     }
 
     if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
-        validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
+        validator_config
+            .hash_verifier_config
+            .halt_on_trusted_validators_accounts_hash_mismatch = true;
+    }
+
+    if matches.is_present("halt_on_supermajority_accounts_hash_mismatch") {
+        validator_config
+            .hash_verifier_config
+            .halt_on_supermajority_hash_mismatch = true;
     }
 
     if matches.value_of("signer_addr").is_some() {
@@ -1175,7 +1201,9 @@ pub fn main() {
                 }
                 warn!("{}", result.unwrap_err());
 
-                if let Some(ref trusted_validators) = validator_config.trusted_validators {
+                if let Some(ref trusted_validators) =
+                    validator_config.hash_verifier_config.trusted_validators
+                {
                     if trusted_validators.contains(&rpc_contact_info.id) {
                         continue; // Never blacklist a trusted node
                     }
