@@ -136,7 +136,6 @@ pub fn create_genesis_config_with_leader_ex(
     // Bare minimum program set
     let native_instruction_processors = vec![
         solana_system_program(),
-        solana_bpf_loader_program!(),
         solana_vote_program!(),
         solana_stake_program!(),
     ];

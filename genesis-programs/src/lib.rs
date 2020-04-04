@@ -1,6 +1,7 @@
 use solana_sdk::{
     clock::Epoch, genesis_config::OperatingMode, inflation::Inflation,
-    move_loader::solana_move_loader_program, pubkey::Pubkey, system_program::solana_system_program,
+    move_loader::solana_move_loader_program, native_loader, pubkey::Pubkey,
+    system_program::solana_system_program,
 };
 
 #[macro_use]
@@ -49,7 +50,10 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
     }
 }
 
-pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(String, Pubkey)>> {
+pub fn get_programs(
+    operating_mode: OperatingMode,
+    epoch: Epoch,
+) -> Option<Vec<(native_loader::Info, Pubkey)>> {
     match operating_mode {
         OperatingMode::Development => {
             if epoch == 0 {
@@ -122,9 +126,9 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
             bank.set_inflation(inflation);
         }
         if let Some(new_programs) = get_programs(operating_mode, bank.epoch()) {
-            for (name, program_id) in new_programs.iter() {
-                info!("Registering {} at {}", name, program_id);
-                bank.register_native_instruction_processor(name, program_id);
+            for (info, program_id) in new_programs.iter() {
+                info!("Registering {:?} at {}", info, program_id);
+                bank.register_native_instruction_processor(info, program_id);
             }
         }
     })

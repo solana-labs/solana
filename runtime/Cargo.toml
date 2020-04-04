@@ -27,7 +27,6 @@ rand = "0.6.5"
 rayon = "1.3.0"
 serde = { version = "1.0.105", features = ["rc"] }
 serde_derive = "1.0.103"
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.2.0" }
 solana-logger = { path = "../logger", version = "1.2.0" }
 solana-measure = { path = "../measure", version = "1.2.0" }
 solana-metrics = { path = "../metrics", version = "1.2.0" }
