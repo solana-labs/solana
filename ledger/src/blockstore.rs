@@ -1604,6 +1604,7 @@ impl Blockstore {
         let i = *w_active_transaction_status_index;
         let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
         if slot > index_meta.max_slot {
+            assert!(!index_meta.frozen);
             index_meta.max_slot = slot;
             self.transaction_status_index_cf.put(i, &index_meta)?;
         }
