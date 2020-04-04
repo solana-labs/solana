@@ -30,6 +30,8 @@ impl Client for RpcClient {
         let mut transaction = Transaction::new_unsigned(message);
         self.resign_transaction(&mut transaction, signers)
             .map_err(|e| TransportError::Custom(e.to_string()))?;
+        let initial_signature = transaction.signatures[0];
+        println!("Sending transaction with signature {}", initial_signature);
         let signature = self
             .send_and_confirm_transaction_with_spinner(&mut transaction, signers)
             .map_err(|e| TransportError::Custom(e.to_string()))?;

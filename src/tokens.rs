@@ -6,13 +6,14 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     message::Message,
-    native_token::sol_to_lamports,
+    native_token::{lamports_to_sol, sol_to_lamports},
     signature::{Signature, Signer},
     system_instruction,
     transport::TransportError,
 };
 use std::fs;
 use std::path::Path;
+use std::process;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
@@ -112,7 +113,7 @@ fn distribute_tokens<T: Client>(
             } else {
                 let result = client.send_message(message, &signers);
                 if let Ok(signature) = result {
-                    println!("{:?}", signature);
+                    println!("Finalized transaction with signature {}", signature);
                 }
                 result
             }
@@ -231,6 +232,27 @@ pub fn process_distribute<T: Client>(
     if allocations.is_empty() {
         eprintln!("No work to do");
         return Ok(());
+    }
+
+    // Sanity check: the recipient should not have tokens yet. If they do, it
+    // is probably because:
+    //  1. The signature couldn't be found in a previous run, though the transaction was
+    //     successful. If so, manually add a row to the transaction log.
+    //  2. The recipient already has tokens. If so, update this code to include a `--force` flag.
+    //  3. The recipient correctly got tokens in a previous run, and then later registered the same
+    //     address for another bid. If so, update this code to check for that case.
+    for allocation in &allocations {
+        let address = allocation.recipient.parse().unwrap();
+        let balance = client.get_balance(&address).unwrap();
+        if balance != 0 {
+            eprintln!(
+                "Error: Non-zero balance {}, refusing to send {} to {}",
+                lamports_to_sol(balance),
+                allocation.amount,
+                allocation.recipient,
+            );
+            process::exit(1);
+        }
     }
 
     println!(
