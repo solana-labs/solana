@@ -4,8 +4,10 @@ use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_client::rpc_response::{Response as RpcResponse, RpcAccount, RpcKeyedAccount};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature, transaction};
+use solana_client::rpc_response::{
+    Response as RpcResponse, RpcAccount, RpcKeyedAccount, RpcSignatureResult,
+};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use std::sync::{atomic, Arc};
 
 // Suppress needless_return due to
@@ -74,7 +76,7 @@ pub trait RpcSolPubSub {
     fn signature_subscribe(
         &self,
         meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<transaction::Result<()>>>,
+        subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
         confirmations: Option<Confirmations>,
     );
@@ -225,7 +227,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn signature_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<transaction::Result<()>>>,
+        subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
         confirmations: Option<Confirmations>,
     ) {
@@ -385,7 +387,7 @@ mod tests {
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
-        let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
+        let expected_res = RpcSignatureResult { err: None };
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",

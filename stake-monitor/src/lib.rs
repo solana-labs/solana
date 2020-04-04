@@ -4,7 +4,7 @@ use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient}
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{clock::Slot, program_utils::limited_deserialize, transaction::Transaction};
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
-use solana_transaction_status::{ConfirmedBlock, TransactionEncoding, TransactionStatusMeta};
+use solana_transaction_status::{ConfirmedBlock, RpcTransactionStatusMeta, TransactionEncoding};
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 pub type PubkeyString = String;
@@ -41,7 +41,7 @@ pub struct StakeAccountsInfo {
 fn process_transaction(
     slot: Slot,
     transaction: &Transaction,
-    meta: &TransactionStatusMeta,
+    meta: &RpcTransactionStatusMeta,
     stake_accounts: &mut HashMap<PubkeyString, StakeAccountInfo>,
 ) {
     let mut last_instruction = true;
@@ -194,7 +194,7 @@ fn process_confirmed_block(
                 );
             }
             Some(meta) => {
-                if meta.status.is_ok() {
+                if meta.err.is_none() {
                     if let Some(transaction) = rpc_transaction.transaction.decode() {
                         if transaction.verify().is_ok() {
                             process_transaction(slot, &transaction, &meta, stake_accounts);

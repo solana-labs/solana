@@ -4,7 +4,7 @@ use solana_sdk::{
     clock::{Epoch, Slot},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     pubkey::Pubkey,
-    transaction::Result,
+    transaction::{Result, TransactionError},
 };
 use std::{collections::HashMap, net::SocketAddr, str::FromStr};
 
@@ -52,6 +52,12 @@ pub struct RpcFeeRateGovernor {
 pub struct RpcKeyedAccount {
     pub pubkey: String,
     pub account: RpcAccount,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSignatureResult {
+    pub err: Option<TransactionError>,
 }
 
 /// A duplicate representation of a Message for pretty JSON serialization
