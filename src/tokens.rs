@@ -293,7 +293,7 @@ pub fn process_balances<T: Client>(
         let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
         let actual = lamports_to_sol(client.get_balance(&address).unwrap());
         println!(
-            "{:<44}  {:>24}  {:>24}  {:>24.9}",
+            "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
             allocation.recipient,
             expected,
             actual,
