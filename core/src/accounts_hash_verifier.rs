@@ -5,9 +5,10 @@
 // set and halt the node if a mismatch is detected.
 
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
+use solana_ledger::staking_utils::vote_account_stakes;
 use solana_ledger::{
-    snapshot_package::AccountsPackage, snapshot_package::AccountsPackageReceiver,
-    snapshot_package::AccountsPackageSender,
+    bank_forks::BankForks, snapshot_package::AccountsPackage,
+    snapshot_package::AccountsPackageReceiver, snapshot_package::AccountsPackageSender,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -21,8 +22,24 @@ use std::{
     time::Duration,
 };
 
+#[derive(Debug, Default)]
+struct StakeInfo {
+    hash: Hash,
+    disagree_stake: u64,
+    total_stake: u64,
+}
+
 pub struct AccountsHashVerifier {
     t_accounts_hash_verifier: JoinHandle<()>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct HashVerifierConfig {
+    pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
+    pub trusted_validators: Option<HashSet<Pubkey>>,
+    pub accounts_hash_fault_injection_slots: u64,
+    pub snapshot_interval_slots: u64,
+    pub halt_on_supermajority_hash_mismatch: bool,
 }
 
 impl AccountsHashVerifier {
@@ -31,13 +48,12 @@ impl AccountsHashVerifier {
         accounts_package_sender: Option<AccountsPackageSender>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        trusted_validators: Option<HashSet<Pubkey>>,
-        halt_on_trusted_validators_accounts_hash_mismatch: bool,
-        fault_injection_rate_slots: u64,
-        snapshot_interval_slots: u64,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        config: HashVerifierConfig,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
+        let bank_forks = bank_forks.clone();
         let t_accounts_hash_verifier = Builder::new()
             .name("solana-accounts-hash".to_string())
             .spawn(move || {
@@ -52,13 +68,11 @@ impl AccountsHashVerifier {
                             Self::process_accounts_package(
                                 accounts_package,
                                 &cluster_info,
-                                &trusted_validators,
-                                halt_on_trusted_validators_accounts_hash_mismatch,
                                 &accounts_package_sender,
                                 &mut hashes,
                                 &exit,
-                                fault_injection_rate_slots,
-                                snapshot_interval_slots,
+                                &bank_forks,
+                                &config,
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -75,16 +89,14 @@ impl AccountsHashVerifier {
     fn process_accounts_package(
         accounts_package: AccountsPackage,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        trusted_validators: &Option<HashSet<Pubkey>>,
-        halt_on_trusted_validator_accounts_hash_mismatch: bool,
         accounts_package_sender: &Option<AccountsPackageSender>,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: u64,
-        snapshot_interval_slots: u64,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        config: &HashVerifierConfig,
     ) {
-        if fault_injection_rate_slots != 0
-            && accounts_package.root % fault_injection_rate_slots == 0
+        if config.accounts_hash_fault_injection_slots != 0
+            && accounts_package.root % config.accounts_hash_fault_injection_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
             use rand::{thread_rng, Rng};
@@ -101,17 +113,28 @@ impl AccountsHashVerifier {
             hashes.remove(0);
         }
 
-        if halt_on_trusted_validator_accounts_hash_mismatch {
+        if config.halt_on_trusted_validators_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
             for (slot, hash) in hashes.iter() {
                 slot_to_hash.insert(*slot, *hash);
             }
-            if Self::should_halt(&cluster_info, trusted_validators, &mut slot_to_hash) {
+            if Self::should_halt(&cluster_info, &config.trusted_validators, &mut slot_to_hash) {
                 exit.store(true, Ordering::Relaxed);
             }
         }
 
-        if accounts_package.block_height % snapshot_interval_slots == 0 {
+        if config.halt_on_supermajority_hash_mismatch {
+            let bank_forks_r = bank_forks.read().unwrap();
+            let root_bank = bank_forks_r.root_bank().clone();
+            drop(bank_forks_r);
+            let vote_account_stakes = vote_account_stakes(&root_bank);
+
+            if Self::should_halt_for_supermajority(cluster_info, vote_account_stakes, hashes) {
+                exit.store(true, Ordering::Relaxed);
+            }
+        }
+
+        if accounts_package.block_height % config.snapshot_interval_slots == 0 {
             if let Some(sender) = accounts_package_sender.as_ref() {
                 if sender.send(accounts_package).is_err() {}
             }
@@ -121,6 +144,48 @@ impl AccountsHashVerifier {
             .write()
             .unwrap()
             .push_accounts_hashes(hashes.clone());
+    }
+
+    fn should_halt_for_supermajority(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        vote_account_stakes: HashMap<Pubkey, u64>,
+        hashes: &[(Slot, Hash)],
+    ) -> bool {
+        let mut slot_to_hash = HashMap::new();
+        for (slot, hash) in hashes.iter() {
+            slot_to_hash.insert(
+                *slot,
+                StakeInfo {
+                    hash: *hash,
+                    disagree_stake: 0,
+                    total_stake: 0,
+                },
+            );
+        }
+
+        let cluster_info_r = cluster_info.read().unwrap();
+        for (id, stake) in &vote_account_stakes {
+            if let Some(hashes) = cluster_info_r.get_accounts_hash_for_node(id) {
+                for (slot, hash) in hashes {
+                    if let Some(entry) = slot_to_hash.get_mut(slot) {
+                        entry.total_stake += stake;
+                        if entry.hash != *hash {
+                            entry.disagree_stake += stake;
+                        }
+                    }
+                }
+            }
+        }
+        for (slot, entry) in &slot_to_hash {
+            if entry.disagree_stake as f64 / entry.total_stake as f64 > 0.66666 {
+                info!(
+                    "Supermajority of the stake disagrees with my hash value! slot: {} hash: {}",
+                    slot, entry.hash
+                );
+                return true;
+            }
+        }
+        false
     }
 
     fn should_halt(
@@ -177,10 +242,70 @@ mod tests {
     use crate::cluster_info::make_accounts_hashes_message;
     use crate::contact_info::ContactInfo;
     use solana_ledger::bank_forks::CompressionType;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_runtime::bank::Bank;
     use solana_sdk::{
         hash::hash,
         signature::{Keypair, Signer},
     };
+
+    fn insert_validator_hash(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        keys: &mut HashMap<Pubkey, u64>,
+        stake: u64,
+        hashes: Vec<(u64, Hash)>,
+    ) {
+        let validator = Keypair::new();
+        keys.insert(validator.pubkey(), stake);
+        let message = make_accounts_hashes_message(&validator, hashes).unwrap();
+        let mut cluster_info_w = cluster_info.write().unwrap();
+        cluster_info_w.push_message(message);
+    }
+
+    #[test]
+    fn test_should_halt_supermajority() {
+        solana_logger::setup();
+        let keypair = Keypair::new();
+
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+
+        let mut keys = HashMap::new();
+        let hashes = vec![];
+        assert!(!AccountsHashVerifier::should_halt_for_supermajority(
+            &cluster_info,
+            keys.clone(),
+            &hashes,
+        ));
+
+        let hash1 = hash(&[1]);
+        let hash2 = hash(&[2]);
+        for _ in 0..3 {
+            insert_validator_hash(&cluster_info, &mut keys, 10, vec![(1, hash1), (2, hash2)]);
+        }
+        let hashes = vec![(1, hash1)];
+        assert!(!AccountsHashVerifier::should_halt_for_supermajority(
+            &cluster_info,
+            keys.clone(),
+            &hashes,
+        ));
+
+        let hashes = vec![(1, hash2)];
+        assert!(AccountsHashVerifier::should_halt_for_supermajority(
+            &cluster_info,
+            keys.clone(),
+            &hashes,
+        ));
+
+        insert_validator_hash(&cluster_info, &mut keys, 100, vec![(1, hash2)]);
+
+        assert!(!AccountsHashVerifier::should_halt_for_supermajority(
+            &cluster_info,
+            keys.clone(),
+            &hashes,
+        ));
+    }
 
     #[test]
     fn test_should_halt() {
@@ -226,7 +351,10 @@ mod tests {
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
-        let trusted_validators = HashSet::new();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+
         let exit = Arc::new(AtomicBool::new(false));
         let mut hashes = vec![];
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
@@ -242,16 +370,21 @@ mod tests {
                 compression: CompressionType::Bzip2,
             };
 
+            let config = HashVerifierConfig {
+                halt_on_trusted_validators_accounts_hash_mismatch: false,
+                accounts_hash_fault_injection_slots: 0,
+                snapshot_interval_slots: 100,
+                halt_on_supermajority_hash_mismatch: false,
+                trusted_validators: None,
+            };
             AccountsHashVerifier::process_accounts_package(
                 accounts_package,
                 &cluster_info,
-                &Some(trusted_validators.clone()),
-                false,
                 &None,
                 &mut hashes,
                 &exit,
-                0,
-                100,
+                &bank_forks,
+                &config,
             );
         }
         let cluster_info_r = cluster_info.read().unwrap();

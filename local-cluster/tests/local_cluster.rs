@@ -725,6 +725,7 @@ fn test_consistency_halt() {
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
     leader_snapshot_test_config
         .validator_config
+        .hash_verifier_config
         .accounts_hash_fault_injection_slots = 40;
 
     let validator_stake = 10_000;
@@ -751,9 +752,11 @@ fn test_consistency_halt() {
 
     validator_snapshot_test_config
         .validator_config
+        .hash_verifier_config
         .trusted_validators = Some(trusted_validators);
     validator_snapshot_test_config
         .validator_config
+        .hash_verifier_config
         .halt_on_trusted_validators_accounts_hash_mismatch = true;
 
     warn!("adding a validator");
@@ -986,6 +989,7 @@ fn test_snapshots_blockstore_floor() {
     trusted_validators.insert(cluster_nodes[0].id);
     validator_snapshot_test_config
         .validator_config
+        .hash_verifier_config
         .trusted_validators = Some(trusted_validators);
 
     cluster.add_validator(

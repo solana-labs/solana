@@ -3,7 +3,7 @@
 
 use crate::{
     accounts_background_service::AccountsBackgroundService,
-    accounts_hash_verifier::AccountsHashVerifier,
+    accounts_hash_verifier::{AccountsHashVerifier, HashVerifierConfig},
     broadcast_stage::RetransmitSlotsSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VoteTracker,
@@ -32,7 +32,6 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::collections::HashSet;
 use std::{
     net::UdpSocket,
     sync::{
@@ -61,14 +60,12 @@ pub struct Sockets {
     pub forwards: Vec<UdpSocket>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
     pub sigverify_disabled: bool,
     pub shred_version: u16,
-    pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
-    pub trusted_validators: Option<HashSet<Pubkey>>,
-    pub accounts_hash_fault_injection_slots: u64,
+    pub hash_verifier_config: HashVerifierConfig,
 }
 
 impl Tvu {
@@ -101,7 +98,7 @@ impl Tvu {
         snapshot_package_sender: Option<AccountsPackageSender>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
-        tvu_config: TvuConfig,
+        mut tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -172,6 +169,7 @@ impl Tvu {
                 std::u64::MAX
             }
         };
+        tvu_config.hash_verifier_config.snapshot_interval_slots = snapshot_interval_slots;
         info!("snapshot_interval_slots: {}", snapshot_interval_slots);
         let (accounts_hash_sender, accounts_hash_receiver) = channel();
         let accounts_hash_verifier = AccountsHashVerifier::new(
@@ -179,10 +177,8 @@ impl Tvu {
             snapshot_package_sender,
             exit,
             cluster_info,
-            tvu_config.trusted_validators.clone(),
-            tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
-            tvu_config.accounts_hash_fault_injection_slots,
-            snapshot_interval_slots,
+            &bank_forks,
+            tvu_config.hash_verifier_config,
         );
 
         let replay_stage_config = ReplayStageConfig {
