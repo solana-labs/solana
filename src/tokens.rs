@@ -82,12 +82,6 @@ fn distribute_tokens<T: Client>(
     allocations: &[Allocation],
     args: &DistributeArgs<Box<dyn Signer>>,
 ) -> Vec<Result<Signature, TransportError>> {
-    let fee_payer_pubkey = if args.dry_run {
-        Pubkey::default()
-    } else {
-        args.fee_payer.as_ref().unwrap().pubkey()
-    };
-
     let signers = if args.dry_run {
         vec![]
     } else {
@@ -101,22 +95,22 @@ fn distribute_tokens<T: Client>(
     allocations
         .iter()
         .map(|allocation| {
-            println!("{:<44}  {}", allocation.recipient, allocation.amount);
+            println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
+            if args.dry_run {
+                return Ok(Signature::default());
+            }
+            let fee_payer_pubkey = args.fee_payer.as_ref().unwrap().pubkey();
             let from = args.sender_keypair.as_ref().unwrap().pubkey();
             let to = allocation.recipient.parse().unwrap();
             let lamports = sol_to_lamports(allocation.amount);
             let instruction = system_instruction::transfer(&from, &to, lamports);
             let message = Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey));
 
-            if args.dry_run {
-                Ok(Signature::default())
-            } else {
-                let result = client.send_message(message, &signers);
-                if let Ok(signature) = result {
-                    println!("Finalized transaction with signature {}", signature);
-                }
-                result
+            let result = client.send_message(message, &signers);
+            if let Ok(signature) = result {
+                println!("Finalized transaction with signature {}", signature);
             }
+            result
         })
         .collect()
 }
@@ -254,7 +248,11 @@ pub fn process_distribute<T: Client>(
 
     println!(
         "{}",
-        style(format!("{:<44}  {}", "Recipient", "Amount")).bold()
+        style(format!(
+            "{:<44}  {:>24}",
+            "Recipient", "Expected Balance (◎)"
+        ))
+        .bold()
     );
 
     let results = distribute_tokens(&client, &allocations, &args);
@@ -283,7 +281,7 @@ pub fn process_balances<T: Client>(
         "{}",
         style(format!(
             "{:<44}  {:>24}  {:>24}  {:>24}",
-            "Recipient", "Expected Balance", "Actual Balance", "Difference"
+            "Recipient", "Expected Balance (◎)", "Actual Balance (◎)", "Difference (◎)"
         ))
         .bold()
     );
