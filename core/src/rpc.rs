@@ -460,10 +460,12 @@ impl JsonRpcRequestProcessor {
                         .get_confirmation_count(slot)
                         .or(Some(0))
                 };
+                let err = status.clone().err();
                 TransactionStatus {
                     slot,
                     status,
                     confirmations,
+                    err,
                 }
             })
     }

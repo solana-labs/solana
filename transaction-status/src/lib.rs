@@ -5,7 +5,7 @@ use bincode;
 use solana_sdk::{
     clock::Slot,
     message::MessageHeader,
-    transaction::{Result, Transaction},
+    transaction::{Result, Transaction, TransactionError},
 };
 
 /// A duplicate representation of a Message for pretty JSON serialization
@@ -32,6 +32,7 @@ pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>,
     pub status: Result<()>,
+    pub err: Option<TransactionError>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
