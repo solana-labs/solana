@@ -50,7 +50,7 @@ use std::{
     rc::Rc,
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
-        Arc, Mutex, RwLock, RwLockWriteGuard,
+        Arc, Mutex, RwLock,
     },
     time::Duration,
 };
@@ -215,6 +215,20 @@ impl Blockstore {
             .unwrap_or(0);
         let last_root = Arc::new(RwLock::new(max_root));
 
+        // Get active transaction-status index or 0
+        let active_transaction_status_index = db
+            .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
+            .next()
+            .and_then(|(_, data)| {
+                let index0: TransactionStatusIndexMeta = deserialize(&data).unwrap();
+                if index0.frozen {
+                    Some(1)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
         let blockstore = Blockstore {
@@ -229,7 +243,7 @@ impl Blockstore {
             code_shred_cf,
             transaction_status_cf,
             transaction_status_index_cf,
-            active_transaction_status_index: RwLock::new(0),
+            active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
@@ -1530,6 +1544,9 @@ impl Blockstore {
         batch: &mut WriteBatch,
         to_slot: Slot,
     ) -> Result<Option<u64>> {
+        let mut w_active_transaction_status_index =
+            self.active_transaction_status_index.write().unwrap();
+
         let index0 = self.transaction_status_index_cf.get(0)?;
         if index0.is_none() {
             return Ok(None);
@@ -1537,8 +1554,6 @@ impl Blockstore {
         let mut index0 = index0.unwrap();
         let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap();
 
-        let mut w_active_transaction_status_index =
-            self.active_transaction_status_index.write().unwrap();
         if !index0.frozen && !index1.frozen {
             index0.frozen = true;
             *w_active_transaction_status_index = 1;
@@ -1576,7 +1591,7 @@ impl Blockstore {
     fn make_transaction_status_index(
         &self,
         index: (Signature, Slot),
-        w_active_transaction_status_index: RwLockWriteGuard<u64>,
+        w_active_transaction_status_index: &mut u64,
     ) -> Result<(u64, Signature, Slot)> {
         let (signature, slot) = index;
         if self.transaction_status_index_cf.get(0)?.is_none() {
@@ -1611,9 +1626,10 @@ impl Blockstore {
     ) -> Result<()> {
         // This write lock prevents interleaving issues with the transactions_status_index_cf by
         // gating writes to that column
-        let w_active_transaction_status_index =
+        let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
-        let index = self.make_transaction_status_index(index, w_active_transaction_status_index)?;
+        let index =
+            self.make_transaction_status_index(index, &mut w_active_transaction_status_index)?;
         self.transaction_status_cf.put(index, status)
     }
 
