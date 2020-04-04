@@ -5,7 +5,7 @@ use bincode;
 use solana_sdk::{
     clock::Slot,
     message::MessageHeader,
-    transaction::{Result, Transaction},
+    transaction::{Result, Transaction, TransactionError},
 };
 
 /// A duplicate representation of a Message for pretty JSON serialization
@@ -28,10 +28,33 @@ pub struct TransactionStatusMeta {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcTransactionStatusMeta {
+    pub err: Option<TransactionError>,
+    pub status: Result<()>, // This field is deprecated.  See https://github.com/solana-labs/solana/issues/9302
+    pub fee: u64,
+    pub pre_balances: Vec<u64>,
+    pub post_balances: Vec<u64>,
+}
+
+impl From<TransactionStatusMeta> for RpcTransactionStatusMeta {
+    fn from(meta: TransactionStatusMeta) -> Self {
+        Self {
+            err: meta.status.clone().err(),
+            status: meta.status,
+            fee: meta.fee,
+            pre_balances: meta.pre_balances,
+            post_balances: meta.post_balances,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>,
     pub status: Result<()>,
+    pub err: Option<TransactionError>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -74,7 +97,7 @@ pub struct RpcMessage {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionWithStatusMeta {
     pub transaction: EncodedTransaction,
-    pub meta: Option<TransactionStatusMeta>,
+    pub meta: Option<RpcTransactionStatusMeta>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

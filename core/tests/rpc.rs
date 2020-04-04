@@ -9,16 +9,12 @@ use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_client::{
     rpc_client::{get_rpc_request_str, RpcClient},
-    rpc_response::Response,
+    rpc_response::{Response, RpcSignatureResult},
 };
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
 use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::Signer,
-    system_transaction,
-    transaction::{self, Transaction},
+    commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey, signature::Signer,
+    system_transaction, transaction::Transaction,
 };
 use std::{
     collections::HashSet,
@@ -225,7 +221,7 @@ fn test_rpc_subscriptions() {
     // Track when subscriptions are ready
     let (ready_sender, ready_receiver) = channel::<()>();
     // Track when status notifications are received
-    let (status_sender, status_receiver) = channel::<(String, Response<transaction::Result<()>>)>();
+    let (status_sender, status_receiver) = channel::<(String, Response<RpcSignatureResult>)>();
 
     // Create the pub sub runtime
     let mut rt = Runtime::new().unwrap();
@@ -305,7 +301,7 @@ fn test_rpc_subscriptions() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match status_receiver.recv_timeout(timeout) {
             Ok((sig, result)) => {
-                assert!(result.value.is_ok());
+                assert!(result.value.err.is_none());
                 assert!(signature_set.remove(&sig));
             }
             Err(_err) => {
