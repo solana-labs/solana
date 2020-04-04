@@ -20,7 +20,7 @@ will halt replay progress on this node.
 
 ## Repair-related primitives
 Epoch Slots:
-   Each validator advertises separately on gossip thhe various parts of an
+   Each validator advertises separately on gossip the various parts of an
    `Epoch Slots`:
    * The `stash`: An epoch-long compressed set of all completed slots.
    * The `cache`: The Run-length Encoding (RLE) of the latest `N` completed
