@@ -30,7 +30,7 @@ pub struct TransactionStatusMeta {
 #[serde(rename_all = "camelCase")]
 pub struct RpcTransactionStatusMeta {
     pub err: Option<TransactionError>,
-    pub status: Result<()>,
+    pub status: Result<()>, // This field is deprecated.  See https://github.com/solana-labs/solana/issues/9302
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
