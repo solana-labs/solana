@@ -494,6 +494,7 @@ impl Metadata for Meta {}
 pub trait RpcSol {
     type Metadata;
 
+    // DEPRECATED
     #[rpc(meta, name = "confirmTransaction")]
     fn confirm_transaction(
         &self,
@@ -501,6 +502,24 @@ pub trait RpcSol {
         signature_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<bool>;
+
+    // DEPRECATED
+    #[rpc(meta, name = "getSignatureStatus")]
+    fn get_signature_status(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<transaction::Result<()>>>;
+
+    // DEPRECATED (used by Trust Wallet)
+    #[rpc(meta, name = "getSignatureConfirmation")]
+    fn get_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<RpcSignatureConfirmation>>;
 
     #[rpc(meta, name = "getAccountInfo")]
     fn get_account_info(
@@ -588,22 +607,6 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
-
-    #[rpc(meta, name = "getSignatureConfirmation")]
-    fn get_signature_confirmation(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<RpcSignatureConfirmation>>;
-
-    #[rpc(meta, name = "getSignatureStatus")]
-    fn get_signature_status(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<transaction::Result<()>>>;
 
     #[rpc(meta, name = "getSignatureStatuses")]
     fn get_signature_statuses(
