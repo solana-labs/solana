@@ -2530,10 +2530,20 @@ pub(crate) mod tests {
             {
                 if let EncodedTransaction::Json(transaction) = transaction {
                     if transaction.signatures[0] == signatures[0].to_string() {
-                        assert_eq!(meta.unwrap().status, Ok(()));
+                        let meta = meta.unwrap();
+                        assert_eq!(meta.err, None);
+                        assert_eq!(meta.status, Ok(()));
                     } else if transaction.signatures[0] == signatures[1].to_string() {
+                        let meta = meta.unwrap();
                         assert_eq!(
-                            meta.unwrap().status,
+                            meta.err,
+                            Some(TransactionError::InstructionError(
+                                0,
+                                InstructionError::Custom(1)
+                            ))
+                        );
+                        assert_eq!(
+                            meta.status,
                             Err(TransactionError::InstructionError(
                                 0,
                                 InstructionError::Custom(1)

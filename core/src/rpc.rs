@@ -460,10 +460,12 @@ impl JsonRpcRequestProcessor {
                         .get_confirmation_count(slot)
                         .or(Some(0))
                 };
+                let err = status.clone().err();
                 TransactionStatus {
                     slot,
                     status,
                     confirmations,
+                    err,
                 }
             })
     }
@@ -2416,11 +2418,21 @@ pub mod tests {
         {
             if let EncodedTransaction::Json(transaction) = transaction {
                 if transaction.signatures[0] == confirmed_block_signatures[0].to_string() {
+                    let meta = meta.unwrap();
                     assert_eq!(transaction.message.recent_blockhash, blockhash.to_string());
-                    assert_eq!(meta.unwrap().status, Ok(()));
+                    assert_eq!(meta.status, Ok(()));
+                    assert_eq!(meta.err, None);
                 } else if transaction.signatures[0] == confirmed_block_signatures[1].to_string() {
+                    let meta = meta.unwrap();
                     assert_eq!(
-                        meta.unwrap().status,
+                        meta.err,
+                        Some(TransactionError::InstructionError(
+                            0,
+                            InstructionError::Custom(1)
+                        ))
+                    );
+                    assert_eq!(
+                        meta.status,
                         Err(TransactionError::InstructionError(
                             0,
                             InstructionError::Custom(1)
@@ -2450,11 +2462,21 @@ pub mod tests {
                 let decoded_transaction: Transaction =
                     deserialize(&bs58::decode(&transaction).into_vec().unwrap()).unwrap();
                 if decoded_transaction.signatures[0] == confirmed_block_signatures[0] {
+                    let meta = meta.unwrap();
                     assert_eq!(decoded_transaction.message.recent_blockhash, blockhash);
-                    assert_eq!(meta.unwrap().status, Ok(()));
+                    assert_eq!(meta.status, Ok(()));
+                    assert_eq!(meta.err, None);
                 } else if decoded_transaction.signatures[0] == confirmed_block_signatures[1] {
+                    let meta = meta.unwrap();
                     assert_eq!(
-                        meta.unwrap().status,
+                        meta.err,
+                        Some(TransactionError::InstructionError(
+                            0,
+                            InstructionError::Custom(1)
+                        ))
+                    );
+                    assert_eq!(
+                        meta.status,
                         Err(TransactionError::InstructionError(
                             0,
                             InstructionError::Custom(1)
