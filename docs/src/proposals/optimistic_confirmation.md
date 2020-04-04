@@ -4,10 +4,12 @@
 
 `vote(X, S)` - Votes will be augmented with a "reference" slot, `X`
 which is the **latest** ancestor of this fork that this validator voted on
-with a proof of switching. Thus as long as a validator keeps voting on the
-same fork, `X` will remain unchanged.All votes will then be of the form
-`vote(X, S)`, where `S` is the sorted list of slots `(s, s.lockout)`
-being voted for.
+with a proof of switching. As long as the validator makes consecutive votes
+that are all descended from each other, the same `X` should be used for all
+those votes. When the validator makes a vote for a slot `s` that is not
+descended from the previous, `X` will be set to the new slot `s`. All votes
+will then be of the form `vote(X, S)`, where `S` is the sorted list of slots
+`(s, s.lockout)` being voted for.
 
 Given a vote `vote(X, S)`, let `S.last == vote.last` be the last slot in `S`.
 
