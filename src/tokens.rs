@@ -1,4 +1,4 @@
-use crate::args::DistributeArgs;
+use crate::args::{BalancesArgs, DistributeArgs};
 use crate::thin_client::{Client, ThinClient};
 use console::style;
 use csv::{ReaderBuilder, Trim};
@@ -260,6 +260,45 @@ pub fn process_distribute<T: Client>(
     let results = distribute_tokens(&client, &allocations, &args);
     if !args.dry_run {
         append_transaction_infos(&allocations, &results, &args.transactions_csv)?;
+    }
+
+    Ok(())
+}
+
+pub fn process_balances<T: Client>(
+    client: &ThinClient<T>,
+    args: &BalancesArgs,
+) -> Result<(), csv::Error> {
+    let mut rdr = ReaderBuilder::new()
+        .trim(Trim::All)
+        .from_path(&args.allocations_csv)?;
+    let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
+    let allocations: Vec<Allocation> = bids
+        .into_iter()
+        .map(|bid| create_allocation(&bid, args.dollars_per_sol))
+        .collect();
+    let allocations = merge_allocations(&allocations);
+
+    println!(
+        "{}",
+        style(format!(
+            "{:<44}  {:>24}  {:>24}  {:>24}",
+            "Recipient", "Expected Balance", "Actual Balance", "Difference"
+        ))
+        .bold()
+    );
+
+    for allocation in &allocations {
+        let address = allocation.recipient.parse().unwrap();
+        let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
+        let actual = lamports_to_sol(client.get_balance(&address).unwrap());
+        println!(
+            "{:<44}  {:>24}  {:>24}  {:>24.9}",
+            allocation.recipient,
+            expected,
+            actual,
+            actual - expected
+        );
     }
 
     Ok(())

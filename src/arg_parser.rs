@@ -1,4 +1,4 @@
-use crate::args::{Args, Command, DistributeArgs};
+use crate::args::{Args, BalancesArgs, Command, DistributeArgs};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::input_validators::is_valid_signer;
 use solana_cli_config::CONFIG_FILE;
@@ -79,6 +79,26 @@ where
                         .help("Fee payer"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("balances")
+                .about("Balance of each account")
+                .arg(
+                    Arg::with_name("allocations_csv")
+                        .required(true)
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("FILE")
+                        .help("Allocations CSV file"),
+                )
+                .arg(
+                    Arg::with_name("dollars_per_sol")
+                        .long("dollars-per-sol")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("NUMBER")
+                        .help("Dollars per SOL"),
+                ),
+        )
         .get_matches_from(args)
 }
 
@@ -93,6 +113,13 @@ fn parse_distribute_args(matches: &ArgMatches<'_>) -> DistributeArgs<String> {
     }
 }
 
+fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
+    BalancesArgs {
+        allocations_csv: value_t_or_exit!(matches, "allocations_csv", String),
+        dollars_per_sol: value_t_or_exit!(matches, "dollars_per_sol", f64),
+    }
+}
+
 pub fn parse_args<I, T>(args: I) -> Args<String>
 where
     I: IntoIterator<Item = T>,
@@ -104,6 +131,7 @@ where
 
     let command = match matches.subcommand() {
         ("distribute", Some(matches)) => Command::Distribute(parse_distribute_args(matches)),
+        ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)),
         _ => {
             eprintln!("{}", matches.usage());
             exit(1);

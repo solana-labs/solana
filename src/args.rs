@@ -13,8 +13,14 @@ pub struct DistributeArgs<K> {
     pub fee_payer: Option<K>,
 }
 
+pub struct BalancesArgs {
+    pub allocations_csv: String,
+    pub dollars_per_sol: f64,
+}
+
 pub enum Command<K> {
     Distribute(DistributeArgs<K>),
+    Balances(BalancesArgs),
 }
 
 pub struct Args<K> {
@@ -24,7 +30,7 @@ pub struct Args<K> {
 }
 
 pub fn resolve_command(
-    command: &Command<String>,
+    command: Command<String>,
 ) -> Result<Command<Box<dyn Signer>>, Box<dyn Error>> {
     match command {
         Command::Distribute(args) => {
@@ -32,10 +38,10 @@ pub fn resolve_command(
             let wallet_manager = wallet_manager.as_ref();
             let matches = ArgMatches::default();
             let resolved_args = DistributeArgs {
-                allocations_csv: args.allocations_csv.clone(),
-                transactions_csv: args.transactions_csv.clone(),
+                allocations_csv: args.allocations_csv,
+                transactions_csv: args.transactions_csv,
                 dollars_per_sol: args.dollars_per_sol,
-                dry_run: args.dry_run.clone(),
+                dry_run: args.dry_run,
                 sender_keypair: args.sender_keypair.as_ref().map(|key_url| {
                     signer_from_path(&matches, &key_url, "sender", wallet_manager).unwrap()
                 }),
@@ -45,5 +51,6 @@ pub fn resolve_command(
             };
             Ok(Command::Distribute(resolved_args))
         }
+        Command::Balances(args) => Ok(Command::Balances(args)),
     }
 }
