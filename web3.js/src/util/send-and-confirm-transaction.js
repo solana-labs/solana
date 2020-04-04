@@ -66,21 +66,22 @@ async function _sendAndConfirmTransaction(
       await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
     }
 
-    if (status && 'Ok' in status.status) {
-      break;
+    if (status) {
+      if (!status.err) {
+        break;
+      } else if (!('AccountInUse' in status.err)) {
+        throw new Error(
+          `Transaction ${signature} failed (${JSON.stringify(status)})`,
+        );
+      }
     }
+
     if (--sendRetries <= 0) {
       const duration = (Date.now() - start) / 1000;
       throw new Error(
         `Transaction '${signature}' was not confirmed in ${duration.toFixed(
           2,
         )} seconds (${JSON.stringify(status)})`,
-      );
-    }
-
-    if (status && status.status.Err && !('AccountInUse' in status.status.Err)) {
-      throw new Error(
-        `Transaction ${signature} failed (${JSON.stringify(status)})`,
       );
     }
 

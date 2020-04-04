@@ -50,7 +50,7 @@ declare module '@solana/web3.js' {
 
   export type SignatureStatus = {
     slot: number;
-    status: SignatureSuccess | TransactionError;
+    err: TransactionError | null;
     confirmations: number | null;
   };
 
@@ -89,8 +89,8 @@ declare module '@solana/web3.js' {
         fee: number;
         preBalances: Array<number>;
         postBalances: Array<number>;
-        status?: SignatureSuccess | TransactionError;
-      };
+        err: TransactionError | null;
+      } | null;
     }>;
   };
 
@@ -126,16 +126,14 @@ declare module '@solana/web3.js' {
   ) => void;
   export type SlotChangeCallback = (slotInfo: SlotInfo) => void;
   export type SignatureResultCallback = (
-    signatureResult: SignatureSuccess | TransactionError,
+    signatureResult: SignatureResult,
     context: Context,
   ) => void;
   export type RootChangeCallback = (root: number) => void;
 
-  export type SignatureSuccess = {
-    Ok: null;
-  };
-  export type TransactionError = {
-    Err: object;
+  export type TransactionError = object;
+  export type SignatureResult = {
+    err: TransactionError | null;
   };
 
   export type Inflation = {
