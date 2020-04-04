@@ -54,6 +54,9 @@ fn apply_previous_transactions(
     for transaction_info in transaction_infos {
         let mut amount = transaction_info.amount;
         for allocation in allocations.iter_mut() {
+            if allocation.recipient != transaction_info.recipient {
+                continue;
+            }
             if allocation.amount >= amount {
                 allocation.amount -= amount;
                 break;
@@ -130,6 +133,14 @@ fn append_transaction_infos(
     results: &[Result<Signature, TransportError>],
     transactions_csv: &str,
 ) -> Result<(), csv::Error> {
+    if results.iter().all(|x| x.is_err()) {
+        for (i, allocation) in allocations.iter().enumerate() {
+            let e = results[i].as_ref().unwrap_err();
+            eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
+        }
+        return Ok(());
+    }
+
     let existed = Path::new(&transactions_csv).exists();
     if existed {
         let transactions_bak = format!("{}.bak", &transactions_csv);
@@ -312,5 +323,52 @@ mod tests {
         let bank_client = BankClient::new(bank);
         let thin_client = ThinClient(bank_client);
         test_process_distribute_with_client(&thin_client, sender_keypair);
+    }
+
+    #[test]
+    fn test_apply_previous_transactions() {
+        let mut allocations = vec![
+            Allocation {
+                recipient: "a".to_string(),
+                amount: 1.0,
+            },
+            Allocation {
+                recipient: "b".to_string(),
+                amount: 1.0,
+            },
+        ];
+        let transaction_infos = vec![TransactionInfo {
+            recipient: "b".to_string(),
+            amount: 1.0,
+            signature: "".to_string(),
+        }];
+        apply_previous_transactions(&mut allocations, &transaction_infos);
+        assert_eq!(allocations.len(), 1);
+
+        // Ensure that we applied the transaction to the allocation with
+        // a matching recipient address (to "b", not "a").
+        assert_eq!(allocations[0].recipient, "a");
+    }
+
+    #[test]
+    fn test_append_transaction_infos_all_errors() {
+        let allocations = vec![Allocation {
+            recipient: "a".to_string(),
+            amount: 1.0,
+        }];
+        let results = vec![Err(TransportError::Custom("".to_string()))];
+        let dir = tempdir().unwrap();
+        let transactions_csv = dir
+            .path()
+            .join("transactions.csv")
+            .to_str()
+            .unwrap()
+            .to_string();
+        append_transaction_infos(&allocations, &results, &transactions_csv).unwrap();
+        assert!(!Path::new(&transactions_csv).exists());
+
+        let results = vec![Ok(Signature::default())];
+        append_transaction_infos(&allocations, &results, &transactions_csv).unwrap();
+        assert!(Path::new(&transactions_csv).exists());
     }
 }
