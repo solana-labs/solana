@@ -4849,7 +4849,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<TransactionStatusMeta>)> = entries
+        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
