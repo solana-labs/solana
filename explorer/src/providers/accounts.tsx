@@ -102,7 +102,8 @@ function urlAddresses(): Array<string> {
     .concat(findGetParameter("address")?.split(",") || [])
     .concat(findGetParameter("addresses")?.split(",") || [])
     .concat(findPathSegment("address")?.split(",") || [])
-    .concat(findPathSegment("addresses")?.split(",") || []);
+    .concat(findPathSegment("addresses")?.split(",") || [])
+    .filter(a => a.length > 0);
 }
 
 function initState(): State {
