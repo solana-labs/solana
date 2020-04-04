@@ -183,13 +183,6 @@ pub fn process_distribute<T: Client>(
         .trim(Trim::All)
         .from_path(&args.allocations_csv)?;
     let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
-    let starting_total_dollars: f64 = bids.iter().map(|x| x.bid_amount_dollars).sum();
-    println!(
-        "{} ${}",
-        style(format!("{}", "Total in allocations_csv:")).bold(),
-        starting_total_dollars
-    );
-
     let allocations: Vec<Allocation> = bids
         .into_iter()
         .map(|bid| create_allocation(&bid, args.dollars_per_sol))
@@ -203,9 +196,10 @@ pub fn process_distribute<T: Client>(
 
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
-        "{} ◎{}",
+        "{} ◎{} (${})",
         style(format!("{}", "Total in allocations_csv:")).bold(),
-        starting_total_tokens
+        starting_total_tokens,
+        starting_total_tokens * args.dollars_per_sol,
     );
 
     let mut allocations = merge_allocations(&allocations);
@@ -214,19 +208,22 @@ pub fn process_distribute<T: Client>(
     let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
     let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
-        "{} ◎{}",
+        "{} ◎{} (${})",
         style(format!("{}", "Distributed:")).bold(),
-        distributed_tokens
+        distributed_tokens,
+        distributed_tokens * args.dollars_per_sol,
     );
     println!(
-        "{} ◎{}",
+        "{} ◎{} (${})",
         style(format!("{}", "Undistributed:")).bold(),
-        undistributed_tokens
+        undistributed_tokens,
+        undistributed_tokens * args.dollars_per_sol,
     );
     println!(
-        "{} ◎{}\n",
+        "{} ◎{} (${})\n",
         style(format!("{}", "Total:")).bold(),
-        distributed_tokens + undistributed_tokens
+        distributed_tokens + undistributed_tokens,
+        (distributed_tokens + undistributed_tokens) * args.dollars_per_sol,
     );
 
     if allocations.is_empty() {
