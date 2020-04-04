@@ -204,12 +204,14 @@ const GetEpochScheduleResult = struct({
 });
 
 /**
+ * Transaction error or null
+ */
+const TransactionErrorResult = struct.union(['null', 'object']);
+
+/**
  * Signature status for a transaction
  */
-const SignatureStatusResult = struct.union([
-  struct({Ok: 'null'}),
-  struct({Err: 'object'}),
-]);
+const SignatureStatusResult = struct({err: TransactionErrorResult});
 
 /**
  * Version info for a node
@@ -241,8 +243,8 @@ type ConfirmedBlock = {
       fee: number,
       preBalances: Array<number>,
       postBalances: Array<number>,
-      status?: SignatureSuccess | TransactionError,
-    },
+      err: {} | null,
+    } | null,
   }>,
   rewards: Array<{
     pubkey: string,
@@ -483,10 +485,10 @@ const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
   struct.array([
     struct.union([
       'null',
-      struct({
+      struct.pick({
         slot: 'number',
         confirmations: struct.union(['number', 'null']),
-        status: SignatureStatusResult,
+        err: TransactionErrorResult,
       }),
     ]),
   ]),
@@ -543,8 +545,8 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
           }),
           meta: struct.union([
             'null',
-            struct({
-              status: struct.union(['null', SignatureStatusResult]),
+            struct.pick({
+              err: TransactionErrorResult,
               fee: 'number',
               preBalances: struct.array(['number']),
               postBalances: struct.array(['number']),
@@ -685,7 +687,7 @@ type SlotSubscriptionInfo = {
  * Callback function for signature notifications
  */
 export type SignatureResultCallback = (
-  signatureResult: SignatureSuccess | TransactionError,
+  signatureResult: SignatureResult,
   context: Context,
 ) => void;
 
@@ -712,22 +714,20 @@ type RootSubscriptionInfo = {
 };
 
 /**
- * Signature status: Success
+ * Signature result
  *
- * @typedef {Object} SignatureSuccess
+ * @typedef {Object} SignatureResult
  */
-export type SignatureSuccess = {|
-  Ok: null,
+export type SignatureResult = {|
+  err: TransactionError | null,
 |};
 
 /**
- * Signature status: TransactionError
+ * Transaction error
  *
  * @typedef {Object} TransactionError
  */
-export type TransactionError = {|
-  Err: Object,
-|};
+export type TransactionError = {};
 
 /**
  * Signature status
@@ -735,12 +735,12 @@ export type TransactionError = {|
  * @typedef {Object} SignatureStatus
  * @property {number} slot when the transaction was processed
  * @property {number | null} confirmations the number of blocks that have been confirmed and voted on in the fork containing `slot` (TODO)
- * @property {SignatureStatus | TransactionError} status success or error
+ * @property {TransactionError | null} err error, if any
  */
 export type SignatureStatus = {
   slot: number,
   confirmations: number | null,
-  status: SignatureSuccess | TransactionError,
+  err: TransactionError | null,
 };
 
 /**

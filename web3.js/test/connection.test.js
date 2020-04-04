@@ -117,6 +117,7 @@ test('get program accounts', async () => {
             slot: 0,
             confirmations: 11,
             status: {Ok: null},
+            err: null,
           },
         ],
       },
@@ -161,6 +162,7 @@ test('get program accounts', async () => {
             slot: 0,
             confirmations: 11,
             status: {Ok: null},
+            err: null,
           },
         ],
       },
@@ -627,6 +629,7 @@ test('get confirmed block', async () => {
               postBalances: [499260347380, 15298080, 1, 1, 1],
               preBalances: [499260357380, 15298080, 1, 1, 1],
               status: {Ok: null},
+              err: null,
             },
             transaction: {
               message: {
@@ -906,6 +909,7 @@ test('request airdrop - max commitment', async () => {
             slot: 0,
             confirmations: null,
             status: {Ok: null},
+            err: null,
           },
         ],
       },
@@ -1100,6 +1104,7 @@ test('transaction', async () => {
             slot: 0,
             confirmations: 11,
             status: {Ok: null},
+            err: null,
           },
         ],
       },
@@ -1118,7 +1123,7 @@ test('transaction', async () => {
     return;
   }
 
-  expect(response.status).toEqual({Ok: null});
+  expect(response.err).toBeNull();
   expect(response.slot).toBeGreaterThanOrEqual(0);
   expect(responseConfirmations).toBeGreaterThan(0);
 
@@ -1147,6 +1152,7 @@ test('transaction', async () => {
             slot: 0,
             confirmations: 11,
             status: {Ok: null},
+            err: null,
           },
           null,
         ],
@@ -1168,7 +1174,7 @@ test('transaction', async () => {
   }
 
   expect(firstResponse.slot).toBeGreaterThanOrEqual(response.slot);
-  expect(firstResponse.status).toEqual(response.status);
+  expect(firstResponse.err).toEqual(response.err);
 
   if (typeof firstResponse.confirmations !== 'number') {
     expect(typeof firstResponse.confirmations).toEqual('number');
@@ -1279,7 +1285,7 @@ test('multi-instruction transaction', async () => {
   const response = (await connection.getSignatureStatus(signature)).value;
   if (response !== null) {
     expect(typeof response.slot).toEqual('number');
-    expect(response.status).toEqual({Ok: null});
+    expect(response.err).toBeNull();
   } else {
     expect(response).not.toBeNull();
   }

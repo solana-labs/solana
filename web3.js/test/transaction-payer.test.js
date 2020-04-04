@@ -165,6 +165,7 @@ test('transaction-payer', async () => {
             slot: 0,
             confirmations: 11,
             status: {Ok: null},
+            err: null,
           },
         ],
       },
@@ -173,7 +174,7 @@ test('transaction-payer', async () => {
   const {value} = await connection.getSignatureStatus(signature);
   if (value !== null) {
     expect(typeof value.slot).toEqual('number');
-    expect(value.status).toEqual({Ok: null});
+    expect(value.err).toBeNull();
   } else {
     expect(value).not.toBeNull();
   }

@@ -5,6 +5,7 @@ declare module 'superstruct' {
       array(schema: any): any;
       literal(schema: any): any;
       tuple(schema: any): any;
+      pick(schema: any): any;
   };
 
   declare module.exports: {

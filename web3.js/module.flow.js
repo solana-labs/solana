@@ -19,7 +19,7 @@ declare module '@solana/web3.js' {
     constructor(
       value: number | string | Buffer | Uint8Array | Array<number>,
     ): PublicKey;
-    static isPublicKey(o: Object): boolean;
+    static isPublicKey(o: {}): boolean;
     static createWithSeed(
       fromPublicKey: PublicKey,
       seed: string,
@@ -63,7 +63,7 @@ declare module '@solana/web3.js' {
 
   declare export type SignatureStatus = {
     slot: number,
-    status: SignatureSuccess | TransactionError,
+    err: TransactionError | null,
     confirmations: number | null,
   };
 
@@ -102,8 +102,8 @@ declare module '@solana/web3.js' {
         fee: number,
         preBalances: Array<number>,
         postBalances: Array<number>,
-        status: SignatureSuccess | TransactionError | null,
-      },
+        err: TransactionError | null,
+      } | null,
     }>,
   };
 
@@ -139,16 +139,14 @@ declare module '@solana/web3.js' {
   ) => void;
   declare type SlotChangeCallback = (slotInfo: SlotInfo) => void;
   declare type SignatureResultCallback = (
-    signatureResult: SignatureSuccess | TransactionError,
+    signatureResult: SignatureResult,
     context: Context,
   ) => void;
   declare type RootChangeCallback = (root: number) => void;
 
-  declare export type SignatureSuccess = {|
-    Ok: null,
-  |};
-  declare export type TransactionError = {|
-    Err: Object,
+  declare export type TransactionError = {};
+  declare export type SignatureResult = {|
+    err: TransactionError | null,
   |};
 
   declare export type Inflation = {
@@ -331,10 +329,7 @@ declare module '@solana/web3.js' {
     layout: typeof BufferLayout,
   |};
 
-  declare export function encodeData(
-    type: InstructionType,
-    fields: Object,
-  ): Buffer;
+  declare export function encodeData(type: InstructionType, fields: {}): Buffer;
 
   // === src/transaction.js ===
   declare export type TransactionSignature = string;
