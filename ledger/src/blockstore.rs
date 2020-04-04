@@ -37,8 +37,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, EncodedTransaction, Rewards, TransactionEncoding, TransactionStatusMeta, RpcTransactionStatusMeta,
-    TransactionWithStatusMeta,
+    ConfirmedBlock, EncodedTransaction, Rewards, RpcTransactionStatusMeta, TransactionEncoding,
+    TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{
@@ -4888,12 +4888,15 @@ pub mod tests {
                     .unwrap();
                 (
                     transaction,
-                    Some(TransactionStatusMeta {
-                        status: Ok(()),
-                        fee: 42,
-                        pre_balances,
-                        post_balances,
-                    }.into()),
+                    Some(
+                        TransactionStatusMeta {
+                            status: Ok(()),
+                            fee: 42,
+                            pre_balances,
+                            post_balances,
+                        }
+                        .into(),
+                    ),
                 )
             })
             .collect();

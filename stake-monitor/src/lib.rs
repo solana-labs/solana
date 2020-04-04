@@ -4,7 +4,7 @@ use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient}
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{clock::Slot, program_utils::limited_deserialize, transaction::Transaction};
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
-use solana_transaction_status::{ConfirmedBlock, TransactionEncoding, RpcTransactionStatusMeta};
+use solana_transaction_status::{ConfirmedBlock, RpcTransactionStatusMeta, TransactionEncoding};
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 pub type PubkeyString = String;
