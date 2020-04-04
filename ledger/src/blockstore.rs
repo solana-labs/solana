@@ -380,7 +380,13 @@ impl Blockstore {
                 .db
                 .delete_range_cf::<cf::Rewards>(&mut write_batch, from_slot, to_slot)
                 .unwrap_or(false);
-        if let Some(index) = self.toggle_transaction_status_index(&mut write_batch, to_slot)? {
+        let mut w_active_transaction_status_index =
+            self.active_transaction_status_index.write().unwrap();
+        if let Some(index) = self.toggle_transaction_status_index(
+            &mut write_batch,
+            &mut w_active_transaction_status_index,
+            to_slot,
+        )? {
             columns_empty &= &self
                 .db
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, index, index + 1)
@@ -1542,11 +1548,9 @@ impl Blockstore {
     fn toggle_transaction_status_index(
         &self,
         batch: &mut WriteBatch,
+        w_active_transaction_status_index: &mut u64,
         to_slot: Slot,
     ) -> Result<Option<u64>> {
-        let mut w_active_transaction_status_index =
-            self.active_transaction_status_index.write().unwrap();
-
         let index0 = self.transaction_status_index_cf.get(0)?;
         if index0.is_none() {
             return Ok(None);
