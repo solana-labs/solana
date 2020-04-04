@@ -21,8 +21,7 @@ should not have voted on a different fork that "overlaps" this fork.
 More concretely, this validator should not have cast another vote
 `vote(X', S')` where the range `[X, S.last]` overlaps the range
 `[X', S'.last]`, `X != X'`, as shown below:
-
-
+`
                                   +-------+
                                   |       |
                         +---------+       +--------+
@@ -66,6 +65,7 @@ More concretely, this validator should not have cast another vote
              S.last |       |
                     |       |
                     +-------+
+`
 
 (Example of slashable votes vote(X', S') and vote(X, S))
 
@@ -172,6 +172,7 @@ for which:
 
 then `X > B`.
 
+`
                                   +-------+
                                   |       |
                         +---------+       +--------+
@@ -182,14 +183,14 @@ then `X > B`.
                         |                          |
                         |                      +---+---+
                         |                      |       |
-                        |                      |       |  `X'`
+                        |                      |       |  X'
                         |                      |       |
                         |                      +---+---+
                         |                          |
                         |                          |
                         |                      +---+---+
                         |                      |       |
-                        |                      |       |  `B (Optimistically Confirmed)`
+                        |                      |       |  B (Optimistically Confirmed)
                         |                      |       |
                         |                      +---+---+
                         |                          |
@@ -197,13 +198,13 @@ then `X > B`.
                         |                          |
                         |                      +---+---+
                         |                      |       |
-                        |                      |       |  `S'.last`
+                        |                      |       |  S'.last
                         |                      |       |
                         |                      +-------+
                         |
                     +---+---+
                     |       |
-                `X` |       |
+                 X  |       |
                     |       |
                     +---+---+
                         |
@@ -214,7 +215,7 @@ then `X > B`.
                         |
                     +---+---+
                     |       |
-           `S.last` |       |
+            S.last  |       |
                     |       |
                     +---+---+
                         |
@@ -223,9 +224,9 @@ then `X > B`.
                         |
                     +---+---+
                     |       |
-    `s + s.lockout` |       |
+      s + s.lockout |       |
                     +-------+
-
+`
 
 `Proof`: Assume for the sake of contradiction a validator `V` from the
 "Optimistic Validators" set made such a vote `Vote(X, S)` where `S` contains
@@ -268,6 +269,7 @@ Recall `B'` was the block finalized on a different fork than
 `Claim`: For any vote `Vote(X, S)` in the `Optimistic Votes` set, it must be
 true that `B' > X`
 
+`
                                 +-------+
                                 |       |
                        +--------+       +---------+
@@ -302,7 +304,7 @@ true that `B' > X`
     B'(Finalized)  |       |
                    |       |
                    +-------+
-
+`
 
 `Proof`: Let `Vote(X, S)` be a vote in the `Optimistic Votes` set. Then by
 definition, given the  "optimistcally confirmed" block `B`, `X <= B <= S.last`.
