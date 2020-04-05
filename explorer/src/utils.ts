@@ -48,14 +48,14 @@ export function assertUnreachable(x: never): never {
 }
 
 const PROGRAM_IDS = {
-  Budget1111111111111111111111111111111111111: "Budget Program",
-  Config1111111111111111111111111111111111111: "Config Program",
-  Exchange11111111111111111111111111111111111: "Exchange Program",
-  [StakeProgram.programId.toBase58()]: "Stake Program",
-  Storage111111111111111111111111111111111111: "Storage Program",
-  [SystemProgram.programId.toBase58()]: "System Program",
-  Vest111111111111111111111111111111111111111: "Vest Program",
-  [VOTE_PROGRAM_ID.toBase58()]: "Vote Program"
+  Budget1111111111111111111111111111111111111: "Budget",
+  Config1111111111111111111111111111111111111: "Config",
+  Exchange11111111111111111111111111111111111: "Exchange",
+  [StakeProgram.programId.toBase58()]: "Stake",
+  Storage111111111111111111111111111111111111: "Storage",
+  [SystemProgram.programId.toBase58()]: "System",
+  Vest111111111111111111111111111111111111111: "Vest",
+  [VOTE_PROGRAM_ID.toBase58()]: "Vote"
 };
 
 const LOADER_IDS = {
