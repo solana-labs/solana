@@ -96,7 +96,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         Ok(())
     }
     fn transmit(
-        &self,
+        &mut self,
         receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,

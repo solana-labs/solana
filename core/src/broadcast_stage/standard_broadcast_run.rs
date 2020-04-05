@@ -37,6 +37,7 @@ pub(super) struct StandardBroadcastRun {
     slot_broadcast_start: Option<Instant>,
     keypair: Arc<Keypair>,
     shred_version: u16,
+    last_datapoint_submit: Instant,
 }
 
 impl StandardBroadcastRun {
@@ -48,6 +49,7 @@ impl StandardBroadcastRun {
             slot_broadcast_start: None,
             keypair,
             shred_version,
+            last_datapoint_submit: Instant::now(),
         }
     }
 
@@ -249,7 +251,7 @@ impl StandardBroadcastRun {
     }
 
     fn broadcast(
-        &self,
+        &mut self,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         stakes: Option<Arc<HashMap<Pubkey, u64>>>,
@@ -264,10 +266,13 @@ impl StandardBroadcastRun {
         let shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
         trace!("Broadcasting {:?} shreds", shred_bufs.len());
 
-        cluster_info
-            .write()
-            .unwrap()
-            .broadcast_shreds(sock, shred_bufs, &seeds, stakes)?;
+        cluster_info.read().unwrap().broadcast_shreds(
+            sock,
+            shred_bufs,
+            &seeds,
+            stakes,
+            &mut self.last_datapoint_submit,
+        )?;
 
         let broadcast_elapsed = broadcast_start.elapsed();
 
@@ -332,7 +337,7 @@ impl BroadcastRun for StandardBroadcastRun {
         )
     }
     fn transmit(
-        &self,
+        &mut self,
         receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
