@@ -222,6 +222,12 @@ impl DuplicateSlotProof {
     }
 }
 
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct TransactionStatusIndexMeta {
+    pub max_slot: Slot,
+    pub frozen: bool,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

@@ -38,6 +38,8 @@ const DATA_SHRED_CF: &str = "data_shred";
 const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
+/// Column family for Transaction Status
+const TRANSACTION_STATUS_INDEX_CF: &str = "transaction_status_index";
 /// Column family for Rewards
 const REWARDS_CF: &str = "rewards";
 
@@ -109,6 +111,10 @@ pub mod columns {
     pub struct TransactionStatus;
 
     #[derive(Debug)]
+    /// The transaction status index column
+    pub struct TransactionStatusIndex;
+
+    #[derive(Debug)]
     /// The rewards column
     pub struct Rewards;
 }
@@ -120,7 +126,7 @@ impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
         use columns::{
             DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
-            ShredData, SlotMeta, TransactionStatus,
+            ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         fs::create_dir_all(&path)?;
@@ -145,6 +151,8 @@ impl Rocks {
             ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options());
         let transaction_status_cf_descriptor =
             ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options());
+        let transaction_status_index_cf_descriptor =
+            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options());
         let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
 
         let cfs = vec![
@@ -158,6 +166,7 @@ impl Rocks {
             shred_data_cf_descriptor,
             shred_code_cf_descriptor,
             transaction_status_cf_descriptor,
+            transaction_status_index_cf_descriptor,
             rewards_cf_descriptor,
         ];
 
@@ -170,7 +179,7 @@ impl Rocks {
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
             DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
-            ShredData, SlotMeta, TransactionStatus,
+            ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         vec![
@@ -184,6 +193,7 @@ impl Rocks {
             ShredData::NAME,
             ShredCode::NAME,
             TransactionStatus::NAME,
+            TransactionStatusIndex::NAME,
             Rewards::NAME,
         ]
     }
@@ -256,7 +266,7 @@ pub trait Column {
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
-    fn slot(index: Self::Index) -> Slot;
+    fn primary_index(index: Self::Index) -> Slot;
     fn as_index(slot: Slot) -> Self::Index;
 }
 
@@ -270,6 +280,10 @@ pub trait TypedColumn: Column {
 
 impl TypedColumn for columns::TransactionStatus {
     type Type = TransactionStatusMeta;
+}
+
+impl TypedColumn for columns::TransactionStatusIndex {
+    type Type = blockstore_meta::TransactionStatusIndexMeta;
 }
 
 pub trait SlotColumn<Index = u64> {}
@@ -287,7 +301,7 @@ impl<T: SlotColumn> Column for T {
         BigEndian::read_u64(&key[..8])
     }
 
-    fn slot(index: u64) -> Slot {
+    fn primary_index(index: u64) -> Slot {
         index
     }
 
@@ -297,32 +311,60 @@ impl<T: SlotColumn> Column for T {
 }
 
 impl Column for columns::TransactionStatus {
-    type Index = (Slot, Signature);
+    type Index = (u64, Signature, Slot);
 
-    fn key((slot, index): (Slot, Signature)) -> Vec<u8> {
-        let mut key = vec![0; 8 + 64];
-        BigEndian::write_u64(&mut key[..8], slot);
-        key[8..72].clone_from_slice(&index.as_ref()[0..64]);
+    fn key((index, signature, slot): (u64, Signature, Slot)) -> Vec<u8> {
+        let mut key = vec![0; 8 + 8 + 64];
+        BigEndian::write_u64(&mut key[0..8], index);
+        key[8..72].clone_from_slice(&signature.as_ref()[0..64]);
+        BigEndian::write_u64(&mut key[72..80], slot);
         key
     }
 
-    fn index(key: &[u8]) -> (Slot, Signature) {
-        let slot = BigEndian::read_u64(&key[..8]);
-        let index = Signature::new(&key[8..72]);
-        (slot, index)
+    fn index(key: &[u8]) -> (u64, Signature, Slot) {
+        let index = BigEndian::read_u64(&key[0..8]);
+        let signature = Signature::new(&key[8..72]);
+        let slot = BigEndian::read_u64(&key[72..80]);
+        (index, signature, slot)
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> u64 {
         index.0
     }
 
-    fn as_index(slot: Slot) -> Self::Index {
-        (slot, Signature::default())
+    fn as_index(index: u64) -> Self::Index {
+        (index, Signature::default(), 0)
     }
 }
 
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
+}
+
+impl Column for columns::TransactionStatusIndex {
+    type Index = u64;
+
+    fn key(index: u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], index);
+        key
+    }
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+
+    fn primary_index(index: u64) -> u64 {
+        index
+    }
+
+    fn as_index(slot: u64) -> u64 {
+        slot
+    }
+}
+
+impl ColumnName for columns::TransactionStatusIndex {
+    const NAME: &'static str = TRANSACTION_STATUS_INDEX_CF;
 }
 
 impl SlotColumn for columns::Rewards {}
@@ -344,7 +386,7 @@ impl Column for columns::ShredCode {
         columns::ShredData::index(key)
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -373,7 +415,7 @@ impl Column for columns::ShredData {
         (slot, index)
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -451,7 +493,7 @@ impl Column for columns::ErasureMeta {
         key
     }
 
-    fn slot(index: Self::Index) -> Slot {
+    fn primary_index(index: Self::Index) -> Slot {
         index.0
     }
 
@@ -583,7 +625,7 @@ impl Database {
         let max_slot = self
             .iter::<C>(IteratorMode::End)?
             .next()
-            .map(|(i, _)| C::slot(i))
+            .map(|(i, _)| C::primary_index(i))
             .unwrap_or(0);
         let end = max_slot <= to;
         result.map(|_| end)
@@ -624,7 +666,7 @@ where
         let iter = self.iter(iter_config)?;
         for (index, _) in iter {
             if let Some(to) = to {
-                if C::slot(index) > to {
+                if C::primary_index(index) > to {
                     end = false;
                     break;
                 }
