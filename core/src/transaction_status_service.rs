@@ -72,7 +72,7 @@ impl TransactionStatusService {
                 let fee = fee_calculator.calculate_fee(transaction.message());
                 blockstore
                     .write_transaction_status(
-                        (slot, transaction.signatures[0]),
+                        (transaction.signatures[0], slot),
                         &TransactionStatusMeta {
                             status,
                             fee,
