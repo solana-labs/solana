@@ -131,20 +131,26 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
+export const TX_PATHS = [
+  "tx",
+  "txs",
+  "txn",
+  "txns",
+  "transaction",
+  "transactions"
+];
+
 function urlSignatures(): Array<string> {
   const signatures: Array<string> = [];
-  return signatures
-    .concat(findGetParameter("tx")?.split(",") || [])
-    .concat(findGetParameter("txn")?.split(",") || [])
-    .concat(findGetParameter("txs")?.split(",") || [])
-    .concat(findGetParameter("txns")?.split(",") || [])
-    .concat(findGetParameter("transaction")?.split(",") || [])
-    .concat(findGetParameter("transactions")?.split(",") || [])
-    .concat(findPathSegment("tx")?.split(",") || [])
-    .concat(findPathSegment("txn")?.split(",") || [])
-    .concat(findPathSegment("transaction")?.split(",") || [])
-    .concat(findPathSegment("transactions")?.split(",") || [])
-    .filter(s => s.length > 0);
+
+  TX_PATHS.forEach(path => {
+    const params = findGetParameter(path)?.split(",") || [];
+    const segments = findPathSegment(path)?.split(",") || [];
+    signatures.push(...params);
+    signatures.push(...segments);
+  });
+
+  return signatures.filter(s => s.length > 0);
 }
 
 function initState(): State {
