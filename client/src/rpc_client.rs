@@ -77,17 +77,16 @@ impl RpcClient {
         signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<bool> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::ConfirmTransaction,
-                json!([signature.to_string(), commitment_config]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("ConfirmTransaction"))?;
+        let Response { context, value } =
+            self.get_signature_statuses_with_commitment(&[*signature], commitment_config)?;
 
-        serde_json::from_value::<Response<bool>>(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "ConfirmTransaction"))
+        Ok(Response {
+            context,
+            value: value[0]
+                .as_ref()
+                .map(|result| result.status.is_ok())
+                .unwrap_or_default(),
+        })
     }
 
     pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
@@ -111,6 +110,21 @@ impl RpcClient {
         signature: &Signature,
     ) -> ClientResult<Option<transaction::Result<()>>> {
         self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
+    }
+
+    pub fn get_signature_statuses_with_commitment(
+        &self,
+        signatures: &[Signature],
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<Vec<Option<TransactionStatus>>> {
+        let signatures: Vec<_> = signatures.iter().map(|s| s.to_string()).collect();
+        let signature_status = self.client.send(
+            &RpcRequest::GetSignatureStatuses,
+            json!([&signatures, commitment_config]),
+            5,
+        )?;
+        Ok(serde_json::from_value(signature_status)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?)
     }
 
     pub fn get_signature_status_with_commitment(
@@ -856,14 +870,13 @@ impl RpcClient {
         trace!("check_signature: {:?}", signature);
 
         for _ in 0..30 {
-            let response = self.client.send(
-                &RpcRequest::ConfirmTransaction,
-                json!([signature.to_string(), CommitmentConfig::recent()]),
-                0,
-            );
-
+            let response =
+                self.confirm_transaction_with_commitment(signature, CommitmentConfig::recent());
             match response {
-                Ok(Value::Bool(signature_status)) => {
+                Ok(Response {
+                    value: signature_status,
+                    ..
+                }) => {
                     if signature_status {
                         trace!("Response found signature");
                     } else {
@@ -871,12 +884,6 @@ impl RpcClient {
                     }
 
                     return signature_status;
-                }
-                Ok(other) => {
-                    debug!(
-                        "check_signature request failed, expected bool, got: {:?}",
-                        other
-                    );
                 }
                 Err(err) => {
                     debug!("check_signature request failed: {:?}", err);
