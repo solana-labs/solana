@@ -14,7 +14,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 
 ## Methods
 
-* [confirmTransaction](jsonrpc-api.md#confirmtransaction)
 * [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 * [getBalance](jsonrpc-api.md#getbalance)
 * [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
@@ -33,7 +32,6 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 * [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
-* [getSignatureStatus](jsonrpc-api.md#getsignaturestatus)
 * [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 * [getSlot](jsonrpc-api.md#getslot)
 * [getSlotLeader](jsonrpc-api.md#getslotleader)
@@ -116,29 +114,6 @@ Many methods that take a commitment parameter return an RpcResponse JSON object 
 
 
 ## JSON RPC API Reference
-
-### confirmTransaction
-
-Returns a transaction receipt. This method only searches the recent status cache of signatures, which retains all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
-
-#### Parameters:
-
-* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `RpcResponse<bool>` - RpcResponse JSON object with `value` field set to Transaction status, boolean true if Transaction is confirmed
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"confirmTransaction", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":true},"id":1}
-```
 
 ### getAccountInfo
 
@@ -656,35 +631,9 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"burnPercent":50,"lamportsPerSignature":5000,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
 ```
 
-### getSignatureStatus
-
-Returns the status of a given signature. This method is similar to [confirmTransaction](jsonrpc-api.md#confirmtransaction) but provides more resolution for error events. This method only searches the recent status cache of signatures, which retains all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
-
-#### Parameters:
-
-* `<string>` - Signature of Transaction to confirm, as base-58 encoded string
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `<null>` - Unknown transaction
-* `<object>` - Transaction status:
-  * `"Ok": <null>` - Transaction was successful
-  * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"Ok": null},"id":1}
-```
-
 ### getSignatureStatuses
 
-Returns the statuses of a list of signatures. This method is similar to [confirmTransaction](jsonrpc-api.md#confirmtransaction) but provides more resolution for error events. This method only searches the recent status cache of signatures, which retains all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
+Returns the statuses of a list of signatures. This method only searches the recent status cache of signatures, which retains statuses for all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
 #### Parameters:
 
@@ -713,7 +662,7 @@ An array of:
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]]}' http://localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "err": null, "status": {"Ok": null}}, null]},"id":1}
