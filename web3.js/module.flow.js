@@ -261,6 +261,14 @@ declare module '@solana/web3.js' {
       dataLength: number,
       commitment: ?Commitment,
     ): Promise<number>;
+    getNonce(
+      nonceAccount: PublicKey,
+      commitment: ?Commitment,
+    ): Promise<NonceAccount>;
+    getNonceAndContext(
+      nonceAccount: PublicKey,
+      commitment: ?Commitment,
+    ): Promise<RpcResponseAndContext<NonceAccount>>;
   }
 
   // === src/nonce-account.js ===
