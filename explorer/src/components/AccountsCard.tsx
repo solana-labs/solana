@@ -109,6 +109,10 @@ const renderAccountRow = (account: Account) => {
   let statusText;
   let statusClass;
   switch (account.status) {
+    case Status.NotFound:
+      statusClass = "danger";
+      statusText = "Not Found";
+      break;
     case Status.CheckFailed:
       statusClass = "danger";
       statusText = "Error";
@@ -131,12 +135,15 @@ const renderAccountRow = (account: Account) => {
   }
 
   let data = "-";
-  let balance = "-";
   let owner = "-";
   if (account.details) {
     data = `${account.details.space}`;
-    balance = `◎${(1.0 * account.details.lamports) / LAMPORTS_PER_SOL}`;
     owner = `${account.details.owner.toBase58()}`;
+  }
+
+  let balance = "-";
+  if (account.lamports !== undefined) {
+    balance = `◎${(1.0 * account.lamports) / LAMPORTS_PER_SOL}`;
   }
 
   return (

@@ -6,6 +6,7 @@ import { useCluster, ClusterStatus } from "./cluster";
 export enum Status {
   Checking,
   CheckFailed,
+  NotFound,
   Success
 }
 
@@ -17,7 +18,6 @@ enum Source {
 export interface Details {
   executable: boolean;
   owner: PublicKey;
-  lamports: number;
   space: number;
 }
 
@@ -26,6 +26,7 @@ export interface Account {
   status: Status;
   source: Source;
   pubkey: PublicKey;
+  lamports?: number;
   details?: Details;
 }
 
@@ -44,6 +45,7 @@ interface Update {
   type: ActionType.Update;
   address: string;
   status: Status;
+  lamports?: number;
   details?: Details;
 }
 
@@ -78,7 +80,8 @@ function reducer(state: State, action: Action): State {
         account = {
           ...account,
           status: action.status,
-          details: action.details
+          details: action.details,
+          lamports: action.lamports
         };
         const accounts = {
           ...state.accounts,
@@ -169,22 +172,28 @@ export async function fetchAccountInfo(
 
   let status;
   let details;
+  let lamports;
   try {
     const result = await new Connection(url).getAccountInfo(
       new PublicKey(address)
     );
+    lamports = result.lamports;
     details = {
       space: result.data.length,
       executable: result.executable,
-      lamports: result.lamports,
       owner: result.owner
     };
     status = Status.Success;
   } catch (error) {
-    console.error("Failed to fetch account info", error);
-    status = Status.CheckFailed;
+    if (error.toString() === "Error: Invalid request") {
+      lamports = 0;
+      status = Status.NotFound;
+    } else {
+      console.error("Failed to fetch account info", error);
+      status = Status.CheckFailed;
+    }
   }
-  dispatch({ type: ActionType.Update, status, details, address });
+  dispatch({ type: ActionType.Update, status, lamports, details, address });
 }
 
 export function useAccounts() {
