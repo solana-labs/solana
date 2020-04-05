@@ -1,20 +1,20 @@
 steps:
   - command: "system-test/testnet-automation.sh"
-    label: "Colo - CPU Only - 1 minute partition then 5 minute stabilization"
+    label: "Colo - CPU Only - Complete Loss 2 - 1 Partition"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-cpu-only"
-      NUMBER_OF_VALIDATOR_NODES: 3
+      NUMBER_OF_VALIDATOR_NODES: 2
       ENABLE_GPU: "false"
       NUMBER_OF_CLIENT_NODES: 1
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 5000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
       APPLY_PARTITIONS: "true"
-      NETEM_CONFIG_FILE: "system-test/netem-configs/partial-loss-three-partitions"
+      NETEM_CONFIG_FILE: "system-test/netem-configs/complete-loss-two-partitions"
       PARTITION_ACTIVE_DURATION: 60
-      PARTITION_INACTIVE_DURATION: 300
-      PARTITION_ITERATION_COUNT: 1
+      PARTITION_INACTIVE_DURATION: 60
+      PARTITION_ITERATION_COUNT: 10
       TEST_TYPE: "partition"
     agents:
       - "queue=colo-deploy"

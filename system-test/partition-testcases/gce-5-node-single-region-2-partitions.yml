@@ -9,7 +9,7 @@ steps:
       ENABLE_GPU: "false"
       VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
       NUMBER_OF_CLIENT_NODES: 1
-      CLIENT_OPTIONS: "bench-tps=1=--tx_count 20000 --thread-batch-sleep-ms 250"
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 5000 --thread-batch-sleep-ms 250"
       TESTNET_ZONES: "us-west1-a"
       USE_PUBLIC_IP_ADDRESSES: "false"
       ADDITIONAL_FLAGS: "--dedicated"
