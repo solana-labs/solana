@@ -26,6 +26,17 @@ pub struct TransactionStatusMeta {
     pub post_balances: Vec<u64>,
 }
 
+impl Default for TransactionStatusMeta {
+    fn default() -> Self {
+        Self {
+            status: Ok(()),
+            fee: 0,
+            pre_balances: vec![],
+            post_balances: vec![],
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTransactionStatusMeta {
