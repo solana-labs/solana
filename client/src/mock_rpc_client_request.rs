@@ -40,7 +40,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
     fn send(
         &self,
         request: &RpcRequest,
-        params: serde_json::Value,
+        _params: serde_json::Value,
         _retries: usize,
     ) -> Result<serde_json::Value> {
         if let Some(value) = self.mocks.write().unwrap().remove(request) {
@@ -50,17 +50,6 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
             return Ok(Value::Null);
         }
         let val = match request {
-            RpcRequest::ConfirmTransaction => {
-                if let Some(params_array) = params.as_array() {
-                    if let Value::String(param_string) = &params_array[0] {
-                        Value::Bool(param_string == SIGNATURE)
-                    } else {
-                        Value::Null
-                    }
-                } else {
-                    Value::Null
-                }
-            }
             RpcRequest::GetBalance => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: Value::Number(Number::from(50)),
@@ -87,21 +76,6 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 context: RpcResponseContext { slot: 1 },
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
             })?,
-            RpcRequest::GetSignatureStatus => {
-                let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {
-                    Some(Err(TransactionError::AccountInUse))
-                } else if self.url == "instruction_error" {
-                    Some(Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::UninitializedAccount,
-                    )))
-                } else if self.url == "sig_not_found" {
-                    None
-                } else {
-                    Some(Ok(()))
-                };
-                serde_json::to_value(response).unwrap()
-            }
             RpcRequest::GetSignatureStatuses => {
                 let status: transaction::Result<()> = if self.url == "account_in_use" {
                     Err(TransactionError::AccountInUse)
