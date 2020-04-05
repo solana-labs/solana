@@ -104,7 +104,7 @@ trait BroadcastRun {
         blockstore_sender: &Sender<Arc<Vec<Shred>>>,
     ) -> Result<()>;
     fn transmit(
-        &self,
+        &mut self,
         receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
@@ -226,7 +226,7 @@ impl BroadcastStage {
         let socket_receiver = Arc::new(Mutex::new(socket_receiver));
         for sock in socks.into_iter() {
             let socket_receiver = socket_receiver.clone();
-            let bs_transmit = broadcast_stage_run.clone();
+            let mut bs_transmit = broadcast_stage_run.clone();
             let cluster_info = cluster_info.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-transmit".to_string())

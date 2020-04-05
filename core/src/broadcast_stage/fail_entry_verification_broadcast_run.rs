@@ -72,7 +72,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         Ok(())
     }
     fn transmit(
-        &self,
+        &mut self,
         receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
@@ -81,10 +81,13 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
         let all_shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
-        cluster_info
-            .write()
-            .unwrap()
-            .broadcast_shreds(sock, all_shred_bufs, &all_seeds, stakes)?;
+        cluster_info.read().unwrap().broadcast_shreds(
+            sock,
+            all_shred_bufs,
+            &all_seeds,
+            stakes,
+            &mut Instant::now(),
+        )?;
         Ok(())
     }
     fn record(
