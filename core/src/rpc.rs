@@ -52,6 +52,14 @@ pub struct JsonRpcConfig {
     pub faucet_addr: Option<SocketAddr>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSignatureStatusConfig {
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+    pub search_transaction_history: Option<bool>,
+}
+
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank_forks: Arc<RwLock<BankForks>>,
@@ -428,14 +436,39 @@ impl JsonRpcRequestProcessor {
     pub fn get_signature_statuses(
         &self,
         signatures: Vec<Signature>,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
+        let (commitment, search_transaction_history) = if let Some(config) = config {
+            (
+                config.commitment,
+                config.search_transaction_history.unwrap_or(false),
+            )
+        } else {
+            (None, false)
+        };
         let bank = self.bank(commitment);
 
         for signature in signatures {
-            let status = self.get_transaction_status(signature, &bank);
+            let status = if let Some(status) = self.get_transaction_status(signature, &bank) {
+                Some(status)
+            } else if self.config.enable_rpc_transaction_history && search_transaction_history {
+                self.blockstore
+                    .get_transaction_status(signature)
+                    .map_err(|_| Error::internal_error())?
+                    .map(|(slot, status_meta)| {
+                        let err = status_meta.status.clone().err();
+                        TransactionStatus {
+                            slot,
+                            status: status_meta.status,
+                            confirmations: None,
+                            err,
+                        }
+                    })
+            } else {
+                None
+            };
             statuses.push(status);
         }
         Ok(Response {
@@ -615,7 +648,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>>;
 
     #[rpc(meta, name = "getSlot")]
@@ -977,7 +1010,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
         let mut signatures: Vec<Signature> = vec![];
         for signature_str in signature_strs {
@@ -986,7 +1019,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_signature_statuses(signatures, commitment)
+            .get_signature_statuses(signatures, config)
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -1074,12 +1107,16 @@ impl RpcSol for RpcSolImpl {
             Some(config) if config.commitment == CommitmentLevel::Recent => 5,
             _ => 30,
         };
+        let config = commitment.map(|commitment| RpcSignatureStatusConfig {
+            commitment: Some(commitment),
+            search_transaction_history: None,
+        });
         loop {
             signature_status = meta
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_statuses(vec![signature], commitment.clone())?
+                .get_signature_statuses(vec![signature], config.clone())?
                 .value[0]
                 .clone()
                 .map(|x| x.status);
