@@ -263,10 +263,10 @@ export async function checkTransactionStatus(
         confirmations = "max";
       }
 
-      if ("Ok" in value.status) {
-        status = Status.Success;
-      } else {
+      if (value.err) {
         status = Status.Failure;
+      } else {
+        status = Status.Success;
       }
     }
   } catch (error) {
