@@ -392,6 +392,7 @@ impl Blockstore {
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, index, index + 1)
                 .unwrap_or(false);
         }
+        let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
             error!(
                 "Error: {:?} while submitting write batch for slot {:?} retrying...",
@@ -399,6 +400,11 @@ impl Blockstore {
             );
             return Err(e);
         }
+        write_timer.stop();
+        datapoint_info!(
+            "blockstore-purge",
+            ("write_batch_ns", write_timer.as_us() as i64, i64)
+        );
         Ok(columns_empty)
     }
 
