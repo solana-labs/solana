@@ -243,7 +243,7 @@ type ConfirmedBlock = {
       fee: number,
       preBalances: Array<number>,
       postBalances: Array<number>,
-      err: {} | null,
+      err: TransactionError | null,
     } | null,
   }>,
   rewards: Array<{

@@ -929,6 +929,158 @@ test('request airdrop - max commitment', async () => {
   }
 });
 
+test('transaction failure', async () => {
+  const account = new Account();
+  const connection = new Connection(url, 'recent');
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getMinimumBalanceForRentExemption',
+      params: [0, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: 50,
+    },
+  ]);
+
+  const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+    0,
+    'recent',
+  );
+
+  mockRpc.push([
+    url,
+    {
+      method: 'requestAirdrop',
+      params: [
+        account.publicKey.toBase58(),
+        minimumAmount + 100010,
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result:
+        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getBalance',
+      params: [account.publicKey.toBase58(), {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: minimumAmount + 100010,
+      },
+    },
+  ]);
+  await connection.requestAirdrop(
+    account.publicKey,
+    minimumAmount + 100010,
+  );
+  expect(await connection.getBalance(account.publicKey)).toBe(
+    minimumAmount + 100010,
+  );
+
+  mockGetRecentBlockhash('recent');
+  mockRpc.push([
+    url,
+    {
+      method: 'sendTransaction',
+    },
+    {
+      error: null,
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+
+  const transaction = SystemProgram.transfer({
+    fromPubkey: account.publicKey,
+    toPubkey: account.publicKey,
+    lamports: 10,
+  });
+  const signature = await connection.sendTransaction(transaction, account);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'confirmTransaction',
+      params: [
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: false,
+      },
+    },
+  ]);
+
+  // Wait for one confirmation
+  await sleep(1000);
+  expect(await connection.confirmTransaction(signature)).toEqual(false);
+
+  const expectedErr = { InstructionError: [ 0, 'AccountBorrowFailed' ] };
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatuses',
+      params: [
+        [
+          '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+        ],
+        {commitment: 'recent'},
+      ],
+    },
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: [
+          {
+            slot: 0,
+            confirmations: 11,
+            status: {Err: expectedErr},
+            err: expectedErr,
+          },
+        ],
+      },
+    },
+  ]);
+
+  const response = (await connection.getSignatureStatus(signature)).value;
+  if (response === null) {
+    expect(response).not.toBeNull();
+    return;
+  }
+
+  const responseConfirmations = response.confirmations;
+  if (typeof responseConfirmations !== 'number') {
+    expect(typeof responseConfirmations).toEqual('number');
+    return;
+  }
+
+  expect(response.err).toEqual(expectedErr);
+  expect(response.slot).toBeGreaterThanOrEqual(0);
+  expect(responseConfirmations).toBeGreaterThan(0);
+});
+
 test('transaction', async () => {
   const accountFrom = new Account();
   const accountTo = new Account();
