@@ -43,7 +43,6 @@ use solana_perf::packet::{
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
-use solana_sdk::timing::duration_as_s;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
     pubkey::Pubkey,
@@ -53,6 +52,7 @@ use solana_sdk::{
 };
 use solana_streamer::sendmmsg::{multicast, send_mmsg};
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
+use std::sync::atomic::AtomicU64;
 use std::{
     borrow::Cow,
     cmp::min,
@@ -93,7 +93,6 @@ pub enum ClusterInfoError {
     BadContactInfo,
     BadGossipAddress,
 }
-#[derive(Clone)]
 pub struct ClusterInfo {
     /// The network
     pub gossip: CrdsGossip,
@@ -101,7 +100,17 @@ pub struct ClusterInfo {
     pub(crate) keypair: Arc<Keypair>,
     /// The network entrypoint
     entrypoint: Option<ContactInfo>,
-    last_datapoint_submit: Instant,
+    last_datapoint_submit: AtomicU64,
+}
+impl Clone for ClusterInfo {
+    fn clone(&self) -> Self {
+        ClusterInfo {
+            gossip: self.gossip.clone(),
+            keypair: self.keypair.clone(),
+            entrypoint: self.entrypoint.clone(),
+            last_datapoint_submit: AtomicU64::new(0),
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -209,7 +218,7 @@ impl ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair,
             entrypoint: None,
-            last_datapoint_submit: Instant::now(),
+            last_datapoint_submit: AtomicU64::new(0),
         };
         let id = contact_info.id;
         me.gossip.set_self(&id);
@@ -949,7 +958,7 @@ impl ClusterInfo {
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
     pub fn broadcast_shreds(
-        &mut self,
+        &self,
         s: &UdpSocket,
         shreds: Vec<Vec<u8>>,
         seeds: &[[u8; 32]],
@@ -958,13 +967,14 @@ impl ClusterInfo {
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
         let broadcast_len = peers_and_stakes.len();
         if broadcast_len == 0 {
-            if duration_as_s(&Instant::now().duration_since(self.last_datapoint_submit)) >= 1.0 {
+            if (timestamp() - self.last_datapoint_submit.load(Ordering::Relaxed)) > 1000 {
                 datapoint_info!(
                     "cluster_info-num_nodes",
                     ("live_count", 1, i64),
                     ("broadcast_count", 1, i64)
                 );
-                self.last_datapoint_submit = Instant::now();
+                self.last_datapoint_submit
+                    .store(timestamp(), Ordering::Relaxed);
             }
             return Ok(());
         }
@@ -995,13 +1005,14 @@ impl ClusterInfo {
                 num_live_peers += 1;
             }
         });
-        if duration_as_s(&Instant::now().duration_since(self.last_datapoint_submit)) >= 1.0 {
+        if (timestamp() - self.last_datapoint_submit.load(Ordering::Relaxed)) > 1000 {
             datapoint_info!(
                 "cluster_info-num_nodes",
                 ("live_count", num_live_peers, i64),
                 ("broadcast_count", broadcast_len + 1, i64)
             );
-            self.last_datapoint_submit = Instant::now();
+            self.last_datapoint_submit
+                .store(timestamp(), Ordering::Relaxed);
         }
         Ok(())
     }

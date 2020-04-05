@@ -265,7 +265,7 @@ impl StandardBroadcastRun {
         trace!("Broadcasting {:?} shreds", shred_bufs.len());
 
         cluster_info
-            .write()
+            .read()
             .unwrap()
             .broadcast_shreds(sock, shred_bufs, &seeds, stakes)?;
 
