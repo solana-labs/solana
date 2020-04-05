@@ -982,10 +982,7 @@ test('transaction failure', async () => {
       },
     },
   ]);
-  await connection.requestAirdrop(
-    account.publicKey,
-    minimumAmount + 100010,
-  );
+  await connection.requestAirdrop(account.publicKey, minimumAmount + 100010);
   expect(await connection.getBalance(account.publicKey)).toBe(
     minimumAmount + 100010,
   );
@@ -1034,7 +1031,7 @@ test('transaction failure', async () => {
   await sleep(1000);
   expect(await connection.confirmTransaction(signature)).toEqual(false);
 
-  const expectedErr = { InstructionError: [ 0, 'AccountBorrowFailed' ] };
+  const expectedErr = {InstructionError: [0, 'AccountBorrowFailed']};
   mockRpc.push([
     url,
     {
