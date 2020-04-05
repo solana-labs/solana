@@ -299,12 +299,13 @@ The result field will be an object with the following fields:
 * `transactions: <array>` - an array of JSON objects containing:
   * `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
   * `meta: <object>` - transaction status metadata object, containing `null` or:
-     * `status: <object>` - Transaction status:
-       * `"Ok": null` - Transaction was successful
-       * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L18)
-     * `fee: <u64>` - fee this transaction was charged, as u64 integer
-     * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
-     * `postBalances: <array>` - array of u64 account balances after the transaction was processed
+    * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+    * `fee: <u64>` - fee this transaction was charged, as u64 integer
+    * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+    * `postBalances: <array>` - array of u64 account balances after the transaction was processed
+    * DEPRECATED: `status: <object>` - Transaction status
+      * `"Ok": <null>` - Transaction was successful
+      * `"Err": <ERR>` - Transaction failed with TransactionError
 * `rewards: <array>` - an array of JSON objects containing:
   * `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
   * `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
@@ -316,13 +317,13 @@ The result field will be an object with the following fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}' localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[{"transaction":{"message":{"accountKeys":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC","39UAy8hsoYPywGPGdmun747omSr79zLSjqvPJN3zetoH","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":2},"instructions":[{"accounts":[1,2,3],"data":"29z5mr1JoRmJYQ6ynmk3pf31cGFRziAF1M3mT3L6sFXf5cKLdkEaMXMT8AqLpD4CpcupHmuMEmtZHpomrwfdZetSomNy3d","programIdIndex":4}],"recentBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA"},"signatures":["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4vANMjSKiwEchGSXwVrQkwHnmsbKQmy9vdrsYxWdCup1bLsFzX8gKrFTSVDCZCae2dbxJB9mPNhqB2sD1vvr4sAD"]},"meta":{"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}}]},"id":1}
+{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[{"transaction":{"message":{"accountKeys":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC","39UAy8hsoYPywGPGdmun747omSr79zLSjqvPJN3zetoH","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":2},"instructions":[{"accounts":[1,2,3],"data":"29z5mr1JoRmJYQ6ynmk3pf31cGFRziAF1M3mT3L6sFXf5cKLdkEaMXMT8AqLpD4CpcupHmuMEmtZHpomrwfdZetSomNy3d","programIdIndex":4}],"recentBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA"},"signatures":["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4vANMjSKiwEchGSXwVrQkwHnmsbKQmy9vdrsYxWdCup1bLsFzX8gKrFTSVDCZCae2dbxJB9mPNhqB2sD1vvr4sAD"]},"meta":{"err":null,"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}}]},"id":1}
 
 // Request
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "binary"]}' localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[{"transaction":"81UZJt4dh4Do66jDhrgkQudS8J2N6iG3jaVav7gJrqJSFY4Ug53iA9JFJZh2gxKWcaFdLJwhHx9mRdg9JwDAWB4ywiu5154CRwXV4FMdnPLg7bhxRLwhhYaLsVgMF5AyNRcTzjCVoBvqFgDU7P8VEKDEiMvD3qxzm1pLZVxDG1LTQpT3Dz4Uviv4KQbFQNuC22KupBoyHFB7Zh6KFdMqux4M9PvhoqcoJsJKwXjWpKu7xmEKnnrSbfLadkgjBmmjhW3fdTrFvnhQdTkhtdJxUL1xS9GMuJQer8YgSKNtUXB1eXZQwXU8bU2BjYkZE6Q5Xww8hu9Z4E4Mo4QsooVtHoP6BM3NKw8zjVbWfoCQqxTrwuSzrNCWCWt58C24LHecH67CTt2uXbYSviixvrYkK7A3t68BxTJcF1dXJitEPTFe2ceTkauLJqrJgnER4iUrsjr26T8YgWvpY9wkkWFSviQW6wV5RASTCUasVEcrDiaKj8EQMkgyDoe9HyKitSVg67vMWJFpUXpQobseWJUs5FTWWzmfHmFp8FZ","meta":{"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}}]},"id":1}
+{"jsonrpc":"2.0","result":{"blockhash":"Gp3t5bfDsJv1ovP8cB1SuRhXVuoTqDv7p3tymyubYg5","parentSlot":429,"previousBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA","transactions":[{"transaction":"81UZJt4dh4Do66jDhrgkQudS8J2N6iG3jaVav7gJrqJSFY4Ug53iA9JFJZh2gxKWcaFdLJwhHx9mRdg9JwDAWB4ywiu5154CRwXV4FMdnPLg7bhxRLwhhYaLsVgMF5AyNRcTzjCVoBvqFgDU7P8VEKDEiMvD3qxzm1pLZVxDG1LTQpT3Dz4Uviv4KQbFQNuC22KupBoyHFB7Zh6KFdMqux4M9PvhoqcoJsJKwXjWpKu7xmEKnnrSbfLadkgjBmmjhW3fdTrFvnhQdTkhtdJxUL1xS9GMuJQer8YgSKNtUXB1eXZQwXU8bU2BjYkZE6Q5Xww8hu9Z4E4Mo4QsooVtHoP6BM3NKw8zjVbWfoCQqxTrwuSzrNCWCWt58C24LHecH67CTt2uXbYSviixvrYkK7A3t68BxTJcF1dXJitEPTFe2ceTkauLJqrJgnER4iUrsjr26T8YgWvpY9wkkWFSviQW6wV5RASTCUasVEcrDiaKj8EQMkgyDoe9HyKitSVg67vMWJFpUXpQobseWJUs5FTWWzmfHmFp8FZ","meta":{"err":null,"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}}]},"id":1}
 ```
 
 #### Transaction Structure
@@ -703,9 +704,10 @@ An array of:
 * `<object>`
   * `slot: <u64>` - The slot the transaction was processed
   * `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted
-  * `status: <object>` - Transaction status
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+  * DEPRECATED: `status: <object>` - Transaction status
     * `"Ok": <null>` - Transaction was successful
-    * `"Err": <ERR>` - Transaction failed with TransactionError  [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+    * `"Err": <ERR>` - Transaction failed with TransactionError
 
 #### Example:
 
@@ -714,10 +716,10 @@ An array of:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "status": {"Ok": null}}, null]},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "err": null, "status": {"Ok": null}}, null]},"id":1}
 
 // Result, first transaction rooted
-{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 48, "confirmations": null, "status": {"Ok": null}}, null]},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 48, "confirmations": null, "err": null, "status": {"Ok": null}}, null]},"id":1}
 ```
 
 ### getSlot
@@ -1226,7 +1228,7 @@ Subscribe to a transaction signature to receive notification when the transactio
 #### Notification Format:
 
 ```bash
-{"jsonrpc": "2.0","method": "signatureNotification", "params": {"result": "Confirmed","subscription":0}}
+{"jsonrpc": "2.0","method": "signatureNotification", "params": {"result": {"err": null}, "subscription":0}}
 ```
 
 ### signatureUnsubscribe

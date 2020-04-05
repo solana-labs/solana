@@ -37,8 +37,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, EncodedTransaction, Rewards, TransactionEncoding, TransactionStatusMeta,
-    TransactionWithStatusMeta,
+    ConfirmedBlock, EncodedTransaction, Rewards, RpcTransactionStatusMeta, TransactionEncoding,
+    TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{
@@ -1500,7 +1500,8 @@ impl Blockstore {
                     meta: self
                         .transaction_status_cf
                         .get((slot, signature))
-                        .expect("Expect database get to succeed"),
+                        .expect("Expect database get to succeed")
+                        .map(RpcTransactionStatusMeta::from),
                 }
             })
             .collect()
@@ -4848,7 +4849,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<TransactionStatusMeta>)> = entries
+        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -4887,12 +4888,15 @@ pub mod tests {
                     .unwrap();
                 (
                     transaction,
-                    Some(TransactionStatusMeta {
-                        status: Ok(()),
-                        fee: 42,
-                        pre_balances,
-                        post_balances,
-                    }),
+                    Some(
+                        TransactionStatusMeta {
+                            status: Ok(()),
+                            fee: 42,
+                            pre_balances,
+                            post_balances,
+                        }
+                        .into(),
+                    ),
                 )
             })
             .collect();

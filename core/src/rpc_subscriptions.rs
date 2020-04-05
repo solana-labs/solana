@@ -8,7 +8,9 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use serde::Serialize;
-use solana_client::rpc_response::{Response, RpcAccount, RpcKeyedAccount, RpcResponseContext};
+use solana_client::rpc_response::{
+    Response, RpcAccount, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
+};
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -66,7 +68,7 @@ type RpcProgramSubscriptions = RwLock<
 type RpcSignatureSubscriptions = RwLock<
     HashMap<
         Signature,
-        HashMap<SubscriptionId, (Sink<Response<transaction::Result<()>>>, Confirmations)>,
+        HashMap<SubscriptionId, (Sink<Response<RpcSignatureResult>>, Confirmations)>,
     >,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
@@ -207,11 +209,15 @@ fn filter_account_result(
     Box::new(iter::empty())
 }
 
-fn filter_signature_result<S>(result: Option<S>, _root: Slot) -> Box<dyn Iterator<Item = S>>
-where
-    S: 'static + Clone + Serialize,
-{
-    Box::new(result.into_iter())
+fn filter_signature_result(
+    result: Option<transaction::Result<()>>,
+    _root: Slot,
+) -> Box<dyn Iterator<Item = RpcSignatureResult>> {
+    Box::new(
+        result
+            .into_iter()
+            .map(|result| RpcSignatureResult { err: result.err() }),
+    )
 }
 
 fn filter_program_results(
@@ -430,7 +436,7 @@ impl RpcSubscriptions {
         signature: Signature,
         confirmations: Option<Confirmations>,
         sub_id: SubscriptionId,
-        subscriber: Subscriber<Response<transaction::Result<()>>>,
+        subscriber: Subscriber<Response<RpcSignatureResult>>,
     ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         add_subscription(
@@ -890,7 +896,7 @@ pub(crate) mod tests {
         }
 
         subscriptions.notify_subscribers(1, &bank_forks);
-        let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
+        let expected_res = RpcSignatureResult { err: None };
 
         struct Notification {
             slot: Slot,
