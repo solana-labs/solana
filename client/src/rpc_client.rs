@@ -82,19 +82,8 @@ impl RpcClient {
         signature: &str,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<bool> {
-<<<<<<< HEAD
-        let response = self
-            .client
-            .send(
-                &RpcRequest::ConfirmTransaction,
-                json!([signature, commitment_config]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("ConfirmTransaction"))?;
-=======
         let Response { context, value } =
             self.get_signature_statuses_with_commitment(&[*signature], commitment_config)?;
->>>>>>> b584174d6... Deprecate `confirmTransaction`, `getSignatureStatus`, and `getSignatureConfirmation` (#9298)
 
         Ok(Response {
             context,
