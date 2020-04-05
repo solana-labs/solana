@@ -425,7 +425,7 @@ impl JsonRpcRequestProcessor {
             .map(|(_, status)| status)
     }
 
-    pub fn get_signature_statuses(
+    pub fn get_signature_statuses_with_commitment(
         &self,
         signatures: Vec<Signature>,
         commitment: Option<CommitmentConfig>,
@@ -609,7 +609,7 @@ pub trait RpcSol {
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
 
     #[rpc(meta, name = "getSignatureStatuses")]
-    fn get_signature_statuses(
+    fn get_signature_statuses_with_commitment(
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
@@ -971,7 +971,7 @@ impl RpcSol for RpcSolImpl {
             .get_signature_status(signature, commitment))
     }
 
-    fn get_signature_statuses(
+    fn get_signature_statuses_with_commitment(
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
@@ -984,7 +984,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_signature_statuses(signatures, commitment)
+            .get_signature_statuses_with_commitment(signatures, commitment)
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -1077,7 +1077,7 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_statuses(vec![signature], commitment.clone())?
+                .get_signature_statuses_with_commitment(vec![signature], commitment.clone())?
                 .value[0]
                 .clone()
                 .map(|x| x.status);

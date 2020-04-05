@@ -78,7 +78,7 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> RpcResult<bool> {
         let Response { context, value } =
-            self.get_signature_statuses(&[*signature], commitment_config)?;
+            self.get_signature_statuses_with_commitment(&[*signature], commitment_config)?;
 
         Ok(Response {
             context,
@@ -112,7 +112,7 @@ impl RpcClient {
         self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
     }
 
-    pub fn get_signature_statuses(
+    pub fn get_signature_statuses_with_commitment(
         &self,
         signatures: &[Signature],
         commitment_config: CommitmentConfig,
