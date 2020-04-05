@@ -422,7 +422,7 @@ impl JsonRpcRequestProcessor {
         self.bank(commitment).get_signature_status(&signature)
     }
 
-    pub fn get_signature_statuses(
+    pub fn get_signature_statuses_with_commitment(
         &self,
         signatures: Vec<Signature>,
         commitment: Option<CommitmentConfig>,
@@ -491,6 +491,7 @@ impl Metadata for Meta {}
 pub trait RpcSol {
     type Metadata;
 
+    // DEPRECATED
     #[rpc(meta, name = "confirmTransaction")]
     fn confirm_transaction(
         &self,
@@ -498,6 +499,24 @@ pub trait RpcSol {
         signature_str: String,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<bool>;
+
+    // DEPRECATED
+    #[rpc(meta, name = "getSignatureStatus")]
+    fn get_signature_status(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<transaction::Result<()>>>;
+
+    // DEPRECATED (used by Trust Wallet)
+    #[rpc(meta, name = "getSignatureConfirmation")]
+    fn get_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Option<RpcSignatureConfirmation>>;
 
     #[rpc(meta, name = "getAccountInfo")]
     fn get_account_info(
@@ -586,24 +605,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "getFeeRateGovernor")]
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
 
-    #[rpc(meta, name = "getSignatureConfirmation")]
-    fn get_signature_confirmation(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<RpcSignatureConfirmation>>;
-
-    #[rpc(meta, name = "getSignatureStatus")]
-    fn get_signature_status(
-        &self,
-        meta: Self::Metadata,
-        signature_str: String,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<transaction::Result<()>>>;
-
     #[rpc(meta, name = "getSignatureStatuses")]
-    fn get_signature_statuses(
+    fn get_signature_statuses_with_commitment(
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
@@ -965,7 +968,7 @@ impl RpcSol for RpcSolImpl {
             .get_signature_status(signature, commitment))
     }
 
-    fn get_signature_statuses(
+    fn get_signature_statuses_with_commitment(
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
@@ -978,7 +981,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_signature_statuses(signatures, commitment)
+            .get_signature_statuses_with_commitment(signatures, commitment)
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -1071,7 +1074,7 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_statuses(vec![signature], commitment.clone())?
+                .get_signature_statuses_with_commitment(vec![signature], commitment.clone())?
                 .value[0]
                 .clone()
                 .map(|x| x.status);

@@ -3,7 +3,6 @@ use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum RpcRequest {
-    ConfirmTransaction,
     DeregisterNode,
     ValidatorExit,
     GetAccountInfo,
@@ -22,7 +21,6 @@ pub enum RpcRequest {
     GetRecentBlockhash,
     GetFeeCalculatorForBlockhash,
     GetFeeRateGovernor,
-    GetSignatureStatus,
     GetSignatureStatuses,
     GetSlot,
     GetSlotLeader,
@@ -45,7 +43,6 @@ impl RpcRequest {
     pub(crate) fn build_request_json(&self, id: u64, params: Value) -> Value {
         let jsonrpc = "2.0";
         let method = match self {
-            RpcRequest::ConfirmTransaction => "confirmTransaction",
             RpcRequest::DeregisterNode => "deregisterNode",
             RpcRequest::ValidatorExit => "validatorExit",
             RpcRequest::GetAccountInfo => "getAccountInfo",
@@ -64,7 +61,6 @@ impl RpcRequest {
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetFeeCalculatorForBlockhash => "getFeeCalculatorForBlockhash",
             RpcRequest::GetFeeRateGovernor => "getFeeRateGovernor",
-            RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetSignatureStatuses => "getSignatureStatuses",
             RpcRequest::GetSlot => "getSlot",
             RpcRequest::GetSlotLeader => "getSlotLeader",
