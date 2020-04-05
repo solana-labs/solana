@@ -1,6 +1,12 @@
 import React from "react";
 import bs58 from "bs58";
-import { Connection, Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  Transaction,
+  TransferParams,
+  SystemProgram,
+  SystemInstruction
+} from "@solana/web3.js";
 import { useCluster, ClusterStatus } from "./cluster";
 import { useTransactions } from "./transactions";
 
@@ -10,7 +16,12 @@ export enum Status {
   Success
 }
 
-type Transactions = { [signature: string]: Transaction };
+export interface TransactionDetails {
+  transaction: Transaction;
+  transfers: Array<TransferParams>;
+}
+
+type Transactions = { [signature: string]: TransactionDetails };
 export interface Block {
   status: Status;
   transactions?: Transactions;
@@ -155,8 +166,26 @@ async function fetchBlock(dispatch: Dispatch, slot: number, url: string) {
     block.transactions.forEach(({ transaction }) => {
       const signature = transaction.signature;
       if (signature) {
+        const transferInstructions = transaction.instructions
+          .filter(ix => ix.programId.equals(SystemProgram.programId))
+          .filter(
+            ix => SystemInstruction.decodeInstructionType(ix) === "Transfer"
+          );
+
+        let transfers: TransferParams[] = [];
+        transferInstructions.forEach(ix => {
+          try {
+            transfers.push(SystemInstruction.decodeTransfer(ix));
+          } catch (err) {
+            console.log(ix, err);
+          }
+        });
+
         const sig = bs58.encode(signature);
-        transactions[sig] = transaction;
+        transactions[sig] = {
+          transaction,
+          transfers
+        };
       }
     });
     status = Status.Success;
