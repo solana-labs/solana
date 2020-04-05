@@ -129,6 +129,10 @@ test('create and query nonce account', async () => {
     nonceAccount.publicKey,
     'recent',
   );
+  if (nonceAccountData === null) {
+    expect(nonceAccountData).not.toBeNull();
+    return;
+  }
   expect(nonceAccountData.authorizedPubkey).toEqual(from.publicKey);
   expect(bs58.decode(nonceAccountData.nonce).length).toBeGreaterThan(30);
 });

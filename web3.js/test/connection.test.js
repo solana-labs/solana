@@ -25,7 +25,7 @@ const errorResponse = {
   result: undefined,
 };
 
-test('get account info - error', () => {
+test('get account info - not found', async () => {
   const account = new Account();
   const connection = new Connection(url);
 
@@ -35,12 +35,18 @@ test('get account info - error', () => {
       method: 'getAccountInfo',
       params: [account.publicKey.toBase58()],
     },
-    errorResponse,
+    {
+      error: null,
+      result: {
+        context: {
+          slot: 11,
+        },
+        value: null,
+      },
+    },
   ]);
 
-  return expect(connection.getAccountInfo(account.publicKey)).rejects.toThrow(
-    errorMessage,
-  );
+  expect(await connection.getAccountInfo(account.publicKey)).toBeNull();
 });
 
 test('get program accounts', async () => {
@@ -820,6 +826,10 @@ test('request airdrop', async () => {
   ]);
 
   const accountInfo = await connection.getAccountInfo(account.publicKey);
+  if (accountInfo === null) {
+    expect(accountInfo).not.toBeNull();
+    return;
+  }
   expect(accountInfo.lamports).toBe(minimumAmount + 42);
   expect(accountInfo.data).toHaveLength(0);
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
