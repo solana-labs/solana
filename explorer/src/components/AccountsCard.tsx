@@ -7,7 +7,7 @@ import {
   Account,
   Status
 } from "../providers/accounts";
-import { assertUnreachable } from "../utils";
+import { assertUnreachable, displayAddress } from "../utils";
 import { useCluster } from "../providers/cluster";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
@@ -138,7 +138,7 @@ const renderAccountRow = (account: Account) => {
   let owner = "-";
   if (account.details) {
     data = `${account.details.space}`;
-    owner = `${account.details.owner.toBase58()}`;
+    owner = displayAddress(account.details.owner);
   }
 
   let balance = "-";
