@@ -18,7 +18,7 @@ export function findGetParameter(parameterName: string): string | null {
     .split("&")
     .forEach(function(item) {
       tmp = item.split("=");
-      if (tmp[0] === parameterName) {
+      if (tmp[0].toLowerCase() === parameterName) {
         if (tmp.length === 2) {
           result = decodeURIComponent(tmp[1]);
         } else if (tmp.length === 1) {

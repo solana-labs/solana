@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 import { ClusterProvider } from "./providers/cluster";
 import {
@@ -15,9 +16,11 @@ import TransactionsCard from "./components/TransactionsCard";
 import ClusterModal from "./components/ClusterModal";
 import TransactionModal from "./components/TransactionModal";
 import Logo from "./img/logos-solana/light-explorer-logo.svg";
+import { useCurrentTab, Tab } from "./providers/tab";
 
 function App() {
   const [showClusterModal, setShowClusterModal] = React.useState(false);
+  const currentTab = useCurrentTab();
   return (
     <ClusterProvider>
       <TransactionsProvider>
@@ -28,14 +31,39 @@ function App() {
           />
           <TransactionModal />
           <div className="main-content">
+            <nav className="navbar navbar-expand-xl navbar-light">
+              <div className="container">
+                <div className="row align-items-end">
+                  <div className="col">
+                    <img src={Logo} width="250" alt="Solana Explorer" />
+                  </div>
+                </div>
+              </div>
+            </nav>
+
             <div className="header">
               <div className="container">
                 <div className="header-body">
-                  <div className="row align-items-end">
-                    <div className="col">
-                      <img src={Logo} width="250" alt="Solana Explorer" />
+                  <div className="row align-items-center d-md-none">
+                    <div className="col-12">
+                      <ClusterStatusButton
+                        expand
+                        onClick={() => setShowClusterModal(true)}
+                      />
                     </div>
-                    <div className="col-auto">
+                  </div>
+                  <div className="row align-items-center">
+                    <div className="col">
+                      <ul className="nav nav-tabs nav-overflow header-tabs">
+                        <li className="nav-item">
+                          <NavLink href="/transactions" tab="Transactions" />
+                        </li>
+                        <li className="nav-item">
+                          <NavLink href="/accounts" tab="Accounts" />
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="col-auto d-none d-md-block">
                       <ClusterStatusButton
                         onClick={() => setShowClusterModal(true)}
                       />
@@ -48,13 +76,13 @@ function App() {
             <div className="container">
               <div className="row">
                 <div className="col-12">
-                  <TransactionsCard />
+                  {currentTab === "Transactions" ? <TransactionsCard /> : null}
                 </div>
               </div>
               <div className="row">
                 <div className="col-12">
                   <AccountsProvider>
-                    <AccountsCard />
+                    {currentTab === "Accounts" ? <AccountsCard /> : null}
                   </AccountsProvider>
                 </div>
               </div>
@@ -67,6 +95,19 @@ function App() {
         </BlocksProvider>
       </TransactionsProvider>
     </ClusterProvider>
+  );
+}
+
+function NavLink({ href, tab }: { href: string; tab: Tab }) {
+  let classes = "nav-link";
+  if (tab === useCurrentTab()) {
+    classes += " active";
+  }
+
+  return (
+    <Link to={href} className={classes}>
+      {tab}
+    </Link>
   );
 }
 

@@ -95,18 +95,19 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
+export const ACCOUNT_PATHS = ["account", "accounts", "address", "addresses"];
+
 function urlAddresses(): Array<string> {
   const addresses: Array<string> = [];
-  return addresses
-    .concat(findGetParameter("account")?.split(",") || [])
-    .concat(findGetParameter("accounts")?.split(",") || [])
-    .concat(findPathSegment("account")?.split(",") || [])
-    .concat(findPathSegment("accounts")?.split(",") || [])
-    .concat(findGetParameter("address")?.split(",") || [])
-    .concat(findGetParameter("addresses")?.split(",") || [])
-    .concat(findPathSegment("address")?.split(",") || [])
-    .concat(findPathSegment("addresses")?.split(",") || [])
-    .filter(a => a.length > 0);
+
+  ACCOUNT_PATHS.forEach(path => {
+    const params = findGetParameter(path)?.split(",") || [];
+    const segments = findPathSegment(path)?.split(",") || [];
+    addresses.push(...params);
+    addresses.push(...segments);
+  });
+
+  return addresses.filter(a => a.length > 0);
 }
 
 function initState(): State {
