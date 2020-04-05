@@ -22,18 +22,24 @@ impl AccountsBackgroundService {
         let exit = exit.clone();
         let t_background = Builder::new()
             .name("solana-accounts-background".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
+            .spawn(move || {
+                let mut i = 0;
+                loop {
+                    i += 1;
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let bank = bank_forks.read().unwrap().working_bank();
+
+                    bank.process_dead_slots();
+
+                    // Currently, given INTERVAL_MS, we process 1 slot/100 ms
+                    if i % 10 == 0 {
+                        bank.process_stale_slot();
+                    }
+
+                    sleep(Duration::from_millis(INTERVAL_MS));
                 }
-                let bank = bank_forks.read().unwrap().working_bank();
-
-                bank.process_dead_slots();
-
-                // Currently, given INTERVAL_MS, we process 1 slot/100 ms
-                bank.process_stale_slot();
-
-                sleep(Duration::from_millis(INTERVAL_MS));
             })
             .unwrap();
         Self { t_background }

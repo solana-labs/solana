@@ -20,7 +20,7 @@
 
 use crate::{
     accounts_index::{AccountsIndex, SlotList, SlotSlice},
-    append_vec::{AppendVec, StoredAccount, StoredMeta},
+    append_vec::{AppendVec, AppendVecId, StoredAccount, StoredMeta},
     bank::deserialize_from_snapshot,
 };
 use bincode::{deserialize_from, serialize_into};
@@ -49,7 +49,7 @@ use std::{
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock, Weak},
 };
 use tempfile::TempDir;
 
@@ -93,10 +93,8 @@ pub struct AccountInfo {
     /// purposes to remove accounts with zero balance.
     lamports: u64,
 }
-/// An offset into the AccountsDB::storage vector
-pub type AppendVecId = usize;
 pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
-pub type SnapshotStorages = Vec<SnapshotStorage>;
+pub type SnapshotStorages = HashMap<Slot, SnapshotStorage>;
 
 // Each slot has a set of storage entries.
 type SlotStores = HashMap<usize, Arc<AccountStorageEntry>>;
@@ -119,8 +117,9 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
         while let Some((slot, storage_entries)) = access.next_entry()? {
             let storage_entries: Vec<AccountStorageEntry> = storage_entries;
             let storage_slot_map = map.entry(slot).or_insert_with(HashMap::new);
-            for mut storage in storage_entries {
-                storage.slot = slot;
+            for storage in storage_entries {
+                // check that storage.{count_and_status, accounts.len} is same across all grouped
+                // by storage.id!
                 storage_slot_map.insert(storage.id, Arc::new(storage));
             }
         }
@@ -146,7 +145,7 @@ impl Versioned for (u64, AccountInfo) {
 }
 
 struct AccountStorageSerialize<'a> {
-    account_storage_entries: &'a [SnapshotStorage],
+    account_storage_entries: &'a SnapshotStorages,
 }
 
 impl<'a> Serialize for AccountStorageSerialize<'a> {
@@ -157,8 +156,8 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         let mut map = serializer.serialize_map(Some(self.account_storage_entries.len()))?;
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        for storage_entries in self.account_storage_entries {
-            map.serialize_entry(&storage_entries.first().unwrap().slot, storage_entries)?;
+        for (slot, storage_entries) in self.account_storage_entries {
+            map.serialize_entry(slot, storage_entries)?;
             count += storage_entries.len();
         }
         serialize_account_storage_timer.stop();
@@ -201,9 +200,6 @@ pub enum BankHashVerificationError {
 pub struct AccountStorageEntry {
     id: AppendVecId,
 
-    #[serde(skip)]
-    slot: Slot,
-
     /// storage holding the accounts
     accounts: AppendVec,
 
@@ -216,14 +212,13 @@ pub struct AccountStorageEntry {
 }
 
 impl AccountStorageEntry {
-    pub fn new(path: &Path, slot: Slot, id: usize, file_size: u64) -> Self {
-        let tail = AppendVec::new_relative_path(slot, id);
+    pub fn new(path: &Path, id: AppendVecId, file_size: u64) -> Self {
+        let tail = AppendVec::new_relative_path(id);
         let path = Path::new(path).join(&tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
         AccountStorageEntry {
             id,
-            slot,
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
         }
@@ -260,10 +255,6 @@ impl AccountStorageEntry {
 
     pub fn has_accounts(&self) -> bool {
         self.count() > 0
-    }
-
-    pub fn slot(&self) -> Slot {
-        self.slot
     }
 
     pub fn append_vec_id(&self) -> AppendVecId {
@@ -315,8 +306,7 @@ impl AccountStorageEntry {
         // unintended reveal of old state for unrelated accounts.
         assert!(
             count > 0,
-            "double remove of account in slot: {}/store: {}!!",
-            self.slot,
+            "double remove of account in store: {}!!",
             self.id
         );
 
@@ -348,14 +338,14 @@ pub fn get_temp_accounts_paths(count: u32) -> IOResult<(Vec<TempDir>, Vec<PathBu
 pub struct AccountsDBSerialize<'a, 'b> {
     accounts_db: &'a AccountsDB,
     slot: Slot,
-    account_storage_entries: &'b [SnapshotStorage],
+    account_storage_entries: &'b SnapshotStorages,
 }
 
 impl<'a, 'b> AccountsDBSerialize<'a, 'b> {
     pub fn new(
         accounts_db: &'a AccountsDB,
         slot: Slot,
-        account_storage_entries: &'b [SnapshotStorage],
+        account_storage_entries: &'b SnapshotStorages,
     ) -> Self {
         Self {
             accounts_db,
@@ -451,7 +441,7 @@ pub struct AccountsDB {
 
     /// distribute the accounts across storage lists
     pub next_id: AtomicUsize,
-    pub shrink_candidate_slots: Mutex<Vec<Slot>>,
+    pub shrink_candidates: Mutex<Vec<Weak<AccountStorageEntry>>>,
 
     write_version: AtomicU64,
 
@@ -501,7 +491,7 @@ impl Default for AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
             storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
-            shrink_candidate_slots: Mutex::new(Vec::new()),
+            shrink_candidates: Mutex::new(Vec::new()),
             write_version: AtomicU64::new(0),
             paths: vec![],
             temp_paths: None,
@@ -572,52 +562,57 @@ impl AccountsDB {
             .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
 
         // Remap the deserialized AppendVec paths to point to correct local paths
+        let mut remapped_entries = HashMap::new();
+
         let new_storage_map: Result<HashMap<Slot, SlotStores>, IOError> = storage
             .0
             .into_iter()
             .map(|(slot, mut slot_storage)| {
                 let mut new_slot_storage = HashMap::new();
                 for (id, storage_entry) in slot_storage.drain() {
-                    let path_index = thread_rng().gen_range(0, self.paths.len());
-                    let local_dir = &self.paths[path_index];
+                    if !remapped_entries.contains_key(&id) {
+                        let path_index = thread_rng().gen_range(0, self.paths.len());
+                        let local_dir = &self.paths[path_index];
 
-                    std::fs::create_dir_all(local_dir).expect("Create directory failed");
+                        std::fs::create_dir_all(local_dir).expect("Create directory failed");
 
-                    // Move the corresponding AppendVec from the snapshot into the directory pointed
-                    // at by `local_dir`
-                    let append_vec_relative_path =
-                        AppendVec::new_relative_path(slot, storage_entry.id);
-                    let append_vec_abs_path = stream_append_vecs_path
-                        .as_ref()
-                        .join(&append_vec_relative_path);
-                    let target = local_dir.join(append_vec_abs_path.file_name().unwrap());
-                    if std::fs::rename(append_vec_abs_path.clone(), target).is_err() {
-                        let mut copy_options = CopyOptions::new();
-                        copy_options.overwrite = true;
-                        let e = fs_extra::move_items(
-                            &vec![&append_vec_abs_path],
-                            &local_dir,
-                            &copy_options,
-                        )
-                        .map_err(|e| {
-                            AccountsDB::get_io_error(&format!(
-                                "Unable to move {:?} to {:?}: {}",
-                                append_vec_abs_path, local_dir, e
-                            ))
-                        });
-                        if e.is_err() {
-                            info!("{:?}", e);
-                            continue;
-                        }
-                    };
+                        // Move the corresponding AppendVec from the snapshot into the directory pointed
+                        // at by `local_dir`
+                        let append_vec_relative_path = AppendVec::new_relative_path(id);
+                        let append_vec_abs_path = stream_append_vecs_path
+                            .as_ref()
+                            .join(&append_vec_relative_path);
+                        let target = local_dir.join(append_vec_abs_path.file_name().unwrap());
+                        if std::fs::rename(append_vec_abs_path.clone(), target).is_err() {
+                            let mut copy_options = CopyOptions::new();
+                            copy_options.overwrite = true;
+                            let e = fs_extra::move_items(
+                                &vec![&append_vec_abs_path],
+                                &local_dir,
+                                &copy_options,
+                            )
+                            .map_err(|e| {
+                                AccountsDB::get_io_error(&format!(
+                                    "Unable to move {:?} to {:?}: {}",
+                                    append_vec_abs_path, local_dir, e
+                                ))
+                            });
+                            if e.is_err() {
+                                info!("{:?}", e);
+                                continue;
+                            }
+                        };
 
-                    // Notify the AppendVec of the new file location
-                    let local_path = local_dir.join(append_vec_relative_path);
-                    let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
-                    u_storage_entry
-                        .set_file(local_path)
-                        .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
-                    new_slot_storage.insert(id, Arc::new(u_storage_entry));
+                        // Notify the AppendVec of the new file location
+                        let local_path = local_dir.join(append_vec_relative_path);
+                        let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
+                        u_storage_entry
+                            .set_file(local_path)
+                            .map_err(|e| AccountsDB::get_io_error(&e.to_string()))?;
+                        remapped_entries.insert(id, Arc::new(u_storage_entry));
+                    }
+
+                    new_slot_storage.insert(id, remapped_entries.get(&id).unwrap().clone());
                 }
                 Ok((slot, new_slot_storage))
             })
@@ -657,13 +652,8 @@ impl AccountsDB {
         Ok(())
     }
 
-    fn new_storage_entry(&self, slot: Slot, path: &Path, size: u64) -> AccountStorageEntry {
-        AccountStorageEntry::new(
-            path,
-            slot,
-            self.next_id.fetch_add(1, Ordering::Relaxed),
-            size,
-        )
+    fn new_storage_entry(&self, path: &Path, size: u64) -> AccountStorageEntry {
+        AccountStorageEntry::new(path, self.next_id.fetch_add(1, Ordering::Relaxed), size)
     }
 
     // Reclaim older states of rooted non-zero lamport accounts as a general
@@ -691,6 +681,7 @@ impl AccountsDB {
 
         let mut measure = Measure::start("clean_old_root_reclaims");
         self.handle_reclaims(&reclaims);
+        trace!("reclaims from clean old rooted: {}", reclaims.len());
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
@@ -838,6 +829,7 @@ impl AccountsDB {
         }
 
         self.handle_reclaims(&reclaims);
+        trace!("reclaims from clean zero lamport: {}", reclaims.len());
         reclaims_time.stop();
         debug!(
             "clean_accounts: {} {} {} {}",
@@ -851,6 +843,7 @@ impl AccountsDB {
         dead_accounts.stop();
         let dead_slots_len = {
             let mut dead_slots_w = self.dead_slots.write().unwrap();
+            debug!("extending dead_slots: {:?}", dead_slots);
             dead_slots_w.extend(dead_slots);
             dead_slots_w.len()
         };
@@ -883,46 +876,74 @@ impl AccountsDB {
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
     // then create a minimum AppendVed filled with the alive.
-    fn shrink_stale_slot(&self, slot: Slot) {
-        trace!("shrink_stale_slot: slot: {}", slot);
+    fn shrink_stale_storage(&self) {
+        let mut total_alive_count = 0;
+        let mut all_stored_accounts: Vec<(
+            Slot,
+            Pubkey,
+            Account,
+            usize,
+            (AppendVecId, usize),
+            u64,
+        )> = vec![];
+        let mut storages = self.shrink_candidates.lock().unwrap();
+        while let Some(storage) = storages.pop() {
+            trace!("shrink_stale_storage: storage: {:?}", storage);
 
-        let mut stored_accounts = vec![];
-        {
-            let storage = self.storage.read().unwrap();
-            if let Some(stores) = storage.0.get(&slot) {
-                let mut alive_count = 0;
-                for store in stores.values() {
-                    alive_count += store.count();
-                    let mut start = 0;
-                    while let Some((account, next)) = store.accounts.get_account(start) {
-                        stored_accounts.push((
-                            account.meta.pubkey,
-                            account.clone_account(),
-                            next - start,
-                            (store.id, account.offset),
-                            account.meta.write_version,
-                        ));
-                        start = next;
-                    }
-                }
-                if (alive_count as f32 / stored_accounts.len() as f32) >= 0.80 {
-                    trace!(
-                        "shrink_stale_slot: not enough space to shrink: {} / {}",
-                        alive_count,
-                        stored_accounts.len()
-                    );
-                    return;
-                }
+            let storage = storage.upgrade();
+            if storage.is_none() {
+                continue;
+            }
+            let storage = storage.unwrap();
+
+            let alive_count = storage.count();
+            let mut stored_accounts = vec![];
+            let mut start = 0;
+            // XX change to get_account(start, None)
+            while let Some((account, next)) = storage.accounts.get_account(start) {
+                stored_accounts.push((
+                    account.meta.slot,
+                    account.meta.pubkey,
+                    account.clone_account(),
+                    next - start,
+                    (storage.id, account.offset),
+                    account.meta.write_version,
+                ));
+                start = next;
+            }
+
+            if stored_accounts.len() > 1000
+                && (alive_count as f32 / stored_accounts.len() as f32) >= 0.80
+            {
+                trace!(
+                    "shrink_stale_storage: not enough space to shrink: {} / {}",
+                    alive_count,
+                    stored_accounts.len()
+                );
+                continue;
+            }
+            total_alive_count += alive_count;
+            all_stored_accounts.extend(stored_accounts);
+
+            if total_alive_count > 100 {
+                break;
             }
         }
 
         let alive_accounts: Vec<_> = {
             let no_ancestors = HashMap::new();
             let accounts_index = self.accounts_index.read().unwrap();
-            stored_accounts
+            all_stored_accounts
                 .iter()
                 .filter(
-                    |(pubkey, _account, _storage_size, (store_id, offset), _write_version)| {
+                    |(
+                        _slot,
+                        pubkey,
+                        _account,
+                        _storage_size,
+                        (store_id, offset),
+                        _write_version,
+                    )| {
                         if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
                             list.iter()
                                 .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
@@ -936,93 +957,86 @@ impl AccountsDB {
 
         let alive_total: u64 = alive_accounts
             .iter()
-            .map(|(_pubkey, _account, account_size, _location, _write_verion)| *account_size as u64)
+            .map(
+                |(_slot, _pubkey, _account, account_size, _location, _write_verion)| {
+                    *account_size as u64
+                },
+            )
             .sum();
         let aligned_total: u64 = (alive_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
 
         debug!(
-            "shrinking: slot: {}, stored_accounts: {} => alive_accounts: {} ({} bytes; aligned to: {})",
-            slot,
-            stored_accounts.len(),
+            "shrinking: stored_accounts: {} => alive_accounts: {} ({} bytes; aligned to: {})",
+            all_stored_accounts.len(),
             alive_accounts.len(),
             alive_total,
             aligned_total
         );
 
         if aligned_total > 0 {
+            let mut slots = Vec::with_capacity(alive_accounts.len());
             let mut accounts = Vec::with_capacity(alive_accounts.len());
             let mut hashes = Vec::with_capacity(alive_accounts.len());
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
-            for (pubkey, account, _size, _location, write_version) in alive_accounts {
+            for (slot, pubkey, account, _size, _location, write_version) in alive_accounts {
+                slots.push(*slot);
                 accounts.push((pubkey, account));
                 hashes.push(account.hash);
                 write_versions.push(*write_version);
             }
 
-            let shrunken_store = self.create_and_insert_store(slot, aligned_total);
+            let shrunken_store = self.create_and_insert_store(&slots, aligned_total);
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
-            let infos = self.store_accounts_to(
-                slot,
+            let infos = self.store_accounts_to2(
+                &slots,
                 &accounts,
                 &hashes,
                 |_| shrunken_store.clone(),
                 write_versions.into_iter(),
             );
-            let reclaims = self.update_index(slot, infos, &accounts);
+            let reclaims = self.update_index2(&slots, infos, &accounts);
 
             self.handle_reclaims(&reclaims);
+            trace!("reclaims from shrink: {}", reclaims.len());
 
             let mut storage = self.storage.write().unwrap();
-            if let Some(slot_storage) = storage.0.get_mut(&slot) {
-                slot_storage.retain(|_key, store| store.count() > 0);
+            for slot in slots {
+                if let Some(slot_storage) = storage.0.get_mut(&slot) {
+                    slot_storage.retain(|_key, store| store.count() > 0);
+                }
             }
         }
     }
 
     // Infinitely returns rooted roots in cyclic order
-    fn next_shrink_slot(&self) -> Option<Slot> {
-        let next = {
-            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-            candidates.pop()
-        };
+    fn remaining_shrink_candidates(&self) {
+        let mut candidates = self.shrink_candidates.lock().unwrap();
 
-        if next.is_some() {
-            next
-        } else {
-            let mut new_all_slots = self.all_root_slots_in_index();
-            let next = new_all_slots.pop();
-
-            let mut candidates = self.shrink_candidate_slots.lock().unwrap();
-            *candidates = new_all_slots;
-
-            next
+        if candidates.is_empty() {
+            *candidates = self.all_storages();
         }
     }
 
-    fn all_root_slots_in_index(&self) -> Vec<Slot> {
-        let index = self.accounts_index.read().unwrap();
-        index.roots.iter().cloned().collect()
-    }
-
-    fn all_slots_in_storage(&self) -> Vec<Slot> {
+    fn all_storages(&self) -> Vec<Weak<AccountStorageEntry>> {
         let storage = self.storage.read().unwrap();
-        storage.0.keys().cloned().collect()
+        // exclude recent roots in some way?
+        let mut s = storage.0.values().flatten().collect::<Vec<_>>();
+
+        s.sort_by(|(_a, a), (_x, b)| a.id.cmp(&b.id));
+        s.iter().map(|(_a, entry)| Arc::downgrade(entry)).collect()
     }
 
-    pub fn process_stale_slot(&self) {
-        if let Some(slot) = self.next_shrink_slot() {
-            self.shrink_stale_slot(slot);
-        }
+    pub fn process_stale_storage(&self) {
+        self.remaining_shrink_candidates();
+        self.shrink_stale_storage();
     }
 
-    pub fn shrink_all_stale_slots(&self) {
-        for slot in self.all_slots_in_storage() {
-            self.shrink_stale_slot(slot);
-        }
+    pub fn shrink_all_stale_storages(&self) {
+        //self.shrink_stale_storage(self.all_storages());
     }
 
     pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Slot, usize>, scan_func: F) -> A
@@ -1076,7 +1090,7 @@ impl AccountsDB {
             storage_maps
                 .into_par_iter()
                 .map(|storage| {
-                    let accounts = storage.accounts.accounts(0);
+                    let accounts = storage.accounts.accounts(0, Some(slot));
                     let mut retval = B::default();
                     accounts.iter().for_each(|stored_account| {
                         scan_func(stored_account, storage.id, &mut retval)
@@ -1161,7 +1175,7 @@ impl AccountsDB {
                         let ret = store.clone();
                         drop(stores);
                         if create_extra {
-                            self.create_and_insert_store(slot, self.file_size);
+                            self.create_and_insert_store(&[slot], self.file_size);
                         }
                         return ret;
                     }
@@ -1175,20 +1189,23 @@ impl AccountsDB {
 
         drop(stores);
 
-        let store = self.create_and_insert_store(slot, self.file_size);
+        let store = self.create_and_insert_store(&[slot], self.file_size);
         store.try_available();
         store
     }
 
-    fn create_and_insert_store(&self, slot: Slot, size: u64) -> Arc<AccountStorageEntry> {
+    fn create_and_insert_store(&self, slots: &[Slot], size: u64) -> Arc<AccountStorageEntry> {
         let path_index = thread_rng().gen_range(0, self.paths.len());
-        let store =
-            Arc::new(self.new_storage_entry(slot, &Path::new(&self.paths[path_index]), size));
-        let store_for_index = store.clone();
+        let store = Arc::new(self.new_storage_entry(&Path::new(&self.paths[path_index]), size));
 
-        let mut stores = self.storage.write().unwrap();
-        let slot_storage = stores.0.entry(slot).or_insert_with(HashMap::new);
-        slot_storage.insert(store.id, store_for_index);
+        if !slots.is_empty() {
+            let mut stores = self.storage.write().unwrap();
+            for slot in slots {
+                let slot_storage = stores.0.entry(*slot).or_insert_with(HashMap::new);
+                slot_storage.insert(store.id, store.clone());
+            }
+        }
+
         store
     }
 
@@ -1314,13 +1331,13 @@ impl AccountsDB {
         )
     }
 
-    fn store_accounts_to<F: FnMut(Slot) -> Arc<AccountStorageEntry>, P: Iterator<Item = u64>>(
+    fn store_accounts_to<F: FnMut(Slot) -> Arc<AccountStorageEntry>, W: Iterator<Item = u64>>(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
         mut storage_finder: F,
-        mut write_version_producer: P,
+        mut write_version_producer: W,
     ) -> Vec<AccountInfo> {
         let default_account = Account::default();
         let with_meta: Vec<(StoredMeta, &Account)> = accounts
@@ -1334,6 +1351,7 @@ impl AccountsDB {
                 let data_len = account.data.len() as u64;
 
                 let meta = StoredMeta {
+                    slot,
                     write_version: write_version_producer.next().unwrap(),
                     pubkey: **pubkey,
                     data_len,
@@ -1353,7 +1371,7 @@ impl AccountsDB {
                 // See if an account overflows the default append vec size.
                 let data_len = (with_meta[infos.len()].1.data.len() + 4096) as u64;
                 if data_len > self.file_size {
-                    self.create_and_insert_store(slot, data_len * 2);
+                    self.create_and_insert_store(&[slot], data_len * 2);
                 }
                 continue;
             }
@@ -1368,6 +1386,55 @@ impl AccountsDB {
             // restore the state to available
             storage.set_status(AccountStorageStatus::Available);
         }
+        infos
+    }
+
+    fn store_accounts_to2<F: FnMut(Slot) -> Arc<AccountStorageEntry>, W: Iterator<Item = u64>>(
+        &self,
+        slots: &[Slot],
+        accounts: &[(&Pubkey, &Account)],
+        hashes: &[Hash],
+        mut storage_finder: F,
+        mut write_version_producer: W,
+    ) -> Vec<AccountInfo> {
+        let default_account = Account::default();
+        let with_meta: Vec<(StoredMeta, &Account)> = accounts
+            .iter()
+            .zip(slots)
+            .map(|((pubkey, account), slot)| {
+                let account = if account.lamports == 0 {
+                    &default_account
+                } else {
+                    *account
+                };
+                let data_len = account.data.len() as u64;
+
+                let meta = StoredMeta {
+                    slot: *slot,
+                    write_version: write_version_producer.next().unwrap(),
+                    pubkey: **pubkey,
+                    data_len,
+                };
+                (meta, account)
+            })
+            .collect();
+        let mut infos: Vec<AccountInfo> = Vec::with_capacity(with_meta.len());
+        let storage = storage_finder(0xdead);
+        let rvs = storage
+            .accounts
+            .append_accounts(&with_meta[infos.len()..], &hashes[infos.len()..]);
+        if rvs.is_empty() {
+            panic!("bad");
+        }
+        for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
+            storage.add_account();
+            infos.push(AccountInfo {
+                store_id: storage.id,
+                offset: *offset,
+                lamports: account.lamports,
+            });
+        }
+        storage.set_status(AccountStorageStatus::Available);
         infos
     }
 
@@ -1605,16 +1672,44 @@ impl AccountsDB {
         reclaims
     }
 
+    fn update_index2(
+        &self,
+        slots: &[Slot],
+        infos: Vec<AccountInfo>,
+        accounts: &[(&Pubkey, &Account)],
+    ) -> SlotList<AccountInfo> {
+        let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
+        let index = self.accounts_index.read().unwrap();
+        let mut update_index_work = Measure::start("update_index_work");
+        let inserts: Vec<_> = infos
+            .into_iter()
+            .zip(accounts.iter())
+            .zip(slots.iter())
+            .filter_map(|((info, pubkey_account), slot)| {
+                let pubkey = pubkey_account.0;
+                index
+                    .update(*slot, pubkey, info, &mut reclaims)
+                    .map(|info| (pubkey, info, slot))
+            })
+            .collect();
+
+        drop(index);
+        if !inserts.is_empty() {
+            let mut index = self.accounts_index.write().unwrap();
+            for (pubkey, info, slot) in inserts {
+                index.insert(*slot, pubkey, info, &mut reclaims);
+            }
+        }
+        update_index_work.stop();
+        reclaims
+    }
+
     fn remove_dead_accounts(&self, reclaims: SlotSlice<AccountInfo>) -> HashSet<Slot> {
         let storage = self.storage.read().unwrap();
         let mut dead_slots = HashSet::new();
         for (slot, account_info) in reclaims {
             if let Some(slot_storage) = storage.0.get(slot) {
                 if let Some(store) = slot_storage.get(&account_info.store_id) {
-                    assert_eq!(
-                        *slot, store.slot,
-                        "AccountDB::accounts_index corrupted. Storage should only point to one slot"
-                    );
                     let count = store.remove_account();
                     if count == 0 {
                         dead_slots.insert(*slot);
@@ -1642,11 +1737,11 @@ impl AccountsDB {
             {
                 let mut measure = Measure::start("clean_dead_slots-ms");
                 let storage = self.storage.read().unwrap();
-                let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
+                let mut stores: Vec<(Slot, Arc<AccountStorageEntry>)> = vec![];
                 for slot in dead_slots.iter() {
                     if let Some(slot_storage) = storage.0.get(slot) {
                         for store in slot_storage.values() {
-                            stores.push(store.clone());
+                            stores.push((*slot, store.clone()));
                         }
                     }
                 }
@@ -1656,8 +1751,8 @@ impl AccountsDB {
                     self.thread_pool_clean.install(|| {
                         stores
                             .into_par_iter()
-                            .map(|store| {
-                                let accounts = store.accounts.accounts(0);
+                            .map(|(slot, store)| {
+                                let accounts = store.accounts.accounts(0, Some(slot));
                                 accounts
                                     .into_iter()
                                     .map(|account| account.meta.pubkey)
@@ -1777,9 +1872,9 @@ impl AccountsDB {
         let mut update_index = Measure::start("store::update_index");
         let reclaims = self.update_index(slot, infos, accounts);
         update_index.stop();
-        trace!("reclaim: {}", reclaims.len());
 
         self.handle_reclaims(&reclaims);
+        trace!("reclaims from store: {}", reclaims.len());
     }
 
     pub fn add_root(&self, slot: Slot) {
@@ -1795,14 +1890,19 @@ impl AccountsDB {
             .filter(|(slot, _slot_stores)| {
                 **slot <= snapshot_slot && accounts_index.is_root(**slot)
             })
-            .map(|(_slot, slot_stores)| {
-                slot_stores
-                    .values()
-                    .filter(|x| x.has_accounts())
-                    .cloned()
-                    .collect()
+            .map(|(slot, slot_stores)| {
+                (
+                    *slot,
+                    slot_stores
+                        .values()
+                        .filter(|x| x.has_accounts())
+                        .cloned()
+                        .collect(),
+                )
             })
-            .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
+            .filter(|(_slot, snapshot_storage): &(Slot, SnapshotStorage)| {
+                !snapshot_storage.is_empty()
+            })
             .collect()
     }
 

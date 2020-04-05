@@ -5,6 +5,7 @@ use crate::snapshot_utils::{self, SnapshotError};
 use log::*;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
+use solana_runtime::accounts_db::SnapshotStorages;
 use solana_runtime::{bank::Bank, status_cache::MAX_CACHE_ENTRIES};
 use solana_sdk::{clock::Slot, timing};
 use std::{
@@ -193,6 +194,7 @@ impl BankForks {
             .unwrap_or(0);
         // Generate each snapshot at a fixed interval
         let mut is_root_bank_squashed = false;
+        trace!("setting root....: {}", root);
         if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
             let config = self.snapshot_config.as_ref().unwrap();
             let mut banks = vec![root_bank];
@@ -207,6 +209,7 @@ impl BankForks {
                         bank.squash();
                         is_root_bank_squashed = bank_slot == root;
                         let mut snapshot_time = Measure::start("total-snapshot-ms");
+                        trace!("generating snapshot....: {}", root);
                         let r = self.generate_snapshot(
                             bank_slot,
                             &bank.src.roots(),
@@ -278,7 +281,7 @@ impl BankForks {
             .cloned()
             .expect("root must exist in BankForks");
 
-        let storages: Vec<_> = bank.get_snapshot_storages();
+        let storages: SnapshotStorages = bank.get_snapshot_storages();
         let mut add_snapshot_time = Measure::start("add-snapshot-ms");
         snapshot_utils::add_snapshot(&config.snapshot_path, &bank, &storages)?;
         add_snapshot_time.stop();

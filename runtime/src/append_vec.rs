@@ -18,6 +18,8 @@ use std::{
     sync::Mutex,
 };
 
+pub type AppendVecId = usize;
+
 //Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 //crash on some architectures.
 const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
@@ -34,6 +36,7 @@ const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 16 * 1024 * 1024 * 1024; // 16 GiB
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Clone, PartialEq, Debug)]
 pub struct StoredMeta {
+    pub slot: Slot,
     /// global write version
     pub write_version: u64,
     /// key for the account
@@ -239,8 +242,8 @@ impl AppendVec {
         append_vec_path.as_ref().file_name().map(PathBuf::from)
     }
 
-    pub fn new_relative_path(slot: Slot, id: usize) -> PathBuf {
-        PathBuf::from(&format!("{}.{}", slot, id))
+    pub fn new_relative_path(id: AppendVecId) -> PathBuf {
+        PathBuf::from(&format!("{:016x}.dat", id))
     }
 
     #[allow(clippy::mutex_atomic)]
@@ -351,7 +354,10 @@ impl AppendVec {
         Some((unsafe { &*ptr }, next))
     }
 
-    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
+    pub fn get_account<'a>(
+        &'a self,
+        offset: usize, /*, slot: Option<Slot>: add?? */
+    ) -> Option<(StoredAccount<'a>, usize)> {
         let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
         let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
         let (hash, next): (&'a Hash, _) = self.get_type(next)?;
@@ -377,10 +383,12 @@ impl AppendVec {
         self.path.clone()
     }
 
-    pub fn accounts<'a>(&'a self, mut start: usize) -> Vec<StoredAccount<'a>> {
+    pub fn accounts<'a>(&'a self, mut start: usize, slot: Option<Slot>) -> Vec<StoredAccount<'a>> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(start) {
-            accounts.push(account);
+            if slot.is_none() || slot.unwrap() == account.meta.slot {
+                accounts.push(account);
+            }
             start = next;
         }
         accounts
@@ -473,6 +481,7 @@ pub mod test_utils {
         let mut account = Account::new(sample as u64, 0, &Pubkey::default());
         account.data = (0..data_len).map(|_| data_len as u8).collect();
         let stored_meta = StoredMeta {
+            slot: 0,
             write_version: 0,
             pubkey: Pubkey::default(),
             data_len: data_len as u64,

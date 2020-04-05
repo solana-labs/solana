@@ -130,7 +130,7 @@ pub fn unpack_snapshot<A: Read, P: AsRef<Path>>(
 }
 
 fn is_valid_snapshot_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
-    let like_storage = Regex::new(r"^\d+\.\d+$").unwrap();
+    let like_storage = Regex::new(r"^[0-9a-f]{16}.dat$").unwrap();
     let like_slot = Regex::new(r"^\d+$").unwrap();
 
     trace!("validating: {:?} {:?}", parts, kind);

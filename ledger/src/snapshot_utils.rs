@@ -9,7 +9,7 @@ use log::*;
 use regex::Regex;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    accounts_db::{SnapshotStorage, SnapshotStorages},
+    accounts_db::SnapshotStorages,
     bank::{
         self, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
         MAX_SNAPSHOT_DATA_FILE_SIZE,
@@ -18,6 +18,7 @@ use solana_runtime::{
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
+    collections::HashSet,
     fs::{self, File},
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -43,22 +44,22 @@ pub struct SlotSnapshotPaths {
 
 #[derive(Error, Debug)]
 pub enum SnapshotError {
-    #[error("I/O error")]
+    #[error("I/O error: {0}")]
     IO(#[from] std::io::Error),
 
-    #[error("serialization error")]
+    #[error("serialization error: {0}")]
     Serialize(#[from] Box<bincode::ErrorKind>),
 
-    #[error("file system error")]
+    #[error("file system error: {0}")]
     FsExtra(#[from] fs_extra::error::Error),
 
-    #[error("archive generation failure {0}")]
+    #[error("archive generation failure: {0}")]
     ArchiveGenerationFailure(ExitStatus),
 
     #[error("storage path symlink is invalid")]
     StoragePathSymlinkInvalid,
 
-    #[error("Unpack error")]
+    #[error("Unpack error: {0}")]
     UnpackError(#[from] UnpackError),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
@@ -170,9 +171,18 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     )?;
 
     // Add the AppendVecs into the compressible list
-    for storage in snapshot_package.storages.iter().flatten() {
+    for storage in snapshot_package.storages.values().flatten() {
         storage.flush()?;
-        let storage_path = storage.get_path();
+    }
+
+    // update metrics so that duplicate storage entries are counted without duplicates
+    let mut paths: HashSet<_> = snapshot_package
+        .storages
+        .values()
+        .flatten()
+        .map(|x| x.get_path())
+        .collect();
+    for storage_path in paths {
         let output_path = staging_accounts_dir.join(
             storage_path
                 .file_name()
@@ -352,7 +362,7 @@ where
 pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_path: P,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &SnapshotStorages,
 ) -> Result<SlotSnapshotPaths> {
     bank.clean_accounts();
     bank.update_accounts_hash();

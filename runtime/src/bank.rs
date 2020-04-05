@@ -4,7 +4,7 @@
 //! already been signed and verified.
 use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
-    accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
+    accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorages},
     blockhash_queue::BlockhashQueue,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
@@ -123,7 +123,7 @@ impl BankRc {
 
 pub struct BankRcSerialize<'a, 'b> {
     pub bank_rc: &'a BankRc,
-    pub snapshot_storages: &'b [SnapshotStorage],
+    pub snapshot_storages: &'b SnapshotStorages,
 }
 
 impl<'a, 'b> Serialize for BankRcSerialize<'a, 'b> {
@@ -2211,11 +2211,11 @@ impl Bank {
     }
 
     pub fn process_stale_slot(&self) {
-        self.rc.accounts.accounts_db.process_stale_slot();
+        self.rc.accounts.accounts_db.process_stale_storage();
     }
 
     pub fn shrink_all_stale_slots(&self) {
-        self.rc.accounts.accounts_db.shrink_all_stale_slots();
+        self.rc.accounts.accounts_db.shrink_all_stale_storages();
     }
 }
 
