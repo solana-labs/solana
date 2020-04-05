@@ -224,7 +224,17 @@ test('live Nonce actions', async () => {
   expect(nonceBalance).toEqual(minimumAmount);
 
   const nonceQuery1 = await connection.getNonce(nonceAccount.publicKey);
+  if (nonceQuery1 === null) {
+    expect(nonceQuery1).not.toBeNull();
+    return;
+  }
+
   const nonceQuery2 = await connection.getNonce(nonceAccount.publicKey);
+  if (nonceQuery2 === null) {
+    expect(nonceQuery2).not.toBeNull();
+    return;
+  }
+
   expect(nonceQuery1.nonce).toEqual(nonceQuery2.nonce);
 
   // Wait for blockhash to advance
@@ -238,6 +248,10 @@ test('live Nonce actions', async () => {
   );
   await sendAndConfirmRecentTransaction(connection, advanceNonce, from);
   const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
+  if (nonceQuery3 === null) {
+    expect(nonceQuery3).not.toBeNull();
+    return;
+  }
   expect(nonceQuery1.nonce).not.toEqual(nonceQuery3.nonce);
   const nonce = nonceQuery3.nonce;
 

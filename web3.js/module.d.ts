@@ -163,11 +163,11 @@ declare module '@solana/web3.js' {
     getAccountInfoAndContext(
       publicKey: PublicKey,
       commitment?: Commitment,
-    ): Promise<RpcResponseAndContext<AccountInfo>>;
+    ): Promise<RpcResponseAndContext<AccountInfo | null>>;
     getAccountInfo(
       publicKey: PublicKey,
       commitment?: Commitment,
-    ): Promise<AccountInfo>;
+    ): Promise<AccountInfo | null>;
     getProgramAccounts(
       programId: PublicKey,
       commitment?: Commitment,

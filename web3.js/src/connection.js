@@ -866,7 +866,7 @@ export class Connection {
   async getAccountInfoAndContext(
     publicKey: PublicKey,
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<AccountInfo>> {
+  ): Promise<RpcResponseAndContext<AccountInfo | null>> {
     const args = this._argsWithCommitment([publicKey.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
@@ -875,17 +875,16 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
 
-    if (!res.result.value) {
-      throw new Error('Invalid request');
+    let value = null;
+    if (res.result.value) {
+      const {executable, owner, lamports, data} = res.result.value;
+      value = {
+        executable,
+        owner: new PublicKey(owner),
+        lamports,
+        data: bs58.decode(data),
+      };
     }
-
-    const {executable, owner, lamports, data} = res.result.value;
-    const value = {
-      executable,
-      owner: new PublicKey(owner),
-      lamports,
-      data: bs58.decode(data),
-    };
 
     return {
       context: {
@@ -901,7 +900,7 @@ export class Connection {
   async getAccountInfo(
     publicKey: PublicKey,
     commitment: ?Commitment,
-  ): Promise<AccountInfo> {
+  ): Promise<AccountInfo | null> {
     return await this.getAccountInfoAndContext(publicKey, commitment)
       .then(x => x.value)
       .catch(e => {
@@ -1235,29 +1234,19 @@ export class Connection {
   async getNonceAndContext(
     nonceAccount: PublicKey,
     commitment: ?Commitment,
-  ): Promise<RpcResponseAndContext<NonceAccount>> {
-    const args = this._argsWithCommitment(
-      [nonceAccount.toBase58()],
+  ): Promise<RpcResponseAndContext<NonceAccount | null>> {
+    const {context, value: accountInfo} = await this.getAccountInfoAndContext(
+      nonceAccount,
       commitment,
     );
-    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
-    const res = GetAccountInfoAndContextRpcResult(unsafeRes);
-    if (res.error) {
-      throw new Error(res.error.message);
-    }
-    assert(typeof res.result !== 'undefined');
-    if (!res.result.value) {
-      throw new Error('Invalid request');
-    }
 
-    const value = NonceAccount.fromAccountData(
-      bs58.decode(res.result.value.data),
-    );
+    let value = null;
+    if (accountInfo !== null) {
+      value = NonceAccount.fromAccountData(accountInfo.data);
+    }
 
     return {
-      context: {
-        slot: res.result.context.slot,
-      },
+      context,
       value,
     };
   }
@@ -1268,7 +1257,7 @@ export class Connection {
   async getNonce(
     nonceAccount: PublicKey,
     commitment: ?Commitment,
-  ): Promise<NonceAccount> {
+  ): Promise<NonceAccount | null> {
     return await this.getNonceAndContext(nonceAccount, commitment)
       .then(x => x.value)
       .catch(e => {
