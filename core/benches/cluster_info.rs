@@ -36,7 +36,13 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     bencher.iter(move || {
         let shreds = shreds.clone();
         cluster_info
-            .broadcast_shreds(&socket, shreds, &seeds, Some(stakes.clone()))
+            .broadcast_shreds(
+                &socket,
+                shreds,
+                &seeds,
+                Some(stakes.clone()),
+                &mut Instant::now(),
+            )
             .unwrap();
     });
 }

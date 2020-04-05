@@ -101,7 +101,6 @@ pub struct ClusterInfo {
     pub(crate) keypair: Arc<Keypair>,
     /// The network entrypoint
     entrypoint: Option<ContactInfo>,
-    last_datapoint_submit: Instant,
 }
 
 #[derive(Default, Clone)]
@@ -209,7 +208,6 @@ impl ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair,
             entrypoint: None,
-            last_datapoint_submit: Instant::now(),
         };
         let id = contact_info.id;
         me.gossip.set_self(&id);
@@ -949,22 +947,23 @@ impl ClusterInfo {
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
     pub fn broadcast_shreds(
-        &mut self,
+        &self,
         s: &UdpSocket,
         shreds: Vec<Vec<u8>>,
         seeds: &[[u8; 32]],
         stakes: Option<Arc<HashMap<Pubkey, u64>>>,
+        last_datapoint_submit: &mut Instant,
     ) -> Result<()> {
         let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
         let broadcast_len = peers_and_stakes.len();
         if broadcast_len == 0 {
-            if duration_as_s(&Instant::now().duration_since(self.last_datapoint_submit)) >= 1.0 {
+            if duration_as_s(&Instant::now().duration_since(*last_datapoint_submit)) >= 1.0 {
                 datapoint_info!(
                     "cluster_info-num_nodes",
                     ("live_count", 1, i64),
                     ("broadcast_count", 1, i64)
                 );
-                self.last_datapoint_submit = Instant::now();
+                *last_datapoint_submit = Instant::now();
             }
             return Ok(());
         }
@@ -995,13 +994,13 @@ impl ClusterInfo {
                 num_live_peers += 1;
             }
         });
-        if duration_as_s(&Instant::now().duration_since(self.last_datapoint_submit)) >= 1.0 {
+        if duration_as_s(&Instant::now().duration_since(*last_datapoint_submit)) >= 1.0 {
             datapoint_info!(
                 "cluster_info-num_nodes",
                 ("live_count", num_live_peers, i64),
                 ("broadcast_count", broadcast_len + 1, i64)
             );
-            self.last_datapoint_submit = Instant::now();
+            *last_datapoint_submit = Instant::now();
         }
         Ok(())
     }
