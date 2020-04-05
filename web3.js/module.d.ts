@@ -265,6 +265,8 @@ declare module '@solana/web3.js' {
     feeCalculator: FeeCalculator;
   }
 
+  export const NONCE_ACCOUNT_LENGTH: number;
+
   // === src/validator-info.js ===
   export const VALIDATOR_INFO_KEY: PublicKey;
   export type Info = {
