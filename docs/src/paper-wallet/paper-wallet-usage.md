@@ -52,8 +52,19 @@ solana-keygen new --no-outfile
 
 {% hint style="warning" %}
 If the `--no-outfile` flag is **omitted**, the default behavior is to write the
-keypair to `~/.config/solana/id.json`
+keypair to `~/.config/solana/id.json`, resulting in a
+[file system wallet](../file-system-wallet/README.md)
 {% endhint %}
+
+The output of this command will display a line like this:
+```
+pubkey: 9ZNTfG4NyQgxy2SWjSiQoUyBPEvXT2xo7fKc5hPYYJ7b
+```
+
+The value shown after `pubkey:` is your *wallet address*.
+
+**Note:** In working with paper wallets and file system wallets, the terms "pubkey"
+and "wallet address" are sometimes used interchangably.
 
 {% hint style="info" %}
 For added security, increase the seed phrase word count using the `--word-count`
@@ -109,87 +120,18 @@ solana-keygen pubkey --help
 
 ## Verifying the Keypair
 
-A keypair can be verified by following a variation on the
-[offline signing](../offline-signing/README.md) procedure with a dummy transaction.
+To verify you control the private key of a paper wallet address, use
+`solana-keygen verify`:
 
-### Create and Sign a Dummy Transaction
-
-Use offline signing to acquire the signature of a dummy transaction that can
-be verified in the next step. A 0 Lamport [transfer](../cli/usage.md#solana-transfer)
-is used to prevent inadvertent loss of funds. Additionally, an improbable _blockhash_
-value is specified, as well as using the address of the _system program_ for the `TO`
-argument, to ensure the transaction would be rejected by the _cluster_ should
-it be submitted in error.
-
-Command
-
-```text
-solana transfer 11111111111111111111111111111111 0 --sign-only \
-    --keypair ASK --blockhash 11111111111111111111111111111111
+```bash
+solana-keygen verify <PUBKEY> ASK
 ```
 
-Prompt for seed phrase
-
-```text
-[keypair] seed phrase:
-[keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-Recovered pubkey `AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi`. Continue? (y/n): y
-```
-
-Output
-
-```text
-Blockhash: 11111111111111111111111111111111
-Signers (Pubkey=Signature):
-  AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA
-
-{"blockhash":"11111111111111111111111111111111","signers":["AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA"]}
-```
-
-### Verify the Signature
-
-Using the _Signers_ output from the [previous step](#create-and-sign-a-dummy-transaction)
-to reconstruct the transaction, this time specifying the _pubkey_ and _signature_
-as in the submission step of [offline signing](../offline-signing/README.md). That is, the `--from` and
-`--fee-payer` are explicitly set to the _pubkey_ rather than being taken from
-the keypair (which is not queried this time).
-
-Command
-
-```text
-solana transfer 11111111111111111111111111111111 0 --sign-only --from AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi \
---signer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA \
---blockhash 11111111111111111111111111111111 --fee-payer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi
-```
-
-Output
-
-```text
-Blockhash: 11111111111111111111111111111111
-Signers (Pubkey=Signature):
-  AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA
-
-{"blockhash":"11111111111111111111111111111111","signers":["AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWA"]}
-```
-
-### An Example of Failure
-
-To simulate an error the [verification step](#verify-the-signature) is repeated,
-but with a corrupted _signature_ (the last letter is changed from "A" to "B").
-
-Command
-
-```text
-solana transfer 11111111111111111111111111111111 0 --sign-only --from AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi \
---signer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi=3uZndChSmPoYfaCihC993E7EAHKDsuu53Ge6Dk1K6ULwhJkgcgiHNm9J1Geqq2azW6PKxQTFjC8rMm5bGxRcYWB \
---blockhash 11111111111111111111111111111111 --fee-payer AjTz9EX6vXB6EboKpFm7SwrbDannb6icjvEE632D3rfi
-```
-
-Output (Error)
-
-```text
-Error: BadParameter("Transaction construction failed, incorrect signature or public key provided")
-```
+where `<PUBKEY>` is replaced with the wallet address and they keyword `ASK` tells the
+command to prompt you for the keypair's seed phrase. Note that for security
+reasons, your seed phrase will not be displayed as you type. After entering your
+seed phrase, the command will output "Success" if the given public key matches the
+keypair generated from your seed phrase, and "Failed" otherwise.
 
 ## Checking Account Balance
 
@@ -200,10 +142,11 @@ To retrieve public keys securely from a paper wallet, follow the
 Public keys can then be typed manually or transferred via a USB stick to a
 networked machine.
 
-Next, configure the `solana` CLI tool to connect to a particular cluster:
+Next, configure the `solana` CLI tool to
+[connect to a particular cluster](../cli/choose-a-cluster.md):
 
 ```bash
-solana config set --url <CLUSTER URL> # (i.e. http://devnet.solana.com)
+solana config set --url <CLUSTER URL> # (i.e. https://api.mainnet-beta.solana.com)
 ```
 
 Finally, to check the balance, run the following command:
@@ -211,51 +154,6 @@ Finally, to check the balance, run the following command:
 ```bash
 solana balance <PUBKEY>
 ```
-
-In order to check a list of public keys quickly, append public keys to a file,
-one per line, like so:
-
-`public_keys.txt`
-```bash
-7hTw3XhprjT2DkVxVixtig9eZwHTZ2rksTSYN7Jh5niZ
-9ufAiSyboCZmmEsoStgLYQfnx9KfqP1ZtDK8Wr1j8SJV
-# ...
-```
-
-And run the following command:
-```bash
-while read PUBLIC_KEY;
-do echo "$PUBLIC_KEY: $(solana balance "$PUBLIC_KEY" | tail -n1)";
-done < public_keys.txt
-```
-
-## Running a Validator
-
-In order to run a validator, you will need to specify an "identity keypair"
-which will be used to fund all of the vote transactions signed by your validator.
-Rather than specifying a path with `--identity <PATH>` you can pass
-`ASK` to securely input the funding keypair.
-
-```bash
-solana-validator --identity ASK --ledger ...
-
-[identity] seed phrase: 🔒
-[identity] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-```
-
-You can use this input method for your voting keypair as well:
-
-```bash
-solana-validator --identity ASK --authorized-voter ASK --ledger ...
-
-[identity] seed phrase: 🔒
-[identity] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-[authorized-voter] seed phrase: 🔒
-[authorized-voter] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-```
-
-Refer to the following page for a comprehensive guide on running a validator:
-{% page-ref page="../running-validator/README.md" %}
 
 ## Delegating Stake
 

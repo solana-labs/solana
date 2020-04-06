@@ -74,15 +74,25 @@ solana-keygen pubkey ~/validator-keypair.json
 
 > Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
 
-Your validator identity keypair uniquely identifies your validator within the
-network. **It is crucial to back-up this information.**
+### Paper Wallet identity
 
-If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR
-VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR
-ALLOCATION OF LAMPORTS TOO.
+You can create a paper wallet for your identity file instead of writing the
+keypair file to disk with:
 
-To back-up your validator identify keypair, **back-up your
-"validator-keypair.json” file to a secure location.**
+```bash
+solana-keygen new --no-outfile
+```
+
+The corresponding identity public key can now be viewed by running:
+
+```bash
+solana-keygen pubkey ASK
+```
+and then entering your seed phrase.
+
+See [Paper Wallet Usage](../paper-wallet/paper-wallet-usage.md) for more info.
+
+-------
 
 ### Vanity Keypair
 
@@ -93,6 +103,18 @@ solana-keygen grind --starts-with e1v1s
 ```
 
 Depending on the string requested, it may take days to find a match...
+
+------
+
+Your validator identity keypair uniquely identifies your validator within the
+network. **It is crucial to back-up this information.**
+
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR
+VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR
+ALLOCATION OF LAMPORTS TOO.
+
+To back-up your validator identify keypair, **back-up your
+"validator-keypair.json” file or your seed phrase to a secure location.**
 
 ## More Solana CLI Configuration
 
@@ -175,6 +197,13 @@ solana-validator --identity ~/validator-keypair.json --vote-account ~/vote-accou
 
 To force validator logging to the console add a `--log -` argument, otherwise
 the validator will automatically log to a file.
+
+> Note: You can use a
+[paper wallet seed phrase](../paper-wallet/paper-wallet-usage.md)
+for your `--identity` and/or
+`--vote-account` keypairs.  To use these, pass the respective argument as
+`solana-validator --identity ASK ... --vote-account ASK ...` and you will be
+prompted to enter your seed phrases and optional passphrase.
 
 Confirm your validator connected to the network by opening a new terminal and
 running:
