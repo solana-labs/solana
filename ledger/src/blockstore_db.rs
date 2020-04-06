@@ -293,7 +293,7 @@ impl TypedColumn for columns::TransactionStatus {
 }
 
 impl TypedColumn for columns::AddressSignatures {
-    type Type = Signature;
+    type Type = blockstore_meta::AddressSignatureMeta;
 }
 
 impl TypedColumn for columns::TransactionStatusIndex {

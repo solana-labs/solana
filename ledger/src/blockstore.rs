@@ -87,6 +87,7 @@ pub struct Blockstore {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
+    address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
@@ -202,6 +203,7 @@ impl Blockstore {
         let data_shred_cf = db.column();
         let code_shred_cf = db.column();
         let transaction_status_cf = db.column();
+        let address_signatures_cf = db.column();
         let transaction_status_index_cf = db.column();
         let rewards_cf = db.column();
 
@@ -244,6 +246,7 @@ impl Blockstore {
             data_shred_cf,
             code_shred_cf,
             transaction_status_cf,
+            address_signatures_cf,
             transaction_status_index_cf,
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
@@ -395,7 +398,11 @@ impl Blockstore {
             columns_empty &= self
                 .db
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, index, index + 1)
-                .unwrap_or(false);
+                .unwrap_or(false)
+                & self
+                    .db
+                    .delete_range_cf::<cf::AddressSignatures>(&mut write_batch, index, index + 1)
+                    .unwrap_or(false);
         }
         let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
@@ -453,6 +460,10 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .transaction_status_cf
+                .compact_range(0, 2)
+                .unwrap_or(false)
+            && self
+                .address_signatures_cf
                 .compact_range(0, 2)
                 .unwrap_or(false)
             && self
@@ -1557,6 +1568,10 @@ impl Blockstore {
         self.transaction_status_cf.put(
             cf::TransactionStatus::as_index(2),
             &TransactionStatusMeta::default(),
+        )?;
+        self.address_signatures_cf.put(
+            cf::AddressSignatures::as_index(2),
+            &AddressSignatureMeta::default(),
         )
     }
 
