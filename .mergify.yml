@@ -21,7 +21,6 @@ pull_request_rules:
           - automerge
   - name: v1.0 backport
     conditions:
-      - base=master
       - label=v1.0
     actions:
       backport:
@@ -30,7 +29,6 @@ pull_request_rules:
           - v1.0
   - name: v1.1 backport
     conditions:
-      - base=master
       - label=v1.1
     actions:
       backport:
@@ -39,7 +37,6 @@ pull_request_rules:
           - v1.1
   - name: v1.2 backport
     conditions:
-      - base=master
       - label=v1.2
     actions:
       backport:
