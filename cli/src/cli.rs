@@ -3182,7 +3182,7 @@ mod tests {
 
         let process_id = Pubkey::new_rand();
         config.command = CliCommand::Cancel(process_id);
-        assert_eq!(process_command(&config).unwrap(), SIGNATURE);
+        assert!(process_command(&config).is_ok());
 
         let good_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = CliCommand::Confirm(good_signature);
@@ -3199,8 +3199,8 @@ mod tests {
             commission: 0,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let new_authorized_pubkey = Pubkey::new_rand();
         config.signers = vec![&bob_keypair];
@@ -3209,8 +3209,8 @@ mod tests {
             new_authorized_pubkey,
             vote_authorize: VoteAuthorize::Voter,
         };
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let new_identity_keypair = Keypair::new();
         config.signers = vec![&keypair, &bob_keypair, &new_identity_keypair];
@@ -3218,8 +3218,8 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 2,
         };
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
@@ -3243,8 +3243,8 @@ mod tests {
             from: 0,
         };
         config.signers = vec![&keypair, &bob_keypair];
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let stake_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
@@ -3260,8 +3260,8 @@ mod tests {
             fee_payer: 0,
         };
         config.signers = vec![&keypair];
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let stake_pubkey = Pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
@@ -3273,8 +3273,8 @@ mod tests {
             nonce_authority: 0,
             fee_payer: 0,
         };
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let stake_pubkey = Pubkey::new_rand();
         let split_stake_account = Keypair::new();
@@ -3291,8 +3291,8 @@ mod tests {
             fee_payer: 0,
         };
         config.signers = vec![&keypair, &split_stake_account];
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         config.command = CliCommand::GetSlot {
             commitment_config: CommitmentConfig::default(),
@@ -3310,8 +3310,8 @@ mod tests {
             to: bob_pubkey,
             ..PayCommand::default()
         });
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let date_string = "\"2018-09-19T17:30:59Z\"";
         let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
@@ -3323,16 +3323,7 @@ mod tests {
             ..PayCommand::default()
         });
         let result = process_command(&config);
-        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
-        assert_eq!(
-            json.as_object()
-                .unwrap()
-                .get("signature")
-                .unwrap()
-                .as_str()
-                .unwrap(),
-            SIGNATURE.to_string()
-        );
+        assert!(result.is_ok());
 
         let witness = Pubkey::new_rand();
         config.command = CliCommand::Pay(PayCommand {
@@ -3343,27 +3334,18 @@ mod tests {
             ..PayCommand::default()
         });
         let result = process_command(&config);
-        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
-        assert_eq!(
-            json.as_object()
-                .unwrap()
-                .get("signature")
-                .unwrap()
-                .as_str()
-                .unwrap(),
-            SIGNATURE.to_string()
-        );
+        assert!(result.is_ok());
 
         let process_id = Pubkey::new_rand();
         config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
         config.signers = vec![&keypair];
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let witness = Pubkey::new_rand();
         config.command = CliCommand::Witness(bob_pubkey, witness);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         // CreateAddressWithSeed
         let from_pubkey = Pubkey::new_rand();
@@ -3390,13 +3372,13 @@ mod tests {
         assert!(process_command(&config).is_ok());
 
         config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         let witness = Pubkey::new_rand();
         config.command = CliCommand::Witness(bob_pubkey, witness);
-        let signature = process_command(&config);
-        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
 
         // sig_not_found case
         config.rpc_client = Some(RpcClient::new_mock("sig_not_found".to_string()));
