@@ -7,9 +7,7 @@ use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
-use std::collections::HashMap;
-use std::net::UdpSocket;
-use std::sync::Arc;
+use std::{collections::HashMap, net::UdpSocket, sync::Arc, time::Instant};
 use test::Bencher;
 
 #[bench]
@@ -36,7 +34,13 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     bencher.iter(move || {
         let shreds = shreds.clone();
         cluster_info
-            .broadcast_shreds(&socket, shreds, &seeds, Some(stakes.clone()))
+            .broadcast_shreds(
+                &socket,
+                shreds,
+                &seeds,
+                Some(stakes.clone()),
+                &mut Instant::now(),
+            )
             .unwrap();
     });
 }
