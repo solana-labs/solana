@@ -265,6 +265,7 @@ fn test_create_account_with_seed() {
     } = TestValidator::run_with_options(TestValidatorOptions {
         fees: 1,
         bootstrap_validator_lamports: 42_000,
+        ..TestValidatorOptions::default()
     });
 
     let (sender, receiver) = channel();
