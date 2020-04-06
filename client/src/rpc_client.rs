@@ -956,7 +956,7 @@ impl RpcClient {
             .send(
                 &RpcRequest::GetSignatureStatuses,
                 json!([[signature.to_string()]]),
-                1,
+                5,
             )
             .map_err(|err| err.into_with_command("GetSignatureStatuses"))?;
         let result: Response<Vec<Option<TransactionStatus>>> = serde_json::from_value(response)
