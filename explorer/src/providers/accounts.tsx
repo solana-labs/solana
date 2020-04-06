@@ -178,21 +178,21 @@ export async function fetchAccountInfo(
     const result = await new Connection(url).getAccountInfo(
       new PublicKey(address)
     );
-    lamports = result.lamports;
-    details = {
-      space: result.data.length,
-      executable: result.executable,
-      owner: result.owner
-    };
-    status = Status.Success;
-  } catch (error) {
-    if (error.toString() === "Error: Invalid request") {
+    if (result === null) {
       lamports = 0;
       status = Status.NotFound;
     } else {
-      console.error("Failed to fetch account info", error);
-      status = Status.CheckFailed;
+      lamports = result.lamports;
+      details = {
+        space: result.data.length,
+        executable: result.executable,
+        owner: result.owner
+      };
+      status = Status.Success;
     }
+  } catch (error) {
+    console.error("Failed to fetch account info", error);
+    status = Status.CheckFailed;
   }
   dispatch({ type: ActionType.Update, status, lamports, details, address });
 }
