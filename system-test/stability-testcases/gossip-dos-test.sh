@@ -4,12 +4,6 @@ set -e
 cd "$(dirname "$0")"
 SOLANA_ROOT="$(cd ../..; pwd)"
 
-
-if [[ $(uname) != Linux ]]; then
-  echo Error: this test is Linux only
-  exit 1
-fi
-
 logDir="$PWD"/logs
 rm -rf "$logDir"
 mkdir "$logDir"
@@ -37,7 +31,7 @@ solana-gossip spy --gossip-port 8001 > "$logDir"/gossip.log 2>&1 &
 solanaGossipPid=$!
 echo "solana-gossip pid: $solanaGossipPid"
 sleep 5
-solana-dos --mode gossip &
+solana-dos --mode gossip --random_data --data_size 1232 &
 dosPid=$!
 echo "solana-dos pid: $dosPid"
 
