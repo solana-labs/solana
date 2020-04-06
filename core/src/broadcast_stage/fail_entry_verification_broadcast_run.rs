@@ -78,16 +78,19 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         sock: &UdpSocket,
     ) -> Result<()> {
         let (stakes, shreds) = receiver.lock().unwrap().recv()?;
-        let all_seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         // Broadcast data
-        let all_shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
-        cluster_info.read().unwrap().broadcast_shreds(
+        let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes);
+
+        let mut send_mmsg_total = 0;
+        broadcast_shreds(
             sock,
-            all_shred_bufs,
-            &all_seeds,
-            stakes,
+            &shreds,
+            &peers_and_stakes,
+            &peers,
             &mut Instant::now(),
+            &mut send_mmsg_total,
         )?;
+
         Ok(())
     }
     fn record(

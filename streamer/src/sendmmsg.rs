@@ -4,7 +4,7 @@ use std::io;
 use std::net::{SocketAddr, UdpSocket};
 
 #[cfg(not(target_os = "linux"))]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
     let count = packets.len();
     for (p, a) in packets {
         sock.send_to(p, *a)?;
@@ -18,7 +18,7 @@ use libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6};
 
 #[cfg(target_os = "linux")]
 fn mmsghdr_for_packet(
-    packet: &mut [u8],
+    packet: &[u8],
     dest: &SocketAddr,
     index: usize,
     addr_in_len: u32,
@@ -32,7 +32,7 @@ fn mmsghdr_for_packet(
     use std::mem;
 
     iovs.push(iovec {
-        iov_base: packet.as_mut_ptr() as *mut c_void,
+        iov_base: packet.as_ptr() as *mut c_void,
         iov_len: packet.len(),
     });
 
@@ -57,7 +57,7 @@ fn mmsghdr_for_packet(
 }
 
 #[cfg(target_os = "linux")]
-pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
+pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -73,7 +73,7 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &mut [(Vec<u8>, &SocketAddr)]) -> io
     let sock_fd = sock.as_raw_fd();
 
     let mut hdrs: Vec<mmsghdr> = packets
-        .iter_mut()
+        .iter()
         .enumerate()
         .map(|(i, (packet, dest))| {
             mmsghdr_for_packet(
@@ -160,11 +160,10 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let mut packets: Vec<_> = (0..32)
-            .map(|_| (vec![0u8; PACKET_DATA_SIZE], &addr))
-            .collect();
+        let packets: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let packet_refs: Vec<_> = packets.iter().map(|p| (p, &addr)).collect();
 
-        let sent = send_mmsg(&sender, &mut packets).ok();
+        let sent = send_mmsg(&sender, &packet_refs).ok();
         assert_eq!(sent, Some(32));
 
         let mut packets = vec![Packet::default(); 32];
@@ -182,17 +181,14 @@ mod tests {
 
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let mut packets: Vec<_> = (0..32)
-            .map(|i| {
-                if i < 16 {
-                    (vec![0u8; PACKET_DATA_SIZE], &addr)
-                } else {
-                    (vec![0u8; PACKET_DATA_SIZE], &addr2)
-                }
-            })
+        let packets: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let packet_refs: Vec<_> = packets
+            .iter()
+            .enumerate()
+            .map(|(i, p)| if i < 16 { (p, &addr) } else { (p, &addr2) })
             .collect();
 
-        let sent = send_mmsg(&sender, &mut packets).ok();
+        let sent = send_mmsg(&sender, &packet_refs).ok();
         assert_eq!(sent, Some(32));
 
         let mut packets = vec![Packet::default(); 32];

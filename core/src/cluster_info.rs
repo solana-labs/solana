@@ -22,7 +22,7 @@ use crate::{
     },
     epoch_slots::EpochSlots,
     result::{Error, Result},
-    weighted_shuffle::{weighted_best, weighted_shuffle},
+    weighted_shuffle::weighted_shuffle,
 };
 use bincode::{serialize, serialized_size};
 use core::cmp;
@@ -43,7 +43,6 @@ use solana_perf::packet::{
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
-use solana_sdk::timing::duration_as_s;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
     pubkey::Pubkey,
@@ -51,7 +50,7 @@ use solana_sdk::{
     timing::{duration_as_ms, timestamp},
     transaction::Transaction,
 };
-use solana_streamer::sendmmsg::{multicast, send_mmsg};
+use solana_streamer::sendmmsg::multicast;
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     borrow::Cow,
@@ -932,77 +931,6 @@ impl ClusterInfo {
             .step_by(fanout)
             .map(|x| x + index % fanout)
             .collect()
-    }
-
-    fn sorted_tvu_peers_and_stakes(
-        &self,
-        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
-    ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
-        let mut peers = self.tvu_peers();
-        peers.dedup();
-        let stakes_and_index = ClusterInfo::sorted_stakes_with_index(&peers, stakes);
-        (peers, stakes_and_index)
-    }
-
-    /// broadcast messages from the leader to layer 1 nodes
-    /// # Remarks
-    pub fn broadcast_shreds(
-        &self,
-        s: &UdpSocket,
-        shreds: Vec<Vec<u8>>,
-        seeds: &[[u8; 32]],
-        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
-        last_datapoint_submit: &mut Instant,
-    ) -> Result<()> {
-        let (peers, peers_and_stakes) = self.sorted_tvu_peers_and_stakes(stakes);
-        let broadcast_len = peers_and_stakes.len();
-        if broadcast_len == 0 {
-            if duration_as_s(&Instant::now().duration_since(*last_datapoint_submit)) >= 1.0 {
-                datapoint_info!(
-                    "cluster_info-num_nodes",
-                    ("live_count", 1, i64),
-                    ("broadcast_count", 1, i64)
-                );
-                *last_datapoint_submit = Instant::now();
-            }
-            return Ok(());
-        }
-        let mut packets: Vec<_> = shreds
-            .into_iter()
-            .zip(seeds)
-            .map(|(shred, seed)| {
-                let broadcast_index = weighted_best(&peers_and_stakes, *seed);
-
-                (shred, &peers[broadcast_index].tvu)
-            })
-            .collect();
-
-        let mut sent = 0;
-        while sent < packets.len() {
-            match send_mmsg(s, &mut packets[sent..]) {
-                Ok(n) => sent += n,
-                Err(e) => {
-                    return Err(Error::IO(e));
-                }
-            }
-        }
-
-        let mut num_live_peers = 1i64;
-        peers.iter().for_each(|p| {
-            // A peer is considered live if they generated their contact info recently
-            if timestamp() - p.wallclock <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
-                num_live_peers += 1;
-            }
-        });
-        if duration_as_s(&Instant::now().duration_since(*last_datapoint_submit)) >= 1.0 {
-            datapoint_info!(
-                "cluster_info-num_nodes",
-                ("live_count", num_live_peers, i64),
-                ("broadcast_count", broadcast_len + 1, i64)
-            );
-            *last_datapoint_submit = Instant::now();
-        }
-        Ok(())
     }
 
     /// retransmit messages to a list of nodes
@@ -1942,6 +1870,14 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
     }
 }
 
+pub fn stake_weight_peers<S: std::hash::BuildHasher>(
+    peers: &mut Vec<ContactInfo>,
+    stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
+) -> Vec<(u64, usize)> {
+    peers.dedup();
+    ClusterInfo::sorted_stakes_with_index(peers, stakes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2480,7 +2416,8 @@ mod tests {
         stakes.insert(id4, 10);
 
         let stakes = Arc::new(stakes);
-        let (peers, peers_and_stakes) = cluster_info.sorted_tvu_peers_and_stakes(Some(stakes));
+        let mut peers = cluster_info.tvu_peers();
+        let peers_and_stakes = stake_weight_peers(&mut peers, Some(stakes));
         assert_eq!(peers.len(), 2);
         assert_eq!(peers[0].id, id);
         assert_eq!(peers[1].id, id2);
