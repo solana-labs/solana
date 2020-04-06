@@ -103,8 +103,12 @@ validation.
 solana-keygen pubkey ASK --skip-seed-phrase-validation
 ```
 
+After entering your seed phrase with `solana-keygen pubkey ASK` the console
+will display a string of base-58 character.  This is the *wallet address*
+associated with your seed phrase.
+
 {% hint style="info" %}
-Copy the derived public key to a USB stick for easy usage on networked computers
+Copy the derived address to a USB stick for easy usage on networked computers
 {% endhint %}
 
 {% hint style="info" %}
@@ -154,6 +158,13 @@ Finally, to check the balance, run the following command:
 ```bash
 solana balance <PUBKEY>
 ```
+
+## Creating Multiple Paper Wallet Addresses
+You can create as many wallet addresses as you like.  Simply re-run the
+steps in [Seed Phrase Generation](#seed-phrase-generation) or
+[Public Key Derivation](#public-key-derivation) to create a new address.
+Multiple wallet addresses can be useful if you want to transfer tokens between
+your own accounts for different purposess.
 
 ## Support
 

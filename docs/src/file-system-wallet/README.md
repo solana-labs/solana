@@ -20,13 +20,7 @@ example, run the following from a command-line shell:
 
 ```bash
 mkdir ~/my-solana-wallet
-solana-keygen new -o ~/my-solana-wallet/my-keypair.json
-```
-
-If you view the file, you will see a long list of numbers, such as:
-
-```text
-[42,200,155,187,52,228,32,9,179,129,192,196,149,41,177,47,87,228,5,19,70,82,170,6,142,114,68,85,124,34,165,216,110,186,177,254,198,143,235,59,173,59,17,250,142,32,66,162,130,62,53,252,48,33,148,38,149,17,81,154,95,178,163,164]
+solana-keygen new --outfile ~/my-solana-wallet/my-keypair.json
 ```
 
 This file contains your **unencrypted** keypair. In fact, even if you specify
@@ -61,3 +55,10 @@ solana-keygen verify <PUBKEY> ~/my-solana-wallet/my-keypair.json
 where `<PUBKEY>` is replaced with your wallet address.
 The command will output "Success" if the given address matches the
 the one in your keypair file, and "Failed" otherwise.
+
+## Creating Multiple File System Wallet Addresses
+You can create as many wallet addresses as you like.  Simply re-run the
+steps in [Generate a File System Wallet](#generate-a-file-system-wallet-keypair)
+and make sure to use a new filename or path with the `--outfile` argument.
+Multiple wallet addresses can be useful if you want to transfer tokens between
+your own accounts for different purposes.
