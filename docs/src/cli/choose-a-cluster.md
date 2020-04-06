@@ -1,7 +1,7 @@
 # Connecting to a Cluster
 
 Solana maintains several different clusters with different purposes.  Each
-cluster features a Solana-owned validator that serves as an entrypoint to the
+cluster features a Solana-run gossip node that serves as an entrypoint to the
 cluster.
 
 ## Before you Begin
@@ -20,7 +20,8 @@ No smart contracts or inflation.
    * Note: If you are using a non-command-line wallet such as
    [Trust Wallet](../wallet/trust-wallet.md),
    the wallet will always be connecting to Mainnet Beta.
- * Entrypoint URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
+ * Gossip entrypoint for Mainnet Beta: `mainnet-beta.solana.com:8001`
+ * RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 #### Devnet
 * Devnet serves as a playground for anyone who wants to take Solana for a
@@ -33,8 +34,8 @@ test drive, as a user, token holder, app developer, or validator.
   * Devnet may be subject to ledger resets
   * Devnet typically runs a newer software version than Mainnet Beta
   * Devnet may be maintained by different validators than Mainnet Beta
- * Devnet is upgraded automatically on the last Monday of each month.
- * Entrypoint URL for Devnet: `https://devnet.solana.com`
+ * Gossip entrypoint for Devnet: `devnet.solana.com:8001`
+ * RPC URL for Devnet: `https://devnet.solana.com`
 
 #### Testnet (Tour de SOL Cluster)
 * Testnet is where we stress test recent release features on a live
@@ -48,7 +49,8 @@ squash bugs or network vulnerabilities.
 * Testnet typically runs a newer software release than both Devnet and
 Mainnet Beta
 * Testnet may be maintained by different validators than Mainnet Beta
-* Entrypoint URL for Testnet: `https://testnet.solana.com`
+* Gossip entrypoint for Testnet: `testnet.solana.com:8001`
+* RPC URL for Testnet: `https://testnet.solana.com`
 
 ## Configure the Command-line
 
