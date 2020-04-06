@@ -10,29 +10,36 @@ use std::sync::{
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
-pub struct AccountsCleanupService {
-    t_cleanup: JoinHandle<()>,
+pub struct AccountsBackgroundService {
+    t_background: JoinHandle<()>,
 }
 
-impl AccountsCleanupService {
+const INTERVAL_MS: u64 = 100;
+
+impl AccountsBackgroundService {
     pub fn new(bank_forks: Arc<RwLock<BankForks>>, exit: &Arc<AtomicBool>) -> Self {
-        info!("AccountsCleanupService active");
+        info!("AccountsBackgroundService active");
         let exit = exit.clone();
-        let t_cleanup = Builder::new()
-            .name("solana-accounts-cleanup".to_string())
+        let t_background = Builder::new()
+            .name("solana-accounts-background".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
                 let bank = bank_forks.read().unwrap().working_bank();
-                bank.clean_dead_slots();
-                sleep(Duration::from_millis(100));
+
+                bank.process_dead_slots();
+
+                // Currently, given INTERVAL_MS, we process 1 slot/100 ms
+                bank.process_stale_slot();
+
+                sleep(Duration::from_millis(INTERVAL_MS));
             })
             .unwrap();
-        Self { t_cleanup }
+        Self { t_background }
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.t_cleanup.join()
+        self.t_background.join()
     }
 }
