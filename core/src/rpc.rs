@@ -36,6 +36,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const MAX_QUERY_ITEMS: usize = 256;
+
 type RpcResponse<T> = Result<Response<T>>;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
@@ -50,6 +52,12 @@ pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSignatureStatusConfig {
+    pub search_transaction_history: bool,
 }
 
 #[derive(Clone)]
@@ -425,17 +433,37 @@ impl JsonRpcRequestProcessor {
             .map(|(_, status)| status)
     }
 
-    pub fn get_signature_statuses_with_commitment(
+    pub fn get_signature_statuses(
         &self,
         signatures: Vec<Signature>,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
-        let bank = self.bank(commitment);
+        let search_transaction_history = config
+            .map(|x| x.search_transaction_history)
+            .unwrap_or(false);
+        let bank = self.bank(Some(CommitmentConfig::recent()));
 
         for signature in signatures {
-            let status = self.get_transaction_status(signature, &bank);
+            let status = if let Some(status) = self.get_transaction_status(signature, &bank) {
+                Some(status)
+            } else if self.config.enable_rpc_transaction_history && search_transaction_history {
+                self.blockstore
+                    .get_transaction_status(signature)
+                    .map_err(|_| Error::internal_error())?
+                    .map(|(slot, status_meta)| {
+                        let err = status_meta.status.clone().err();
+                        TransactionStatus {
+                            slot,
+                            status: status_meta.status,
+                            confirmations: None,
+                            err,
+                        }
+                    })
+            } else {
+                None
+            };
             statuses.push(status);
         }
         Ok(Response {
@@ -611,11 +639,11 @@ pub trait RpcSol {
     fn get_fee_rate_governor(&self, meta: Self::Metadata) -> RpcResponse<RpcFeeRateGovernor>;
 
     #[rpc(meta, name = "getSignatureStatuses")]
-    fn get_signature_statuses_with_commitment(
+    fn get_signature_statuses(
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>>;
 
     #[rpc(meta, name = "getSlot")]
@@ -973,12 +1001,18 @@ impl RpcSol for RpcSolImpl {
             .get_signature_status(signature, commitment))
     }
 
-    fn get_signature_statuses_with_commitment(
+    fn get_signature_statuses(
         &self,
         meta: Self::Metadata,
         signature_strs: Vec<String>,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
+        if signature_strs.len() > MAX_QUERY_ITEMS {
+            return Err(Error::invalid_params(format!(
+                "Too many inputs provided; max {}",
+                MAX_QUERY_ITEMS
+            )));
+        }
         let mut signatures: Vec<Signature> = vec![];
         for signature_str in signature_strs {
             signatures.push(verify_signature(&signature_str)?);
@@ -986,7 +1020,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_signature_statuses_with_commitment(signatures, commitment)
+            .get_signature_statuses(signatures, config)
     }
 
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -1079,9 +1113,10 @@ impl RpcSol for RpcSolImpl {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_statuses_with_commitment(vec![signature], commitment.clone())?
+                .get_signature_statuses(vec![signature], None)?
                 .value[0]
                 .clone()
+                .filter(|result| result.satisfies_commitment(commitment.unwrap_or_default()))
                 .map(|x| x.status);
 
             if signature_status == Some(Ok(())) {

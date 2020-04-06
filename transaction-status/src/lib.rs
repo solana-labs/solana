@@ -4,6 +4,7 @@ extern crate serde_derive;
 use bincode;
 use solana_sdk::{
     clock::Slot,
+    commitment_config::CommitmentConfig,
     message::MessageHeader,
     transaction::{Result, Transaction, TransactionError},
 };
@@ -66,6 +67,13 @@ pub struct TransactionStatus {
     pub confirmations: Option<usize>,
     pub status: Result<()>,
     pub err: Option<TransactionError>,
+}
+
+impl TransactionStatus {
+    pub fn satisfies_commitment(&self, commitment_config: CommitmentConfig) -> bool {
+        (commitment_config == CommitmentConfig::default() && self.confirmations.is_none())
+            || commitment_config == CommitmentConfig::recent()
+    }
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -169,5 +177,33 @@ impl EncodedTransaction {
                 .ok()
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_satisfies_commitment() {
+        let status = TransactionStatus {
+            slot: 0,
+            confirmations: None,
+            status: Ok(()),
+            err: None,
+        };
+
+        assert!(status.satisfies_commitment(CommitmentConfig::default()));
+        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+
+        let status = TransactionStatus {
+            slot: 0,
+            confirmations: Some(10),
+            status: Ok(()),
+            err: None,
+        };
+
+        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
+        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
     }
 }

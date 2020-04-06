@@ -77,13 +77,13 @@ impl RpcClient {
         signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<bool> {
-        let Response { context, value } =
-            self.get_signature_statuses_with_commitment(&[*signature], commitment_config)?;
+        let Response { context, value } = self.get_signature_statuses(&[*signature])?;
 
         Ok(Response {
             context,
             value: value[0]
                 .as_ref()
+                .filter(|result| result.satisfies_commitment(commitment_config))
                 .map(|result| result.status.is_ok())
                 .unwrap_or_default(),
         })
@@ -112,17 +112,14 @@ impl RpcClient {
         self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
     }
 
-    pub fn get_signature_statuses_with_commitment(
+    pub fn get_signature_statuses(
         &self,
         signatures: &[Signature],
-        commitment_config: CommitmentConfig,
     ) -> RpcResult<Vec<Option<TransactionStatus>>> {
         let signatures: Vec<_> = signatures.iter().map(|s| s.to_string()).collect();
-        let signature_status = self.client.send(
-            &RpcRequest::GetSignatureStatuses,
-            json!([&signatures, commitment_config]),
-            5,
-        )?;
+        let signature_status =
+            self.client
+                .send(&RpcRequest::GetSignatureStatuses, json!([signatures]), 5)?;
         Ok(serde_json::from_value(signature_status)
             .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?)
     }
@@ -134,7 +131,7 @@ impl RpcClient {
     ) -> ClientResult<Option<transaction::Result<()>>> {
         let signature_status = self.client.send(
             &RpcRequest::GetSignatureStatuses,
-            json!([[signature.to_string()], commitment_config]),
+            json!([[signature.to_string()]]),
             5,
         )?;
         let result: Response<Vec<Option<TransactionStatus>>> =
@@ -142,6 +139,7 @@ impl RpcClient {
                 .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?;
         Ok(result.value[0]
             .clone()
+            .filter(|result| result.satisfies_commitment(commitment_config))
             .map(|status_meta| status_meta.status))
     }
 
@@ -957,7 +955,7 @@ impl RpcClient {
             .client
             .send(
                 &RpcRequest::GetSignatureStatuses,
-                json!([[signature.to_string()], CommitmentConfig::recent().ok()]),
+                json!([[signature.to_string()]]),
                 1,
             )
             .map_err(|err| err.into_with_command("GetSignatureStatuses"))?;

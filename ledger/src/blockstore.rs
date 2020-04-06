@@ -1644,6 +1644,41 @@ impl Blockstore {
         self.transaction_status_cf.put(index, status)
     }
 
+    // Returns a transaction status if it was processed in a root, as well as a loop counter for
+    // unit testing
+    fn get_transaction_status_with_counter(
+        &self,
+        signature: Signature,
+    ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
+        let mut counter = 0;
+        for transaction_status_cf_primary_index in 0..=1 {
+            let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
+                (transaction_status_cf_primary_index, signature, 0),
+                IteratorDirection::Forward,
+            ))?;
+            for ((_, sig, slot), data) in index_iterator {
+                counter += 1;
+                if sig != signature {
+                    break;
+                }
+                if self.is_root(slot) {
+                    let status: TransactionStatusMeta = deserialize(&data)?;
+                    return Ok((Some((slot, status)), counter));
+                }
+            }
+        }
+        Ok((None, counter))
+    }
+
+    /// Returns a transaction status if it was processed in a root
+    pub fn get_transaction_status(
+        &self,
+        signature: Signature,
+    ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
+        self.get_transaction_status_with_counter(signature)
+            .map(|(status, _)| status)
+    }
+
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
         self.rewards_cf.get(index)
     }
@@ -5592,6 +5627,127 @@ pub mod tests {
                     frozen: true,
                 }
             );
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_get_transaction_status() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
+
+            let pre_balances_vec = vec![1, 2, 3];
+            let post_balances_vec = vec![3, 2, 1];
+            let status = TransactionStatusMeta {
+                status: solana_sdk::transaction::Result::<()>::Ok(()),
+                fee: 42u64,
+                pre_balances: pre_balances_vec.clone(),
+                post_balances: post_balances_vec.clone(),
+            };
+
+            let signature1 = Signature::new(&[1u8; 64]);
+            let signature2 = Signature::new(&[2u8; 64]);
+            let signature3 = Signature::new(&[3u8; 64]);
+            let signature4 = Signature::new(&[4u8; 64]);
+            let signature5 = Signature::new(&[5u8; 64]);
+            let signature6 = Signature::new(&[6u8; 64]);
+
+            // Initialize index 0, including:
+            //   signature2 in non-root and root,
+            //   signature4 in 2 non-roots,
+            //   extra entries
+            transaction_status_cf
+                .put((0, signature2.clone(), 1), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((0, signature2.clone(), 2), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((0, signature4.clone(), 0), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((0, signature4.clone(), 1), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((0, signature5.clone(), 0), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((0, signature5.clone(), 1), &status)
+                .unwrap();
+
+            // Initialize index 1, including:
+            //   signature4 in non-root and root,
+            //   extra entries
+            transaction_status_cf
+                .put((1, signature4.clone(), 1), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((1, signature4.clone(), 2), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((1, signature5.clone(), 0), &status)
+                .unwrap();
+
+            transaction_status_cf
+                .put((1, signature5.clone(), 1), &status)
+                .unwrap();
+
+            blockstore.set_roots(&[2]).unwrap();
+
+            // Signature exists, root found in index 0
+            if let (Some((slot, _status)), counter) = blockstore
+                .get_transaction_status_with_counter(signature2)
+                .unwrap()
+            {
+                assert_eq!(slot, 2);
+                assert_eq!(counter, 2);
+            }
+
+            // Signature exists, root found in index 1
+            if let (Some((slot, _status)), counter) = blockstore
+                .get_transaction_status_with_counter(signature4)
+                .unwrap()
+            {
+                assert_eq!(slot, 2);
+                assert_eq!(counter, 5);
+            }
+
+            // Signature exists, no root found
+            let (status, counter) = blockstore
+                .get_transaction_status_with_counter(signature5)
+                .unwrap();
+            assert_eq!(status, None);
+            assert_eq!(counter, 5);
+
+            // Signature does not exist, smaller than existing entries
+            let (status, counter) = blockstore
+                .get_transaction_status_with_counter(signature1)
+                .unwrap();
+            assert_eq!(status, None);
+            assert_eq!(counter, 2);
+
+            // Signature does not exist, between existing entries
+            let (status, counter) = blockstore
+                .get_transaction_status_with_counter(signature3)
+                .unwrap();
+            assert_eq!(status, None);
+            assert_eq!(counter, 2);
+
+            // Signature does not exist, larger than existing entries
+            let (status, counter) = blockstore
+                .get_transaction_status_with_counter(signature6)
+                .unwrap();
+            assert_eq!(status, None);
+            assert_eq!(counter, 1);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
