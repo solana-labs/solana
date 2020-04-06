@@ -155,39 +155,6 @@ Finally, to check the balance, run the following command:
 solana balance <PUBKEY>
 ```
 
-## Delegating Stake
-
-Solana CLI tooling supports secure keypair input for stake delegation. To do so,
-first create a stake account with some SOL. Use the special `ASK` keyword to
-trigger a seed phrase input prompt for the stake account and use
-`--keypair ASK` to securely input the funding keypair.
-
-```bash
-solana create-stake-account ASK 1 --keypair ASK
-
-[stake_account] seed phrase: 🔒
-[stake_account] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-[keypair] seed phrase: 🔒
-[keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-```
-
-Then, to delegate that stake to a validator, use `--keypair ASK` to
-securely input the funding keypair.
-
-```bash
-solana delegate-stake --keypair ASK <STAKE_ACCOUNT_PUBKEY> <VOTE_ACCOUNT_PUBKEY>
-
-[keypair] seed phrase: 🔒
-[keypair] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue:
-```
-
-Refer to the following page for a comprehensive guide on delegating stake:
-{% page-ref page="../running-validator/validator-stake.md" %}
-
----
-
-{% page-ref page="../api-reference/cli.md" %}
-
 ## Support
 
 Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
