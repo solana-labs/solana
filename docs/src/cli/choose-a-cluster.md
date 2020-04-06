@@ -12,13 +12,11 @@ cluster.
 ## Choose a Cluster
 
 #### Mainnet Beta
- * The *Mainnet Beta* cluster is the official persistent cluster that will
- eventually transition to become Mainnet.
-   * We call the current form "Beta" because ... [TODO]
+A permissionless, persistent cluster for early token holders and launch partners.
+No smart contracts or inflation.
  * Tokens that are issued on Mainnet Beta are **real** SOL
  * If you have paid money to purchase/be issued tokens, such as through our
- CoinList auction or as an investor, these tokens will be transferred on
- Mainnet Beta.
+ CoinList auction, these tokens will be transferred on Mainnet Beta.
    * Note: If you are using a non-command-line wallet such as
    [Trust Wallet](../wallet/trust-wallet.md),
    the wallet will always be connecting to Mainnet Beta.
@@ -35,6 +33,7 @@ test drive, as a user, token holder, app developer, or validator.
   * Devnet may be subject to ledger resets
   * Devnet typically runs a newer software version than Mainnet Beta
   * Devnet may be maintained by different validators than Mainnet Beta
+ * Devnet is upgraded automatically on the last Monday of each month.
  * Entrypoint URL for Devnet: `https://devnet.solana.com`
 
 #### Testnet (Tour de SOL Cluster)
@@ -43,7 +42,7 @@ cluster, particularly focused on network performance, stability and validator
 behavior.
 * [Tour de SOL](../tour-de-sol/README.md) initiative runs on Testnet, where we
 encourage malicious behavior and attacks on the network to help us find and
-squash bugs.
+squash bugs or network vulnerabilities.
 * Testnet tokens are **not real**
 * Testnet may be subject to ledger resets.
 * Testnet typically runs a newer software release than both Devnet and
