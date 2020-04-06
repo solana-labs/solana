@@ -28,6 +28,15 @@ After this reorg, any code needing a client would be written in terms of
 `ThinClient<BankClient>`, whereas `main()` functions, benchmarks and
 integration tests would invoke it with `ThinClient<ClusterClient>`.
 
+If higher-level components require more functionality than what could be
+implemented by `BankClient`, it should be implemented by a second object
+that implements a second trait, following the same pattern described here.
+
+### Error Handling
+
+The `Client` should use the existing `TransportError` enum for errors, except
+that the `Custom(String)` field should be changed to `Custom(Box<dyn Error>)`.
+
 ### Implementation Strategy
 
 1. Add new object to `solana-sdk`, `RpcClientTng`, where the `Tng` suffix is
