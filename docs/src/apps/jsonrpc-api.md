@@ -633,13 +633,16 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ### getSignatureStatuses
 
-Returns the statuses of a list of signatures. This method only searches the recent status cache of signatures, which retains statuses for all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
+Returns the statuses of a list of signatures. Unless the
+`searchTransactionHistory` configuration parameter is included, this method only
+searches the recent status cache of signatures, which retains statuses for all
+active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
 #### Parameters:
 
 * `<array>` - An array of transaction signatures to confirm, as base-58 encoded strings
-* `<object>` - (optional) Extended Rpc configuration, containing the following optional fields:
-  * `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) Configuration object containing the following field:
+  * `searchTransactionHistory: <bool>` - if true, a Solana node will search its ledger cache for any signatures not found in the recent status cache
 
 #### Results:
 
@@ -662,7 +665,10 @@ An array of:
 
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
+
+// Request with configuration
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"], {"searchTransactionHistory": true}]}' http://localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "err": null, "status": {"Ok": null}}, null]},"id":1}

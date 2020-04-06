@@ -94,7 +94,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                     Some(TransactionStatus {
                         status,
                         slot: 1,
-                        confirmations: Some(0),
+                        confirmations: None,
                         err,
                     })
                 };
