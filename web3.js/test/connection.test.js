@@ -109,7 +109,6 @@ test('get program accounts', async () => {
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
         ],
-        {commitment: 'recent'},
       ],
     },
     {
@@ -154,7 +153,6 @@ test('get program accounts', async () => {
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
         ],
-        {commitment: 'recent'},
       ],
     },
     {
@@ -905,7 +903,6 @@ test('request airdrop - max commitment', async () => {
         [
           '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
         ],
-        {commitment: 'recent'},
       ],
     },
     {
@@ -926,7 +923,7 @@ test('request airdrop - max commitment', async () => {
     },
   ]);
 
-  const {value} = await connection.getSignatureStatus(signature, 'recent');
+  const {value} = await connection.getSignatureStatus(signature);
   if (value === null) {
     expect(value).not.toBeNull();
     return;
@@ -1050,7 +1047,6 @@ test('transaction failure', async () => {
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
         ],
-        {commitment: 'recent'},
       ],
     },
     {
@@ -1249,7 +1245,6 @@ test('transaction', async () => {
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
         ],
-        {commitment: 'recent'},
       ],
     },
     {
@@ -1297,7 +1292,6 @@ test('transaction', async () => {
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
           unprocessedSignature,
         ],
-        {commitment: 'recent'},
       ],
     },
     {

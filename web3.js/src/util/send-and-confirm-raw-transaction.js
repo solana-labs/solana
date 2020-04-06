@@ -15,15 +15,20 @@ export async function sendAndConfirmRawTransaction(
   commitment: ?Commitment,
 ): Promise<TransactionSignature> {
   const start = Date.now();
+  const statusCommitment = commitment || connection.commitment || 'max';
   let signature = await connection.sendRawTransaction(rawTransaction);
 
   // Wait up to a couple slots for a confirmation
   let status = null;
   let statusRetries = 6;
   for (;;) {
-    status = (await connection.getSignatureStatus(signature, commitment)).value;
+    status = (await connection.getSignatureStatus(signature)).value;
     if (status) {
-      break;
+      if (statusCommitment === 'max' && status.confirmations === null) {
+        break;
+      } else if (statusCommitment === 'recent') {
+        break;
+      }
     }
 
     // Sleep for approximately half a slot

@@ -43,8 +43,11 @@ async function _sendAndConfirmTransaction(
   signers: Array<Account>,
   commitment: ?Commitment,
 ): Promise<TransactionSignature> {
+  const statusCommitment = commitment || connection.commitment || 'max';
+
   let sendRetries = 10;
   let signature;
+
   for (;;) {
     const start = Date.now();
     signature = await connection.sendTransaction(transaction, ...signers);
@@ -53,10 +56,13 @@ async function _sendAndConfirmTransaction(
     let status = null;
     let statusRetries = 6;
     for (;;) {
-      status = (await connection.getSignatureStatus(signature, commitment))
-        .value;
+      status = (await connection.getSignatureStatus(signature)).value;
       if (status) {
-        break;
+        if (statusCommitment === 'max' && status.confirmations === null) {
+          break;
+        } else if (statusCommitment === 'recent') {
+          break;
+        }
       }
 
       if (--statusRetries <= 0) {
