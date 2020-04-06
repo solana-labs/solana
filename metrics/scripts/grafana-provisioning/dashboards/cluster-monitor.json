@@ -4618,7 +4618,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -5385,7 +5385,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -5752,7 +5752,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -5793,7 +5793,7 @@
         "x": 16,
         "y": 62
       },
-      "id": 45,
+      "id": 71,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5812,7 +5812,16 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
-      "seriesOverrides": [],
+      "seriesOverrides": [
+        {
+          "alias": "replay-slot-stats.total_shreds",
+          "yaxis": 2
+        },
+        {
+          "alias": "replay-slot-stats.total_entries",
+          "yaxis": 2
+        }
+      ],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
@@ -5836,7 +5845,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"bank-forks_set_root_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"repair-total\") AS \"repair-total\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -5875,7 +5884,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"squash_accounts_ms\")  AS \"squash_account\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"shred-count\") AS \"shred-count\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -5914,7 +5923,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"count\")  AS \"serialize_bank\" FROM \"$testnet\".\"autogen\".\"bank-serialize-ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"highest-shred-count\") AS \"highest-shred-count\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -5953,7 +5962,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"count\")  AS \"add_snapshot_ms\" FROM \"$testnet\".\"autogen\".\"add-snapshot-ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"orphan-count\") AS \"orphan-count\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -5992,7 +6001,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"duration\")  AS \"serialize_account_storage\" FROM \"$testnet\".\"autogen\".\"serialize_account_storage_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"repair-highest-slot\") AS \"repair-highest-slot\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -6031,9 +6040,9 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"squash_cache_ms\")  AS \"squash_cache\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"repair-orphan\") AS \"repair-orphan\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
-          "refId": "C",
+          "refId": "D",
           "resultFormat": "time_series",
           "select": [
             [
@@ -6055,7 +6064,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Time spent in squashing ($hostid)",
+      "title": "Repair Stats",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -6071,7 +6080,7 @@
       },
       "yaxes": [
         {
-          "format": "ms",
+          "format": "none",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -6727,7 +6736,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -6749,565 +6758,14 @@
       }
     },
     {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 16,
-        "y": 68
-      },
-      "id": 48,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "rightSide": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT sum(\"recovered\") AS \"recovered\" FROM \"$testnet\".\"autogen\".\"blockstore-erasure\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Erasure Recovery ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
       "aliasColors": {
         "cluster-info.repair": "#ba43a9",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-observed.squash_account": "#0a437c",
+        "tower-observed.squash_cache": "#ea6460",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 16,
-        "y": 73
-      },
-      "id": 49,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "connected",
-      "percentage": false,
-      "pointradius": 1,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [
-        {
-          "alias": "serve_repair-repair_highest.ix",
-          "yaxis": 2
-        }
-      ],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Repair highest index in slot ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 0,
-        "y": 74
-      },
-      "id": 50,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "connected",
-      "percentage": false,
-      "pointradius": 1,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [
-        {
-          "alias": "serve_repair-repair.repair-ix",
-          "yaxis": 2
-        }
-      ],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT last(\"repair-ix\") AS \"repair-ix\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT last(\"repair-slot\") AS \"repair-slot\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Repair slot and index ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 8,
-        "x": 8,
-        "y": 74
-      },
-      "id": 51,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "connected",
-      "percentage": false,
-      "pointradius": 1,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT last(\"repair-orphan\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"serve_repair-repair\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Repair detached heads ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
       "bars": false,
       "dashLength": 10,
       "dashes": false,
@@ -7317,9 +6775,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 78
+        "y": 68
       },
-      "id": 52,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7333,9 +6791,9 @@
       "lines": true,
       "linewidth": 1,
       "links": [],
-      "nullPointMode": "null",
+      "nullPointMode": "connected",
       "percentage": false,
-      "pointradius": 5,
+      "pointradius": 2,
       "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
@@ -7358,10 +6816,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT sum(\"count\") AS \"retransmit\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-retransmit\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"bank-forks_set_root_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -7396,9 +6855,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "policy": "autogen",
+          "query": "SELECT mean(\"squash_accounts_ms\")  AS \"squash_account\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -7406,13 +6867,13 @@
             [
               {
                 "params": [
-                  "value"
+                  "count"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "mean"
+                "type": "sum"
               }
             ]
           ],
@@ -7433,9 +6894,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"broadcast sent\" FROM \"$testnet\".\"autogen\".\"streamer-broadcast-sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "policy": "autogen",
+          "query": "SELECT mean(\"count\")  AS \"serialize_bank\" FROM \"$testnet\".\"autogen\".\"bank-serialize-ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -7443,13 +6906,130 @@
             [
               {
                 "params": [
-                  "value"
+                  "count"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "mean"
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"count\")  AS \"add_snapshot_ms\" FROM \"$testnet\".\"autogen\".\"add-snapshot-ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"duration\")  AS \"serialize_account_storage\" FROM \"$testnet\".\"autogen\".\"serialize_account_storage_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"squash_cache_ms\")  AS \"squash_cache\" FROM \"$testnet\".\"autogen\".\"tower-observed\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
               }
             ]
           ],
@@ -7459,7 +7039,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Send/Receive/Retransmit",
+      "title": "Time spent in squashing ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -7475,7 +7055,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "ms",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -7521,7 +7101,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 79
+        "y": 74
       },
       "id": 53,
       "legend": {
@@ -7823,7 +7403,7 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 79
+        "y": 74
       },
       "id": 54,
       "legend": {
@@ -7966,12 +7546,520 @@
       }
     },
     {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 74
+      },
+      "id": 48,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT sum(\"recovered\") AS \"recovered\" FROM \"$testnet\".\"autogen\".\"blockstore-erasure\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Erasure Recovery ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 79
+      },
+      "id": 61,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": true,
+        "hideZero": true,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null as zero",
+      "percentage": false,
+      "pointradius": 1,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT max(\"num_blocks_on_fork\") as \"num_blocks\" FROM \"$testnet\".\"autogen\".\"blocks_produced\" WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n\n\n\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT max(\"num_dropped_blocks_on_fork\") as \"num_dropped_blocks\" FROM \"$testnet\".\"autogen\".\"blocks_produced\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n\n\n\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Block Production ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 0,
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "description": "(Must pick a host id for this to make sense)",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 79
+      },
+      "id": 73,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT count(\"slot\") AS \"num_my_leader_slots\" FROM \"$testnet\".\"autogen\".\"replay_stage-my_leader_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "My Leader Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 79
+      },
+      "id": 52,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT count(\"slot\") AS \"num_skipped\" FROM \"$testnet\".\"autogen\".\"replay_stage-skip_leader_slot\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Skipped Leader Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 84
+        "y": 85
       },
       "id": 55,
       "panels": [],
@@ -7994,7 +8082,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 85
+        "y": 86
       },
       "id": 56,
       "legend": {
@@ -8154,7 +8242,7 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 85
+        "y": 86
       },
       "id": 57,
       "legend": {
@@ -8314,7 +8402,7 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 85
+        "y": 86
       },
       "id": 58,
       "legend": {
@@ -8499,7 +8587,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 90
+        "y": 91
       },
       "id": 59,
       "panels": [],
@@ -8518,7 +8606,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 92
       },
       "id": 60,
       "legend": {
@@ -8751,9 +8839,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 91
+        "y": 92
       },
-      "id": 61,
+      "id": 72,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8798,7 +8886,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"in_octets\") as \"recv\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE $timeFilter   GROUP BY time(1s) fill(null)\n\n\n\n",
+          "query": "SELECT mean(\"in_octets\") as \"recv\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE $timeFilter   GROUP BY time(1s) fill(null)\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -8836,7 +8924,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"out_octets\") as \"sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE $timeFilter   GROUP BY time(1s) fill(null)\n\n\n\n",
+          "query": "SELECT mean(\"out_octets\") as \"sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE $timeFilter   GROUP BY time(1s) fill(null)\n\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -8904,7 +8992,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 96
+        "y": 97
       },
       "id": 62,
       "panels": [],
@@ -8922,7 +9010,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 97
+        "y": 98
       },
       "id": 63,
       "legend": {
@@ -9124,7 +9212,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 97
+        "y": 98
       },
       "id": 64,
       "legend": {
@@ -9273,7 +9361,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 102
+        "y": 103
       },
       "id": 65,
       "panels": [],
@@ -9291,7 +9379,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 103
+        "y": 104
       },
       "id": 66,
       "legend": {
@@ -9483,7 +9571,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 103
+        "y": 104
       },
       "id": 67,
       "legend": {
@@ -9751,7 +9839,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 103
+        "y": 104
       },
       "id": 68,
       "legend": {
@@ -9940,7 +10028,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 109
+        "y": 110
       },
       "id": 69,
       "panels": [],
@@ -9958,7 +10046,7 @@
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 110
+        "y": 111
       },
       "id": 70,
       "legend": {
@@ -10181,8 +10269,8 @@
     "list": [
       {
         "current": {
-          "text": "$datasource",
-          "value": "$datasource"
+          "text": "Solana Metrics (read-only)",
+          "value": "Solana Metrics (read-only)"
         },
         "hide": 1,
         "label": "Data Source",
@@ -10218,6 +10306,7 @@
       },
       {
         "allValue": ".*",
+        "current": {},
         "datasource": "$datasource",
         "hide": 0,
         "includeAll": true,

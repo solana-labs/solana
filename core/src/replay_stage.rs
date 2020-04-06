@@ -171,6 +171,8 @@ impl ReplayStage {
                             &my_pubkey,
                             &vote_account,
                             prev_leader_slot,
+                            0,
+                            0,
                         ),
                     );
                 }
@@ -347,6 +349,12 @@ impl ReplayStage {
                                 "vote bank: {:?} reset bank: {:?}",
                                 vote_bank.as_ref().map(|b| b.slot()),
                                 reset_bank.slot(),
+                            );
+                            let fork_progress = progress.get(&reset_bank.slot()).expect("bank to reset to must exist in progress map");
+                            datapoint_info!(
+                                "blocks_produced",
+                                ("num_blocks_on_fork", fork_progress.num_blocks_on_fork, i64),
+                                ("num_dropped_blocks_on_fork", fork_progress.num_dropped_blocks_on_fork, i64),
                             );
                             Self::reset_poh_recorder(
                                 &my_pubkey,
@@ -599,6 +607,7 @@ impl ReplayStage {
             }
 
             let root_slot = bank_forks.read().unwrap().root();
+            datapoint_info!("replay_stage-my_leader_slot", ("slot", poh_slot, i64),);
             info!(
                 "new fork:{} parent:{} (leader) root:{}",
                 poh_slot, parent_slot, root_slot
@@ -893,13 +902,30 @@ impl ReplayStage {
             }
 
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
+            let parent_slot = bank.parent_slot();
             let prev_leader_slot = progress.get_bank_prev_leader_slot(&bank);
-
+            let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
+                let stats = progress
+                    .get(&parent_slot)
+                    .expect("parent of active bank must exist in progress map");
+                let num_blocks_on_fork = stats.num_blocks_on_fork + 1;
+                let new_dropped_blocks = bank.slot() - parent_slot - 1;
+                let num_dropped_blocks_on_fork =
+                    stats.num_dropped_blocks_on_fork + new_dropped_blocks;
+                (num_blocks_on_fork, num_dropped_blocks_on_fork)
+            };
             // Insert a progress entry even for slots this node is the leader for, so that
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
             // this bank in `select_forks()`
             let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
-                ForkProgress::new_from_bank(&bank, &my_pubkey, vote_account, prev_leader_slot)
+                ForkProgress::new_from_bank(
+                    &bank,
+                    &my_pubkey,
+                    vote_account,
+                    prev_leader_slot,
+                    num_blocks_on_fork,
+                    num_dropped_blocks_on_fork,
+                )
             });
             if bank.collector_id() != my_pubkey {
                 let replay_result = Self::replay_blockstore_into_bank(
@@ -1740,7 +1766,7 @@ pub(crate) mod tests {
             let bank = &bank_forks.banks[&0];
             fork_progress
                 .entry(neutral_fork.fork[0])
-                .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None));
+                .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None, 0, 0));
         }
 
         for index in 1..neutral_fork.fork.len() {
@@ -1766,7 +1792,7 @@ pub(crate) mod tests {
                 let bank = &bank_forks.banks[&neutral_fork.fork[index]];
                 fork_progress
                     .entry(bank_forks.banks[&neutral_fork.fork[index]].slot())
-                    .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None));
+                    .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None, 0, 0));
             }
         }
 
@@ -1806,7 +1832,9 @@ pub(crate) mod tests {
                     let bank = &bank_forks.banks[&fork_info.fork[index]];
                     fork_progress
                         .entry(bank_forks.banks[&fork_info.fork[index]].slot())
-                        .or_insert_with(|| ForkProgress::new(bank.last_blockhash(), None, None));
+                        .or_insert_with(|| {
+                            ForkProgress::new(bank.last_blockhash(), None, None, 0, 0)
+                        });
                 }
             }
         }
@@ -1942,7 +1970,14 @@ pub(crate) mod tests {
             let mut progress = ProgressMap::default();
             progress.insert(
                 0,
-                ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None),
+                ForkProgress::new_from_bank(
+                    &bank0,
+                    bank0.collector_id(),
+                    &Pubkey::default(),
+                    None,
+                    0,
+                    0,
+                ),
             );
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let exit = Arc::new(AtomicBool::new(false));
@@ -1966,6 +2001,8 @@ pub(crate) mod tests {
                     bank1.collector_id(),
                     &validator_voting_keys.get(&bank1.collector_id()).unwrap(),
                     Some(0),
+                    0,
+                    0,
                 ),
             );
             assert!(progress.get_propagated_stats(1).unwrap().is_leader_slot);
@@ -2060,7 +2097,7 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(root_bank);
         let mut progress = ProgressMap::default();
         for i in 0..=root {
-            progress.insert(i, ForkProgress::new(Hash::default(), None, None));
+            progress.insert(i, ForkProgress::new(Hash::default(), None, None, 0, 0));
         }
         ReplayStage::handle_new_root(root, &bank_forks, &mut progress, &None, &mut HashSet::new());
         assert_eq!(bank_forks.read().unwrap().root(), root);
@@ -2298,7 +2335,7 @@ pub(crate) mod tests {
             let last_blockhash = bank0.last_blockhash();
             let mut bank0_progress = progress
                 .entry(bank0.slot())
-                .or_insert_with(|| ForkProgress::new(last_blockhash, None, None));
+                .or_insert_with(|| ForkProgress::new(last_blockhash, None, None, 0, 0));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let res = ReplayStage::replay_blockstore_into_bank(
@@ -2626,7 +2663,10 @@ pub(crate) mod tests {
 
         // Insert the bank that contains a vote for slot 0, which confirms slot 0
         bank_forks.write().unwrap().insert(bank1);
-        progress.insert(1, ForkProgress::new(bank0.last_blockhash(), None, None));
+        progress.insert(
+            1,
+            ForkProgress::new(bank0.last_blockhash(), None, None, 0, 0),
+        );
         let ancestors = bank_forks.read().unwrap().ancestors();
         let mut frozen_banks: Vec<_> = bank_forks
             .read()
@@ -2999,6 +3039,8 @@ pub(crate) mod tests {
                     total_epoch_stake,
                     ..ValidatorStakeInfo::default()
                 }),
+                0,
+                0,
             ),
         );
         progress_map.insert(
@@ -3010,6 +3052,8 @@ pub(crate) mod tests {
                     total_epoch_stake,
                     ..ValidatorStakeInfo::default()
                 }),
+                0,
+                0,
             ),
         );
 
@@ -3085,16 +3129,22 @@ pub(crate) mod tests {
             bank_forks.insert(Bank::new_from_parent(&parent_bank, &Pubkey::default(), i));
             progress_map.insert(
                 i,
-                ForkProgress::new(Hash::default(), Some(prev_leader_slot), {
-                    if i % 2 == 0 {
-                        Some(ValidatorStakeInfo {
-                            total_epoch_stake,
-                            ..ValidatorStakeInfo::default()
-                        })
-                    } else {
-                        None
-                    }
-                }),
+                ForkProgress::new(
+                    Hash::default(),
+                    Some(prev_leader_slot),
+                    {
+                        if i % 2 == 0 {
+                            Some(ValidatorStakeInfo {
+                                total_epoch_stake,
+                                ..ValidatorStakeInfo::default()
+                            })
+                        } else {
+                            None
+                        }
+                    },
+                    0,
+                    0,
+                ),
             );
         }
 
@@ -3167,6 +3217,8 @@ pub(crate) mod tests {
                     total_epoch_stake,
                     ..ValidatorStakeInfo::default()
                 }),
+                0,
+                0,
             );
 
             let end_range = {
@@ -3222,7 +3274,7 @@ pub(crate) mod tests {
 
         // If there is no previous leader slot (previous leader slot is None),
         // should succeed
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, None));
+        progress_map.insert(3, ForkProgress::new(Hash::default(), None, None, 0, 0));
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
@@ -3232,7 +3284,13 @@ pub(crate) mod tests {
         // If the parent was itself the leader, then requires propagation confirmation
         progress_map.insert(
             3,
-            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+            ForkProgress::new(
+                Hash::default(),
+                None,
+                Some(ValidatorStakeInfo::default()),
+                0,
+                0,
+            ),
         );
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
@@ -3252,10 +3310,16 @@ pub(crate) mod tests {
         // Now, set up the progress map to show that the previous leader slot of 5 is
         // 2 (even though the parent is 3), so 2 needs to see propagation confirmation
         // before we can start a leader for block 5
-        progress_map.insert(3, ForkProgress::new(Hash::default(), Some(2), None));
+        progress_map.insert(3, ForkProgress::new(Hash::default(), Some(2), None, 0, 0));
         progress_map.insert(
             2,
-            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+            ForkProgress::new(
+                Hash::default(),
+                None,
+                Some(ValidatorStakeInfo::default()),
+                0,
+                0,
+            ),
         );
 
         // Last leader slot has not seen propagation threshold, so should fail
@@ -3308,11 +3372,23 @@ pub(crate) mod tests {
         // which means 3 and 4 are consecutiive leader slots
         progress_map.insert(
             3,
-            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+            ForkProgress::new(
+                Hash::default(),
+                None,
+                Some(ValidatorStakeInfo::default()),
+                0,
+                0,
+            ),
         );
         progress_map.insert(
             2,
-            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+            ForkProgress::new(
+                Hash::default(),
+                None,
+                Some(ValidatorStakeInfo::default()),
+                0,
+                0,
+            ),
         );
 
         // If the last leader slot has not seen propagation threshold, but

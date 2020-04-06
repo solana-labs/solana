@@ -180,12 +180,30 @@ impl BankForks {
         root: Slot,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
     ) {
+        let old_epoch = self.root_bank().epoch();
         self.root = root;
         let set_root_start = Instant::now();
         let root_bank = self
             .banks
             .get(&root)
             .expect("root bank didn't exist in bank_forks");
+        let new_epoch = root_bank.epoch();
+        if old_epoch != new_epoch {
+            info!(
+                "Root entering
+                epoch: {},
+                next_epoch_start_slot: {},
+                epoch_stakes: {:#?}",
+                new_epoch,
+                root_bank
+                    .epoch_schedule()
+                    .get_first_slot_in_epoch(new_epoch + 1),
+                root_bank
+                    .epoch_stakes(new_epoch)
+                    .unwrap()
+                    .node_id_to_vote_accounts()
+            );
+        }
         let root_tx_count = root_bank
             .parents()
             .last()
