@@ -255,9 +255,9 @@ export async function checkTransactionStatus(
   let slot;
   let confirmations: Confirmations | undefined;
   try {
-    const { value } = await new Connection(url, "recent").getSignatureStatus(
-      signature
-    );
+    const { value } = await new Connection(url).getSignatureStatus(signature, {
+      searchTransactionHistory: true
+    });
 
     if (value === null) {
       status = Status.Missing;
