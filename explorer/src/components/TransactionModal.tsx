@@ -5,8 +5,13 @@ import {
   ActionType,
   Selected
 } from "../providers/transactions";
+import { displayAddress } from "../utils";
 import { useBlocks } from "../providers/blocks";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  LAMPORTS_PER_SOL,
+  TransferParams,
+  CreateAccountParams
+} from "@solana/web3.js";
 
 function TransactionModal() {
   const { selected } = useTransactions();
@@ -45,24 +50,34 @@ function TransactionModal() {
 function TransactionDetails({ selected }: { selected: Selected }) {
   const { blocks } = useBlocks();
   const block = blocks[selected.slot];
-  if (!block)
-    return <span className="text-info">{"Transaction block not found"}</span>;
+
+  const renderError = (content: React.ReactNode) => {
+    return (
+      <div className="card-body">
+        <span className="text-info">{content}</span>
+      </div>
+    );
+  };
+
+  if (!block) return renderError("Transaction block not found");
 
   if (!block.transactions) {
-    return (
-      <span className="text-info">
+    return renderError(
+      <>
         <span className="spinner-grow spinner-grow-sm mr-2"></span>
         Loading
-      </span>
+      </>
     );
   }
 
   const details = block.transactions[selected.signature];
-  if (!details)
-    return <span className="text-info">{"Transaction not found"}</span>;
+  if (!details) return renderError("Transaction not found");
 
-  if (details.transfers.length === 0)
-    return <span className="text-info">{"No transfers"}</span>;
+  const { transfers, creates } = details;
+  if (transfers.length === 0 && creates.length === 0)
+    return renderError(
+      "Details for this transaction's instructions are not yet supported"
+    );
 
   let i = 0;
   return (
@@ -71,46 +86,78 @@ function TransactionDetails({ selected }: { selected: Selected }) {
         return (
           <div key={++i}>
             {i > 1 ? <hr className="mb-4"></hr> : null}
-            <div className="card-body">
-              <div className="list-group list-group-flush my-n3">
-                <div className="list-group-item">
-                  <div className="row align-items-center">
-                    <div className="col">
-                      <h5 className="mb-0">From</h5>
-                    </div>
-                    <div className="col-auto">
-                      <code>{transfer.fromPubkey.toBase58()}</code>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="list-group-item">
-                  <div className="row align-items-center">
-                    <div className="col">
-                      <h5 className="mb-0">To</h5>
-                    </div>
-                    <div className="col-auto">
-                      <code>{transfer.toPubkey.toBase58()}</code>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="list-group-item">
-                  <div className="row align-items-center">
-                    <div className="col">
-                      <h5 className="mb-0">Amount (SOL)</h5>
-                    </div>
-                    <div className="col-auto">
-                      {`◎${(1.0 * transfer.lamports) / LAMPORTS_PER_SOL}`}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TransferDetails transfer={transfer} />
+          </div>
+        );
+      })}
+      {details.creates.map(create => {
+        return (
+          <div key={++i}>
+            {i > 1 ? <hr className="mb-4"></hr> : null}
+            <CreateDetails create={create} />
           </div>
         );
       })}
     </>
+  );
+}
+
+function TransferDetails({ transfer }: { transfer: TransferParams }) {
+  return (
+    <div className="card-body">
+      <div className="list-group list-group-flush my-n3">
+        <ListGroupItem label="From">
+          <code>{transfer.fromPubkey.toBase58()}</code>
+        </ListGroupItem>
+        <ListGroupItem label="To">
+          <code>{transfer.toPubkey.toBase58()}</code>
+        </ListGroupItem>
+        <ListGroupItem label="Amount (SOL)">
+          {`◎${(1.0 * transfer.lamports) / LAMPORTS_PER_SOL}`}
+        </ListGroupItem>
+      </div>
+    </div>
+  );
+}
+
+function CreateDetails({ create }: { create: CreateAccountParams }) {
+  return (
+    <div className="card-body">
+      <div className="list-group list-group-flush my-n3">
+        <ListGroupItem label="From">
+          <code>{create.fromPubkey.toBase58()}</code>
+        </ListGroupItem>
+        <ListGroupItem label="New Account">
+          <code>{create.newAccountPubkey.toBase58()}</code>
+        </ListGroupItem>
+        <ListGroupItem label="Amount (SOL)">
+          {`◎${(1.0 * create.lamports) / LAMPORTS_PER_SOL}`}
+        </ListGroupItem>
+        <ListGroupItem label="Data (Bytes)">{create.space}</ListGroupItem>
+        <ListGroupItem label="Owner">
+          <code>{displayAddress(create.programId)}</code>
+        </ListGroupItem>
+      </div>
+    </div>
+  );
+}
+
+function ListGroupItem({
+  label,
+  children
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="list-group-item">
+      <div className="row align-items-center">
+        <div className="col">
+          <h5 className="mb-0">{label}</h5>
+        </div>
+        <div className="col-auto">{children}</div>
+      </div>
+    </div>
   );
 }
 

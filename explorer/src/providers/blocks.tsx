@@ -5,7 +5,8 @@ import {
   Transaction,
   TransferParams,
   SystemProgram,
-  SystemInstruction
+  SystemInstruction,
+  CreateAccountParams
 } from "@solana/web3.js";
 import { useCluster, ClusterStatus } from "./cluster";
 import { useTransactions } from "./transactions";
@@ -19,6 +20,7 @@ export enum Status {
 export interface TransactionDetails {
   transaction: Transaction;
   transfers: Array<TransferParams>;
+  creates: Array<CreateAccountParams>;
 }
 
 type Transactions = { [signature: string]: TransactionDetails };
@@ -152,6 +154,38 @@ export function BlocksProvider({ children }: BlocksProviderProps) {
   );
 }
 
+function decodeTransfers(tx: Transaction) {
+  const transferInstructions = tx.instructions
+    .filter(ix => ix.programId.equals(SystemProgram.programId))
+    .filter(ix => SystemInstruction.decodeInstructionType(ix) === "Transfer");
+
+  let transfers: TransferParams[] = [];
+  transferInstructions.forEach(ix => {
+    try {
+      transfers.push(SystemInstruction.decodeTransfer(ix));
+    } catch (err) {
+      console.error(ix, err);
+    }
+  });
+  return transfers;
+}
+
+function decodeCreates(tx: Transaction) {
+  const createInstructions = tx.instructions
+    .filter(ix => ix.programId.equals(SystemProgram.programId))
+    .filter(ix => SystemInstruction.decodeInstructionType(ix) === "Create");
+
+  let creates: CreateAccountParams[] = [];
+  createInstructions.forEach(ix => {
+    try {
+      creates.push(SystemInstruction.decodeCreateAccount(ix));
+    } catch (err) {
+      console.error(ix, err);
+    }
+  });
+  return creates;
+}
+
 async function fetchBlock(dispatch: Dispatch, slot: number, url: string) {
   dispatch({
     type: ActionType.Update,
@@ -166,25 +200,11 @@ async function fetchBlock(dispatch: Dispatch, slot: number, url: string) {
     block.transactions.forEach(({ transaction }) => {
       const signature = transaction.signature;
       if (signature) {
-        const transferInstructions = transaction.instructions
-          .filter(ix => ix.programId.equals(SystemProgram.programId))
-          .filter(
-            ix => SystemInstruction.decodeInstructionType(ix) === "Transfer"
-          );
-
-        let transfers: TransferParams[] = [];
-        transferInstructions.forEach(ix => {
-          try {
-            transfers.push(SystemInstruction.decodeTransfer(ix));
-          } catch (err) {
-            console.log(ix, err);
-          }
-        });
-
         const sig = bs58.encode(signature);
         transactions[sig] = {
           transaction,
-          transfers
+          transfers: decodeTransfers(transaction),
+          creates: decodeCreates(transaction)
         };
       }
     });
