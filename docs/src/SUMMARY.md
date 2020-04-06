@@ -121,3 +121,4 @@
   * [Tick Verification](proposals/tick-verification.md)
   * [Block Confirmation](proposals/block-confirmation.md)
   * [ABI Management](proposals/abi-management.md)
+  * [Rust Clients](proposals/rust-clients.md)
