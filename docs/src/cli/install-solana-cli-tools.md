@@ -156,54 +156,10 @@ prebuilt binaries:
 solana-install init
 ```
 
-# Choosing a Cluster
+# Connect to a Cluster
 
-Solana maintains several clusters, each featuring a Solana-owned validator
-that serves as an entrypoint to the cluster.
+After you have installed the command line tools, to interact with a live Solana
+cluster, you need to
+[configure your local tools to connect to a cluster](choose-a-cluster.md)
 
-Current cluster entrypoints:
-
-* Devnet: devnet.solana.com
-* Tour de SOL: tds.solana.com
-
-Application developers should target Devnet. Key differences
-between Devnet and what will be Mainnet:
-
-* Devnet tokens are not real
-* Devnet includes a token faucet for application testing
-* Devnet may be subject to ledger resets
-* Devnet typically runs a newer software version than mainnet
-* Devnet may be maintained by different validators than mainnet
-
-## Configure the Command-line
-
-You can check what cluster the Solana CLI is currently targeting by
-running the following command:
-
-```bash
-solana config get
-```
-
-Use the `solana config set` command to target a different cluster.
-For example, for Devnet, use:
-
-```bash
-solana config set --url http://devnet.solana.com
-```
-
-## Ensure Versions Match
-
-Though not strictly necessary, the CLI will generally work best when its version
-matches the software version running on the cluster. To get the CLI version, run:
-
-```bash
-solana --version
-```
-
-To get the cluster version, run:
-
-```bash
-solana cluster-version
-```
-
-Ensure the CLI version is greater than or equal to the cluster version.
+{% page-ref page="choose-a-cluster.md" %}
