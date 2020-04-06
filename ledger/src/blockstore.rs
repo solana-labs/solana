@@ -2817,6 +2817,15 @@ pub mod tests {
                 .unwrap_or(true)
             & blockstore
                 .db
+                .iter::<cf::AddressSignatures>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|((primary_index, _, slot), _)| {
+                    slot >= min_slot || (primary_index == 2 && slot == 0)
+                })
+                .unwrap_or(true)
+            & blockstore
+                .db
                 .iter::<cf::Rewards>(IteratorMode::Start)
                 .unwrap()
                 .next()
