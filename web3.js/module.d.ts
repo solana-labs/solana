@@ -48,6 +48,10 @@ declare module '@solana/web3.js' {
 
   export type Commitment = 'max' | 'recent';
 
+  export type SignatureStatusConfig = {
+    searchTransactionHistory: boolean;
+  };
+
   export type SignatureStatus = {
     slot: number;
     err: TransactionError | null;
@@ -160,6 +164,7 @@ declare module '@solana/web3.js' {
 
   export class Connection {
     constructor(endpoint: string, commitment?: Commitment);
+    commitment?: Commitment;
     getAccountInfoAndContext(
       publicKey: PublicKey,
       commitment?: Commitment,
@@ -192,11 +197,11 @@ declare module '@solana/web3.js' {
     getSlotLeader(commitment?: Commitment): Promise<string>;
     getSignatureStatus(
       signature: TransactionSignature,
-      commitment?: Commitment,
+      config?: SignatureStatusConfig,
     ): Promise<RpcResponseAndContext<SignatureStatus | null>>;
     getSignatureStatuses(
       signatures: Array<TransactionSignature>,
-      commitment?: Commitment,
+      config?: SignatureStatusConfig,
     ): Promise<RpcResponseAndContext<Array<SignatureStatus | null>>>;
     getTransactionCount(commitment?: Commitment): Promise<number>;
     getTotalSupply(commitment?: Commitment): Promise<number>;

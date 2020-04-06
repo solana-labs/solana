@@ -151,7 +151,6 @@ test('transaction-payer', async () => {
         [
           '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
         ],
-        {commitment: 'recent'},
       ],
     },
     {

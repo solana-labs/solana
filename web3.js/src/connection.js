@@ -97,6 +97,16 @@ function notificationResultAndContext(resultDescription: any) {
 export type Commitment = 'max' | 'recent';
 
 /**
+ * Configuration object for changing query behavior
+ *
+ * @typedef {Object} SignatureStatusConfig
+ * @property {boolean} searchTransactionHistory enable searching status history, not needed for recent transactions
+ */
+export type SignatureStatusConfig = {
+  searchTransactionHistory: boolean,
+};
+
+/**
  * Information describing a cluster node
  *
  * @typedef {Object} ContactInfo
@@ -830,6 +840,13 @@ export class Connection {
   }
 
   /**
+   * The default commitment used for requests
+   */
+  get commitment(): ?Commitment {
+    return this._commitment;
+  }
+
+  /**
    * Fetch the balance for the specified public key, return with context
    */
   async getBalanceAndContext(
@@ -1033,25 +1050,28 @@ export class Connection {
    */
   async getSignatureStatus(
     signature: TransactionSignature,
-    commitment: ?Commitment,
+    config: ?SignatureStatusConfig,
   ): Promise<RpcResponseAndContext<SignatureStatus | null>> {
     const {context, value} = await this.getSignatureStatuses(
       [signature],
-      commitment,
+      config,
     );
     assert(value.length === 1);
     return {context, value: value[0]};
   }
 
   /**
-   * Fetch the current status of a signature
+   * Fetch the current statuses of a batch of signatures
    */
   async getSignatureStatuses(
     signatures: Array<TransactionSignature>,
-    commitment: ?Commitment,
+    config: ?SignatureStatusConfig,
   ): Promise<RpcResponseAndContext<Array<SignatureStatus | null>>> {
-    const args = this._argsWithCommitment([signatures], commitment);
-    const unsafeRes = await this._rpcRequest('getSignatureStatuses', args);
+    const params = [signatures];
+    if (config) {
+      params.push(config);
+    }
+    const unsafeRes = await this._rpcRequest('getSignatureStatuses', params);
     const res = GetSignatureStatusesRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
