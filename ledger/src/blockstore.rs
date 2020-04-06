@@ -1651,9 +1651,9 @@ impl Blockstore {
         signature: Signature,
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
         let mut counter = 0;
-        for i in 0..=1 {
+        for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
-                (i, signature, 0),
+                (transaction_status_cf_primary_index, signature, 0),
                 IteratorDirection::Forward,
             ))?;
             for ((_, sig, slot), data) in index_iterator {
