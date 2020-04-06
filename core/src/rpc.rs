@@ -57,9 +57,7 @@ pub struct JsonRpcConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSignatureStatusConfig {
-    #[serde(flatten)]
-    pub commitment: Option<CommitmentConfig>,
-    pub search_transaction_history: Option<bool>,
+    pub search_transaction_history: bool,
 }
 
 #[derive(Clone)]
@@ -442,15 +440,10 @@ impl JsonRpcRequestProcessor {
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
-        let (commitment, search_transaction_history) = if let Some(config) = config {
-            (
-                config.commitment,
-                config.search_transaction_history.unwrap_or(false),
-            )
-        } else {
-            (None, false)
-        };
-        let bank = self.bank(commitment);
+        let search_transaction_history = config
+            .map(|x| x.search_transaction_history)
+            .unwrap_or(false);
+        let bank = self.bank(Some(CommitmentConfig::recent()));
 
         for signature in signatures {
             let status = if let Some(status) = self.get_transaction_status(signature, &bank) {
@@ -1115,18 +1108,15 @@ impl RpcSol for RpcSolImpl {
             Some(config) if config.commitment == CommitmentLevel::Recent => 5,
             _ => 30,
         };
-        let config = commitment.map(|commitment| RpcSignatureStatusConfig {
-            commitment: Some(commitment),
-            search_transaction_history: None,
-        });
         loop {
             signature_status = meta
                 .request_processor
                 .read()
                 .unwrap()
-                .get_signature_statuses(vec![signature], config.clone())?
+                .get_signature_statuses(vec![signature], None)?
                 .value[0]
                 .clone()
+                .filter(|result| result.satisfies_commitment(commitment.unwrap_or_default()))
                 .map(|x| x.status);
 
             if signature_status == Some(Ok(())) {
