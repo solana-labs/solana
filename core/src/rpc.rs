@@ -36,6 +36,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const MAX_QUERY_ITEMS: usize = 256;
+
 type RpcResponse<T> = Result<Response<T>>;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
@@ -1012,6 +1014,12 @@ impl RpcSol for RpcSolImpl {
         signature_strs: Vec<String>,
         config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
+        if signature_strs.len() > MAX_QUERY_ITEMS {
+            return Err(Error::invalid_params(format!(
+                "Too many inputs provided; max {}",
+                MAX_QUERY_ITEMS
+            )));
+        }
         let mut signatures: Vec<Signature> = vec![];
         for signature_str in signature_strs {
             signatures.push(verify_signature(&signature_str)?);
