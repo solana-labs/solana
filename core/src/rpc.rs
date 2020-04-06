@@ -56,7 +56,10 @@ pub struct JsonRpcConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSignatureStatusConfig {
-    pub search_transaction_history: bool,
+    pub search_transaction_history: Option<bool>,
+    // DEPRECATED
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
 }
 
 #[derive(Clone)]
@@ -437,10 +440,16 @@ impl JsonRpcRequestProcessor {
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
+        // DEPRECATED
+        let commitment = config
+            .clone()
+            .and_then(|x| x.commitment)
+            .or_else(|| Some(CommitmentConfig::recent()));
+
         let search_transaction_history = config
-            .map(|x| x.search_transaction_history)
+            .and_then(|x| x.search_transaction_history)
             .unwrap_or(false);
-        let bank = self.bank(Some(CommitmentConfig::recent()));
+        let bank = self.bank(commitment);
 
         for signature in signatures {
             let status = if let Some(status) = self.get_transaction_status(signature, &bank) {
