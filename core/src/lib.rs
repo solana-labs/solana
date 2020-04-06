@@ -5,6 +5,10 @@
 //! command-line tools to spin up validators and a Rust library
 //!
 
+<<<<<<< HEAD
+=======
+pub mod accounts_background_service;
+>>>>>>> b28ec430e... Introduce background stale AppendVec shrink mechanism (#9219)
 pub mod accounts_hash_verifier;
 pub mod banking_stage;
 pub mod broadcast_stage;

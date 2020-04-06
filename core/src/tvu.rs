@@ -2,6 +2,10 @@
 //! validation pipeline in software.
 
 use crate::{
+<<<<<<< HEAD
+=======
+    accounts_background_service::AccountsBackgroundService,
+>>>>>>> b28ec430e... Introduce background stale AppendVec shrink mechanism (#9219)
     accounts_hash_verifier::AccountsHashVerifier,
     blockstream_service::BlockstreamService,
     cluster_info::ClusterInfo,
@@ -49,6 +53,10 @@ pub struct Tvu {
     replay_stage: ReplayStage,
     blockstream_service: Option<BlockstreamService>,
     ledger_cleanup_service: Option<LedgerCleanupService>,
+<<<<<<< HEAD
+=======
+    accounts_background_service: AccountsBackgroundService,
+>>>>>>> b28ec430e... Introduce background stale AppendVec shrink mechanism (#9219)
     storage_stage: StorageStage,
     accounts_hash_verifier: AccountsHashVerifier,
 }
@@ -220,6 +228,11 @@ impl Tvu {
             )
         });
 
+<<<<<<< HEAD
+=======
+        let accounts_background_service = AccountsBackgroundService::new(bank_forks.clone(), &exit);
+
+>>>>>>> b28ec430e... Introduce background stale AppendVec shrink mechanism (#9219)
         let storage_stage = StorageStage::new(
             storage_state,
             root_bank_receiver,
@@ -239,6 +252,10 @@ impl Tvu {
             replay_stage,
             blockstream_service,
             ledger_cleanup_service,
+<<<<<<< HEAD
+=======
+            accounts_background_service,
+>>>>>>> b28ec430e... Introduce background stale AppendVec shrink mechanism (#9219)
             storage_stage,
             accounts_hash_verifier,
         }
@@ -255,6 +272,10 @@ impl Tvu {
         if self.ledger_cleanup_service.is_some() {
             self.ledger_cleanup_service.unwrap().join()?;
         }
+<<<<<<< HEAD
+=======
+        self.accounts_background_service.join()?;
+>>>>>>> b28ec430e... Introduce background stale AppendVec shrink mechanism (#9219)
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
         Ok(())

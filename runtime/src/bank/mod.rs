@@ -1998,6 +1998,7 @@ impl Bank {
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
         self.clean_accounts();
+        self.shrink_all_stale_slots();
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }
@@ -2238,6 +2239,21 @@ impl Bank {
     pub fn clean_accounts(&self) {
         self.rc.accounts.accounts_db.clean_accounts();
     }
+<<<<<<< HEAD:runtime/src/bank/mod.rs
+=======
+
+    pub fn process_dead_slots(&self) {
+        self.rc.accounts.accounts_db.process_dead_slots();
+    }
+
+    pub fn process_stale_slot(&self) {
+        self.rc.accounts.accounts_db.process_stale_slot();
+    }
+
+    pub fn shrink_all_stale_slots(&self) {
+        self.rc.accounts.accounts_db.shrink_all_stale_slots();
+    }
+>>>>>>> b28ec430e... Introduce background stale AppendVec shrink mechanism (#9219):runtime/src/bank.rs
 }
 
 impl Drop for Bank {
