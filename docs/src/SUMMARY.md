@@ -10,6 +10,7 @@
       * [Paper Wallet Usage](paper-wallet/paper-wallet-usage.md)
     * [Hardware Wallets](remote-wallet/README.md)
       * [Ledger Hardware Wallet](remote-wallet/ledger.md)
+    * [File System Wallet](file-system-wallet/README.md)
   * [Support / Troubleshooting](wallet/support.md)
 * [Command Line Guide](cli/README.md)
   * [Install the Solana Command Line Tool Suite](cli/install-solana-cli-tools.md)

@@ -78,9 +78,7 @@ The output will contain the public key after the text `pubkey:`. Copy the
 public key. We will use it in the next step.
 
 ```text
-============================================================================
 pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
-============================================================================
 ```
 
 ```bash
