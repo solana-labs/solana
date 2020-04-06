@@ -15,7 +15,11 @@ export {
   STAKE_INSTRUCTION_LAYOUTS,
   StakeProgram,
 } from './stake-program';
-export {SystemInstruction, SystemProgram} from './system-program';
+export {
+  SystemInstruction,
+  SystemProgram,
+  SYSTEM_INSTRUCTION_LAYOUTS,
+} from './system-program';
 export {Transaction, TransactionInstruction} from './transaction';
 export {VALIDATOR_INFO_KEY, ValidatorInfo} from './validator-info';
 export {VOTE_PROGRAM_ID, VoteAccount} from './vote-account';

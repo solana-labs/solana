@@ -363,7 +363,7 @@ export type SystemInstructionType = $Keys<typeof SYSTEM_INSTRUCTION_LAYOUTS>;
 /**
  * An enumeration of valid system InstructionType's
  */
-const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze({
+export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze({
   Create: {
     index: 0,
     layout: BufferLayout.struct([
