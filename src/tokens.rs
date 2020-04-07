@@ -17,7 +17,7 @@ use std::process;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
-    bid_amount_dollars: f64,
+    accepted_amount_dollars: f64,
     primary_address: String,
 }
 
@@ -67,13 +67,13 @@ fn apply_previous_transactions(
             }
         }
     }
-    allocations.retain(|x| x.amount > 0.0);
+    allocations.retain(|x| x.amount > 0.5);
 }
 
 fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
     Allocation {
         recipient: bid.primary_address.clone(),
-        amount: bid.bid_amount_dollars / dollars_per_sol,
+        amount: bid.accepted_amount_dollars / dollars_per_sol,
     }
 }
 
@@ -316,7 +316,7 @@ pub fn test_process_distribute_with_client<C: Client>(
     let alice_pubkey = Pubkey::new_rand();
     let bid = Bid {
         primary_address: alice_pubkey.to_string(),
-        bid_amount_dollars: 1000.0,
+        accepted_amount_dollars: 1000.0,
     };
     let allocations_file = NamedTempFile::new().unwrap();
     let allocations_csv = allocations_file.path().to_str().unwrap().to_string();
@@ -344,7 +344,7 @@ pub fn test_process_distribute_with_client<C: Client>(
     let transaction_infos = read_transaction_infos(&transactions_csv);
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = bid.bid_amount_dollars / args.dollars_per_sol;
+    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol;
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
     assert_eq!(
@@ -357,7 +357,7 @@ pub fn test_process_distribute_with_client<C: Client>(
     let transaction_infos = read_transaction_infos(&transactions_csv);
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = bid.bid_amount_dollars / args.dollars_per_sol;
+    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol;
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
     assert_eq!(
