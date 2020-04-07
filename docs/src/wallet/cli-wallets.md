@@ -14,10 +14,10 @@ To use a Command Line Wallet, you must first [install the Solana CLI tools](../c
 A *file system wallet*, aka an FS wallet, is a directory in your computer's
 file system. Each file in the directory holds a keypair.
 
-### FS Wallet Security
+### File System Wallet Security
 
-An FS wallet is the most convenient and least secure form of wallet. It is
-convenient because the keypair is stored in a simple file. You can generate as
+A file system wallet is the most convenient and least secure form of wallet. It
+is convenient because the keypair is stored in a simple file. You can generate as
 many keys as you would like and trivially back them up by copying the files. It
 is insecure because the keypair files are **unencrypted**. If you are the only
 user of your computer and you are confident it is free of malware, an FS wallet
@@ -27,6 +27,8 @@ upload your keys and use them to take your tokens. Likewise, because the
 keypairs are stored on your computer as files, a skilled hacker with physical
 access to your computer may be able to access it. Using an encrypted hard
 drive, such as FileVault on MacOS, minimizes that risk.
+
+{% page-ref page="../file-system-wallet/README.md" %}
 
 ## Paper Wallet
 

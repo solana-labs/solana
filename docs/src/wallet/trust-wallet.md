@@ -81,7 +81,7 @@ go to the main page of the wallet from which you want to send some SOL tokens:
  - Under "Recipient Address":
    - If you already have the receiving address you are going to send to,
    tap "Paste"
-   - If you are transferring to another Trust Wallet user, you can use the apps'
+   - If you are transferring to another Trust Wallet user, you can use the app's
    QR code reader by tapping the square icon to the right of the "Paste" button.
  - Under "Amount", enter the amount of SOL you want to send, or tap "Max"
    to send **all** of the SOL in your wallet to the new address
