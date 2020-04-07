@@ -466,7 +466,7 @@ fn cleanup_network(matches: &ArgMatches) {
     assert!(my_index < network_size);
 
     println!("cleanup: my_index: {}, network_size: {}, partitions: {:?}", my_index, network_size, topology.partitions);
-    let my_partition = identify_my_partition(&topology.partitions, my_index, network_size);
+    let my_partition = identify_my_partition(&topology.partitions, my_index + 1, network_size);
     println!("My cleanup partition is {}", my_partition);
 
     topology.interconnects.iter().for_each(|i| {
