@@ -198,6 +198,10 @@ impl Validator {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
 
+        blockstore
+            .reconcile_shreds(Some(&leader_schedule_cache))
+            .expect("Expected to successfully reconcile shreds");
+
         info!("Starting validator from slot {}", bank.slot());
         {
             let hard_forks: Vec<_> = bank.hard_forks().read().unwrap().iter().copied().collect();

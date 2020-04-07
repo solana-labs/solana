@@ -43,7 +43,7 @@ pub struct Index {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct ShredIndex {
     /// Map representing presence/absence of shreds
-    index: BTreeSet<u64>,
+    pub index: BTreeSet<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
