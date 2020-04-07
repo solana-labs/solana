@@ -4,6 +4,9 @@ use self::{
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
+use crate::contact_info::ContactInfo;
+use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+use crate::weighted_shuffle::weighted_best;
 use crate::{
     cluster_info::{ClusterInfo, ClusterInfoError},
     poh_recorder::WorkingBankEntry,
@@ -14,9 +17,13 @@ use crossbeam_channel::{
     Sender as CrossbeamSender,
 };
 use solana_ledger::{blockstore::Blockstore, shred::Shred, staking_utils};
+use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
+use solana_sdk::timing::duration_as_s;
+use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_streamer::sendmmsg::send_mmsg;
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -326,6 +333,84 @@ impl BroadcastStage {
         }
         Ok(BroadcastStageReturnType::ChannelDisconnected)
     }
+}
+
+fn update_peer_stats(num_live_peers: i64, broadcast_len: i64, last_datapoint_submit: &mut Instant) {
+    if duration_as_s(&Instant::now().duration_since(*last_datapoint_submit)) >= 1.0 {
+        datapoint_info!(
+            "cluster_info-num_nodes",
+            ("live_count", num_live_peers, i64),
+            ("broadcast_count", broadcast_len, i64)
+        );
+        *last_datapoint_submit = Instant::now();
+    }
+}
+
+pub fn get_broadcast_peers<S: std::hash::BuildHasher>(
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
+) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
+    use crate::cluster_info;
+    let mut peers = cluster_info.read().unwrap().tvu_peers();
+    let peers_and_stakes = cluster_info::stake_weight_peers(&mut peers, stakes);
+    (peers, peers_and_stakes)
+}
+
+/// broadcast messages from the leader to layer 1 nodes
+/// # Remarks
+pub fn broadcast_shreds(
+    s: &UdpSocket,
+    shreds: &Arc<Vec<Shred>>,
+    peers_and_stakes: &[(u64, usize)],
+    peers: &[ContactInfo],
+    last_datapoint_submit: &mut Instant,
+    send_mmsg_total: &mut u64,
+) -> Result<()> {
+    let broadcast_len = peers_and_stakes.len();
+    if broadcast_len == 0 {
+        update_peer_stats(1, 1, last_datapoint_submit);
+        return Ok(());
+    }
+    let packets: Vec<_> = shreds
+        .iter()
+        .map(|shred| {
+            let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
+
+            (&shred.payload, &peers[broadcast_index].tvu)
+        })
+        .collect();
+
+    let mut sent = 0;
+    let mut send_mmsg_time = Measure::start("send_mmsg");
+    while sent < packets.len() {
+        match send_mmsg(s, &packets[sent..]) {
+            Ok(n) => sent += n,
+            Err(e) => {
+                return Err(Error::IO(e));
+            }
+        }
+    }
+    send_mmsg_time.stop();
+    *send_mmsg_total += send_mmsg_time.as_us();
+
+    let num_live_peers = num_live_peers(&peers);
+    update_peer_stats(
+        num_live_peers,
+        broadcast_len as i64 + 1,
+        last_datapoint_submit,
+    );
+    Ok(())
+}
+
+fn num_live_peers(peers: &[ContactInfo]) -> i64 {
+    let mut num_live_peers = 1i64;
+    peers.iter().for_each(|p| {
+        // A peer is considered live if they generated their contact info recently
+        if timestamp() - p.wallclock <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
+            num_live_peers += 1;
+        }
+    });
+    num_live_peers
 }
 
 #[cfg(test)]

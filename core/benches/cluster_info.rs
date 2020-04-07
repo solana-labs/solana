@@ -3,10 +3,13 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
+use solana_core::broadcast_stage::{broadcast_shreds, get_broadcast_peers};
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
+use solana_ledger::shred::Shred;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
+use std::sync::RwLock;
 use std::{collections::HashMap, net::UdpSocket, sync::Arc, time::Instant};
 use test::Bencher;
 
@@ -18,10 +21,8 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-    const SHRED_SIZE: usize = 1024;
     const NUM_SHREDS: usize = 32;
-    let shreds = vec![vec![0; SHRED_SIZE]; NUM_SHREDS];
-    let seeds = vec![[0u8; 32]; NUM_SHREDS];
+    let shreds = vec![Shred::new_empty_data_shred(); NUM_SHREDS];
     let mut stakes = HashMap::new();
     const NUM_PEERS: usize = 200;
     for _ in 0..NUM_PEERS {
@@ -31,16 +32,19 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         stakes.insert(id, thread_rng().gen_range(1, NUM_PEERS) as u64);
     }
     let stakes = Arc::new(stakes);
+    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(stakes.clone()));
+    let shreds = Arc::new(shreds);
     bencher.iter(move || {
         let shreds = shreds.clone();
-        cluster_info
-            .broadcast_shreds(
-                &socket,
-                shreds,
-                &seeds,
-                Some(stakes.clone()),
-                &mut Instant::now(),
-            )
-            .unwrap();
+        broadcast_shreds(
+            &socket,
+            &shreds,
+            &peers_and_stakes,
+            &peers,
+            &mut Instant::now(),
+            &mut 0,
+        )
+        .unwrap();
     });
 }
