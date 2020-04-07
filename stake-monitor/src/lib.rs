@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{
-    clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey, signature::Signature,
-    transaction::Transaction,
+    clock::Slot, native_token::LAMPORTS_PER_SOL, program_utils::limited_deserialize,
+    pubkey::Pubkey, signature::Signature, transaction::Transaction,
 };
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
 use solana_transaction_status::{ConfirmedBlock, RpcTransactionStatusMeta, TransactionEncoding};
@@ -203,7 +203,9 @@ fn process_transaction(
     for (index, account_pubkey) in message.account_keys.iter().enumerate() {
         if let Some(mut account_info) = accounts.get_mut(&account_pubkey.to_string()) {
             let post_balance = meta.post_balances[index];
-            if account_info.compliant_since.is_some() && post_balance < account_info.lamports {
+            if account_info.compliant_since.is_some()
+                && post_balance <= account_info.lamports.saturating_sub(LAMPORTS_PER_SOL)
+            {
                 account_info.compliant_since = None;
                 account_info.transactions.push(AccountTransactionInfo {
                     op: AccountOperation::FailedToMaintainMinimumBalance,
@@ -543,6 +545,39 @@ mod test {
             ))
             .unwrap();
 
+        // System transfer 2
+        let system2_keypair = Keypair::new();
+
+        // Fund system2
+        let fund_system2_signature = rpc_client
+            .send_transaction(&system_transaction::transfer(
+                &payer,
+                &system2_keypair.pubkey(),
+                2 * one_sol,
+                blockhash,
+            ))
+            .unwrap();
+        rpc_client
+            .poll_for_signature_with_commitment(&fund_system2_signature, CommitmentConfig::recent())
+            .unwrap();
+        accounts_info.enroll_system_account(
+            &system2_keypair.pubkey(),
+            rpc_client
+                .get_slot_with_commitment(CommitmentConfig::recent())
+                .unwrap(),
+            2 * one_sol,
+        );
+
+        // Withdraw 1 sol - 1 lamport from system 2, it's still compliant
+        rpc_client
+            .send_transaction(&system_transaction::transfer(
+                &system2_keypair,
+                &payer.pubkey(),
+                one_sol - 1,
+                blockhash,
+            ))
+            .unwrap();
+
         // Process all the transactions
         let current_slot = rpc_client
             .get_slot_with_commitment(CommitmentConfig::recent())
@@ -656,7 +691,6 @@ mod test {
             .account_info
             .get(&system1_keypair.pubkey().to_string())
             .unwrap();
-        error!("account_info system 1: {:?}", account_info);
         assert!(account_info.compliant_since.is_none());
         assert_eq!(account_info.lamports, 2 * one_sol);
         assert_eq!(account_info.transactions.len(), 2);
@@ -667,6 +701,19 @@ mod test {
         assert_eq!(
             account_info.transactions[1].op,
             AccountOperation::FailedToMaintainMinimumBalance,
+        );
+
+        info!("Check the data recorded for system2");
+        let account_info = accounts_info
+            .account_info
+            .get(&system2_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_some());
+        assert_eq!(account_info.lamports, 2 * one_sol);
+        assert_eq!(account_info.transactions.len(), 1);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::SystemAccountEnroll,
         );
     }
 }
