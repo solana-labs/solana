@@ -21,10 +21,20 @@ if [[ ! -f target/perf-libs/.$VERSION ]]; then
   (
     set -x
     cd target/perf-libs
-    curl -L --retry 5 --retry-delay 2 --retry-connrefused -o solana-perf.tgz \
-      https://github.com/solana-labs/solana-perf-libs/releases/download/$PERF_LIBS_VERSION/solana-perf.tgz
+
+    if [[ -r ~/.cache/solana-perf-$PERF_LIBS_VERSION.tgz ]]; then
+      cp ~/.cache/solana-perf-$PERF_LIBS_VERSION.tgz solana-perf.tgz
+    else
+      curl -L --retry 5 --retry-delay 2 --retry-connrefused -o solana-perf.tgz \
+        https://github.com/solana-labs/solana-perf-libs/releases/download/$PERF_LIBS_VERSION/solana-perf.tgz
+    fi
     tar zxvf solana-perf.tgz
-    rm -f solana-perf.tgz
+
+    if [[ ! -r ~/.cache/solana-perf-$PERF_LIBS_VERSION.tgz ]]; then
+      # Save it for next time
+      mkdir -p ~/.cache
+      mv solana-perf.tgz ~/.cache/solana-perf-$PERF_LIBS_VERSION.tgz
+    fi
     touch .$VERSION
   )
 
