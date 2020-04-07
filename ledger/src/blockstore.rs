@@ -1622,12 +1622,11 @@ impl Blockstore {
         }
     }
 
-    fn make_transaction_status_index(
+    fn get_primary_index(
         &self,
-        index: (Signature, Slot),
+        slot: Slot,
         w_active_transaction_status_index: &mut u64,
-    ) -> Result<(u64, Signature, Slot)> {
-        let (signature, slot) = index;
+    ) -> Result<u64> {
         let i = *w_active_transaction_status_index;
         let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
         if slot > index_meta.max_slot {
@@ -1635,7 +1634,7 @@ impl Blockstore {
             index_meta.max_slot = slot;
             self.transaction_status_index_cf.put(i, &index_meta)?;
         }
-        Ok((i, signature, slot))
+        Ok(i)
     }
 
     pub fn read_transaction_status(
@@ -1653,16 +1652,38 @@ impl Blockstore {
 
     pub fn write_transaction_status(
         &self,
-        index: (Signature, Slot),
+        slot: Slot,
+        signature: Signature,
+        writable_keys: Vec<&Pubkey>,
+        readonly_keys: Vec<&Pubkey>,
         status: &TransactionStatusMeta,
     ) -> Result<()> {
         // This write lock prevents interleaving issues with the transaction_status_index_cf by gating
         // writes to that column
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
-        let index =
-            self.make_transaction_status_index(index, &mut w_active_transaction_status_index)?;
-        self.transaction_status_cf.put(index, status)
+        let primary_index = self.get_primary_index(slot, &mut w_active_transaction_status_index)?;
+        self.transaction_status_cf
+            .put((primary_index, signature, slot), status)?;
+        for address in writable_keys {
+            self.address_signatures_cf.put(
+                (primary_index, *address, slot),
+                &AddressSignatureMeta {
+                    signature,
+                    loaded_as_writable: true,
+                },
+            )?;
+        }
+        for address in readonly_keys {
+            self.address_signatures_cf.put(
+                (primary_index, *address, slot),
+                &AddressSignatureMeta {
+                    signature,
+                    loaded_as_writable: false,
+                },
+            )?;
+        }
+        Ok(())
     }
 
     // Returns a transaction status if it was processed in a root, as well as a loop counter for
