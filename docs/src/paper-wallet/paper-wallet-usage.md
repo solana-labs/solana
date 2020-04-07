@@ -57,7 +57,7 @@ keypair to `~/.config/solana/id.json`, resulting in a
 {% endhint %}
 
 The output of this command will display a line like this:
-```
+```bash
 pubkey: 9ZNTfG4NyQgxy2SWjSiQoUyBPEvXT2xo7fKc5hPYYJ7b
 ```
 
