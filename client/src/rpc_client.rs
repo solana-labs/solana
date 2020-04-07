@@ -99,9 +99,24 @@ impl RpcClient {
             None => {
                 Err(RpcError::ForUser("Received result of an unexpected type".to_string()).into())
             }
-            Some(signature_base58_str) => signature_base58_str
-                .parse::<Signature>()
-                .map_err(|err| RpcError::ParseError(err.to_string()).into()),
+            Some(signature_base58_str) => {
+                let signature = signature_base58_str.parse::<Signature>().map_err(|err| {
+                    Into::<ClientError>::into(RpcError::ParseError(err.to_string()))
+                })?;
+                // A mismatching RPC response signature indicates an issue with the RPC node, and
+                // should not be passed along to confirmation methods. The transaction may or may
+                // not have been submitted to the cluster, so callers should verify the success of
+                // the correct transaction signature independently.
+                if signature != transaction.signatures[0] {
+                    Err(RpcError::RpcRequestError(format!(
+                        "RPC node returned mismatched signature {:?}, expected {:?}",
+                        signature, transaction.signatures[0]
+                    ))
+                    .into())
+                } else {
+                    Ok(transaction.signatures[0])
+                }
+            }
         }
     }
 
@@ -956,7 +971,7 @@ impl RpcClient {
             .send(
                 &RpcRequest::GetSignatureStatuses,
                 json!([[signature.to_string()]]),
-                1,
+                5,
             )
             .map_err(|err| err.into_with_command("GetSignatureStatuses"))?;
         let result: Response<Vec<Option<TransactionStatus>>> = serde_json::from_value(response)
@@ -1094,10 +1109,7 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        client_error::ClientErrorKind,
-        mock_rpc_client_request::{PUBKEY, SIGNATURE},
-    };
+    use crate::{client_error::ClientErrorKind, mock_rpc_client_request::PUBKEY};
     use assert_matches::assert_matches;
     use jsonrpc_core::{Error, IoHandler, Params};
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
@@ -1210,10 +1222,15 @@ mod tests {
         let tx = system_transaction::transfer(&key, &to, 50, blockhash);
 
         let signature = rpc_client.send_transaction(&tx);
-        assert_eq!(signature.unwrap(), SIGNATURE.parse().unwrap());
+        assert_eq!(signature.unwrap(), tx.signatures[0]);
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
 
+        let signature = rpc_client.send_transaction(&tx);
+        assert!(signature.is_err());
+
+        // Test bad signature returned from rpc node
+        let rpc_client = RpcClient::new_mock("malicious".to_string());
         let signature = rpc_client.send_transaction(&tx);
         assert!(signature.is_err());
     }
