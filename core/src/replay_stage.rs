@@ -283,22 +283,7 @@ impl ReplayStage {
 
                         for r in failure_reasons {
                             if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
-                                if let Some(latest_leader_slot) = progress.get_latest_leader_slot(slot)
-                                {
-                                    if let Some(stats) =
-                                        progress.get_propagated_stats(latest_leader_slot)
-                                    {
-                                        info!(
-                                            "total staked: {}, observed staked: {}, vote pubkeys: {:?}, node_pubkeys: {:?}, latest_leader_slot: {}, epoch: {:?}",
-                                            stats.total_epoch_stake,
-                                            stats.propagated_validators_stake,
-                                            stats.propagated_validators,
-                                            stats.propagated_node_ids,
-                                            latest_leader_slot,
-                                            bank_forks.read().unwrap().get(latest_leader_slot).map(|x| x.epoch()),
-                                        );
-                                    }
-                                }
+                                progress.log_propagated_stats(slot, &bank_forks);
                             }
                         }
                     }
@@ -307,9 +292,12 @@ impl ReplayStage {
 
                     // Vote on a fork
                     if let Some(ref vote_bank) = vote_bank {
-                        subscriptions.notify_subscribers(block_commitment_cache.read().unwrap().slot(), &bank_forks);
-                        if let Some(votable_leader) = leader_schedule_cache
-                            .slot_leader_at(vote_bank.slot(), Some(vote_bank))
+                        subscriptions.notify_subscribers(
+                            block_commitment_cache.read().unwrap().slot(),
+                            &bank_forks,
+                        );
+                        if let Some(votable_leader) =
+                            leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
                         {
                             Self::log_leader_change(
                                 &my_pubkey,
@@ -343,18 +331,23 @@ impl ReplayStage {
 
                     // Reset onto a fork
                     if let Some(reset_bank) = reset_bank {
-                        if last_reset != reset_bank.last_blockhash()
-                        {
+                        if last_reset != reset_bank.last_blockhash() {
                             info!(
                                 "vote bank: {:?} reset bank: {:?}",
                                 vote_bank.as_ref().map(|b| b.slot()),
                                 reset_bank.slot(),
                             );
-                            let fork_progress = progress.get(&reset_bank.slot()).expect("bank to reset to must exist in progress map");
+                            let fork_progress = progress
+                                .get(&reset_bank.slot())
+                                .expect("bank to reset to must exist in progress map");
                             datapoint_info!(
                                 "blocks_produced",
                                 ("num_blocks_on_fork", fork_progress.num_blocks_on_fork, i64),
-                                ("num_dropped_blocks_on_fork", fork_progress.num_dropped_blocks_on_fork, i64),
+                                (
+                                    "num_dropped_blocks_on_fork",
+                                    fork_progress.num_dropped_blocks_on_fork,
+                                    i64
+                                ),
                             );
                             Self::reset_poh_recorder(
                                 &my_pubkey,
@@ -583,17 +576,22 @@ impl ReplayStage {
             );
 
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
-                let latest_leader_slot = progress_map.get_latest_leader_slot(parent_slot).expect("In order for propagated check to fail, latest leader must exist in progress map");
+                let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot(parent_slot).expect("In order for propagated check to fail, latest leader must exist in progress map");
                 if poh_slot != skipped_slots_info.last_skipped_slot {
                     datapoint_info!(
                         "replay_stage-skip_leader_slot",
                         ("slot", poh_slot, i64),
                         ("parent_slot", parent_slot, i64),
-                        ("latest_unconfirmed_leader", latest_leader_slot, i64)
+                        (
+                            "latest_unconfirmed_leader_slot",
+                            latest_unconfirmed_leader_slot,
+                            i64
+                        )
                     );
+                    progress_map.log_propagated_stats(latest_unconfirmed_leader_slot, bank_forks);
                     skipped_slots_info.last_skipped_slot = poh_slot;
                 }
-                let bank = bank_forks.read().unwrap().get(latest_leader_slot)
+                let bank = bank_forks.read().unwrap().get(latest_unconfirmed_leader_slot)
                 .expect("In order for propagated check to fail, latest leader must exist in progress map, and thus also in BankForks").clone();
 
                 // Signal retransmit
