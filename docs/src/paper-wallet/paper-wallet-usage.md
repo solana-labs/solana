@@ -164,7 +164,7 @@ You can create as many wallet addresses as you like.  Simply re-run the
 steps in [Seed Phrase Generation](#seed-phrase-generation) or
 [Public Key Derivation](#public-key-derivation) to create a new address.
 Multiple wallet addresses can be useful if you want to transfer tokens between
-your own accounts for different purposess.
+your own accounts for different purposes.
 
 ## Support
 

@@ -14,6 +14,7 @@
   * [Support / Troubleshooting](wallet/support.md)
 * [Command Line Guide](cli/README.md)
   * [Install the Solana Command Line Tool Suite](cli/install-solana-cli-tools.md)
+  * [Command Line Conventions](cli/conventions.md)
   * [Choose a Cluster](cli/choose-a-cluster.md)
   * [Send and Receive Tokens](cli/transfer-tokens.md)
   * [Delegate Stake](cli/delegate-stake.md)

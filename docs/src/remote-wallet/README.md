@@ -49,6 +49,26 @@ For example, a fully qualified URL for a Ledger device might be:
 usb://ledger/BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK?key=0/0
 ```
 
+### Multiple Addresses on a Single Hardware Wallet
+You can derive as many wallet addresses as you like.  To view them, simply
+iterate the `ACCOUNT` and/or `CHANGE` number when specifying the URL path.
+Multiple wallet addresses can be useful if you want to transfer tokens between
+your own accounts for different purposes.
+
+For example, a first address can be viewed with:
+```bash
+solana-keygen pubkey usb://ledger?key=0
+```
+A second address can be viewed with:
+```bash
+solana-keygen pubkey usb://ledger?key=1
+```
+A third address:
+```bash
+solana-keygen pubkey usb://ledger?key=2
+```
+...and so on.
+
 ## Manage Multiple Hardware Wallets
 
 It is sometimes useful to sign a transaction with keys from multiple hardware

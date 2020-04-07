@@ -155,11 +155,3 @@ prebuilt binaries:
 ```bash
 solana-install init
 ```
-
-# Connect to a Cluster
-
-After you have installed the command line tools, to interact with a live Solana
-cluster, you need to
-[configure your local tools to connect to a cluster](choose-a-cluster.md)
-
-{% page-ref page="choose-a-cluster.md" %}
