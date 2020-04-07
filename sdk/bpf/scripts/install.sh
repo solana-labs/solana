@@ -12,6 +12,12 @@ download() {
   declare url=$1
   declare filename=$2
   declare progress=$3
+  declare cache_filename=~/.cache/${filename//:\//_}
+
+  if [[ -r $cache_filename ]]; then
+    ln -s "$cache_filename" "$filename"
+    return
+  fi
 
   declare args=(
     "$url" -O "$filename"
@@ -19,7 +25,12 @@ download() {
     "--retry-connrefused"
     "--read-timeout=30"
   )
-  wget "${args[@]}"
+  if wget "${args[@]}"; then
+    mkdir -p ~/.cache
+    cp "$filename" "$cache_filename"
+    return 0
+  fi
+  return 1
 }
 
 # Install xargo
@@ -123,11 +134,12 @@ fi
 # Install Rust-BPF Sysroot sources
 version=v0.12
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
+
   (
     set -ex
     rm -rf rust-bpf-sysroot*
     rm -rf xargo
-    cmd="git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git"
+    cmd="git clone --recursive --depth 1 --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git"
     $cmd
 
     echo "$cmd" > rust-bpf-sysroot-$version.md
