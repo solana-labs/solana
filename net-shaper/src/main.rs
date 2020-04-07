@@ -345,6 +345,7 @@ fn identify_my_partition(partitions: &[u8], index: u64, size: u64) -> usize {
     let mut my_partition = 0;
     let mut watermark = 0;
     for (i, p) in partitions.iter().enumerate() {
+        println!("i: {}, p: {}, watermark: {}, index: {}, size: {}", i, p, watermark, index, size);
         watermark += *p;
         if u64::from(watermark) >= index * 100 / size {
             my_partition = i;
@@ -380,6 +381,8 @@ fn shape_network(matches: &ArgMatches) {
     assert!(my_index < network_size);
 
     let my_partition = identify_my_partition(&topology.partitions, my_index + 1, network_size);
+
+    println!("my_index: {}, network_size: {}, partitions: {:?}", my_index, network_size, topology.partitions);
     println!("My partition is {}", my_partition);
 
     flush_iptables_rule();
@@ -402,7 +405,10 @@ fn shape_network(matches: &ArgMatches) {
         }
     }
 
+    println!("Processing interconnects");
     topology.interconnects.iter().for_each(|i| {
+        println!("my partition 2: {}", my_partition);
+        println!("interconnects: {:#?}", i);
         if i.b as usize == my_partition {
             let tos = partition_id_to_tos(i.a as usize);
             if tos == 0 {
@@ -414,18 +420,21 @@ fn shape_network(matches: &ArgMatches) {
             let tos_string = tos.to_string();
             // First valid class is 1:1
             let class = format!("1:{}", i.a + 1);
+            println!("here");
             if !insert_tc_netem(
                 interface.as_str(),
                 class.as_str(),
                 tos_string.as_str(),
                 i.config.as_str(),
             ) {
+                println!("failed");
                 delete_default_filter(interface.as_str(), default_filter_class.as_str());
                 delete_tc_root(interface.as_str());
                 return;
             }
 
             if !insert_tos_filter(interface.as_str(), class.as_str(), tos_string.as_str()) {
+                println!("failed 2");
                 delete_tc_netem(
                     interface.as_str(),
                     class.as_str(),
@@ -456,8 +465,9 @@ fn cleanup_network(matches: &ArgMatches) {
 
     assert!(my_index < network_size);
 
+    println!("cleanup: my_index: {}, network_size: {}, partitions: {:?}", my_index, network_size, topology.partitions);
     let my_partition = identify_my_partition(&topology.partitions, my_index, network_size);
-    println!("My partition is {}", my_partition);
+    println!("My cleanup partition is {}", my_partition);
 
     topology.interconnects.iter().for_each(|i| {
         if i.b as usize == my_partition {
