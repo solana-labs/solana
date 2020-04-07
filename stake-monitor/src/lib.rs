@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{
-    clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey, signature::Signature,
-    transaction::Transaction,
+    clock::Slot, native_token::LAMPORTS_PER_SOL, program_utils::limited_deserialize,
+    pubkey::Pubkey, signature::Signature, transaction::Transaction,
 };
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
 use solana_transaction_status::{ConfirmedBlock, RpcTransactionStatusMeta, TransactionEncoding};
@@ -203,7 +203,9 @@ fn process_transaction(
     for (index, account_pubkey) in message.account_keys.iter().enumerate() {
         if let Some(mut account_info) = accounts.get_mut(&account_pubkey.to_string()) {
             let post_balance = meta.post_balances[index];
-            if account_info.compliant_since.is_some() && post_balance < account_info.lamports {
+            if account_info.compliant_since.is_some()
+                && post_balance <= account_info.lamports.saturating_sub(LAMPORTS_PER_SOL)
+            {
                 account_info.compliant_since = None;
                 account_info.transactions.push(AccountTransactionInfo {
                     op: AccountOperation::FailedToMaintainMinimumBalance,
@@ -321,3 +323,400 @@ pub fn process_slots(rpc_client: &RpcClient, accounts_info: &mut AccountsInfo, b
         }
     }
 }
+<<<<<<< HEAD
+=======
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use serial_test_derive::serial;
+    use solana_core::{rpc::JsonRpcConfig, validator::ValidatorConfig};
+    use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
+    use solana_sdk::{
+        commitment_config::CommitmentConfig,
+        genesis_config::OperatingMode,
+        message::Message,
+        native_token::sol_to_lamports,
+        signature::{Keypair, Signer},
+        system_transaction,
+        transaction::Transaction,
+    };
+    use solana_stake_program::{stake_instruction, stake_state::Authorized};
+
+    #[test]
+    #[serial]
+    fn test_record() {
+        solana_logger::setup();
+        let mut accounts_info = AccountsInfo::default();
+
+        let one_sol = sol_to_lamports(1.0);
+        let cluster = LocalCluster::new(&ClusterConfig {
+            operating_mode: OperatingMode::Stable,
+            node_stakes: vec![10; 1],
+            cluster_lamports: sol_to_lamports(1_000_000_000.0),
+            validator_configs: vec![ValidatorConfig {
+                rpc_config: JsonRpcConfig {
+                    enable_rpc_transaction_history: true,
+                    ..JsonRpcConfig::default()
+                },
+                ..ValidatorConfig::default()
+            }],
+            ..ClusterConfig::default()
+        });
+
+        let payer = &cluster.funding_keypair;
+
+        let rpc_client = RpcClient::new_socket(cluster.entry_point_info.rpc);
+
+        let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash().unwrap();
+
+        // Configure stake1
+        let stake1_keypair = Keypair::new();
+        let stake1_signature = rpc_client
+            .send_transaction(&Transaction::new_signed_instructions(
+                &[&payer, &stake1_keypair],
+                stake_instruction::create_account(
+                    &payer.pubkey(),
+                    &stake1_keypair.pubkey(),
+                    &Authorized::auto(&payer.pubkey()),
+                    &Lockup::default(),
+                    one_sol,
+                ),
+                blockhash,
+            ))
+            .unwrap();
+
+        rpc_client
+            .poll_for_signature_with_commitment(&stake1_signature, CommitmentConfig::recent())
+            .unwrap();
+
+        // A balance increase by system transfer is ignored
+        rpc_client
+            .send_transaction(&system_transaction::transfer(
+                &payer,
+                &stake1_keypair.pubkey(),
+                one_sol,
+                blockhash,
+            ))
+            .unwrap();
+
+        // Configure stake2 with non-compliant lockup
+        let stake2_keypair = Keypair::new();
+        let stake2_signature = rpc_client
+            .send_transaction(&Transaction::new_signed_instructions(
+                &[&payer, &stake2_keypair],
+                stake_instruction::create_account(
+                    &payer.pubkey(),
+                    &stake2_keypair.pubkey(),
+                    &Authorized::auto(&payer.pubkey()),
+                    &Lockup {
+                        custodian: payer.pubkey(),
+                        ..Lockup::default()
+                    },
+                    one_sol,
+                ),
+                blockhash,
+            ))
+            .unwrap();
+
+        // Configure stake3
+        let stake3_keypair = Keypair::new();
+        let stake3_initialize_signature = rpc_client
+            .send_transaction(&Transaction::new_signed_instructions(
+                &[&payer, &stake3_keypair],
+                stake_instruction::create_account(
+                    &payer.pubkey(),
+                    &stake3_keypair.pubkey(),
+                    &Authorized::auto(&payer.pubkey()),
+                    &Lockup::default(),
+                    one_sol,
+                ),
+                blockhash,
+            ))
+            .unwrap();
+
+        rpc_client
+            .poll_for_signature_with_commitment(
+                &stake3_initialize_signature,
+                CommitmentConfig::recent(),
+            )
+            .unwrap();
+
+        // Withdraw instruction causes non-compliance
+        let stake3_withdraw_signature = rpc_client
+            .send_transaction(&Transaction::new(
+                &[&payer, &stake3_keypair],
+                Message::new_with_payer(
+                    &[stake_instruction::withdraw(
+                        &stake3_keypair.pubkey(),
+                        &stake3_keypair.pubkey(),
+                        &payer.pubkey(),
+                        one_sol,
+                    )],
+                    Some(&payer.pubkey()),
+                ),
+                blockhash,
+            ))
+            .unwrap();
+
+        rpc_client
+            .poll_for_signature_with_commitment(
+                &stake3_withdraw_signature,
+                CommitmentConfig::recent(),
+            )
+            .unwrap();
+
+        // Configure stake4
+        let stake4_keypair = Keypair::new();
+        let stake4_initialize_signature = rpc_client
+            .send_transaction(&Transaction::new_signed_instructions(
+                &[&payer, &stake4_keypair],
+                stake_instruction::create_account(
+                    &payer.pubkey(),
+                    &stake4_keypair.pubkey(),
+                    &Authorized::auto(&payer.pubkey()),
+                    &Lockup::default(),
+                    2 * one_sol,
+                ),
+                blockhash,
+            ))
+            .unwrap();
+
+        rpc_client
+            .poll_for_signature_with_commitment(
+                &stake4_initialize_signature,
+                CommitmentConfig::recent(),
+            )
+            .unwrap();
+
+        // Split stake4 into stake5
+        let stake5_keypair = Keypair::new();
+        let stake45_split_signature = rpc_client
+            .send_transaction(&Transaction::new(
+                &[&payer, &stake5_keypair],
+                Message::new_with_payer(
+                    &stake_instruction::split(
+                        &stake4_keypair.pubkey(),
+                        &payer.pubkey(),
+                        one_sol,
+                        &stake5_keypair.pubkey(),
+                    ),
+                    Some(&payer.pubkey()),
+                ),
+                blockhash,
+            ))
+            .unwrap();
+
+        rpc_client
+            .poll_for_signature_with_commitment(
+                &stake45_split_signature,
+                CommitmentConfig::recent(),
+            )
+            .unwrap();
+
+        // System transfer 1
+        let system1_keypair = Keypair::new();
+
+        // Fund system1
+        let fund_system1_signature = rpc_client
+            .send_transaction(&system_transaction::transfer(
+                &payer,
+                &system1_keypair.pubkey(),
+                2 * one_sol,
+                blockhash,
+            ))
+            .unwrap();
+        rpc_client
+            .poll_for_signature_with_commitment(&fund_system1_signature, CommitmentConfig::recent())
+            .unwrap();
+        accounts_info.enroll_system_account(
+            &system1_keypair.pubkey(),
+            rpc_client
+                .get_slot_with_commitment(CommitmentConfig::recent())
+                .unwrap(),
+            2 * one_sol,
+        );
+
+        // Withdraw 1 sol from system 1 to make it non-compliant
+        rpc_client
+            .send_transaction(&system_transaction::transfer(
+                &system1_keypair,
+                &payer.pubkey(),
+                one_sol,
+                blockhash,
+            ))
+            .unwrap();
+
+        // System transfer 2
+        let system2_keypair = Keypair::new();
+
+        // Fund system2
+        let fund_system2_signature = rpc_client
+            .send_transaction(&system_transaction::transfer(
+                &payer,
+                &system2_keypair.pubkey(),
+                2 * one_sol,
+                blockhash,
+            ))
+            .unwrap();
+        rpc_client
+            .poll_for_signature_with_commitment(&fund_system2_signature, CommitmentConfig::recent())
+            .unwrap();
+        accounts_info.enroll_system_account(
+            &system2_keypair.pubkey(),
+            rpc_client
+                .get_slot_with_commitment(CommitmentConfig::recent())
+                .unwrap(),
+            2 * one_sol,
+        );
+
+        // Withdraw 1 sol - 1 lamport from system 2, it's still compliant
+        rpc_client
+            .send_transaction(&system_transaction::transfer(
+                &system2_keypair,
+                &payer.pubkey(),
+                one_sol - 1,
+                blockhash,
+            ))
+            .unwrap();
+
+        // Process all the transactions
+        let current_slot = rpc_client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .unwrap();
+        process_slots(&rpc_client, &mut accounts_info, current_slot + 1);
+
+        //
+        // Check that `accounts_info` was populated with the expected results
+        //
+
+        info!("Check the data recorded for stake1");
+        let account_info = accounts_info
+            .account_info
+            .get(&stake1_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_some());
+        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.transactions.len(), 1);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::Initialize
+        );
+        assert_eq!(
+            account_info.transactions[0].signature,
+            stake1_signature.to_string()
+        );
+
+        info!("Check the data recorded for stake2");
+        let account_info = accounts_info
+            .account_info
+            .get(&stake2_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_none());
+        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.transactions.len(), 1);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::Initialize
+        );
+        assert_eq!(
+            account_info.transactions[0].signature,
+            stake2_signature.to_string()
+        );
+
+        info!("Check the data recorded for stake3");
+        let account_info = accounts_info
+            .account_info
+            .get(&stake3_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_none());
+        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.transactions.len(), 2);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::Initialize
+        );
+        assert_eq!(
+            account_info.transactions[0].signature,
+            stake3_initialize_signature.to_string()
+        );
+        assert_eq!(account_info.transactions[1].op, AccountOperation::Withdraw,);
+        assert_eq!(
+            account_info.transactions[1].signature,
+            stake3_withdraw_signature.to_string()
+        );
+
+        info!("Check the data recorded for stake4");
+        let account_info = accounts_info
+            .account_info
+            .get(&stake4_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_some());
+        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.transactions.len(), 2);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::Initialize
+        );
+        assert_eq!(
+            account_info.transactions[0].signature,
+            stake4_initialize_signature.to_string()
+        );
+        assert_eq!(
+            account_info.transactions[1].op,
+            AccountOperation::SplitSource,
+        );
+        assert_eq!(
+            account_info.transactions[1].signature,
+            stake45_split_signature.to_string()
+        );
+
+        info!("Check the data recorded for stake5");
+        let account_info = accounts_info
+            .account_info
+            .get(&stake5_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_some());
+        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.transactions.len(), 1);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::SplitDestination,
+        );
+        assert_eq!(
+            account_info.transactions[0].signature,
+            stake45_split_signature.to_string()
+        );
+
+        info!("Check the data recorded for system1");
+        let account_info = accounts_info
+            .account_info
+            .get(&system1_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_none());
+        assert_eq!(account_info.lamports, 2 * one_sol);
+        assert_eq!(account_info.transactions.len(), 2);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::SystemAccountEnroll,
+        );
+        assert_eq!(
+            account_info.transactions[1].op,
+            AccountOperation::FailedToMaintainMinimumBalance,
+        );
+
+        info!("Check the data recorded for system2");
+        let account_info = accounts_info
+            .account_info
+            .get(&system2_keypair.pubkey().to_string())
+            .unwrap();
+        assert!(account_info.compliant_since.is_some());
+        assert_eq!(account_info.lamports, 2 * one_sol);
+        assert_eq!(account_info.transactions.len(), 1);
+        assert_eq!(
+            account_info.transactions[0].op,
+            AccountOperation::SystemAccountEnroll,
+        );
+    }
+}
+>>>>>>> 9883ca854... Add 1 SOL grace, to allow for a complaint system account to fund a reasonable number of transactions. (#9359)
