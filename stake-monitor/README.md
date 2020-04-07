@@ -12,3 +12,6 @@ In terms of `solana` command-line subcommands:
 * `delegate-stake` / `deactivate-stake` / `stake-authorize` / `split-stake`: These commands do not affect compliance
 * `withdraw-stake` / `stake-set-lockup`: These commands will cause non-compliance
 * `transfer`:  Any additional funds transferred after `create-stake-account` are excluded from the "compliant balance"
+
+System accounts can also be manually enrolled with the `solana-stake-monitor enroll` subcommand.
+An enrolled system account must always maintain a balance greater than the balance it had at enrollment minus 1 SOL.
