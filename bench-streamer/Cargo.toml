@@ -2,14 +2,14 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-bench-streamer"
-version = "1.0.14"
+version = "1.0.15"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-solana-clap-utils = { path = "../clap-utils", version = "1.0.14" }
-solana-core = { path = "../core", version = "1.0.14" }
-solana-logger = { path = "../logger", version = "1.0.14" }
-solana-net-utils = { path = "../net-utils", version = "1.0.14" }
+solana-clap-utils = { path = "../clap-utils", version = "1.0.15" }
+solana-core = { path = "../core", version = "1.0.15" }
+solana-logger = { path = "../logger", version = "1.0.15" }
+solana-net-utils = { path = "../net-utils", version = "1.0.15" }
