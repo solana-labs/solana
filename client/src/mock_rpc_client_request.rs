@@ -8,7 +8,8 @@ use serde_json::{Number, Value};
 use solana_sdk::{
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     instruction::InstructionError,
-    transaction::{self, TransactionError},
+    signature::Signature,
+    transaction::{self, Transaction, TransactionError},
 };
 use solana_transaction_status::TransactionStatus;
 use std::{collections::HashMap, sync::RwLock};
@@ -40,7 +41,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
     fn send(
         &self,
         request: &RpcRequest,
-        _params: serde_json::Value,
+        params: serde_json::Value,
         _retries: usize,
     ) -> Result<serde_json::Value> {
         if let Some(value) = self.mocks.write().unwrap().remove(request) {
@@ -105,7 +106,17 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
             }
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
             RpcRequest::GetSlot => Value::Number(Number::from(0)),
-            RpcRequest::SendTransaction => Value::String(SIGNATURE.to_string()),
+            RpcRequest::SendTransaction => {
+                let signature = if self.url == "malicious" {
+                    Signature::new(&[8; 64]).to_string()
+                } else {
+                    let tx_str = params.as_array().unwrap()[0].as_str().unwrap().to_string();
+                    let data = bs58::decode(tx_str).into_vec().unwrap();
+                    let tx: Transaction = bincode::deserialize(&data).unwrap();
+                    tx.signatures[0].to_string()
+                };
+                Value::String(signature)
+            }
             RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(1234)),
             _ => Value::Null,
         };
