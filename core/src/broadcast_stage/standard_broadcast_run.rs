@@ -17,20 +17,17 @@ struct BroadcastStats {
     broadcast_elapsed: u64,
     receive_elapsed: u64,
     seed_elapsed: u64,
+    send_mmsg_elapsed: u64,
 }
 
 impl BroadcastStats {
     fn reset(&mut self) {
-        self.insert_shreds_elapsed = 0;
-        self.shredding_elapsed = 0;
-        self.broadcast_elapsed = 0;
-        self.receive_elapsed = 0;
-        self.seed_elapsed = 0;
+        *self = Self::default();
     }
 }
 
 #[derive(Clone)]
-pub(super) struct StandardBroadcastRun {
+pub struct StandardBroadcastRun {
     stats: Arc<RwLock<BroadcastStats>>,
     unfinished_slot: Option<UnfinishedSlotInfo>,
     current_slot_and_parent: Option<(u64, u64)>,
@@ -258,20 +255,22 @@ impl StandardBroadcastRun {
         shreds: Arc<Vec<Shred>>,
     ) -> Result<()> {
         let seed_start = Instant::now();
-        let seeds: Vec<[u8; 32]> = shreds.iter().map(|s| s.seed()).collect();
         let seed_elapsed = seed_start.elapsed();
 
         // Broadcast the shreds
         let broadcast_start = Instant::now();
-        let shred_bufs: Vec<Vec<u8>> = shreds.to_vec().into_iter().map(|s| s.payload).collect();
-        trace!("Broadcasting {:?} shreds", shred_bufs.len());
+        trace!("Broadcasting {:?} shreds", shreds.len());
 
-        cluster_info.read().unwrap().broadcast_shreds(
+        let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes);
+
+        let mut send_mmsg_total = 0;
+        broadcast_shreds(
             sock,
-            shred_bufs,
-            &seeds,
-            stakes,
+            &shreds,
+            &peers_and_stakes,
+            &peers,
             &mut self.last_datapoint_submit,
+            &mut send_mmsg_total,
         )?;
 
         let broadcast_elapsed = broadcast_start.elapsed();
@@ -279,6 +278,7 @@ impl StandardBroadcastRun {
         self.update_broadcast_stats(BroadcastStats {
             broadcast_elapsed: duration_as_us(&broadcast_elapsed),
             seed_elapsed: duration_as_us(&seed_elapsed),
+            send_mmsg_elapsed: send_mmsg_total,
             ..BroadcastStats::default()
         });
         Ok(())
@@ -291,6 +291,7 @@ impl StandardBroadcastRun {
         wstats.insert_shreds_elapsed += stats.insert_shreds_elapsed;
         wstats.broadcast_elapsed += stats.broadcast_elapsed;
         wstats.seed_elapsed += stats.seed_elapsed;
+        wstats.send_mmsg_elapsed += stats.send_mmsg_elapsed;
     }
 
     fn report_and_reset_stats(&mut self) {
@@ -303,6 +304,7 @@ impl StandardBroadcastRun {
             ("insertion_time", stats.insert_shreds_elapsed as i64, i64),
             ("broadcast_time", stats.broadcast_elapsed as i64, i64),
             ("receive_time", stats.receive_elapsed as i64, i64),
+            ("send_mmsg", stats.send_mmsg_elapsed as i64, i64),
             ("seed", stats.seed_elapsed as i64, i64),
             (
                 "num_shreds",
