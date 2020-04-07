@@ -670,6 +670,7 @@ pub struct TestValidator {
 pub struct TestValidatorOptions {
     pub fees: u64,
     pub bootstrap_validator_lamports: u64,
+    pub mint_lamports: u64,
 }
 
 impl Default for TestValidatorOptions {
@@ -678,6 +679,7 @@ impl Default for TestValidatorOptions {
         TestValidatorOptions {
             fees: 0,
             bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
+            mint_lamports: 1_000_000,
         }
     }
 }
@@ -696,6 +698,7 @@ impl TestValidator {
         let TestValidatorOptions {
             fees,
             bootstrap_validator_lamports,
+            mint_lamports,
         } = options;
         let node_keypair = Arc::new(Keypair::new());
         let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
@@ -706,7 +709,7 @@ impl TestValidator {
             mint_keypair,
             voting_keypair,
         } = create_genesis_config_with_leader_ex(
-            1_000_000,
+            mint_lamports,
             &contact_info.id,
             42,
             bootstrap_validator_lamports,
