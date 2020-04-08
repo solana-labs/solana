@@ -85,6 +85,12 @@ pub(crate) struct ForkProgress {
     pub(crate) propagated_stats: PropagatedStats,
     pub(crate) replay_stats: ReplaySlotStats,
     pub(crate) replay_progress: ConfirmationProgress,
+    // Note `num_blocks_on_fork` and `num_dropped_blocks_on_fork` only
+    // count new blocks replayed since last restart, which won't include
+    // blocks already existing in the ledger/before snapshot at start,
+    // so these stats do not span all of time
+    pub(crate) num_blocks_on_fork: u64,
+    pub(crate) num_dropped_blocks_on_fork: u64,
 }
 
 impl ForkProgress {
@@ -92,6 +98,8 @@ impl ForkProgress {
         last_entry: Hash,
         prev_leader_slot: Option<Slot>,
         validator_stake_info: Option<ValidatorStakeInfo>,
+        num_blocks_on_fork: u64,
+        num_dropped_blocks_on_fork: u64,
     ) -> Self {
         let (
             is_leader_slot,
@@ -124,6 +132,8 @@ impl ForkProgress {
             fork_stats: ForkStats::default(),
             replay_stats: ReplaySlotStats::default(),
             replay_progress: ConfirmationProgress::new(last_entry),
+            num_blocks_on_fork,
+            num_dropped_blocks_on_fork,
             propagated_stats: PropagatedStats {
                 prev_leader_slot,
                 is_leader_slot,
@@ -141,6 +151,8 @@ impl ForkProgress {
         my_pubkey: &Pubkey,
         voting_pubkey: &Pubkey,
         prev_leader_slot: Option<Slot>,
+        num_blocks_on_fork: u64,
+        num_dropped_blocks_on_fork: u64,
     ) -> Self {
         let validator_fork_info = {
             if bank.collector_id() == my_pubkey {
@@ -155,7 +167,13 @@ impl ForkProgress {
             }
         };
 
-        Self::new(bank.last_blockhash(), prev_leader_slot, validator_fork_info)
+        Self::new(
+            bank.last_blockhash(),
+            prev_leader_slot,
+            validator_fork_info,
+            num_blocks_on_fork,
+            num_dropped_blocks_on_fork,
+        )
     }
 }
 
@@ -352,6 +370,26 @@ impl ProgressMap {
         self.progress_map
             .retain(|k, _| bank_forks.get(*k).is_some());
     }
+
+    pub fn log_propagated_stats(&self, slot: Slot, bank_forks: &RwLock<BankForks>) {
+        if let Some(stats) = self.get_propagated_stats(slot) {
+            info!(
+                "Propagated stats:
+                total staked: {},
+                observed staked: {},
+                vote pubkeys: {:?},
+                node_pubkeys: {:?},
+                slot: {},
+                epoch: {:?}",
+                stats.total_epoch_stake,
+                stats.propagated_validators_stake,
+                stats.propagated_validators,
+                stats.propagated_node_ids,
+                slot,
+                bank_forks.read().unwrap().get(slot).map(|x| x.epoch()),
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -476,7 +514,7 @@ mod test {
     fn test_is_propagated_status_on_construction() {
         // If the given ValidatorStakeInfo == None, then this is not
         // a leader slot and is_propagated == false
-        let progress = ForkProgress::new(Hash::default(), Some(9), None);
+        let progress = ForkProgress::new(Hash::default(), Some(9), None, 0, 0);
         assert!(!progress.propagated_stats.is_propagated);
 
         // If the stake is zero, then threshold is always achieved
@@ -487,6 +525,8 @@ mod test {
                 total_epoch_stake: 0,
                 ..ValidatorStakeInfo::default()
             }),
+            0,
+            0,
         );
         assert!(progress.propagated_stats.is_propagated);
 
@@ -499,6 +539,8 @@ mod test {
                 total_epoch_stake: 2,
                 ..ValidatorStakeInfo::default()
             }),
+            0,
+            0,
         );
         assert!(!progress.propagated_stats.is_propagated);
 
@@ -511,6 +553,8 @@ mod test {
                 total_epoch_stake: 2,
                 ..ValidatorStakeInfo::default()
             }),
+            0,
+            0,
         );
         assert!(progress.propagated_stats.is_propagated);
 
@@ -521,6 +565,8 @@ mod test {
             Hash::default(),
             Some(9),
             Some(ValidatorStakeInfo::default()),
+            0,
+            0,
         );
         assert!(!progress.propagated_stats.is_propagated);
     }
@@ -531,10 +577,16 @@ mod test {
 
         // Insert new ForkProgress for slot 10 (not a leader slot) and its
         // previous leader slot 9 (leader slot)
-        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), None));
+        progress_map.insert(10, ForkProgress::new(Hash::default(), Some(9), None, 0, 0));
         progress_map.insert(
             9,
-            ForkProgress::new(Hash::default(), None, Some(ValidatorStakeInfo::default())),
+            ForkProgress::new(
+                Hash::default(),
+                None,
+                Some(ValidatorStakeInfo::default()),
+                0,
+                0,
+            ),
         );
 
         // None of these slot have parents which are confirmed
@@ -545,7 +597,7 @@ mod test {
         // The previous leader before 8, slot 7, does not exist in
         // progress map, so is_propagated(8) should return true as
         // this implies the parent is rooted
-        progress_map.insert(8, ForkProgress::new(Hash::default(), Some(7), None));
+        progress_map.insert(8, ForkProgress::new(Hash::default(), Some(7), None, 0, 0));
         assert!(progress_map.is_propagated(8));
 
         // If we set the is_propagated = true, is_propagated should return true
