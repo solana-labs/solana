@@ -1,6 +1,6 @@
 use crate::erasure::ErasureConfig;
 use serde::{Deserialize, Serialize};
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, signature::Signature};
 use std::{collections::BTreeSet, ops::RangeBounds};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -226,6 +226,12 @@ impl DuplicateSlotProof {
 pub struct TransactionStatusIndexMeta {
     pub max_slot: Slot,
     pub frozen: bool,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct AddressSignatureMeta {
+    pub signature: Signature,
+    pub writeable: bool,
 }
 
 #[cfg(test)]
