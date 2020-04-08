@@ -3128,6 +3128,26 @@ pub mod tests {
     }
 
     #[test]
+    fn test_shred_cleanup_check() {
+        let slot = 1;
+        let (shreds, _) = make_slot_entries(slot, 0, 100);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
+
+        let mut buf = [0; 4096];
+        assert!(ledger.get_data_shreds(slot, 0, 1, &mut buf).is_ok());
+
+        let max_purge_slot = 1;
+        ledger.run_purge(0, max_purge_slot).unwrap();
+        *ledger.lowest_cleanup_slot.write().unwrap() = max_purge_slot;
+
+        let mut buf = [0; 4096];
+        assert!(ledger.get_data_shreds(slot, 0, 1, &mut buf).is_err());
+    }
+
+    #[test]
     fn test_insert_data_shreds_basic() {
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1) + 1;
