@@ -7,7 +7,6 @@ use crate::{
     fee_calculator::FeeRateGovernor,
     hash::{hash, Hash},
     inflation::Inflation,
-    native_loader,
     native_token::lamports_to_sol,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -42,7 +41,7 @@ pub struct GenesisConfig {
     /// initial accounts
     pub accounts: BTreeMap<Pubkey, Account>,
     /// built-in programs
-    pub native_instruction_processors: Vec<(native_loader::Info, Pubkey)>,
+    pub native_instruction_processors: Vec<(String, Pubkey)>,
     /// accounts for network rewards, these do not count towards capitalization
     pub rewards_pools: BTreeMap<Pubkey, Account>,
     pub ticks_per_slot: u64,
@@ -105,7 +104,7 @@ impl Default for GenesisConfig {
 impl GenesisConfig {
     pub fn new(
         accounts: &[(Pubkey, Account)],
-        native_instruction_processors: &[(native_loader::Info, Pubkey)],
+        native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self {
             accounts: accounts
@@ -173,8 +172,8 @@ impl GenesisConfig {
         self.accounts.insert(pubkey, account);
     }
 
-    pub fn add_native_instruction_processor(&mut self, processor: (native_loader::Info, Pubkey)) {
-        self.native_instruction_processors.push(processor);
+    pub fn add_native_instruction_processor(&mut self, name: String, program_id: Pubkey) {
+        self.native_instruction_processors.push((name, program_id));
     }
 
     pub fn add_rewards_pool(&mut self, pubkey: Pubkey, account: Account) {
@@ -231,7 +230,6 @@ impl fmt::Display for GenesisConfig {
 mod tests {
     use super::*;
     use crate::signature::{Keypair, Signer};
-    use solana_sdk::native_program_info;
     use std::path::PathBuf;
 
     fn make_tmp_path(name: &str) -> PathBuf {
@@ -263,10 +261,7 @@ mod tests {
             Account::new(10_000, 0, &Pubkey::default()),
         );
         config.add_account(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()));
-        config.add_native_instruction_processor((
-            native_program_info!("hi".to_string()),
-            Pubkey::new_rand(),
-        ));
+        config.add_native_instruction_processor("hi".to_string(), Pubkey::new_rand());
 
         assert_eq!(config.accounts.len(), 2);
         assert!(config
