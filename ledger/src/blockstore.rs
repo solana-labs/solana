@@ -1173,7 +1173,7 @@ impl Blockstore {
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
         let meta_cf = self.db.column::<cf::SlotMeta>();
@@ -1420,7 +1420,7 @@ impl Blockstore {
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
 
@@ -1489,7 +1489,7 @@ impl Blockstore {
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
         let encoding = encoding.unwrap_or(TransactionEncoding::Json);
@@ -1784,7 +1784,7 @@ impl Blockstore {
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
 
