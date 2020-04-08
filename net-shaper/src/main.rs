@@ -345,7 +345,10 @@ fn identify_my_partition(partitions: &[u8], index: u64, size: u64) -> usize {
     let mut my_partition = 0;
     let mut watermark = 0;
     for (i, p) in partitions.iter().enumerate() {
-        println!("i: {}, p: {}, watermark: {}, index: {}, size: {}", i, p, watermark, index, size);
+        println!(
+            "i: {}, p: {}, watermark: {}, index: {}, size: {}",
+            i, p, watermark, index, size
+        );
         watermark += *p;
         if u64::from(watermark) >= index * 100 / size {
             my_partition = i;
@@ -382,7 +385,10 @@ fn shape_network(matches: &ArgMatches) {
 
     let my_partition = identify_my_partition(&topology.partitions, my_index + 1, network_size);
 
-    println!("my_index: {}, network_size: {}, partitions: {:?}", my_index, network_size, topology.partitions);
+    println!(
+        "my_index: {}, network_size: {}, partitions: {:?}",
+        my_index, network_size, topology.partitions
+    );
     println!("My partition is {}", my_partition);
 
     flush_iptables_rule();
@@ -419,7 +425,14 @@ fn shape_network(matches: &ArgMatches) {
             }
             let tos_string = tos.to_string();
             // First valid class is 1:1
-            let class = format!("1:{}", i.a + 1);
+            let x = {
+                if i.a == 1 {
+                    2
+                } else {
+                    1
+                }
+            };
+            let class = format!("1:{}", x);
             println!("here");
             if !insert_tc_netem(
                 interface.as_str(),
@@ -465,7 +478,10 @@ fn cleanup_network(matches: &ArgMatches) {
 
     assert!(my_index < network_size);
 
-    println!("cleanup: my_index: {}, network_size: {}, partitions: {:?}", my_index, network_size, topology.partitions);
+    println!(
+        "cleanup: my_index: {}, network_size: {}, partitions: {:?}",
+        my_index, network_size, topology.partitions
+    );
     let my_partition = identify_my_partition(&topology.partitions, my_index + 1, network_size);
     println!("My cleanup partition is {}", my_partition);
 
