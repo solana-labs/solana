@@ -328,7 +328,7 @@ impl Column for columns::TransactionStatus {
     type Index = (u64, Signature, Slot);
 
     fn key((index, signature, slot): (u64, Signature, Slot)) -> Vec<u8> {
-        let mut key = vec![0; 8 + 64 + 8];
+        let mut key = vec![0; 8 + 64 + 8]; // size_of u64 + size_of Signature + size_of Slot
         BigEndian::write_u64(&mut key[0..8], index);
         key[8..72].clone_from_slice(&signature.as_ref()[0..64]);
         BigEndian::write_u64(&mut key[72..80], slot);
@@ -359,7 +359,7 @@ impl Column for columns::AddressSignatures {
     type Index = (u64, Pubkey, Slot);
 
     fn key((index, pubkey, slot): (u64, Pubkey, Slot)) -> Vec<u8> {
-        let mut key = vec![0; 8 + 32 + 8];
+        let mut key = vec![0; 8 + 32 + 8]; // size_of u64 + size_of Pubkey + size_of Slot
         BigEndian::write_u64(&mut key[0..8], index);
         key[8..40].clone_from_slice(&pubkey.as_ref()[0..32]);
         BigEndian::write_u64(&mut key[40..48], slot);

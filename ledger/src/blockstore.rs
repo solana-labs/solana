@@ -1670,7 +1670,7 @@ impl Blockstore {
                 (primary_index, *address, slot),
                 &AddressSignatureMeta {
                     signature,
-                    loaded_as_writable: true,
+                    writeable: true,
                 },
             )?;
         }
@@ -1679,7 +1679,7 @@ impl Blockstore {
                 (primary_index, *address, slot),
                 &AddressSignatureMeta {
                     signature,
-                    loaded_as_writable: false,
+                    writeable: false,
                 },
             )?;
         }

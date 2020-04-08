@@ -231,7 +231,7 @@ pub struct TransactionStatusIndexMeta {
 #[derive(Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct AddressSignatureMeta {
     pub signature: Signature,
-    pub loaded_as_writable: bool,
+    pub writeable: bool,
 }
 
 #[cfg(test)]
