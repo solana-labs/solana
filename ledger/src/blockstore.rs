@@ -218,7 +218,9 @@ impl Blockstore {
         // Get active transaction-status index or 0
         let active_transaction_status_index = db
             .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
-            .next()
+            .next();
+        let initialize_transaction_status_index = active_transaction_status_index.is_none();
+        let active_transaction_status_index = active_transaction_status_index
             .and_then(|(_, data)| {
                 let index0: TransactionStatusIndexMeta = deserialize(&data).unwrap();
                 if index0.frozen {
@@ -252,6 +254,9 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
         };
+        if initialize_transaction_status_index {
+            blockstore.initialize_transaction_status_index()?;
+        }
         Ok(blockstore)
     }
 
@@ -387,7 +392,7 @@ impl Blockstore {
             &mut w_active_transaction_status_index,
             to_slot,
         )? {
-            columns_empty &= &self
+            columns_empty &= self
                 .db
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, index, index + 1)
                 .unwrap_or(false);
@@ -448,6 +453,10 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .transaction_status_cf
+                .compact_range(0, 2)
+                .unwrap_or(false)
+            && self
+                .transaction_status_index_cf
                 .compact_range(0, 2)
                 .unwrap_or(false)
             && self
@@ -1546,7 +1555,7 @@ impl Blockstore {
             .put(1, &TransactionStatusIndexMeta::default())?;
         // This dummy status improves compaction performance
         self.transaction_status_cf.put(
-            (2, Signature::default(), 0),
+            cf::TransactionStatus::as_index(2),
             &TransactionStatusMeta::default(),
         )
     }
@@ -1604,9 +1613,6 @@ impl Blockstore {
         w_active_transaction_status_index: &mut u64,
     ) -> Result<(u64, Signature, Slot)> {
         let (signature, slot) = index;
-        if self.transaction_status_index_cf.get(0)?.is_none() {
-            self.initialize_transaction_status_index()?;
-        }
         let i = *w_active_transaction_status_index;
         let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
         if slot > index_meta.max_slot {
@@ -1635,8 +1641,8 @@ impl Blockstore {
         index: (Signature, Slot),
         status: &TransactionStatusMeta,
     ) -> Result<()> {
-        // This write lock prevents interleaving issues with the transactions_status_index_cf by
-        // gating writes to that column
+        // This write lock prevents interleaving issues with the transaction_status_index_cf by gating
+        // writes to that column
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
         let index =
@@ -2805,7 +2811,9 @@ pub mod tests {
                 .iter::<cf::TransactionStatus>(IteratorMode::Start)
                 .unwrap()
                 .next()
-                .map(|((_, _, slot), _)| slot >= min_slot)
+                .map(|((primary_index, _, slot), _)| {
+                    slot >= min_slot || (primary_index == 2 && slot == 0)
+                })
                 .unwrap_or(true)
             & blockstore
                 .db
@@ -5378,8 +5386,9 @@ pub mod tests {
             let transaction_status_index_cf = blockstore.db.column::<cf::TransactionStatusIndex>();
             let slot0 = 10;
 
-            assert!(transaction_status_index_cf.get(0).unwrap().is_none());
-            assert!(transaction_status_index_cf.get(1).unwrap().is_none());
+            // Primary index column is initialized on Blockstore::open
+            assert!(transaction_status_index_cf.get(0).unwrap().is_some());
+            assert!(transaction_status_index_cf.get(1).unwrap().is_some());
 
             for _ in 0..5 {
                 let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
@@ -5636,6 +5645,7 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            // TransactionStatus column opens initialized with one entry at index 2
             let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
 
             let pre_balances_vec = vec![1, 2, 3];
@@ -5726,7 +5736,7 @@ pub mod tests {
                 .get_transaction_status_with_counter(signature5)
                 .unwrap();
             assert_eq!(status, None);
-            assert_eq!(counter, 5);
+            assert_eq!(counter, 6);
 
             // Signature does not exist, smaller than existing entries
             let (status, counter) = blockstore
@@ -5747,7 +5757,7 @@ pub mod tests {
                 .get_transaction_status_with_counter(signature6)
                 .unwrap();
             assert_eq!(status, None);
-            assert_eq!(counter, 1);
+            assert_eq!(counter, 2);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
