@@ -801,6 +801,12 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
+            .arg(
+                Arg::with_name("include_sysvars")
+                    .long("include-sysvars")
+                    .takes_value(false)
+                    .help("Include sysvars too"),
+            )
         ).subcommand(
             SubCommand::with_name("prune")
             .about("Prune the ledger from a yaml file containing a list of slots to prune.")
@@ -1092,6 +1098,7 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config(&ledger_path);
+            let include_sysvars = arg_matches.is_present("include_sysvars");
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = dev_halt_at_slot.unwrap_or_else(|| {
@@ -1107,19 +1114,23 @@ fn main() {
                         exit(1);
                     });
 
-                    let accounts: Vec<_> = bank
+                    let accounts: BTreeMap<_, _> = bank
                         .get_program_accounts(None)
                         .into_iter()
-                        .filter(|(pubkey, _account)| !solana_sdk::sysvar::is_sysvar_id(pubkey))
+                        .filter(|(pubkey, _account)| {
+                            include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
+                        })
                         .collect();
 
                     println!("---");
                     for (pubkey, account) in accounts.into_iter() {
+                        let data_len = account.data.len();
                         println!("{}:", pubkey);
                         println!("  - lamports: {}", account.lamports);
                         println!("  - owner: '{}'", account.owner);
                         println!("  - executable: {}", account.executable);
                         println!("  - data: '{}'", bs58::encode(account.data).into_string());
+                        println!("  - data_len: {}", data_len);
                     }
                 }
                 Err(err) => {
