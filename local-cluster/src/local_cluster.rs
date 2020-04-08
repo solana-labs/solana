@@ -20,7 +20,6 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     genesis_config::{GenesisConfig, OperatingMode},
     message::Message,
-    native_loader,
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -82,7 +81,7 @@ pub struct ClusterConfig {
     pub slots_per_epoch: u64,
     pub slots_per_segment: u64,
     pub stakers_slot_offset: u64,
-    pub native_instruction_processors: Vec<(native_loader::Info, Pubkey)>,
+    pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub operating_mode: OperatingMode,
     pub poh_config: PohConfig,
 }
@@ -180,12 +179,13 @@ impl LocalCluster {
                     .push(solana_storage_program!());
             }
         }
-        genesis_config
-            .native_instruction_processors
-            .extend_from_slice(&config.native_instruction_processors);
 
         genesis_config.inflation =
             solana_genesis_programs::get_inflation(genesis_config.operating_mode, 0).unwrap();
+
+        genesis_config
+            .native_instruction_processors
+            .extend_from_slice(&config.native_instruction_processors);
 
         let storage_keypair = Keypair::new();
         genesis_config.add_account(

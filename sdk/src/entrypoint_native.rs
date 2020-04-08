@@ -7,19 +7,7 @@ use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey
 /// program_id: Program ID of the currently executing program
 /// keyed_accounts: Accounts passed as part of the instruction
 /// instruction_data: Instruction data
-pub type ProgramEntrypoint = unsafe extern "C" fn(
-    program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
-    instruction_data: &[u8],
-) -> Result<(), InstructionError>;
-
-// Prototype of a native loader entry point
-///
-/// program_id: Program ID of the currently executing program
-/// keyed_accounts: Accounts passed as part of the instruction
-/// instruction_data: Instruction data
-/// invoke_context: Invocation context
-pub type LoaderEntrypoint = unsafe extern "C" fn(
+pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
@@ -101,32 +89,7 @@ macro_rules! declare_program(
         #[macro_export]
         macro_rules! $name {
             () => {
-                (solana_sdk::native_program_info!(stringify!($name).to_string()), $crate::id())
-            };
-        }
-
-        #[no_mangle]
-        pub extern "C" fn $name(
-            program_id: &$crate::pubkey::Pubkey,
-            keyed_accounts: &[$crate::account::KeyedAccount],
-            instruction_data: &[u8],
-        ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, instruction_data)
-        }
-    )
-);
-
-/// Same as declare_program but for native loaders
-#[macro_export]
-macro_rules! declare_loader(
-    ($bs58_string:expr, $name:ident, $entrypoint:expr) => (
-        $crate::declare_id!($bs58_string);
-
-        #[macro_export]
-        macro_rules! $name {
-            () => {
-                (solana_sdk::native_loader_info!(stringify!($name).to_string()), $crate::id())
-
+                (stringify!($name).to_string(), $crate::id())
             };
         }
 

@@ -11,7 +11,6 @@ use solana_sdk::{
     clock::MAX_RECENT_BLOCKHASHES,
     genesis_config::create_genesis_config,
     instruction::InstructionError,
-    native_program_info,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     transaction::Transaction,
@@ -125,7 +124,7 @@ fn do_bench_transactions(
     let mut bank = Bank::new(&genesis_config);
     bank.add_instruction_processor(Pubkey::new(&BUILTIN_PROGRAM_ID), process_instruction);
     bank.register_native_instruction_processor(
-        &native_program_info!("solana_noop_program"),
+        "solana_noop_program",
         &Pubkey::new(&NOOP_PROGRAM_ID),
     );
     let bank = Arc::new(bank);

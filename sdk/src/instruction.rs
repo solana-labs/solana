@@ -134,10 +134,6 @@ pub enum InstructionError {
     /// Executable accounts must be rent exempt
     #[error("executable accounts must be rent exempt")]
     ExecutableAccountNotRentExempt,
-
-    /// Unsupported program id
-    #[error("Unsupported program id")]
-    UnsupportedProgramId,
 }
 
 impl InstructionError {

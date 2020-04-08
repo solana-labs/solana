@@ -1,18 +1,22 @@
-use crate::{
-    native_loader::NativeLoader, rent_collector::RentCollector, system_instruction_processor,
-};
+use crate::{native_loader, rent_collector::RentCollector, system_instruction_processor};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
+    entrypoint_native,
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
-    native_loader,
+    native_loader::id as native_loader_id,
     pubkey::Pubkey,
     system_program,
     transaction::TransactionError,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::RwLock};
+
+#[cfg(unix)]
+use libloading::os::unix::*;
+#[cfg(windows)]
+use libloading::os::windows::*;
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
@@ -155,13 +159,14 @@ impl PreAccount {
 }
 
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<entrypoint_native::Entrypoint>>>;
 
 #[derive(Serialize, Deserialize)]
 pub struct MessageProcessor {
     #[serde(skip)]
     instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
     #[serde(skip)]
-    native_loader: NativeLoader,
+    symbol_cache: SymbolCache,
 }
 impl Default for MessageProcessor {
     fn default() -> Self {
@@ -172,7 +177,7 @@ impl Default for MessageProcessor {
 
         Self {
             instruction_processors,
-            native_loader: NativeLoader::default(),
+            symbol_cache: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -213,10 +218,10 @@ impl MessageProcessor {
             })
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
-        assert!(keyed_accounts[0].executable()?, "account not executable");
 
+        assert!(keyed_accounts[0].executable()?, "account not executable");
+        let root_program_id = keyed_accounts[0].unsigned_key();
         for (id, process_instruction) in &self.instruction_processors {
-            let root_program_id = keyed_accounts[0].unsigned_key();
             if id == root_program_id {
                 return process_instruction(
                     &root_program_id,
@@ -226,15 +231,12 @@ impl MessageProcessor {
             }
         }
 
-        if native_loader::check_id(&keyed_accounts[0].owner()?) {
-            self.native_loader.process_instruction(
-                &native_loader::id(),
-                &keyed_accounts,
-                &instruction.data,
-            )
-        } else {
-            Err(InstructionError::UnsupportedProgramId)
-        }
+        native_loader::invoke_entrypoint(
+            &native_loader_id(),
+            &keyed_accounts,
+            &instruction.data,
+            &self.symbol_cache,
+        )
     }
 
     /// Record the initial state of the accounts so that they can be compared
@@ -370,7 +372,6 @@ mod tests {
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         native_loader::create_loadable_account,
-        native_program_info,
     };
 
     #[test]
@@ -916,9 +917,7 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account(&native_program_info!(
-            "mock_system_program"
-        )));
+        let account = RefCell::new(create_loadable_account("mock_system_program"));
         loaders.push(vec![(mock_system_program_id, account)]);
 
         let from_pubkey = Pubkey::new_rand();
@@ -1041,9 +1040,7 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account(&native_program_info!(
-            "mock_system_program"
-        )));
+        let account = RefCell::new(create_loadable_account("mock_system_program"));
         loaders.push(vec![(mock_program_id, account)]);
 
         let from_pubkey = Pubkey::new_rand();
