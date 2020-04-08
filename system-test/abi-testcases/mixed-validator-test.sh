@@ -13,7 +13,7 @@ ledgerDir="$PWD"/config
 rm -rf "$ledgerDir" "$logDir"
 mkdir -p "$logDir"
 
-baselineVersion=0.23.4  # <-- oldest version we remain compatible with
+baselineVersion=1.0.14  # <-- oldest version we remain compatible with
 otherVersions=(
   beta
   edge
