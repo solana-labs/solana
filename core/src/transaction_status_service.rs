@@ -70,9 +70,14 @@ impl TransactionStatusService {
                 }
                 .expect("FeeCalculator must exist");
                 let fee = fee_calculator.calculate_fee(transaction.message());
+                let (writable_keys, readonly_keys) =
+                    transaction.message.get_account_keys_by_lock_type();
                 blockstore
                     .write_transaction_status(
-                        (transaction.signatures[0], slot),
+                        slot,
+                        transaction.signatures[0],
+                        writable_keys,
+                        readonly_keys,
                         &TransactionStatusMeta {
                             status,
                             fee,

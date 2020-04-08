@@ -10,7 +10,7 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use solana_sdk::{clock::Slot, signature::Signature};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::{Rewards, TransactionStatusMeta};
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
@@ -38,7 +38,9 @@ const DATA_SHRED_CF: &str = "data_shred";
 const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
-/// Column family for Transaction Status
+/// Column family for Address Signatures
+const ADDRESS_SIGNATURES_CF: &str = "address_signatures";
+/// Column family for Transaction Status Index
 const TRANSACTION_STATUS_INDEX_CF: &str = "transaction_status_index";
 /// Column family for Rewards
 const REWARDS_CF: &str = "rewards";
@@ -111,6 +113,10 @@ pub mod columns {
     pub struct TransactionStatus;
 
     #[derive(Debug)]
+    /// The address signatures column
+    pub struct AddressSignatures;
+
+    #[derive(Debug)]
     /// The transaction status index column
     pub struct TransactionStatusIndex;
 
@@ -125,8 +131,8 @@ struct Rocks(rocksdb::DB);
 impl Rocks {
     fn open(path: &Path) -> Result<Rocks> {
         use columns::{
-            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
-            ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
+            AddressSignatures, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards,
+            Root, ShredCode, ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         fs::create_dir_all(&path)?;
@@ -151,6 +157,8 @@ impl Rocks {
             ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options());
         let transaction_status_cf_descriptor =
             ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options());
+        let address_signatures_cf_descriptor =
+            ColumnFamilyDescriptor::new(AddressSignatures::NAME, get_cf_options());
         let transaction_status_index_cf_descriptor =
             ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options());
         let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
@@ -166,6 +174,7 @@ impl Rocks {
             shred_data_cf_descriptor,
             shred_code_cf_descriptor,
             transaction_status_cf_descriptor,
+            address_signatures_cf_descriptor,
             transaction_status_index_cf_descriptor,
             rewards_cf_descriptor,
         ];
@@ -178,8 +187,8 @@ impl Rocks {
 
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
-            DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards, Root, ShredCode,
-            ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
+            AddressSignatures, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans, Rewards,
+            Root, ShredCode, ShredData, SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         vec![
@@ -193,6 +202,7 @@ impl Rocks {
             ShredData::NAME,
             ShredCode::NAME,
             TransactionStatus::NAME,
+            AddressSignatures::NAME,
             TransactionStatusIndex::NAME,
             Rewards::NAME,
         ]
@@ -282,6 +292,10 @@ impl TypedColumn for columns::TransactionStatus {
     type Type = TransactionStatusMeta;
 }
 
+impl TypedColumn for columns::AddressSignatures {
+    type Type = blockstore_meta::AddressSignatureMeta;
+}
+
 impl TypedColumn for columns::TransactionStatusIndex {
     type Type = blockstore_meta::TransactionStatusIndexMeta;
 }
@@ -314,7 +328,7 @@ impl Column for columns::TransactionStatus {
     type Index = (u64, Signature, Slot);
 
     fn key((index, signature, slot): (u64, Signature, Slot)) -> Vec<u8> {
-        let mut key = vec![0; 8 + 8 + 64];
+        let mut key = vec![0; 8 + 64 + 8]; // size_of u64 + size_of Signature + size_of Slot
         BigEndian::write_u64(&mut key[0..8], index);
         key[8..72].clone_from_slice(&signature.as_ref()[0..64]);
         BigEndian::write_u64(&mut key[72..80], slot);
@@ -339,6 +353,37 @@ impl Column for columns::TransactionStatus {
 
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
+}
+
+impl Column for columns::AddressSignatures {
+    type Index = (u64, Pubkey, Slot);
+
+    fn key((index, pubkey, slot): (u64, Pubkey, Slot)) -> Vec<u8> {
+        let mut key = vec![0; 8 + 32 + 8]; // size_of u64 + size_of Pubkey + size_of Slot
+        BigEndian::write_u64(&mut key[0..8], index);
+        key[8..40].clone_from_slice(&pubkey.as_ref()[0..32]);
+        BigEndian::write_u64(&mut key[40..48], slot);
+        key
+    }
+
+    fn index(key: &[u8]) -> (u64, Pubkey, Slot) {
+        let index = BigEndian::read_u64(&key[0..8]);
+        let pubkey = Pubkey::new(&key[8..40]);
+        let slot = BigEndian::read_u64(&key[40..48]);
+        (index, pubkey, slot)
+    }
+
+    fn primary_index(index: Self::Index) -> u64 {
+        index.0
+    }
+
+    fn as_index(index: u64) -> Self::Index {
+        (index, Pubkey::default(), 0)
+    }
+}
+
+impl ColumnName for columns::AddressSignatures {
+    const NAME: &'static str = ADDRESS_SIGNATURES_CF;
 }
 
 impl Column for columns::TransactionStatusIndex {

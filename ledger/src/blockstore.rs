@@ -87,6 +87,7 @@ pub struct Blockstore {
     data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
+    address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
@@ -201,6 +202,7 @@ impl Blockstore {
         let data_shred_cf = db.column();
         let code_shred_cf = db.column();
         let transaction_status_cf = db.column();
+        let address_signatures_cf = db.column();
         let transaction_status_index_cf = db.column();
         let rewards_cf = db.column();
 
@@ -217,7 +219,9 @@ impl Blockstore {
         // Get active transaction-status index or 0
         let active_transaction_status_index = db
             .iter::<cf::TransactionStatusIndex>(IteratorMode::Start)?
-            .next()
+            .next();
+        let initialize_transaction_status_index = active_transaction_status_index.is_none();
+        let active_transaction_status_index = active_transaction_status_index
             .and_then(|(_, data)| {
                 let index0: TransactionStatusIndexMeta = deserialize(&data).unwrap();
                 if index0.frozen {
@@ -241,6 +245,7 @@ impl Blockstore {
             data_shred_cf,
             code_shred_cf,
             transaction_status_cf,
+            address_signatures_cf,
             transaction_status_index_cf,
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
@@ -251,6 +256,9 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
         };
+        if initialize_transaction_status_index {
+            blockstore.initialize_transaction_status_index()?;
+        }
         Ok(blockstore)
     }
 
@@ -386,10 +394,14 @@ impl Blockstore {
             &mut w_active_transaction_status_index,
             to_slot,
         )? {
-            columns_empty &= &self
+            columns_empty &= self
                 .db
                 .delete_range_cf::<cf::TransactionStatus>(&mut write_batch, index, index + 1)
-                .unwrap_or(false);
+                .unwrap_or(false)
+                & self
+                    .db
+                    .delete_range_cf::<cf::AddressSignatures>(&mut write_batch, index, index + 1)
+                    .unwrap_or(false);
         }
         let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
@@ -447,6 +459,14 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .transaction_status_cf
+                .compact_range(0, 2)
+                .unwrap_or(false)
+            && self
+                .address_signatures_cf
+                .compact_range(0, 2)
+                .unwrap_or(false)
+            && self
+                .transaction_status_index_cf
                 .compact_range(0, 2)
                 .unwrap_or(false)
             && self
@@ -1512,8 +1532,12 @@ impl Blockstore {
             .put(1, &TransactionStatusIndexMeta::default())?;
         // This dummy status improves compaction performance
         self.transaction_status_cf.put(
-            (2, Signature::default(), 0),
+            cf::TransactionStatus::as_index(2),
             &TransactionStatusMeta::default(),
+        )?;
+        self.address_signatures_cf.put(
+            cf::AddressSignatures::as_index(2),
+            &AddressSignatureMeta::default(),
         )
     }
 
@@ -1564,15 +1588,11 @@ impl Blockstore {
         }
     }
 
-    fn make_transaction_status_index(
+    fn get_primary_index(
         &self,
-        index: (Signature, Slot),
+        slot: Slot,
         w_active_transaction_status_index: &mut u64,
-    ) -> Result<(u64, Signature, Slot)> {
-        let (signature, slot) = index;
-        if self.transaction_status_index_cf.get(0)?.is_none() {
-            self.initialize_transaction_status_index()?;
-        }
+    ) -> Result<u64> {
         let i = *w_active_transaction_status_index;
         let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
         if slot > index_meta.max_slot {
@@ -1580,7 +1600,7 @@ impl Blockstore {
             index_meta.max_slot = slot;
             self.transaction_status_index_cf.put(i, &index_meta)?;
         }
-        Ok((i, signature, slot))
+        Ok(i)
     }
 
     pub fn read_transaction_status(
@@ -1598,16 +1618,38 @@ impl Blockstore {
 
     pub fn write_transaction_status(
         &self,
-        index: (Signature, Slot),
+        slot: Slot,
+        signature: Signature,
+        writable_keys: Vec<&Pubkey>,
+        readonly_keys: Vec<&Pubkey>,
         status: &TransactionStatusMeta,
     ) -> Result<()> {
-        // This write lock prevents interleaving issues with the transactions_status_index_cf by
-        // gating writes to that column
+        // This write lock prevents interleaving issues with the transaction_status_index_cf by gating
+        // writes to that column
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
-        let index =
-            self.make_transaction_status_index(index, &mut w_active_transaction_status_index)?;
-        self.transaction_status_cf.put(index, status)
+        let primary_index = self.get_primary_index(slot, &mut w_active_transaction_status_index)?;
+        self.transaction_status_cf
+            .put((primary_index, signature, slot), status)?;
+        for address in writable_keys {
+            self.address_signatures_cf.put(
+                (primary_index, *address, slot),
+                &AddressSignatureMeta {
+                    signature,
+                    writeable: true,
+                },
+            )?;
+        }
+        for address in readonly_keys {
+            self.address_signatures_cf.put(
+                (primary_index, *address, slot),
+                &AddressSignatureMeta {
+                    signature,
+                    writeable: false,
+                },
+            )?;
+        }
+        Ok(())
     }
 
     // Returns a transaction status if it was processed in a root, as well as a loop counter for
@@ -2771,7 +2813,18 @@ pub mod tests {
                 .iter::<cf::TransactionStatus>(IteratorMode::Start)
                 .unwrap()
                 .next()
-                .map(|((_, _, slot), _)| slot >= min_slot)
+                .map(|((primary_index, _, slot), _)| {
+                    slot >= min_slot || (primary_index == 2 && slot == 0)
+                })
+                .unwrap_or(true)
+            & blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::Start)
+                .unwrap()
+                .next()
+                .map(|((primary_index, _, slot), _)| {
+                    slot >= min_slot || (primary_index == 2 && slot == 0)
+                })
                 .unwrap_or(true)
             & blockstore
                 .db
@@ -5344,14 +5397,18 @@ pub mod tests {
             let transaction_status_index_cf = blockstore.db.column::<cf::TransactionStatusIndex>();
             let slot0 = 10;
 
-            assert!(transaction_status_index_cf.get(0).unwrap().is_none());
-            assert!(transaction_status_index_cf.get(1).unwrap().is_none());
+            // Primary index column is initialized on Blockstore::open
+            assert!(transaction_status_index_cf.get(0).unwrap().is_some());
+            assert!(transaction_status_index_cf.get(1).unwrap().is_some());
 
             for _ in 0..5 {
                 let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
                 blockstore
                     .write_transaction_status(
-                        (Signature::new(&random_bytes), slot0),
+                        slot0,
+                        Signature::new(&random_bytes),
+                        vec![&Pubkey::new(&random_bytes[0..32])],
+                        vec![&Pubkey::new(&random_bytes[32..])],
                         &TransactionStatusMeta::default(),
                     )
                     .unwrap();
@@ -5382,6 +5439,18 @@ pub mod tests {
                 .0;
             assert_eq!(first_status_entry.0, 0);
             assert_eq!(first_status_entry.2, slot0);
+            let first_address_entry = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (0, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap()
+                .next()
+                .unwrap()
+                .0;
+            assert_eq!(first_address_entry.0, 0);
+            assert_eq!(first_address_entry.2, slot0);
 
             blockstore.run_purge(0, 8).unwrap();
             // First successful prune freezes index 0
@@ -5402,7 +5471,10 @@ pub mod tests {
                 let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
                 blockstore
                     .write_transaction_status(
-                        (Signature::new(&random_bytes), slot1),
+                        slot1,
+                        Signature::new(&random_bytes),
+                        vec![&Pubkey::new(&random_bytes[0..32])],
+                        vec![&Pubkey::new(&random_bytes[32..])],
                         &TransactionStatusMeta::default(),
                     )
                     .unwrap();
@@ -5424,7 +5496,7 @@ pub mod tests {
                 }
             );
 
-            // Index 0 statuses still exist
+            // Index 0 statuses and address records still exist
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
@@ -5437,7 +5509,19 @@ pub mod tests {
                 .0;
             assert_eq!(first_status_entry.0, 0);
             assert_eq!(first_status_entry.2, 10);
-            // New statuses are stored in index 1
+            let first_address_entry = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (0, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap()
+                .next()
+                .unwrap()
+                .0;
+            assert_eq!(first_address_entry.0, 0);
+            assert_eq!(first_address_entry.2, slot0);
+            // New statuses and address records are stored in index 1
             let index1_first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
@@ -5450,6 +5534,18 @@ pub mod tests {
                 .0;
             assert_eq!(index1_first_status_entry.0, 1);
             assert_eq!(index1_first_status_entry.2, slot1);
+            let index1_first_address_entry = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (1, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap()
+                .next()
+                .unwrap()
+                .0;
+            assert_eq!(index1_first_address_entry.0, 1);
+            assert_eq!(index1_first_address_entry.2, slot1);
 
             blockstore.run_purge(0, 18).unwrap();
             // Successful prune toggles TransactionStatusIndex
@@ -5468,7 +5564,7 @@ pub mod tests {
                 }
             );
 
-            // Index 0 has been pruned, so first status entry is now index 1
+            // Index 0 has been pruned, so first status and address entries are now index 1
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
@@ -5481,6 +5577,18 @@ pub mod tests {
                 .0;
             assert_eq!(first_status_entry.0, 1);
             assert_eq!(first_status_entry.2, slot1);
+            let first_address_entry = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (0, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap()
+                .next()
+                .unwrap()
+                .0;
+            assert_eq!(first_address_entry.0, 1);
+            assert_eq!(first_address_entry.2, slot1);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
@@ -5496,7 +5604,10 @@ pub mod tests {
                 let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
                 blockstore
                     .write_transaction_status(
-                        (Signature::new(&random_bytes), slot),
+                        slot,
+                        Signature::new(&random_bytes),
+                        vec![&Pubkey::new(&random_bytes[0..32])],
+                        vec![&Pubkey::new(&random_bytes[32..])],
                         &TransactionStatusMeta::default(),
                     )
                     .unwrap();
@@ -5512,6 +5623,18 @@ pub mod tests {
                 .unwrap();
             for _ in 0..5 {
                 let entry = status_entry_iterator.next().unwrap().0;
+                assert_eq!(entry.0, 0);
+                assert_eq!(entry.2, slot);
+            }
+            let mut address_transactions_iterator = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (0, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            for _ in 0..10 {
+                let entry = address_transactions_iterator.next().unwrap().0;
                 assert_eq!(entry.0, 0);
                 assert_eq!(entry.2, slot);
             }
@@ -5537,6 +5660,18 @@ pub mod tests {
                 assert_eq!(entry.0, 0);
                 assert_eq!(entry.2, slot);
             }
+            let mut address_transactions_iterator = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (0, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            for _ in 0..10 {
+                let entry = address_transactions_iterator.next().unwrap().0;
+                assert_eq!(entry.0, 0);
+                assert_eq!(entry.2, slot);
+            }
             assert_eq!(
                 transaction_status_index_cf.get(0).unwrap().unwrap(),
                 TransactionStatusIndexMeta {
@@ -5556,6 +5691,18 @@ pub mod tests {
                 .unwrap();
             for _ in 0..5 {
                 let entry = status_entry_iterator.next().unwrap().0;
+                assert_eq!(entry.0, 0);
+                assert_eq!(entry.2, slot);
+            }
+            let mut address_transactions_iterator = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (0, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            for _ in 0..10 {
+                let entry = address_transactions_iterator.next().unwrap().0;
                 assert_eq!(entry.0, 0);
                 assert_eq!(entry.2, slot);
             }
@@ -5579,6 +5726,17 @@ pub mod tests {
             assert_eq!(padding_entry.0, 2);
             assert_eq!(padding_entry.2, 0);
             assert!(status_entry_iterator.next().is_none());
+            let mut address_transactions_iterator = blockstore
+                .db
+                .iter::<cf::AddressSignatures>(IteratorMode::From(
+                    (0, Pubkey::default(), 0),
+                    IteratorDirection::Forward,
+                ))
+                .unwrap();
+            let padding_entry = address_transactions_iterator.next().unwrap().0;
+            assert_eq!(padding_entry.0, 2);
+            assert_eq!(padding_entry.2, 0);
+            assert!(address_transactions_iterator.next().is_none());
             assert_eq!(
                 transaction_status_index_cf.get(0).unwrap().unwrap(),
                 TransactionStatusIndexMeta {
@@ -5602,6 +5760,7 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            // TransactionStatus column opens initialized with one entry at index 2
             let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
 
             let pre_balances_vec = vec![1, 2, 3];
@@ -5692,7 +5851,7 @@ pub mod tests {
                 .get_transaction_status_with_counter(signature5)
                 .unwrap();
             assert_eq!(status, None);
-            assert_eq!(counter, 5);
+            assert_eq!(counter, 6);
 
             // Signature does not exist, smaller than existing entries
             let (status, counter) = blockstore
@@ -5713,7 +5872,7 @@ pub mod tests {
                 .get_transaction_status_with_counter(signature6)
                 .unwrap();
             assert_eq!(status, None);
-            assert_eq!(counter, 1);
+            assert_eq!(counter, 2);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
