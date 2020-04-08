@@ -433,9 +433,7 @@ export class SystemProgram {
    * Public key that identifies the System program
    */
   static get programId(): PublicKey {
-    return new PublicKey(
-      '0x000000000000000000000000000000000000000000000000000000000000000',
-    );
+    return new PublicKey('11111111111111111111111111111111');
   }
 
   /**
