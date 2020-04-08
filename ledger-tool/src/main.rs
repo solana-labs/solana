@@ -803,7 +803,7 @@ fn main() {
             .arg(&hard_forks_arg)
         ).subcommand(
             SubCommand::with_name("prune")
-            .about("Prune the ledger at the block height")
+            .about("Prune the ledger from a yaml file containing a list of slots to prune.")
             .arg(
                 Arg::with_name("slot_list")
                     .long("slot-list")
@@ -814,7 +814,7 @@ fn main() {
             )
         ).subcommand(
             SubCommand::with_name("purge")
-            .about("Purge the ledger at the block height")
+            .about("Delete a range of slots from the ledger.")
             .arg(
                 Arg::with_name("start_slot")
                     .index(1)
@@ -866,7 +866,15 @@ fn main() {
         )
         .get_matches();
 
-    let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger_path", String));
+    let ledger_path = PathBuf::from(value_t!(matches, "ledger_path", String).unwrap_or_else(
+        |_err| {
+            eprintln!(
+                "Error: Missing --ledger <DIR> argument.\n\n{}",
+                matches.usage()
+            );
+            exit(1);
+        },
+    ));
 
     // Canonicalize ledger path to avoid issues with symlink creation
     let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
