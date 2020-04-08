@@ -857,7 +857,12 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getBalance', args);
     const res = GetBalanceAndContextRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error(
+        'failed to get balance for ' +
+          publicKey.toBase58() +
+          ': ' +
+          res.error.message,
+      );
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -873,7 +878,10 @@ export class Connection {
     return await this.getBalanceAndContext(publicKey, commitment)
       .then(x => x.value)
       .catch(e => {
-        throw e;
+        throw new Error(
+          'failed to get balance of account ' + publicKey.toBase58() + ': ' +
+          e,
+        );
       });
   }
 
@@ -888,7 +896,12 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error(
+        'failed info about account ' +
+          publicKey.toBase58() +
+          ': ' +
+          res.error.message,
+      );
     }
     assert(typeof res.result !== 'undefined');
 
@@ -921,7 +934,9 @@ export class Connection {
     return await this.getAccountInfoAndContext(publicKey, commitment)
       .then(x => x.value)
       .catch(e => {
-        throw e;
+        throw new Error(
+          'failed info about account ' + publicKey.toBase58() + ': ' + e,
+        );
       });
   }
 
@@ -938,7 +953,12 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error(
+        'failed info about account ' +
+          programId.toBase58() +
+          ': ' +
+          res.error.message,
+      );
     }
 
     const {result} = res;
@@ -968,7 +988,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('confirmTransaction', args);
     const res = ConfirmTransactionAndContextRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to confirm transaction: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -984,7 +1004,7 @@ export class Connection {
     return await this.confirmTransactionAndContext(signature, commitment)
       .then(x => x.value)
       .catch(e => {
-        throw e;
+        throw new Error('failed to confirm transaction: ' + e);
       });
   }
 
@@ -996,7 +1016,7 @@ export class Connection {
 
     const res = GetClusterNodes(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get cluster nodes: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1011,7 +1031,7 @@ export class Connection {
     const res = GetVoteAccounts(unsafeRes);
     //const res = unsafeRes;
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get vote accounts: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1025,7 +1045,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getSlot', args);
     const res = GetSlot(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get slot: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1039,7 +1059,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getSlotLeader', args);
     const res = GetSlotLeader(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get slot leader: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1074,7 +1094,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getSignatureStatuses', params);
     const res = GetSignatureStatusesRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get signature status: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1088,7 +1108,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTransactionCount', args);
     const res = GetTransactionCountRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get transaction count: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return Number(res.result);
@@ -1102,7 +1122,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTotalSupply', args);
     const res = GetTotalSupplyRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('faied to get total supply: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return Number(res.result);
@@ -1116,7 +1136,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getInflation', args);
     const res = GetInflationRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get inflation: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return GetInflationResult(res.result);
@@ -1130,7 +1150,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
     const res = GetEpochInfoRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get epoch info: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return GetEpochInfoResult(res.result);
@@ -1143,7 +1163,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getEpochSchedule', []);
     const res = GetEpochScheduleRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get epoch schedule: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return GetEpochScheduleResult(res.result);
@@ -1185,7 +1205,7 @@ export class Connection {
 
     const res = GetRecentBlockhashAndContextRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get recent blockhash: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1201,7 +1221,7 @@ export class Connection {
     return await this.getRecentBlockhashAndContext(commitment)
       .then(x => x.value)
       .catch(e => {
-        throw e;
+        throw new Error('failed to get recent blockhash: ' + e);
       });
   }
 
@@ -1212,7 +1232,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getVersion', []);
     const res = GetVersionRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to get version: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1226,7 +1246,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
     const result = GetConfirmedBlockRpcResult(unsafeRes);
     if (result.error) {
-      throw new Error(result.error.message);
+      throw new Error('failed to get confirmed block: ' + result.error.message);
     }
     assert(typeof result.result !== 'undefined');
     if (!result.result) {
@@ -1281,7 +1301,12 @@ export class Connection {
     return await this.getNonceAndContext(nonceAccount, commitment)
       .then(x => x.value)
       .catch(e => {
-        throw e;
+        throw new Error(
+          'failed to get nonce for account ' +
+            nonceAccount.toBase58() +
+            ': ' +
+            e,
+        );
       });
   }
 
@@ -1297,7 +1322,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('requestAirdrop', args);
     const res = RequestAirdropRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error(
+        'airdrop to ' + to.toBase58() + ' failed: ' + res.error.message,
+      );
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1379,7 +1406,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('validatorExit', []);
     const res = jsonRpcResult('boolean')(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('validator exit failed: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
@@ -1409,7 +1436,7 @@ export class Connection {
     ]);
     const res = SendTransactionRpcResult(unsafeRes);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('failed to send transaction: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     assert(res.result);
@@ -1566,7 +1593,7 @@ export class Connection {
   _wsOnAccountNotification(notification: Object) {
     const res = AccountNotificationResult(notification);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('account notification failed: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._accountChangeSubscriptions).map(Number);
@@ -1633,7 +1660,9 @@ export class Connection {
   _wsOnProgramAccountNotification(notification: Object) {
     const res = ProgramAccountNotificationResult(notification);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error(
+        'program account notification failed: ' + res.error.message,
+      );
     }
     assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._programAccountChangeSubscriptions).map(
@@ -1706,7 +1735,7 @@ export class Connection {
   _wsOnSlotNotification(notification: Object) {
     const res = SlotNotificationResult(notification);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('slot notification failed: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     const {parent, slot, root} = res.result;
@@ -1770,7 +1799,7 @@ export class Connection {
   _wsOnSignatureNotification(notification: Object) {
     const res = SignatureNotificationResult(notification);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('signature notification failed: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._signatureSubscriptions).map(Number);
@@ -1830,7 +1859,7 @@ export class Connection {
   _wsOnRootNotification(notification: Object) {
     const res = RootNotificationResult(notification);
     if (res.error) {
-      throw new Error(res.error.message);
+      throw new Error('root notification failed: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
     const root = res.result;
