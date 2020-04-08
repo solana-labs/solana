@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{
-    clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey, signature::Signature,
-    transaction::Transaction,
+    clock::Slot, native_token::LAMPORTS_PER_SOL, program_utils::limited_deserialize,
+    pubkey::Pubkey, signature::Signature, transaction::Transaction,
 };
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
 use solana_transaction_status::{ConfirmedBlock, RpcTransactionStatusMeta, TransactionEncoding};
@@ -203,7 +203,9 @@ fn process_transaction(
     for (index, account_pubkey) in message.account_keys.iter().enumerate() {
         if let Some(mut account_info) = accounts.get_mut(&account_pubkey.to_string()) {
             let post_balance = meta.post_balances[index];
-            if account_info.compliant_since.is_some() && post_balance < account_info.lamports {
+            if account_info.compliant_since.is_some()
+                && post_balance <= account_info.lamports.saturating_sub(LAMPORTS_PER_SOL)
+            {
                 account_info.compliant_since = None;
                 account_info.transactions.push(AccountTransactionInfo {
                     op: AccountOperation::FailedToMaintainMinimumBalance,
