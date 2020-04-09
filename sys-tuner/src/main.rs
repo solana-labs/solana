@@ -93,7 +93,7 @@ fn tune_kernel_udp_buffers_and_vmmap() {
     sysctl_write("net.core.wmem_default", "134217728");
 
     // increase mmap counts for many append_vecs
-    sysctl_write("vm.max_map_count", "262144");
+    sysctl_write("vm.max_map_count", "1000000");
 }
 
 #[cfg(unix)]
