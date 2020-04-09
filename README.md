@@ -13,7 +13,7 @@
 
 ## Building
 
-1. **Install rustc, cargo and rustfmt.**
+**1. Install rustc, cargo and rustfmt.**
 
 ```bash
 $ curl https://sh.rustup.rs -sSf | sh
@@ -34,27 +34,27 @@ $ sudo apt-get update
 $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang
 ```
 
-2. **Download the source code.**
+**2. Download the source code.**
 
 ```bash
 $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
-3. **Build.**
+**3. Build.**
 
 ```bash
 $ cargo build
 ```
 
-Then to run a minimal local cluster
+**4. Run a minimal local cluster.**
 ```bash
 $ ./run.sh
 ```
 
 ## Testing
 
-Run the test suite:
+**Run the test suite:**
 
 ```bash
 $ cargo test
@@ -62,14 +62,14 @@ $ cargo test
 
 **Local Testnet**
 
-Start your own testnet locally, instructions are in the online docs [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/building-from-source).
+Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/building-from-source).
 
 **Remote Testnets**
 
 * `testnet` - public stable testnet accessible via devnet.solana.com. Runs 24/7
 
 
-## Deploy process
+### Deploy process
 
 They are deployed with the `ci/testnet-manager.sh` script through a list of [scheduled
 buildkite jobs](https://buildkite.com/solana-labs/testnet-management/settings/schedules).
