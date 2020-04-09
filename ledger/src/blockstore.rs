@@ -1173,7 +1173,7 @@ impl Blockstore {
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
         let meta_cf = self.db.column::<cf::SlotMeta>();
@@ -1420,7 +1420,7 @@ impl Blockstore {
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
 
@@ -1489,7 +1489,7 @@ impl Blockstore {
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
         let encoding = encoding.unwrap_or(TransactionEncoding::Json);
@@ -1784,7 +1784,7 @@ impl Blockstore {
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > slot {
+        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
 
@@ -3125,6 +3125,26 @@ pub mod tests {
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_shred_cleanup_check() {
+        let slot = 1;
+        let (shreds, _) = make_slot_entries(slot, 0, 100);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+        ledger.insert_shreds(shreds, None, false).unwrap();
+
+        let mut buf = [0; 4096];
+        assert!(ledger.get_data_shreds(slot, 0, 1, &mut buf).is_ok());
+
+        let max_purge_slot = 1;
+        ledger.run_purge(0, max_purge_slot).unwrap();
+        *ledger.lowest_cleanup_slot.write().unwrap() = max_purge_slot;
+
+        let mut buf = [0; 4096];
+        assert!(ledger.get_data_shreds(slot, 0, 1, &mut buf).is_err());
     }
 
     #[test]
