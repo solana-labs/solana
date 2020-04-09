@@ -21,6 +21,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 * [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
+* [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
 * [getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash)
@@ -343,6 +344,45 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 // Result
 {"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
+```
+
+### getConfirmedTransaction
+
+Returns transaction details for a confirmed transaction
+
+#### Parameters:
+
+* `<string>` - transaction signature as base-58 encoded string
+* `<string>` - (optional) encoding for the returned Transaction, either "json" or "binary". If not provided, the default encoding is JSON.
+
+#### Results:
+
+The result field will be an object with the following fields:
+* `slot: <u64>` - the slot this transaction was processed in
+* `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
+* `meta: <object>` - transaction status metadata object, containing `null` or:
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+  * `fee: <u64>` - fee this transaction was charged, as u64 integer
+  * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+  * `postBalances: <array>` - array of u64 account balances after the transaction was processed
+  * DEPRECATED: `status: <object>` - Transaction status
+    * `"Ok": <null>` - Transaction was successful
+    * `"Err": <ERR>` - Transaction failed with TransactionError
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby", "json"]}' localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"slot":430,"transaction":{"message":{"accountKeys":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC","39UAy8hsoYPywGPGdmun747omSr79zLSjqvPJN3zetoH","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":2},"instructions":[{"accounts":[1,2,3],"data":"29z5mr1JoRmJYQ6ynmk3pf31cGFRziAF1M3mT3L6sFXf5cKLdkEaMXMT8AqLpD4CpcupHmuMEmtZHpomrwfdZetSomNy3d","programIdIndex":4}],"recentBlockhash":"EFejToxii1L5aUF2NrK9dsbAEmZSNyN5nsipmZHQR1eA"},"signatures":["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4vANMjSKiwEchGSXwVrQkwHnmsbKQmy9vdrsYxWdCup1bLsFzX8gKrFTSVDCZCae2dbxJB9mPNhqB2sD1vvr4sAD"]},"meta":{"err":null,"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}},"id":1}
+
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby", "binary"]}' localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"slot":430,"transaction":"81UZJt4dh4Do66jDhrgkQudS8J2N6iG3jaVav7gJrqJSFY4Ug53iA9JFJZh2gxKWcaFdLJwhHx9mRdg9JwDAWB4ywiu5154CRwXV4FMdnPLg7bhxRLwhhYaLsVgMF5AyNRcTzjCVoBvqFgDU7P8VEKDEiMvD3qxzm1pLZVxDG1LTQpT3Dz4Uviv4KQbFQNuC22KupBoyHFB7Zh6KFdMqux4M9PvhoqcoJsJKwXjWpKu7xmEKnnrSbfLadkgjBmmjhW3fdTrFvnhQdTkhtdJxUL1xS9GMuJQer8YgSKNtUXB1eXZQwXU8bU2BjYkZE6Q5Xww8hu9Z4E4Mo4QsooVtHoP6BM3NKw8zjVbWfoCQqxTrwuSzrNCWCWt58C24LHecH67CTt2uXbYSviixvrYkK7A3t68BxTJcF1dXJitEPTFe2ceTkauLJqrJgnER4iUrsjr26T8YgWvpY9wkkWFSviQW6wV5RASTCUasVEcrDiaKj8EQMkgyDoe9HyKitSVg67vMWJFpUXpQobseWJUs5FTWWzmfHmFp8FZ","meta":{"err":null,"fee":18000,"postBalances":[499999972500,15298080,1,1,1],"preBalances":[499999990500,15298080,1,1,1],"status":{"Ok":null}}},"id":1}
 ```
 
 ### getEpochInfo

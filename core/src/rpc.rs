@@ -24,7 +24,9 @@ use solana_sdk::{
     timing::slot_duration_from_slots_per_year,
     transaction::{self, Transaction},
 };
-use solana_transaction_status::{ConfirmedBlock, TransactionEncoding, TransactionStatus};
+use solana_transaction_status::{
+    ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
+};
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     collections::HashMap,
@@ -503,6 +505,21 @@ impl JsonRpcRequestProcessor {
                 }
             })
     }
+
+    pub fn get_confirmed_transaction(
+        &self,
+        signature: Signature,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Option<ConfirmedTransaction>> {
+        if self.config.enable_rpc_transaction_history {
+            Ok(self
+                .blockstore
+                .get_confirmed_transaction(signature, encoding)
+                .unwrap_or(None))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
@@ -744,6 +761,14 @@ pub trait RpcSol {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>>;
+
+    #[rpc(meta, name = "getConfirmedTransaction")]
+    fn get_confirmed_transaction(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Option<ConfirmedTransaction>>;
 }
 
 pub struct RpcSolImpl;
@@ -1286,6 +1311,19 @@ impl RpcSol for RpcSolImpl {
 
     fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>> {
         meta.request_processor.read().unwrap().get_block_time(slot)
+    }
+
+    fn get_confirmed_transaction(
+        &self,
+        meta: Self::Metadata,
+        signature_str: String,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Option<ConfirmedTransaction>> {
+        let signature = verify_signature(&signature_str)?;
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_confirmed_transaction(signature, encoding)
     }
 }
 
