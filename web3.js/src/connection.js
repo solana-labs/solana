@@ -1428,20 +1428,15 @@ export class Connection {
    * @private
    */
   _wsOnError(err: Error) {
-    console.log('ws error:', err.message);
+    console.error('ws error:', err.message);
   }
 
   /**
    * @private
    */
-  _wsOnClose(code: number, message: string) {
-    // 1000 means _rpcWebSocket.close() was called explicitly
-    if (code !== 1000) {
-      console.log('ws close:', code, message);
-    } else {
-      // Only after an explicit close do we need to explicitly connect again
-      this._rpcWebSocketConnected = false;
-    }
+  _wsOnClose() {
+    this._rpcWebSocketConnected = false;
+    this._resetSubscriptions();
   }
 
   /**
@@ -1483,9 +1478,30 @@ export class Connection {
       try {
         await this._rpcWebSocket.call(rpcMethod, [unsubscribeId]);
       } catch (err) {
-        console.log(`${rpcMethod} error:`, err.message);
+        console.error(`${rpcMethod} error:`, err.message);
       }
     }
+  }
+
+  /**
+   * @private
+   */
+  _resetSubscriptions() {
+    (Object.values(this._accountChangeSubscriptions): any).forEach(
+      s => (s.subscriptionId = null),
+    );
+    (Object.values(this._programAccountChangeSubscriptions): any).forEach(
+      s => (s.subscriptionId = null),
+    );
+    (Object.values(this._signatureSubscriptions): any).forEach(
+      s => (s.subscriptionId = null),
+    );
+    (Object.values(this._slotSubscriptions): any).forEach(
+      s => (s.subscriptionId = null),
+    );
+    (Object.values(this._rootSubscriptions): any).forEach(
+      s => (s.subscriptionId = null),
+    );
   }
 
   /**
@@ -1513,21 +1529,7 @@ export class Connection {
     }
 
     if (!this._rpcWebSocketConnected) {
-      for (let id of accountKeys) {
-        this._accountChangeSubscriptions[id].subscriptionId = null;
-      }
-      for (let id of programKeys) {
-        this._programAccountChangeSubscriptions[id].subscriptionId = null;
-      }
-      for (let id of slotKeys) {
-        this._slotSubscriptions[id].subscriptionId = null;
-      }
-      for (let id of signatureKeys) {
-        this._signatureSubscriptions[id].subscriptionId = null;
-      }
-      for (let id of rootKeys) {
-        this._rootSubscriptions[id].subscriptionId = null;
-      }
+      this._resetSubscriptions();
       this._rpcWebSocket.connect();
       return;
     }
