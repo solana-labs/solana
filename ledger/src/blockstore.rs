@@ -1754,12 +1754,10 @@ impl Blockstore {
     fn find_address_signatures(
         &self,
         pubkey: Pubkey,
-        start_slot: Option<Slot>,
-        end_slot: Option<Slot>,
+        start_slot: Slot,
+        end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
         let mut signatures: Vec<(Slot, Signature)> = vec![];
-        let start_slot = start_slot.unwrap_or(0);
-        let end_slot = end_slot.unwrap_or(std::u64::MAX);
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
@@ -1783,11 +1781,11 @@ impl Blockstore {
         Ok(signatures)
     }
 
-    pub fn get_address_confirmed_signatures(
+    pub fn get_confirmed_signatures_for_address(
         &self,
         pubkey: Pubkey,
-        start_slot: Option<Slot>,
-        end_slot: Option<Slot>,
+        start_slot: Slot,
+        end_slot: Slot,
     ) -> Result<Vec<Signature>> {
         self.find_address_signatures(pubkey, start_slot, end_slot)
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
@@ -6086,7 +6084,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_address_confirmed_signatures() {
+    fn test_get_confirmed_signatures_for_address() {
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -6125,7 +6123,7 @@ pub mod tests {
             blockstore.set_roots(&[slot0, slot1]).unwrap();
 
             let all0 = blockstore
-                .get_address_confirmed_signatures(address0, None, None)
+                .get_confirmed_signatures_for_address(address0, 0, 50)
                 .unwrap();
             assert_eq!(all0.len(), 8);
             for x in 1..9 {
@@ -6134,32 +6132,32 @@ pub mod tests {
             }
             assert_eq!(
                 blockstore
-                    .get_address_confirmed_signatures(address0, Some(20), None)
+                    .get_confirmed_signatures_for_address(address0, 20, 50)
                     .unwrap()
                     .len(),
                 4
             );
             assert_eq!(
                 blockstore
-                    .get_address_confirmed_signatures(address0, None, Some(10))
+                    .get_confirmed_signatures_for_address(address0, 0, 10)
                     .unwrap()
                     .len(),
                 4
             );
             assert!(blockstore
-                .get_address_confirmed_signatures(address0, Some(1), Some(5))
+                .get_confirmed_signatures_for_address(address0, 1, 5)
                 .unwrap()
                 .is_empty());
             assert_eq!(
                 blockstore
-                    .get_address_confirmed_signatures(address0, Some(1), Some(15))
+                    .get_confirmed_signatures_for_address(address0, 1, 15)
                     .unwrap()
                     .len(),
                 4
             );
 
             let all1 = blockstore
-                .get_address_confirmed_signatures(address1, None, None)
+                .get_confirmed_signatures_for_address(address1, 0, 50)
                 .unwrap();
             assert_eq!(all1.len(), 8);
             for x in 1..9 {
@@ -6171,29 +6169,29 @@ pub mod tests {
             blockstore.run_purge(0, 10).unwrap();
             assert_eq!(
                 blockstore
-                    .get_address_confirmed_signatures(address0, None, None)
+                    .get_confirmed_signatures_for_address(address0, 0, 50)
                     .unwrap()
                     .len(),
                 4
             );
             assert_eq!(
                 blockstore
-                    .get_address_confirmed_signatures(address0, Some(20), None)
+                    .get_confirmed_signatures_for_address(address0, 20, 50)
                     .unwrap()
                     .len(),
                 4
             );
             assert!(blockstore
-                .get_address_confirmed_signatures(address0, None, Some(10))
+                .get_confirmed_signatures_for_address(address0, 0, 10)
                 .unwrap()
                 .is_empty());
             assert!(blockstore
-                .get_address_confirmed_signatures(address0, Some(1), Some(5))
+                .get_confirmed_signatures_for_address(address0, 1, 5)
                 .unwrap()
                 .is_empty());
             assert_eq!(
                 blockstore
-                    .get_address_confirmed_signatures(address0, Some(1), Some(25))
+                    .get_confirmed_signatures_for_address(address0, 1, 25)
                     .unwrap()
                     .len(),
                 4

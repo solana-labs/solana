@@ -39,6 +39,7 @@ use std::{
 };
 
 const MAX_QUERY_ITEMS: usize = 256;
+const MAX_SLOT_RANGE: u64 = 10_000;
 
 type RpcResponse<T> = Result<Response<T>>;
 
@@ -515,16 +516,16 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_address_confirmed_signatures(
+    pub fn get_confirmed_signatures_for_address(
         &self,
         pubkey: Pubkey,
-        start_slot: Option<Slot>,
-        end_slot: Option<Slot>,
+        start_slot: Slot,
+        end_slot: Slot,
     ) -> Result<Vec<Signature>> {
         if self.config.enable_rpc_transaction_history {
             Ok(self
                 .blockstore
-                .get_address_confirmed_signatures(pubkey, start_slot, end_slot)
+                .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
                 .unwrap_or_else(|_| vec![]))
         } else {
             Ok(vec![])
@@ -780,13 +781,13 @@ pub trait RpcSol {
         encoding: Option<TransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>>;
 
-    #[rpc(meta, name = "getAddressConfirmedSignatures")]
-    fn get_address_confirmed_signatures(
+    #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
+    fn get_confirmed_signatures_for_address(
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        start_slot: Option<Slot>,
-        end_slot: Option<Slot>,
+        start_slot: Slot,
+        end_slot: Slot,
     ) -> Result<Vec<String>>;
 }
 
@@ -1345,18 +1346,30 @@ impl RpcSol for RpcSolImpl {
             .get_confirmed_transaction(signature, encoding)
     }
 
-    fn get_address_confirmed_signatures(
+    fn get_confirmed_signatures_for_address(
         &self,
         meta: Self::Metadata,
         pubkey_str: String,
-        start_slot: Option<Slot>,
-        end_slot: Option<Slot>,
+        start_slot: Slot,
+        end_slot: Slot,
     ) -> Result<Vec<String>> {
         let pubkey = verify_pubkey(pubkey_str)?;
+        if end_slot <= start_slot {
+            return Err(Error::invalid_params(format!(
+                "start_slot {} must be smaller than end_slot {}",
+                start_slot, end_slot
+            )));
+        }
+        if end_slot - start_slot > MAX_SLOT_RANGE {
+            return Err(Error::invalid_params(format!(
+                "Slot range too large; max {}",
+                MAX_SLOT_RANGE
+            )));
+        }
         meta.request_processor
             .read()
             .unwrap()
-            .get_address_confirmed_signatures(pubkey, start_slot, end_slot)
+            .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
             .map(|signatures| {
                 signatures
                     .iter()
