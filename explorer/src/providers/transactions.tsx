@@ -5,7 +5,7 @@ import {
   SystemProgram,
   Account
 } from "@solana/web3.js";
-import { findGetParameter, findPathSegment } from "../utils";
+import { findGetParameter, findPathSegment } from "../utils/url";
 import { useCluster, ClusterStatus } from "../providers/cluster";
 import base58 from "bs58";
 import {

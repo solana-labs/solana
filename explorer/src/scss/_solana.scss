@@ -41,3 +41,16 @@ code {
 input.text-signature, input.text-address {
   padding: 0 0.75rem
 }
+
+h4.ix-pill {
+  display: inline-block;
+  padding: 5px;
+  border-radius: $border-radius;
+  margin-bottom: 2rem;
+  margin-left: -5px;
+  background-color: theme-color-level(info, $badge-soft-bg-level);
+}
+
+.list-group-flush .list-group-item.ix-item:first-child {
+  border-top-width: 1px;
+}

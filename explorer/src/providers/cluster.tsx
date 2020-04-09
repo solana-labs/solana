@@ -1,6 +1,6 @@
 import React from "react";
 import { clusterApiUrl, Connection } from "@solana/web3.js";
-import { findGetParameter } from "../utils";
+import { findGetParameter } from "../utils/url";
 
 export enum ClusterStatus {
   Connected,

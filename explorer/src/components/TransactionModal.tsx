@@ -5,12 +5,13 @@ import {
   ActionType,
   Selected
 } from "../providers/transactions";
-import { displayAddress } from "../utils";
+import { displayAddress, decodeCreate, decodeTransfer } from "../utils/tx";
 import { useBlocks } from "../providers/blocks";
 import {
   LAMPORTS_PER_SOL,
   TransferParams,
-  CreateAccountParams
+  CreateAccountParams,
+  TransactionInstruction
 } from "@solana/web3.js";
 
 function TransactionModal() {
@@ -70,31 +71,27 @@ function TransactionDetails({ selected }: { selected: Selected }) {
     );
   }
 
-  const details = block.transactions[selected.signature];
-  if (!details) return renderError("Transaction not found");
+  const transaction = block.transactions[selected.signature];
+  if (!transaction) return renderError("Transaction not found");
 
-  const { transfers, creates } = details;
-  if (transfers.length === 0 && creates.length === 0)
-    return renderError(
-      "Details for this transaction's instructions are not yet supported"
-    );
+  if (transaction.instructions.length === 0)
+    return renderError("No instructions found");
 
-  let i = 0;
+  const instructionDetails = transaction.instructions.map((ix, index) => {
+    const transfer = decodeTransfer(ix);
+    if (transfer) return <TransferDetails transfer={transfer} index={index} />;
+    const create = decodeCreate(ix);
+    if (create) return <CreateDetails create={create} index={index} />;
+    return <InstructionDetails ix={ix} index={index} />;
+  });
+
   return (
     <>
-      {details.transfers.map(transfer => {
+      {instructionDetails.map((details, i) => {
         return (
           <div key={++i}>
-            {i > 1 ? <hr className="mb-4"></hr> : null}
-            <TransferDetails transfer={transfer} />
-          </div>
-        );
-      })}
-      {details.creates.map(create => {
-        return (
-          <div key={++i}>
-            {i > 1 ? <hr className="mb-4"></hr> : null}
-            <CreateDetails create={create} />
+            {i > 1 ? <hr className="mt-0 mb-0"></hr> : null}
+            {details}
           </div>
         );
       })}
@@ -102,9 +99,16 @@ function TransactionDetails({ selected }: { selected: Selected }) {
   );
 }
 
-function TransferDetails({ transfer }: { transfer: TransferParams }) {
+function TransferDetails({
+  transfer,
+  index
+}: {
+  transfer: TransferParams;
+  index: number;
+}) {
   return (
     <div className="card-body">
+      <h4 className="ix-pill">{`Instruction #${index + 1} (Transfer)`}</h4>
       <div className="list-group list-group-flush my-n3">
         <ListGroupItem label="From">
           <code>{transfer.fromPubkey.toBase58()}</code>
@@ -120,9 +124,17 @@ function TransferDetails({ transfer }: { transfer: TransferParams }) {
   );
 }
 
-function CreateDetails({ create }: { create: CreateAccountParams }) {
+function CreateDetails({
+  create,
+  index
+}: {
+  create: CreateAccountParams;
+  index: number;
+}) {
   return (
     <div className="card-body">
+      <h4 className="ix-pill">{`Instruction #${index +
+        1} (Create Account)`}</h4>
       <div className="list-group list-group-flush my-n3">
         <ListGroupItem label="From">
           <code>{create.fromPubkey.toBase58()}</code>
@@ -142,6 +154,31 @@ function CreateDetails({ create }: { create: CreateAccountParams }) {
   );
 }
 
+function InstructionDetails({
+  ix,
+  index
+}: {
+  ix: TransactionInstruction;
+  index: number;
+}) {
+  return (
+    <div className="card-body">
+      <h4 className="ix-pill">{`Instruction #${index + 1}`}</h4>
+      <div className="list-group list-group-flush my-n3">
+        {ix.keys.map(({ pubkey }, keyIndex) => (
+          <ListGroupItem key={keyIndex} label={`Address #${keyIndex + 1}`}>
+            <code>{pubkey.toBase58()}</code>
+          </ListGroupItem>
+        ))}
+        <ListGroupItem label="Data (Bytes)">{ix.data.length}</ListGroupItem>
+        <ListGroupItem label="Program">
+          <code>{displayAddress(ix.programId)}</code>
+        </ListGroupItem>
+      </div>
+    </div>
+  );
+}
+
 function ListGroupItem({
   label,
   children
@@ -150,7 +187,7 @@ function ListGroupItem({
   children: React.ReactNode;
 }) {
   return (
-    <div className="list-group-item">
+    <div className="list-group-item ix-item">
       <div className="row align-items-center">
         <div className="col">
           <h5 className="mb-0">{label}</h5>

@@ -1,6 +1,6 @@
 import React from "react";
 import { PublicKey, Connection } from "@solana/web3.js";
-import { findGetParameter, findPathSegment } from "../utils";
+import { findGetParameter, findPathSegment } from "../utils/url";
 import { useCluster, ClusterStatus } from "./cluster";
 
 export enum Status {

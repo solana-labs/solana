@@ -7,7 +7,8 @@ import {
   Account,
   Status
 } from "../providers/accounts";
-import { assertUnreachable, displayAddress } from "../utils";
+import { assertUnreachable } from "../utils";
+import { displayAddress } from "../utils/tx";
 import { useCluster } from "../providers/cluster";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
