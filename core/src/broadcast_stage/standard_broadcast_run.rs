@@ -476,11 +476,9 @@ mod test {
             .receive_elapsed = 10;
 
         // Try to fetch ticks from blockstore, nothing should break
-        assert_eq!(blockstore.get_slot_entries(0, 0, None).unwrap(), ticks0);
+        assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), ticks0);
         assert_eq!(
-            blockstore
-                .get_slot_entries(0, num_shreds_per_slot, None)
-                .unwrap(),
+            blockstore.get_slot_entries(0, num_shreds_per_slot).unwrap(),
             vec![],
         );
 
@@ -516,11 +514,9 @@ mod test {
         );
 
         // Try to fetch the incomplete ticks from blockstore, should succeed
-        assert_eq!(blockstore.get_slot_entries(0, 0, None).unwrap(), ticks0);
+        assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), ticks0);
         assert_eq!(
-            blockstore
-                .get_slot_entries(0, num_shreds_per_slot, None)
-                .unwrap(),
+            blockstore.get_slot_entries(0, num_shreds_per_slot).unwrap(),
             vec![],
         );
     }

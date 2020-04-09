@@ -141,7 +141,7 @@ pub fn validator_exit(entry_point_info: &ContactInfo, nodes: usize) {
 
 pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
     let ledger = Blockstore::open(ledger_path).unwrap();
-    let zeroth_slot = ledger.get_slot_entries(0, 0, None).unwrap();
+    let zeroth_slot = ledger.get_slot_entries(0, 0).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;
     let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();
     let mut pending_slots: Vec<_> = next_slots
@@ -306,7 +306,7 @@ fn get_and_verify_slot_entries(
     slot: Slot,
     last_entry: &Hash,
 ) -> Vec<Entry> {
-    let entries = blockstore.get_slot_entries(slot, 0, None).unwrap();
+    let entries = blockstore.get_slot_entries(slot, 0).unwrap();
     assert_eq!(entries.verify(last_entry), true);
     entries
 }
