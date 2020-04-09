@@ -267,10 +267,10 @@ pub fn bind_common_in_range(
         }
     }
 
-    return Err(io::Error::new(
+    Err(io::Error::new(
         io::ErrorKind::Other,
         format!("No available TCP/UDP ports in {:?}", range),
-    ));
+    ))
 }
 
 pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpSocket)> {
@@ -285,10 +285,10 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
         }
     }
 
-    return Err(io::Error::new(
+    Err(io::Error::new(
         io::ErrorKind::Other,
         format!("No available UDP ports in {:?}", range),
-    ));
+    ))
 }
 
 // binds many sockets to the same port in a range
