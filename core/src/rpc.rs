@@ -514,6 +514,22 @@ impl JsonRpcRequestProcessor {
             Ok(None)
         }
     }
+
+    pub fn get_address_confirmed_signatures(
+        &self,
+        pubkey: Pubkey,
+        start_slot: Option<Slot>,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<Signature>> {
+        if self.config.enable_rpc_transaction_history {
+            Ok(self
+                .blockstore
+                .get_address_confirmed_signatures(pubkey, start_slot, end_slot)
+                .unwrap_or_else(|_| vec![]))
+        } else {
+            Ok(vec![])
+        }
+    }
 }
 
 fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
@@ -763,6 +779,15 @@ pub trait RpcSol {
         signature_str: String,
         encoding: Option<TransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>>;
+
+    #[rpc(meta, name = "getAddressConfirmedSignatures")]
+    fn get_address_confirmed_signatures(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        start_slot: Option<Slot>,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<String>>;
 }
 
 pub struct RpcSolImpl;
@@ -1318,6 +1343,26 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_confirmed_transaction(signature, encoding)
+    }
+
+    fn get_address_confirmed_signatures(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        start_slot: Option<Slot>,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<String>> {
+        let pubkey = verify_pubkey(pubkey_str)?;
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_address_confirmed_signatures(pubkey, start_slot, end_slot)
+            .map(|signatures| {
+                signatures
+                    .iter()
+                    .map(|signature| signature.to_string())
+                    .collect()
+            })
     }
 }
 
