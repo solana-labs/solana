@@ -338,6 +338,7 @@ fn test_create_account_with_seed() {
         to: to_address,
         from: 0,
         sign_only: true,
+        no_wait: false,
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_address),
         nonce_authority: 0,
@@ -358,6 +359,7 @@ fn test_create_account_with_seed() {
         to: to_address,
         from: 0,
         sign_only: false,
+        no_wait: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_address),
             sign_only.blockhash,
