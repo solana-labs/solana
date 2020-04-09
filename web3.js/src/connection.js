@@ -879,8 +879,7 @@ export class Connection {
       .then(x => x.value)
       .catch(e => {
         throw new Error(
-          'failed to get balance of account ' + publicKey.toBase58() + ': ' +
-          e,
+          'failed to get balance of account ' + publicKey.toBase58() + ': ' + e,
         );
       });
   }
@@ -897,7 +896,7 @@ export class Connection {
     const res = GetAccountInfoAndContextRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(
-        'failed info about account ' +
+        'failed to get info about account ' +
           publicKey.toBase58() +
           ': ' +
           res.error.message,
@@ -935,7 +934,7 @@ export class Connection {
       .then(x => x.value)
       .catch(e => {
         throw new Error(
-          'failed info about account ' + publicKey.toBase58() + ': ' + e,
+          'failed to get info about account ' + publicKey.toBase58() + ': ' + e,
         );
       });
   }
@@ -954,7 +953,7 @@ export class Connection {
     const res = GetProgramAccountsRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(
-        'failed info about account ' +
+        'failed to get accounts owned by program ' +
           programId.toBase58() +
           ': ' +
           res.error.message,
