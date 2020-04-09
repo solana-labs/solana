@@ -3,13 +3,11 @@
 [![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
-Blockchain Rebuilt for Scale
-===
-
-Solana&trade; is a new blockchain architecture built from the ground up for scale. The architecture supports
-up to 710 thousand transactions per second on a gigabit network.
-
-Read all about it at [Solana: Blockchain Rebuilt for Scale](https://docs.solana.com/v/master).
+<p align="center">
+  <a href="https://solana.com">
+    <img alt="Solana" src="https://i.imgur.com/OMnvVEz.png" width="250" />
+  </a>
+</p>
 
 Developing
 ===
