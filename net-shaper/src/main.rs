@@ -306,22 +306,6 @@ fn insert_tc_ifb_netem(class: &str, handle: &str, filter: &str) -> bool {
     run("tc", &args, "Failed to add tc child", "tc add child", false)
 }
 
-fn delete_tc_ifb_netem(interface: &str, class: &str, handle: &str, filter: &str) {
-    let mut filters: Vec<&str> = filter.split(' ').collect();
-    let mut args = vec![
-        "qdisc", "delete", "dev", interface, "parent", class, "handle", handle, "netem",
-    ];
-    args.append(&mut filters);
-    // tc qdisc delete dev <if> parent <class> handle <handle>: netem <filters>
-    run(
-        "tc",
-        &args,
-        "Failed to delete child qdisc",
-        "tc delete child qdisc",
-        true,
-    );
-}
-
 fn insert_tos_ifb_filter(class: &str, tos: &str) -> bool {
     // tc filter add dev ifb0 protocol ip parent 1: prio 1 u32 match ip tos <tos> 0xff flowid <class>
     run(
@@ -334,20 +318,6 @@ fn insert_tos_ifb_filter(class: &str, tos: &str) -> bool {
         "tc filter add dev ifb0 protocol ip parent 1: prio 1 u32 match ip tos <tos> 0xff flowid <class>",
         false,
     )
-}
-
-fn delete_tos_filter(interface: &str, class: &str, tos: &str) {
-    // tc filter delete dev <if> protocol ip parent 1: prio 10 u32 match ip tos <tos> 0xff flowid <class>
-    run(
-        "tc",
-        &[
-            "filter", "delete", "dev", interface, "protocol", "ip", "parent", "1:", "prio", "1",
-            "u32", "match", "ip", "tos", tos, "0xff", "flowid", class,
-        ],
-        "Failed to delete tos filter",
-        "tc delete filter",
-        true,
-    );
 }
 
 fn insert_default_ifb_filter(class: &str) -> bool {
@@ -486,45 +456,14 @@ fn shape_network_steps(
     true
 }
 
-fn cleanup_network(matches: &ArgMatches) {
-    let config_path = PathBuf::from(value_t_or_exit!(matches, "file", String));
-    let config = fs::read_to_string(&config_path).expect("Unable to read config file");
-    let topology: NetworkTopology =
-        serde_json::from_str(&config).expect("Failed to parse log as JSON");
-
-    if !topology.verify() {
-        panic!("Failed to verify the configuration file");
+fn parse_interface(interfaces: &str) -> &str {
+    for line in interfaces.lines() {
+        if line != "ifb0" {
+            return line;
+        }
     }
 
-    let network_size = value_t_or_exit!(matches, "size", u64);
-    let my_index = value_t_or_exit!(matches, "position", u64);
-    let interface = value_t_or_exit!(matches, "iface", String);
-
-    assert!(my_index < network_size);
-
-    println!(
-        "cleanup: my_index: {}, network_size: {}, partitions: {:?}",
-        my_index, network_size, topology.partitions
-    );
-    let my_partition = identify_my_partition(&topology.partitions, my_index + 1, network_size);
-    println!("My cleanup partition is {}", my_partition);
-
-    topology.interconnects.iter().for_each(|i| {
-        if i.b as usize == my_partition {
-            let handle = (i.a + 1).to_string();
-            // First valid class is 1:1
-            let class = format!("1:{}", i.a + 1);
-            let tos_string = i.a.to_string();
-            delete_tos_filter(interface.as_str(), class.as_str(), tos_string.as_str());
-            delete_tc_ifb_netem(
-                interface.as_str(),
-                class.as_str(),
-                handle.as_str(),
-                i.config.as_str(),
-            );
-        }
-    });
-    force_cleanup_network(&interface);
+    panic!("No valid interfaces");
 }
 
 fn force_cleanup_network(interface: &str) {
@@ -639,10 +578,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("force_cleanup")
-                .about("Remove the network filters")
-        )
-        .subcommand(
             SubCommand::with_name("configure")
                 .about("Generate a config file")
                 .arg(
@@ -684,8 +619,11 @@ fn main() {
 
     match matches.subcommand() {
         ("shape", Some(args_matches)) => shape_network(args_matches),
-        ("cleanup", Some(args_matches)) => cleanup_network(args_matches),
-        ("force_cleanup", Some(args_matches)) => force_cleanup_network(&value_t_or_exit!(args_matches, "iface", String)),
+        ("cleanup", Some(args_matches)) => {
+            let interfaces = value_t_or_exit!(args_matches, "iface", String);
+            let iface = parse_interface(&interfaces);
+            force_cleanup_network(iface)
+        }
         ("configure", Some(args_matches)) => configure(args_matches),
         _ => {}
     };
