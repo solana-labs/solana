@@ -71,7 +71,7 @@ fn output_slot(
 ) -> Result<(), String> {
     println!("Slot Meta {:?}", blockstore.meta(slot));
     let entries = blockstore
-        .get_slot_entries(slot, 0, None)
+        .get_slot_entries(slot, 0)
         .map_err(|err| format!("Failed to load entries for slot {}: {}", slot, err))?;
 
     for (entry_index, entry) in entries.iter().enumerate() {
@@ -1159,7 +1159,7 @@ fn main() {
                 let potential_hashes: Vec<_> = iter
                     .filter_map(|(slot, _meta)| {
                         let blockhash = blockstore
-                            .get_slot_entries(slot, 0, None)
+                            .get_slot_entries(slot, 0)
                             .unwrap()
                             .last()
                             .unwrap()
@@ -1202,7 +1202,7 @@ fn main() {
                 .filter_map(|(slot, _meta)| {
                     if slot <= max_height as u64 {
                         let blockhash = blockstore
-                            .get_slot_entries(slot, 0, None)
+                            .get_slot_entries(slot, 0)
                             .unwrap()
                             .last()
                             .unwrap()

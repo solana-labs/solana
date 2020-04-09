@@ -542,10 +542,7 @@ mod test {
             .insert_shreds(shreds, None, false)
             .expect("Expect successful processing of shred");
 
-        assert_eq!(
-            blockstore.get_slot_entries(0, 0, None).unwrap(),
-            original_entries
-        );
+        assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), original_entries);
 
         drop(blockstore);
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");

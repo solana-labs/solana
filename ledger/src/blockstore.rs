@@ -1503,13 +1503,13 @@ impl Blockstore {
                 }
             };
 
-            let slot_entries = self.get_slot_entries(slot, 0, None)?;
+            let slot_entries = self.get_slot_entries(slot, 0)?;
             if !slot_entries.is_empty() {
                 let slot_transaction_iterator = slot_entries
                     .iter()
                     .cloned()
                     .flat_map(|entry| entry.transactions);
-                let parent_slot_entries = self.get_slot_entries(slot_meta.parent_slot, 0, None)?;
+                let parent_slot_entries = self.get_slot_entries(slot_meta.parent_slot, 0)?;
                 let previous_blockhash = if !parent_slot_entries.is_empty() {
                     get_last_hash(parent_slot_entries.iter()).unwrap()
                 } else {
@@ -1749,7 +1749,7 @@ impl Blockstore {
         slot: Slot,
         signature: Signature,
     ) -> Result<Option<Transaction>> {
-        let slot_entries = self.get_slot_entries(slot, 0, None)?;
+        let slot_entries = self.get_slot_entries(slot, 0)?;
         Ok(slot_entries
             .iter()
             .cloned()
@@ -1766,7 +1766,7 @@ impl Blockstore {
     }
 
     fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, (Slot, UnixTimestamp))>> {
-        let slot_entries = self.get_slot_entries(slot, 0, None)?;
+        let slot_entries = self.get_slot_entries(slot, 0)?;
         Ok(slot_entries
             .iter()
             .cloned()
@@ -1796,12 +1796,7 @@ impl Blockstore {
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`
-    pub fn get_slot_entries(
-        &self,
-        slot: Slot,
-        shred_start_index: u64,
-        _max_entries: Option<u64>,
-    ) -> Result<Vec<Entry>> {
+    pub fn get_slot_entries(&self, slot: Slot, shred_start_index: u64) -> Result<Vec<Entry>> {
         self.get_slot_entries_with_shred_info(slot, shred_start_index)
             .map(|x| x.0)
     }
@@ -2914,7 +2909,7 @@ pub mod tests {
         let ledger = Blockstore::open(&ledger_path).unwrap();
 
         let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
-        let entries = ledger.get_slot_entries(0, 0, None).unwrap();
+        let entries = ledger.get_slot_entries(0, 0).unwrap();
 
         assert_eq!(ticks, entries);
 
@@ -3004,7 +2999,7 @@ pub mod tests {
 
                 assert_eq!(
                     &ticks[(i * ticks_per_slot) as usize..((i + 1) * ticks_per_slot) as usize],
-                    &ledger.get_slot_entries(i, 0, None).unwrap()[..]
+                    &ledger.get_slot_entries(i, 0).unwrap()[..]
                 );
             }
 
@@ -3032,7 +3027,7 @@ pub mod tests {
                         assert_eq!(
                             &ticks[0..1],
                             &ledger
-                                .get_slot_entries(num_slots, ticks_per_slot - 2, None)
+                                .get_slot_entries(num_slots, ticks_per_slot - 2)
                                 .unwrap()[..]
                         );
 
@@ -3046,7 +3041,7 @@ pub mod tests {
 
                         assert_eq!(
                             &ticks[1..2],
-                            &ledger.get_slot_entries(num_slots + 1, 0, None).unwrap()[..]
+                            &ledger.get_slot_entries(num_slots + 1, 0).unwrap()[..]
                         );
             */
         }
@@ -3200,7 +3195,7 @@ pub mod tests {
         assert!(shreds.len() > 1);
         let last_shred = shreds.pop().unwrap();
         ledger.insert_shreds(vec![last_shred], None, false).unwrap();
-        assert!(ledger.get_slot_entries(0, 0, None).unwrap().is_empty());
+        assert!(ledger.get_slot_entries(0, 0).unwrap().is_empty());
 
         let meta = ledger
             .meta(0)
@@ -3210,7 +3205,7 @@ pub mod tests {
 
         // Insert the other shreds, check for consecutive returned entries
         ledger.insert_shreds(shreds, None, false).unwrap();
-        let result = ledger.get_slot_entries(0, 0, None).unwrap();
+        let result = ledger.get_slot_entries(0, 0).unwrap();
 
         assert_eq!(result, entries);
 
@@ -3244,7 +3239,7 @@ pub mod tests {
         for i in (0..num_shreds).rev() {
             let shred = shreds.pop().unwrap();
             ledger.insert_shreds(vec![shred], None, false).unwrap();
-            let result = ledger.get_slot_entries(0, 0, None).unwrap();
+            let result = ledger.get_slot_entries(0, 0).unwrap();
 
             let meta = ledger
                 .meta(0)
@@ -3333,7 +3328,7 @@ pub mod tests {
                 .expect("Expected successful write of shreds");
 
             assert_eq!(
-                blockstore.get_slot_entries(1, 0, None).unwrap()[2..4],
+                blockstore.get_slot_entries(1, 0).unwrap()[2..4],
                 entries[2..4],
             );
         }
@@ -3367,7 +3362,7 @@ pub mod tests {
                     .expect("Expected successful write of shreds");
                 assert_eq!(
                     blockstore
-                        .get_slot_entries(slot, u64::from(index - 1), None)
+                        .get_slot_entries(slot, u64::from(index - 1))
                         .unwrap(),
                     vec![last_entry],
                 );
@@ -3398,7 +3393,7 @@ pub mod tests {
                 blockstore
                     .insert_shreds(shreds, None, false)
                     .expect("Expected successful write of shreds");
-                assert_eq!(blockstore.get_slot_entries(slot, 0, None).unwrap(), entries);
+                assert_eq!(blockstore.get_slot_entries(slot, 0).unwrap(), entries);
             }
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
@@ -3433,7 +3428,7 @@ pub mod tests {
 
                 blockstore.insert_shreds(odd_shreds, None, false).unwrap();
 
-                assert_eq!(blockstore.get_slot_entries(slot, 0, None).unwrap(), vec![]);
+                assert_eq!(blockstore.get_slot_entries(slot, 0).unwrap(), vec![]);
 
                 let meta = blockstore.meta(slot).unwrap().unwrap();
                 if num_shreds % 2 == 0 {
@@ -3452,7 +3447,7 @@ pub mod tests {
                 blockstore.insert_shreds(even_shreds, None, false).unwrap();
 
                 assert_eq!(
-                    blockstore.get_slot_entries(slot, 0, None).unwrap(),
+                    blockstore.get_slot_entries(slot, 0).unwrap(),
                     original_entries,
                 );
 
@@ -3486,7 +3481,7 @@ pub mod tests {
                 .insert_shreds(original_shreds, None, false)
                 .unwrap();
 
-            assert_eq!(blockstore.get_slot_entries(0, 0, None).unwrap(), vec![]);
+            assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), vec![]);
 
             let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true, 0);
             let num_shreds = duplicate_shreds.len() as u64;
@@ -3494,10 +3489,7 @@ pub mod tests {
                 .insert_shreds(duplicate_shreds, None, false)
                 .unwrap();
 
-            assert_eq!(
-                blockstore.get_slot_entries(0, 0, None).unwrap(),
-                original_entries
-            );
+            assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), original_entries);
 
             let meta = blockstore.meta(0).unwrap().unwrap();
             assert_eq!(meta.consumed, num_shreds);
@@ -4178,7 +4170,7 @@ pub mod tests {
 
             for i in 0..num_entries - 1 {
                 assert_eq!(
-                    blockstore.get_slot_entries(i, 0, None).unwrap()[0],
+                    blockstore.get_slot_entries(i, 0).unwrap()[0],
                     entries[i as usize]
                 );
 
@@ -4921,7 +4913,7 @@ pub mod tests {
                 .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
             assert_eq!(
-                blockstore.get_slot_entries(slot, 0, None).unwrap().len() as u64,
+                blockstore.get_slot_entries(slot, 0).unwrap().len() as u64,
                 num_ticks
             );
 
@@ -4943,7 +4935,7 @@ pub mod tests {
             blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expected successful write of shreds");
-            assert!(blockstore.get_slot_entries(slot, 0, None).is_err());
+            assert!(blockstore.get_slot_entries(slot, 0).is_err());
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
