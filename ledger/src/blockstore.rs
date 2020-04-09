@@ -1751,6 +1751,48 @@ impl Blockstore {
             .find(|transaction| transaction.signatures[0] == signature))
     }
 
+    fn find_address_signatures(
+        &self,
+        pubkey: Pubkey,
+        start_slot: Option<Slot>,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<(Slot, Signature)>> {
+        let mut signatures: Vec<(Slot, Signature)> = vec![];
+        let start_slot = start_slot.unwrap_or(0);
+        let end_slot = end_slot.unwrap_or(std::u64::MAX);
+        for transaction_status_cf_primary_index in 0..=1 {
+            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
+                (
+                    transaction_status_cf_primary_index,
+                    pubkey,
+                    start_slot,
+                    Signature::default(),
+                ),
+                IteratorDirection::Forward,
+            ))?;
+            for ((i, address, slot, signature), _) in index_iterator {
+                if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
+                {
+                    break;
+                }
+                if self.is_root(slot) {
+                    signatures.push((slot, signature));
+                }
+            }
+        }
+        Ok(signatures)
+    }
+
+    pub fn get_address_confirmed_signatures(
+        &self,
+        pubkey: Pubkey,
+        start_slot: Option<Slot>,
+        end_slot: Option<Slot>,
+    ) -> Result<Vec<Signature>> {
+        self.find_address_signatures(pubkey, start_slot, end_slot)
+            .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
+    }
+
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
         self.rewards_cf.get(index)
     }
@@ -6041,6 +6083,123 @@ pub mod tests {
                 None,
             );
         }
+    }
+
+    #[test]
+    fn test_get_address_confirmed_signatures() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+            let address0 = Pubkey::new_rand();
+            let address1 = Pubkey::new_rand();
+
+            let slot0 = 10;
+            for x in 1..5 {
+                let signature = Signature::new(&[x; 64]);
+                blockstore
+                    .write_transaction_status(
+                        slot0,
+                        signature,
+                        vec![&address0],
+                        vec![&address1],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            // Purge to freeze index 0
+            blockstore.run_purge(0, 1).unwrap();
+            let slot1 = 20;
+            for x in 5..9 {
+                let signature = Signature::new(&[x; 64]);
+                blockstore
+                    .write_transaction_status(
+                        slot1,
+                        signature,
+                        vec![&address0],
+                        vec![&address1],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            blockstore.set_roots(&[slot0, slot1]).unwrap();
+
+            let all0 = blockstore
+                .get_address_confirmed_signatures(address0, None, None)
+                .unwrap();
+            assert_eq!(all0.len(), 8);
+            for x in 1..9 {
+                let expected_signature = Signature::new(&[x; 64]);
+                assert_eq!(all0[x as usize - 1], expected_signature);
+            }
+            assert_eq!(
+                blockstore
+                    .get_address_confirmed_signatures(address0, Some(20), None)
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert_eq!(
+                blockstore
+                    .get_address_confirmed_signatures(address0, None, Some(10))
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert!(blockstore
+                .get_address_confirmed_signatures(address0, Some(1), Some(5))
+                .unwrap()
+                .is_empty());
+            assert_eq!(
+                blockstore
+                    .get_address_confirmed_signatures(address0, Some(1), Some(15))
+                    .unwrap()
+                    .len(),
+                4
+            );
+
+            let all1 = blockstore
+                .get_address_confirmed_signatures(address1, None, None)
+                .unwrap();
+            assert_eq!(all1.len(), 8);
+            for x in 1..9 {
+                let expected_signature = Signature::new(&[x; 64]);
+                assert_eq!(all1[x as usize - 1], expected_signature);
+            }
+
+            // Purge index 0
+            blockstore.run_purge(0, 10).unwrap();
+            assert_eq!(
+                blockstore
+                    .get_address_confirmed_signatures(address0, None, None)
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert_eq!(
+                blockstore
+                    .get_address_confirmed_signatures(address0, Some(20), None)
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert!(blockstore
+                .get_address_confirmed_signatures(address0, None, Some(10))
+                .unwrap()
+                .is_empty());
+            assert!(blockstore
+                .get_address_confirmed_signatures(address0, Some(1), Some(5))
+                .unwrap()
+                .is_empty());
+            assert_eq!(
+                blockstore
+                    .get_address_confirmed_signatures(address0, Some(1), Some(25))
+                    .unwrap()
+                    .len(),
+                4
+            );
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
