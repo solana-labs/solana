@@ -261,54 +261,34 @@ pub fn bind_common_in_range(
     ip_addr: IpAddr,
     range: PortRange,
 ) -> io::Result<(u16, (UdpSocket, TcpListener))> {
-    let (start, end) = range;
-    let mut tries_left = end - start;
-    let mut rand_port = thread_rng().gen_range(start, end);
-    loop {
-        match bind_common(ip_addr, rand_port, false) {
-            Ok((sock, listener)) => {
-                break Result::Ok((sock.local_addr().unwrap().port(), (sock, listener)));
-            }
-            Err(err) => {
-                if tries_left == 0 {
-                    return Err(err);
-                }
-            }
+    for port in range.0..range.1 {
+        if let Ok((sock, listener)) = bind_common(ip_addr, port, false) {
+            return Result::Ok((sock.local_addr().unwrap().port(), (sock, listener)));
         }
-        rand_port += 1;
-        if rand_port == end {
-            rand_port = start;
-        }
-        tries_left -= 1;
     }
+
+    return Err(io::Error::new(
+        io::ErrorKind::Other,
+        format!("No available TCP/UDP ports in {:?}", range),
+    ));
 }
 
 pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpSocket)> {
     let sock = udp_socket(false)?;
 
-    let (start, end) = range;
-    let mut tries_left = end - start;
-    let mut rand_port = thread_rng().gen_range(start, end);
-    loop {
-        let addr = SocketAddr::new(ip_addr, rand_port);
+    for port in range.0..range.1 {
+        let addr = SocketAddr::new(ip_addr, port);
 
-        match sock.bind(&SockAddr::from(addr)) {
-            Ok(_) => {
-                let sock = sock.into_udp_socket();
-                break Result::Ok((sock.local_addr().unwrap().port(), sock));
-            }
-            Err(err) => {
-                if tries_left == 0 {
-                    return Err(err);
-                }
-            }
+        if sock.bind(&SockAddr::from(addr)).is_ok() {
+            let sock = sock.into_udp_socket();
+            return Result::Ok((sock.local_addr().unwrap().port(), sock));
         }
-        rand_port += 1;
-        if rand_port == end {
-            rand_port = start;
-        }
-        tries_left -= 1;
     }
+
+    return Err(io::Error::new(
+        io::ErrorKind::Other,
+        format!("No available UDP ports in {:?}", range),
+    ));
 }
 
 // binds many sockets to the same port in a range
@@ -454,10 +434,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_bind_in_range_nil() {
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let _ = bind_in_range(ip_addr, (2000, 2000));
+        bind_in_range(ip_addr, (2000, 2000)).unwrap_err();
+        bind_in_range(ip_addr, (2000, 1999)).unwrap_err();
     }
 
     #[test]
