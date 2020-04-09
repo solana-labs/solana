@@ -94,6 +94,14 @@ pub struct ConfirmedBlock {
     pub rewards: Rewards,
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmedTransaction {
+    pub slot: Slot,
+    #[serde(flatten)]
+    pub transaction: TransactionWithStatusMeta,
+}
+
 /// A duplicate representation of a Transaction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
