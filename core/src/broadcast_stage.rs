@@ -642,8 +642,8 @@ pub mod test {
             );
 
             let blockstore = broadcast_service.blockstore;
-            let (entries, _, _) = blockstore
-                .get_slot_entries_with_shred_info(slot, 0)
+            let entries = blockstore
+                .get_slot_entries(slot, 0)
                 .expect("Expect entries to be present");
             assert_eq!(entries.len(), max_tick_height as usize);
 
