@@ -8,6 +8,12 @@ import {
 import { findGetParameter, findPathSegment } from "../utils";
 import { useCluster, ClusterStatus } from "../providers/cluster";
 import base58 from "bs58";
+import {
+  useAccountsDispatch,
+  fetchAccountInfo,
+  Dispatch as AccountsDispatch,
+  ActionType as AccountsActionType
+} from "./accounts";
 
 export enum Status {
   Checking,
@@ -181,6 +187,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, undefined, initState);
 
   const { status, url } = useCluster();
+  const accountsDispatch = useAccountsDispatch();
 
   // Check transaction statuses on startup and whenever cluster updates
   React.useEffect(() => {
@@ -188,7 +195,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 
     // Create a test transaction
     if (findGetParameter("test") !== null) {
-      createTestTransaction(dispatch, url);
+      createTestTransaction(dispatch, accountsDispatch, url);
     }
 
     Object.keys(state.transactions).forEach(signature => {
@@ -205,7 +212,11 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   );
 }
 
-async function createTestTransaction(dispatch: Dispatch, url: string) {
+async function createTestTransaction(
+  dispatch: Dispatch,
+  accountsDispatch: AccountsDispatch,
+  url: string
+) {
   const testKey = process.env.REACT_APP_TEST_KEY;
   let testAccount = new Account();
   if (testKey) {
@@ -221,6 +232,11 @@ async function createTestTransaction(dispatch: Dispatch, url: string) {
     );
     dispatch({ type: ActionType.InputSignature, signature });
     checkTransactionStatus(dispatch, signature, url);
+    accountsDispatch({
+      type: AccountsActionType.Input,
+      pubkey: testAccount.publicKey
+    });
+    fetchAccountInfo(accountsDispatch, testAccount.publicKey.toBase58(), url);
   } catch (error) {
     console.error("Failed to create test success transaction", error);
   }

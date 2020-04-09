@@ -23,77 +23,79 @@ function App() {
   const currentTab = useCurrentTab();
   return (
     <ClusterProvider>
-      <TransactionsProvider>
-        <BlocksProvider>
-          <ClusterModal
-            show={showClusterModal}
-            onClose={() => setShowClusterModal(false)}
-          />
-          <TransactionModal />
-          <div className="main-content">
-            <nav className="navbar navbar-expand-xl navbar-light">
-              <div className="container">
-                <div className="row align-items-end">
-                  <div className="col">
-                    <img src={Logo} width="250" alt="Solana Explorer" />
-                  </div>
-                </div>
-              </div>
-            </nav>
-
-            <div className="header">
-              <div className="container">
-                <div className="header-body">
-                  <div className="row align-items-center d-md-none">
-                    <div className="col-12">
-                      <ClusterStatusButton
-                        expand
-                        onClick={() => setShowClusterModal(true)}
-                      />
-                    </div>
-                  </div>
-                  <div className="row align-items-center">
+      <AccountsProvider>
+        <TransactionsProvider>
+          <BlocksProvider>
+            <ClusterModal
+              show={showClusterModal}
+              onClose={() => setShowClusterModal(false)}
+            />
+            <TransactionModal />
+            <div className="main-content">
+              <nav className="navbar navbar-expand-xl navbar-light">
+                <div className="container">
+                  <div className="row align-items-end">
                     <div className="col">
-                      <ul className="nav nav-tabs nav-overflow header-tabs">
-                        <li className="nav-item">
-                          <NavLink href="/transactions" tab="Transactions" />
-                        </li>
-                        <li className="nav-item">
-                          <NavLink href="/accounts" tab="Accounts" />
-                        </li>
-                      </ul>
+                      <img src={Logo} width="250" alt="Solana Explorer" />
                     </div>
-                    <div className="col-auto d-none d-md-block">
-                      <ClusterStatusButton
-                        onClick={() => setShowClusterModal(true)}
-                      />
+                  </div>
+                </div>
+              </nav>
+
+              <div className="header">
+                <div className="container">
+                  <div className="header-body">
+                    <div className="row align-items-center d-md-none">
+                      <div className="col-12">
+                        <ClusterStatusButton
+                          expand
+                          onClick={() => setShowClusterModal(true)}
+                        />
+                      </div>
+                    </div>
+                    <div className="row align-items-center">
+                      <div className="col">
+                        <ul className="nav nav-tabs nav-overflow header-tabs">
+                          <li className="nav-item">
+                            <NavLink href="/transactions" tab="Transactions" />
+                          </li>
+                          <li className="nav-item">
+                            <NavLink href="/accounts" tab="Accounts" />
+                          </li>
+                        </ul>
+                      </div>
+                      <div className="col-auto d-none d-md-block">
+                        <ClusterStatusButton
+                          onClick={() => setShowClusterModal(true)}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="container">
-              <div className="row">
-                <div className="col-12">
-                  {currentTab === "Transactions" ? <TransactionsCard /> : null}
+              <div className="container">
+                <div className="row">
+                  <div className="col-12">
+                    {currentTab === "Transactions" ? (
+                      <TransactionsCard />
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              <div className="row">
-                <div className="col-12">
-                  <AccountsProvider>
+                <div className="row">
+                  <div className="col-12">
                     {currentTab === "Accounts" ? <AccountsCard /> : null}
-                  </AccountsProvider>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <Overlay
-            show={showClusterModal}
-            onClick={() => setShowClusterModal(false)}
-          />
-        </BlocksProvider>
-      </TransactionsProvider>
+            <Overlay
+              show={showClusterModal}
+              onClick={() => setShowClusterModal(false)}
+            />
+          </BlocksProvider>
+        </TransactionsProvider>
+      </AccountsProvider>
     </ClusterProvider>
   );
 }
