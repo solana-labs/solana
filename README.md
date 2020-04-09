@@ -1,21 +1,19 @@
-[![Solana crate](https://img.shields.io/crates/v/solana-core.svg)](https://crates.io/crates/solana-core)
-[![Solana documentation](https://docs.rs/solana-core/badge.svg)](https://docs.rs/solana-core)
-[![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
-[![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
-
 <p align="center">
   <a href="https://solana.com">
     <img alt="Solana" src="https://i.imgur.com/OMnvVEz.png" width="250" />
   </a>
 </p>
 
-Developing
-===
+[![Solana crate](https://img.shields.io/crates/v/solana-core.svg)](https://crates.io/crates/solana-core)
+[![Solana documentation](https://docs.rs/solana-core/badge.svg)](https://docs.rs/solana-core)
+[![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
+[![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
-Building
----
+# Developing
 
-Install rustc, cargo and rustfmt:
+##Building
+
+1. **Install rustc, cargo and rustfmt.**
 
 ```bash
 $ curl https://sh.rustup.rs -sSf | sh
@@ -36,14 +34,14 @@ $ sudo apt-get update
 $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang
 ```
 
-Download the source code:
+2. **Download the source code.**
 
 ```bash
 $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
-Build
+3. **Build.**
 
 ```bash
 $ cargo build
@@ -54,8 +52,7 @@ Then to run a minimal local cluster
 $ ./run.sh
 ```
 
-Testing
----
+## Testing
 
 Run the test suite:
 
@@ -63,13 +60,11 @@ Run the test suite:
 $ cargo test
 ```
 
-Local Testnet
----
+**Local Testnet**
 
 Start your own testnet locally, instructions are in the online docs [Solana: Blockchain Rebuild for Scale: Getting Started](https://docs.solana.com/building-from-source).
 
-Remote Testnets
----
+**Remote Testnets**
 
 * `testnet` - public stable testnet accessible via devnet.solana.com. Runs 24/7
 
