@@ -9,11 +9,9 @@
 [![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
-# Developing
+# Building
 
-## Building
-
-**1. Install rustc, cargo and rustfmt.**
+## **1. Install rustc, cargo and rustfmt.**
 
 ```bash
 $ curl https://sh.rustup.rs -sSf | sh
@@ -34,25 +32,25 @@ $ sudo apt-get update
 $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang
 ```
 
-**2. Download the source code.**
+## **2. Download the source code.**
 
 ```bash
 $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
-**3. Build.**
+## **3. Build.**
 
 ```bash
 $ cargo build
 ```
 
-**4. Run a minimal local cluster.**
+## **4. Run a minimal local cluster.**
 ```bash
 $ ./run.sh
 ```
 
-## Testing
+# Testing
 
 **Run the test suite:**
 
@@ -60,41 +58,38 @@ $ ./run.sh
 $ cargo test
 ```
 
-**Local Testnet**
-
+### Starting a local testnet
 Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/building-from-source).
 
-**Remote Testnets**
-
+### Accessing the remote testnet
 * `testnet` - public stable testnet accessible via devnet.solana.com. Runs 24/7
 
 
-### Deploy process
-
+### Deploying
 They are deployed with the `ci/testnet-manager.sh` script through a list of [scheduled
 buildkite jobs](https://buildkite.com/solana-labs/testnet-management/settings/schedules).
 Each testnet can be manually manipulated from buildkite as well.
 
-## How do I reset the testnet?
+### How do I reset the testnet?
 Manually trigger the [testnet-management](https://buildkite.com/solana-labs/testnet-management) pipeline
 and when prompted select the desired testnet
 
-## How can I scale the tx generation rate?
+### Scaling the transaction generation rate
 
 Increase the TX rate by increasing the number of cores on the client machine which is running
 `bench-tps` or run multiple clients. Decrease by lowering cores or using the rayon env
 variable `RAYON_NUM_THREADS=<xx>`
 
-## How can I test a change on the testnet?
+### Testing a change on the testnet
 
 Currently, a merged PR is the only way to test a change on the testnet.  But you
 can run your own testnet using the scripts in the `net/` directory.
 
-## Adjusting the number of clients or validators on the testnet
+### Adjusting the number of clients or validators on the testnet
 Edit `ci/testnet-manager.sh`
 
 
-## Metrics Server Maintenance
+### Metrics Server Maintenance
 Sometimes the dashboard becomes unresponsive. This happens due to glitch in the metrics server.
 The current solution is to reset the metrics server. Use the following steps.
 
@@ -109,7 +104,8 @@ The current solution is to reset the metrics server. Use the following steps.
     5. Click ```Create Build```
     6. This will restart the metrics services, and the dashboards should be accessible afterwards.
 
-## Debugging Testnet
+# Debugging
+
 Testnet may exhibit different symptoms of failures. Primary statistics to check are
 1. Rise in Confirmation Time
 2. Nodes are not voting
@@ -135,8 +131,7 @@ Check the following if there are any signs of failure.
     6. The logs are in ```~solana\solana``` folder
 
 
-Benchmarking
----
+# Benchmarking
 
 First install the nightly build of rustc. `cargo bench` requires use of the
 unstable features only available in the nightly build.
@@ -151,13 +146,12 @@ Run the benchmarks:
 $ cargo +nightly bench
 ```
 
-Release Process
----
+# Release Process
+
 The release process for this project is described [here](RELEASE.md).
 
 
-Code coverage
----
+# Code coverage
 
 To generate code coverage statistics:
 
@@ -165,7 +159,6 @@ To generate code coverage statistics:
 $ scripts/coverage.sh
 $ open target/cov/lcov-local/index.html
 ```
-
 
 Why coverage? While most see coverage as a code quality metric, we see it primarily as a developer
 productivity metric. When a developer makes a change to the codebase, presumably it's a *solution* to
@@ -179,7 +172,6 @@ better way to solve the same problem, a Pull Request with your solution would mo
 welcome! Likewise, if rewriting a test can better communicate what code it's protecting, please
 send us that patch!
 
-Disclaimer
-===
+# Disclaimer
 
 All claims, content, designs, algorithms, estimates, roadmaps, specifications, and performance measurements described in this project are done with the author's best effort.  It is up to the reader to check and validate their accuracy and truthfulness.  Furthermore nothing in this project constitutes a solicitation for investment.
