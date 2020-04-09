@@ -55,7 +55,7 @@ interface Input {
 }
 
 type Action = Update | Input;
-type Dispatch = (action: Action) => void;
+export type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -175,7 +175,7 @@ export async function fetchAccountInfo(
   let details;
   let lamports;
   try {
-    const result = await new Connection(url).getAccountInfo(
+    const result = await new Connection(url, "recent").getAccountInfo(
       new PublicKey(address)
     );
     if (result === null) {
