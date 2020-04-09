@@ -410,6 +410,7 @@ pub enum CliCommand {
         to: Pubkey,
         from: SignerIndex,
         sign_only: bool,
+        no_wait: bool,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
@@ -908,6 +909,7 @@ pub fn parse_command(
             let lamports = lamports_of_sol(matches, "amount").unwrap();
             let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+            let no_wait = matches.is_present("no_wait");
             let blockhash_query = BlockhashQuery::new_from_matches(matches);
             let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
             let (nonce_authority, nonce_authority_pubkey) =
@@ -933,6 +935,7 @@ pub fn parse_command(
                     lamports,
                     to,
                     sign_only,
+                    no_wait,
                     blockhash_query,
                     nonce_account,
                     nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -1494,6 +1497,7 @@ fn process_transfer(
     to: &Pubkey,
     from: SignerIndex,
     sign_only: bool,
+    no_wait: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: SignerIndex,
@@ -1540,7 +1544,11 @@ fn process_transfer(
             &fee_calculator,
             &tx.message,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
+        let result = if no_wait {
+            rpc_client.send_transaction(&tx)
+        } else {
+            rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers)
+        };
         log_instruction_custom_error::<SystemError>(result)
     }
 }
@@ -2097,6 +2105,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             to,
             from,
             sign_only,
+            no_wait,
             ref blockhash_query,
             ref nonce_account,
             nonce_authority,
@@ -2108,6 +2117,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             to,
             *from,
             *sign_only,
+            *no_wait,
             blockhash_query,
             nonce_account.as_ref(),
             *nonce_authority,
@@ -2497,6 +2507,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("from")
                         .value_name("FROM_ADDRESS"),
                         "Source account of funds (if different from client local account). "),
+                )
+                .arg(
+                    Arg::with_name("no_wait")
+                        .long("no-wait")
+                        .takes_value(false)
+                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
                 )
                 .offline_args()
                 .arg(nonce_arg())
@@ -3538,6 +3554,33 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
+                    no_wait: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test Transfer no-wait
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "transfer",
+            "--no-wait",
+            &to_string,
+            "42",
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer, &default_keypair_file, None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    lamports: 42_000_000_000,
+                    to: to_pubkey,
+                    from: 0,
+                    sign_only: false,
+                    no_wait: true,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -3567,6 +3610,7 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: true,
+                    no_wait: false,
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -3601,6 +3645,7 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
+                    no_wait: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -3639,6 +3684,7 @@ mod tests {
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
+                    no_wait: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_address),
                         blockhash
