@@ -10,6 +10,13 @@ import type {Account} from '../account';
 import type {TransactionSignature} from '../transaction';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../timing';
 
+const MS_PER_SECOND = 1000;
+const MS_PER_SLOT =
+  (DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND) * MS_PER_SECOND;
+
+const NUM_SEND_RETRIES = 10;
+const NUM_STATUS_RETRIES = 10;
+
 /**
  * Sign, send and confirm a transaction with recent commitment level
  */
@@ -45,7 +52,7 @@ async function _sendAndConfirmTransaction(
 ): Promise<TransactionSignature> {
   const statusCommitment = commitment || connection.commitment || 'max';
 
-  let sendRetries = 10;
+  let sendRetries = NUM_SEND_RETRIES;
   let signature;
 
   for (;;) {
@@ -54,13 +61,17 @@ async function _sendAndConfirmTransaction(
 
     // Wait up to a couple slots for a confirmation
     let status = null;
-    let statusRetries = 6;
+    let statusRetries = NUM_STATUS_RETRIES;
     for (;;) {
       status = (await connection.getSignatureStatus(signature)).value;
       if (status) {
-        if (statusCommitment === 'max' && status.confirmations === null) {
-          break;
-        } else if (statusCommitment === 'recent') {
+        // Recieved a status, if not an error wait for confirmation
+        statusRetries = NUM_STATUS_RETRIES;
+        if (
+          status.err ||
+          status.confirmations === null ||
+          (statusCommitment === 'recent' && status.confirmations >= 1)
+        ) {
           break;
         }
       }
@@ -69,7 +80,7 @@ async function _sendAndConfirmTransaction(
         break;
       }
       // Sleep for approximately half a slot
-      await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+      await sleep(MS_PER_SLOT / 2);
     }
 
     if (status) {
