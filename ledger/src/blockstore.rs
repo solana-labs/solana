@@ -37,8 +37,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, EncodedTransaction, Rewards, RpcTransactionStatusMeta, TransactionEncoding,
-    TransactionStatusMeta, TransactionWithStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, EncodedTransaction, Rewards, RpcTransactionStatusMeta,
+    TransactionEncoding, TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
 use std::{
@@ -1719,6 +1719,42 @@ impl Blockstore {
     ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
         self.get_transaction_status_with_counter(signature)
             .map(|(status, _)| status)
+    }
+
+    /// Returns a complete transaction if it was processed in a root
+    pub fn get_confirmed_transaction(
+        &self,
+        signature: Signature,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Option<ConfirmedTransaction>> {
+        if let Some((slot, status)) = self.get_transaction_status(signature.clone())? {
+            let transaction = self.find_transaction_in_slot(slot, signature)?
+                .expect("Transaction to exist in slot entries if it exists in statuses and hasn't been cleaned up");
+            let encoding = encoding.unwrap_or(TransactionEncoding::Json);
+            let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
+            Ok(Some(ConfirmedTransaction {
+                slot,
+                transaction: TransactionWithStatusMeta {
+                    transaction: encoded_transaction,
+                    meta: Some(status.into()),
+                },
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn find_transaction_in_slot(
+        &self,
+        slot: Slot,
+        signature: Signature,
+    ) -> Result<Option<Transaction>> {
+        let slot_entries = self.get_slot_entries(slot, 0, None)?;
+        Ok(slot_entries
+            .iter()
+            .cloned()
+            .flat_map(|entry| entry.transactions)
+            .find(|transaction| transaction.signatures[0] == signature))
     }
 
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
@@ -5929,6 +5965,88 @@ pub mod tests {
             assert_eq!(counter, 2);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_get_confirmed_transaction() {
+        let slot = 2;
+        let entries = make_slot_entries_with_transactions(5);
+        let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore.set_roots(&[slot - 1, slot]).unwrap();
+
+        let expected_transactions: Vec<(Transaction, Option<RpcTransactionStatusMeta>)> = entries
+            .iter()
+            .cloned()
+            .filter(|entry| !entry.is_tick())
+            .flat_map(|entry| entry.transactions)
+            .map(|transaction| {
+                let mut pre_balances: Vec<u64> = vec![];
+                let mut post_balances: Vec<u64> = vec![];
+                for (i, _account_key) in transaction.message.account_keys.iter().enumerate() {
+                    pre_balances.push(i as u64 * 10);
+                    post_balances.push(i as u64 * 11);
+                }
+                let signature = transaction.signatures[0];
+                blockstore
+                    .transaction_status_cf
+                    .put(
+                        (0, signature, slot),
+                        &TransactionStatusMeta {
+                            status: Ok(()),
+                            fee: 42,
+                            pre_balances: pre_balances.clone(),
+                            post_balances: post_balances.clone(),
+                        },
+                    )
+                    .unwrap();
+                (
+                    transaction,
+                    Some(
+                        TransactionStatusMeta {
+                            status: Ok(()),
+                            fee: 42,
+                            pre_balances,
+                            post_balances,
+                        }
+                        .into(),
+                    ),
+                )
+            })
+            .collect();
+
+        for (transaction, status) in expected_transactions.clone() {
+            let signature = transaction.signatures[0];
+            let encoded_transaction =
+                EncodedTransaction::encode(transaction, TransactionEncoding::Json);
+            let expected_transaction = ConfirmedTransaction {
+                slot,
+                transaction: TransactionWithStatusMeta {
+                    transaction: encoded_transaction,
+                    meta: status,
+                },
+            };
+            assert_eq!(
+                blockstore
+                    .get_confirmed_transaction(signature, None)
+                    .unwrap(),
+                Some(expected_transaction)
+            );
+        }
+
+        blockstore.run_purge(0, 2).unwrap();
+        *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
+        for (transaction, _) in expected_transactions {
+            let signature = transaction.signatures[0];
+            assert_eq!(
+                blockstore
+                    .get_confirmed_transaction(signature, None)
+                    .unwrap(),
+                None,
+            );
+        }
     }
 
     #[test]
