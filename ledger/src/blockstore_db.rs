@@ -356,21 +356,23 @@ impl ColumnName for columns::TransactionStatus {
 }
 
 impl Column for columns::AddressSignatures {
-    type Index = (u64, Pubkey, Slot);
+    type Index = (u64, Pubkey, Slot, Signature);
 
-    fn key((index, pubkey, slot): (u64, Pubkey, Slot)) -> Vec<u8> {
-        let mut key = vec![0; 8 + 32 + 8]; // size_of u64 + size_of Pubkey + size_of Slot
+    fn key((index, pubkey, slot, signature): (u64, Pubkey, Slot, Signature)) -> Vec<u8> {
+        let mut key = vec![0; 8 + 32 + 8 + 64]; // size_of u64 + size_of Pubkey + size_of Slot + size_of Signature
         BigEndian::write_u64(&mut key[0..8], index);
         key[8..40].clone_from_slice(&pubkey.as_ref()[0..32]);
         BigEndian::write_u64(&mut key[40..48], slot);
+        key[48..112].clone_from_slice(&signature.as_ref()[0..64]);
         key
     }
 
-    fn index(key: &[u8]) -> (u64, Pubkey, Slot) {
+    fn index(key: &[u8]) -> (u64, Pubkey, Slot, Signature) {
         let index = BigEndian::read_u64(&key[0..8]);
         let pubkey = Pubkey::new(&key[8..40]);
         let slot = BigEndian::read_u64(&key[40..48]);
-        (index, pubkey, slot)
+        let signature = Signature::new(&key[48..112]);
+        (index, pubkey, slot, signature)
     }
 
     fn primary_index(index: Self::Index) -> u64 {
@@ -378,7 +380,7 @@ impl Column for columns::AddressSignatures {
     }
 
     fn as_index(index: u64) -> Self::Index {
-        (index, Pubkey::default(), 0)
+        (index, Pubkey::default(), 0, Signature::default())
     }
 }
 

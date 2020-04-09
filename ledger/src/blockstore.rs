@@ -1667,20 +1667,14 @@ impl Blockstore {
             .put((primary_index, signature, slot), status)?;
         for address in writable_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot),
-                &AddressSignatureMeta {
-                    signature,
-                    writeable: true,
-                },
+                (primary_index, *address, slot, signature),
+                &AddressSignatureMeta { writeable: true },
             )?;
         }
         for address in readonly_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot),
-                &AddressSignatureMeta {
-                    signature,
-                    writeable: false,
-                },
+                (primary_index, *address, slot, signature),
+                &AddressSignatureMeta { writeable: false },
             )?;
         }
         Ok(())
@@ -2892,7 +2886,7 @@ pub mod tests {
                 .iter::<cf::AddressSignatures>(IteratorMode::Start)
                 .unwrap()
                 .next()
-                .map(|((primary_index, _, slot), _)| {
+                .map(|((primary_index, _, slot, _), _)| {
                     slot >= min_slot || (primary_index == 2 && slot == 0)
                 })
                 .unwrap_or(true)
@@ -5520,7 +5514,7 @@ pub mod tests {
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5532,7 +5526,7 @@ pub mod tests {
             let first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5590,7 +5584,7 @@ pub mod tests {
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5602,7 +5596,7 @@ pub mod tests {
             let first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5615,7 +5609,7 @@ pub mod tests {
             let index1_first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (1, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(1),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5627,7 +5621,7 @@ pub mod tests {
             let index1_first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (1, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(1),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5658,7 +5652,7 @@ pub mod tests {
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5670,7 +5664,7 @@ pub mod tests {
             let first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5707,7 +5701,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5719,7 +5713,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    (0, Pubkey::default(), 0, Signature::default()),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5741,7 +5735,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5753,7 +5747,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5775,7 +5769,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5787,7 +5781,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5808,7 +5802,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5819,7 +5813,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
