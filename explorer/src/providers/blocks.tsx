@@ -1,13 +1,6 @@
 import React from "react";
 import bs58 from "bs58";
-import {
-  Connection,
-  Transaction,
-  TransferParams,
-  SystemProgram,
-  SystemInstruction,
-  CreateAccountParams
-} from "@solana/web3.js";
+import { Connection, Transaction } from "@solana/web3.js";
 import { useCluster, ClusterStatus } from "./cluster";
 import { useTransactions } from "./transactions";
 
@@ -17,13 +10,7 @@ export enum Status {
   Success
 }
 
-export interface TransactionDetails {
-  transaction: Transaction;
-  transfers: Array<TransferParams>;
-  creates: Array<CreateAccountParams>;
-}
-
-type Transactions = { [signature: string]: TransactionDetails };
+type Transactions = { [signature: string]: Transaction };
 export interface Block {
   status: Status;
   transactions?: Transactions;
@@ -154,38 +141,6 @@ export function BlocksProvider({ children }: BlocksProviderProps) {
   );
 }
 
-function decodeTransfers(tx: Transaction) {
-  const transferInstructions = tx.instructions
-    .filter(ix => ix.programId.equals(SystemProgram.programId))
-    .filter(ix => SystemInstruction.decodeInstructionType(ix) === "Transfer");
-
-  let transfers: TransferParams[] = [];
-  transferInstructions.forEach(ix => {
-    try {
-      transfers.push(SystemInstruction.decodeTransfer(ix));
-    } catch (err) {
-      console.error(ix, err);
-    }
-  });
-  return transfers;
-}
-
-function decodeCreates(tx: Transaction) {
-  const createInstructions = tx.instructions
-    .filter(ix => ix.programId.equals(SystemProgram.programId))
-    .filter(ix => SystemInstruction.decodeInstructionType(ix) === "Create");
-
-  let creates: CreateAccountParams[] = [];
-  createInstructions.forEach(ix => {
-    try {
-      creates.push(SystemInstruction.decodeCreateAccount(ix));
-    } catch (err) {
-      console.error(ix, err);
-    }
-  });
-  return creates;
-}
-
 async function fetchBlock(dispatch: Dispatch, slot: number, url: string) {
   dispatch({
     type: ActionType.Update,
@@ -201,11 +156,7 @@ async function fetchBlock(dispatch: Dispatch, slot: number, url: string) {
       const signature = transaction.signature;
       if (signature) {
         const sig = bs58.encode(signature);
-        transactions[sig] = {
-          transaction,
-          transfers: decodeTransfers(transaction),
-          creates: decodeCreates(transaction)
-        };
+        transactions[sig] = transaction;
       }
     });
     status = Status.Success;

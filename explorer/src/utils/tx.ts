@@ -4,48 +4,15 @@ import {
   StakeProgram,
   VOTE_PROGRAM_ID,
   BpfLoader,
+  TransferParams,
+  SystemInstruction,
+  CreateAccountParams,
+  TransactionInstruction,
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
   SYSVAR_REWARDS_PUBKEY,
   SYSVAR_STAKE_HISTORY_PUBKEY
 } from "@solana/web3.js";
-
-export function findGetParameter(parameterName: string): string | null {
-  let result = null,
-    tmp = [];
-  window.location.search
-    .substr(1)
-    .split("&")
-    .forEach(function(item) {
-      tmp = item.split("=");
-      if (tmp[0].toLowerCase() === parameterName.toLowerCase()) {
-        if (tmp.length === 2) {
-          result = decodeURIComponent(tmp[1]);
-        } else if (tmp.length === 1) {
-          result = "";
-        }
-      }
-    });
-  return result;
-}
-
-export function findPathSegment(pathName: string): string | null {
-  const segments = window.location.pathname.substr(1).split("/");
-  if (segments.length < 2) return null;
-
-  // remove all but last two segments
-  segments.splice(0, segments.length - 2);
-
-  if (segments[0] === pathName) {
-    return segments[1];
-  }
-
-  return null;
-}
-
-export function assertUnreachable(x: never): never {
-  throw new Error("Unreachable!");
-}
 
 const PROGRAM_IDS = {
   Budget1111111111111111111111111111111111111: "Budget",
@@ -85,4 +52,32 @@ export function displayAddress(pubkey: PublicKey): string {
     SYSVAR_IDS[address] ||
     address
   );
+}
+
+export function decodeTransfer(
+  ix: TransactionInstruction
+): TransferParams | null {
+  if (!ix.programId.equals(SystemProgram.programId)) return null;
+  if (SystemInstruction.decodeInstructionType(ix) !== "Transfer") return null;
+
+  try {
+    return SystemInstruction.decodeTransfer(ix);
+  } catch (err) {
+    console.error(ix, err);
+    return null;
+  }
+}
+
+export function decodeCreate(
+  ix: TransactionInstruction
+): CreateAccountParams | null {
+  if (!ix.programId.equals(SystemProgram.programId)) return null;
+  if (SystemInstruction.decodeInstructionType(ix) !== "Create") return null;
+
+  try {
+    return SystemInstruction.decodeCreateAccount(ix);
+  } catch (err) {
+    console.error(ix, err);
+    return null;
+  }
 }
