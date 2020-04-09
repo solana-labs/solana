@@ -273,13 +273,13 @@ fn delete_ifb(interface: &str) -> bool {
         ],
         "Failed to setup ingress qdisc",
         "tc qdisc delete dev <if> handle ffff: ingress",
-        false,
+        true,
     ) && run(
         "modprobe",
         &["ifb", "--remove"],
         "Failed to delete ifb module",
         "modprobe ifb --remove",
-        false,
+        true,
     )
 }
 
@@ -349,10 +349,6 @@ fn identify_my_partition(partitions: &[u8], index: u64, size: u64) -> usize {
     let mut my_partition = 0;
     let mut watermark = 0;
     for (i, p) in partitions.iter().enumerate() {
-        println!(
-            "i: {}, p: {}, watermark: {}, index: {}, size: {}",
-            i, p, watermark, index, size
-        );
         watermark += *p;
         if u64::from(watermark) >= index * 100 / size {
             my_partition = i;
@@ -407,7 +403,7 @@ fn shape_network_steps(
     );
     println!("My partition is {}", my_partition);
 
-    force_cleanup_network(interface);
+    cleanup_network(interface);
 
     // Mark egress packets with our partition id
     if !insert_iptables_rule(partition_id_to_tos(my_partition)) {
@@ -433,8 +429,8 @@ fn shape_network_steps(
 
     println!("Setting up interconnects");
     for i in &topology.interconnects {
-        println!("interconnects: {:#?}", i);
         if i.b as usize == my_partition {
+            println!("interconnects: {:#?}", i);
             let tos = partition_id_to_tos(i.a as usize);
             if tos == 0 {
                 println!("Incorrect value of TOS/Partition in config {}", i.a);
@@ -466,7 +462,7 @@ fn parse_interface(interfaces: &str) -> &str {
     panic!("No valid interfaces");
 }
 
-fn force_cleanup_network(interface: &str) {
+fn cleanup_network(interface: &str) {
     delete_all_filters("ifb0");
     delete_ifb(interface);
     flush_iptables_rule();
@@ -622,7 +618,7 @@ fn main() {
         ("cleanup", Some(args_matches)) => {
             let interfaces = value_t_or_exit!(args_matches, "iface", String);
             let iface = parse_interface(&interfaces);
-            force_cleanup_network(iface)
+            cleanup_network(iface)
         }
         ("configure", Some(args_matches)) => configure(args_matches),
         _ => {}
