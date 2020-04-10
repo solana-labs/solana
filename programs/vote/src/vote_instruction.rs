@@ -87,14 +87,14 @@ pub enum VoteInstruction {
     ///    1 - Destination account for the withdrawal
     Withdraw(u64),
 
-    /// Update the vote account's validator identity (node id)
+    /// Update the vote account's validator identity (node_pubkey)
     ///    requires authorized withdrawer and new validator identity signature
     ///
     /// Expects 2 Accounts:
     ///    0 - Vote account to be updated with the Pubkey for authorization
-    ///    1 - New validator identity (node id)
+    ///    1 - New validator identity (node_pubkey)
     ///
-    UpdateNode,
+    UpdateValidatorIdentity,
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -166,7 +166,7 @@ pub fn authorize(
     )
 }
 
-pub fn update_node(
+pub fn update_validator_identity(
     vote_pubkey: &Pubkey,
     authorized_withdrawer_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
@@ -177,7 +177,11 @@ pub fn update_node(
     ]
     .with_signer(authorized_withdrawer_pubkey);
 
-    Instruction::new(id(), &VoteInstruction::UpdateNode, account_metas)
+    Instruction::new(
+        id(),
+        &VoteInstruction::UpdateValidatorIdentity,
+        account_metas,
+    )
 }
 
 pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) -> Instruction {
@@ -238,7 +242,7 @@ pub fn process_instruction(
             &signers,
             &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
-        VoteInstruction::UpdateNode => vote_state::update_node(
+        VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
             me,
             next_keyed_account(keyed_accounts)?.unsigned_key(),
             &signers,
@@ -336,7 +340,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&update_node(
+            process_instruction(&update_validator_identity(
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
