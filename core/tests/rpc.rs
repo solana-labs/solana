@@ -11,6 +11,7 @@ use solana_client::{
     rpc_client::{get_rpc_request_str, RpcClient},
     rpc_response::{Response, RpcSignatureResult},
 };
+use solana_core::contact_info::ContactInfo;
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
 use solana_sdk::{
     commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey, signature::Signer,
@@ -26,6 +27,30 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
+macro_rules! json_req {
+    ($method: expr, $params: expr) => {{
+        json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": $method,
+           "params": $params,
+        })
+    }}
+}
+
+fn post_rpc(request: Value, data: &ContactInfo) -> Value {
+    let client = reqwest::blocking::Client::new();
+    let rpc_addr = data.rpc;
+    let rpc_string = get_rpc_request_str(rpc_addr, false);
+    let response = client
+        .post(&rpc_string)
+        .header(CONTENT_TYPE, "application/json")
+        .body(request.to_string())
+        .send()
+        .unwrap();
+    serde_json::from_str(&response.text().unwrap()).unwrap()
+}
+
 #[test]
 fn test_rpc_send_tx() {
     solana_logger::setup();
@@ -39,22 +64,9 @@ fn test_rpc_send_tx() {
     } = TestValidator::run();
     let bob_pubkey = Pubkey::new_rand();
 
-    let client = reqwest::blocking::Client::new();
-    let request = json!({
-       "jsonrpc": "2.0",
-       "id": 1,
-       "method": "getRecentBlockhash",
-       "params": json!([])
-    });
-    let rpc_addr = leader_data.rpc;
-    let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let response = client
-        .post(&rpc_string)
-        .header(CONTENT_TYPE, "application/json")
-        .body(request.to_string())
-        .send()
-        .unwrap();
-    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+    let req = json_req!("getRecentBlockhash", json!([]));
+    let json = post_rpc(req, &leader_data);
+
     let blockhash: Hash = json["result"]["value"]["blockhash"]
         .as_str()
         .unwrap()
@@ -65,43 +77,17 @@ fn test_rpc_send_tx() {
     let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
     let serialized_encoded_tx = bs58::encode(serialize(&tx).unwrap()).into_string();
 
-    let client = reqwest::blocking::Client::new();
-    let request = json!({
-       "jsonrpc": "2.0",
-       "id": 1,
-       "method": "sendTransaction",
-       "params": json!([serialized_encoded_tx])
-    });
-    let rpc_addr = leader_data.rpc;
-    let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let response = client
-        .post(&rpc_string)
-        .header(CONTENT_TYPE, "application/json")
-        .body(request.to_string())
-        .send()
-        .unwrap();
-    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+    let req = json_req!("sendTransaction", json!([serialized_encoded_tx]));
+    let json: Value = post_rpc(req, &leader_data);
+
     let signature = &json["result"];
 
     let mut confirmed_tx = false;
 
-    let client = reqwest::blocking::Client::new();
-    let request = json!({
-       "jsonrpc": "2.0",
-       "id": 1,
-       "method": "confirmTransaction",
-       "params": [signature],
-    });
+    let request = json_req!("confirmTransaction", [signature]);
 
     for _ in 0..solana_sdk::clock::DEFAULT_TICKS_PER_SLOT {
-        let response = client
-            .post(&rpc_string)
-            .header(CONTENT_TYPE, "application/json")
-            .body(request.to_string())
-            .send()
-            .unwrap();
-        let response_json_text = response.text().unwrap();
-        let json: Value = serde_json::from_str(&response_json_text).unwrap();
+        let json = post_rpc(request.clone(), &leader_data);
 
         if true == json["result"]["value"] {
             confirmed_tx = true;
@@ -130,62 +116,23 @@ fn test_rpc_invalid_requests() {
     let bob_pubkey = Pubkey::new_rand();
 
     // test invalid get_balance request
-    let client = reqwest::blocking::Client::new();
-    let request = json!({
-       "jsonrpc": "2.0",
-       "id": 1,
-       "method": "getBalance",
-       "params": json!(["invalid9999"])
-    });
-    let rpc_addr = leader_data.rpc;
-    let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let response = client
-        .post(&rpc_string)
-        .header(CONTENT_TYPE, "application/json")
-        .body(request.to_string())
-        .send()
-        .unwrap();
-    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+    let req = json_req!("getBalance", json!(["invalid9999"]));
+    let json = post_rpc(req, &leader_data);
+
     let the_error = json["error"]["message"].as_str().unwrap();
     assert_eq!(the_error, "Invalid request");
 
     // test invalid get_account_info request
-    let client = reqwest::blocking::Client::new();
-    let request = json!({
-       "jsonrpc": "2.0",
-       "id": 1,
-       "method": "getAccountInfo",
-       "params": json!(["invalid9999"])
-    });
-    let rpc_addr = leader_data.rpc;
-    let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let response = client
-        .post(&rpc_string)
-        .header(CONTENT_TYPE, "application/json")
-        .body(request.to_string())
-        .send()
-        .unwrap();
-    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+    let req = json_req!("getAccountInfo", json!(["invalid9999"]));
+    let json = post_rpc(req, &leader_data);
+
     let the_error = json["error"]["message"].as_str().unwrap();
     assert_eq!(the_error, "Invalid request");
 
     // test invalid get_account_info request
-    let client = reqwest::blocking::Client::new();
-    let request = json!({
-       "jsonrpc": "2.0",
-       "id": 1,
-       "method": "getAccountInfo",
-       "params": json!([bob_pubkey.to_string()])
-    });
-    let rpc_addr = leader_data.rpc;
-    let rpc_string = get_rpc_request_str(rpc_addr, false);
-    let response = client
-        .post(&rpc_string)
-        .header(CONTENT_TYPE, "application/json")
-        .body(request.to_string())
-        .send()
-        .unwrap();
-    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+    let req = json_req!("getAccountInfo", json!([bob_pubkey.to_string()]));
+    let json = post_rpc(req, &leader_data);
+
     let the_value = &json["result"]["value"];
     assert!(the_value.is_null());
 

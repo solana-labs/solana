@@ -1,3 +1,4 @@
+use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     nonce,
@@ -7,6 +8,7 @@ use solana_cli::{
     },
 };
 use solana_client::rpc_client::RpcClient;
+use solana_core::contact_info::ContactInfo;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
@@ -15,23 +17,11 @@ use solana_sdk::{
     signature::{keypair_from_seed, Keypair, Signer},
     system_program,
 };
-use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
-
-fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
-    (0..5).for_each(|tries| {
-        let balance = client.retry_get_balance(pubkey, 1).unwrap().unwrap();
-        if balance == expected_balance {
-            return;
-        }
-        if tries == 4 {
-            assert_eq!(balance, expected_balance);
-        }
-        sleep(Duration::from_millis(500));
-    });
-}
+use std::{fs::remove_dir_all, sync::mpsc::channel};
 
 #[test]
 fn test_nonce() {
+    solana_logger::setup();
     let TestValidator {
         server,
         leader_data,
@@ -39,14 +29,8 @@ fn test_nonce() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
-    let json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    full_battery_tests(&rpc_client, &faucet_addr, json_rpc_url, None, false);
+    full_battery_tests(leader_data, alice, None, false);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -61,20 +45,8 @@ fn test_nonce_with_seed() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
-    let json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-
-    full_battery_tests(
-        &rpc_client,
-        &faucet_addr,
-        json_rpc_url,
-        Some(String::from("seed")),
-        false,
-    );
+    full_battery_tests(leader_data, alice, Some(String::from("seed")), false);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -89,6 +61,19 @@ fn test_nonce_with_authority() {
         ledger_path,
         ..
     } = TestValidator::run();
+
+    full_battery_tests(leader_data, alice, None, true);
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
+}
+
+fn full_battery_tests(
+    leader_data: ContactInfo,
+    alice: Keypair,
+    seed: Option<String>,
+    use_nonce_authority: bool,
+) {
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -96,19 +81,6 @@ fn test_nonce_with_authority() {
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
     let json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
-    full_battery_tests(&rpc_client, &faucet_addr, json_rpc_url, None, true);
-
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
-}
-
-fn full_battery_tests(
-    rpc_client: &RpcClient,
-    faucet_addr: &std::net::SocketAddr,
-    json_rpc_url: String,
-    seed: Option<String>,
-    use_nonce_authority: bool,
-) {
     let mut config_payer = CliConfig::default();
     config_payer.json_rpc_url = json_rpc_url.clone();
     let payer = Keypair::new();

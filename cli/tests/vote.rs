@@ -1,4 +1,5 @@
 use solana_cli::cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig};
+use solana_cli::test_utils::check_balance;
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
@@ -8,20 +9,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions};
-use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
-
-fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
-    (0..5).for_each(|tries| {
-        let balance = client.retry_get_balance(pubkey, 1).unwrap().unwrap();
-        if balance == expected_balance {
-            return;
-        }
-        if tries == 4 {
-            assert_eq!(balance, expected_balance);
-        }
-        sleep(Duration::from_millis(500));
-    });
-}
+use std::{fs::remove_dir_all, sync::mpsc::channel};
 
 #[test]
 fn test_vote_authorize_and_withdraw() {

@@ -1,5 +1,6 @@
 use chrono::prelude::*;
 use serde_json::Value;
+use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
     nonce,
@@ -16,20 +17,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::{fs::remove_dir_all, sync::mpsc::channel, thread::sleep, time::Duration};
-
-fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
-    (0..5).for_each(|tries| {
-        let balance = client.retry_get_balance(pubkey, 1).unwrap().unwrap();
-        if balance == expected_balance {
-            return;
-        }
-        if tries == 4 {
-            assert_eq!(balance, expected_balance);
-        }
-        sleep(Duration::from_millis(500));
-    });
-}
+use std::{fs::remove_dir_all, sync::mpsc::channel};
 
 #[test]
 fn test_cli_timestamp_tx() {

@@ -456,8 +456,8 @@ pub fn process_create_nonce_account(
     lamports: u64,
 ) -> ProcessResult {
     let nonce_account_pubkey = config.signers[nonce_account].pubkey();
-    let nonce_account_address = if let Some(seed) = seed.clone() {
-        Pubkey::create_with_seed(&nonce_account_pubkey, &seed, &system_program::id())?
+    let nonce_account_address = if let Some(ref seed) = seed {
+        Pubkey::create_with_seed(&nonce_account_pubkey, seed, &system_program::id())?
     } else {
         nonce_account_pubkey
     };
