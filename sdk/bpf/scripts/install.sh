@@ -36,7 +36,12 @@ download() {
 # Install xargo
 (
   set -ex
-  cargo +"${rust_stable:-}" install xargo
+  # shellcheck disable=SC2154
+  if [[ -n $rust_stable ]]; then
+    cargo +"$rust_stable" install xargo
+  else
+    cargo install xargo
+  fi
   xargo --version > xargo.md 2>&1
 )
 # shellcheck disable=SC2181
