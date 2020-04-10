@@ -1667,20 +1667,14 @@ impl Blockstore {
             .put((primary_index, signature, slot), status)?;
         for address in writable_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot),
-                &AddressSignatureMeta {
-                    signature,
-                    writeable: true,
-                },
+                (primary_index, *address, slot, signature),
+                &AddressSignatureMeta { writeable: true },
             )?;
         }
         for address in readonly_keys {
             self.address_signatures_cf.put(
-                (primary_index, *address, slot),
-                &AddressSignatureMeta {
-                    signature,
-                    writeable: false,
-                },
+                (primary_index, *address, slot, signature),
+                &AddressSignatureMeta { writeable: false },
             )?;
         }
         Ok(())
@@ -1755,6 +1749,49 @@ impl Blockstore {
             .cloned()
             .flat_map(|entry| entry.transactions)
             .find(|transaction| transaction.signatures[0] == signature))
+    }
+
+    // Returns all cached signatures for an address, ordered by slot that the transaction was
+    // processed in
+    fn find_address_signatures(
+        &self,
+        pubkey: Pubkey,
+        start_slot: Slot,
+        end_slot: Slot,
+    ) -> Result<Vec<(Slot, Signature)>> {
+        let mut signatures: Vec<(Slot, Signature)> = vec![];
+        for transaction_status_cf_primary_index in 0..=1 {
+            let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
+                (
+                    transaction_status_cf_primary_index,
+                    pubkey,
+                    start_slot,
+                    Signature::default(),
+                ),
+                IteratorDirection::Forward,
+            ))?;
+            for ((i, address, slot, signature), _) in index_iterator {
+                if i != transaction_status_cf_primary_index || slot > end_slot || address != pubkey
+                {
+                    break;
+                }
+                if self.is_root(slot) {
+                    signatures.push((slot, signature));
+                }
+            }
+        }
+        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        Ok(signatures)
+    }
+
+    pub fn get_confirmed_signatures_for_address(
+        &self,
+        pubkey: Pubkey,
+        start_slot: Slot,
+        end_slot: Slot,
+    ) -> Result<Vec<Signature>> {
+        self.find_address_signatures(pubkey, start_slot, end_slot)
+            .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
 
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
@@ -2888,7 +2925,7 @@ pub mod tests {
                 .iter::<cf::AddressSignatures>(IteratorMode::Start)
                 .unwrap()
                 .next()
-                .map(|((primary_index, _, slot), _)| {
+                .map(|((primary_index, _, slot, _), _)| {
                     slot >= min_slot || (primary_index == 2 && slot == 0)
                 })
                 .unwrap_or(true)
@@ -5513,7 +5550,7 @@ pub mod tests {
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5525,7 +5562,7 @@ pub mod tests {
             let first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5583,7 +5620,7 @@ pub mod tests {
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5595,7 +5632,7 @@ pub mod tests {
             let first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5608,7 +5645,7 @@ pub mod tests {
             let index1_first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (1, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(1),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5620,7 +5657,7 @@ pub mod tests {
             let index1_first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (1, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(1),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5651,7 +5688,7 @@ pub mod tests {
             let first_status_entry = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5663,7 +5700,7 @@ pub mod tests {
             let first_address_entry = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap()
@@ -5700,7 +5737,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5712,7 +5749,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    (0, Pubkey::default(), 0, Signature::default()),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5734,7 +5771,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5746,7 +5783,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5768,7 +5805,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5780,7 +5817,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5801,7 +5838,7 @@ pub mod tests {
             let mut status_entry_iterator = blockstore
                 .db
                 .iter::<cf::TransactionStatus>(IteratorMode::From(
-                    (0, Signature::default(), 0),
+                    cf::TransactionStatus::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -5812,7 +5849,7 @@ pub mod tests {
             let mut address_transactions_iterator = blockstore
                 .db
                 .iter::<cf::AddressSignatures>(IteratorMode::From(
-                    (0, Pubkey::default(), 0),
+                    cf::AddressSignatures::as_index(0),
                     IteratorDirection::Forward,
                 ))
                 .unwrap();
@@ -6040,6 +6077,144 @@ pub mod tests {
                 None,
             );
         }
+    }
+
+    #[test]
+    fn test_get_confirmed_signatures_for_address() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+
+            let address0 = Pubkey::new_rand();
+            let address1 = Pubkey::new_rand();
+
+            let slot0 = 10;
+            for x in 1..5 {
+                let signature = Signature::new(&[x; 64]);
+                blockstore
+                    .write_transaction_status(
+                        slot0,
+                        signature,
+                        vec![&address0],
+                        vec![&address1],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            // Purge to freeze index 0
+            blockstore.run_purge(0, 1).unwrap();
+            let slot1 = 20;
+            for x in 5..9 {
+                let signature = Signature::new(&[x; 64]);
+                blockstore
+                    .write_transaction_status(
+                        slot1,
+                        signature,
+                        vec![&address0],
+                        vec![&address1],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            blockstore.set_roots(&[slot0, slot1]).unwrap();
+
+            let all0 = blockstore
+                .get_confirmed_signatures_for_address(address0, 0, 50)
+                .unwrap();
+            assert_eq!(all0.len(), 8);
+            for x in 1..9 {
+                let expected_signature = Signature::new(&[x; 64]);
+                assert_eq!(all0[x as usize - 1], expected_signature);
+            }
+            assert_eq!(
+                blockstore
+                    .get_confirmed_signatures_for_address(address0, 20, 50)
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert_eq!(
+                blockstore
+                    .get_confirmed_signatures_for_address(address0, 0, 10)
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert!(blockstore
+                .get_confirmed_signatures_for_address(address0, 1, 5)
+                .unwrap()
+                .is_empty());
+            assert_eq!(
+                blockstore
+                    .get_confirmed_signatures_for_address(address0, 1, 15)
+                    .unwrap()
+                    .len(),
+                4
+            );
+
+            let all1 = blockstore
+                .get_confirmed_signatures_for_address(address1, 0, 50)
+                .unwrap();
+            assert_eq!(all1.len(), 8);
+            for x in 1..9 {
+                let expected_signature = Signature::new(&[x; 64]);
+                assert_eq!(all1[x as usize - 1], expected_signature);
+            }
+
+            // Purge index 0
+            blockstore.run_purge(0, 10).unwrap();
+            assert_eq!(
+                blockstore
+                    .get_confirmed_signatures_for_address(address0, 0, 50)
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert_eq!(
+                blockstore
+                    .get_confirmed_signatures_for_address(address0, 20, 50)
+                    .unwrap()
+                    .len(),
+                4
+            );
+            assert!(blockstore
+                .get_confirmed_signatures_for_address(address0, 0, 10)
+                .unwrap()
+                .is_empty());
+            assert!(blockstore
+                .get_confirmed_signatures_for_address(address0, 1, 5)
+                .unwrap()
+                .is_empty());
+            assert_eq!(
+                blockstore
+                    .get_confirmed_signatures_for_address(address0, 1, 25)
+                    .unwrap()
+                    .len(),
+                4
+            );
+
+            // Test sort, regardless of entry order or signature value
+            for slot in (21..25).rev() {
+                let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+                let signature = Signature::new(&random_bytes);
+                blockstore
+                    .write_transaction_status(
+                        slot,
+                        signature,
+                        vec![&address0],
+                        vec![&address1],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            blockstore.set_roots(&[21, 22, 23, 24]).unwrap();
+            let mut past_slot = 0;
+            for (slot, _) in blockstore.find_address_signatures(address0, 1, 25).unwrap() {
+                assert!(slot >= past_slot);
+                past_slot = slot;
+            }
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
