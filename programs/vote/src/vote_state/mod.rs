@@ -578,7 +578,7 @@ pub fn authorize<S: std::hash::BuildHasher>(
 }
 
 /// Update the node_pubkey, requires signature of the authorized voter
-pub fn update_node<S: std::hash::BuildHasher>(
+pub fn update_validator_identity<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     node_pubkey: &Pubkey,
     signers: &HashSet<Pubkey, S>,
@@ -949,7 +949,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vote_update_node_id() {
+    fn test_vote_update_validator_identity() {
         let (vote_pubkey, _authorized_voter, authorized_withdrawer, vote_account) =
             create_test_account_with_authorized();
 
@@ -963,7 +963,7 @@ mod tests {
             KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
         ];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
+        let res = update_validator_identity(&keyed_accounts[0], &node_pubkey, &signers);
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         let keyed_accounts = &[
@@ -976,7 +976,7 @@ mod tests {
             ),
         ];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
+        let res = update_validator_identity(&keyed_accounts[0], &node_pubkey, &signers);
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
         let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
             .unwrap()
@@ -989,7 +989,7 @@ mod tests {
             KeyedAccount::new(&authorized_withdrawer, true, &authorized_withdrawer_account),
         ];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let res = update_node(&keyed_accounts[0], &node_pubkey, &signers);
+        let res = update_validator_identity(&keyed_accounts[0], &node_pubkey, &signers);
         assert_eq!(res, Ok(()));
         let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&*vote_account.borrow())
             .unwrap()
