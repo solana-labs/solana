@@ -21,6 +21,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 * [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
+* [getConfirmedSignaturesForAddress](jsonrpc-api.md#getconfirmedsignaturesforaddress)
 * [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
 * [getEpochInfo](jsonrpc-api.md#getepochinfo)
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
@@ -344,6 +345,33 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 // Result
 {"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
+```
+
+### getConfirmedSignaturesForAddress
+
+Returns a list of all the confirmed signatures for transactions involving an address, within a specified Slot range. Max range allowed is 10_000 Slots.
+
+#### Parameters:
+
+* `<string>` - account address as base-58 encoded string
+* `<u64>` - start slot, inclusive
+* `<u64>` - end slot, inclusive
+
+#### Results:
+
+The result field will be an array of:
+* `<string>` - transaction signature as base-58 encoded string
+
+The signatures will be ordered based on the Slot in which they were confirmed in, from lowest to highest Slot
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 100]}' localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr","4LQ14a7BYY27578Uj8LPCaVhSdJGLn9DJqnUJHpy95FMqdKf9acAhUhecPQNjNUy6VoNFUbvwYkPociFSf87cWbG"]},"id":1}
 ```
 
 ### getConfirmedTransaction
