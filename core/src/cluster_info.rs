@@ -1240,7 +1240,7 @@ impl ClusterInfo {
                     Protocol::PullRequest(filter, caller) => {
                         let start = allocated.get();
                         if !caller.verify() {
-                            inc_new_counter_error!(
+                            inc_new_counter_info!(
                                 "cluster_info-gossip_pull_request_verify_fail",
                                 1
                             );
@@ -1266,7 +1266,7 @@ impl ClusterInfo {
                         data.retain(|v| {
                             let ret = v.verify();
                             if !ret {
-                                inc_new_counter_error!(
+                                inc_new_counter_info!(
                                     "cluster_info-gossip_pull_response_verify_fail",
                                     1
                                 );
@@ -1284,7 +1284,7 @@ impl ClusterInfo {
                         data.retain(|v| {
                             let ret = v.verify();
                             if !ret {
-                                inc_new_counter_error!(
+                                inc_new_counter_info!(
                                     "cluster_info-gossip_push_msg_verify_fail",
                                     1
                                 );
@@ -1864,9 +1864,9 @@ impl Node {
 }
 
 fn report_time_spent(label: &str, time: &Duration, extra: &str) {
-    let count = duration_as_ms(time);
-    if count > 5 {
-        info!("{} took: {} ms {}", label, count, extra);
+    let time_ms = duration_as_ms(time);
+    if time_ms > 50 {
+        info!("{} took: {} ms {}", label, time_ms, extra);
     }
 }
 
