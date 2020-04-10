@@ -321,7 +321,7 @@ impl Tower {
     }
     pub fn check_vote_stake_threshold(
         &self,
-        slot: u64,
+        slot: Slot,
         stake_lockouts: &HashMap<u64, StakeLockout>,
         total_staked: u64,
     ) -> bool {
@@ -332,11 +332,8 @@ impl Tower {
             if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
                 let lockout = fork_stake.stake as f64 / total_staked as f64;
                 trace!(
-                    "fork_stake slot: {} lockout: {} fork_stake: {} total_stake: {}",
-                    slot,
-                    lockout,
-                    fork_stake.stake,
-                    total_staked
+                    "fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: {}",
+                    slot, vote.slot, lockout, fork_stake.stake, total_staked
                 );
                 if vote.confirmation_count as usize > self.threshold_depth {
                     for old_vote in &self.lockouts.votes {
@@ -499,107 +496,96 @@ pub mod test {
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        transaction::Transaction,
     };
     use solana_vote_program::{
-        vote_instruction,
         vote_state::{Vote, VoteStateVersions},
+        vote_transaction,
     };
-    use std::collections::{HashMap, VecDeque};
+    use std::collections::HashMap;
     use std::sync::RwLock;
     use std::{thread::sleep, time::Duration};
-    use trees::{tr, Node, Tree};
+    use trees::{tr, Tree, TreeWalk};
 
-    pub(crate) struct VoteSimulator<'a> {
-        searchable_nodes: HashMap<u64, &'a Node<u64>>,
+    pub(crate) struct VoteSimulator {
+        pub validator_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs>,
+        pub node_pubkeys: Vec<Pubkey>,
+        pub vote_pubkeys: Vec<Pubkey>,
+        pub bank_forks: RwLock<BankForks>,
+        pub progress: ProgressMap,
     }
 
-    impl<'a> VoteSimulator<'a> {
-        pub(crate) fn new(forks: &'a Tree<u64>) -> Self {
-            let mut searchable_nodes = HashMap::new();
-            let root = forks.root();
-            searchable_nodes.insert(root.data, root);
-            Self { searchable_nodes }
+    impl VoteSimulator {
+        pub(crate) fn new(num_keypairs: usize) -> Self {
+            let (validator_keypairs, node_pubkeys, vote_pubkeys, bank_forks, progress) =
+                Self::init_state(num_keypairs);
+            Self {
+                validator_keypairs,
+                node_pubkeys,
+                vote_pubkeys,
+                bank_forks: RwLock::new(bank_forks),
+                progress,
+            }
+        }
+        pub(crate) fn fill_bank_forks(
+            &mut self,
+            forks: Tree<u64>,
+            cluster_votes: &HashMap<Pubkey, Vec<u64>>,
+        ) {
+            let root = forks.root().data;
+            assert!(self.bank_forks.read().unwrap().get(root).is_some());
+
+            let mut walk = TreeWalk::from(forks);
+            loop {
+                if let Some(visit) = walk.get() {
+                    let slot = visit.node().data;
+                    self.progress
+                        .entry(slot)
+                        .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
+                    if self.bank_forks.read().unwrap().get(slot).is_some() {
+                        walk.forward();
+                        continue;
+                    }
+                    let parent = walk.get_parent().unwrap().data;
+                    let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap().clone();
+                    let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
+                    for (pubkey, vote) in cluster_votes.iter() {
+                        if vote.contains(&parent) {
+                            let keypairs = self.validator_keypairs.get(pubkey).unwrap();
+                            let last_blockhash = parent_bank.last_blockhash();
+                            let vote_tx = vote_transaction::new_vote_transaction(
+                                // Must vote > root to be processed
+                                vec![parent],
+                                parent_bank.hash(),
+                                last_blockhash,
+                                &keypairs.node_keypair,
+                                &keypairs.vote_keypair,
+                                &keypairs.vote_keypair,
+                            );
+                            info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
+                            new_bank.process_transaction(&vote_tx).unwrap();
+                        }
+                    }
+                    new_bank.freeze();
+                    self.bank_forks.write().unwrap().insert(new_bank);
+                    walk.forward();
+                } else {
+                    break;
+                }
+            }
         }
 
         pub(crate) fn simulate_vote(
             &mut self,
             vote_slot: Slot,
-            bank_forks: &RwLock<BankForks>,
-            cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
-            validator_keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
-            my_keypairs: &ValidatorVoteKeypairs,
-            progress: &mut ProgressMap,
+            my_pubkey: &Pubkey,
             tower: &mut Tower,
         ) -> Vec<HeaviestForkFailures> {
-            let node = self
-                .find_node_and_update_simulation(vote_slot)
-                .expect("Vote to simulate must be for a slot in the tree");
-
-            let mut missing_nodes = VecDeque::new();
-            let mut current = node;
-            loop {
-                let current_slot = current.data;
-                if bank_forks.read().unwrap().get(current_slot).is_some()
-                    || tower.root().map(|r| current_slot < r).unwrap_or(false)
-                {
-                    break;
-                } else {
-                    missing_nodes.push_front(current);
-                }
-
-                if let Some(parent) = current.parent() {
-                    current = parent;
-                } else {
-                    break;
-                }
-            }
-
-            // Create any missing banks along the path
-            for missing_node in missing_nodes {
-                let missing_slot = missing_node.data;
-                let parent = missing_node.parent().unwrap().data;
-                let parent_bank = bank_forks
-                    .read()
-                    .unwrap()
-                    .get(parent)
-                    .expect("parent bank must exist")
-                    .clone();
-                info!("parent of {} is {}", missing_slot, parent_bank.slot(),);
-                progress.entry(missing_slot).or_insert_with(|| {
-                    ForkProgress::new(parent_bank.last_blockhash(), None, None, 0, 0)
-                });
-
-                // Create the missing bank
-                let new_bank =
-                    Bank::new_from_parent(&parent_bank, &Pubkey::default(), missing_slot);
-
-                // Simulate ingesting the cluster's votes for the parent into this bank
-                for (pubkey, vote) in cluster_votes.iter() {
-                    if vote.contains(&parent_bank.slot()) {
-                        let keypairs = validator_keypairs.get(pubkey).unwrap();
-                        let node_pubkey = keypairs.node_keypair.pubkey();
-                        let vote_pubkey = keypairs.vote_keypair.pubkey();
-                        let last_blockhash = parent_bank.last_blockhash();
-                        let votes = Vote::new(vec![parent_bank.slot()], parent_bank.hash());
-                        info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
-                        let vote_ix = vote_instruction::vote(&vote_pubkey, &vote_pubkey, votes);
-                        let mut vote_tx =
-                            Transaction::new_with_payer(vec![vote_ix], Some(&node_pubkey));
-                        vote_tx.partial_sign(&[&keypairs.node_keypair], last_blockhash);
-                        vote_tx.partial_sign(&[&keypairs.vote_keypair], last_blockhash);
-                        new_bank.process_transaction(&vote_tx).unwrap();
-                    }
-                }
-                new_bank.freeze();
-                bank_forks.write().unwrap().insert(new_bank);
-            }
-
-            // Now try to simulate the vote
-            let my_pubkey = my_keypairs.node_keypair.pubkey();
+            // Try to simulate the vote
+            let my_keypairs = self.validator_keypairs.get(&my_pubkey).unwrap();
             let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
-            let ancestors = bank_forks.read().unwrap().ancestors();
-            let mut frozen_banks: Vec<_> = bank_forks
+            let ancestors = self.bank_forks.read().unwrap().ancestors();
+            let mut frozen_banks: Vec<_> = self
+                .bank_forks
                 .read()
                 .unwrap()
                 .frozen_banks()
@@ -612,90 +598,118 @@ pub mod test {
                 &ancestors,
                 &mut frozen_banks,
                 tower,
-                progress,
+                &mut self.progress,
                 &VoteTracker::default(),
                 &ClusterSlots::default(),
-                bank_forks,
+                &self.bank_forks,
                 &mut HashSet::new(),
             );
 
-            let bank = bank_forks
+            let vote_bank = self
+                .bank_forks
                 .read()
                 .unwrap()
                 .get(vote_slot)
                 .expect("Bank must have been created before vote simulation")
                 .clone();
+
+            // Try to vote on the given slot
+            let descendants = self.bank_forks.read().unwrap().descendants();
+            let (_, _, failure_reasons) = ReplayStage::select_vote_and_reset_forks(
+                &Some(vote_bank.clone()),
+                &None,
+                &ancestors,
+                &descendants,
+                &self.progress,
+                &tower,
+            );
+
             // Make sure this slot isn't locked out or failing threshold
-            let fork_progress = progress
-                .get(&vote_slot)
-                .expect("Slot for vote must exist in progress map");
-            info!("Checking vote: {}", vote_slot);
-            info!("lockouts: {:?}", fork_progress.fork_stats.stake_lockouts);
-            let mut failures = vec![];
-            if fork_progress.fork_stats.is_locked_out {
-                failures.push(HeaviestForkFailures::LockedOut(vote_slot));
+            info!("Checking vote: {}", vote_bank.slot());
+            if !failure_reasons.is_empty() {
+                return failure_reasons;
             }
-            if !fork_progress.fork_stats.vote_threshold {
-                failures.push(HeaviestForkFailures::FailedThreshold(vote_slot));
-            }
-            if !failures.is_empty() {
-                return failures;
-            }
-            let vote = tower.new_vote_from_bank(&bank, &my_vote_pubkey).0;
+            let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
                 ReplayStage::handle_new_root(
                     new_root,
-                    bank_forks,
-                    progress,
+                    &self.bank_forks,
+                    &mut self.progress,
                     &None,
                     &mut HashSet::new(),
                 );
             }
 
-            // Mark the vote for this bank under this node's pubkey so it will be
-            // integrated into any future child banks
-            cluster_votes.entry(my_pubkey).or_default().push(vote_slot);
             vec![]
         }
 
-        // Find a node representing the given slot
-        fn find_node_and_update_simulation(&mut self, slot: u64) -> Option<&'a Node<u64>> {
-            let mut successful_search_node: Option<&'a Node<u64>> = None;
-            let mut found_node = None;
-            for search_node in self.searchable_nodes.values() {
-                if let Some((target, new_searchable_nodes)) = Self::find_node(search_node, slot) {
-                    successful_search_node = Some(search_node);
-                    found_node = Some(target);
-                    for node in new_searchable_nodes {
-                        self.searchable_nodes.insert(node.data, node);
-                    }
-                    break;
+        fn can_progress_on_fork(
+            &mut self,
+            my_pubkey: &Pubkey,
+            tower: &mut Tower,
+            start_slot: u64,
+            num_slots: u64,
+            cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
+        ) -> bool {
+            // Check that within some reasonable time, validator can make a new
+            // root on this fork
+            let old_root = tower.root();
+
+            for i in 1..num_slots {
+                // The parent of the tip of the fork
+                let mut fork_tip_parent = tr(start_slot + i - 1);
+                // The tip of the fork
+                fork_tip_parent.push_front(tr(start_slot + i));
+                self.fill_bank_forks(fork_tip_parent, cluster_votes);
+                if self
+                    .simulate_vote(i + start_slot, &my_pubkey, tower)
+                    .is_empty()
+                {
+                    cluster_votes
+                        .entry(*my_pubkey)
+                        .or_default()
+                        .push(start_slot + i);
+                }
+                if old_root != tower.root() {
+                    return true;
                 }
             }
-            successful_search_node.map(|node| {
-                self.searchable_nodes.remove(&node.data);
-            });
-            found_node
+
+            false
         }
 
-        fn find_node(
-            node: &'a Node<u64>,
-            slot: u64,
-        ) -> Option<(&'a Node<u64>, Vec<&'a Node<u64>>)> {
-            if node.data == slot {
-                Some((node, node.iter().collect()))
-            } else {
-                let mut search_result: Option<(&'a Node<u64>, Vec<&'a Node<u64>>)> = None;
-                for child in node.iter() {
-                    if let Some((_, ref mut new_searchable_nodes)) = search_result {
-                        new_searchable_nodes.push(child);
-                        continue;
-                    }
-                    search_result = Self::find_node(child, slot);
-                }
+        fn init_state(
+            num_keypairs: usize,
+        ) -> (
+            HashMap<Pubkey, ValidatorVoteKeypairs>,
+            Vec<Pubkey>,
+            Vec<Pubkey>,
+            BankForks,
+            ProgressMap,
+        ) {
+            let keypairs: HashMap<_, _> = std::iter::repeat_with(|| {
+                let node_keypair = Keypair::new();
+                let vote_keypair = Keypair::new();
+                let stake_keypair = Keypair::new();
+                let node_pubkey = node_keypair.pubkey();
+                (
+                    node_pubkey,
+                    ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
+                )
+            })
+            .take(num_keypairs)
+            .collect();
+            let node_pubkeys: Vec<_> = keypairs
+                .values()
+                .map(|keys| keys.node_keypair.pubkey())
+                .collect();
+            let vote_pubkeys: Vec<_> = keypairs
+                .values()
+                .map(|keys| keys.vote_keypair.pubkey())
+                .collect();
 
-                search_result
-            }
+            let (bank_forks, progress) = initialize_state(&keypairs, 10_000);
+            (keypairs, node_pubkeys, vote_pubkeys, bank_forks, progress)
         }
     }
 
@@ -746,84 +760,26 @@ pub mod test {
         stakes
     }
 
-    fn can_progress_on_fork(
-        my_pubkey: &Pubkey,
-        tower: &mut Tower,
-        start_slot: u64,
-        num_slots: u64,
-        bank_forks: &RwLock<BankForks>,
-        cluster_votes: &mut HashMap<Pubkey, Vec<u64>>,
-        keypairs: &HashMap<Pubkey, ValidatorVoteKeypairs>,
-        progress: &mut ProgressMap,
-    ) -> bool {
-        // Check that within some reasonable time, validator can make a new
-        // root on this fork
-        let old_root = tower.root();
-        let mut main_fork = tr(start_slot);
-        let mut tip = main_fork.root_mut();
-
-        for i in 1..num_slots {
-            tip.push_front(tr(start_slot + i));
-            tip = tip.first_mut().unwrap();
-        }
-        let mut voting_simulator = VoteSimulator::new(&main_fork);
-        for i in 1..num_slots {
-            voting_simulator.simulate_vote(
-                i + start_slot,
-                &bank_forks,
-                cluster_votes,
-                &keypairs,
-                keypairs.get(&my_pubkey).unwrap(),
-                progress,
-                tower,
-            );
-            if old_root != tower.root() {
-                return true;
-            }
-        }
-
-        false
-    }
-
     #[test]
     fn test_simple_votes() {
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let stake_keypair = Keypair::new();
-        let node_pubkey = node_keypair.pubkey();
-
-        let mut keypairs = HashMap::new();
-        keypairs.insert(
-            node_pubkey,
-            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-        );
-
-        // Initialize BankForks
-        let (bank_forks, mut progress) = initialize_state(&keypairs, 10_000);
-        let bank_forks = RwLock::new(bank_forks);
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(1);
+        let node_pubkey = vote_simulator.node_pubkeys[0];
+        let mut tower = Tower::new_with_key(&node_pubkey);
 
         // Create the tree of banks
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / tr(5)))));
 
         // Set the voting behavior
-        let mut voting_simulator = VoteSimulator::new(&forks);
+        let mut cluster_votes = HashMap::new();
         let votes = vec![0, 1, 2, 3, 4, 5];
+        cluster_votes.insert(node_pubkey, votes.clone());
+        vote_simulator.fill_bank_forks(forks, &cluster_votes);
 
         // Simulate the votes
-        let mut tower = Tower::new_with_key(&node_pubkey);
-
-        let mut cluster_votes = HashMap::new();
         for vote in votes {
-            assert!(voting_simulator
-                .simulate_vote(
-                    vote,
-                    &bank_forks,
-                    &mut cluster_votes,
-                    &keypairs,
-                    keypairs.get(&node_pubkey).unwrap(),
-                    &mut progress,
-                    &mut tower,
-                )
+            assert!(vote_simulator
+                .simulate_vote(vote, &node_pubkey, &mut tower,)
                 .is_empty());
         }
 
@@ -835,21 +791,14 @@ pub mod test {
 
     #[test]
     fn test_double_partition() {
-        solana_logger::setup();
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let stake_keypair = Keypair::new();
-        let node_pubkey = node_keypair.pubkey();
-        let vote_pubkey = vote_keypair.pubkey();
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(2);
+        let node_pubkey = vote_simulator.node_pubkeys[0];
+        let vote_pubkey = vote_simulator.vote_pubkeys[0];
+        let mut tower = Tower::new_with_key(&node_pubkey);
 
-        let mut keypairs = HashMap::new();
-        info!("my_pubkey: {}", node_pubkey);
-        keypairs.insert(
-            node_pubkey,
-            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-        );
-
-        // Create the tree of banks in a BankForks object
+        let num_slots_to_try = 200;
+        // Create the tree of banks
         let forks = tr(0)
             / (tr(1)
                 / (tr(2)
@@ -866,56 +815,37 @@ pub mod test {
                                                     / (tr(44)
                                                         // Minor fork 2
                                                         / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
-                                                        / (tr(110)))))))))))));
+                                                        / (tr(110) / (tr(110 + 2 * num_slots_to_try))))))))))))));
 
-        // Set the voting behavior
-        let mut voting_simulator = VoteSimulator::new(&forks);
-        let mut votes: Vec<Slot> = vec![];
+        // Set the successful voting behavior
+        let mut cluster_votes = HashMap::new();
+        let mut my_votes: Vec<Slot> = vec![];
+        let next_unlocked_slot = 110;
         // Vote on the first minor fork
-        votes.extend((0..=14).into_iter());
+        my_votes.extend((0..=14).into_iter());
         // Come back to the main fork
-        votes.extend((43..=44).into_iter());
+        my_votes.extend((43..=44).into_iter());
         // Vote on the second minor fork
-        votes.extend((45..=50).into_iter());
+        my_votes.extend((45..=50).into_iter());
+        // Vote to come back to main fork
+        my_votes.push(next_unlocked_slot);
+        cluster_votes.insert(node_pubkey, my_votes.clone());
+        // Make the other validator vote fork to pass the threshold checks
+        let other_votes = my_votes.clone();
+        cluster_votes.insert(vote_simulator.node_pubkeys[1], other_votes);
+        vote_simulator.fill_bank_forks(forks, &cluster_votes);
 
-        let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
-        let (bank_forks, mut progress) = initialize_state(&keypairs, 10_000);
-        let bank_forks = RwLock::new(bank_forks);
-
-        // Simulate the votes. Should fail on trying to come back to the main fork
-        // at 106 exclusively due to threshold failure
-        let mut tower = Tower::new_with_key(&node_pubkey);
-        for vote in &votes {
+        // Simulate the votes.
+        for vote in &my_votes {
             // All these votes should be ok
-            assert!(voting_simulator
-                .simulate_vote(
-                    *vote,
-                    &bank_forks,
-                    &mut cluster_votes,
-                    &keypairs,
-                    keypairs.get(&node_pubkey).unwrap(),
-                    &mut progress,
-                    &mut tower,
-                )
+            assert!(vote_simulator
+                .simulate_vote(*vote, &node_pubkey, &mut tower,)
                 .is_empty());
         }
 
-        // Try to come back to main fork
-        let next_unlocked_slot = 110;
-        assert!(voting_simulator
-            .simulate_vote(
-                next_unlocked_slot,
-                &bank_forks,
-                &mut cluster_votes,
-                &keypairs,
-                keypairs.get(&node_pubkey).unwrap(),
-                &mut progress,
-                &mut tower,
-            )
-            .is_empty());
-
         info!("local tower: {:#?}", tower.lockouts.votes);
-        let vote_accounts = bank_forks
+        let vote_accounts = vote_simulator
+            .bank_forks
             .read()
             .unwrap()
             .get(next_unlocked_slot)
@@ -925,15 +855,17 @@ pub mod test {
         let state = VoteState::from(&observed.1).unwrap();
         info!("observed tower: {:#?}", state.votes);
 
-        assert!(can_progress_on_fork(
+        let num_slots_to_try = 200;
+        cluster_votes
+            .get_mut(&vote_simulator.node_pubkeys[1])
+            .unwrap()
+            .extend(next_unlocked_slot + 1..next_unlocked_slot + num_slots_to_try);
+        assert!(vote_simulator.can_progress_on_fork(
             &node_pubkey,
             &mut tower,
             next_unlocked_slot,
-            200,
-            &bank_forks,
+            num_slots_to_try,
             &mut cluster_votes,
-            &keypairs,
-            &mut progress
         ));
     }
 
