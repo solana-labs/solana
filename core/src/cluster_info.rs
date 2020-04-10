@@ -1998,20 +1998,16 @@ mod tests {
 
     #[test]
     fn new_with_external_ip_test_gossip() {
-        let ip = IpAddr::V4(Ipv4Addr::from(0));
-        let port = {
-            bind_in_range(ip, VALIDATOR_PORT_RANGE)
-                .expect("Failed to bind")
-                .0
-        };
-        let node = Node::new_with_external_ip(
-            &Pubkey::new_rand(),
-            &socketaddr!(0, port),
-            VALIDATOR_PORT_RANGE,
-            ip,
-        );
+        // Can't use VALIDATOR_PORT_RANGE because if this test runs in parallel with others, the
+        // port returned by `bind_in_range()` might be snatched up before `Node::new_with_external_ip()` runs
+        let port_range = (VALIDATOR_PORT_RANGE.1 + 10, VALIDATOR_PORT_RANGE.1 + 20);
 
-        check_node_sockets(&node, ip, VALIDATOR_PORT_RANGE);
+        let ip = IpAddr::V4(Ipv4Addr::from(0));
+        let port = bind_in_range(ip, port_range).expect("Failed to bind").0;
+        let node =
+            Node::new_with_external_ip(&Pubkey::new_rand(), &socketaddr!(0, port), port_range, ip);
+
+        check_node_sockets(&node, ip, port_range);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), port);
     }
