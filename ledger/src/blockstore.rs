@@ -1790,6 +1790,42 @@ impl Blockstore {
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
 
+    pub fn get_confirmed_transactions_for_address(
+        &self,
+        pubkey: Pubkey,
+        start_slot: Slot,
+        end_slot: Slot,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Vec<ConfirmedTransaction>> {
+        let mut transactions: Vec<ConfirmedTransaction> = vec![];
+        let slot_signatures = self.find_address_signatures(pubkey, start_slot, end_slot)?;
+
+        // Collect slot_entries to minimize shred deserialization in case of multiple transactions
+        // in the same slot
+        let mut slot_entries_map: HashMap<Slot, Vec<Entry>> = HashMap::new();
+
+        for (slot, signature) in slot_signatures {
+            if let Some((_, status)) = self.get_transaction_status(signature.clone())? {
+                if slot_entries_map.get(&slot).is_none() {
+                    slot_entries_map.insert(slot, self.get_slot_entries(slot, 0)?);
+                }
+                let slot_entries = slot_entries_map.get(&slot).unwrap();
+                if let Some(transaction) = find_transaction_in_entries(slot_entries, signature) {
+                    let encoding = encoding.clone().unwrap_or(TransactionEncoding::Json);
+                    let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
+                    transactions.push(ConfirmedTransaction {
+                        slot,
+                        transaction: TransactionWithStatusMeta {
+                            transaction: encoded_transaction,
+                            meta: Some(status.into()),
+                        },
+                    });
+                }
+            }
+        }
+        Ok(transactions)
+    }
+
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
         self.rewards_cf.get(index)
     }
@@ -2841,6 +2877,24 @@ pub mod tests {
         for x in 0..num_entries {
             let transaction = Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
+                &[Pubkey::new_rand()],
+                Hash::default(),
+                vec![Pubkey::new_rand()],
+                vec![CompiledInstruction::new(1, &(), vec![0])],
+            );
+            entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
+            let mut tick = create_ticks(1, 0, hash(&serialize(&x).unwrap()));
+            entries.append(&mut tick);
+        }
+        entries
+    }
+
+    // used for tests only
+    fn make_keyed_slot_entries_with_transactions(num_entries: u64, keypair: Keypair) -> Vec<Entry> {
+        let mut entries: Vec<Entry> = Vec::new();
+        for x in 0..num_entries {
+            let transaction = Transaction::new_with_compiled_instructions(
+                &[&keypair],
                 &[Pubkey::new_rand()],
                 Hash::default(),
                 vec![Pubkey::new_rand()],
@@ -6007,7 +6061,9 @@ pub mod tests {
     #[test]
     fn test_get_confirmed_transaction() {
         let slot = 2;
-        let entries = make_slot_entries_with_transactions(5);
+        let keypair = Keypair::new();
+        let address = keypair.pubkey();
+        let entries = make_keyed_slot_entries_with_transactions(5, keypair);
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
@@ -6027,10 +6083,14 @@ pub mod tests {
                     post_balances.push(i as u64 * 11);
                 }
                 let signature = transaction.signatures[0];
+                let (writable_keys, readonly_keys) =
+                    transaction.message.get_account_keys_by_lock_type();
                 blockstore
-                    .transaction_status_cf
-                    .put(
-                        (0, signature, slot),
+                    .write_transaction_status(
+                        slot,
+                        signature,
+                        writable_keys,
+                        readonly_keys,
                         &TransactionStatusMeta {
                             status: Ok(()),
                             fee: 42,
@@ -6054,6 +6114,11 @@ pub mod tests {
             })
             .collect();
 
+        let all_transactions_for_address = blockstore
+            .get_confirmed_transactions_for_address(address, 0, 5, None)
+            .unwrap();
+        assert_eq!(all_transactions_for_address.len(), 5);
+
         for (transaction, status) in expected_transactions.clone() {
             let signature = transaction.signatures[0];
             let encoded_transaction =
@@ -6065,6 +6130,7 @@ pub mod tests {
                     meta: status,
                 },
             };
+            assert!(all_transactions_for_address.contains(&expected_transaction));
             assert_eq!(
                 blockstore
                     .get_confirmed_transaction(signature, None)
@@ -6072,6 +6138,15 @@ pub mod tests {
                 Some(expected_transaction)
             );
         }
+
+        let other_address = expected_transactions[0].0.message.account_keys[1];
+        assert_eq!(
+            blockstore
+                .get_confirmed_transactions_for_address(other_address.clone(), 0, 5, None)
+                .unwrap()
+                .len(),
+            1
+        );
 
         blockstore.run_purge(0, 2).unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
@@ -6084,6 +6159,21 @@ pub mod tests {
                 None,
             );
         }
+
+        assert_eq!(
+            blockstore
+                .get_confirmed_transactions_for_address(address, 0, 5, None)
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(
+            blockstore
+                .get_confirmed_transactions_for_address(other_address, 0, 5, None)
+                .unwrap()
+                .len(),
+            0
+        );
     }
 
     #[test]
