@@ -500,7 +500,7 @@ pub fn process_vote_update_validator(
         (&new_identity_pubkey, "new_identity_account".to_string()),
     )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![vote_instruction::update_node(
+    let ixs = vec![vote_instruction::update_validator_identity(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
         &new_identity_pubkey,
