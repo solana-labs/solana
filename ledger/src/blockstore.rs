@@ -1744,11 +1744,7 @@ impl Blockstore {
         signature: Signature,
     ) -> Result<Option<Transaction>> {
         let slot_entries = self.get_slot_entries(slot, 0)?;
-        Ok(slot_entries
-            .iter()
-            .cloned()
-            .flat_map(|entry| entry.transactions)
-            .find(|transaction| transaction.signatures[0] == signature))
+        Ok(find_transaction_in_entries(&slot_entries, signature))
     }
 
     // Returns all cached signatures for an address, ordered by slot that the transaction was
@@ -2570,6 +2566,17 @@ fn calculate_stake_weighted_timestamp(
     } else {
         None
     }
+}
+
+fn find_transaction_in_entries(
+    slot_entries: &[Entry],
+    signature: Signature,
+) -> Option<Transaction> {
+    slot_entries
+        .iter()
+        .cloned()
+        .flat_map(|entry| entry.transactions)
+        .find(|transaction| transaction.signatures[0] == signature)
 }
 
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
