@@ -2723,41 +2723,27 @@ pub(crate) mod tests {
 
     #[test]
     fn test_child_bank_heavier() {
-        let node_keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let stake_keypair = Keypair::new();
-        let node_pubkey = node_keypair.pubkey();
-        let mut keypairs = HashMap::new();
-        keypairs.insert(
-            node_pubkey,
-            ValidatorVoteKeypairs::new(node_keypair, vote_keypair, stake_keypair),
-        );
-
-        let (bank_forks, mut progress) = initialize_state(&keypairs, 10_000);
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(1);
+        let node_pubkey = vote_simulator.node_pubkeys[0];
         let mut tower = Tower::new_with_key(&node_pubkey);
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(3))));
 
-        let mut voting_simulator = VoteSimulator::new(&forks);
-        let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
-        let votes: Vec<Slot> = vec![0, 2];
-        for vote in &votes {
-            assert!(voting_simulator
-                .simulate_vote(
-                    *vote,
-                    &bank_forks,
-                    &mut cluster_votes,
-                    &keypairs,
-                    keypairs.get(&node_pubkey).unwrap(),
-                    &mut progress,
-                    &mut tower,
-                )
+        // Set the voting behavior
+        let mut cluster_votes = HashMap::new();
+        let votes = vec![0, 2];
+        cluster_votes.insert(node_pubkey, votes.clone());
+        vote_simulator.fill_bank_forks(forks, &cluster_votes);
+        for vote in votes {
+            assert!(vote_simulator
+                .simulate_vote(vote, &node_pubkey, &mut tower,)
                 .is_empty());
         }
 
-        let mut frozen_banks: Vec<_> = bank_forks
+        let mut frozen_banks: Vec<_> = vote_simulator
+            .bank_forks
             .read()
             .unwrap()
             .frozen_banks()
@@ -2767,20 +2753,28 @@ pub(crate) mod tests {
 
         ReplayStage::compute_bank_stats(
             &Pubkey::default(),
-            &bank_forks.read().unwrap().ancestors(),
+            &vote_simulator.bank_forks.read().unwrap().ancestors(),
             &mut frozen_banks,
             &tower,
-            &mut progress,
+            &mut vote_simulator.progress,
             &VoteTracker::default(),
             &ClusterSlots::default(),
-            &bank_forks,
+            &vote_simulator.bank_forks,
             &mut HashSet::new(),
         );
 
         frozen_banks.sort_by_key(|bank| bank.slot());
         for pair in frozen_banks.windows(2) {
-            let first = progress.get_fork_stats(pair[0].slot()).unwrap().fork_weight;
-            let second = progress.get_fork_stats(pair[1].slot()).unwrap().fork_weight;
+            let first = vote_simulator
+                .progress
+                .get_fork_stats(pair[0].slot())
+                .unwrap()
+                .fork_weight;
+            let second = vote_simulator
+                .progress
+                .get_fork_stats(pair[1].slot())
+                .unwrap()
+                .fork_weight;
             assert!(second >= first);
         }
     }
