@@ -41,7 +41,7 @@ solana create-stake-account ~/validator-stake-keypair.json 1
 and then delegating that stake to your validator:
 
 ```bash
-solana delegate-stake ~/validator-stake-keypair.json ~/validator-vote-keypair.json
+solana delegate-stake ~/validator-stake-keypair.json ~/vote-account-keypair.json
 ```
 
 > Don’t delegate your remaining SOL, as your validator will use those tokens to vote.
@@ -50,7 +50,7 @@ Stakes can be re-delegated to another node at any time with the same command,
 but only one re-delegation is permitted per epoch:
 
 ```bash
-solana delegate-stake ~/validator-stake-keypair.json ~/some-other-validator-vote-keypair.json
+solana delegate-stake ~/validator-stake-keypair.json ~/some-other-vote-account-keypair.json
 ```
 
 Assuming the node is voting, now you're up and running and generating validator
@@ -81,7 +81,7 @@ so it can take an hour or more for stake to come fully online.
 
 To monitor your validator during its warmup period:
 
-* View your vote account:`solana vote-account ~/validator-vote-keypair.json` This displays the current state of all the votes the validator has submitted to the network.
+* View your vote account:`solana vote-account ~/vote-account-keypair.json` This displays the current state of all the votes the validator has submitted to the network.
 * View your stake account, the delegation preference and details of your stake:`solana stake-account ~/validator-stake-keypair.json`
 * `solana validators` displays the current active stake of all validators, including yours
 * `solana stake-history ` shows the history of stake warming up and cooling down over recent epochs

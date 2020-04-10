@@ -25,7 +25,7 @@ The `solana vote-account` command displays the recent voting activity from
 your validator:
 
 ```bash
-solana vote-account ~/validator-vote-keypair.json
+solana vote-account ~/vote-account-keypair.json
 ```
 
 ## Get Cluster Info
