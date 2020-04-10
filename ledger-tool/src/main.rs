@@ -67,12 +67,27 @@ fn output_slot_rewards(
 fn output_slot(
     blockstore: &Blockstore,
     slot: Slot,
+    allow_dead_slots: bool,
     method: &LedgerOutputMethod,
 ) -> Result<(), String> {
-    println!("Slot Meta {:?}", blockstore.meta(slot));
-    let entries = blockstore
-        .get_slot_entries(slot, 0)
+    if blockstore.is_dead(slot) {
+        if allow_dead_slots {
+            if *method == LedgerOutputMethod::Print {
+                println!("Slot is dead");
+            }
+        } else {
+            return Err("Dead slot".to_string());
+        }
+    }
+
+    let (entries, num_shreds, _is_full) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
         .map_err(|err| format!("Failed to load entries for slot {}: {}", slot, err))?;
+
+    if *method == LedgerOutputMethod::Print {
+        println!("Slot Meta {:?}", blockstore.meta(slot));
+        println!("Number of shreds: {}", num_shreds);
+    }
 
     for (entry_index, entry) in entries.iter().enumerate() {
         match method {
@@ -204,7 +219,12 @@ fn output_slot(
     output_slot_rewards(blockstore, slot, method)
 }
 
-fn output_ledger(blockstore: Blockstore, starting_slot: Slot, method: LedgerOutputMethod) {
+fn output_ledger(
+    blockstore: Blockstore,
+    starting_slot: Slot,
+    allow_dead_slots: bool,
+    method: LedgerOutputMethod,
+) {
     let rooted_slot_iterator =
         RootedSlotIterator::new(starting_slot, &blockstore).unwrap_or_else(|err| {
             eprintln!(
@@ -227,7 +247,7 @@ fn output_ledger(blockstore: Blockstore, starting_slot: Slot, method: LedgerOutp
             }
         }
 
-        if let Err(err) = output_slot(&blockstore, slot, &method) {
+        if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method) {
             eprintln!("{}", err);
         }
     }
@@ -667,6 +687,10 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Add a hard fork at this slot");
+    let allow_dead_slots_arg = Arg::with_name("allow_dead_slots")
+        .long("allow-dead-slots")
+        .takes_value(false)
+        .help("Output dead slots as well");
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -684,6 +708,7 @@ fn main() {
             SubCommand::with_name("print")
             .about("Print the ledger")
             .arg(&starting_slot_arg)
+            .arg(&allow_dead_slots_arg)
         )
         .subcommand(
             SubCommand::with_name("slot")
@@ -698,6 +723,7 @@ fn main() {
                     .required(true)
                     .help("Slots to print"),
             )
+            .arg(&allow_dead_slots_arg)
         )
         .subcommand(
             SubCommand::with_name("set-dead-slot")
@@ -740,6 +766,7 @@ fn main() {
             SubCommand::with_name("json")
             .about("Print the ledger in JSON format")
             .arg(&starting_slot_arg)
+            .arg(&allow_dead_slots_arg)
         )
         .subcommand(
             SubCommand::with_name("verify")
@@ -891,9 +918,11 @@ fn main() {
     match matches.subcommand() {
         ("print", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             output_ledger(
                 open_blockstore(&ledger_path),
                 starting_slot,
+                allow_dead_slots,
                 LedgerOutputMethod::Print,
             );
         }
@@ -932,19 +961,27 @@ fn main() {
         }
         ("slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             let blockstore = open_blockstore(&ledger_path);
             for slot in slots {
                 println!("Slot {}", slot);
-                if let Err(err) = output_slot(&blockstore, slot, &LedgerOutputMethod::Print) {
+                if let Err(err) = output_slot(
+                    &blockstore,
+                    slot,
+                    allow_dead_slots,
+                    &LedgerOutputMethod::Print,
+                ) {
                     eprintln!("{}", err);
                 }
             }
         }
         ("json", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             output_ledger(
                 open_blockstore(&ledger_path),
                 starting_slot,
+                allow_dead_slots,
                 LedgerOutputMethod::Json,
             );
         }

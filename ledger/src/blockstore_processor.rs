@@ -538,7 +538,7 @@ pub fn confirm_slot(
     let (entries, num_shreds, slot_full) = {
         let mut load_elapsed = Measure::start("load_elapsed");
         let load_result = blockstore
-            .get_slot_entries_with_shred_info(slot, progress.num_shreds)
+            .get_slot_entries_with_shred_info(slot, progress.num_shreds, false)
             .map_err(BlockstoreProcessorError::FailedToLoadEntries);
         load_elapsed.stop();
         if load_result.is_err() {

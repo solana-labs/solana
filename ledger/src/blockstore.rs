@@ -1797,7 +1797,7 @@ impl Blockstore {
 
     /// Returns the entry vector for the slot starting with `shred_start_index`
     pub fn get_slot_entries(&self, slot: Slot, shred_start_index: u64) -> Result<Vec<Entry>> {
-        self.get_slot_entries_with_shred_info(slot, shred_start_index)
+        self.get_slot_entries_with_shred_info(slot, shred_start_index, false)
             .map(|x| x.0)
     }
 
@@ -1807,8 +1807,9 @@ impl Blockstore {
         &self,
         slot: Slot,
         start_index: u64,
+        allow_dead_slots: bool,
     ) -> Result<(Vec<Entry>, u64, bool)> {
-        if self.is_dead(slot) {
+        if self.is_dead(slot) && !allow_dead_slots {
             return Err(BlockstoreError::DeadSlot);
         }
 
