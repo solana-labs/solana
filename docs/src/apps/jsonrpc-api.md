@@ -362,6 +362,8 @@ Returns a list of all the confirmed signatures for transactions involving an add
 The result field will be an array of:
 * `<string>` - transaction signature as base-58 encoded string
 
+The signatures will be ordered based on the Slot in which they were confirmed in, from lowest to highest Slot
+
 #### Example:
 
 ```bash

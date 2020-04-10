@@ -1751,6 +1751,8 @@ impl Blockstore {
             .find(|transaction| transaction.signatures[0] == signature))
     }
 
+    // Returns all cached signatures for an address, ordered by slot that the transaction was
+    // processed in
     fn find_address_signatures(
         &self,
         pubkey: Pubkey,
@@ -1778,6 +1780,7 @@ impl Blockstore {
                 }
             }
         }
+        signatures.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         Ok(signatures)
     }
 
@@ -6196,6 +6199,27 @@ pub mod tests {
                     .len(),
                 4
             );
+
+            // Test sort, regardless of entry order or signature value
+            for slot in (21..25).rev() {
+                let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+                let signature = Signature::new(&random_bytes);
+                blockstore
+                    .write_transaction_status(
+                        slot,
+                        signature,
+                        vec![&address0],
+                        vec![&address1],
+                        &TransactionStatusMeta::default(),
+                    )
+                    .unwrap();
+            }
+            blockstore.set_roots(&[21, 22, 23, 24]).unwrap();
+            let mut past_slot = 0;
+            for (slot, _) in blockstore.find_address_signatures(address0, 1, 25).unwrap() {
+                assert!(slot >= past_slot);
+                past_slot = slot;
+            }
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
