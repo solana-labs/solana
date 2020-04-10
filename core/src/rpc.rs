@@ -531,6 +531,23 @@ impl JsonRpcRequestProcessor {
             Ok(vec![])
         }
     }
+
+    pub fn get_confirmed_transactions_for_address(
+        &self,
+        pubkey: Pubkey,
+        start_slot: Slot,
+        end_slot: Slot,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Vec<ConfirmedTransaction>> {
+        if self.config.enable_rpc_transaction_history {
+            Ok(self
+                .blockstore
+                .get_confirmed_transactions_for_address(pubkey, start_slot, end_slot, encoding)
+                .unwrap_or_else(|_| vec![]))
+        } else {
+            Ok(vec![])
+        }
+    }
 }
 
 fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
@@ -789,6 +806,16 @@ pub trait RpcSol {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<String>>;
+
+    #[rpc(meta, name = "getConfirmedTransactionsForAddress")]
+    fn get_confirmed_transactions_for_address(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        start_slot: Slot,
+        end_slot: Slot,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Vec<ConfirmedTransaction>>;
 }
 
 pub struct RpcSolImpl;
@@ -1376,6 +1403,33 @@ impl RpcSol for RpcSolImpl {
                     .map(|signature| signature.to_string())
                     .collect()
             })
+    }
+
+    fn get_confirmed_transactions_for_address(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+        start_slot: Slot,
+        end_slot: Slot,
+        encoding: Option<TransactionEncoding>,
+    ) -> Result<Vec<ConfirmedTransaction>> {
+        let pubkey = verify_pubkey(pubkey_str)?;
+        if end_slot <= start_slot {
+            return Err(Error::invalid_params(format!(
+                "start_slot {} must be smaller than end_slot {}",
+                start_slot, end_slot
+            )));
+        }
+        if end_slot - start_slot > MAX_SLOT_RANGE {
+            return Err(Error::invalid_params(format!(
+                "Slot range too large; max {}",
+                MAX_SLOT_RANGE
+            )));
+        }
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_confirmed_transactions_for_address(pubkey, start_slot, end_slot, encoding)
     }
 }
 
