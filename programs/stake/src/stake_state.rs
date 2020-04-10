@@ -151,7 +151,8 @@ impl Meta {
     ) -> Result<(), InstructionError> {
         // verify that lockup has expired or that the authorization
         //  is *also* signed by the custodian
-        if self.lockup.is_in_force(clock, signers) {
+        if stake_authorize == StakeAuthorize::Withdrawer && self.lockup.is_in_force(clock, signers)
+        {
             return Err(StakeError::LockupInForce.into());
         }
         self.authorized
@@ -948,23 +949,28 @@ mod tests {
             meta.authorize(&staker, StakeAuthorize::Staker, &signers, &clock),
             Ok(())
         );
-        // verify lockup check
+        // verify staker not subject to lockup, but withdrawer is
         meta.lockup.epoch = 1;
         assert_eq!(
             meta.authorize(&staker, StakeAuthorize::Staker, &signers, &clock),
+            Ok(())
+        );
+        // verify lockup check
+        assert_eq!(
+            meta.authorize(&staker, StakeAuthorize::Withdrawer, &signers, &clock),
             Err(StakeError::LockupInForce.into())
         );
         // verify lockup check defeated by custodian
         signers.insert(custodian);
         assert_eq!(
-            meta.authorize(&staker, StakeAuthorize::Staker, &signers, &clock),
+            meta.authorize(&staker, StakeAuthorize::Withdrawer, &signers, &clock),
             Ok(())
         );
         // verify lock expiry
         signers.remove(&custodian);
         clock.epoch = 1;
         assert_eq!(
-            meta.authorize(&staker, StakeAuthorize::Staker, &signers, &clock),
+            meta.authorize(&staker, StakeAuthorize::Withdrawer, &signers, &clock),
             Ok(())
         );
     }
