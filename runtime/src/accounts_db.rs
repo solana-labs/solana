@@ -701,6 +701,74 @@ impl AccountsDB {
         accounts_index.uncleaned_roots.clear();
     }
 
+    fn inc_store_counts(
+        no_delete_id: AppendVecId,
+        purges: &HashMap<Pubkey, Vec<(Slot, AccountInfo)>>,
+        store_counts: &mut HashMap<AppendVecId, usize>,
+        already_counted: &mut HashSet<AppendVecId>,
+    ) {
+        if already_counted.contains(&no_delete_id) {
+            return;
+        }
+        *store_counts.get_mut(&no_delete_id).unwrap() += 1;
+        already_counted.insert(no_delete_id);
+        let mut affected_pubkeys = HashSet::new();
+        for (key, account_infos) in purges {
+            for (_slot, account_info) in account_infos {
+                if account_info.store_id == no_delete_id {
+                    affected_pubkeys.insert(key);
+                    break;
+                }
+            }
+        }
+        for key in affected_pubkeys {
+            for (_slot, account_info) in purges.get(&key).unwrap() {
+                Self::inc_store_counts(
+                    account_info.store_id,
+                    purges,
+                    store_counts,
+                    already_counted,
+                );
+            }
+        }
+    }
+
+    fn calc_delete_dependencies(
+        accounts_index: &AccountsIndex<AccountInfo>,
+        purges: &HashMap<Pubkey, Vec<(Slot, AccountInfo)>>,
+        store_counts: &mut HashMap<AppendVecId, usize>,
+    ) {
+        // Another pass to check if there are some filtered accounts which
+        // do not match the criteria of deleting all appendvecs which contain them
+        // then increment their storage count.
+        let mut already_counted = HashSet::new();
+        for (pubkey, account_infos) in purges.iter() {
+            let no_delete =
+                if account_infos.len() as u64 != accounts_index.ref_count_from_storage(&pubkey) {
+                    true
+                } else {
+                    let mut no_delete = false;
+                    for (_slot, account_info) in account_infos {
+                        if *store_counts.get(&account_info.store_id).unwrap() != 0 {
+                            no_delete = true;
+                            break;
+                        }
+                    }
+                    no_delete
+                };
+            if no_delete {
+                for (_slot_id, account_info) in account_infos {
+                    Self::inc_store_counts(
+                        account_info.store_id,
+                        &purges,
+                        store_counts,
+                        &mut already_counted,
+                    );
+                }
+            }
+        }
+    }
+
     // Purge zero lamport accounts and older rooted account states as garbage
     // collection
     // Only remove those accounts where the entire rooted history of the account
@@ -777,29 +845,8 @@ impl AccountsDB {
             }
         }
 
-        // Another pass to check if there are some filtered accounts which
-        // do not match the criteria of deleting all appendvecs which contain them
-        // then increment their storage count.
-        for (pubkey, account_infos) in &purges {
-            let no_delete =
-                if account_infos.len() as u64 != accounts_index.ref_count_from_storage(&pubkey) {
-                    true
-                } else {
-                    let mut no_delete = false;
-                    for (_slot, account_info) in account_infos {
-                        if *store_counts.get(&account_info.store_id).unwrap() != 0 {
-                            no_delete = true;
-                            break;
-                        }
-                    }
-                    no_delete
-                };
-            if no_delete {
-                for (_slot, account_info) in account_infos {
-                    *store_counts.get_mut(&account_info.store_id).unwrap() += 1;
-                }
-            }
-        }
+        Self::calc_delete_dependencies(&accounts_index, &purges, &mut store_counts);
+
         store_counts_time.stop();
 
         // Only keep purges where the entire history of the account in the root set
@@ -3841,5 +3888,70 @@ pub mod tests {
             pubkey_count,
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
+    }
+
+    #[test]
+    fn test_delete_dependencies() {
+        solana_logger::setup();
+        let mut accounts_index = AccountsIndex::default();
+        let key0 = Pubkey::new_from_array([0u8; 32]);
+        let key1 = Pubkey::new_from_array([1u8; 32]);
+        let key2 = Pubkey::new_from_array([2u8; 32]);
+        let info0 = AccountInfo {
+            store_id: 0,
+            offset: 0,
+            lamports: 0,
+        };
+        let info1 = AccountInfo {
+            store_id: 1,
+            offset: 0,
+            lamports: 0,
+        };
+        let info2 = AccountInfo {
+            store_id: 2,
+            offset: 0,
+            lamports: 0,
+        };
+        let info3 = AccountInfo {
+            store_id: 3,
+            offset: 0,
+            lamports: 0,
+        };
+        let mut reclaims = vec![];
+        accounts_index.insert(0, &key0, info0.clone(), &mut reclaims);
+        accounts_index.insert(1, &key0, info1.clone(), &mut reclaims);
+        accounts_index.insert(1, &key1, info1.clone(), &mut reclaims);
+        accounts_index.insert(2, &key1, info2.clone(), &mut reclaims);
+        accounts_index.insert(2, &key2, info2.clone(), &mut reclaims);
+        accounts_index.insert(3, &key2, info3.clone(), &mut reclaims);
+        accounts_index.add_root(0);
+        accounts_index.add_root(1);
+        accounts_index.add_root(2);
+        accounts_index.add_root(3);
+        let mut purges = HashMap::new();
+        purges.insert(key0, accounts_index.would_purge(&key0));
+        purges.insert(key1, accounts_index.would_purge(&key1));
+        purges.insert(key2, accounts_index.would_purge(&key2));
+        for (key, list) in &purges {
+            info!(" purge {} =>", key);
+            for x in list {
+                info!("  {:?}", x);
+            }
+        }
+
+        let mut store_counts = HashMap::new();
+        store_counts.insert(0, 0);
+        store_counts.insert(1, 0);
+        store_counts.insert(2, 0);
+        store_counts.insert(3, 1);
+        AccountsDB::calc_delete_dependencies(&accounts_index, &purges, &mut store_counts);
+        let mut stores: Vec<_> = store_counts.keys().cloned().collect();
+        stores.sort();
+        for store in &stores {
+            info!("store: {:?} : {}", store, store_counts.get(&store).unwrap());
+        }
+        for x in 0..3 {
+            assert!(store_counts[&x] >= 1);
+        }
     }
 }
