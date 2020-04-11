@@ -182,7 +182,6 @@ pub(crate) struct ForkStats {
     pub(crate) weight: u128,
     pub(crate) fork_weight: u128,
     pub(crate) total_staked: u64,
-    pub(crate) slot: Slot,
     pub(crate) block_height: u64,
     pub(crate) has_voted: bool,
     pub(crate) is_recent: bool,
