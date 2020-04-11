@@ -990,14 +990,12 @@ impl ReplayStage {
                 .and_then(|b| progress.get(&b.slot()))
                 .map(|x| x.fork_stats.fork_weight)
                 .unwrap_or(0);
-
             {
                 let stats = progress
                     .get_fork_stats_mut(bank_slot)
                     .expect("All frozen banks must exist in the Progress map");
 
                 if !stats.computed {
-                    stats.slot = bank_slot;
                     let (stake_lockouts, total_staked, bank_weight) = tower.collect_vote_lockouts(
                         bank_slot,
                         bank.vote_accounts().into_iter(),
@@ -1016,7 +1014,7 @@ impl ReplayStage {
                     info!(
                         "{} slot_weight: {} {} {} {}",
                         my_pubkey,
-                        stats.slot,
+                        bank_slot,
                         stats.weight,
                         stats.fork_weight,
                         bank.parent().map(|b| b.slot()).unwrap_or(0)
@@ -1024,7 +1022,7 @@ impl ReplayStage {
                     stats.stake_lockouts = stake_lockouts;
                     stats.block_height = bank.block_height();
                     stats.computed = true;
-                    new_stats.push(stats.slot);
+                    new_stats.push(bank_slot);
                 }
             }
 
@@ -1182,12 +1180,12 @@ impl ReplayStage {
         let mut candidates: Vec<_> = frozen_banks.iter().zip(stats.iter()).collect();
 
         //highest weight, lowest slot first
-        candidates.sort_by_key(|b| (b.1.fork_weight, 0i64 - b.1.slot as i64));
+        candidates.sort_by_key(|b| (b.1.fork_weight, 0i64 - b.0.slot() as i64));
         let rv = candidates.last();
         let ms = timing::duration_as_ms(&tower_start.elapsed());
         let weights: Vec<(u128, u64, u64)> = candidates
             .iter()
-            .map(|x| (x.1.weight, x.1.slot, x.1.block_height))
+            .map(|x| (x.1.weight, x.0.slot(), x.1.block_height))
             .collect();
         debug!(
             "@{:?} tower duration: {:?} len: {}/{} weights: {:?} voting: {}",
@@ -1873,7 +1871,7 @@ pub(crate) mod tests {
                     let bank = heaviest_bank.unwrap();
                     let stats = &fork_progresses[i].get_fork_stats(bank.slot()).unwrap();
                     Some(ForkSelectionResponse {
-                        slot: stats.slot,
+                        slot: bank.slot(),
                         is_locked_out: stats.is_locked_out,
                     })
                 }
@@ -2719,6 +2717,57 @@ pub(crate) mod tests {
         );
         // No new stats should have been computed
         assert!(newly_computed.is_empty());
+    }
+
+    #[test]
+    fn test_same_weight_select_lower_slot() {
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(1);
+        let node_pubkey = vote_simulator.node_pubkeys[0];
+        let tower = Tower::new_with_key(&node_pubkey);
+
+        // Create the tree of banks in a BankForks object
+        let forks = tr(0) / (tr(1)) / (tr(2));
+        vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        let mut frozen_banks: Vec<_> = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .frozen_banks()
+            .values()
+            .cloned()
+            .collect();
+
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        ReplayStage::compute_bank_stats(
+            &Pubkey::default(),
+            &ancestors,
+            &mut frozen_banks,
+            &tower,
+            &mut vote_simulator.progress,
+            &VoteTracker::default(),
+            &ClusterSlots::default(),
+            &vote_simulator.bank_forks,
+            &mut HashSet::new(),
+        );
+
+        assert_eq!(
+            vote_simulator
+                .progress
+                .get_fork_stats(1)
+                .unwrap()
+                .fork_weight,
+            vote_simulator
+                .progress
+                .get_fork_stats(2)
+                .unwrap()
+                .fork_weight,
+        );
+        let (heaviest_bank, _) =
+            ReplayStage::select_forks(&frozen_banks, &tower, &vote_simulator.progress, &ancestors);
+
+        // Should pick the lower of the two equally weighted banks
+        assert_eq!(heaviest_bank.unwrap().slot(), 1);
     }
 
     #[test]
