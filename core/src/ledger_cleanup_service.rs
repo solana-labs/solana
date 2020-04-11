@@ -13,15 +13,18 @@ use std::thread;
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
-// - To try and keep the RocksDB size under 512GB:
-//   Seeing about 1600b/shred, using 2000b/shred for margin, so 250m shreds can be stored in 512gb.
-//   at 5k shreds/slot at 50k tps, this is 500k slots (~5.5 hours).
+// - To try and keep the RocksDB size under 400GB:
+//   Seeing about 1600b/shred, using 2000b/shred for margin, so 200m shreds can be stored in 400gb.
+//   at 5k shreds/slot at 50k tps, this is 500k slots (~5 hours).
 //   At idle, 60 shreds/slot this is about 4m slots (18 days)
 // This is chosen to allow enough time for
 // - A validator to download a snapshot from a peer and boot from it
 // - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally
 //   to catch back up to where it was when it stopped
-pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 250_000_000;
+pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 200_000_000;
+
+// Allow down to 50m, or 3.5 days at idle, 1hr at 50k load, around ~100GB
+pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 
 // Check for removing slots at this interval so we don't purge too often
 // and starve other blockstore users.
