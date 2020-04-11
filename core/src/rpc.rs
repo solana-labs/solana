@@ -4,6 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     commitment::{BlockCommitmentArray, BlockCommitmentCache},
     contact_info::ContactInfo,
+    non_circulating_supply::NonCirculatingSupply,
     storage_stage::StorageState,
     validator::ValidatorExit,
 };
@@ -78,6 +79,7 @@ pub struct JsonRpcRequestProcessor {
     config: JsonRpcConfig,
     storage_state: StorageState,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+    non_circulating_supply: Arc<RwLock<NonCirculatingSupply>>,
 }
 
 impl JsonRpcRequestProcessor {
@@ -121,6 +123,7 @@ impl JsonRpcRequestProcessor {
         blockstore: Arc<Blockstore>,
         storage_state: StorageState,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+        non_circulating_supply: Arc<RwLock<NonCirculatingSupply>>,
     ) -> Self {
         JsonRpcRequestProcessor {
             config,
@@ -129,6 +132,7 @@ impl JsonRpcRequestProcessor {
             blockstore,
             storage_state,
             validator_exit,
+            non_circulating_supply,
         }
     }
 
@@ -279,6 +283,24 @@ impl JsonRpcRequestProcessor {
 
     fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
         Ok(self.bank(commitment)?.capitalization())
+    }
+
+    fn get_circulating_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
+        let bank = self.bank(commitment)?;
+        let epoch = bank.epoch();
+        let total_supply = bank.capitalization();
+
+        let r_non_circulating_supply = self.non_circulating_supply.read().unwrap();
+        // Update non_circulating_supply on the first request in an epoch
+        let non_circulating_supply = if *r_non_circulating_supply == NonCirculatingSupply::default()
+            || epoch > r_non_circulating_supply.epoch
+        {
+            drop(r_non_circulating_supply);
+            self.non_circulating_supply.write().unwrap().update(bank)
+        } else {
+            r_non_circulating_supply.non_circulating_supply
+        };
+        Ok(total_supply - non_circulating_supply)
     }
 
     fn get_largest_accounts(
@@ -793,6 +815,13 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64>;
 
+    #[rpc(meta, name = "getCirculatingSupply")]
+    fn get_circulating_supply(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<u64>;
+
     #[rpc(meta, name = "getLargestAccounts")]
     fn get_largest_accounts(
         &self,
@@ -1199,6 +1228,18 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_total_supply(commitment)
+    }
+
+    fn get_circulating_supply(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<u64> {
+        debug!("get_circulating_supply rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_circulating_supply(commitment)
     }
 
     fn get_largest_accounts(
@@ -1669,6 +1710,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            Arc::new(RwLock::new(NonCirculatingSupply::default())),
         )));
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
@@ -1718,6 +1760,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            Arc::new(RwLock::new(NonCirculatingSupply::default())),
         );
         thread::spawn(move || {
             let blockhash = bank.confirmed_last_blockhash().0;
@@ -2412,6 +2455,7 @@ pub mod tests {
                     blockstore,
                     StorageState::default(),
                     validator_exit,
+                    Arc::new(RwLock::new(NonCirculatingSupply::default())),
                 );
                 Arc::new(RwLock::new(request_processor))
             },
@@ -2509,6 +2553,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            Arc::new(RwLock::new(NonCirculatingSupply::default())),
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -2532,6 +2577,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            Arc::new(RwLock::new(NonCirculatingSupply::default())),
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -2614,6 +2660,7 @@ pub mod tests {
             blockstore,
             StorageState::default(),
             validator_exit,
+            Arc::new(RwLock::new(NonCirculatingSupply::default())),
         );
         assert_eq!(
             request_processor.get_block_commitment(0),
