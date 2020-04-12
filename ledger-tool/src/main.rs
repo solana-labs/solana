@@ -1163,7 +1163,7 @@ fn main() {
                     for (pubkey, account) in accounts.into_iter() {
                         let data_len = account.data.len();
                         println!("{}:", pubkey);
-                        println!("  - lamports: {}", account.lamports);
+                        println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
                         println!("  - owner: '{}'", account.owner);
                         println!("  - executable: {}", account.executable);
                         println!("  - data: '{}'", bs58::encode(account.data).into_string());
