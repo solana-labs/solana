@@ -2014,20 +2014,23 @@ mod tests {
 
     #[test]
     fn new_archiver_external_ip_test() {
+        // Can't use VALIDATOR_PORT_RANGE because if this test runs in parallel with others, the
+        // port returned by `bind_in_range()` might be snatched up before `Node::new_with_external_ip()` runs
+        let port_range = (VALIDATOR_PORT_RANGE.1 + 20, VALIDATOR_PORT_RANGE.1 + 30);
         let ip = Ipv4Addr::from(0);
         let node = Node::new_archiver_with_external_ip(
             &Pubkey::new_rand(),
             &socketaddr!(ip, 0),
-            VALIDATOR_PORT_RANGE,
+            port_range,
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         );
 
         let ip = IpAddr::V4(ip);
-        check_socket(&node.sockets.storage.unwrap(), ip, VALIDATOR_PORT_RANGE);
-        check_socket(&node.sockets.gossip, ip, VALIDATOR_PORT_RANGE);
-        check_socket(&node.sockets.repair, ip, VALIDATOR_PORT_RANGE);
+        check_socket(&node.sockets.storage.unwrap(), ip, port_range);
+        check_socket(&node.sockets.gossip, ip, port_range);
+        check_socket(&node.sockets.repair, ip, port_range);
 
-        check_sockets(&node.sockets.tvu, ip, VALIDATOR_PORT_RANGE);
+        check_sockets(&node.sockets.tvu, ip, port_range);
     }
 
     //test that all cluster_info objects only generate signed messages
