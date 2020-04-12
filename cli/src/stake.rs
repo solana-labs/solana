@@ -1257,7 +1257,6 @@ pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamp
                 "Total Stake: {}",
                 build_balance_message(stake_lamports, use_lamports_unit, true)
             );
-            println!("Credits Observed: {}", stake.credits_observed);
             println!(
                 "Delegated Stake: {}",
                 build_balance_message(stake.delegation.stake, use_lamports_unit, true)
