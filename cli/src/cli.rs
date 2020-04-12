@@ -1,4 +1,5 @@
 use crate::{
+    cli_output::OutputFormat,
     cluster_query::*,
     display::{println_name_value, println_signers},
     nonce::{self, *},
@@ -472,6 +473,7 @@ pub struct CliConfig<'a> {
     pub keypair_path: String,
     pub rpc_client: Option<RpcClient>,
     pub verbose: bool,
+    pub output_format: OutputFormat,
 }
 
 impl CliConfig<'_> {
@@ -563,6 +565,7 @@ impl Default for CliConfig<'_> {
             keypair_path: Self::default_keypair_path(),
             rpc_client: None,
             verbose: false,
+            output_format: OutputFormat::Display,
         }
     }
 }
@@ -2532,7 +2535,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 )
                 .arg(
                     Arg::with_name("output_file")
-                        .long("output")
+                        .long("output-file")
                         .short("o")
                         .value_name("FILEPATH")
                         .takes_value(true)
