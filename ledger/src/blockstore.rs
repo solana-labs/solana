@@ -2259,7 +2259,27 @@ impl Blockstore {
     }
 
     pub fn storage_size(&self) -> Result<u64> {
-        self.db.storage_size()
+        let storage = self.db.storage_size()?;
+        let mut dir_len = 0;
+        let path = Path::new(&self.shreds_dir);
+        Self::dir_size(path, &mut dir_len)?;
+        Ok(storage + dir_len)
+    }
+
+    fn dir_size(dir: &Path, size: &mut u64) -> Result<()> {
+        if dir.is_dir() {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    Self::dir_size(&path, size)?;
+                } else {
+                    let len = fs::metadata(path)?.len();
+                    *size += len;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
