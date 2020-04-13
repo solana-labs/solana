@@ -1715,7 +1715,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowNonceAccount {
             nonce_account_pubkey,
             use_lamports_unit,
-        } => process_show_nonce_account(&rpc_client, &nonce_account_pubkey, *use_lamports_unit),
+        } => process_show_nonce_account(
+            &rpc_client,
+            config,
+            &nonce_account_pubkey,
+            *use_lamports_unit,
+        ),
         // Withdraw lamports from a nonce account
         CliCommand::WithdrawFromNonceAccount {
             nonce_account,

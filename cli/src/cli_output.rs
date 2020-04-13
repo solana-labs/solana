@@ -34,6 +34,46 @@ impl OutputFormat {
     }
 }
 
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliNonceAccount {
+    pub balance: u64,
+    pub minimum_balance_for_rent_exemption: u64,
+    pub nonce: Option<String>,
+    pub lamports_per_signature: Option<u64>,
+    pub authority: Option<String>,
+    #[serde(skip_serializing)]
+    pub use_lamports_unit: bool,
+}
+
+impl fmt::Display for CliNonceAccount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "Balance: {}",
+            build_balance_message(self.balance, self.use_lamports_unit, true)
+        )?;
+        writeln!(
+            f,
+            "Minimum Balance Required: {}",
+            build_balance_message(
+                self.minimum_balance_for_rent_exemption,
+                self.use_lamports_unit,
+                true
+            )
+        )?;
+        let nonce = self.nonce.as_deref().unwrap_or("uninitialized");
+        writeln!(f, "Nonce: {}", nonce)?;
+        if let Some(fees) = self.lamports_per_signature {
+            writeln!(f, "Fee: {} lamports per signature", fees)?;
+        } else {
+            writeln!(f, "Fees: uninitialized")?;
+        }
+        let authority = self.authority.as_deref().unwrap_or("uninitialized");
+        writeln!(f, "Authority: {}", authority)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct CliStakeVec(Vec<CliKeyedStakeState>);
 
