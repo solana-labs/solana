@@ -44,14 +44,14 @@ chown buildkite-agent:buildkite-agent /etc/buildkite-agent/hooks/environment
 
 # Create SSH key
 sudo -u buildkite-agent mkdir -p ~buildkite-agent/.ssh
-sudo -u buildkite-agent ssh-keygen -t ecdsa -q -N "" -f ~buildkite-agent/.ssh/buildkite_ecdsa
+sudo -u buildkite-agent ssh-keygen -t ecdsa -q -N "" -f ~buildkite-agent/.ssh/id_ecdsa
 
 # Set buildkite-agent user's shell
 sudo usermod --shell /bin/bash buildkite-agent
 
 # Install Rust for buildkite-agent
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh
-sudo -u buildkite-agent HOME=~buildkite-agent sh /tmp/rustup-init.sh
+sudo -u buildkite-agent HOME=~buildkite-agent sh /tmp/rustup-init.sh -y
 
 # Add to docker and sudoers group
 addgroup buildkite-agent docker

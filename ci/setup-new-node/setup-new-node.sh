@@ -20,7 +20,10 @@ EOF
 
 apt install -y build-essential pkg-config clang cmake sysstat linux-tools-common \
   linux-generic-hwe-18.04-edge linux-tools-generic-hwe-18.04-edge \
-  iftop heaptrack jq
+  iftop heaptrack jq ruby python3-venv
+
+gem install ejson ejson2env
+mkdir -p /opt/ejson/keys
 
 "$SOLANA_ROOT"/net/scripts/install-docker.sh
 usermod -aG docker "$SETUP_USER"
@@ -40,4 +43,7 @@ usermod -aG docker "$SETUP_USER"
 
 "$HERE"/setup-procfs-knobs.sh
 "$HERE"/setup-limits.sh
-"$HERE"/setup-cuda.sh
+
+[[ -n $CUDA ]] && "$HERE"/setup-cuda.sh
+
+exit 0
