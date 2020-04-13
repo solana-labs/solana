@@ -11,12 +11,16 @@ steps:
   - command: "ci/shellcheck.sh"
     name: "shellcheck"
     timeout_in_minutes: 5
+    agents:
+      - "queue=test"
 
   - wait
 
   - command: "ci/maybe-trigger-tests.sh"
     name: "maybe-trigger-tests"
     timeout_in_minutes: 2
+    agents:
+      - "queue=test"
 
   - wait
 
