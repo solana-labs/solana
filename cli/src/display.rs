@@ -13,7 +13,7 @@ pub fn println_name_value(name: &str, value: &str) {
     println!("{} {}", style(name).bold(), styled_value);
 }
 
-pub fn writeln_name_value(name: &str, value: &str, f: &mut fmt::Formatter) -> fmt::Result {
+pub fn writeln_name_value(f: &mut fmt::Formatter, name: &str, value: &str) -> fmt::Result {
     let styled_value = if value == "" {
         style("(not set)").italic()
     } else {

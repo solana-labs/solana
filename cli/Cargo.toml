@@ -18,6 +18,7 @@ ctrlc = { version = "3.1.4", features = ["termination"] }
 console = "0.10.0"
 dirs = "2.0.2"
 log = "0.4.8"
+Inflector = "0.11.4"
 indicatif = "0.14.0"
 humantime = "2.0.0"
 num-traits = "0.2"
@@ -41,7 +42,6 @@ solana-stake-program = { path = "../programs/stake", version = "1.2.0" }
 solana-storage-program = { path = "../programs/storage", version = "1.2.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.2.0" }
-titlecase = "1.1.0"
 thiserror = "1.0.15"
 url = "2.1.1"
 

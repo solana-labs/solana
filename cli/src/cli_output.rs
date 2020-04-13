@@ -1,7 +1,9 @@
-use crate::cli::build_balance_message;
+use crate::{cli::build_balance_message, display::writeln_name_value};
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use console::style;
+use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
+use serde_json::{Map, Value};
 use solana_sdk::{
     clock::{Epoch, Slot, UnixTimestamp},
     stake_history::StakeHistoryEntry,
@@ -311,6 +313,51 @@ impl From<&Lockup> for CliLockup {
             epoch: lockup.epoch,
             custodian: lockup.custodian.to_string(),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliValidatorInfoVec(Vec<CliValidatorInfo>);
+
+impl CliValidatorInfoVec {
+    pub fn new(list: Vec<CliValidatorInfo>) -> Self {
+        Self(list)
+    }
+}
+
+impl fmt::Display for CliValidatorInfoVec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0.is_empty() {
+            writeln!(f, "No validator info accounts found")?;
+        }
+        for validator_info in &self.0 {
+            writeln!(f)?;
+            write!(f, "{}", validator_info)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliValidatorInfo {
+    pub identity_pubkey: String,
+    pub info_pubkey: String,
+    pub info: Map<String, Value>,
+}
+
+impl fmt::Display for CliValidatorInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Validator Identity Pubkey:", &self.identity_pubkey)?;
+        writeln_name_value(f, "  Info Pubkey:", &self.info_pubkey)?;
+        for (key, value) in self.info.iter() {
+            writeln_name_value(
+                f,
+                &format!("  {}:", to_title_case(key)),
+                &value.as_str().unwrap_or("?"),
+            )?;
+        }
+        Ok(())
     }
 }
 

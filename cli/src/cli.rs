@@ -1949,7 +1949,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Return all or single validator info
         CliCommand::GetValidatorInfo(info_pubkey) => {
-            process_get_validator_info(&rpc_client, *info_pubkey)
+            process_get_validator_info(&rpc_client, config, *info_pubkey)
         }
         // Publish validator info
         CliCommand::SetValidatorInfo {
