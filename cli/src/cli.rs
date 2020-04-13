@@ -1580,7 +1580,7 @@ fn process_witness(
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
-    if config.verbose {
+    if config.verbose && config.output_format == OutputFormat::Display {
         println_name_value("RPC URL:", &config.json_rpc_url);
         println_name_value("Default Signer Path:", &config.keypair_path);
         if config.keypair_path.starts_with("usb://") {

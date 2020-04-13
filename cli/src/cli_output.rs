@@ -15,6 +15,7 @@ use solana_vote_program::{
 };
 use std::{collections::BTreeMap, fmt};
 
+#[derive(PartialEq)]
 pub enum OutputFormat {
     Display,
     Json,
