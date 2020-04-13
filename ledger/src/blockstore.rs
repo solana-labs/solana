@@ -179,7 +179,7 @@ impl Blockstore {
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
-        let shreds_dir = blockstore_path
+        let shreds_dir = ledger_path
             .join(SHREDS_DIRECTORY)
             .to_str()
             .unwrap()
