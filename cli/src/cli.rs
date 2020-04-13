@@ -1625,7 +1625,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, *slot),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetEpochInfo { commitment_config } => {
-            process_get_epoch_info(&rpc_client, *commitment_config)
+            process_get_epoch_info(&rpc_client, config, *commitment_config)
         }
         CliCommand::GetEpoch { commitment_config } => {
             process_get_epoch(&rpc_client, *commitment_config)

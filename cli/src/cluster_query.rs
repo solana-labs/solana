@@ -4,7 +4,8 @@ use crate::{
         CliError, ProcessResult,
     },
     cli_output::{
-        CliBlockProduction, CliBlockProductionEntry, CliKeyedStakeState, CliSlotStatus, CliStakeVec,
+        CliBlockProduction, CliBlockProductionEntry, CliEpochInfo, CliKeyedStakeState,
+        CliSlotStatus, CliStakeVec,
     },
     display::println_name_value,
 };
@@ -602,51 +603,15 @@ pub fn process_get_block_time(rpc_client: &RpcClient, slot: Slot) -> ProcessResu
     Ok(result)
 }
 
-fn slot_to_human_time(slot: Slot) -> String {
-    humantime::format_duration(Duration::from_secs(
-        slot * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
-    ))
-    .to_string()
-}
-
 pub fn process_get_epoch_info(
     rpc_client: &RpcClient,
+    config: &CliConfig,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment_config.clone())?;
-    println!();
-    println_name_value("Slot:", &epoch_info.absolute_slot.to_string());
-    println_name_value("Epoch:", &epoch_info.epoch.to_string());
-    let start_slot = epoch_info.absolute_slot - epoch_info.slot_index;
-    let end_slot = start_slot + epoch_info.slots_in_epoch;
-    println_name_value(
-        "Epoch Slot Range:",
-        &format!("[{}..{})", start_slot, end_slot),
-    );
-    println_name_value(
-        "Epoch Completed Percent:",
-        &format!(
-            "{:>3.3}%",
-            epoch_info.slot_index as f64 / epoch_info.slots_in_epoch as f64 * 100_f64
-        ),
-    );
-    let remaining_slots_in_epoch = epoch_info.slots_in_epoch - epoch_info.slot_index;
-    println_name_value(
-        "Epoch Completed Slots:",
-        &format!(
-            "{}/{} ({} remaining)",
-            epoch_info.slot_index, epoch_info.slots_in_epoch, remaining_slots_in_epoch
-        ),
-    );
-    println_name_value(
-        "Epoch Completed Time:",
-        &format!(
-            "{}/{} ({} remaining)",
-            slot_to_human_time(epoch_info.slot_index),
-            slot_to_human_time(epoch_info.slots_in_epoch),
-            slot_to_human_time(remaining_slots_in_epoch)
-        ),
-    );
+    let epoch_info: CliEpochInfo = rpc_client
+        .get_epoch_info_with_commitment(commitment_config.clone())?
+        .into();
+    config.output_format.formatted_print(&epoch_info);
     Ok("".to_string())
 }
 

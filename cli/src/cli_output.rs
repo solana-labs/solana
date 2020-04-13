@@ -4,8 +4,9 @@ use console::style;
 use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
+use solana_client::rpc_response::RpcEpochInfo;
 use solana_sdk::{
-    clock::{Epoch, Slot, UnixTimestamp},
+    clock::{self, Epoch, Slot, UnixTimestamp},
     stake_history::StakeHistoryEntry,
 };
 use solana_stake_program::stake_state::{Authorized, Lockup};
@@ -13,7 +14,7 @@ use solana_vote_program::{
     authorized_voters::AuthorizedVoters,
     vote_state::{BlockTimestamp, Lockout},
 };
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, time::Duration};
 
 #[derive(PartialEq)]
 pub enum OutputFormat {
@@ -140,6 +141,70 @@ pub struct CliSlotStatus {
     pub slot: Slot,
     pub leader: String,
     pub skipped: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliEpochInfo {
+    #[serde(flatten)]
+    pub epoch_info: RpcEpochInfo,
+}
+
+impl From<RpcEpochInfo> for CliEpochInfo {
+    fn from(epoch_info: RpcEpochInfo) -> Self {
+        Self { epoch_info }
+    }
+}
+
+impl fmt::Display for CliEpochInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Slot:", &self.epoch_info.absolute_slot.to_string())?;
+        writeln_name_value(f, "Epoch:", &self.epoch_info.epoch.to_string())?;
+        let start_slot = self.epoch_info.absolute_slot - self.epoch_info.slot_index;
+        let end_slot = start_slot + self.epoch_info.slots_in_epoch;
+        writeln_name_value(
+            f,
+            "Epoch Slot Range:",
+            &format!("[{}..{})", start_slot, end_slot),
+        )?;
+        writeln_name_value(
+            f,
+            "Epoch Completed Percent:",
+            &format!(
+                "{:>3.3}%",
+                self.epoch_info.slot_index as f64 / self.epoch_info.slots_in_epoch as f64 * 100_f64
+            ),
+        )?;
+        let remaining_slots_in_epoch = self.epoch_info.slots_in_epoch - self.epoch_info.slot_index;
+        writeln_name_value(
+            f,
+            "Epoch Completed Slots:",
+            &format!(
+                "{}/{} ({} remaining)",
+                self.epoch_info.slot_index,
+                self.epoch_info.slots_in_epoch,
+                remaining_slots_in_epoch
+            ),
+        )?;
+        writeln_name_value(
+            f,
+            "Epoch Completed Time:",
+            &format!(
+                "{}/{} ({} remaining)",
+                slot_to_human_time(self.epoch_info.slot_index),
+                slot_to_human_time(self.epoch_info.slots_in_epoch),
+                slot_to_human_time(remaining_slots_in_epoch)
+            ),
+        )
+    }
+}
+
+fn slot_to_human_time(slot: Slot) -> String {
+    humantime::format_duration(Duration::from_secs(
+        slot * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
+    ))
+    .to_string()
 }
 
 #[derive(Default, Serialize, Deserialize)]
