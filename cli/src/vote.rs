@@ -1,7 +1,10 @@
-use crate::cli::{
-    build_balance_message, check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
-    SignerIndex,
+use crate::{
+    cli::{
+        check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
+        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult, SignerIndex,
+    },
+    cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount},
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*};
@@ -549,7 +552,7 @@ fn get_vote_account(
 
 pub fn process_show_vote_account(
     rpc_client: &RpcClient,
-    _config: &CliConfig,
+    config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
     commitment_config: CommitmentConfig,
@@ -559,45 +562,38 @@ pub fn process_show_vote_account(
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
-    println!(
-        "Account Balance: {}",
-        build_balance_message(vote_account.lamports, use_lamports_unit, true)
-    );
-    println!("Validator Identity: {}", vote_state.node_pubkey);
-    println!("Authorized Voter: {:?}", vote_state.authorized_voters());
-    println!(
-        "Authorized Withdrawer: {}",
-        vote_state.authorized_withdrawer
-    );
-    println!("Credits: {}", vote_state.credits());
-    println!("Commission: {}%", vote_state.commission);
-    println!(
-        "Root Slot: {}",
-        match vote_state.root_slot {
-            Some(slot) => slot.to_string(),
-            None => "~".to_string(),
-        }
-    );
-    println!("Recent Timestamp: {:?}", vote_state.last_timestamp);
+    let mut votes: Vec<CliLockout> = vec![];
+    let mut epoch_voting_history: Vec<CliEpochVotingHistory> = vec![];
     if !vote_state.votes.is_empty() {
-        println!("recent votes:");
         for vote in &vote_state.votes {
-            println!(
-                "- slot: {}\n  confirmation count: {}",
-                vote.slot, vote.confirmation_count
-            );
+            votes.push(vote.into());
         }
-
-        println!("Epoch Voting History:");
         for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
             let credits_earned = credits - prev_credits;
             let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
-            println!(
-                "- epoch: {}\n  slots in epoch: {}\n  credits earned: {}",
-                epoch, slots_in_epoch, credits_earned,
-            );
+            epoch_voting_history.push(CliEpochVotingHistory {
+                epoch: *epoch,
+                slots_in_epoch,
+                credits_earned,
+            });
         }
     }
+
+    let vote_account_data = CliVoteAccount {
+        account_balance: vote_account.lamports,
+        validator_identity: vote_state.node_pubkey.to_string(),
+        authorized_voters: vote_state.authorized_voters().into(),
+        authorized_withdrawer: vote_state.authorized_withdrawer.to_string(),
+        credits: vote_state.credits(),
+        commission: vote_state.commission,
+        root_slot: vote_state.root_slot,
+        recent_timestamp: vote_state.last_timestamp.clone(),
+        votes,
+        epoch_voting_history,
+        use_lamports_unit,
+    };
+
+    config.output_format.formatted_print(&vote_account_data);
     Ok("".to_string())
 }
 
