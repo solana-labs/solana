@@ -316,7 +316,7 @@ impl Validator {
             std::thread::park();
         }
 
-        let poh_config = Arc::new(genesis_config.poh_config);
+        let poh_config = Arc::new(genesis_config.poh_config.clone());
         let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -443,6 +443,7 @@ impl Validator {
                 shred_version: node.info.shred_version,
                 trusted_validators: config.trusted_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
+                genesis_config,
             },
         );
 

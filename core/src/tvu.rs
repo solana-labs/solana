@@ -26,6 +26,7 @@ use solana_ledger::{
     snapshot_package::SnapshotPackageSender,
 };
 use solana_sdk::{
+    genesis_config::GenesisConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -67,6 +68,7 @@ pub struct TvuConfig {
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
     pub trusted_validators: Option<HashSet<Pubkey>>,
     pub accounts_hash_fault_injection_slots: u64,
+    pub genesis_config: GenesisConfig,
 }
 
 impl Tvu {
@@ -185,6 +187,7 @@ impl Tvu {
             block_commitment_cache: block_commitment_cache.clone(),
             transaction_status_sender,
             rewards_recorder_sender,
+            genesis_config: tvu_config.genesis_config,
         };
 
         let (replay_stage, root_bank_receiver) = ReplayStage::new(
