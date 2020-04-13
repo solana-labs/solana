@@ -117,7 +117,7 @@ trait BroadcastRun {
         sock: &UdpSocket,
     ) -> Result<()>;
     fn record(
-        &self,
+        &mut self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()>;
@@ -250,7 +250,7 @@ impl BroadcastStage {
         let blockstore_receiver = Arc::new(Mutex::new(blockstore_receiver));
         for _ in 0..NUM_INSERT_THREADS {
             let blockstore_receiver = blockstore_receiver.clone();
-            let bs_record = broadcast_stage_run.clone();
+            let mut bs_record = broadcast_stage_run.clone();
             let btree = blockstore.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-record".to_string())

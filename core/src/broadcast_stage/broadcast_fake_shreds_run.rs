@@ -119,7 +119,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         Ok(())
     }
     fn record(
-        &self,
+        &mut self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {

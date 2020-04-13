@@ -94,7 +94,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         Ok(())
     }
     fn record(
-        &self,
+        &mut self,
         receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
