@@ -4,7 +4,7 @@ use console::style;
 use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use solana_client::rpc_response::RpcEpochInfo;
+use solana_client::rpc_response::{RpcEpochInfo, RpcKeyedAccount};
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
     stake_history::StakeHistoryEntry,
@@ -35,6 +35,42 @@ impl OutputFormat {
                 println!("{}", serde_json::to_value(item).unwrap());
             }
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliAccount {
+    #[serde(flatten)]
+    pub keyed_account: RpcKeyedAccount,
+    #[serde(skip_serializing)]
+    pub use_lamports_unit: bool,
+}
+
+impl fmt::Display for CliAccount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Public Key:", &self.keyed_account.pubkey)?;
+        writeln_name_value(
+            f,
+            "Balance:",
+            &build_balance_message(
+                self.keyed_account.account.lamports,
+                self.use_lamports_unit,
+                true,
+            ),
+        )?;
+        writeln_name_value(f, "Owner:", &self.keyed_account.account.owner)?;
+        writeln_name_value(
+            f,
+            "Executable:",
+            &self.keyed_account.account.executable.to_string(),
+        )?;
+        writeln_name_value(
+            f,
+            "Rent Epoch:",
+            &self.keyed_account.account.rent_epoch.to_string(),
+        )?;
+        Ok(())
     }
 }
 

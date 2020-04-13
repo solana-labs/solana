@@ -1,5 +1,5 @@
 use crate::{
-    cli_output::OutputFormat,
+    cli_output::{CliAccount, OutputFormat},
     cluster_query::*,
     display::{println_name_value, println_signers},
     nonce::{self, *},
@@ -22,6 +22,7 @@ use solana_clap_utils::{
 use solana_client::{
     client_error::{ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
+    rpc_response::{RpcAccount, RpcKeyedAccount},
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -1182,31 +1183,33 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
 
 fn process_show_account(
     rpc_client: &RpcClient,
-    _config: &CliConfig,
+    config: &CliConfig,
     account_pubkey: &Pubkey,
     output_file: &Option<String>,
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let account = rpc_client.get_account(account_pubkey)?;
+    let data = account.data.clone();
+    let cli_account = CliAccount {
+        keyed_account: RpcKeyedAccount {
+            pubkey: account_pubkey.to_string(),
+            account: RpcAccount::encode(account),
+        },
+        use_lamports_unit,
+    };
 
-    println!();
-    println_name_value("Public Key:", &account_pubkey.to_string());
-    println_name_value(
-        "Balance:",
-        &build_balance_message(account.lamports, use_lamports_unit, true),
-    );
-    println_name_value("Owner:", &account.owner.to_string());
-    println_name_value("Executable:", &account.executable.to_string());
-    println_name_value("Rent Epoch:", &account.rent_epoch.to_string());
+    config.output_format.formatted_print(&cli_account);
 
-    if let Some(output_file) = output_file {
-        let mut f = File::create(output_file)?;
-        f.write_all(&account.data)?;
-        println!();
-        println!("Wrote account data to {}", output_file);
-    } else if !account.data.is_empty() {
-        use pretty_hex::*;
-        println!("{:?}", account.data.hex_dump());
+    if config.output_format == OutputFormat::Display {
+        if let Some(output_file) = output_file {
+            let mut f = File::create(output_file)?;
+            f.write_all(&data)?;
+            println!();
+            println!("Wrote account data to {}", output_file);
+        } else if !data.is_empty() {
+            use pretty_hex::*;
+            println!("{:?}", data.hex_dump());
+        }
     }
 
     Ok("".to_string())
