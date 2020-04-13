@@ -479,6 +479,16 @@ pub struct AccountsDB {
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
     pub dead_slots: RwLock<HashSet<Slot>>,
+
+    stats: AccountsStats,
+}
+
+#[derive(Debug, Default)]
+struct AccountsStats {
+    delta_hash_scan_time_total_us: AtomicU64,
+    delta_hash_accumulate_time_total_us: AtomicU64,
+    delta_hash_merge_time_total_us: AtomicU64,
+    delta_hash_num: AtomicU64,
 }
 
 fn make_min_priority_thread_pool() -> ThreadPool {
@@ -516,6 +526,7 @@ impl Default for AccountsDB {
             bank_hashes: RwLock::new(bank_hashes),
             frozen_accounts: HashMap::new(),
             dead_slots: RwLock::new(HashSet::new()),
+            stats: AccountsStats::default(),
         }
     }
 }
@@ -1446,9 +1457,39 @@ impl AccountsDB {
                 oldest_slot = *slot;
             }
         }
+        drop(stores);
         info!("total_stores: {}, newest_slot: {}, oldest_slot: {}, max_slot: {} (num={}), min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
+        datapoint_info!(
+            "accounts_db-perf-stats",
+            (
+                "delta_hash_num",
+                self.stats.delta_hash_num.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "delta_hash_scan_us",
+                self.stats
+                    .delta_hash_scan_time_total_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "delta_hash_merge_us",
+                self.stats
+                    .delta_hash_merge_time_total_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "delta_hash_accumulate_us",
+                self.stats
+                    .delta_hash_accumulate_time_total_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+        );
     }
 
     pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
@@ -1617,7 +1658,16 @@ impl AccountsDB {
             .collect();
         let ret = Self::accumulate_account_hashes(hashes);
         accumulate.stop();
-        info!("{} {} {}", scan, merge, accumulate);
+        self.stats
+            .delta_hash_scan_time_total_us
+            .fetch_add(scan.as_us(), Ordering::Relaxed);
+        self.stats
+            .delta_hash_merge_time_total_us
+            .fetch_add(merge.as_us(), Ordering::Relaxed);
+        self.stats
+            .delta_hash_accumulate_time_total_us
+            .fetch_add(accumulate.as_us(), Ordering::Relaxed);
+        self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
         ret
     }
 
@@ -1698,7 +1748,7 @@ impl AccountsDB {
                     }
                 }
                 drop(storage);
-                datapoint_info!("clean_dead_slots", ("stores", stores.len(), i64));
+                datapoint_debug!("clean_dead_slots", ("stores", stores.len(), i64));
                 let pubkeys: Vec<Vec<Pubkey>> = {
                     self.thread_pool_clean.install(|| {
                         stores
