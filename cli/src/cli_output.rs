@@ -37,6 +37,111 @@ impl OutputFormat {
 }
 
 #[derive(Default, Serialize, Deserialize)]
+pub struct CliBlockProduction {
+    pub epoch: Epoch,
+    pub start_slot: Slot,
+    pub end_slot: Slot,
+    pub total_slots: usize,
+    pub total_blocks_produced: usize,
+    pub total_slots_skipped: usize,
+    pub leaders: Vec<CliBlockProductionEntry>,
+    pub individual_slot_status: Vec<CliSlotStatus>,
+    #[serde(skip_serializing)]
+    pub verbose: bool,
+}
+
+impl fmt::Display for CliBlockProduction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln!(
+            f,
+            "{}",
+            style(format!(
+                "  {:<44}  {:>15}  {:>15}  {:>15}  {:>23}",
+                "Identity Pubkey",
+                "Leader Slots",
+                "Blocks Produced",
+                "Skipped Slots",
+                "Skipped Slot Percentage",
+            ))
+            .bold()
+        )?;
+        for leader in &self.leaders {
+            writeln!(
+                f,
+                "  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
+                leader.identity_pubkey,
+                leader.leader_slots,
+                leader.blocks_produced,
+                leader.skipped_slots,
+                leader.skipped_slots as f64 / leader.leader_slots as f64 * 100.
+            )?;
+        }
+        writeln!(f)?;
+        writeln!(
+            f,
+            "  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
+            format!("Epoch {} total:", self.epoch),
+            self.total_slots,
+            self.total_blocks_produced,
+            self.total_slots_skipped,
+            self.total_slots_skipped as f64 / self.total_slots as f64 * 100.
+        )?;
+        writeln!(
+            f,
+            "  (using data from {} slots: {} to {})",
+            self.total_slots, self.start_slot, self.end_slot
+        )?;
+        if self.verbose {
+            writeln!(f)?;
+            writeln!(f)?;
+            writeln!(
+                f,
+                "{}",
+                style(format!("  {:<15} {:<44}", "Slot", "Identity Pubkey")).bold(),
+            )?;
+            for status in &self.individual_slot_status {
+                if status.skipped {
+                    writeln!(
+                        f,
+                        "{}",
+                        style(format!(
+                            "  {:<15} {:<44} SKIPPED",
+                            status.slot, status.leader
+                        ))
+                        .red()
+                    )?;
+                } else {
+                    writeln!(
+                        f,
+                        "{}",
+                        style(format!("  {:<15} {:<44}", status.slot, status.leader))
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliBlockProductionEntry {
+    pub identity_pubkey: String,
+    pub leader_slots: u64,
+    pub blocks_produced: u64,
+    pub skipped_slots: u64,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliSlotStatus {
+    pub slot: Slot,
+    pub leader: String,
+    pub skipped: bool,
+}
+
+#[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliNonceAccount {
     pub balance: u64,

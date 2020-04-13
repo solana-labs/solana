@@ -3,7 +3,9 @@ use crate::{
         build_balance_message, check_account_for_fee, CliCommand, CliCommandInfo, CliConfig,
         CliError, ProcessResult,
     },
-    cli_output::{CliKeyedStakeState, CliStakeVec},
+    cli_output::{
+        CliBlockProduction, CliBlockProductionEntry, CliKeyedStakeState, CliSlotStatus, CliStakeVec,
+    },
     display::println_name_value,
 };
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
@@ -737,9 +739,9 @@ pub fn process_show_block_production(
     let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
     let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
     let total_slots = end_slot_index - start_slot_index + 1;
-    let total_blocks = confirmed_blocks.len();
-    assert!(total_blocks <= total_slots);
-    let total_slots_skipped = total_slots - total_blocks;
+    let total_blocks_produced = confirmed_blocks.len();
+    assert!(total_blocks_produced <= total_slots);
+    let total_slots_skipped = total_slots - total_blocks_produced;
     let mut leader_slot_count = HashMap::new();
     let mut leader_skipped_slots = HashMap::new();
 
@@ -763,7 +765,7 @@ pub fn process_show_block_production(
 
     progress_bar.set_message(&format!(
         "Processing {} slots containing {} blocks and {} empty slots...",
-        total_slots, total_blocks, total_slots_skipped
+        total_slots, total_blocks_produced, total_slots_skipped
     ));
 
     let mut confirmed_blocks_index = 0;
@@ -782,71 +784,52 @@ pub fn process_show_block_production(
                     continue;
                 }
                 if slot_of_next_confirmed_block == slot {
-                    individual_slot_status
-                        .push(style(format!("  {:<15} {:<44}", slot, leader)).to_string());
+                    individual_slot_status.push(CliSlotStatus {
+                        slot,
+                        leader: leader.to_string(),
+                        skipped: false,
+                    });
                     break;
                 }
             }
             *skipped_slots += 1;
-            individual_slot_status.push(
-                style(format!("  {:<15} {:<44} SKIPPED", slot, leader))
-                    .red()
-                    .to_string(),
-            );
+            individual_slot_status.push(CliSlotStatus {
+                slot,
+                leader: leader.to_string(),
+                skipped: true,
+            });
             break;
         }
     }
 
     progress_bar.finish_and_clear();
-    println!(
-        "\n{}",
-        style(format!(
-            "  {:<44}  {:>15}  {:>15}  {:>15}  {:>23}",
-            "Identity Pubkey",
-            "Leader Slots",
-            "Blocks Produced",
-            "Skipped Slots",
-            "Skipped Slot Percentage",
-        ))
-        .bold()
-    );
 
-    let mut table = vec![];
-    for (leader, leader_slots) in leader_slot_count.iter() {
-        let skipped_slots = leader_skipped_slots.get(leader).unwrap();
-        let blocks_produced = leader_slots - skipped_slots;
-        table.push(format!(
-            "  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
-            leader,
-            leader_slots,
-            blocks_produced,
-            skipped_slots,
-            *skipped_slots as f64 / *leader_slots as f64 * 100.
-        ));
-    }
-    table.sort();
-
-    println!(
-        "{}\n\n  {:<44}  {:>15}  {:>15}  {:>15}  {:>22.2}%",
-        table.join("\n"),
-        format!("Epoch {} total:", epoch),
+    let mut leaders: Vec<CliBlockProductionEntry> = leader_slot_count
+        .iter()
+        .map(|(leader, leader_slots)| {
+            let skipped_slots = leader_skipped_slots.get(leader).unwrap();
+            let blocks_produced = leader_slots - skipped_slots;
+            CliBlockProductionEntry {
+                identity_pubkey: leader.to_string(),
+                leader_slots: *leader_slots,
+                blocks_produced,
+                skipped_slots: *skipped_slots,
+            }
+        })
+        .collect();
+    leaders.sort_by(|a, b| a.identity_pubkey.partial_cmp(&b.identity_pubkey).unwrap());
+    let block_production = CliBlockProduction {
+        epoch,
+        start_slot,
+        end_slot,
         total_slots,
-        total_blocks,
+        total_blocks_produced,
         total_slots_skipped,
-        total_slots_skipped as f64 / total_slots as f64 * 100.
-    );
-    println!(
-        "  (using data from {} slots: {} to {})",
-        total_slots, start_slot, end_slot
-    );
-
-    if config.verbose {
-        println!(
-            "\n\n{}\n{}",
-            style(format!("  {:<15} {:<44}", "Slot", "Identity Pubkey")).bold(),
-            individual_slot_status.join("\n")
-        );
-    }
+        leaders,
+        individual_slot_status,
+        verbose: config.verbose,
+    };
+    config.output_format.formatted_print(&block_production);
     Ok("".to_string())
 }
 
