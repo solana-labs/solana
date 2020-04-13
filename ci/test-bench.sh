@@ -8,17 +8,17 @@ annotate() {
   }
 }
 
-ci/affects-files.sh \
-  .rs$ \
-  Cargo.lock$ \
-  Cargo.toml$ \
-  ^ci/rust-version.sh \
-  ^ci/test-bench.sh \
-|| {
-  annotate --style info --context test-bench \
-    "Bench skipped as no .rs files were modified"
-  exit 0
-}
+#ci/affects-files.sh \
+#  .rs$ \
+#  Cargo.lock$ \
+#  Cargo.toml$ \
+#  ^ci/rust-version.sh \
+#  ^ci/test-bench.sh \
+#|| {
+#  annotate --style info --context test-bench \
+#    "Bench skipped as no .rs files were modified"
+#  exit 0
+#}
 
 
 source ci/_
