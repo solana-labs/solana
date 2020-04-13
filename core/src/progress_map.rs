@@ -94,7 +94,6 @@ pub(crate) struct ForkProgress {
     // so these stats do not span all of time
     pub(crate) num_blocks_on_fork: u64,
     pub(crate) num_dropped_blocks_on_fork: u64,
-    pub(crate) stake_ranges: StakeRanges,
 }
 
 impl ForkProgress {

@@ -2988,7 +2988,7 @@ pub(crate) mod tests {
             &VoteTracker::default(),
             &ClusterSlots::default(),
             &vote_simulator.bank_forks,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
         );
 
         assert_eq!(

@@ -772,7 +772,7 @@ pub mod test {
         ) {
             self.progress
                 .entry(slot)
-                .or_insert_with(|| ForkProgress::new(Hash::default(), None, None))
+                .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0))
                 .fork_stats
                 .lockout_intervals
                 .entry(lockout_interval.1)
