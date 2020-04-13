@@ -3,6 +3,7 @@ use crate::{
         build_balance_message, check_account_for_fee, CliCommand, CliCommandInfo, CliConfig,
         CliError, ProcessResult,
     },
+    cli_output::{CliKeyedStakeState, CliStakeVec},
     display::println_name_value,
 };
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
@@ -1127,10 +1128,11 @@ pub fn process_show_gossip(rpc_client: &RpcClient) -> ProcessResult {
 
 pub fn process_show_stakes(
     rpc_client: &RpcClient,
+    config: &CliConfig,
     use_lamports_unit: bool,
     vote_account_pubkeys: Option<&[Pubkey]>,
 ) -> ProcessResult {
-    use crate::stake::print_stake_state;
+    use crate::stake::build_stake_state;
     use solana_stake_program::stake_state::StakeState;
 
     let progress_bar = new_spinner_progress_bar();
@@ -1138,13 +1140,20 @@ pub fn process_show_stakes(
     let all_stake_accounts = rpc_client.get_program_accounts(&solana_stake_program::id())?;
     progress_bar.finish_and_clear();
 
+    let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
         if let Ok(stake_state) = stake_account.state() {
             match stake_state {
                 StakeState::Initialized(_) => {
                     if vote_account_pubkeys.is_none() {
-                        println!("\nstake pubkey: {}", stake_pubkey);
-                        print_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
+                        stake_accounts.push(CliKeyedStakeState {
+                            stake_pubkey: stake_pubkey.to_string(),
+                            stake_state: build_stake_state(
+                                stake_account.lamports,
+                                &stake_state,
+                                use_lamports_unit,
+                            ),
+                        });
                     }
                 }
                 StakeState::Stake(_, stake) => {
@@ -1153,14 +1162,23 @@ pub fn process_show_stakes(
                             .unwrap()
                             .contains(&stake.delegation.voter_pubkey)
                     {
-                        println!("\nstake pubkey: {}", stake_pubkey);
-                        print_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
+                        stake_accounts.push(CliKeyedStakeState {
+                            stake_pubkey: stake_pubkey.to_string(),
+                            stake_state: build_stake_state(
+                                stake_account.lamports,
+                                &stake_state,
+                                use_lamports_unit,
+                            ),
+                        });
                     }
                 }
                 _ => {}
             }
         }
     }
+    config
+        .output_format
+        .formatted_print(&CliStakeVec::new(stake_accounts));
     Ok("".to_string())
 }
 

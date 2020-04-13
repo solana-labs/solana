@@ -1665,6 +1665,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             vote_account_pubkeys,
         } => process_show_stakes(
             &rpc_client,
+            config,
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
         ),
