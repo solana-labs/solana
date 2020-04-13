@@ -1276,7 +1276,9 @@ pub fn process_show_validators(
         );
     }
 
-    for vote_account in vote_accounts.current.into_iter() {
+    let mut current = vote_accounts.current;
+    current.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
+    for vote_account in current.into_iter() {
         print_vote_account(
             vote_account,
             epoch_info.epoch,
@@ -1285,7 +1287,9 @@ pub fn process_show_validators(
             false,
         );
     }
-    for vote_account in vote_accounts.delinquent.into_iter() {
+    let mut delinquent = vote_accounts.delinquent;
+    delinquent.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
+    for vote_account in delinquent.into_iter() {
         print_vote_account(
             vote_account,
             epoch_info.epoch,
