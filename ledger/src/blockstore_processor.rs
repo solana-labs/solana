@@ -20,8 +20,8 @@ use solana_runtime::{
     transaction_batch::TransactionBatch,
 };
 use solana_sdk::{
-    clock::{Slot, MAX_PROCESSING_AGE},
-    genesis_config::GenesisConfig,
+    clock::{Slot, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES},
+    genesis_config::{GenesisConfig, OperatingMode},
     hash::Hash,
     pubkey::Pubkey,
     signature::Keypair,
@@ -57,11 +57,22 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
+const MAX_AGE_CORRECTION_EPOCH: u64 = 14;
+
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<TransactionStatusSender>,
+    genesis_config: Option<&GenesisConfig>,
 ) -> Result<()> {
+    // See https://github.com/solana-labs/solana/pull/9423
+    let max_age_reduced = if let Some(genesis_config) = genesis_config {
+        genesis_config.operating_mode == OperatingMode::Stable
+            && bank.epoch() >= MAX_AGE_CORRECTION_EPOCH
+    } else {
+        false
+    };
+
     let (
         TransactionResults {
             fee_collection_results,
@@ -70,7 +81,11 @@ fn execute_batch(
         balances,
     ) = batch.bank().load_execute_and_commit_transactions(
         batch,
-        MAX_PROCESSING_AGE,
+        if max_age_reduced {
+            MAX_PROCESSING_AGE
+        } else {
+            MAX_RECENT_BLOCKHASHES
+        },
         transaction_status_sender.is_some(),
     );
 
@@ -112,6 +127,7 @@ fn execute_batches(
     batches: &[TransactionBatch],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<TransactionStatusSender>,
+    genesis_config: Option<&GenesisConfig>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
@@ -119,7 +135,7 @@ fn execute_batches(
             batches
                 .into_par_iter()
                 .map_with(transaction_status_sender, |sender, batch| {
-                    let result = execute_batch(batch, bank, sender.clone());
+                    let result = execute_batch(batch, bank, sender.clone(), genesis_config);
                     if let Some(entry_callback) = entry_callback {
                         entry_callback(bank);
                     }
@@ -143,7 +159,14 @@ pub fn process_entries(
     randomize: bool,
     transaction_status_sender: Option<TransactionStatusSender>,
 ) -> Result<()> {
-    process_entries_with_callback(bank, entries, randomize, None, transaction_status_sender)
+    process_entries_with_callback(
+        bank,
+        entries,
+        randomize,
+        None,
+        transaction_status_sender,
+        Some(&GenesisConfig::default()),
+    )
 }
 
 fn process_entries_with_callback(
@@ -152,6 +175,7 @@ fn process_entries_with_callback(
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<TransactionStatusSender>,
+    genesis_config: Option<&GenesisConfig>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -168,6 +192,7 @@ fn process_entries_with_callback(
                     &batches,
                     entry_callback,
                     transaction_status_sender.clone(),
+                    genesis_config,
                 )?;
                 batches.clear();
                 for hash in &tick_hashes {
@@ -223,12 +248,19 @@ fn process_entries_with_callback(
                     &batches,
                     entry_callback,
                     transaction_status_sender.clone(),
+                    genesis_config,
                 )?;
                 batches.clear();
             }
         }
     }
-    execute_batches(bank, &batches, entry_callback, transaction_status_sender)?;
+    execute_batches(
+        bank,
+        &batches,
+        entry_callback,
+        transaction_status_sender,
+        genesis_config,
+    )?;
     for hash in tick_hashes {
         bank.register_tick(&hash);
     }
@@ -363,6 +395,7 @@ pub fn process_blockstore_from_root(
                 &mut rooted_path,
                 opts,
                 recyclers,
+                genesis_config,
             )?;
             let (banks, bank_forks_info): (Vec<_>, Vec<_>) =
                 fork_info.into_iter().map(|(_, v)| v).unzip();
@@ -456,6 +489,7 @@ fn confirm_full_slot(
     last_entry_hash: &Hash,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
+    genesis_config: Option<&GenesisConfig>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut timing = ConfirmationTiming::default();
     let mut progress = ConfirmationProgress::new(*last_entry_hash);
@@ -469,6 +503,7 @@ fn confirm_full_slot(
         None,
         opts.entry_callback.as_ref(),
         recyclers,
+        genesis_config,
     )?;
 
     if !bank.is_complete() {
@@ -527,6 +562,7 @@ pub fn confirm_slot(
     transaction_status_sender: Option<TransactionStatusSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
+    genesis_config: Option<&GenesisConfig>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -592,6 +628,7 @@ pub fn confirm_slot(
         true,
         entry_callback,
         transaction_status_sender,
+        genesis_config,
     )
     .map_err(BlockstoreProcessorError::from);
     replay_elapsed.stop();
@@ -625,8 +662,15 @@ fn process_bank_0(
     recyclers: &VerifyRecyclers,
 ) -> result::Result<(), BlockstoreProcessorError> {
     assert_eq!(bank0.slot(), 0);
-    confirm_full_slot(blockstore, bank0, &bank0.last_blockhash(), opts, recyclers)
-        .expect("processing for bank 0 must succceed");
+    confirm_full_slot(
+        blockstore,
+        bank0,
+        &bank0.last_blockhash(),
+        opts,
+        recyclers,
+        None,
+    )
+    .expect("processing for bank 0 must succceed");
     bank0.freeze();
     Ok(())
 }
@@ -701,6 +745,7 @@ fn process_pending_slots(
     rooted_path: &mut Vec<u64>,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
+    genesis_config: &GenesisConfig,
 ) -> result::Result<HashMap<u64, (Arc<Bank>, BankForksInfo)>, BlockstoreProcessorError> {
     let mut fork_info = HashMap::new();
     let mut last_status_report = Instant::now();
@@ -730,7 +775,16 @@ fn process_pending_slots(
         let allocated = thread_mem_usage::Allocatedp::default();
         let initial_allocation = allocated.get();
 
-        if process_single_slot(blockstore, &bank, &last_entry_hash, opts, recyclers).is_err() {
+        if process_single_slot(
+            blockstore,
+            &bank,
+            &last_entry_hash,
+            opts,
+            recyclers,
+            genesis_config,
+        )
+        .is_err()
+        {
             continue;
         }
 
@@ -778,10 +832,19 @@ fn process_single_slot(
     last_entry_hash: &Hash,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
+    genesis_config: &GenesisConfig,
 ) -> result::Result<(), BlockstoreProcessorError> {
     // Mark corrupt slots as dead so validators don't replay this slot and
     // see DuplicateSignature errors later in ReplayStage
-    confirm_full_slot(blockstore, bank, last_entry_hash, opts, recyclers).map_err(|err| {
+    confirm_full_slot(
+        blockstore,
+        bank,
+        last_entry_hash,
+        opts,
+        recyclers,
+        Some(genesis_config),
+    )
+    .map_err(|err| {
         let slot = bank.slot();
         blockstore
             .set_dead_slot(slot)
@@ -2444,6 +2507,7 @@ pub mod tests {
             &bank0.last_blockhash(),
             &opts,
             &recyclers,
+            None,
         )
         .unwrap();
         bank1.squash();
@@ -2609,7 +2673,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_with_callback(&bank0, &entries, true, None, None).unwrap();
+        process_entries_with_callback(&bank0, &entries, true, None, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 

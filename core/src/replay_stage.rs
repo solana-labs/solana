@@ -26,6 +26,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::Slot,
+    genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -80,6 +81,7 @@ pub struct ReplayStageConfig {
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
+    pub genesis_config: GenesisConfig,
 }
 
 pub struct ReplayStage {
@@ -183,6 +185,7 @@ impl ReplayStage {
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
+            genesis_config,
         } = config;
 
         let (root_bank_sender, root_bank_receiver) = channel();
@@ -246,6 +249,7 @@ impl ReplayStage {
                         &slot_full_senders,
                         transaction_status_sender.clone(),
                         &verify_recyclers,
+                        &genesis_config,
                     );
                     datapoint_debug!(
                         "replay_stage-memory",
@@ -551,6 +555,7 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
+        genesis_config: &GenesisConfig,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
         let confirm_result = blockstore_processor::confirm_slot(
@@ -562,6 +567,7 @@ impl ReplayStage {
             transaction_status_sender,
             None,
             verify_recyclers,
+            Some(genesis_config),
         );
         let tx_count_after = bank_progress.replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
@@ -737,6 +743,7 @@ impl ReplayStage {
         slot_full_senders: &[Sender<(u64, Pubkey)>],
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
+        genesis_config: &GenesisConfig,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -765,6 +772,7 @@ impl ReplayStage {
                     bank_progress,
                     transaction_status_sender.clone(),
                     verify_recyclers,
+                    genesis_config,
                 );
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
@@ -1709,6 +1717,7 @@ pub(crate) mod tests {
                 &mut bank0_progress,
                 None,
                 &VerifyRecyclers::default(),
+                &genesis_config,
             );
 
             // Check that the erroring bank was marked as dead in the progress map
