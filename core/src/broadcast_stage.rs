@@ -42,6 +42,7 @@ mod standard_broadcast_run;
 pub const NUM_INSERT_THREADS: usize = 2;
 pub type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
 pub type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
+pub type RecordReceiver = Receiver<(Arc<Vec<Shred>>, bool)>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -107,18 +108,18 @@ trait BroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<TransmitShreds>,
-        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        socket_sender: &Sender<(TransmitShreds, bool)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
     ) -> Result<()>;
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
+        receiver: &Arc<Mutex<Receiver<(TransmitShreds, bool)>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()>;
     fn record(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
+        receiver: &Arc<Mutex<RecordReceiver>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()>;
 }
@@ -150,8 +151,8 @@ impl BroadcastStage {
     fn run(
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<TransmitShreds>,
-        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        socket_sender: &Sender<(TransmitShreds, bool)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
@@ -289,7 +290,7 @@ impl BroadcastStage {
     fn check_retransmit_signals(
         blockstore: &Blockstore,
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
-        socket_sender: &Sender<TransmitShreds>,
+        socket_sender: &Sender<(TransmitShreds, bool)>,
     ) -> Result<()> {
         let timer = Duration::from_millis(100);
 
@@ -310,7 +311,7 @@ impl BroadcastStage {
             );
 
             if !data_shreds.is_empty() {
-                socket_sender.send((stakes.clone(), data_shreds))?;
+                socket_sender.send(((stakes.clone(), data_shreds), false))?;
             }
 
             let coding_shreds = Arc::new(
@@ -320,7 +321,7 @@ impl BroadcastStage {
             );
 
             if !coding_shreds.is_empty() {
-                socket_sender.send((stakes.clone(), coding_shreds))?;
+                socket_sender.send(((stakes.clone(), coding_shreds), false))?;
             }
         }
 
@@ -478,13 +479,13 @@ pub mod test {
     }
 
     fn check_all_shreds_received(
-        transmit_receiver: &Receiver<TransmitShreds>,
+        transmit_receiver: &Receiver<(TransmitShreds, bool)>,
         mut data_index: u64,
         mut coding_index: u64,
         num_expected_data_shreds: u64,
         num_expected_coding_shreds: u64,
     ) {
-        while let Ok(new_retransmit_slots) = transmit_receiver.try_recv() {
+        while let Ok((new_retransmit_slots, _)) = transmit_receiver.try_recv() {
             if new_retransmit_slots.1[0].is_data() {
                 for data_shred in new_retransmit_slots.1.iter() {
                     assert_eq!(data_shred.index() as u64, data_index);

@@ -26,16 +26,28 @@ impl ProcessShredsStats {
 }
 
 #[derive(Default, Clone)]
-struct BroadcastShredsStats {
-    broadcast_elapsed: u64,
+struct TransmitShredsStats {
+    transmit_elapsed: u64,
     send_mmsg_elapsed: u64,
+    get_peers_elapsed: u64,
+    num_shreds: usize,
 }
-impl BroadcastShredsStats {
-    fn update(&mut self, new_stats: &BroadcastShredsStats) {
-        self.broadcast_elapsed += new_stats.broadcast_elapsed;
+impl TransmitShredsStats {
+    fn update(&mut self, new_stats: &TransmitShredsStats) {
+        self.transmit_elapsed += new_stats.transmit_elapsed;
         self.send_mmsg_elapsed += new_stats.send_mmsg_elapsed;
+        self.get_peers_elapsed += new_stats.get_peers_elapsed;
+        self.num_shreds += new_stats.num_shreds;
     }
-    fn reset(&mut self) {
+    fn report_and_reset_stats(&mut self, slot: Slot) {
+        datapoint_info!(
+            "broadcast-transmit-shreds-stats",
+            ("slot", slot as i64, i64),
+            ("transmit_elapsed", self.transmit_elapsed as i64, i64),
+            ("send_mmsg_elapsed", self.send_mmsg_elapsed as i64, i64),
+            ("get_peers_elapsed", self.get_peers_elapsed as i64, i64),
+            ("num_shreds", self.num_shreds as i64, i64),
+        );
         *self = Self::default();
     }
 }
@@ -43,12 +55,24 @@ impl BroadcastShredsStats {
 #[derive(Default, Clone)]
 struct InsertShredsStats {
     insert_shreds_elapsed: u64,
+    num_shreds: usize,
 }
 impl InsertShredsStats {
     fn update(&mut self, new_stats: &InsertShredsStats) {
         self.insert_shreds_elapsed += new_stats.insert_shreds_elapsed;
+        self.num_shreds += new_stats.num_shreds;
     }
-    fn reset(&mut self) {
+    fn report_and_reset_stats(&mut self, slot: Slot) {
+        datapoint_info!(
+            "broadcast-insert-shreds-stats",
+            ("slot", slot as i64, i64),
+            (
+                "insert_shreds_elapsed",
+                self.insert_shreds_elapsed as i64,
+                i64
+            ),
+            ("num_shreds", self.num_shreds as i64, i64),
+        );
         *self = Self::default();
     }
 }
@@ -56,7 +80,7 @@ impl InsertShredsStats {
 #[derive(Clone)]
 pub struct StandardBroadcastRun {
     process_shreds_stats: ProcessShredsStats,
-    broadcast_shreds_stats: BroadcastShredsStats,
+    broadcast_shreds_stats: TransmitShredsStats,
     insert_shreds_stats: InsertShredsStats,
     unfinished_slot: Option<UnfinishedSlotInfo>,
     current_slot_and_parent: Option<(u64, u64)>,
@@ -70,7 +94,7 @@ impl StandardBroadcastRun {
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
         Self {
             process_shreds_stats: ProcessShredsStats::default(),
-            broadcast_shreds_stats: BroadcastShredsStats::default(),
+            broadcast_shreds_stats: TransmitShredsStats::default(),
             insert_shreds_stats: InsertShredsStats::default(),
             unfinished_slot: None,
             current_slot_and_parent: None,
@@ -181,8 +205,8 @@ impl StandardBroadcastRun {
     fn process_receive_results(
         &mut self,
         blockstore: &Arc<Blockstore>,
-        socket_sender: &Sender<TransmitShreds>,
-        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        socket_sender: &Sender<(TransmitShreds, bool)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
@@ -209,19 +233,19 @@ impl StandardBroadcastRun {
             self.check_for_interrupted_slot(bank.ticks_per_slot() as u8);
 
         // 2) Convert entries to shreds and coding shreds
-
         let (shredder, next_shred_index) = self.init_shredder(
             blockstore,
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
         );
-        let mut data_shreds = self.entries_to_data_shreds(
+        let is_last_in_slot = last_tick_height == bank.max_tick_height();
+        let data_shreds = self.entries_to_data_shreds(
             &shredder,
             next_shred_index,
             &receive_results.entries,
-            last_tick_height == bank.max_tick_height(),
+            is_last_in_slot,
         );
-        //Insert the first shred so blockstore stores that the leader started this block
-        //This must be done before the blocks are sent out over the wire.
+        // Insert the first shred so blockstore stores that the leader started this block
+        // This must be done before the blocks are sent out over the wire.
         if !data_shreds.is_empty() && data_shreds[0].index() == 0 {
             let first = vec![data_shreds[0].clone()];
             blockstore
@@ -229,21 +253,23 @@ impl StandardBroadcastRun {
                 .expect("Failed to insert shreds in blockstore");
         }
         let last_data_shred = data_shreds.len();
-        if let Some(last_shred) = last_unfinished_slot_shred {
-            data_shreds.push(last_shred);
-        }
         let to_shreds_elapsed = to_shreds_start.elapsed();
 
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
         let stakes = stakes.map(Arc::new);
+
+        // Broadcast the last shred of the interrupted slot if necessary
+        if let Some(last_shred) = last_unfinished_slot_shred {
+            socket_sender.send(((stakes.clone(), Arc::new(vec![last_shred])), true))?;
+        }
         let data_shreds = Arc::new(data_shreds);
-        socket_sender.send((stakes.clone(), data_shreds.clone()))?;
-        blockstore_sender.send(data_shreds.clone())?;
+        socket_sender.send(((stakes.clone(), data_shreds.clone()), false))?;
+        blockstore_sender.send((data_shreds.clone(), false))?;
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
         let coding_shreds = Arc::new(coding_shreds);
-        socket_sender.send((stakes, coding_shreds.clone()))?;
-        blockstore_sender.send(coding_shreds)?;
+        socket_sender.send(((stakes, coding_shreds.clone()), is_last_in_slot))?;
+        blockstore_sender.send((coding_shreds, is_last_in_slot))?;
         self.process_shreds_stats.update(&ProcessShredsStats {
             shredding_elapsed: duration_as_us(&to_shreds_elapsed),
             receive_elapsed: duration_as_us(&receive_elapsed),
@@ -256,7 +282,12 @@ impl StandardBroadcastRun {
         Ok(())
     }
 
-    fn insert(&mut self, blockstore: &Arc<Blockstore>, shreds: Arc<Vec<Shred>>) -> Result<()> {
+    fn insert(
+        &mut self,
+        blockstore: &Arc<Blockstore>,
+        shreds: Arc<Vec<Shred>>,
+        is_last_in_slot: bool,
+    ) -> Result<()> {
         // Insert shreds into blockstore
         let insert_shreds_start = Instant::now();
         // The first shred is inserted synchronously
@@ -271,7 +302,12 @@ impl StandardBroadcastRun {
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
         self.insert_shreds_stats.update(&InsertShredsStats {
             insert_shreds_elapsed: duration_as_us(&insert_shreds_elapsed),
+            num_shreds: shreds.len(),
         });
+        if is_last_in_slot {
+            self.insert_shreds_stats
+                .report_and_reset_stats(shreds.last().map(|s| s.slot()).unwrap_or(0));
+        }
         Ok(())
     }
 
@@ -281,6 +317,7 @@ impl StandardBroadcastRun {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         stakes: Option<Arc<HashMap<Pubkey, u64>>>,
         shreds: Arc<Vec<Shred>>,
+        is_last_in_slot: bool,
     ) -> Result<()> {
         trace!("Broadcasting {:?} shreds", shreds.len());
         // Get the list of peers to broadcast to
@@ -289,7 +326,7 @@ impl StandardBroadcastRun {
         let get_peers_elapsed = get_peers_start.elapsed();
 
         // Broadcast the shreds
-        let broadcast_start = Instant::now();
+        let transmit_start = Instant::now();
         let mut send_mmsg_total = 0;
         broadcast_shreds(
             sock,
@@ -299,12 +336,20 @@ impl StandardBroadcastRun {
             &self.last_datapoint_submit,
             &mut send_mmsg_total,
         )?;
-        let broadcast_elapsed = broadcast_start.elapsed();
+        let transmit_elapsed = transmit_start.elapsed();
 
-        self.broadcast_shreds_stats.update(&BroadcastShredsStats {
-            broadcast_elapsed: duration_as_us(&broadcast_elapsed),
+        self.broadcast_shreds_stats.update(&TransmitShredsStats {
+            transmit_elapsed: duration_as_us(&transmit_elapsed),
+            get_peers_elapsed: duration_as_us(&get_peers_elapsed),
             send_mmsg_elapsed: send_mmsg_total,
+            num_shreds: shreds.len(),
         });
+
+        if is_last_in_slot {
+            self.broadcast_shreds_stats
+                .report_and_reset_stats(shreds.last().map(|s| s.slot()).unwrap_or(0));
+        }
+
         Ok(())
     }
 
@@ -317,7 +362,7 @@ impl StandardBroadcastRun {
             ("shredding_time", stats.shredding_elapsed as i64, i64),
             ("receive_time", stats.receive_elapsed as i64, i64),
             (
-                "num_shreds",
+                "num_data_shreds",
                 i64::from(self.unfinished_slot.unwrap().next_shred_index),
                 i64
             ),
@@ -327,7 +372,6 @@ impl StandardBroadcastRun {
                 i64
             ),
         );
-        drop(stats);
         self.process_shreds_stats.reset();
     }
 }
@@ -337,8 +381,8 @@ impl BroadcastRun for StandardBroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<TransmitShreds>,
-        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        socket_sender: &Sender<(TransmitShreds, bool)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         self.process_receive_results(
@@ -350,20 +394,20 @@ impl BroadcastRun for StandardBroadcastRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
+        receiver: &Arc<Mutex<Receiver<(TransmitShreds, bool)>>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
-        let (stakes, shreds) = receiver.lock().unwrap().recv()?;
-        self.broadcast(sock, cluster_info, stakes, shreds)
+        let ((stakes, shreds), is_last_in_slot) = receiver.lock().unwrap().recv()?;
+        self.broadcast(sock, cluster_info, stakes, shreds, is_last_in_slot)
     }
     fn record(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
+        receiver: &Arc<Mutex<RecordReceiver>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
-        let shreds = receiver.lock().unwrap().recv()?;
-        self.insert(blockstore, shreds)
+        let (shreds, is_last_in_slot) = receiver.lock().unwrap().recv()?;
+        self.insert(blockstore, shreds, is_last_in_slot)
     }
 }
 
@@ -479,11 +523,7 @@ mod test {
         // Make sure the slot is not complete
         assert!(!blockstore.is_full(0));
         // Modify the stats, should reset later
-        standard_broadcast_run
-            .stats
-            .write()
-            .unwrap()
-            .receive_elapsed = 10;
+        standard_broadcast_run.process_shreds_stats.receive_elapsed = 10;
 
         // Try to fetch ticks from blockstore, nothing should break
         assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), ticks0);
@@ -519,7 +559,7 @@ mod test {
 
         // Check that the stats were reset as well
         assert_eq!(
-            standard_broadcast_run.stats.read().unwrap().receive_elapsed,
+            standard_broadcast_run.process_shreds_stats.receive_elapsed,
             0
         );
 
