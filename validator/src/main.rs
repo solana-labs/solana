@@ -1005,12 +1005,12 @@ pub fn main() {
         let mut tcp_listeners = vec![];
         if !private_rpc {
             if let Some((rpc_port, rpc_pubsub_port)) = validator_config.rpc_ports {
-                for port in &[rpc_port, rpc_pubsub_port] {
+                for (purpose, port) in &[("RPC", rpc_port), ("RPC pubsub", rpc_pubsub_port)] {
                     tcp_listeners.push((
                         *port,
                         TcpListener::bind(&SocketAddr::from((rpc_bind_address, *port)))
                             .unwrap_or_else(|err| {
-                                error!("Unable to bind to tcp/{}: {}", port, err);
+                                error!("Unable to bind to tcp/{} for {}: {}", port, purpose, err);
                                 std::process::exit(1);
                             }),
                     ));
