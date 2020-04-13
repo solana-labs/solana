@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
 HERE="$(dirname "$0")"
+SOLANA_ROOT="$HERE"/../..
 
-# shellcheck source=net/datacenter-node-install/utils.sh
+# shellcheck source=ci/setup-new-node/utils.sh
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
 
-set -xe
+set -ex
 
 apt update
 apt upgrade -y
@@ -21,20 +22,22 @@ apt install -y build-essential pkg-config clang cmake sysstat linux-tools-common
   linux-generic-hwe-18.04-edge linux-tools-generic-hwe-18.04-edge \
   iftop heaptrack jq
 
-"$HERE"/../scripts/install-docker.sh
+"$SOLANA_ROOT"/net/scripts/install-docker.sh
 usermod -aG docker "$SETUP_USER"
-"$HERE"/../scripts/install-certbot.sh
+"$SOLANA_ROOT"/net/scripts/install-certbot.sh
 "$HERE"/setup-sudoers.sh
 "$HERE"/setup-ssh.sh
 
 "$HERE"/disable-nouveau.sh
 "$HERE"/disable-networkd-wait.sh
-"$HERE"/../scripts/install-earlyoom.sh
-"$HERE"/../scripts/install-nodejs.sh
-"$HERE"/../scripts/localtime.sh
-"$HERE"/../scripts/install-redis.sh
-"$HERE"/../scripts/install-rsync.sh
-"$HERE"/../scripts/install-libssl-compatability.sh
+
+"$SOLANA_ROOT"/net/scripts/install-earlyoom.sh
+"$SOLANA_ROOT"/net/scripts/install-nodejs.sh
+"$SOLANA_ROOT"/net/scripts/localtime.sh
+"$SOLANA_ROOT"/net/scripts/install-redis.sh
+"$SOLANA_ROOT"/net/scripts/install-rsync.sh
+"$SOLANA_ROOT"/net/scripts/install-libssl-compatability.sh
+
 "$HERE"/setup-procfs-knobs.sh
 "$HERE"/setup-limits.sh
 "$HERE"/setup-cuda.sh

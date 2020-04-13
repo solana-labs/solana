@@ -53,11 +53,13 @@ sudo usermod --shell /bin/bash buildkite-agent
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh
 sudo -u buildkite-agent HOME=~buildkite-agent sh /tmp/rustup-init.sh
 
-# Add to docker group
+# Add to docker and sudoers group
 addgroup buildkite-agent docker
+addgroup buildkite-agent sudo
 
-echo "************ MANUAL STEP !!! ***********************"
-echo "Copy the pubkey contents from ~buildkite-agent/.ssh/buildkite_ecdsa.pub"
-echo "Add the pubkey as an authorized SSH key on github:"
-cat ~buildkite-agent/.ssh/buildkite_ecdsa.pub
+echo "************ MANUAL STEPS !!! ***********************"
+echo "1) Copy the pubkey contents from ~buildkite-agent/.ssh/buildkite_ecdsa.pub"
+echo "2) Add the pubkey as an authorized SSH key on github"
+echo "3) Edit /etc/buildkite-agent/buildkite-agent.cfg and/or /etc/systemd/system/buildkite-agent@* to the desired configuration of the agent(s)"
+echo "4) Start the new agent(s) with 'sudo systemctl enable --now buildkite-agent'"
 echo "****************************************************"
