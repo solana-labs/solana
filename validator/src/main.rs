@@ -14,7 +14,7 @@ use solana_core::ledger_cleanup_service::{
     DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
 };
 use solana_core::{
-    cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
+    cluster_info::{ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
     rpc::JsonRpcConfig,
@@ -55,8 +55,16 @@ fn port_validator(port: String) -> Result<(), String> {
 }
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
-    if solana_net_utils::parse_port_range(&port_range).is_some() {
-        Ok(())
+    if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
+        if end - start < MINIMUM_VALIDATOR_PORT_RANGE_WIDTH {
+            Err(format!(
+                "Port range is too small.  Try --dynamic-port-range {}-{}",
+                start,
+                start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
+            ))
+        } else {
+            Ok(())
+        }
     } else {
         Err("Invalid port range".to_string())
     }
@@ -517,7 +525,7 @@ pub fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(port_validator)
-                .help("RPC port to use for this node"),
+                .help("Use this port for JSON RPC, and the next port for the RPC websocket"),
         )
         .arg(
             Arg::with_name("private_rpc")
