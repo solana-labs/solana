@@ -11,7 +11,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-    use std::thread::{Builder, JoinHandle};
+    use std::thread::{self, Builder, JoinHandle};
     use std::time::{Duration, Instant};
     use systemstat::{CPULoad, Platform, System};
 
@@ -355,5 +355,52 @@ mod tests {
             Blockstore::destroy(&blockstore_path)
                 .expect("Expected successful database destruction");
         }
+    }
+
+    #[test]
+    fn test_compaction() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+
+        let n = 10_000;
+        let batch_size = 100;
+        let batches = n / batch_size;
+        let max_ledger_shreds = 100;
+
+        for i in 0..batches {
+            let (shreds, _) = make_many_slot_entries(i * batch_size, batch_size, 1);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+        }
+
+        let u1 = blockstore.storage_size().unwrap() as f64;
+
+        // send signal to cleanup slots
+        let (sender, receiver) = channel();
+        sender.send(n).unwrap();
+        let mut next_purge_batch = 0;
+        LedgerCleanupService::cleanup_ledger(
+            &receiver,
+            &blockstore,
+            max_ledger_shreds,
+            &mut next_purge_batch,
+            10,
+        )
+        .unwrap();
+
+        thread::sleep(Duration::from_secs(2));
+
+        let u2 = blockstore.storage_size().unwrap() as f64;
+
+        assert!(u2 < u1, "insufficient compaction! pre={},post={}", u1, u2,);
+
+        // check that early slots don't exist
+        let max_slot = n - max_ledger_shreds - 1;
+        blockstore
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(slot, _)| assert!(slot > max_slot));
+
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
