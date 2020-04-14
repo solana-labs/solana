@@ -56,6 +56,8 @@ if RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${
   test_status=0
 else
   test_status=$?
+  echo "Failed: $test_status"
+  echo "^^^ +++"
 fi
 touch target/cov/after-test
 
