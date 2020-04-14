@@ -1908,6 +1908,7 @@ impl Blockstore {
         &self,
         ls: Option<&Arc<LeaderScheduleCache>>,
         slot: Slot,
+        total: &mut usize,
     ) -> ShredIndex {
         let index = self
             .index_cf
@@ -1920,6 +1921,7 @@ impl Blockstore {
                 let leader = ls.slot_leader_at(slot, None).unwrap();
                 for ix in data.index.iter() {
                     self.verify_shred(&leader, slot, *ix);
+                    *total += 1;
                 }
             }
         }
@@ -1931,6 +1933,7 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
     ) -> Result<()> {
         let root_slot: Slot = *self.last_root.read().unwrap();
+        let mut total = 0;
         info!("reconciling shreds from root {}", root_slot);
         let slot_iterator = self
             .db
@@ -1938,7 +1941,7 @@ impl Blockstore {
         for (slot, _) in slot_iterator {
             info!("reconciling shreds slot {}", slot);
             let existing = self.find_data_indexes(slot, 0, std::u64::MAX, &mut 0);
-            let expected = self.verify_expected_shreds(leader_schedule, slot);
+            let expected = self.verify_expected_shreds(leader_schedule, slot, &mut total);
             let new_shreds: Vec<Shred> = existing
                 .into_iter()
                 .filter_map(|x| {
@@ -1954,7 +1957,7 @@ impl Blockstore {
                 self.insert_shreds(new_shreds, leader_schedule, false)?;
             }
         }
-        info!("reconciling shreds done!");
+        info!("Done reconciling shreds. Verified {}", total);
         Ok(())
     }
 
