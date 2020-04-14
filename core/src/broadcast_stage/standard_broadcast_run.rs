@@ -14,8 +14,8 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct StandardBroadcastRun {
     process_shreds_stats: ProcessShredsStats,
-    transmit_shreds_stats: Arc<Mutex<HashMap<Slot, TransmitShredsStats>>>,
-    insert_shreds_stats: Arc<Mutex<HashMap<Slot, InsertShredsStats>>>,
+    transmit_shreds_stats: Arc<Mutex<SlotBroadcastStats<TransmitShredsStats>>>,
+    insert_shreds_stats: Arc<Mutex<SlotBroadcastStats<InsertShredsStats>>>,
     unfinished_slot: Option<UnfinishedSlotInfo>,
     current_slot_and_parent: Option<(u64, u64)>,
     slot_broadcast_start: Option<Instant>,
@@ -29,8 +29,8 @@ impl StandardBroadcastRun {
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
         Self {
             process_shreds_stats: ProcessShredsStats::default(),
-            transmit_shreds_stats: Arc::new(Mutex::new(HashMap::new())),
-            insert_shreds_stats: Arc::new(Mutex::new(HashMap::new())),
+            transmit_shreds_stats: Arc::new(Mutex::new(SlotBroadcastStats::default())),
+            insert_shreds_stats: Arc::new(Mutex::new(SlotBroadcastStats::default())),
             unfinished_slot: None,
             current_slot_and_parent: None,
             slot_broadcast_start: None,
@@ -253,10 +253,10 @@ impl StandardBroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         shreds: Arc<Vec<Shred>>,
-        _broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
+        broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
     ) -> Result<()> {
         // Insert shreds into blockstore
-        let _insert_shreds_start = Instant::now();
+        let insert_shreds_start = Instant::now();
         // The first shred is inserted synchronously
         let data_shreds = if !shreds.is_empty() && shreds[0].index() == 0 {
             shreds[1..].to_vec()
@@ -266,16 +266,22 @@ impl StandardBroadcastRun {
         blockstore
             .insert_shreds(data_shreds, None, true)
             .expect("Failed to insert shreds in blockstore");
-        /*let insert_shreds_elapsed = insert_shreds_start.elapsed();
-        self.insert_shreds_stats.update(&InsertShredsStats {
+        let insert_shreds_elapsed = insert_shreds_start.elapsed();
+        let new_insert_shreds_stats = InsertShredsStats {
             insert_shreds_elapsed: duration_as_us(&insert_shreds_elapsed),
             num_shreds: shreds.len(),
-        });
-        if let Some(ts) = slot_start_ts {
-            self.insert_shreds_stats
-                .report_stats(shreds.last().map(|s| s.slot()).unwrap_or(0), ts);
-        }*/
+        };
+        self.update_insertion_metrics(&new_insert_shreds_stats, &broadcast_shred_batch_info);
         Ok(())
+    }
+
+    fn update_insertion_metrics(
+        &mut self,
+        new_insertion_shreds_stats: &InsertShredsStats,
+        broadcast_shred_batch_info: &Option<BroadcastShredBatchInfo>,
+    ) {
+        let mut insert_shreds_stats = self.insert_shreds_stats.lock().unwrap();
+        insert_shreds_stats.update(new_insertion_shreds_stats, broadcast_shred_batch_info);
     }
 
     fn broadcast(
@@ -309,7 +315,6 @@ impl StandardBroadcastRun {
             get_peers_elapsed: duration_as_us(&get_peers_elapsed),
             send_mmsg_elapsed: send_mmsg_total,
             num_shreds: shreds.len(),
-            ..TransmitShredsStats::default()
         };
 
         // Process metrics
@@ -323,35 +328,7 @@ impl StandardBroadcastRun {
         broadcast_shred_batch_info: &Option<BroadcastShredBatchInfo>,
     ) {
         let mut transmit_shreds_stats = self.transmit_shreds_stats.lock().unwrap();
-        if let Some(batch_info) = broadcast_shred_batch_info {
-            let mut should_delete = false;
-            {
-                let slot_transmit_shreds_stats =
-                    transmit_shreds_stats.entry(batch_info.slot).or_default();
-                slot_transmit_shreds_stats.update(new_transmit_shreds_stats);
-                // Only count the ones where `broadcast_shred_batch_info`.is_some(), because
-                // there could potentially be other `retransmit` slots inserted into the
-                // transmit pipeline (signaled by ReplayStage) that are not created by the
-                // main shredding/broadcast pipeline
-                slot_transmit_shreds_stats.num_transmitted_batches += 1;
-                if let Some(num_expected_batches) = batch_info.num_expected_batches {
-                    slot_transmit_shreds_stats.num_expected_batches = Some(num_expected_batches);
-                }
-                if let Some(num_expected_batches) = slot_transmit_shreds_stats.num_expected_batches
-                {
-                    if slot_transmit_shreds_stats.num_transmitted_batches == num_expected_batches {
-                        slot_transmit_shreds_stats
-                            .report_stats(batch_info.slot, batch_info.slot_start_ts);
-                    }
-                    should_delete = true;
-                }
-            }
-            if should_delete {
-                transmit_shreds_stats
-                    .remove(&batch_info.slot)
-                    .expect("delete should be successful");
-            }
-        }
+        transmit_shreds_stats.update(new_transmit_shreds_stats, broadcast_shred_batch_info);
     }
 
     fn report_and_reset_stats(&mut self) {
