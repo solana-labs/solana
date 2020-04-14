@@ -28,8 +28,8 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, bool)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
+        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -83,27 +83,27 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         }
 
         let data_shreds = Arc::new(data_shreds);
-        blockstore_sender.send((data_shreds.clone(), false))?;
+        blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
         //some indicates fake shreds
         socket_sender.send((
             (Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)),
-            false,
+            None,
         ))?;
         socket_sender.send((
             (Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)),
-            false,
+            None,
         ))?;
         //none indicates real shreds
-        socket_sender.send(((None, data_shreds), false))?;
-        socket_sender.send(((None, Arc::new(coding_shreds)), false))?;
+        socket_sender.send(((None, data_shreds), None))?;
+        socket_sender.send(((None, Arc::new(coding_shreds)), None))?;
 
         Ok(())
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<(TransmitShreds, bool)>>>,
+        receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {

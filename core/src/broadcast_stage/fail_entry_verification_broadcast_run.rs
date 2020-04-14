@@ -23,8 +23,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, bool)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
+        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -61,19 +61,19 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         );
 
         let data_shreds = Arc::new(data_shreds);
-        blockstore_sender.send((data_shreds.clone(), false))?;
+        blockstore_sender.send((data_shreds.clone(), None))?;
         // 3) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
         let stakes = stakes.map(Arc::new);
-        socket_sender.send(((stakes.clone(), data_shreds), false))?;
-        socket_sender.send(((stakes, Arc::new(coding_shreds)), false))?;
+        socket_sender.send(((stakes.clone(), data_shreds), None))?;
+        socket_sender.send(((stakes, Arc::new(coding_shreds)), None))?;
         Ok(())
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<(TransmitShreds, bool)>>>,
+        receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {

@@ -1,6 +1,6 @@
 //! A stage to broadcast data from a leader node to validators
 use self::{
-    broadcast_fake_shreds_run::BroadcastFakeShredsRun,
+    broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
@@ -35,6 +35,7 @@ use std::{
 };
 
 mod broadcast_fake_shreds_run;
+pub(crate) mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
@@ -42,7 +43,8 @@ mod standard_broadcast_run;
 pub const NUM_INSERT_THREADS: usize = 2;
 pub type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
 pub type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
-pub type RecordReceiver = Receiver<(Arc<Vec<Shred>>, bool)>;
+pub type RecordReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
+pub type TransmitReceiver = Receiver<(TransmitShreds, Option<BroadcastShredBatchInfo>)>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -108,12 +110,12 @@ trait BroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, bool)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
+        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()>;
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<(TransmitShreds, bool)>>>,
+        receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()>;
@@ -151,8 +153,8 @@ impl BroadcastStage {
     fn run(
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, bool)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, bool)>,
+        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
@@ -290,7 +292,7 @@ impl BroadcastStage {
     fn check_retransmit_signals(
         blockstore: &Blockstore,
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
-        socket_sender: &Sender<(TransmitShreds, bool)>,
+        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         let timer = Duration::from_millis(100);
 
@@ -311,7 +313,7 @@ impl BroadcastStage {
             );
 
             if !data_shreds.is_empty() {
-                socket_sender.send(((stakes.clone(), data_shreds), false))?;
+                socket_sender.send(((stakes.clone(), data_shreds), None))?;
             }
 
             let coding_shreds = Arc::new(
@@ -321,7 +323,7 @@ impl BroadcastStage {
             );
 
             if !coding_shreds.is_empty() {
-                socket_sender.send(((stakes.clone(), coding_shreds), false))?;
+                socket_sender.send(((stakes.clone(), coding_shreds), None))?;
             }
         }
 
@@ -479,7 +481,7 @@ pub mod test {
     }
 
     fn check_all_shreds_received(
-        transmit_receiver: &Receiver<(TransmitShreds, bool)>,
+        transmit_receiver: &TransmitReceiver,
         mut data_index: u64,
         mut coding_index: u64,
         num_expected_data_shreds: u64,
