@@ -806,9 +806,8 @@ export class Connection {
 
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.host = '';
-    url.port = String(Number(url.port) + 1);
-    if (url.port === '1') {
-      url.port = url.protocol === 'wss:' ? '8901' : '8900';
+    if (url.port !== null) {
+      url.port = String(Number(url.port) + 1);
     }
     this._rpcWebSocket = new RpcWebSocketClient(urlFormat(url), {
       autoconnect: false,
