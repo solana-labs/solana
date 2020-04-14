@@ -15,14 +15,19 @@ use solana_ledger::{
     blockstore::Blockstore,
     snapshot_utils,
 };
-use solana_sdk::hash::Hash;
+use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::{
+    collections::HashSet,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::{mpsc::channel, Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
 use tokio::prelude::Future;
+
+// If trusted validators are specified, consider this validator healthy if its latest account hash
+// is no further behind than this distance from the latest trusted validator account hash
+const HEALTH_CHECK_SLOT_DISTANCE: u64 = 150;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
@@ -37,10 +42,17 @@ struct RpcRequestMiddleware {
     ledger_path: PathBuf,
     snapshot_archive_path_regex: Regex,
     snapshot_config: Option<SnapshotConfig>,
+    cluster_info: Arc<RwLock<ClusterInfo>>,
+    trusted_validators: Option<HashSet<Pubkey>>,
 }
 
 impl RpcRequestMiddleware {
-    pub fn new(ledger_path: PathBuf, snapshot_config: Option<SnapshotConfig>) -> Self {
+    pub fn new(
+        ledger_path: PathBuf,
+        snapshot_config: Option<SnapshotConfig>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
+        trusted_validators: Option<HashSet<Pubkey>>,
+    ) -> Self {
         Self {
             ledger_path,
             snapshot_archive_path_regex: Regex::new(
@@ -48,6 +60,8 @@ impl RpcRequestMiddleware {
             )
             .unwrap(),
             snapshot_config,
+            cluster_info,
+            trusted_validators,
         }
     }
 
@@ -116,6 +130,58 @@ impl RpcRequestMiddleware {
             ),
         }
     }
+
+    fn health_check(&self) -> &'static str {
+        let response = if let Some(trusted_validators) = &self.trusted_validators {
+            let (latest_account_hash_slot, latest_trusted_validator_account_hash_slot) = {
+                let cluster_info = self.cluster_info.read().unwrap();
+                (
+                    cluster_info
+                        .get_accounts_hash_for_node(&cluster_info.id())
+                        .map(|hashes| hashes.iter().max_by(|a, b| a.0.cmp(&b.0)))
+                        .flatten()
+                        .map(|slot_hash| slot_hash.0)
+                        .unwrap_or(0),
+                    trusted_validators
+                        .iter()
+                        .map(|trusted_validator| {
+                            cluster_info
+                                .get_accounts_hash_for_node(&trusted_validator)
+                                .map(|hashes| hashes.iter().max_by(|a, b| a.0.cmp(&b.0)))
+                                .flatten()
+                                .map(|slot_hash| slot_hash.0)
+                                .unwrap_or(0)
+                        })
+                        .max()
+                        .unwrap_or(0),
+                )
+            };
+
+            // This validator is considered healthy if its latest account hash slot is within
+            // `HEALTH_CHECK_SLOT_DISTANCE` of the latest trusted validator's account hash slot
+            if latest_account_hash_slot > 0
+                && latest_trusted_validator_account_hash_slot > 0
+                && latest_account_hash_slot
+                    > latest_trusted_validator_account_hash_slot
+                        .saturating_sub(HEALTH_CHECK_SLOT_DISTANCE)
+            {
+                "ok"
+            } else {
+                warn!(
+                    "health check: me={}, latest trusted_validator={}",
+                    latest_account_hash_slot, latest_trusted_validator_account_hash_slot
+                );
+                "behind"
+            }
+        } else {
+            // No trusted validator point of reference available, so this validator is healthy
+            // because it's running
+            "ok"
+        };
+
+        info!("health check: {}", response);
+        response
+    }
 }
 
 impl RequestMiddleware for RpcRequestMiddleware {
@@ -150,6 +216,16 @@ impl RequestMiddleware for RpcRequestMiddleware {
         }
         if self.is_get_path(request.uri().path()) {
             self.get(request.uri().path())
+        } else if request.uri().path() == "/health" {
+            RequestMiddlewareAction::Respond {
+                should_validate_hosts: true,
+                response: Box::new(jsonrpc_core::futures::future::ok(
+                    hyper::Response::builder()
+                        .status(hyper::StatusCode::OK)
+                        .body(hyper::Body::from(self.health_check()))
+                        .unwrap(),
+                )),
+            }
         } else {
             RequestMiddlewareAction::Proceed {
                 should_continue_on_invalid_cors: false,
@@ -173,6 +249,7 @@ impl JsonRpcService {
         ledger_path: &Path,
         storage_state: StorageState,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+        trusted_validators: Option<HashSet<Pubkey>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -198,20 +275,35 @@ impl JsonRpcService {
                 let rpc = RpcSolImpl;
                 io.extend_with(rpc.to_delegate());
 
-                let server =
-                    ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
+                let request_middleware = RpcRequestMiddleware::new(
+                    ledger_path,
+                    snapshot_config,
+                    cluster_info.clone(),
+                    trusted_validators,
+                );
+                let server = ServerBuilder::with_meta_extractor(
+                    io,
+                    move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor.clone(),
                         cluster_info: cluster_info.clone(),
-                        genesis_hash
-                    }).threads(4)
-                        .cors(DomainsValidation::AllowOnly(vec![
-                            AccessControlAllowOrigin::Any,
-                        ]))
-                        .cors_max_age(86400)
-                        .request_middleware(RpcRequestMiddleware::new(ledger_path, snapshot_config))
-                        .start_http(&rpc_addr);
+                        genesis_hash,
+                    },
+                )
+                .threads(4)
+                .cors(DomainsValidation::AllowOnly(vec![
+                    AccessControlAllowOrigin::Any,
+                ]))
+                .cors_max_age(86400)
+                .request_middleware(request_middleware)
+                .start_http(&rpc_addr);
+
                 if let Err(e) = server {
-                    warn!("JSON RPC service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", e, rpc_addr.port());
+                    warn!(
+                        "JSON RPC service unavailable error: {:?}. \n\
+                           Also, check that port {} is not already in use by another application",
+                        e,
+                        rpc_addr.port()
+                    );
                     return;
                 }
 
@@ -250,9 +342,13 @@ impl JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{contact_info::ContactInfo, rpc::tests::create_validator_exit};
-    use solana_ledger::bank_forks::CompressionType;
+    use crate::{
+        contact_info::ContactInfo,
+        crds_value::{CrdsData, CrdsValue, SnapshotHash},
+        rpc::tests::create_validator_exit,
+    };
     use solana_ledger::{
+        bank_forks::CompressionType,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
@@ -295,6 +391,7 @@ mod tests {
             &PathBuf::from("farf"),
             StorageState::default(),
             validator_exit,
+            None,
         );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
@@ -315,7 +412,11 @@ mod tests {
 
     #[test]
     fn test_is_get_path() {
-        let rrm = RpcRequestMiddleware::new(PathBuf::from("/"), None);
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            ContactInfo::default(),
+        )));
+
+        let rrm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info.clone(), None);
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig {
@@ -324,6 +425,8 @@ mod tests {
                 snapshot_path: PathBuf::from("/"),
                 compression: CompressionType::Bzip2,
             }),
+            cluster_info,
+            None,
         );
 
         assert!(rrm.is_get_path("/genesis.tar.bz2"));
@@ -344,5 +447,96 @@ mod tests {
         assert!(!rrm.is_get_path("/"));
         assert!(!rrm.is_get_path(".."));
         assert!(!rrm.is_get_path("🎣"));
+    }
+
+    #[test]
+    fn test_health_check_with_no_trusted_validators() {
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            ContactInfo::default(),
+        )));
+
+        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info.clone(), None);
+        assert_eq!(rm.health_check(), "ok");
+    }
+
+    #[test]
+    fn test_health_check_with_trusted_validators() {
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            ContactInfo::default(),
+        )));
+
+        let trusted_validators = vec![Pubkey::new_rand(), Pubkey::new_rand(), Pubkey::new_rand()];
+        let rm = RpcRequestMiddleware::new(
+            PathBuf::from("/"),
+            None,
+            cluster_info.clone(),
+            Some(trusted_validators.clone().into_iter().collect()),
+        );
+
+        // No account hashes for this node or any trusted validators == "behind"
+        assert_eq!(rm.health_check(), "behind");
+
+        // No account hashes for any trusted validators == "behind"
+        {
+            let mut cluster_info = cluster_info.write().unwrap();
+            cluster_info
+                .push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
+        }
+        assert_eq!(rm.health_check(), "behind");
+
+        // This node is ahead of the trusted validators == "ok"
+        {
+            let mut cluster_info = cluster_info.write().unwrap();
+            cluster_info
+                .gossip
+                .crds
+                .insert(
+                    CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
+                        trusted_validators[0].clone(),
+                        vec![
+                            (1, Hash::default()),
+                            (1001, Hash::default()),
+                            (2, Hash::default()),
+                        ],
+                    ))),
+                    1,
+                )
+                .unwrap();
+        }
+        assert_eq!(rm.health_check(), "ok");
+
+        // Node is slightly behind the trusted validators == "ok"
+        {
+            let mut cluster_info = cluster_info.write().unwrap();
+            cluster_info
+                .gossip
+                .crds
+                .insert(
+                    CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
+                        trusted_validators[1].clone(),
+                        vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE - 1, Hash::default())],
+                    ))),
+                    1,
+                )
+                .unwrap();
+        }
+        assert_eq!(rm.health_check(), "ok");
+
+        // Node is far behind the trusted validators == "behind"
+        {
+            let mut cluster_info = cluster_info.write().unwrap();
+            cluster_info
+                .gossip
+                .crds
+                .insert(
+                    CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
+                        trusted_validators[2].clone(),
+                        vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE, Hash::default())],
+                    ))),
+                    1,
+                )
+                .unwrap();
+        }
+        assert_eq!(rm.health_check(), "behind");
     }
 }
