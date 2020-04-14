@@ -22,6 +22,7 @@ static WARNING: Emoji = Emoji("⚠️", "!");
 pub enum OutputFormat {
     Display,
     Json,
+    JsonCompact,
 }
 
 impl OutputFormat {
@@ -34,6 +35,9 @@ impl OutputFormat {
                 println!("{}", item);
             }
             OutputFormat::Json => {
+                println!("{}", serde_json::to_string_pretty(item).unwrap());
+            }
+            OutputFormat::JsonCompact => {
                 println!("{}", serde_json::to_value(item).unwrap());
             }
         }

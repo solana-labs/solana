@@ -132,7 +132,11 @@ pub fn parse_args<'a>(
 
     let output_format = matches
         .value_of("output_format")
-        .map(|_| OutputFormat::Json)
+        .map(|value| match value {
+            "json" => OutputFormat::Json,
+            "json-compact" => OutputFormat::JsonCompact,
+            _ => unreachable!(),
+        })
         .unwrap_or(OutputFormat::Display);
 
     Ok((
@@ -211,8 +215,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .long("output")
             .global(true)
             .takes_value(true)
-            .possible_value("json")
-            .help("Return information in specified output format. Supports: json"),
+            .possible_values(&["json", "json-compact"])
+            .help("Return information in specified output format. Supports: json, json-compact"),
     )
     .arg(
         Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
