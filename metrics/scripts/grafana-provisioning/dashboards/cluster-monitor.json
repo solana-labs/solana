@@ -5364,6 +5364,10 @@
         {
           "alias": "broadcast-bank-stats.num_shreds",
           "yaxis": 2
+        },
+        {
+          "alias": "broadcast-transmit-shreds-stats.num_data_and_coding_shreds",
+          "yaxis": 2
         }
       ],
       "spaceLength": 10,
@@ -5641,6 +5645,10 @@
       "seriesOverrides": [
         {
           "alias": "broadcast-bank-stats.num_shreds",
+          "yaxis": 2
+        },
+        {
+          "alias": "broadcast-insert-shreds-stats.num_data_and_coding_shreds",
           "yaxis": 2
         }
       ],
