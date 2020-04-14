@@ -3034,6 +3034,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "reed-solomon-erasure"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "cc 1.0.49 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.69 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smallvec 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "regex"
 version = "0.1.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4192,6 +4202,7 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand_chacha 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "reed-solomon-erasure 4.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 1.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rocksdb 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4205,7 +4216,6 @@ dependencies = [
  "solana-metrics 1.2.0",
  "solana-perf 1.2.0",
  "solana-rayon-threadlimit 1.2.0",
- "solana-reed-solomon-erasure 4.0.1-3 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-runtime 1.2.0",
  "solana-sdk 1.2.0",
  "solana-stake-program 1.2.0",
@@ -4444,16 +4454,6 @@ version = "1.2.0"
 dependencies = [
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-reed-solomon-erasure"
-version = "4.0.1-3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "cc 1.0.49 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.69 (registry+https://github.com/rust-lang/crates.io-index)",
- "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -6625,6 +6625,7 @@ dependencies = [
 "checksum rdrand 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
 "checksum redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)" = "2439c63f3f6139d1b57529d16bc3b8bb855230c8efcc5d3a896c8bea7c3b1e84"
 "checksum redox_users 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3fe5204c3a17e97dde73f285d49be585df59ed84b50a872baf416e73b62c3828"
+"checksum reed-solomon-erasure 4.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "a415a013dd7c5d4221382329a5a3482566da675737494935cbbbcdec04662f9d"
 "checksum regex 0.1.80 (registry+https://github.com/rust-lang/crates.io-index)" = "4fd4ace6a8cf7860714a2c2280d6c1f7e6a413486c13298bbc86fd3da019402f"
 "checksum regex 1.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "7f6946991529684867e47d86474e3a6d0c0ab9b82d5821e314b1ede31fa3a4b3"
 "checksum regex-automata 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "92b73c2a1770c255c240eaa4ee600df1704a38dc3feaa6e949e7fcd4f8dc09f9"
@@ -6683,7 +6684,6 @@ dependencies = [
 "checksum smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)" = "ab606a9c5e214920bb66c458cd7be8ef094f813f20fe77a54cc7dbfff220d4b7"
 "checksum smallvec 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5c2fb2ec9bcd216a5b0d0ccf31ab17b5ed1d627960edff65bbe95d3ce221cefc"
 "checksum socket2 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)" = "03088793f677dce356f3ccc2edb1b314ad191ab702a5de3faf49304f7e104918"
-"checksum solana-reed-solomon-erasure 4.0.1-3 (registry+https://github.com/rust-lang/crates.io-index)" = "d5b3ab3f4dd12af687a7d0d0ee73299cbc06ed3aada42dccac26fe243e73399e"
 "checksum solana_libra_bytecode_verifier 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "79c3b7e9555da6f04a3f542a40e92bbbd46d0f05bd270ae3ff8c0283c329a179"
 "checksum solana_libra_canonical_serialization 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "c674689dd2d17b0bab49501f0d63ec71b3e1f8fab2eae86174e37768435a54aa"
 "checksum solana_libra_compiler 0.0.1-sol4 (registry+https://github.com/rust-lang/crates.io-index)" = "908b00b637e6eaf835d67bea2329bbee82e75f8e162744fd707ca9c9e4c1400b"
