@@ -58,6 +58,9 @@ else
   test_status=$?
   echo "Failed: $test_status"
   echo "^^^ +++"
+  if [[ -n $CI ]]; then
+    exit $test_status
+  fi
 fi
 touch target/cov/after-test
 
