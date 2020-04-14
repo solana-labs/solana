@@ -32,7 +32,10 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
-    clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
+    clock::{
+        get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_PROCESSING_AGE,
+        MAX_RECENT_BLOCKHASHES,
+    },
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::GenesisConfig,
@@ -1671,7 +1674,7 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let batch = self.prepare_batch(txs, None);
-        self.load_execute_and_commit_transactions(&batch, MAX_RECENT_BLOCKHASHES, false)
+        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false)
             .0
             .fee_collection_results
     }
@@ -3859,7 +3862,7 @@ mod tests {
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
         let results_alice = bank
-            .load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES, false)
+            .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, false)
             .0
             .fee_collection_results;
         assert_eq!(results_alice[0], Ok(()));
@@ -5640,7 +5643,7 @@ mod tests {
 
         let lock_result = bank0.prepare_batch(&txs, None);
         let (transaction_results, transaction_balances_set) =
-            bank0.load_execute_and_commit_transactions(&lock_result, MAX_RECENT_BLOCKHASHES, true);
+            bank0.load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, true);
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
