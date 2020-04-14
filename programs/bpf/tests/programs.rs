@@ -18,6 +18,7 @@ mod bpf {
         sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
         transaction::TransactionError,
     };
+    use solana_bpf_loader_program::solana_bpf_loader_program;
     use std::{env, fs::File, io::Read, path::PathBuf, sync::Arc};
 
     /// BPF program file extension
@@ -83,10 +84,11 @@ mod bpf {
             println!("Test program: {:?}", program.0);
 
             let GenesisConfigInfo {
-                genesis_config,
+                mut genesis_config,
                 mint_keypair,
                 ..
             } = create_genesis_config(50);
+            genesis_config.native_instruction_processors.push(solana_bpf_loader_program!());
             let bank = Arc::new(Bank::new(&genesis_config));
             // Create bank with specific slot, used by solana_bpf_rust_sysvar test
             let bank =
@@ -133,10 +135,11 @@ mod bpf {
             println!("Test program: {:?}", program);
 
             let GenesisConfigInfo {
-                genesis_config,
+                mut genesis_config,
                 mint_keypair,
                 ..
             } = create_genesis_config(50);
+            genesis_config.native_instruction_processors.push(solana_bpf_loader_program!());
             let bank = Arc::new(Bank::new(&genesis_config));
             let bank_client = BankClient::new_shared(&bank);
             let program_id = load_bpf_program(&bank_client, &mint_keypair, program);
@@ -215,10 +218,11 @@ mod bpf {
             println!("Test program: {:?}", program);
 
             let GenesisConfigInfo {
-                genesis_config,
+                mut genesis_config,
                 mint_keypair,
                 ..
             } = create_genesis_config(50);
+            genesis_config.native_instruction_processors.push(solana_bpf_loader_program!());
             let bank = Bank::new(&genesis_config);
             let bank_client = BankClient::new(bank);
             let program_id = load_bpf_program(&bank_client, &mint_keypair, program);
