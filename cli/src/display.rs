@@ -1,6 +1,7 @@
 use crate::cli::SettingType;
 use console::style;
 use solana_sdk::hash::Hash;
+use std::fmt;
 
 // Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
@@ -10,6 +11,15 @@ pub fn println_name_value(name: &str, value: &str) {
         style(value)
     };
     println!("{} {}", style(name).bold(), styled_value);
+}
+
+pub fn writeln_name_value(f: &mut fmt::Formatter, name: &str, value: &str) -> fmt::Result {
+    let styled_value = if value == "" {
+        style("(not set)").italic()
+    } else {
+        style(value)
+    };
+    writeln!(f, "{} {}", style(name).bold(), styled_value)
 }
 
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {

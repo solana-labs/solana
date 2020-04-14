@@ -1,15 +1,14 @@
 use crate::{
     cli::{
-        build_balance_message, check_account_for_fee, check_unique_pubkeys, fee_payer_arg,
-        generate_unique_signers, log_instruction_custom_error, nonce_authority_arg, return_signers,
-        CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex, FEE_PAYER_ARG,
+        check_account_for_fee, check_unique_pubkeys, fee_payer_arg, generate_unique_signers,
+        log_instruction_custom_error, nonce_authority_arg, return_signers, CliCommand,
+        CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex, FEE_PAYER_ARG,
     },
+    cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::{blockhash_query::BlockhashQuery, *},
 };
-use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
-use console::style;
 use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
 use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -1231,78 +1230,61 @@ pub fn process_stake_set_lockup(
     }
 }
 
-pub fn print_stake_state(stake_lamports: u64, stake_state: &StakeState, use_lamports_unit: bool) {
-    fn show_authorized(authorized: &Authorized) {
-        println!("Stake Authority: {}", authorized.staker);
-        println!("Withdraw Authority: {}", authorized.withdrawer);
-    }
-    fn show_lockup(lockup: &Lockup) {
-        println!(
-            "Lockup Timestamp: {} (UnixTimestamp: {})",
-            DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(lockup.unix_timestamp, 0), Utc)
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-            lockup.unix_timestamp
-        );
-        println!("Lockup Epoch: {}", lockup.epoch);
-        println!("Lockup Custodian: {}", lockup.custodian);
-    }
+pub fn build_stake_state(
+    stake_lamports: u64,
+    stake_state: &StakeState,
+    use_lamports_unit: bool,
+) -> CliStakeState {
     match stake_state {
         StakeState::Stake(
             Meta {
                 authorized, lockup, ..
             },
             stake,
-        ) => {
-            println!(
-                "Total Stake: {}",
-                build_balance_message(stake_lamports, use_lamports_unit, true)
-            );
-            println!(
-                "Delegated Stake: {}",
-                build_balance_message(stake.delegation.stake, use_lamports_unit, true)
-            );
-            if stake.delegation.voter_pubkey != Pubkey::default() {
-                println!(
-                    "Delegated Vote Account Address: {}",
-                    stake.delegation.voter_pubkey
-                );
-            }
-            println!(
-                "Stake activates starting from epoch: {}",
-                if stake.delegation.activation_epoch < std::u64::MAX {
-                    stake.delegation.activation_epoch
-                } else {
-                    0
-                }
-            );
-            if stake.delegation.deactivation_epoch < std::u64::MAX {
-                println!(
-                    "Stake deactivates starting from epoch: {}",
-                    stake.delegation.deactivation_epoch
-                );
-            }
-            show_authorized(&authorized);
-            show_lockup(&lockup);
-        }
-        StakeState::RewardsPool => println!("Stake account is a rewards pool"),
-        StakeState::Uninitialized => println!("Stake account is uninitialized"),
+        ) => CliStakeState {
+            stake_type: CliStakeType::Stake,
+            total_stake: stake_lamports,
+            delegated_stake: Some(stake.delegation.stake),
+            delegated_vote_account_address: if stake.delegation.voter_pubkey != Pubkey::default() {
+                Some(stake.delegation.voter_pubkey.to_string())
+            } else {
+                None
+            },
+            activation_epoch: Some(if stake.delegation.activation_epoch < std::u64::MAX {
+                stake.delegation.activation_epoch
+            } else {
+                0
+            }),
+            deactivation_epoch: if stake.delegation.deactivation_epoch < std::u64::MAX {
+                Some(stake.delegation.deactivation_epoch)
+            } else {
+                None
+            },
+            authorized: Some(authorized.into()),
+            lockup: Some(lockup.into()),
+            use_lamports_unit,
+        },
+        StakeState::RewardsPool => CliStakeState {
+            stake_type: CliStakeType::RewardsPool,
+            ..CliStakeState::default()
+        },
+        StakeState::Uninitialized => CliStakeState::default(),
         StakeState::Initialized(Meta {
             authorized, lockup, ..
-        }) => {
-            println!(
-                "Total Stake: {}",
-                build_balance_message(stake_lamports, use_lamports_unit, true)
-            );
-            println!("Stake account is undelegated");
-            show_authorized(&authorized);
-            show_lockup(&lockup);
-        }
+        }) => CliStakeState {
+            stake_type: CliStakeType::Initialized,
+            total_stake: stake_lamports,
+            authorized: Some(authorized.into()),
+            lockup: Some(lockup.into()),
+            use_lamports_unit,
+            ..CliStakeState::default()
+        },
     }
 }
 
 pub fn process_show_stake_account(
     rpc_client: &RpcClient,
-    _config: &CliConfig,
+    config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
@@ -1316,7 +1298,8 @@ pub fn process_show_stake_account(
     }
     match stake_account.state() {
         Ok(stake_state) => {
-            print_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
+            let state = build_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
+            config.output_format.formatted_print(&state);
             Ok("".to_string())
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
@@ -1329,7 +1312,7 @@ pub fn process_show_stake_account(
 
 pub fn process_show_stake_history(
     rpc_client: &RpcClient,
-    _config: &CliConfig,
+    config: &CliConfig,
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
@@ -1337,26 +1320,15 @@ pub fn process_show_stake_history(
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
 
-    println!();
-    println!(
-        "{}",
-        style(format!(
-            "  {:<5}  {:>20}  {:>20}  {:>20}",
-            "Epoch", "Effective Stake", "Activating Stake", "Deactivating Stake",
-        ))
-        .bold()
-    );
-
-    for (epoch, entry) in stake_history.deref() {
-        println!(
-            "  {:>5}  {:>20}  {:>20}  {:>20} {}",
-            epoch,
-            build_balance_message(entry.effective, use_lamports_unit, false),
-            build_balance_message(entry.activating, use_lamports_unit, false),
-            build_balance_message(entry.deactivating, use_lamports_unit, false),
-            if use_lamports_unit { "lamports" } else { "SOL" }
-        );
+    let mut entries: Vec<CliStakeHistoryEntry> = vec![];
+    for entry in stake_history.deref() {
+        entries.push(entry.into());
     }
+    let stake_history_output = CliStakeHistory {
+        entries,
+        use_lamports_unit,
+    };
+    config.output_format.formatted_print(&stake_history_output);
     Ok("".to_string())
 }
 

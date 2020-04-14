@@ -1,7 +1,10 @@
-use crate::cli::{
-    build_balance_message, check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
-    SignerIndex,
+use crate::{
+    cli::{
+        check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
+        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult, SignerIndex,
+    },
+    cli_output::CliNonceAccount,
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
@@ -568,38 +571,26 @@ pub fn process_new_nonce(
 
 pub fn process_show_nonce_account(
     rpc_client: &RpcClient,
+    config: &CliConfig,
     nonce_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let nonce_account = get_account(rpc_client, nonce_account_pubkey)?;
     let print_account = |data: Option<&nonce::state::Data>| {
-        println!(
-            "Balance: {}",
-            build_balance_message(nonce_account.lamports, use_lamports_unit, true)
-        );
-        println!(
-            "Minimum Balance Required: {}",
-            build_balance_message(
-                rpc_client.get_minimum_balance_for_rent_exemption(State::size())?,
-                use_lamports_unit,
-                true
-            )
-        );
-        match data {
-            Some(ref data) => {
-                println!("Nonce: {}", data.blockhash);
-                println!(
-                    "Fee: {} lamports per signature",
-                    data.fee_calculator.lamports_per_signature
-                );
-                println!("Authority: {}", data.authority);
-            }
-            None => {
-                println!("Nonce: uninitialized");
-                println!("Fees: uninitialized");
-                println!("Authority: uninitialized");
-            }
+        let mut nonce_account = CliNonceAccount {
+            balance: nonce_account.lamports,
+            minimum_balance_for_rent_exemption: rpc_client
+                .get_minimum_balance_for_rent_exemption(State::size())?,
+            use_lamports_unit,
+            ..CliNonceAccount::default()
+        };
+        if let Some(ref data) = data {
+            nonce_account.nonce = Some(data.blockhash.to_string());
+            nonce_account.lamports_per_signature = Some(data.fee_calculator.lamports_per_signature);
+            nonce_account.authority = Some(data.authority.to_string());
         }
+
+        config.output_format.formatted_print(&nonce_account);
         Ok("".to_string())
     };
     match state_from_account(&nonce_account)? {
