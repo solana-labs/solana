@@ -20,7 +20,7 @@ use solana_runtime::{
     transaction_batch::TransactionBatch,
 };
 use solana_sdk::{
-    clock::{Slot, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES},
+    clock::{Epoch, Slot, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES},
     genesis_config::{GenesisConfig, OperatingMode},
     hash::Hash,
     pubkey::Pubkey,
@@ -57,7 +57,7 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-const MAX_AGE_CORRECTION_EPOCH: u64 = 14;
+const MAX_AGE_CORRECTION_EPOCH: Epoch = 14;
 
 fn execute_batch(
     batch: &TransactionBatch,
