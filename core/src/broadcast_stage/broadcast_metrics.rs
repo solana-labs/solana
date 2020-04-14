@@ -105,6 +105,7 @@ pub(crate) struct BatchCounter<T: BroadcastStats + Default> {
 }
 
 impl<T: BroadcastStats + Default> BatchCounter<T> {
+    #[cfg(test)]
     pub(crate) fn num_batches(&self) -> usize {
         self.num_batches
     }
@@ -114,6 +115,7 @@ impl<T: BroadcastStats + Default> BatchCounter<T> {
 pub(crate) struct SlotBroadcastStats<T: BroadcastStats + Default>(HashMap<Slot, BatchCounter<T>>);
 
 impl<T: BroadcastStats + Default> SlotBroadcastStats<T> {
+    #[cfg(test)]
     pub(crate) fn get(&self, slot: Slot) -> Option<&BatchCounter<T>> {
         self.0.get(&slot)
     }
