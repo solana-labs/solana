@@ -65,6 +65,7 @@ use std::{
 };
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
+pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 10; // VALIDATOR_PORT_RANGE must be at least this wide
 
 /// The Data plane fanout size, also used as the neighborhood size
 pub const DATA_PLANE_FANOUT: usize = 200;
