@@ -38,10 +38,15 @@ test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 # Clear the BPF sysroot files, they are not automatically rebuilt
 rm -rf target/xargo # Issue #3105
 
+# Limit compiler jobs to reduce memory usage
+# on machines with 1gb/thread of memory
+NPROC=$(nproc)
+NPROC=$((NPROC>16 ? 16 : NPROC))
+
 echo "Executing $testName"
 case $testName in
 test-stable)
-  _ cargo +"$rust_stable" test --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+  _ cargo +"$rust_stable" test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   _ cargo +"$rust_stable" test --manifest-path bench-tps/Cargo.toml --features=move ${V:+--verbose} test_bench_tps_local_cluster_move -- --nocapture
   ;;
 test-stable-perf)
