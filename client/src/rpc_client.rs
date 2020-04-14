@@ -998,14 +998,15 @@ impl RpcClient {
         let mut confirmations = 0;
 
         let progress_bar = new_spinner_progress_bar();
-        progress_bar.set_message(&format!(
-            "[{}/{}] Waiting for confirmations",
-            confirmations,
-            MAX_LOCKOUT_HISTORY + 1,
-        ));
 
         let mut send_retries = 20;
         let signature = loop {
+            progress_bar.set_message(&format!(
+                "[{}/{}] Finalizing transaction {}",
+                confirmations,
+                MAX_LOCKOUT_HISTORY + 1,
+                transaction.signatures[0],
+            ));
             let mut status_retries = 15;
             let (signature, status) = loop {
                 let signature = self.send_transaction(transaction)?;
@@ -1066,9 +1067,10 @@ impl RpcClient {
                 return Ok(signature);
             }
             progress_bar.set_message(&format!(
-                "[{}/{}] Waiting for confirmations",
+                "[{}/{}] Finalizing transaction {}",
                 confirmations + 1,
                 MAX_LOCKOUT_HISTORY + 1,
+                signature,
             ));
             sleep(Duration::from_millis(500));
             confirmations = self.get_num_blocks_since_signature_confirmation(&signature)?;
