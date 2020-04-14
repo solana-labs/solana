@@ -307,13 +307,32 @@ pub fn multi_bind_in_range(
     }
     let mut sockets = Vec::with_capacity(num);
 
-    let port = {
-        let (port, _) = bind_in_range(ip_addr, range)?;
-        port
-    }; // drop the probe, port should be available... briefly.
+    const NUM_TRIES: usize = 100;
+    let mut port = 0;
+    let mut error = None;
+    for _ in 0..NUM_TRIES {
+        port = {
+            let (port, _) = bind_in_range(ip_addr, range)?;
+            port
+        }; // drop the probe, port should be available... briefly.
 
-    for _ in 0..num {
-        sockets.push(bind_to(ip_addr, port, true)?);
+        for _ in 0..num {
+            let sock = bind_to(ip_addr, port, true);
+            if let Ok(sock) = sock {
+                sockets.push(sock);
+            } else {
+                error = Some(sock);
+                break;
+            }
+        }
+        if sockets.len() == num {
+            break;
+        } else {
+            sockets.clear();
+        }
+    }
+    if sockets.len() != num {
+        error.unwrap()?;
     }
     Ok((port, sockets))
 }
