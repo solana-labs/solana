@@ -60,17 +60,38 @@ impl Config {
         ws_url
             .set_scheme(if is_secure { "wss" } else { "ws" })
             .expect("unable to set scheme");
-        let ws_port = match json_rpc_url.port() {
-            Some(port) => port + 1,
-            None => {
-                if is_secure {
-                    8901
-                } else {
-                    8900
-                }
-            }
-        };
-        ws_url.set_port(Some(ws_port)).expect("unable to set port");
+        if let Some(port) = json_rpc_url.port() {
+            ws_url.set_port(Some(port + 1)).expect("unable to set port");
+        }
         ws_url.to_string()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn compute_websocket_url() {
+        assert_eq!(
+            Config::compute_websocket_url(&"http://devnet.solana.com"),
+            "ws://devnet.solana.com/".to_string()
+        );
+
+        assert_eq!(
+            Config::compute_websocket_url(&"https://devnet.solana.com"),
+            "wss://devnet.solana.com/".to_string()
+        );
+
+        assert_eq!(
+            Config::compute_websocket_url(&"http://example.com:8899"),
+            "ws://example.com:8900/".to_string()
+        );
+        assert_eq!(
+            Config::compute_websocket_url(&"https://example.com:1234"),
+            "wss://example.com:1235/".to_string()
+        );
+
+        assert_eq!(Config::compute_websocket_url(&"garbage"), String::new());
     }
 }
