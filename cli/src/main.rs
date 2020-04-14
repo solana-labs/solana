@@ -9,6 +9,7 @@ use solana_clap_utils::{
 };
 use solana_cli::{
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
+    cli_output::OutputFormat,
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::{Config, CONFIG_FILE};
@@ -129,6 +130,15 @@ pub fn parse_args<'a>(
     let CliCommandInfo { command, signers } =
         parse_command(&matches, &default_signer_path, wallet_manager.as_ref())?;
 
+    let output_format = matches
+        .value_of("output_format")
+        .map(|value| match value {
+            "json" => OutputFormat::Json,
+            "json-compact" => OutputFormat::JsonCompact,
+            _ => unreachable!(),
+        })
+        .unwrap_or(OutputFormat::Display);
+
     Ok((
         CliConfig {
             command,
@@ -138,6 +148,7 @@ pub fn parse_args<'a>(
             keypair_path: default_signer_path,
             rpc_client: None,
             verbose: matches.is_present("verbose"),
+            output_format,
         },
         signers,
     ))
@@ -198,6 +209,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .short("v")
             .global(true)
             .help("Show additional information"),
+    )
+    .arg(
+        Arg::with_name("output_format")
+            .long("output")
+            .global(true)
+            .takes_value(true)
+            .possible_values(&["json", "json-compact"])
+            .help("Return information in specified output format. Supports: json, json-compact"),
     )
     .arg(
         Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)

@@ -1,6 +1,6 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    display::println_name_value,
+    cli_output::{CliValidatorInfo, CliValidatorInfoVec},
 };
 use bincode::deserialize;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -25,7 +25,6 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{error, sync::Arc};
-use titlecase::titlecase;
 
 pub const MAX_SHORT_FIELD_LENGTH: usize = 70;
 pub const MAX_LONG_FIELD_LENGTH: usize = 300;
@@ -375,7 +374,11 @@ pub fn process_set_validator_info(
     Ok("".to_string())
 }
 
-pub fn process_get_validator_info(rpc_client: &RpcClient, pubkey: Option<Pubkey>) -> ProcessResult {
+pub fn process_get_validator_info(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    pubkey: Option<Pubkey>,
+) -> ProcessResult {
     let validator_info: Vec<(Pubkey, Account)> = if let Some(validator_info_pubkey) = pubkey {
         vec![(
             validator_info_pubkey,
@@ -394,23 +397,22 @@ pub fn process_get_validator_info(rpc_client: &RpcClient, pubkey: Option<Pubkey>
             .collect()
     };
 
+    let mut validator_info_list: Vec<CliValidatorInfo> = vec![];
     if validator_info.is_empty() {
         println!("No validator info accounts found");
     }
     for (validator_info_pubkey, validator_info_account) in validator_info.iter() {
         let (validator_pubkey, validator_info) =
             parse_validator_info(&validator_info_pubkey, &validator_info_account)?;
-        println!();
-        println_name_value("Validator Identity Pubkey:", &validator_pubkey.to_string());
-        println_name_value("  Info Pubkey:", &validator_info_pubkey.to_string());
-        for (key, value) in validator_info.iter() {
-            println_name_value(
-                &format!("  {}:", titlecase(key)),
-                &value.as_str().unwrap_or("?"),
-            );
-        }
+        validator_info_list.push(CliValidatorInfo {
+            identity_pubkey: validator_pubkey.to_string(),
+            info_pubkey: validator_info_pubkey.to_string(),
+            info: validator_info,
+        });
     }
-
+    config
+        .output_format
+        .formatted_print(&CliValidatorInfoVec::new(validator_info_list));
     Ok("".to_string())
 }
 
