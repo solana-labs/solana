@@ -132,6 +132,7 @@ impl StandardBroadcastRun {
         let brecv = Arc::new(Mutex::new(brecv));
         //data
         let _ = self.transmit(&srecv, cluster_info, sock);
+        let _ = self.record(&brecv, blockstore);
         //coding
         let _ = self.transmit(&srecv, cluster_info, sock);
         let _ = self.record(&brecv, blockstore);
@@ -502,7 +503,28 @@ mod test {
         assert!(!blockstore.is_full(0));
         // Modify the stats, should reset later
         standard_broadcast_run.process_shreds_stats.receive_elapsed = 10;
-
+        // Broadcast stats should exist, and 2 batches should have been sent,
+        // one for data, one for coding
+        assert_eq!(
+            standard_broadcast_run
+                .transmit_shreds_stats
+                .lock()
+                .unwrap()
+                .get(unfinished_slot.slot)
+                .unwrap()
+                .num_batches(),
+            2
+        );
+        assert_eq!(
+            standard_broadcast_run
+                .insert_shreds_stats
+                .lock()
+                .unwrap()
+                .get(unfinished_slot.slot)
+                .unwrap()
+                .num_batches(),
+            2
+        );
         // Try to fetch ticks from blockstore, nothing should break
         assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), ticks0);
         assert_eq!(
@@ -513,7 +535,7 @@ mod test {
         // Step 2: Make a transmission for another bank that interrupts the transmission for
         // slot 0
         let bank2 = Arc::new(Bank::new_from_parent(&bank0, &leader_keypair.pubkey(), 2));
-
+        let interrupted_slot = unfinished_slot.slot;
         // Interrupting the slot should cause the unfinished_slot and stats to reset
         let num_shreds = 1;
         assert!(num_shreds < num_shreds_per_slot);
@@ -540,6 +562,20 @@ mod test {
             standard_broadcast_run.process_shreds_stats.receive_elapsed,
             0
         );
+
+        // Broadcast stats for interrupted slot should be cleared
+        assert!(standard_broadcast_run
+            .transmit_shreds_stats
+            .lock()
+            .unwrap()
+            .get(interrupted_slot)
+            .is_none());
+        assert!(standard_broadcast_run
+            .insert_shreds_stats
+            .lock()
+            .unwrap()
+            .get(interrupted_slot)
+            .is_none());
 
         // Try to fetch the incomplete ticks from blockstore, should succeed
         assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), ticks0);
