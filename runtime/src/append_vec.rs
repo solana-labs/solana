@@ -8,7 +8,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{
-    fmt,
+    env, fmt,
     fs::{remove_file, OpenOptions},
     io,
     io::{Cursor, Seek, SeekFrom, Write},
@@ -117,6 +117,10 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
+        if env::var("SOLANA_DISABLE_DEAD_APPEND_VEC_REMOVAL").is_ok() {
+            return;
+        }
+
         let _ignored = remove_file(&self.path);
     }
 }
@@ -176,7 +180,7 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
-    fn new_empty_map(current_len: usize) -> Self {
+    pub fn new_empty_map(current_len: usize) -> Self {
         let map = MmapMut::map_anon(1).expect("failed to map the data file");
 
         AppendVec {

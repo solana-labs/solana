@@ -15,8 +15,9 @@ use solana_ledger::{
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
 };
+use solana_runtime::append_vec::AppendVec;
 use solana_sdk::{
-    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
+    account::Account, clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
     shred_version::compute_shred_version,
 };
 use solana_vote_program::vote_state::VoteState;
@@ -584,6 +585,16 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
 }
 
+fn print_account(pubkey: &Pubkey, account: &Account) {
+    let data_len = account.data.len();
+    println!("{}:", pubkey);
+    println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
+    println!("  - owner: '{}'", account.owner);
+    println!("  - executable: {}", account.executable);
+    println!("  - data: '{}'", bs58::encode(&account.data).into_string());
+    println!("  - data_len: {}", data_len);
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
@@ -849,7 +860,51 @@ fn main() {
             SubCommand::with_name("analyze-storage")
                 .about("Output statistics in JSON format about all column families in the ledger rocksDB")
         )
+        .subcommand(
+            SubCommand::with_name("append-vec")
+            .about("Print account contents of AppendVec mmap files")
+            .arg(
+                Arg::with_name("paths")
+                    .index(1)
+                    .value_name("PATHS")
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+            )
+        )
         .get_matches();
+
+    // somewhat specially-treated subcommand which don't require a ledger
+    if let ("append-vec", Some(arg_matches)) = matches.subcommand() {
+        let paths = values_t_or_exit!(arg_matches, "paths", String);
+
+        let append_vecs: Vec<_> = paths
+            .iter()
+            .map(|path| {
+                let file_size = std::fs::metadata(&path).unwrap().len() as usize;
+                let mut append_vec = AppendVec::new_empty_map(file_size);
+                // ignore sanitization because we can't do so properly without AccountsDB
+                let _ignored = append_vec.set_file(Path::new(path));
+                append_vec
+            })
+            .collect();
+        let accounts: BTreeMap<_, _> = append_vecs
+            .iter()
+            .map(|append_vec| {
+                append_vec
+                    .accounts(0)
+                    .into_iter()
+                    .map(|a| (a.meta.pubkey, a.clone_account()))
+            })
+            .flatten()
+            .collect();
+
+        println!("---");
+        for (pubkey, account) in accounts.into_iter() {
+            print_account(&pubkey, &account);
+        }
+        exit(0);
+    }
 
     let ledger_path = PathBuf::from(value_t!(matches, "ledger_path", String).unwrap_or_else(
         |_err| {
@@ -1105,13 +1160,7 @@ fn main() {
 
                     println!("---");
                     for (pubkey, account) in accounts.into_iter() {
-                        let data_len = account.data.len();
-                        println!("{}:", pubkey);
-                        println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
-                        println!("  - owner: '{}'", account.owner);
-                        println!("  - executable: {}", account.executable);
-                        println!("  - data: '{}'", bs58::encode(account.data).into_string());
-                        println!("  - data_len: {}", data_len);
+                        print_account(&pubkey, &account);
                     }
                 }
                 Err(err) => {
