@@ -1675,7 +1675,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowValidators {
             use_lamports_unit,
             commitment_config,
-        } => process_show_validators(&rpc_client, *use_lamports_unit, *commitment_config),
+        } => process_show_validators(&rpc_client, config, *use_lamports_unit, *commitment_config),
 
         // Nonce Commands
 

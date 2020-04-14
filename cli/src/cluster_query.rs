@@ -1,11 +1,8 @@
 use crate::{
-    cli::{
-        build_balance_message, check_account_for_fee, CliCommand, CliCommandInfo, CliConfig,
-        CliError, ProcessResult,
-    },
+    cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::{
         CliBlockProduction, CliBlockProductionEntry, CliEpochInfo, CliKeyedStakeState,
-        CliSlotStatus, CliStakeVec,
+        CliSlotStatus, CliStakeVec, CliValidator, CliValidators,
     },
     display::println_name_value,
 };
@@ -17,7 +14,6 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_f
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
     rpc_client::RpcClient,
-    rpc_response::RpcVoteAccountInfo,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -46,7 +42,6 @@ use std::{
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 static CROSS_MARK: Emoji = Emoji("❌ ", "");
-static WARNING: Emoji = Emoji("⚠️", "!");
 
 pub trait ClusterQuerySubCommands {
     fn cluster_query_subcommands(self) -> Self;
@@ -751,7 +746,7 @@ pub fn process_show_block_production(
                 if slot_of_next_confirmed_block == slot {
                     individual_slot_status.push(CliSlotStatus {
                         slot,
-                        leader: leader.to_string(),
+                        leader: (*leader).to_string(),
                         skipped: false,
                     });
                     break;
@@ -760,7 +755,7 @@ pub fn process_show_block_production(
             *skipped_slots += 1;
             individual_slot_status.push(CliSlotStatus {
                 slot,
-                leader: leader.to_string(),
+                leader: (*leader).to_string(),
                 skipped: true,
             });
             break;
@@ -775,7 +770,7 @@ pub fn process_show_block_production(
             let skipped_slots = leader_skipped_slots.get(leader).unwrap();
             let blocks_produced = leader_slots - skipped_slots;
             CliBlockProductionEntry {
-                identity_pubkey: leader.to_string(),
+                identity_pubkey: (**leader).to_string(),
                 leader_slots: *leader_slots,
                 blocks_produced,
                 skipped_slots: *skipped_slots,
@@ -1132,6 +1127,7 @@ pub fn process_show_stakes(
 
 pub fn process_show_validators(
     rpc_client: &RpcClient,
+    config: &CliConfig,
     use_lamports_unit: bool,
     commitment_config: CommitmentConfig,
 ) -> ProcessResult {
@@ -1141,126 +1137,36 @@ pub fn process_show_validators(
         .current
         .iter()
         .chain(vote_accounts.delinquent.iter())
-        .fold(0, |acc, vote_account| acc + vote_account.activated_stake)
-        as f64;
+        .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
 
     let total_deliquent_stake = vote_accounts
         .delinquent
         .iter()
-        .fold(0, |acc, vote_account| acc + vote_account.activated_stake)
-        as f64;
+        .fold(0, |acc, vote_account| acc + vote_account.activated_stake);
     let total_current_stake = total_active_stake - total_deliquent_stake;
-
-    println_name_value(
-        "Active Stake:",
-        &build_balance_message(total_active_stake as u64, use_lamports_unit, true),
-    );
-    if total_deliquent_stake > 0. {
-        println_name_value(
-            "Current Stake:",
-            &format!(
-                "{} ({:0.2}%)",
-                &build_balance_message(total_current_stake as u64, use_lamports_unit, true),
-                100. * total_current_stake / total_active_stake
-            ),
-        );
-        println_name_value(
-            "Delinquent Stake:",
-            &format!(
-                "{} ({:0.2}%)",
-                &build_balance_message(total_deliquent_stake as u64, use_lamports_unit, true),
-                100. * total_deliquent_stake / total_active_stake
-            ),
-        );
-    }
-    println!();
-
-    println!(
-        "{}",
-        style(format!(
-            "  {:<44}  {:<44}  {}  {}  {}  {:>7}  {}",
-            "Identity Pubkey",
-            "Vote Account Pubkey",
-            "Commission",
-            "Last Vote",
-            "Root Block",
-            "Credits",
-            "Active Stake",
-        ))
-        .bold()
-    );
-
-    fn print_vote_account(
-        vote_account: RpcVoteAccountInfo,
-        current_epoch: Epoch,
-        total_active_stake: f64,
-        use_lamports_unit: bool,
-        delinquent: bool,
-    ) {
-        fn non_zero_or_dash(v: u64) -> String {
-            if v == 0 {
-                "-".into()
-            } else {
-                format!("{}", v)
-            }
-        }
-
-        println!(
-            "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>7}  {}",
-            if delinquent {
-                WARNING.to_string()
-            } else {
-                " ".to_string()
-            },
-            vote_account.node_pubkey,
-            vote_account.vote_pubkey,
-            vote_account.commission,
-            non_zero_or_dash(vote_account.last_vote),
-            non_zero_or_dash(vote_account.root_slot),
-            vote_account
-                .epoch_credits
-                .iter()
-                .find_map(|(epoch, credits, _)| if *epoch == current_epoch {
-                    Some(*credits)
-                } else {
-                    None
-                })
-                .unwrap_or(0),
-            if vote_account.activated_stake > 0 {
-                format!(
-                    "{} ({:.2}%)",
-                    build_balance_message(vote_account.activated_stake, use_lamports_unit, true),
-                    100. * vote_account.activated_stake as f64 / total_active_stake
-                )
-            } else {
-                "-".into()
-            },
-        );
-    }
 
     let mut current = vote_accounts.current;
     current.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
-    for vote_account in current.into_iter() {
-        print_vote_account(
-            vote_account,
-            epoch_info.epoch,
-            total_active_stake,
-            use_lamports_unit,
-            false,
-        );
-    }
+    let current_validators: Vec<CliValidator> = current
+        .iter()
+        .map(|vote_account| CliValidator::new(vote_account, epoch_info.epoch))
+        .collect();
     let mut delinquent = vote_accounts.delinquent;
     delinquent.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
-    for vote_account in delinquent.into_iter() {
-        print_vote_account(
-            vote_account,
-            epoch_info.epoch,
-            total_active_stake,
-            use_lamports_unit,
-            true,
-        );
-    }
+    let delinquent_validators: Vec<CliValidator> = delinquent
+        .iter()
+        .map(|vote_account| CliValidator::new(vote_account, epoch_info.epoch))
+        .collect();
 
+    let cli_validators = CliValidators {
+        total_active_stake,
+        total_current_stake,
+        total_deliquent_stake,
+        current_validators,
+        delinquent_validators,
+        use_lamports_unit,
+    };
+    config.output_format.formatted_print(&cli_validators);
     Ok("".to_string())
 }
 

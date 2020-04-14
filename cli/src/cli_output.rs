@@ -1,10 +1,10 @@
 use crate::{cli::build_balance_message, display::writeln_name_value};
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
-use console::style;
+use console::{style, Emoji};
 use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use solana_client::rpc_response::{RpcEpochInfo, RpcKeyedAccount};
+use solana_client::rpc_response::{RpcEpochInfo, RpcKeyedAccount, RpcVoteAccountInfo};
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
     stake_history::StakeHistoryEntry,
@@ -15,6 +15,8 @@ use solana_vote_program::{
     vote_state::{BlockTimestamp, Lockout},
 };
 use std::{collections::BTreeMap, fmt, time::Duration};
+
+static WARNING: Emoji = Emoji("⚠️", "!");
 
 #[derive(PartialEq)]
 pub enum OutputFormat {
@@ -241,6 +243,163 @@ fn slot_to_human_time(slot: Slot) -> String {
         slot * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
     ))
     .to_string()
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliValidators {
+    pub total_active_stake: u64,
+    pub total_current_stake: u64,
+    pub total_deliquent_stake: u64,
+    pub current_validators: Vec<CliValidator>,
+    pub delinquent_validators: Vec<CliValidator>,
+    #[serde(skip_serializing)]
+    pub use_lamports_unit: bool,
+}
+
+impl fmt::Display for CliValidators {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn write_vote_account(
+            f: &mut fmt::Formatter,
+            validator: &CliValidator,
+            total_active_stake: u64,
+            use_lamports_unit: bool,
+            delinquent: bool,
+        ) -> fmt::Result {
+            fn non_zero_or_dash(v: u64) -> String {
+                if v == 0 {
+                    "-".into()
+                } else {
+                    format!("{}", v)
+                }
+            }
+
+            writeln!(
+                f,
+                "{} {:<44}  {:<44}  {:>9}%   {:>8}  {:>10}  {:>7}  {}",
+                if delinquent {
+                    WARNING.to_string()
+                } else {
+                    " ".to_string()
+                },
+                validator.identity_pubkey,
+                validator.vote_account_pubkey,
+                validator.commission,
+                non_zero_or_dash(validator.last_vote),
+                non_zero_or_dash(validator.root_slot),
+                validator.credits,
+                if validator.activated_stake > 0 {
+                    format!(
+                        "{} ({:.2}%)",
+                        build_balance_message(validator.activated_stake, use_lamports_unit, true),
+                        100. * validator.activated_stake as f64 / total_active_stake as f64
+                    )
+                } else {
+                    "-".into()
+                },
+            )
+        }
+        writeln_name_value(
+            f,
+            "Active Stake:",
+            &build_balance_message(self.total_active_stake, self.use_lamports_unit, true),
+        )?;
+        if self.total_deliquent_stake > 0 {
+            writeln_name_value(
+                f,
+                "Current Stake:",
+                &format!(
+                    "{} ({:0.2}%)",
+                    &build_balance_message(self.total_current_stake, self.use_lamports_unit, true),
+                    100. * self.total_current_stake as f64 / self.total_active_stake as f64
+                ),
+            )?;
+            writeln_name_value(
+                f,
+                "Delinquent Stake:",
+                &format!(
+                    "{} ({:0.2}%)",
+                    &build_balance_message(
+                        self.total_deliquent_stake,
+                        self.use_lamports_unit,
+                        true
+                    ),
+                    100. * self.total_deliquent_stake as f64 / self.total_active_stake as f64
+                ),
+            )?;
+        }
+        writeln!(f)?;
+        writeln!(
+            f,
+            "{}",
+            style(format!(
+                "  {:<44}  {:<44}  {}  {}  {}  {:>7}  {}",
+                "Identity Pubkey",
+                "Vote Account Pubkey",
+                "Commission",
+                "Last Vote",
+                "Root Block",
+                "Credits",
+                "Active Stake",
+            ))
+            .bold()
+        )?;
+        for validator in &self.current_validators {
+            write_vote_account(
+                f,
+                validator,
+                self.total_active_stake,
+                self.use_lamports_unit,
+                false,
+            )?;
+        }
+        for validator in &self.delinquent_validators {
+            write_vote_account(
+                f,
+                validator,
+                self.total_active_stake,
+                self.use_lamports_unit,
+                true,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliValidator {
+    pub identity_pubkey: String,
+    pub vote_account_pubkey: String,
+    pub commission: u8,
+    pub last_vote: u64,
+    pub root_slot: u64,
+    pub credits: u64,
+    pub activated_stake: u64,
+}
+
+impl CliValidator {
+    pub fn new(vote_account: &RpcVoteAccountInfo, current_epoch: Epoch) -> Self {
+        Self {
+            identity_pubkey: vote_account.node_pubkey.to_string(),
+            vote_account_pubkey: vote_account.vote_pubkey.to_string(),
+            commission: vote_account.commission,
+            last_vote: vote_account.last_vote,
+            root_slot: vote_account.root_slot,
+            credits: vote_account
+                .epoch_credits
+                .iter()
+                .find_map(|(epoch, credits, _)| {
+                    if *epoch == current_epoch {
+                        Some(*credits)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0),
+            activated_stake: vote_account.activated_stake,
+        }
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
