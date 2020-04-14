@@ -20,7 +20,7 @@ use solana_runtime::{
     transaction_batch::TransactionBatch,
 };
 use solana_sdk::{
-    clock::{Slot, MAX_RECENT_BLOCKHASHES},
+    clock::{Slot, MAX_PROCESSING_AGE},
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -70,7 +70,7 @@ fn execute_batch(
         balances,
     ) = batch.bank().load_execute_and_commit_transactions(
         batch,
-        MAX_RECENT_BLOCKHASHES,
+        MAX_PROCESSING_AGE,
         transaction_status_sender.is_some(),
     );
 
