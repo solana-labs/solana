@@ -12,7 +12,6 @@ use crate::{
     erasure::ErasureConfig,
     leader_schedule_cache::LeaderScheduleCache,
     next_slots_iterator::NextSlotsIterator,
-    rooted_slot_iterator::RootedSlotIterator,
     shred::{Result as ShredResult, Shred, Shredder},
 };
 use bincode::deserialize;
@@ -1464,41 +1463,42 @@ impl Blockstore {
         timestamp_interval: u64,
         timestamp_sample_range: usize,
     ) -> Vec<Slot> {
-        let root_iterator = self.db.iter::<cf::Root>(IteratorMode::Start);
+        let baseline_slot = slot - (slot % timestamp_interval);
+        let root_iterator = self.db.iter::<cf::Root>(IteratorMode::From(
+            baseline_slot,
+            IteratorDirection::Forward,
+        ));
         if !self.is_root(slot) || root_iterator.is_err() {
             return vec![];
         }
-        let lowest_nonzero_root = root_iterator.unwrap().map(|(slot, _)| slot).nth(1).unwrap();
-        let rooted_slots = RootedSlotIterator::new(lowest_nonzero_root, &self);
-        let slots: Vec<Slot> = rooted_slots
+        let mut get_slots = Measure::start("get_slots");
+        let mut slots: Vec<Slot> = root_iterator
             .unwrap()
             .map(|(iter_slot, _)| iter_slot)
+            .take(timestamp_sample_range)
             .filter(|&iter_slot| iter_slot <= slot)
             .collect();
 
-        if slots.len() < timestamp_sample_range {
-            return slots;
+        if slots.len() < timestamp_sample_range && baseline_slot >= timestamp_interval {
+            let earlier_baseline = baseline_slot - timestamp_interval;
+            let earlier_root_iterator = self.db.iter::<cf::Root>(IteratorMode::From(
+                earlier_baseline,
+                IteratorDirection::Forward,
+            ));
+            if let Ok(iterator) = earlier_root_iterator {
+                slots = iterator
+                    .map(|(iter_slot, _)| iter_slot)
+                    .take(timestamp_sample_range)
+                    .collect();
+            }
         }
-
-        let recent_timestamp_slot_position = slots
-            .iter()
-            .position(|&x| x >= slot - (slot % timestamp_interval))
-            .unwrap();
-
-        let filtered_iter =
-            if slots.len() - timestamp_sample_range >= recent_timestamp_slot_position {
-                slots.iter().skip(recent_timestamp_slot_position)
-            } else {
-                let earlier_timestamp_slot_position = slots
-                    .iter()
-                    .position(|&x| x >= slot - (slot % timestamp_interval) - timestamp_interval)
-                    .unwrap();
-                slots.iter().skip(earlier_timestamp_slot_position)
-            };
-        filtered_iter
-            .take(timestamp_sample_range)
-            .cloned()
-            .collect()
+        get_slots.stop();
+        datapoint_info!(
+            "blockstore-get-timestamp-slots",
+            ("slot", slot as i64, i64),
+            ("get_slots_us", get_slots.as_us() as i64, i64)
+        );
+        slots
     }
 
     pub fn get_confirmed_block(
@@ -5106,11 +5106,11 @@ pub mod tests {
 
         assert_eq!(
             blockstore.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
-            vec![1, 2]
+            vec![0, 1, 2]
         );
         assert_eq!(
             blockstore.get_timestamp_slots(3, timestamp_interval, timestamp_sample_range),
-            vec![1, 2, 3]
+            vec![0, 1, 2, 3]
         );
 
         drop(blockstore);
@@ -5146,11 +5146,15 @@ pub mod tests {
 
         assert_eq!(
             blockstore.get_timestamp_slots(2, timestamp_interval, timestamp_sample_range),
-            vec![1, 2]
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            blockstore.get_timestamp_slots(6, timestamp_interval, timestamp_sample_range),
+            vec![0, 1, 2, 3, 4]
         );
         assert_eq!(
             blockstore.get_timestamp_slots(8, timestamp_interval, timestamp_sample_range),
-            vec![1, 2, 3, 4, 5]
+            vec![0, 1, 2, 3, 4]
         );
         assert_eq!(
             blockstore.get_timestamp_slots(13, timestamp_interval, timestamp_sample_range),
