@@ -662,6 +662,7 @@ declare module '@solana/web3.js' {
     static load(
       connection: Connection,
       payer: Account,
+      program: Account,
       elfBytes: Buffer | Uint8Array | Array<number>,
     ): Promise<PublicKey>;
   }
