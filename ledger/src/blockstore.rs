@@ -344,7 +344,7 @@ impl Blockstore {
     }
 
     fn archive_dir(dir: &str) -> String {
-        Path::new(dir).join("tar.gz").to_str().unwrap().to_string()
+        format!("{}.tar.gz", dir)
     }
 
     fn tar_dir(dir: String) -> Result<()> {
@@ -354,15 +354,17 @@ impl Blockstore {
         if !output.status.success() {
             warn!(
                 "tar {} command failed with exit code: {}",
-                dir, output.status
+                dir, output.status,
             );
+            use std::str::from_utf8;
+            info!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
+            info!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
         }
         let _ = fs::remove_dir_all(dir);
         Ok(())
     }
 
-    pub fn tar_shreds(&self) -> Result<()> {
-        let root_slot: Slot = *self.last_root.read().unwrap();
+    pub fn tar_shreds(&self, max_slot: Slot) -> Result<()> {
         let dir = fs::read_dir(Path::new(&self.shreds_dir).join("data"))?;
         let slots = dir
             .filter_map(|e| {
@@ -374,7 +376,7 @@ impl Blockstore {
                 let ix: Slot = std::str::FromStr::from_str(e.file_name().to_str()?).ok()?;
                 Some(ix)
             })
-            .filter(|ix| *ix < root_slot);
+            .filter(|ix| *ix < max_slot);
         for slot in slots {
             let dir = self.slot_data_dir(slot);
             let _ = Self::tar_dir(dir);

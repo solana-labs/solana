@@ -324,7 +324,7 @@ mod tests {
         )));
 
         let snapshot_packager_service =
-            SnapshotPackagerService::new(receiver, None, &exit, &cluster_info);
+            SnapshotPackagerService::new(receiver, None, &exit, &cluster_info, None);
 
         // Close the channel so that the package service will exit after reading all the
         // packages off the channel
