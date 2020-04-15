@@ -341,6 +341,35 @@ impl Blockstore {
                 }
             }
         }
+        self.tar_shreds(batch_end);
+    }
+
+    fn archive_dir(dir: &str) -> String {
+        Path::new(dir).join("tar.gz").to_str().unwrap().to_string()
+    }
+
+    fn tar_dir(dir: String) -> Result<()> {
+        let archive = Self::archive_dir(&dir);
+        let args = ["cfz", &archive, &dir];
+        let output = std::process::Command::new("tar").args(&args).output()?;
+        if !output.status.success() {
+            warn!(
+                "tar {} command failed with exit code: {}",
+                dir, output.status
+            );
+        }
+        let _ = fs::remove_dir_all(dir);
+        Ok(())
+    }
+
+    fn tar_shreds(&self, end_slot: Slot) {
+        let root_slot: Slot = *self.last_root.read().unwrap();
+        for slot in end_slot..root_slot {
+            let dir = self.slot_data_dir(slot);
+            let _ = Self::tar_dir(dir);
+            let dir = self.slot_coding_dir(slot);
+            let _ = Self::tar_dir(dir);
+        }
     }
 
     // Returns whether or not all columns have been purged until their end
@@ -353,7 +382,9 @@ impl Blockstore {
         let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
         for s in from_slot..to_slot {
             let _ = fs::remove_dir_all(self.slot_data_dir(s));
+            let _ = fs::remove_file(Self::archive_dir(&self.slot_coding_dir(s)));
             let _ = fs::remove_dir_all(self.slot_coding_dir(s));
+            let _ = fs::remove_file(Self::archive_dir(&self.slot_coding_dir(s)));
         }
         let mut columns_empty = self
             .db
