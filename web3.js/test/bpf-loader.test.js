@@ -7,6 +7,7 @@ import {
   BpfLoader,
   Transaction,
   sendAndConfirmTransaction,
+  Account,
 } from '../src';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
@@ -37,7 +38,8 @@ test('load BPF C program', async () => {
   );
   const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
-  const programId = await BpfLoader.load(connection, from, data);
+  const program = new Account();
+  const programId = await BpfLoader.load(connection, from, program, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
     programId,
@@ -65,7 +67,8 @@ test('load BPF Rust program', async () => {
   );
   const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
-  const programId = await BpfLoader.load(connection, from, data);
+  const program = new Account();
+  const programId = await BpfLoader.load(connection, from, program, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
     programId,
