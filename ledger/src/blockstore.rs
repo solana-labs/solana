@@ -415,7 +415,7 @@ impl Blockstore {
         write_timer.stop();
         datapoint_info!(
             "blockstore-purge",
-            ("write_batch_ns", write_timer.as_us() as i64, i64)
+            ("write_batch_us", write_timer.as_us() as i64, i64)
         );
         Ok(columns_empty)
     }
@@ -1424,18 +1424,34 @@ impl Blockstore {
             return Err(BlockstoreError::SlotCleanedUp);
         }
 
+        let mut get_unique_timestamps = Measure::start("get_unique_timestamps");
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
             .get_timestamp_slots(slot, TIMESTAMP_SLOT_INTERVAL, TIMESTAMP_SLOT_RANGE)
             .into_iter()
             .flat_map(|query_slot| self.get_block_timestamps(query_slot).unwrap_or_default())
             .collect();
+        get_unique_timestamps.stop();
 
-        Ok(calculate_stake_weighted_timestamp(
-            unique_timestamps,
-            stakes,
-            slot,
-            slot_duration,
-        ))
+        let mut calculate_timestamp =
+            Measure::start("calculate_timestamp");
+        let stake_weighted_timestamps =
+            calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration);
+        calculate_timestamp.stop();
+        datapoint_info!(
+            "blockstore-get-block-time",
+            (
+                "get_unique_timestamps_us",
+                get_unique_timestamps.as_us() as i64,
+                i64
+            ),
+            (
+                "calculate_stake_weighted_timestamp_us",
+                calculate_timestamp.as_us() as i64,
+                i64
+            )
+        );
+
+        Ok(stake_weighted_timestamps)
     }
 
     fn get_timestamp_slots(
