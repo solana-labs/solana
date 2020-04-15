@@ -2054,17 +2054,20 @@ impl Blockstore {
                 self.get_data_shred(slot, u64::from(i))
                     .and_then(|serialized_shred| {
                         Shred::new_from_serialized_shred(serialized_shred.unwrap_or_else(|| {
+                            let index = self.index_cf.get(slot).unwrap().map(|i| i.data().clone());
                             panic!(
                                 "Shred with
                         slot: {},
                         index: {},
                         consumed: {},
-                        completed_indexes: {:?}
+                        completed_indexes: {:?},
+                        index_meta data: {:?},
                         must exist if shred index was included in a range: {} {}",
                                 slot,
                                 i,
                                 slot_meta.consumed,
                                 slot_meta.completed_data_indexes,
+                                index,
                                 start_index,
                                 end_index
                             )
