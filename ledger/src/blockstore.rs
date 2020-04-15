@@ -6676,7 +6676,6 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_reconcile_missing() {
         let slot = 1;
         let num_entries = 100;
@@ -6691,12 +6690,9 @@ pub mod tests {
             .unwrap();
         let shred_path = ledger.data_shred_path(slot, 0);
         fs::remove_file(shred_path.clone()).unwrap();
-        let mut f = fs::File::create(shred_path).unwrap();
-        f.write_all(b"corrupt shred").unwrap();
-        f.sync_all().unwrap();
-        drop(f);
-        let _ = ledger
-            .reconcile_shreds(Some(&leader_schedule_cache))
-            .unwrap();
+        let result = std::panic::catch_unwind(|| {
+            let _ = ledger.reconcile_shreds(Some(&leader_schedule_cache));
+        });
+        assert!(result.is_err());
     }
 }
