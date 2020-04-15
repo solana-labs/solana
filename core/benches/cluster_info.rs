@@ -10,7 +10,11 @@ use solana_ledger::shred::Shred;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::sync::RwLock;
-use std::{collections::HashMap, net::UdpSocket, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    net::UdpSocket,
+    sync::{atomic::AtomicU64, Arc},
+};
 use test::Bencher;
 
 #[bench]
@@ -35,6 +39,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(stakes.clone()));
     let shreds = Arc::new(shreds);
+    let last_datapoint = Arc::new(AtomicU64::new(0));
     bencher.iter(move || {
         let shreds = shreds.clone();
         broadcast_shreds(
@@ -42,7 +47,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &shreds,
             &peers_and_stakes,
             &peers,
-            &mut Instant::now(),
+            &last_datapoint,
             &mut 0,
         )
         .unwrap();
