@@ -340,17 +340,12 @@ impl JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-<<<<<<< HEAD
-    use crate::{contact_info::ContactInfo, rpc::tests::create_validator_exit};
-=======
     use crate::{
         contact_info::ContactInfo,
         crds_value::{CrdsData, CrdsValue, SnapshotHash},
         rpc::tests::create_validator_exit,
     };
->>>>>>> 40737e9ef... Add health check URI
     use solana_ledger::{
-        bank_forks::CompressionType,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
