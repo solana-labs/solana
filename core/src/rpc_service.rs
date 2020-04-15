@@ -332,14 +332,7 @@ mod tests {
     use super::*;
     use crate::{
         contact_info::ContactInfo,
-<<<<<<< HEAD
-=======
         crds_value::{CrdsData, CrdsValue, SnapshotHash},
-        rpc::tests::create_validator_exit,
-    };
-    use solana_ledger::{
-        bank_forks::CompressionType,
->>>>>>> 40737e9ef... Add health check URI
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         rpc::tests::create_validator_exit,
     };
