@@ -262,6 +262,7 @@ impl Validator {
                     ledger_path,
                     storage_state.clone(),
                     validator_exit.clone(),
+                    config.trusted_validators.clone(),
                 ),
                 PubSubService::new(
                     &subscriptions,
