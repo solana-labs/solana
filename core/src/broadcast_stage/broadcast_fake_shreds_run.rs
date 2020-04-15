@@ -28,8 +28,8 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<TransmitShreds>,
-        blockstore_sender: &Sender<Arc<Vec<Shred>>>,
+        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -83,25 +83,31 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         }
 
         let data_shreds = Arc::new(data_shreds);
-        blockstore_sender.send(data_shreds.clone())?;
+        blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
         //some indicates fake shreds
-        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)))?;
-        socket_sender.send((Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)))?;
+        socket_sender.send((
+            (Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)),
+            None,
+        ))?;
+        socket_sender.send((
+            (Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)),
+            None,
+        ))?;
         //none indicates real shreds
-        socket_sender.send((None, data_shreds))?;
-        socket_sender.send((None, Arc::new(coding_shreds)))?;
+        socket_sender.send(((None, data_shreds), None))?;
+        socket_sender.send(((None, Arc::new(coding_shreds)), None))?;
 
         Ok(())
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<Receiver<TransmitShreds>>>,
+        receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sock: &UdpSocket,
     ) -> Result<()> {
-        for (stakes, data_shreds) in receiver.lock().unwrap().iter() {
+        for ((stakes, data_shreds), _) in receiver.lock().unwrap().iter() {
             let peers = cluster_info.read().unwrap().tvu_peers();
             peers.iter().enumerate().for_each(|(i, peer)| {
                 if i <= self.partition && stakes.is_some() {
@@ -119,11 +125,11 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         Ok(())
     }
     fn record(
-        &self,
-        receiver: &Arc<Mutex<Receiver<Arc<Vec<Shred>>>>>,
+        &mut self,
+        receiver: &Arc<Mutex<RecordReceiver>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
-        for data_shreds in receiver.lock().unwrap().iter() {
+        for (data_shreds, _) in receiver.lock().unwrap().iter() {
             blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
         }
         Ok(())
