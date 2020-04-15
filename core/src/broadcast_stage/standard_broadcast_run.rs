@@ -34,7 +34,7 @@ pub struct StandardBroadcastRun {
     slot_broadcast_start: Option<Instant>,
     keypair: Arc<Keypair>,
     shred_version: u16,
-    last_datapoint_submit: Instant,
+    last_datapoint_submit: Arc<AtomicU64>,
 }
 
 impl StandardBroadcastRun {
@@ -46,7 +46,7 @@ impl StandardBroadcastRun {
             slot_broadcast_start: None,
             keypair,
             shred_version,
-            last_datapoint_submit: Instant::now(),
+            last_datapoint_submit: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -269,7 +269,7 @@ impl StandardBroadcastRun {
             &shreds,
             &peers_and_stakes,
             &peers,
-            &mut self.last_datapoint_submit,
+            &self.last_datapoint_submit,
             &mut send_mmsg_total,
         )?;
 

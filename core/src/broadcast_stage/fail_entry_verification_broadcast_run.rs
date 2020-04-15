@@ -87,7 +87,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &shreds,
             &peers_and_stakes,
             &peers,
-            &mut Instant::now(),
+            &Arc::new(AtomicU64::new(0)),
             &mut send_mmsg_total,
         )?;
 

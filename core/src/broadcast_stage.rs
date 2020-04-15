@@ -20,10 +20,10 @@ use solana_ledger::{blockstore::Blockstore, shred::Shred, staking_utils};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
-use solana_sdk::timing::duration_as_s;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use solana_streamer::sendmmsg::send_mmsg;
+use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -335,14 +335,21 @@ impl BroadcastStage {
     }
 }
 
-fn update_peer_stats(num_live_peers: i64, broadcast_len: i64, last_datapoint_submit: &mut Instant) {
-    if duration_as_s(&Instant::now().duration_since(*last_datapoint_submit)) >= 1.0 {
+fn update_peer_stats(
+    num_live_peers: i64,
+    broadcast_len: i64,
+    last_datapoint_submit: &Arc<AtomicU64>,
+) {
+    let now = timestamp();
+    let last = last_datapoint_submit.load(Ordering::Relaxed);
+    if now - last > 1000
+        && last_datapoint_submit.compare_and_swap(last, now, Ordering::Relaxed) == last
+    {
         datapoint_info!(
             "cluster_info-num_nodes",
             ("live_count", num_live_peers, i64),
             ("broadcast_count", broadcast_len, i64)
         );
-        *last_datapoint_submit = Instant::now();
     }
 }
 
@@ -363,7 +370,7 @@ pub fn broadcast_shreds(
     shreds: &Arc<Vec<Shred>>,
     peers_and_stakes: &[(u64, usize)],
     peers: &[ContactInfo],
-    last_datapoint_submit: &mut Instant,
+    last_datapoint_submit: &Arc<AtomicU64>,
     send_mmsg_total: &mut u64,
 ) -> Result<()> {
     let broadcast_len = peers_and_stakes.len();
