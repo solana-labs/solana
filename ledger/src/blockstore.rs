@@ -341,7 +341,6 @@ impl Blockstore {
                 }
             }
         }
-        self.tar_shreds(batch_end);
     }
 
     fn archive_dir(dir: &str) -> String {
@@ -362,14 +361,27 @@ impl Blockstore {
         Ok(())
     }
 
-    fn tar_shreds(&self, end_slot: Slot) {
+    pub fn tar_shreds(&self) -> Result<()> {
         let root_slot: Slot = *self.last_root.read().unwrap();
-        for slot in end_slot..root_slot {
+        let dir = fs::read_dir(Path::new(&self.shreds_dir).join("data"))?;
+        let slots = dir
+            .filter_map(|e| {
+                let e = e.ok()?;
+                let path = e.path();
+                if !path.is_dir() {
+                    return None;
+                }
+                let ix: Slot = std::str::FromStr::from_str(e.file_name().to_str()?).ok()?;
+                Some(ix)
+            })
+            .filter(|ix| *ix < root_slot);
+        for slot in slots {
             let dir = self.slot_data_dir(slot);
             let _ = Self::tar_dir(dir);
             let dir = self.slot_coding_dir(slot);
             let _ = Self::tar_dir(dir);
         }
+        Ok(())
     }
 
     // Returns whether or not all columns have been purged until their end
