@@ -1417,6 +1417,10 @@ impl Blockstore {
         slot_duration: Duration,
         stakes: &HashMap<Pubkey, (u64, Account)>,
     ) -> Result<Option<UnixTimestamp>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_block_time".to_string(), String)
+        );
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
@@ -1432,13 +1436,13 @@ impl Blockstore {
             .collect();
         get_unique_timestamps.stop();
 
-        let mut calculate_timestamp =
-            Measure::start("calculate_timestamp");
+        let mut calculate_timestamp = Measure::start("calculate_timestamp");
         let stake_weighted_timestamps =
             calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration);
         calculate_timestamp.stop();
         datapoint_info!(
             "blockstore-get-block-time",
+            ("slot", slot as i64, i64),
             (
                 "get_unique_timestamps_us",
                 get_unique_timestamps.as_us() as i64,
@@ -1502,6 +1506,10 @@ impl Blockstore {
         slot: Slot,
         encoding: Option<TransactionEncoding>,
     ) -> Result<ConfirmedBlock> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_confirmed_block".to_string(), String)
+        );
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
         // LedgerCleanupService
@@ -1727,6 +1735,10 @@ impl Blockstore {
         &self,
         signature: Signature,
     ) -> Result<Option<(Slot, TransactionStatusMeta)>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_transaction_status".to_string(), String)
+        );
         self.get_transaction_status_with_counter(signature)
             .map(|(status, _)| status)
     }
@@ -1737,6 +1749,10 @@ impl Blockstore {
         signature: Signature,
         encoding: Option<TransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            ("method", "get_confirmed_transaction".to_string(), String)
+        );
         if let Some((slot, status)) = self.get_transaction_status(signature.clone())? {
             let transaction = self.find_transaction_in_slot(slot, signature)?
                 .expect("Transaction to exist in slot entries if it exists in statuses and hasn't been cleaned up");
@@ -1806,6 +1822,14 @@ impl Blockstore {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<Signature>> {
+        datapoint_info!(
+            "blockstore-rpc-api",
+            (
+                "method",
+                "get_confirmed_signatures_for_address".to_string(),
+                String
+            )
+        );
         self.find_address_signatures(pubkey, start_slot, end_slot)
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
