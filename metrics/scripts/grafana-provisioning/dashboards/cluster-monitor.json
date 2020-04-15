@@ -5150,7 +5150,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"receive_time\") AS \"receive_time\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"receive_time\") AS \"receive_time\" FROM \"$testnet\".\"autogen\".\"broadcast-process-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -5189,7 +5189,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"shredding_time\") AS \"shredding_time\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"shredding_time\") AS \"shredding_time\" FROM \"$testnet\".\"autogen\".\"broadcast-process-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -5228,7 +5228,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"broadcast_time\") AS \"broadcast_time\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"slot_broadcast_time\") AS \"slot_broadcast_time\" FROM \"$testnet\".\"autogen\".\"broadcast-process-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -5267,85 +5267,7 @@
           "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"num_shreds\") AS \"num_shreds\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT mean(\"slot_broadcast_time\") AS \"slot_broadcast_time\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT mean(\"insertion_time\") AS \"insertion_time\" FROM \"$testnet\".\"autogen\".\"broadcast-bank-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT mean(\"num_data_shreds\") AS \"num_data_shreds\" FROM \"$testnet\".\"autogen\".\"broadcast-process-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series",
@@ -5369,7 +5291,493 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Time spent in Broadcast ($hostid)",
+      "title": "Broadcast Receive/Shredding Stats ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "µs",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 62
+      },
+      "id": 74,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [
+        {
+          "alias": "broadcast-bank-stats.num_shreds",
+          "yaxis": 2
+        },
+        {
+          "alias": "broadcast-transmit-shreds-stats.num_data_and_coding_shreds",
+          "yaxis": 2
+        }
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"transmit_elapsed\") AS \"transmit_elapsed\" FROM \"$testnet\".\"autogen\".\"broadcast-transmit-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"send_mmsg_elapsed\") AS \"send_mmsg_elapsed\" FROM \"$testnet\".\"autogen\".\"broadcast-transmit-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"get_peers_elapsed\") AS \"get_peers_elapsed\" FROM \"$testnet\".\"autogen\".\"broadcast-transmit-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"num_shreds\") AS \"num_data_and_coding_shreds\" FROM \"$testnet\".\"autogen\".\"broadcast-transmit-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"end_to_end_elapsed\") AS \"end_to_end_elapsed\" FROM \"$testnet\".\"autogen\".\"broadcast-transmit-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Broadcast Transmit Stats ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "µs",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 62
+      },
+      "id": 75,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [
+        {
+          "alias": "broadcast-bank-stats.num_shreds",
+          "yaxis": 2
+        },
+        {
+          "alias": "broadcast-insert-shreds-stats.num_data_and_coding_shreds",
+          "yaxis": 2
+        }
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"insert_shreds_elapsed\") AS \"insert_shreds_elapsed\" FROM \"$testnet\".\"autogen\".\"broadcast-insert-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"num_shreds\") AS \"num_data_and_coding_shreds\" FROM \"$testnet\".\"autogen\".\"broadcast-insert-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"end_to_end_elapsed\") AS \"end_to_end_elapsed\" FROM \"$testnet\".\"autogen\".\"broadcast-insert-shreds-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Broadcast Insert Shreds Stats ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -5423,8 +5831,8 @@
       "gridPos": {
         "h": 6,
         "w": 8,
-        "x": 8,
-        "y": 62
+        "x": 0,
+        "y": 68
       },
       "id": 44,
       "legend": {
@@ -5775,6 +6183,248 @@
     },
     {
       "aliasColors": {
+        "banking_stage-buffered_packets.sum": "#3f6833",
+        "banking_stage-consumed_buffered_packets.last": "#65c5db",
+        "banking_stage-consumed_buffered_packets.sum": "#614d93",
+        "banking_stage-forwarded_packets.last": "#f9ba8f",
+        "banking_stage-forwarded_packets.sum": "#b7dbab",
+        "banking_stage-rebuffered_packets.last": "#e5a8e2",
+        "cluster-info.repair": "#ba43a9",
+        "fetch_stage-discard_forwards.sum": "#00ffbb",
+        "fetch_stage-honor_forwards.sum": "#bf1b00",
+        "poh_recorder-record_lock_contention.sum": "#5195ce",
+        "poh_recorder-tick_lock_contention.sum": "#962d82",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 68
+      },
+      "id": 47,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 2,
+      "links": [],
+      "nullPointMode": "null as zero",
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "F",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "PoH Lock Contention ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "µs",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
         "cluster-info.repair": "#ba43a9",
         "replay_stage-new_leader.last": "#00ffbb",
         "tower-observed.squash_account": "#0a437c",
@@ -5791,7 +6441,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 62
+        "y": 68
       },
       "id": 71,
       "legend": {
@@ -6112,7 +6762,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 68
+        "y": 74
       },
       "id": 46,
       "legend": {
@@ -6516,35 +7166,19 @@
       }
     },
     {
-      "aliasColors": {
-        "banking_stage-buffered_packets.sum": "#3f6833",
-        "banking_stage-consumed_buffered_packets.last": "#65c5db",
-        "banking_stage-consumed_buffered_packets.sum": "#614d93",
-        "banking_stage-forwarded_packets.last": "#f9ba8f",
-        "banking_stage-forwarded_packets.sum": "#b7dbab",
-        "banking_stage-rebuffered_packets.last": "#e5a8e2",
-        "cluster-info.repair": "#ba43a9",
-        "fetch_stage-discard_forwards.sum": "#00ffbb",
-        "fetch_stage-honor_forwards.sum": "#bf1b00",
-        "poh_recorder-record_lock_contention.sum": "#5195ce",
-        "poh_recorder-tick_lock_contention.sum": "#962d82",
-        "replay_stage-new_leader.last": "#00ffbb",
-        "tower-vote.last": "#00ffbb",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
+      "aliasColors": {},
       "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 6,
+        "h": 5,
         "w": 8,
         "x": 8,
-        "y": 68
+        "y": 74
       },
-      "id": 47,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6556,11 +7190,11 @@
         "values": false
       },
       "lines": true,
-      "linewidth": 2,
+      "linewidth": 1,
       "links": [],
-      "nullPointMode": "null as zero",
+      "nullPointMode": "null",
       "percentage": false,
-      "pointradius": 2,
+      "pointradius": 5,
       "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
@@ -6583,46 +7217,10 @@
               "type": "fill"
             }
           ],
+          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "F",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "policy": "autogen",
+          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -6630,13 +7228,13 @@
             [
               {
                 "params": [
-                  "value"
+                  "count"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "mean"
+                "type": "sum"
               }
             ]
           ],
@@ -6659,46 +7257,9 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-consume\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
           "resultFormat": "time_series",
           "select": [
             [
@@ -6720,7 +7281,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "PoH Lock Contention ($hostid)",
+      "title": "Window",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -6736,7 +7297,7 @@
       },
       "yaxes": [
         {
-          "format": "µs",
+          "format": "short",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -6749,7 +7310,7 @@
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": false
+          "show": true
         }
       ],
       "yaxis": {
@@ -6775,7 +7336,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 68
+        "y": 74
       },
       "id": 45,
       "legend": {
@@ -7077,6 +7638,123 @@
       }
     },
     {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "description": "(Must pick a host id for this to make sense)",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 79
+      },
+      "id": 73,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT count(\"slot\") AS \"num_my_leader_slots\" FROM \"$testnet\".\"autogen\".\"replay_stage-my_leader_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "My Leader Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "aliasColors": {
         "banking_stage-buffered_packets.sum": "#3f6833",
         "banking_stage-consumed_buffered_packets.last": "#65c5db",
@@ -7101,7 +7779,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 74
+        "y": 80
       },
       "id": 53,
       "legend": {
@@ -7402,161 +8080,8 @@
       "gridPos": {
         "h": 5,
         "w": 8,
-        "x": 8,
-        "y": 74
-      },
-      "id": 54,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-consume\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Window",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 8,
         "x": 16,
-        "y": 74
+        "y": 80
       },
       "id": 48,
       "legend": {
@@ -7673,7 +8198,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 79
+        "y": 85
       },
       "id": 61,
       "legend": {
@@ -7826,129 +8351,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
-      "description": "(Must pick a host id for this to make sense)",
-      "fill": 1,
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 8,
-        "y": 79
-      },
-      "id": 73,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT count(\"slot\") AS \"num_my_leader_slots\" FROM \"$testnet\".\"autogen\".\"replay_stage-my_leader_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) fill(null)\n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "My Leader Slots ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 79
+        "y": 85
       },
       "id": 52,
       "legend": {
@@ -8059,7 +8467,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 91
       },
       "id": 55,
       "panels": [],
@@ -8082,7 +8490,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 86
+        "y": 92
       },
       "id": 56,
       "legend": {
@@ -8242,7 +8650,7 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 86
+        "y": 92
       },
       "id": 57,
       "legend": {
@@ -8402,7 +8810,7 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 86
+        "y": 92
       },
       "id": 58,
       "legend": {
@@ -8587,7 +8995,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 91
+        "y": 97
       },
       "id": 59,
       "panels": [],
@@ -8606,7 +9014,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 98
       },
       "id": 60,
       "legend": {
@@ -8839,7 +9247,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 98
       },
       "id": 72,
       "legend": {
@@ -8992,7 +9400,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 97
+        "y": 103
       },
       "id": 62,
       "panels": [],
@@ -9010,7 +9418,7 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 98
+        "y": 104
       },
       "id": 63,
       "legend": {
@@ -9212,7 +9620,7 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 98
+        "y": 104
       },
       "id": 64,
       "legend": {
@@ -9361,7 +9769,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 103
+        "y": 109
       },
       "id": 65,
       "panels": [],
@@ -9379,7 +9787,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 104
+        "y": 110
       },
       "id": 66,
       "legend": {
@@ -9571,7 +9979,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 104
+        "y": 110
       },
       "id": 67,
       "legend": {
@@ -9839,7 +10247,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 104
+        "y": 110
       },
       "id": 68,
       "legend": {
@@ -10028,7 +10436,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 110
+        "y": 116
       },
       "id": 69,
       "panels": [],
@@ -10046,7 +10454,7 @@
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 111
+        "y": 117
       },
       "id": 70,
       "legend": {
