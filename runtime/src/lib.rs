@@ -31,9 +31,6 @@ extern crate solana_vote_program;
 extern crate solana_stake_program;
 
 #[macro_use]
-extern crate solana_bpf_loader_program;
-
-#[macro_use]
 extern crate serde_derive;
 
 extern crate fs_extra;

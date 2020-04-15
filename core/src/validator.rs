@@ -718,6 +718,9 @@ impl TestValidator {
         genesis_config
             .native_instruction_processors
             .push(solana_budget_program!());
+        genesis_config
+            .native_instruction_processors
+            .push(solana_bpf_loader_program!());
 
         genesis_config.rent.lamports_per_byte_year = 1;
         genesis_config.rent.exemption_threshold = 1.0;
