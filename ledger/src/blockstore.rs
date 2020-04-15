@@ -1012,8 +1012,7 @@ impl Blockstore {
         let mut f = fs::File::create(tmp_path)?;
         f.write_all(payload)?;
         let real_path = Path::new(path);
-        //rename should sync force the metadata to be synced
-        //in case of a data corruption, reconcile_shreds will fail to boot
+        //after rename syscall returns, the real path is on disk
         fs::rename(tmp_path, real_path)?;
         Ok(())
     }
@@ -1931,7 +1930,7 @@ impl Blockstore {
     pub fn reconcile_shreds(
         &self,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let root_slot: Slot = *self.last_root.read().unwrap();
         let mut total = 0;
         info!("reconciling shreds from root {}", root_slot);
@@ -1958,7 +1957,7 @@ impl Blockstore {
             }
         }
         info!("Done reconciling shreds. Verified {}", total);
-        Ok(())
+        Ok(total)
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`, the number of
@@ -6648,5 +6647,53 @@ pub mod tests {
         }
 
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_reconcile() {
+        let slot = 1;
+        let num_entries = 100;
+        let (data_shreds, _, leader_schedule_cache) =
+            setup_erasure_shreds(slot, 0, num_entries, 1.0);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+
+        let len = data_shreds.len();
+        ledger
+            .insert_shreds(data_shreds, Some(&leader_schedule_cache), false)
+            .unwrap();
+
+        let num = ledger
+            .reconcile_shreds(Some(&leader_schedule_cache))
+            .unwrap();
+        assert_eq!(num, len);
+        drop(ledger);
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_reconcile_missing() {
+        let slot = 1;
+        let num_entries = 100;
+        let (data_shreds, _, leader_schedule_cache) =
+            setup_erasure_shreds(slot, 0, num_entries, 1.0);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+
+        ledger
+            .insert_shreds(data_shreds, Some(&leader_schedule_cache), false)
+            .unwrap();
+        let shred_path = ledger.data_shred_path(slot, 0);
+        fs::remove_file(shred_path.clone()).unwrap();
+        let mut f = fs::File::create(shred_path).unwrap();
+        f.write_all(b"corrupt shred").unwrap();
+        f.sync_all().unwrap();
+        drop(f);
+        let _ = ledger
+            .reconcile_shreds(Some(&leader_schedule_cache))
+            .unwrap();
     }
 }
