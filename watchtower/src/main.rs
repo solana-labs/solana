@@ -28,6 +28,23 @@ fn get_config() -> Config {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
+        .after_help("ADDITIONAL HELP:
+        To receive a Slack, Discord and/or Telegram notification on sanity failure,
+        define environment variables before running `solana-watchtower`:
+
+        export SLACK_WEBHOOK=...
+        export DISCORD_WEBHOOK=...
+        
+        Telegram requires the following two variables:
+
+        export TELEGRAM_BOT_TOKEN=...
+        export TELEGRAM_CHAT_ID=...
+        
+        To receive a Twilio SMS notification on failure, having a Twilio account,
+        and a sending number owned by that account,
+        define environment variable before running `solana-watchtower`:
+
+        export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'")
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("C")
