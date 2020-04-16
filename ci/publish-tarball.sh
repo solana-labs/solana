@@ -95,9 +95,8 @@ fi
 source ci/upload-ci-artifact.sh
 
 for file in solana-release-$TARGET.tar.bz2 solana-release-$TARGET.yml solana-install-init-"$TARGET"* $MAYBE_TARBALLS; do
-  upload-ci-artifact "$file"
-
   if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
+    upload-ci-artifact "$file"
     echo "Skipped $file due to DO_NOT_PUBLISH_TAR"
     continue
   fi
