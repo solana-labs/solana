@@ -3,6 +3,8 @@ set -e
 
 cd "$(dirname "$0")"
 
+: "${rust_stable:=}" # Pacify shellcheck
+
 usage=$(cargo +"$rust_stable" -q run -p solana-cli -- -C ~/.foo --help | sed -e 's|'"$HOME"'|~|g' -e 's/[[:space:]]\+$//')
 
 out=${1:-src/cli/usage.md}
