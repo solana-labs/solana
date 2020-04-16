@@ -31,6 +31,6 @@ in_subcommands=0
 while read -r subcommand rest; do
   [[ $subcommand == "SUBCOMMANDS:" ]] && in_subcommands=1 && continue
   if ((in_subcommands)); then
-      section "$(cargo -q run -p solana-cli -- help "$subcommand" | sed 's|'"$HOME"'|~|g')" "####" >> "$out"
+      section "$(cargo +"$rust_stable" -q run -p solana-cli -- help "$subcommand" | sed 's|'"$HOME"'|~|g')" "####" >> "$out"
   fi
 done <<<"$usage">>"$out"
