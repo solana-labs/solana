@@ -12,6 +12,12 @@ pub const SIGN_ONLY_ARG: ArgConstant<'static> = ArgConstant {
     help: "Sign the transaction offline",
 };
 
+pub const JSON_OUTPUT_ARG: ArgConstant<'static> = ArgConstant {
+    name: "json",
+    long: "json",
+    help: "Show result of command in JSON format",
+};
+
 pub const SIGNER_ARG: ArgConstant<'static> = ArgConstant {
     name: "signer",
     long: "signer",

@@ -314,6 +314,7 @@ fn test_offline_pay_tx() {
         to: bob_pubkey,
         blockhash_query: BlockhashQuery::None(blockhash),
         sign_only: true,
+        json_output: true,
         ..PayCommand::default()
     });
     let sig_response = process_command(&config_offline).unwrap();

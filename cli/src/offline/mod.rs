@@ -7,7 +7,7 @@ use solana_clap_utils::{
     input_parsers::{pubkey_of, value_of},
     input_validators::{is_hash, is_pubkey_sig},
     keypair::presigner_from_pubkey_sigs,
-    offline::{BLOCKHASH_ARG, SIGNER_ARG, SIGN_ONLY_ARG},
+    offline::{BLOCKHASH_ARG, SIGNER_ARG, SIGN_ONLY_ARG, JSON_OUTPUT_ARG},
 };
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
@@ -35,6 +35,14 @@ fn sign_only_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(SIGN_ONLY_ARG.help)
 }
 
+fn json_output_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(JSON_OUTPUT_ARG.name)
+        .long(JSON_OUTPUT_ARG.long)
+        .takes_value(false)
+        .requires(SIGN_ONLY_ARG.name)
+        .help(JSON_OUTPUT_ARG.help)
+}
+
 fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(SIGNER_ARG.name)
         .long(SIGNER_ARG.long)
@@ -54,6 +62,7 @@ impl OfflineArgs for App<'_, '_> {
     fn offline_args(self) -> Self {
         self.arg(blockhash_arg())
             .arg(sign_only_arg())
+            .arg(json_output_arg())
             .arg(signer_arg())
     }
 }
