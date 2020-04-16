@@ -343,12 +343,7 @@ impl Blockstore {
         }
     }
 
-    fn archive_dir(dir: &str) -> String {
-        format!("{}.tar.gz", dir)
-    }
-
-    fn tar_dir(dir: String) -> Result<()> {
-        let archive = Self::archive_dir(&dir);
+    fn tar_dir(dir: String, archive: String) -> Result<()> {
         let args = ["cfz", &archive, &dir];
         let output = std::process::Command::new("tar").args(&args).output()?;
         if !output.status.success() {
@@ -365,6 +360,8 @@ impl Blockstore {
     }
 
     pub fn tar_shreds(&self, max_slot: Slot) -> Result<()> {
+        fs::create_dir_all(Path::new(&self.shreds_dir).join("data").join("tars"))?;
+        fs::create_dir_all(Path::new(&self.shreds_dir).join("coding").join("tars"))?;
         let dir = fs::read_dir(Path::new(&self.shreds_dir).join("data"))?;
         let slots = dir
             .filter_map(|e| {
@@ -379,9 +376,11 @@ impl Blockstore {
             .filter(|ix| *ix < max_slot);
         for slot in slots {
             let dir = self.slot_data_dir(slot);
-            let _ = Self::tar_dir(dir);
+            let archive = self.slot_data_tar_path(slot);
+            let _ = Self::tar_dir(dir, archive);
             let dir = self.slot_coding_dir(slot);
-            let _ = Self::tar_dir(dir);
+            let archive = self.slot_coding_tar_path(slot);
+            let _ = Self::tar_dir(dir, archive);
         }
         Ok(())
     }
@@ -396,9 +395,9 @@ impl Blockstore {
         let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
         for s in from_slot..to_slot {
             let _ = fs::remove_dir_all(self.slot_data_dir(s));
-            let _ = fs::remove_file(Self::archive_dir(&self.slot_coding_dir(s)));
+            let _ = fs::remove_file(self.slot_data_tar_path(s));
             let _ = fs::remove_dir_all(self.slot_coding_dir(s));
-            let _ = fs::remove_file(Self::archive_dir(&self.slot_coding_dir(s)));
+            let _ = fs::remove_file(self.slot_coding_tar_path(s));
         }
         let mut columns_empty = self
             .db
@@ -1191,6 +1190,17 @@ impl Blockstore {
         Ok(())
     }
 
+    fn slot_data_tar_path(&self, slot: Slot) -> String {
+        Path::new(&self.shreds_dir)
+            .join("data")
+            .join("tars")
+            .join(slot.to_string())
+            .with_extension("tar.gz")
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
     fn slot_data_dir(&self, slot: Slot) -> String {
         Path::new(&self.shreds_dir)
             .join("data")
@@ -1207,7 +1217,16 @@ impl Blockstore {
             .unwrap()
             .to_string()
     }
-
+    fn slot_coding_tar_path(&self, slot: Slot) -> String {
+        Path::new(&self.shreds_dir)
+            .join("coding")
+            .join("tars")
+            .join(slot.to_string())
+            .with_extension("tar.gz")
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
     fn data_shred_path(&self, slot: Slot, index: u64) -> String {
         Path::new(&self.slot_data_dir(slot))
             .join(index.to_string())
