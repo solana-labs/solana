@@ -399,6 +399,15 @@ fn download_then_check_genesis_hash(
     Ok(genesis_config.hash())
 }
 
+fn is_snapshot_config_invalid(
+    snapshot_interval_slots: u64,
+    accounts_hash_interval_slots: u64,
+) -> bool {
+    snapshot_interval_slots != 0
+        && (snapshot_interval_slots < accounts_hash_interval_slots
+            || snapshot_interval_slots % accounts_hash_interval_slots != 0)
+}
+
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
     let default_dynamic_port_range =
@@ -608,6 +617,14 @@ pub fn main() {
                 .takes_value(true)
                 .default_value("100")
                 .help("Number of slots between generating snapshots, 0 to disable snapshots"),
+        )
+        .arg(
+            clap::Arg::with_name("accounts_hash_interval_slots")
+                .long("accounts-hash-slots")
+                .value_name("ACCOUNTS_HASH_INTERVAL_SLOTS")
+                .takes_value(true)
+                .default_value("100")
+                .help("Number of slots between generating accounts hash."),
         )
         .arg(
             clap::Arg::with_name("limit_ledger_size")
@@ -850,7 +867,7 @@ pub fn main() {
         })
         .collect();
 
-    let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", usize);
+    let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let snapshot_path = ledger_path.clone().join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
         eprintln!(
@@ -874,12 +891,29 @@ pub fn main() {
         snapshot_interval_slots: if snapshot_interval_slots > 0 {
             snapshot_interval_slots
         } else {
-            std::usize::MAX
+            std::u64::MAX
         },
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
         compression: snapshot_compression,
     });
+
+    validator_config.accounts_hash_interval_slots =
+        value_t_or_exit!(matches, "accounts_hash_interval_slots", u64);
+    if validator_config.accounts_hash_interval_slots == 0 {
+        eprintln!("Accounts hash interval should not be 0.");
+        exit(1);
+    }
+    if is_snapshot_config_invalid(
+        snapshot_interval_slots,
+        validator_config.accounts_hash_interval_slots,
+    ) {
+        eprintln!("Invalid snapshot interval provided ({}), must be a multiple of accounts_hash_interval_slots ({})",
+            snapshot_interval_slots,
+            validator_config.accounts_hash_interval_slots,
+        );
+        exit(1);
+    }
 
     if matches.is_present("limit_ledger_size") {
         let limit_ledger_size = value_t_or_exit!(matches, "limit_ledger_size", u64);
@@ -1187,4 +1221,18 @@ pub fn main() {
     info!("Validator initialized");
     validator.join().expect("validator exit");
     info!("Validator exiting..");
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interval_check() {
+        assert!(!is_snapshot_config_invalid(0, 100));
+        assert!(is_snapshot_config_invalid(1, 100));
+        assert!(is_snapshot_config_invalid(230, 100));
+        assert!(!is_snapshot_config_invalid(500, 100));
+        assert!(!is_snapshot_config_invalid(5, 5));
+    }
 }

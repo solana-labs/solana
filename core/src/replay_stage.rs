@@ -20,7 +20,7 @@ use solana_ledger::{
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
-    snapshot_package::SnapshotPackageSender,
+    snapshot_package::AccountsPackageSender,
 };
 use solana_measure::thread_mem_usage;
 use solana_metrics::inc_new_counter_info;
@@ -97,7 +97,7 @@ pub struct ReplayStageConfig {
     pub subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub latest_root_senders: Vec<Sender<Slot>>,
-    pub accounts_hash_sender: Option<SnapshotPackageSender>,
+    pub accounts_hash_sender: Option<AccountsPackageSender>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
@@ -690,7 +690,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         lockouts_sender: &Sender<CommitmentAggregationData>,
-        accounts_hash_sender: &Option<SnapshotPackageSender>,
+        accounts_hash_sender: &Option<AccountsPackageSender>,
         latest_root_senders: &[Sender<Slot>],
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -1485,7 +1485,7 @@ impl ReplayStage {
         new_root: u64,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
-        accounts_hash_sender: &Option<SnapshotPackageSender>,
+        accounts_hash_sender: &Option<AccountsPackageSender>,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
     ) {
         let old_epoch = bank_forks.read().unwrap().root_bank().epoch();

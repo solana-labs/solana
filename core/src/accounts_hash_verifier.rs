@@ -6,8 +6,8 @@
 
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_ledger::{
-    snapshot_package::SnapshotPackage, snapshot_package::SnapshotPackageReceiver,
-    snapshot_package::SnapshotPackageSender,
+    snapshot_package::AccountsPackage, snapshot_package::AccountsPackageReceiver,
+    snapshot_package::AccountsPackageSender,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -27,13 +27,14 @@ pub struct AccountsHashVerifier {
 
 impl AccountsHashVerifier {
     pub fn new(
-        snapshot_package_receiver: SnapshotPackageReceiver,
-        snapshot_package_sender: Option<SnapshotPackageSender>,
+        accounts_package_receiver: AccountsPackageReceiver,
+        accounts_package_sender: Option<AccountsPackageSender>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         trusted_validators: Option<HashSet<Pubkey>>,
         halt_on_trusted_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
+        snapshot_interval_slots: u64,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -46,17 +47,18 @@ impl AccountsHashVerifier {
                         break;
                     }
 
-                    match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
-                        Ok(snapshot_package) => {
-                            Self::process_snapshot(
-                                snapshot_package,
+                    match accounts_package_receiver.recv_timeout(Duration::from_secs(1)) {
+                        Ok(accounts_package) => {
+                            Self::process_accounts_package(
+                                accounts_package,
                                 &cluster_info,
                                 &trusted_validators,
                                 halt_on_trusted_validators_accounts_hash_mismatch,
-                                &snapshot_package_sender,
+                                &accounts_package_sender,
                                 &mut hashes,
                                 &exit,
                                 fault_injection_rate_slots,
+                                snapshot_interval_slots,
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -70,28 +72,29 @@ impl AccountsHashVerifier {
         }
     }
 
-    fn process_snapshot(
-        snapshot_package: SnapshotPackage,
+    fn process_accounts_package(
+        accounts_package: AccountsPackage,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         trusted_validators: &Option<HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
-        snapshot_package_sender: &Option<SnapshotPackageSender>,
+        accounts_package_sender: &Option<AccountsPackageSender>,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
+        snapshot_interval_slots: u64,
     ) {
         if fault_injection_rate_slots != 0
-            && snapshot_package.root % fault_injection_rate_slots == 0
+            && accounts_package.root % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
             use rand::{thread_rng, Rng};
             use solana_sdk::hash::extend_and_hash;
-            warn!("inserting fault at slot: {}", snapshot_package.root);
+            warn!("inserting fault at slot: {}", accounts_package.root);
             let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&snapshot_package.hash, &[rand]);
-            hashes.push((snapshot_package.root, hash));
+            let hash = extend_and_hash(&accounts_package.hash, &[rand]);
+            hashes.push((accounts_package.root, hash));
         } else {
-            hashes.push((snapshot_package.root, snapshot_package.hash));
+            hashes.push((accounts_package.root, accounts_package.hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {
@@ -107,8 +110,11 @@ impl AccountsHashVerifier {
                 exit.store(true, Ordering::Relaxed);
             }
         }
-        if let Some(sender) = snapshot_package_sender.as_ref() {
-            if sender.send(snapshot_package).is_err() {}
+
+        if accounts_package.block_height % snapshot_interval_slots == 0 {
+            if let Some(sender) = accounts_package_sender.as_ref() {
+                if sender.send(accounts_package).is_err() {}
+            }
         }
 
         cluster_info
@@ -225,8 +231,9 @@ mod tests {
         let mut hashes = vec![];
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let snapshot_links = TempDir::new().unwrap();
-            let snapshot_package = SnapshotPackage {
+            let accounts_package = AccountsPackage {
                 hash: hash(&[i as u8]),
+                block_height: 100 + i as u64,
                 root: 100 + i as u64,
                 slot_deltas: vec![],
                 snapshot_links,
@@ -235,8 +242,8 @@ mod tests {
                 compression: CompressionType::Bzip2,
             };
 
-            AccountsHashVerifier::process_snapshot(
-                snapshot_package,
+            AccountsHashVerifier::process_accounts_package(
+                accounts_package,
                 &cluster_info,
                 &Some(trusted_validators.clone()),
                 false,
@@ -244,6 +251,7 @@ mod tests {
                 &mut hashes,
                 &exit,
                 0,
+                100,
             );
         }
         let cluster_info_r = cluster_info.read().unwrap();

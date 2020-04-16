@@ -1,6 +1,6 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
-use crate::snapshot_package::{SnapshotPackageSendError, SnapshotPackageSender};
+use crate::snapshot_package::{AccountsPackageSendError, AccountsPackageSender};
 use crate::snapshot_utils::{self, SnapshotError};
 use log::*;
 use solana_measure::measure::Measure;
@@ -27,7 +27,7 @@ pub enum CompressionType {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
     // Generate a new snapshot every this many slots
-    pub snapshot_interval_slots: usize,
+    pub snapshot_interval_slots: u64,
 
     // Where to store the latest packaged snapshot
     pub snapshot_package_output_path: PathBuf,
@@ -43,8 +43,8 @@ pub enum BankForksError {
     #[error("snapshot error")]
     SnapshotError(#[from] SnapshotError),
 
-    #[error("snapshot package send error")]
-    SnapshotPackageSendError(#[from] SnapshotPackageSendError),
+    #[error("accounts package send error")]
+    AccountsPackageSendError(#[from] AccountsPackageSendError),
 }
 type Result<T> = std::result::Result<T, BankForksError>;
 
@@ -54,6 +54,9 @@ pub struct BankForks {
     root: Slot,
     pub snapshot_config: Option<SnapshotConfig>,
     last_snapshot_slot: Slot,
+
+    pub accounts_hash_interval_slots: Slot,
+    last_accounts_hash_slot: Slot,
 }
 
 impl Index<u64> for BankForks {
@@ -74,6 +77,8 @@ impl BankForks {
             root: 0,
             snapshot_config: None,
             last_snapshot_slot: bank_slot,
+            accounts_hash_interval_slots: std::u64::MAX,
+            last_accounts_hash_slot: bank_slot,
         }
     }
 
@@ -159,6 +164,8 @@ impl BankForks {
             working_bank,
             snapshot_config: None,
             last_snapshot_slot: root,
+            accounts_hash_interval_slots: std::u64::MAX,
+            last_accounts_hash_slot: root,
         }
     }
 
@@ -178,7 +185,7 @@ impl BankForks {
     pub fn set_root(
         &mut self,
         root: Slot,
-        snapshot_package_sender: &Option<SnapshotPackageSender>,
+        accounts_package_sender: &Option<AccountsPackageSender>,
     ) {
         let old_epoch = self.root_bank().epoch();
         self.root = root;
@@ -209,43 +216,46 @@ impl BankForks {
             .last()
             .map(|bank| bank.transaction_count())
             .unwrap_or(0);
-        // Generate each snapshot at a fixed interval
+        // Calculate the accounts hash at a fixed interval
         let mut is_root_bank_squashed = false;
-        if self.snapshot_config.is_some() && snapshot_package_sender.is_some() {
-            let config = self.snapshot_config.as_ref().unwrap();
-            let mut banks = vec![root_bank];
-            let parents = root_bank.parents();
-            banks.extend(parents.iter());
-            for bank in banks.iter() {
-                let bank_slot = bank.slot();
-                if bank.block_height() % (config.snapshot_interval_slots as u64) == 0 {
-                    // Generate a snapshot if snapshots are configured and it's been an appropriate number
-                    // of banks since the last snapshot
-                    if bank_slot > self.last_snapshot_slot {
-                        bank.squash();
-                        is_root_bank_squashed = bank_slot == root;
-                        let mut snapshot_time = Measure::start("total-snapshot-ms");
-                        let r = self.generate_snapshot(
-                            bank_slot,
-                            &bank.src.roots(),
-                            snapshot_package_sender.as_ref().unwrap(),
-                        );
-                        if r.is_err() {
-                            warn!(
-                                "Error generating snapshot for bank: {}, err: {:?}",
-                                bank_slot, r
-                            );
-                        } else {
-                            self.last_snapshot_slot = bank_slot;
-                        }
+        let mut banks = vec![root_bank];
+        let parents = root_bank.parents();
+        banks.extend(parents.iter());
+        for bank in banks.iter() {
+            let bank_slot = bank.slot();
+            if bank.block_height() % self.accounts_hash_interval_slots == 0
+                && bank_slot > self.last_accounts_hash_slot
+            {
+                self.last_accounts_hash_slot = bank_slot;
+                bank.squash();
+                is_root_bank_squashed = bank_slot == root;
 
-                        // Cleanup outdated snapshots
-                        self.purge_old_snapshots();
-                        snapshot_time.stop();
-                        inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
+                bank.clean_accounts();
+                bank.update_accounts_hash();
+
+                if self.snapshot_config.is_some() && accounts_package_sender.is_some() {
+                    // Generate an accounts package
+                    let mut snapshot_time = Measure::start("total-snapshot-ms");
+                    let r = self.generate_accounts_package(
+                        bank_slot,
+                        &bank.src.roots(),
+                        accounts_package_sender.as_ref().unwrap(),
+                    );
+                    if r.is_err() {
+                        warn!(
+                            "Error generating snapshot for bank: {}, err: {:?}",
+                            bank_slot, r
+                        );
+                    } else {
+                        self.last_snapshot_slot = bank_slot;
                     }
-                    break;
+
+                    // Cleanup outdated snapshots
+                    self.purge_old_snapshots();
+                    snapshot_time.stop();
+                    inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
                 }
+                break;
             }
         }
         if !is_root_bank_squashed {
@@ -282,11 +292,11 @@ impl BankForks {
         }
     }
 
-    pub fn generate_snapshot(
+    pub fn generate_accounts_package(
         &self,
         root: Slot,
         slots_to_snapshot: &[Slot],
-        snapshot_package_sender: &SnapshotPackageSender,
+        accounts_package_sender: &AccountsPackageSender,
     ) -> Result<()> {
         let config = self.snapshot_config.as_ref().unwrap();
 
@@ -319,8 +329,7 @@ impl BankForks {
             config.compression.clone(),
         )?;
 
-        // Send the package to the packaging thread
-        snapshot_package_sender.send(package)?;
+        accounts_package_sender.send(package)?;
 
         Ok(())
     }
@@ -337,6 +346,10 @@ impl BankForks {
 
     pub fn snapshot_config(&self) -> &Option<SnapshotConfig> {
         &self.snapshot_config
+    }
+
+    pub fn set_accounts_hash_interval_slots(&mut self, accounts_interval_slots: u64) {
+        self.accounts_hash_interval_slots = accounts_interval_slots;
     }
 }
 
