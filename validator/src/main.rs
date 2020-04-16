@@ -35,6 +35,7 @@ use solana_sdk::{
 };
 use std::{
     collections::HashSet,
+    env,
     fs::{self, File},
     net::{SocketAddr, TcpListener, UdpSocket},
     path::PathBuf,
@@ -936,6 +937,11 @@ pub fn main() {
         ]
         .join(","),
     );
+
+    // Default to RUST_BACKTRACE=1 for more informative validator logs
+    if env::var_os("RUST_BACKTRACE").is_none() {
+        env::set_var("RUST_BACKTRACE", "1")
+    }
 
     info!("{} {}", crate_name!(), solana_clap_utils::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
