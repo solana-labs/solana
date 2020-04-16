@@ -457,7 +457,8 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
             if let Some(outfile) = outfile {
-                output_keypair(&keypair, &outfile, "new")?;
+                output_keypair(&keypair, &outfile, "new")
+                    .map_err(|err| format!("Unable to write {}: {}", outfile, err))?;
             }
 
             let silent = matches.is_present("silent");
