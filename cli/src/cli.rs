@@ -1165,12 +1165,48 @@ fn process_balance(
     }
 }
 
-fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResult {
-    match rpc_client.get_signature_status(&signature) {
+fn process_confirm(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    signature: &Signature,
+) -> ProcessResult {
+    match rpc_client.get_signature_status_with_commitment_and_history(
+        &signature,
+        CommitmentConfig::max(),
+        true,
+    ) {
         Ok(status) => {
             if let Some(result) = status {
                 match result {
-                    Ok(_) => Ok("Confirmed".to_string()),
+                    Ok(_) => {
+                        if config.verbose {
+                            match rpc_client.get_confirmed_transaction(
+                                signature,
+                                solana_transaction_status::TransactionEncoding::Binary,
+                            ) {
+                                Ok(confirmed_transaction) => {
+                                    println!("\nTransaction:");
+                                    crate::display::println_transaction(
+                                        &confirmed_transaction
+                                            .transaction
+                                            .transaction
+                                            .decode()
+                                            .expect("Successful decode"),
+                                        &confirmed_transaction.transaction.meta,
+                                        "  ",
+                                    );
+                                    println!();
+                                    Ok(format!("Confirmed in slot {}", confirmed_transaction.slot))
+                                }
+                                Err(err) => Ok(format!(
+                                    "Confirmed. Unable to get confirmed transaction details: {}",
+                                    err
+                                )),
+                            }
+                        } else {
+                            Ok("Confirmed".to_string())
+                        }
+                    }
                     Err(err) => Ok(format!("Transaction failed with error: {}", err)),
                 }
             } else {
@@ -2063,7 +2099,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
-        CliCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
+        CliCommand::Confirm(signature) => process_confirm(&rpc_client, config, signature),
         // If client has positive balance, pay lamports to another address
         CliCommand::Pay(PayCommand {
             lamports,
