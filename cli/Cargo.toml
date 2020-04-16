@@ -40,6 +40,7 @@ solana-runtime = { path = "../runtime", version = "1.1.4" }
 solana-sdk = { path = "../sdk", version = "1.1.4" }
 solana-stake-program = { path = "../programs/stake", version = "1.1.4" }
 solana-storage-program = { path = "../programs/storage", version = "1.1.4" }
+solana-transaction-status = { path = "../transaction-status", version = "1.1.4" }
 solana-vote-program = { path = "../programs/vote", version = "1.1.4" }
 solana-vote-signer = { path = "../vote-signer", version = "1.1.4" }
 thiserror = "1.0.13"

@@ -64,7 +64,7 @@ impl From<TransactionStatusMeta> for RpcTransactionStatusMeta {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,
-    pub confirmations: Option<usize>,
+    pub confirmations: Option<usize>, // None = rooted
     pub status: Result<()>,
     pub err: Option<TransactionError>,
 }
