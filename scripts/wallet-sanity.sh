@@ -15,7 +15,9 @@ else
   args=("$@")
 fi
 
-$solana_keygen new --no-passphrase -sf
+keypair="target/wallet-sanity-keypair.json"
+$solana_keygen new --no-passphrase -sf -o $keypair
+args+=(--keypair "$keypair")
 
 node_readiness=false
 timeout=60
@@ -41,6 +43,7 @@ fi
   $solana_cli "${args[@]}" ping --count 5 --interval 0
   $solana_cli "${args[@]}" balance --lamports
 )
+rm $keypair
 
 echo PASS
 exit 0
