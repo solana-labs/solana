@@ -764,7 +764,7 @@ impl Shredder {
                 return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
             }
 
-            let session = Session::new(num_data, num_coding).unwrap();
+            let session = Session::new(num_data, num_coding)?;
 
             let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
             let coding_block_offset = SIZE_OF_CODING_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER;
