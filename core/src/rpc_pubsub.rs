@@ -722,11 +722,16 @@ mod tests {
 
     #[test]
     fn test_slot_subscribe() {
+        solana_logger::setup();
         let rpc = RpcSolPubSubImpl::default();
+        error!("slot_subscribe: create_session");
         let session = create_session();
+        error!("slot_subscribe: new_test");
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
+        error!("slot_subscribe after new_test");
         rpc.slot_subscribe(session, subscriber);
 
+        error!("slot_subscribe after subscribe");
         rpc.subscriptions.notify_slot(0, 0, 0);
         // Test slot confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
@@ -735,19 +740,24 @@ mod tests {
             slot: 0,
             root: 0,
         };
+        error!("slot_subscribe after panic");
         let expected_res_str =
             serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
         let expected = format!(
             r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
             expected_res_str
         );
+        error!("test_slot_subscribe: {} {}", expected, response);
         assert_eq!(expected, response);
     }
 
     #[test]
     fn test_slot_unsubscribe() {
+        solana_logger::setup();
         let rpc = RpcSolPubSubImpl::default();
+        error!("slot_unsubscribe: create_session");
         let session = create_session();
+        error!("slot_unsubscribe: new_test");
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
         rpc.slot_subscribe(session, subscriber);
         rpc.subscriptions.notify_slot(0, 0, 0);
@@ -757,6 +767,7 @@ mod tests {
             slot: 0,
             root: 0,
         };
+        error!("slot_unsubscribe: robust poll");
         let expected_res_str =
             serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
         let expected = format!(
@@ -769,8 +780,10 @@ mod tests {
         assert!(rpc
             .slot_unsubscribe(Some(session), SubscriptionId::Number(42))
             .is_err());
+        error!("slot_unsubscribe: create2");
 
         let session = create_session();
+        error!("slot_unsubscribe: create3");
         assert!(rpc
             .slot_unsubscribe(Some(session), SubscriptionId::Number(0))
             .is_ok());

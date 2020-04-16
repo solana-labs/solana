@@ -13,7 +13,7 @@ source ci/_
 reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -z $1 ]]; then
-  packages=( --lib --all --exclude solana-local-cluster )
+  packages=( --lib -p solana-core )
 else
   packages=( "$@" )
 fi
