@@ -476,6 +476,25 @@ impl Accounts {
         )
     }
 
+    pub fn load_to_collect_rent_eargerly<R: std::ops::RangeBounds<solana_sdk::pubkey::Pubkey>>(
+        &self,
+        ancestors: &HashMap<Slot, usize>,
+        range: R,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts_db.scan_accounts_under_range(
+            ancestors,
+            range,
+            |collector: &mut Vec<(Pubkey, Account)>, option| {
+                if let Some(data) = option
+                    .filter(|(_, account, _)| account.lamports != 0)
+                    .map(|(pubkey, account, _slot)| (*pubkey, account))
+                {
+                    collector.push(data)
+                }
+            },
+        )
+    }
+
     /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, slot: Slot, pubkey: &Pubkey, account: &Account) {
         self.accounts_db.store(slot, &[(pubkey, account)]);

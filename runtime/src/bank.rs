@@ -26,7 +26,7 @@ use crate::{
     transaction_utils::OrderedIterator,
 };
 use bincode::{deserialize_from, serialize_into};
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -799,6 +799,7 @@ impl Bank {
 
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
+            self.collect_rent_eagerly(); // update the docs
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
@@ -1645,6 +1646,88 @@ impl Bank {
                 .fetch_sub(account.lamports, Ordering::Relaxed);
             self.store_account(&incinerator::id(), &Account::default());
         }
+    }
+
+    fn collect_rent_by_range(
+        &self,
+        start_slot_index: Slot,
+        end_slot_index: Slot,
+        subrange_count: Slot,
+    ) {
+        // pubkey (= account address, including derived ones?) distribution should be uniform?
+        error!(
+            "ryoqun: {}, {}, {}",
+            start_slot_index, end_slot_index, subrange_count
+        );
+
+        let start_key_prefix = if start_slot_index == 0 && end_slot_index == 0 {
+            0
+        } else {
+            (start_slot_index + 1) * (Slot::max_value() / subrange_count)
+        };
+
+        let end_key_prefix = if end_slot_index + 1 == subrange_count {
+            Slot::max_value()
+        } else {
+            (end_slot_index + 1) * (Slot::max_value() / subrange_count) - 1
+        };
+
+        let mut start_pubkey = [0x00u8; 32];
+        let mut end_pubkey = [0xffu8; 32];
+        BigEndian::write_u64(&mut start_pubkey[..], start_key_prefix);
+        BigEndian::write_u64(&mut end_pubkey[..], end_key_prefix);
+        // special case parent_slot is in previous current_epoch
+        error!(
+            "ryoqun: ({}-{})/{}, {:064b} {:064b} {:?} {:?}",
+            start_slot_index,
+            end_slot_index,
+            subrange_count,
+            start_slot_index,
+            start_key_prefix,
+            start_pubkey,
+            end_pubkey
+        );
+        // should be an inclusive range (a closed interval) like this:
+        // [0xgg00-0xhhff], [0xii00-0xjjff], ... (where 0xii00 == 0xhhff + 1)
+        let subrange = Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey);
+
+        let accounts = self
+            .rc
+            .accounts
+            .load_to_collect_rent_eargerly(&self.ancestors, subrange);
+        let account_count = accounts.len();
+
+        // parallelize?
+        let mut rent = 0;
+        for (pubkey, mut account) in accounts {
+            rent += self.rent_collector.update(&pubkey, &mut account);
+            // to purge old AppendVec, store even regardless rent is zero or not
+            self.store_account(&pubkey, &account);
+        }
+        self.collected_rent.fetch_add(rent, Ordering::Relaxed);
+
+        error!(
+            "ryoqun: collected rent eagerly: {} from {} accounts",
+            rent, account_count
+        );
+    }
+
+    fn collect_rent_eagerly(&self) {
+        let (current_epoch, current_slot_index) = self.get_epoch_and_slot_index(self.slot());
+        let (parent_epoch, mut parent_slot_index) =
+            self.get_epoch_and_slot_index(self.parent_slot());
+
+        if parent_epoch < current_epoch {
+            if current_slot_index > 0 {
+                let parent_slot_count = self.get_slots_in_epoch(parent_epoch);
+                let last_slot_index = parent_slot_count - 1;
+                self.collect_rent_by_range(parent_slot_index, last_slot_index, parent_slot_count);
+            }
+            parent_slot_index = 0;
+        }
+
+        let current_slot_count = self.get_slots_in_epoch(current_epoch);
+        self.collect_rent_by_range(parent_slot_index, current_slot_index, current_slot_count);
     }
 
     /// Process a batch of transactions.

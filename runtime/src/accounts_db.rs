@@ -1113,6 +1113,46 @@ impl AccountsDB {
         collector
     }
 
+    pub fn scan_accounts_under_range<F, A, R>(
+        &self,
+        ancestors: &HashMap<Slot, usize>,
+        range: R,
+        scan_func: F,
+    ) -> A
+    where
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
+        A: Default,
+        R: std::ops::RangeBounds<solana_sdk::pubkey::Pubkey>,
+    {
+        let mut collector = A::default();
+        let accounts_index = self.accounts_index.read().unwrap();
+        let storage = self.storage.read().unwrap();
+        accounts_index.scan_accounts_under_range(
+            ancestors,
+            range,
+            |pubkey, (account_info, slot)| {
+                scan_func(
+                    &mut collector,
+                    storage
+                        .0
+                        .get(&slot)
+                        .and_then(|storage_map| storage_map.get(&account_info.store_id))
+                        .and_then(|store| {
+                            Some(
+                                store
+                                    .accounts
+                                    .get_account(account_info.offset)?
+                                    .0
+                                    .clone_account(),
+                            )
+                        })
+                        .map(|account| (pubkey, account, slot)),
+                )
+            },
+        );
+        collector
+    }
+
     /// Scan a specific slot through all the account storage in parallel with sequential read
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>

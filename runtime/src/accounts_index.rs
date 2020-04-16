@@ -34,6 +34,23 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
+    pub fn scan_accounts_under_range<F, R>(
+        &self,
+        ancestors: &HashMap<Slot, usize>,
+        range: R,
+        mut func: F,
+    ) where
+        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        R: std::ops::RangeBounds<solana_sdk::pubkey::Pubkey>,
+    {
+        for (pubkey, list) in self.account_maps.range(range) {
+            let list_r = &list.1.read().unwrap();
+            if let Some(index) = self.latest_slot(ancestors, &list_r) {
+                func(pubkey, (&list_r[index].1, list_r[index].0));
+            }
+        }
+    }
+
     fn get_rooted_entries(&self, slice: SlotSlice<T>) -> SlotList<T> {
         slice
             .iter()
