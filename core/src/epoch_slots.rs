@@ -5,7 +5,7 @@ use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress};
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct Uncompressed {
     pub first_slot: Slot,
     pub num: usize,
@@ -157,7 +157,7 @@ impl CompressedSlots {
     pub fn deflate(&mut self) -> Result<()> {
         match self {
             CompressedSlots::Uncompressed(vals) => {
-                let unc = vals.clone();
+                let unc = std::mem::take(vals);
                 let compressed = Flate2::deflate(unc)?;
                 let mut new = CompressedSlots::Flate2(compressed);
                 std::mem::swap(self, &mut new);
@@ -189,13 +189,20 @@ impl EpochSlots {
         while num < slots.len() {
             num += self.add(&slots[num..]);
             if num < slots.len() {
-                if self.deflate().is_err() {
+                if let Err(e) = self.deflate() {
+                    warn!("Deflate err: {:?}", e);
                     return num;
                 }
                 let space = self.max_compressed_slot_size();
                 if space > 0 {
                     let cslot = CompressedSlots::new(space as usize);
                     self.slots.push(cslot);
+                    info!(
+                        "Compressing new slots, total number of compressed slots: {},
+                        new uncompressed size: {}",
+                        self.slots.len(),
+                        space,
+                    );
                 } else {
                     return num;
                 }

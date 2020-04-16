@@ -397,12 +397,14 @@ impl ClusterInfo {
         }
         let mut reset = false;
         let mut epoch_slot_index = current_slots.last().map(|(_, x)| *x).unwrap_or(0);
+        let mut new_ixs = vec![];
         while num < update.len() {
             let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
             let now = timestamp();
             let mut slots = if !reset {
                 self.lookup_epoch_slots(ix)
             } else {
+                new_ixs.push(ix);
                 EpochSlots::new(self.id(), now)
             };
             let n = slots.fill(&update[num..], now);
@@ -416,6 +418,10 @@ impl ClusterInfo {
                 epoch_slot_index += 1;
                 reset = true;
             }
+        }
+
+        if !new_ixs.is_empty() {
+            info!("Added new EpochSlots indexes: {:?}", new_ixs);
         }
     }
 
