@@ -23,7 +23,9 @@ use solana_sdk::{
     signers::Signers,
     transaction::{self, Transaction, TransactionError},
 };
-use solana_transaction_status::{ConfirmedBlock, TransactionEncoding, TransactionStatus};
+use solana_transaction_status::{
+    ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
+};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     error,
@@ -158,6 +160,28 @@ impl RpcClient {
             .map(|status_meta| status_meta.status))
     }
 
+    pub fn get_signature_status_with_commitment_and_history(
+        &self,
+        signature: &Signature,
+        commitment_config: CommitmentConfig,
+        search_transaction_history: bool,
+    ) -> ClientResult<Option<transaction::Result<()>>> {
+        let signature_status = self.client.send(
+            &RpcRequest::GetSignatureStatuses,
+            json!([[signature.to_string()], {
+                "searchTransactionHistory": search_transaction_history
+            }]),
+            5,
+        )?;
+        let result: Response<Vec<Option<TransactionStatus>>> =
+            serde_json::from_value(signature_status)
+                .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?;
+        Ok(result.value[0]
+            .clone()
+            .filter(|result| result.satisfies_commitment(commitment_config))
+            .map(|status_meta| status_meta.status))
+    }
+
     pub fn get_slot(&self) -> ClientResult<Slot> {
         self.get_slot_with_commitment(CommitmentConfig::default())
     }
@@ -253,6 +277,44 @@ impl RpcClient {
 
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_command(err.into(), "GetConfirmedBlocks"))
+    }
+
+    pub fn get_confirmed_signatures_for_address(
+        &self,
+        address: &Pubkey,
+        start_slot: Slot,
+        end_slot: Slot,
+    ) -> ClientResult<Vec<Signature>> {
+        let response = self
+            .client
+            .send(
+                &RpcRequest::GetConfirmedSignaturesForAddress,
+                json!([address, start_slot, end_slot]),
+                0,
+            )
+            .map_err(|err| err.into_with_command("GetConfirmedSignaturesForAddress"))?;
+
+        serde_json::from_value(response).map_err(|err| {
+            ClientError::new_with_command(err.into(), "GetConfirmedSignaturesForAddress")
+        })
+    }
+
+    pub fn get_confirmed_transaction(
+        &self,
+        signature: &Signature,
+        encoding: TransactionEncoding,
+    ) -> ClientResult<ConfirmedTransaction> {
+        let response = self
+            .client
+            .send(
+                &RpcRequest::GetConfirmedTransaction,
+                json!([signature.to_string(), encoding]),
+                0,
+            )
+            .map_err(|err| err.into_with_command("GetConfirmedTransaction"))?;
+
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_command(err.into(), "GetConfirmedTransaction"))
     }
 
     pub fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
