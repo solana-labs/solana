@@ -17,8 +17,8 @@ use solana_ledger::{
     snapshot_utils,
 };
 use solana_sdk::{
-    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol,
-    program_utils::limited_deserialize, pubkey::Pubkey, shred_version::compute_shred_version,
+    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
+    shred_version::compute_shred_version,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
@@ -100,112 +100,23 @@ fn output_slot(
                     entry.transactions.len()
                 );
                 for (transactions_index, transaction) in entry.transactions.iter().enumerate() {
-                    let message = &transaction.message;
                     println!("    Transaction {}", transactions_index);
-                    println!("      Recent Blockhash: {:?}", message.recent_blockhash);
-                    for (signature_index, signature) in transaction.signatures.iter().enumerate() {
-                        println!("      Signature {}: {:?}", signature_index, signature);
-                    }
-                    println!("      {:?}", message.header);
-                    for (account_index, account) in message.account_keys.iter().enumerate() {
-                        println!("      Account {}: {:?}", account_index, account);
-                    }
-                    for (instruction_index, instruction) in message.instructions.iter().enumerate()
-                    {
-                        let program_pubkey =
-                            message.account_keys[instruction.program_id_index as usize];
-                        println!("      Instruction {}", instruction_index);
-                        println!(
-                            "        Program: {} ({})",
-                            program_pubkey, instruction.program_id_index
-                        );
-                        for (account_index, account) in instruction.accounts.iter().enumerate() {
-                            let account_pubkey = message.account_keys[*account as usize];
-                            println!(
-                                "        Account {}: {} ({})",
-                                account_index, account_pubkey, account
+                    let transaction_status = blockstore
+                        .read_transaction_status((transaction.signatures[0], slot))
+                        .unwrap_or_else(|err| {
+                            eprintln!(
+                                "Failed to read transaction status for {} at slot {}: {}",
+                                transaction.signatures[0], slot, err
                             );
-                        }
+                            None
+                        })
+                        .map(|transaction_status| transaction_status.into());
 
-                        let mut raw = true;
-                        if program_pubkey == solana_vote_program::id() {
-                            if let Ok(vote_instruction) =
-                                limited_deserialize::<
-                                    solana_vote_program::vote_instruction::VoteInstruction,
-                                >(&instruction.data)
-                            {
-                                println!("        {:?}", vote_instruction);
-                                raw = false;
-                            }
-                        } else if program_pubkey == solana_stake_program::id() {
-                            if let Ok(stake_instruction) =
-                                limited_deserialize::<
-                                    solana_stake_program::stake_instruction::StakeInstruction,
-                                >(&instruction.data)
-                            {
-                                println!("        {:?}", stake_instruction);
-                                raw = false;
-                            }
-                        } else if program_pubkey == solana_sdk::system_program::id() {
-                            if let Ok(system_instruction) =
-                                limited_deserialize::<
-                                    solana_sdk::system_instruction::SystemInstruction,
-                                >(&instruction.data)
-                            {
-                                println!("        {:?}", system_instruction);
-                                raw = false;
-                            }
-                        }
-
-                        if raw {
-                            println!("        Data: {:?}", instruction.data);
-                        }
-                    }
-                    match blockstore.read_transaction_status((transaction.signatures[0], slot)) {
-                        Ok(transaction_status) => {
-                            if let Some(transaction_status) = transaction_status {
-                                println!(
-                                    "      Status: {}",
-                                    if transaction_status.status.is_ok() {
-                                        "Ok".into()
-                                    } else {
-                                        transaction_status.status.unwrap_err().to_string()
-                                    }
-                                );
-                                println!("        Fee: {}", transaction_status.fee);
-                                assert_eq!(
-                                    transaction_status.pre_balances.len(),
-                                    transaction_status.post_balances.len()
-                                );
-                                for (i, (pre, post)) in transaction_status
-                                    .pre_balances
-                                    .iter()
-                                    .zip(transaction_status.post_balances.iter())
-                                    .enumerate()
-                                {
-                                    if pre == post {
-                                        println!(
-                                            "        Account {} balance: {} SOL",
-                                            i,
-                                            lamports_to_sol(*pre)
-                                        );
-                                    } else {
-                                        println!(
-                                            "        Account {} balance: {} SOL -> {} SOL",
-                                            i,
-                                            lamports_to_sol(*pre),
-                                            lamports_to_sol(*post)
-                                        );
-                                    }
-                                }
-                            } else {
-                                println!("      Status: Unavailable");
-                            }
-                        }
-                        Err(err) => {
-                            println!("      Status: {:?}", err);
-                        }
-                    }
+                    solana_cli::display::println_transaction(
+                        &transaction,
+                        &transaction_status,
+                        "      ",
+                    );
                 }
             }
             LedgerOutputMethod::Json => {

@@ -15,12 +15,14 @@ histogram = "*"
 serde_json = "1.0.51"
 serde_yaml = "0.8.11"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
+solana-cli = { path = "../cli", version = "1.2.0" }
 solana-ledger = { path = "../ledger", version = "1.2.0" }
 solana-logger = { path = "../logger", version = "1.2.0" }
 solana-runtime = { path = "../runtime", version = "1.2.0" }
 solana-sdk = { path = "../sdk", version = "1.2.0" }
-solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.0" }
+solana-transaction-status = { path = "../transaction-status", version = "1.2.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 tempfile = "3.1.0"
 
 [dev-dependencies]
