@@ -557,7 +557,7 @@ impl Blockstore {
             let e = e.ok()?;
             let ix: u64 = std::str::FromStr::from_str(e.file_name().to_str()?).ok()?;
             if ix >= index {
-                let buf = Self::get_data(&e.path().to_str().unwrap().to_string()).ok()??;
+                let buf = Self::get_data(&e.path().to_str().unwrap().to_string(), None).ok()??;
                 Some(((slot, ix), buf.into_boxed_slice()))
             } else {
                 None
@@ -1235,7 +1235,6 @@ impl Blockstore {
             .unwrap()
             .to_string()
     }
-
     fn coding_shred_path(&self, slot: Slot, index: u64) -> String {
         Path::new(&self.slot_coding_dir(slot))
             .join(index.to_string())
@@ -1243,20 +1242,41 @@ impl Blockstore {
             .unwrap()
             .to_string()
     }
-
-    pub fn get_data(shred_path: &str) -> Result<Option<Vec<u8>>> {
+    fn extract_data(archive: &str, file: &str) -> Result<Option<Vec<u8>>> {
+        let args = ["xfzO", archive, file];
+        let output = std::process::Command::new("tar").args(&args).output()?;
+        if !output.status.success() {
+            warn!(
+                "tar extract shred {} {} command failed with exit code: {}",
+                archive, file, output.status,
+            );
+            use std::str::from_utf8;
+            info!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
+            info!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+            Ok(None)
+        } else {
+            Ok(Some(output.stdout))
+        }
+    }
+    fn get_data(shred_path: &str, tgz: Option<&str>) -> Result<Option<Vec<u8>>> {
         let path = Path::new(shred_path);
         let f = fs::File::open(path);
         if f.is_err() {
-            return Ok(None);
+            if let Some(archive) = tgz {
+                Self::extract_data(archive, shred_path)
+            } else {
+                Ok(None)
+            }
+        } else {
+            let mut buf = vec![];
+            f?.read_to_end(&mut buf)?;
+            Ok(Some(buf))
         }
-        let mut buf = vec![];
-        f?.read_to_end(&mut buf)?;
-        Ok(Some(buf))
     }
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         let shred_path = self.data_shred_path(slot, index);
-        Self::get_data(&shred_path)
+        let archive_path = self.slot_data_tar_path(slot);
+        Self::get_data(&shred_path, Some(&archive_path))
     }
 
     pub fn get_data_shreds_for_slot(
@@ -1321,7 +1341,8 @@ impl Blockstore {
 
     pub fn get_coding_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         let shred_path = self.coding_shred_path(slot, index);
-        Self::get_data(&shred_path)
+        let archive_path = self.slot_data_tar_path(slot);
+        Self::get_data(&shred_path, Some(&archive_path))
     }
 
     pub fn get_coding_shreds_for_slot(
