@@ -20,7 +20,7 @@ EOF
 
 apt install -y build-essential pkg-config clang cmake sysstat linux-tools-common \
   linux-generic-hwe-18.04-edge linux-tools-generic-hwe-18.04-edge \
-  iftop heaptrack jq ruby python3-venv
+  iftop heaptrack jq ruby python3-venv gcc-multilib libudev-dev
 
 gem install ejson ejson2env
 mkdir -p /opt/ejson/keys

@@ -57,9 +57,28 @@ sudo -u buildkite-agent HOME=~buildkite-agent sh /tmp/rustup-init.sh -y
 addgroup buildkite-agent docker
 addgroup buildkite-agent sudo
 
-echo "************ MANUAL STEPS !!! ***********************"
-echo "1) Copy the pubkey contents from ~buildkite-agent/.ssh/buildkite_ecdsa.pub"
-echo "2) Add the pubkey as an authorized SSH key on github"
-echo "3) Edit /etc/buildkite-agent/buildkite-agent.cfg and/or /etc/systemd/system/buildkite-agent@* to the desired configuration of the agent(s)"
-echo "4) Start the new agent(s) with 'sudo systemctl enable --now buildkite-agent'"
-echo "****************************************************"
+# Edit the systemd unit file to include LimitNOFILE
+cat > /lib/systemd/system/buildkite-agent.service <<EOF
+[Unit]
+Description=Buildkite Agent
+Documentation=https://buildkite.com/agent
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+User=buildkite-agent
+Environment=HOME=/var/lib/buildkite-agent
+ExecStart=/usr/bin/buildkite-agent start
+RestartSec=5
+Restart=on-failure
+RestartForceExitStatus=SIGPIPE
+TimeoutStartSec=10
+TimeoutStopSec=0
+KillMode=process
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+DefaultInstance=1
+EOF
