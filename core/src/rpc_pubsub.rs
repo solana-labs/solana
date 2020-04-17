@@ -320,6 +320,7 @@ mod tests {
     };
     use jsonrpc_core::{futures::sync::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
+    use serial_test_derive::serial;
     use solana_budget_program::{self, budget_instruction};
     use solana_ledger::bank_forks::BankForks;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
@@ -357,6 +358,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_signature_subscribe() {
         let GenesisConfigInfo {
             genesis_config,
@@ -403,6 +405,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_signature_unsubscribe() {
         let GenesisConfigInfo {
             genesis_config,
@@ -451,6 +454,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_account_subscribe() {
         let GenesisConfigInfo {
             mut genesis_config,
@@ -561,6 +565,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_account_unsubscribe() {
         let bob_pubkey = Pubkey::new_rand();
         let session = create_session();
@@ -721,6 +726,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_slot_subscribe() {
         let rpc = RpcSolPubSubImpl::default();
         let session = create_session();
@@ -745,6 +751,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_slot_unsubscribe() {
         let rpc = RpcSolPubSubImpl::default();
         let session = create_session();
