@@ -494,8 +494,6 @@ fn analyze_storage(database: &Database) -> Result<(), String> {
     analyze_column::<ErasureMeta>(database, "ErasureMeta", ErasureMeta::key_size())?;
     analyze_column::<Root>(database, "Root", Root::key_size())?;
     analyze_column::<Index>(database, "Index", Index::key_size())?;
-    analyze_column::<ShredData>(database, "ShredData", ShredData::key_size())?;
-    analyze_column::<ShredCode>(database, "ShredCode", ShredCode::key_size())?;
     analyze_column::<TransactionStatus>(
         database,
         "TransactionStatus",

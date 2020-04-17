@@ -1,4 +1,5 @@
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
+use solana_ledger::blockstore::Blockstore;
 use solana_ledger::{snapshot_package::AccountsPackageReceiver, snapshot_utils};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
@@ -21,6 +22,7 @@ impl SnapshotPackagerService {
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        blockstore: Option<Arc<Blockstore>>,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -62,6 +64,9 @@ impl SnapshotPackagerService {
                                     .write()
                                     .unwrap()
                                     .push_snapshot_hashes(hashes.clone());
+                            }
+                            if let Some(ref blockstore) = blockstore {
+                                let _ = blockstore.tar_shreds(snapshot_package.root);
                             }
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
