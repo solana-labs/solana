@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 
 type SignatureProps = {
-  text: string
-}
+  text: string;
+};
 
 const popover = (
   <div className="popover fade bs-popover-right show">
@@ -16,11 +16,10 @@ function Signature({ text }: SignatureProps) {
 
   const copyToClipboard = () => navigator.clipboard.writeText(text);
   const handleClick = () =>
-    copyToClipboard()
-      .then(() => {
-        setShowPopover(true);
-        setTimeout(setShowPopover.bind(null, false), 2500);
-      });
+    copyToClipboard().then(() => {
+      setShowPopover(true);
+      setTimeout(setShowPopover.bind(null, false), 2500);
+    });
 
   return (
     <div className="signature">
