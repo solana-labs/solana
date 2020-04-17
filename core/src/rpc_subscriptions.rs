@@ -619,6 +619,7 @@ pub(crate) mod tests {
     use crate::commitment::BlockCommitment;
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
+    use serial_test_derive::serial;
     use solana_budget_program;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_sdk::{
@@ -654,6 +655,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_check_account_subscribe() {
         let GenesisConfigInfo {
             genesis_config,
@@ -726,6 +728,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_check_program_subscribe() {
         let GenesisConfigInfo {
             genesis_config,
@@ -806,6 +809,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_check_signature_subscribe() {
         let GenesisConfigInfo {
             genesis_config,
@@ -947,6 +951,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_check_slot_subscribe() {
         let (subscriber, _id_receiver, transport_receiver) =
             Subscriber::new_test("slotNotification");
@@ -988,6 +993,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_check_root_subscribe() {
         let (subscriber, _id_receiver, mut transport_receiver) =
             Subscriber::new_test("rootNotification");
@@ -1028,6 +1034,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_add_and_remove_subscription() {
         let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, (Sink<()>, Confirmations)>> =
             HashMap::new();
