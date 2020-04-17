@@ -18,3 +18,6 @@ solana-metrics = { path = "../metrics", version = "1.2.0" }
 [target."cfg(unix)".dependencies]
 jemallocator = "0.3.2"
 jemalloc-ctl = "0.3.2"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

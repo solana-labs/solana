@@ -67,3 +67,6 @@ name = "solana_ledger"
 
 [[bench]]
 name = "sigverify_shreds"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

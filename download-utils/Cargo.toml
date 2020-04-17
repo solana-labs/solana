@@ -21,3 +21,6 @@ tar = "0.4.26"
 [lib]
 crate-type = ["lib"]
 name = "solana_download_utils"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

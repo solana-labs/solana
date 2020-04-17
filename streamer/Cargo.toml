@@ -24,3 +24,6 @@ solana-perf = { path = "../perf", version = "1.2.0" }
 [lib]
 crate-type = ["lib"]
 name = "solana_streamer"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

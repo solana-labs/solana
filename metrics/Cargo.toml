@@ -23,3 +23,6 @@ serial_test_derive = "0.4.0"
 
 [lib]
 name = "solana_metrics"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

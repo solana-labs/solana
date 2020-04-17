@@ -104,3 +104,6 @@ name = "cluster_info"
 [[bench]]
 name = "chacha"
 required-features = ["chacha"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

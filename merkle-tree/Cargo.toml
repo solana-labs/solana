@@ -18,3 +18,6 @@ hex = "0.4.2"
 [lib]
 crate-type = ["lib"]
 name = "solana_merkle_tree"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

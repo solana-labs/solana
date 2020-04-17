@@ -23,3 +23,6 @@ solana-sdk = { path = "../sdk", version = "1.2.0" }
 [[bin]]
 name = "solana-watchtower"
 path = "src/main.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

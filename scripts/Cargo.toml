@@ -17,3 +17,6 @@ serde = { version = "1.0.106", features = ["derive"] }
 name = "solana-csv-to-validator-infos"
 path = "src/csv_to_validator_infos.rs"
 
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

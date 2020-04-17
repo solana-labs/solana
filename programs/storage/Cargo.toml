@@ -25,3 +25,6 @@ assert_matches = "1.3.0"
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_storage_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
