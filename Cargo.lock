@@ -4340,7 +4340,8 @@ name = "solana-ledger-tool"
 version = "1.2.0"
 dependencies = [
  "assert_cmd",
- "bs58 0.3.1",
+ "base64",
+ "bs58",
  "clap",
  "histogram",
  "serde_json",

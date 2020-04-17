@@ -591,7 +591,8 @@ fn print_account(pubkey: &Pubkey, account: &Account) {
     println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
     println!("  - owner: '{}'", account.owner);
     println!("  - executable: {}", account.executable);
-    println!("  - data: '{}'", bs58::encode(&account.data).into_string());
+    println!("  - rent_epoch: {}", account.rent_epoch);
+    println!("  - data: '{}'", base64::encode(&account.data));
     println!("  - data_len: {}", data_len);
 }
 
