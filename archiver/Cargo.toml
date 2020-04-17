@@ -18,3 +18,6 @@ solana-archiver-lib = { path = "../archiver-lib", version = "1.2.0" }
 solana-net-utils = { path = "../net-utils", version = "1.2.0" }
 solana-sdk = { path = "../sdk", version = "1.2.0" }
 
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

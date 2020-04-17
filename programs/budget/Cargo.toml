@@ -25,3 +25,6 @@ solana-runtime = { path = "../../runtime", version = "1.2.0" }
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_budget_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

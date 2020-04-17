@@ -20,3 +20,6 @@ solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/test", version = "1.2.0
 [features]
 program = ["solana-sdk/program"]
 default = ["program"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

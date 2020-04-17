@@ -20,3 +20,6 @@ types = { version = "0.0.1-sol4", package = "solana_libra_types" }
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_librapay"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

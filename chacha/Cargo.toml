@@ -23,3 +23,6 @@ hex-literal = "0.2.1"
 
 [lib]
 name = "solana_chacha"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -21,3 +21,6 @@ hex = "0.4.2"
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_btc_spv_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
