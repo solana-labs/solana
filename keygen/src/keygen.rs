@@ -407,11 +407,12 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
         Config::default()
     };
 
-    let wallet_manager = if check_for_usb(std::env::args()) {
-        maybe_wallet_manager()?
-    } else {
-        None
-    };
+    let wallet_manager =
+        if check_for_usb(std::env::args()) || check_for_usb([config.keypair_path.clone()].iter()) {
+            maybe_wallet_manager()?
+        } else {
+            None
+        };
 
     match matches.subcommand() {
         ("pubkey", Some(matches)) => {
