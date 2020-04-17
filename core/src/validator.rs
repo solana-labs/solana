@@ -660,10 +660,9 @@ fn wait_for_supermajority(
         "Waiting for 80% of activated stake at slot {} to be in gossip...",
         bank.slot()
     );
-    loop {
-        let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info);
+    for i in 1.. {
+        let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info, i % 10 == 0);
 
-        info!("{}% of activated stake in gossip", gossip_stake_percent,);
         if gossip_stake_percent >= 80 {
             break;
         }
@@ -797,33 +796,87 @@ fn report_target_features() {
 }
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
-fn get_stake_percent_in_gossip(bank: &Arc<Bank>, cluster_info: &Arc<RwLock<ClusterInfo>>) -> u64 {
-    let mut gossip_stake = 0;
+fn get_stake_percent_in_gossip(
+    bank: &Arc<Bank>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    log: bool,
+) -> u64 {
+    let mut online_stake = 0;
+    let mut wrong_shred_stake = 0;
+    let mut wrong_shred_nodes = vec![];
+    let mut offline_stake = 0;
+    let mut offline_nodes = vec![];
+
     let mut total_activated_stake = 0;
-    let tvu_peers = cluster_info.read().unwrap().tvu_peers();
+    let all_tvu_peers = cluster_info.read().unwrap().all_tvu_peers();
     let me = cluster_info.read().unwrap().my_data();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
         let vote_state =
             solana_vote_program::vote_state::VoteState::from(&vote_account).unwrap_or_default();
         total_activated_stake += activated_stake;
-        if tvu_peers
+
+        if *activated_stake == 0 {
+            continue;
+        }
+
+        if let Some(peer) = all_tvu_peers
             .iter()
-            .filter(|peer| peer.shred_version == me.shred_version)
-            .any(|peer| peer.id == vote_state.node_pubkey)
+            .find(|peer| peer.id == vote_state.node_pubkey)
         {
-            trace!(
-                "observed {} in gossip, (activated_stake={})",
-                vote_state.node_pubkey,
-                activated_stake
-            );
-            gossip_stake += activated_stake;
-        } else if vote_state.node_pubkey == cluster_info.read().unwrap().id() {
-            gossip_stake += activated_stake;
+            if peer.shred_version == me.shred_version {
+                trace!(
+                    "observed {} in gossip, (activated_stake={})",
+                    vote_state.node_pubkey,
+                    activated_stake
+                );
+                online_stake += activated_stake;
+            } else {
+                wrong_shred_stake += activated_stake;
+                wrong_shred_nodes.push((*activated_stake, vote_state.node_pubkey));
+            }
+        } else {
+            offline_stake += activated_stake;
+            offline_nodes.push((*activated_stake, vote_state.node_pubkey));
         }
     }
 
-    gossip_stake * 100 / total_activated_stake
+    if log {
+        info!(
+            "{}% of active stake visible in gossip",
+            online_stake * 100 / total_activated_stake
+        );
+
+        if !wrong_shred_nodes.is_empty() {
+            info!(
+                "{}% of active stake has the wrong shred version in gossip",
+                wrong_shred_stake * 100 / total_activated_stake,
+            );
+            for (stake, identity) in wrong_shred_nodes {
+                info!(
+                    "    {}% - {}",
+                    stake * 100 / total_activated_stake,
+                    identity
+                );
+            }
+        }
+
+        if !offline_nodes.is_empty() {
+            info!(
+                "{}% of active stake is not visible in gossip",
+                offline_stake * 100 / total_activated_stake
+            );
+            for (stake, identity) in offline_nodes {
+                info!(
+                    "    {}% - {}",
+                    stake * 100 / total_activated_stake,
+                    identity
+                );
+            }
+        }
+    }
+
+    online_stake * 100 / total_activated_stake
 }
 
 #[cfg(test)]
