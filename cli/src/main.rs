@@ -16,7 +16,7 @@ use solana_cli_config::{Config, CONFIG_FILE};
 use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
 use std::{error, sync::Arc};
 
-fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
+fn parse_settings(matches: &ArgMatches<'_>) -> Result<Option<bool>, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
         ("config", Some(matches)) => match matches.subcommand() {
             ("get", Some(subcommand_matches)) => {
@@ -54,7 +54,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                         style("No config file found.").bold()
                     );
                 }
-                false
+                None
             }
             ("set", Some(subcommand_matches)) => {
                 if let Some(config_file) = matches.value_of("config_file") {
@@ -94,11 +94,19 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                         style("No config file found.").bold()
                     );
                 }
-                false
+                None
             }
             _ => unreachable!(),
         },
-        _ => true,
+        _ => {
+            let need_wallet_manager = if let Some(config_file) = matches.value_of("config_file") {
+                let config = Config::load(config_file).unwrap_or_default();
+                check_for_usb([config.keypair_path].iter())
+            } else {
+                false
+            };
+            Some(need_wallet_manager)
+        }
     };
     Ok(parse_args)
 }
@@ -262,8 +270,8 @@ fn do_main(
     matches: &ArgMatches<'_>,
     need_wallet_manager: bool,
 ) -> Result<(), Box<dyn error::Error>> {
-    if parse_settings(&matches)? {
-        let wallet_manager = if need_wallet_manager {
+    if let Some(config_need_wallet_manager) = parse_settings(&matches)? {
+        let wallet_manager = if need_wallet_manager || config_need_wallet_manager {
             maybe_wallet_manager()?
         } else {
             None
