@@ -15,7 +15,7 @@ use solana_ledger::{
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
 };
-use solana_runtime::append_vec::AppendVec;
+use solana_runtime::{append_vec::AppendVec, bank::Bank};
 use solana_sdk::{
     account::Account, clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
     shred_version::compute_shred_version,
@@ -596,6 +596,49 @@ fn print_account(pubkey: &Pubkey, account: &Account) {
     println!("  - data_len: {}", data_len);
 }
 
+fn print_append_vec_accounts(paths: &[String]) {
+    let append_vecs: Vec<_> = paths
+        .iter()
+        .map(|path| {
+            let file_size = std::fs::metadata(&path).unwrap().len() as usize;
+            let mut append_vec = AppendVec::new_empty_map(file_size);
+            // ignore sanitization because we can't do so properly without AccountsDB
+            let _ignored = append_vec.set_file(Path::new(path));
+            append_vec
+        })
+        .collect();
+    let accounts: BTreeMap<_, _> = append_vecs
+        .iter()
+        .map(|append_vec| {
+            append_vec
+                .accounts(0)
+                .into_iter()
+                .map(|a| (a.meta.pubkey, a.clone_account()))
+        })
+        .flatten()
+        .collect();
+
+    println!("---");
+    for (pubkey, account) in accounts.into_iter() {
+        print_account(&pubkey, &account);
+    }
+}
+
+fn print_bank_accounts(bank: &Bank, include_sysvars: bool) {
+    let accounts: BTreeMap<_, _> = bank
+        .get_program_accounts(None)
+        .into_iter()
+        .filter(|(pubkey, _account)| {
+            include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
+        })
+        .collect();
+
+    println!("---");
+    for (pubkey, account) in accounts.into_iter() {
+        print_account(&pubkey, &account);
+    }
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
@@ -878,32 +921,7 @@ fn main() {
     // somewhat specially-treated subcommand which don't require a ledger
     if let ("append-vec", Some(arg_matches)) = matches.subcommand() {
         let paths = values_t_or_exit!(arg_matches, "paths", String);
-
-        let append_vecs: Vec<_> = paths
-            .iter()
-            .map(|path| {
-                let file_size = std::fs::metadata(&path).unwrap().len() as usize;
-                let mut append_vec = AppendVec::new_empty_map(file_size);
-                // ignore sanitization because we can't do so properly without AccountsDB
-                let _ignored = append_vec.set_file(Path::new(path));
-                append_vec
-            })
-            .collect();
-        let accounts: BTreeMap<_, _> = append_vecs
-            .iter()
-            .map(|append_vec| {
-                append_vec
-                    .accounts(0)
-                    .into_iter()
-                    .map(|a| (a.meta.pubkey, a.clone_account()))
-            })
-            .flatten()
-            .collect();
-
-        println!("---");
-        for (pubkey, account) in accounts.into_iter() {
-            print_account(&pubkey, &account);
-        }
+        print_append_vec_accounts(&paths);
         exit(0);
     }
 
@@ -1150,19 +1168,7 @@ fn main() {
                         eprintln!("Error: Slot {} is not available", slot);
                         exit(1);
                     });
-
-                    let accounts: BTreeMap<_, _> = bank
-                        .get_program_accounts(None)
-                        .into_iter()
-                        .filter(|(pubkey, _account)| {
-                            include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
-                        })
-                        .collect();
-
-                    println!("---");
-                    for (pubkey, account) in accounts.into_iter() {
-                        print_account(&pubkey, &account);
-                    }
+                    print_bank_accounts(bank, include_sysvars);
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);
