@@ -11,6 +11,7 @@ import { assertUnreachable } from "../utils";
 import { displayAddress } from "../utils/tx";
 import { useCluster } from "../providers/cluster";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import Signature from "./Signature";
 
 function AccountsCard() {
   const { accounts, idCounter } = useAccounts();
@@ -156,7 +157,7 @@ const renderAccountRow = (account: Account) => {
         <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>
       </td>
       <td>
-        <code>{account.pubkey.toBase58()}</code>
+        <Signature text={account.pubkey.toBase58()} />
       </td>
       <td>{balance}</td>
       <td>{data}</td>
