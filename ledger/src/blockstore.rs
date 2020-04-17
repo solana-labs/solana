@@ -1263,10 +1263,11 @@ impl Blockstore {
         let f = fs::File::open(path);
         if f.is_err() {
             if let Some(archive) = tgz {
-                Self::extract_data(archive, shred_path)
-            } else {
-                Ok(None)
+                if Path::new(archive).is_file() {
+                    return Self::extract_data(archive, shred_path);
+                }
             }
+            Ok(None)
         } else {
             let mut buf = vec![];
             f?.read_to_end(&mut buf)?;
