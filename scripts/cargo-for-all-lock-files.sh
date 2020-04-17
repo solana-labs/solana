@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
 
-for lock_file in $(git ls-files :**/Cargo.lock)
+if [[ -n $_TARGET_LOCK_FILES ]]; then
+  files="$_TARGET_LOCK_FILES"
+else
+  files="$(git ls-files :**/Cargo.lock)"
+fi
+
+for lock_file in $files
 do
   (
+    set -x
     cd "$(dirname "$lock_file")"
     cargo "$@"
   )
