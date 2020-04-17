@@ -9,7 +9,7 @@ use solana_sdk::{
 };
 use std::{
     env, fmt,
-    fs::{remove_file, OpenOptions},
+    fs::{metadata, remove_file, File, OpenOptions},
     io,
     io::{Cursor, Seek, SeekFrom, Write},
     mem,
@@ -113,11 +113,14 @@ pub struct AppendVec {
     append_offset: Mutex<usize>,
     current_len: AtomicUsize,
     file_size: u64,
+    read_only: bool,
 }
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-        if env::var("SOLANA_DISABLE_DEAD_APPEND_VEC_REMOVAL").is_ok() {
+        // the env knob is needed to make solana-validator retain retired AppendVecs for
+        // later inspection of the files
+        if self.read_only || env::var("SOLANA_DISABLE_DEAD_APPEND_VEC_REMOVAL").is_ok() {
             return;
         }
 
@@ -127,42 +130,12 @@ impl Drop for AppendVec {
 
 impl AppendVec {
     #[allow(clippy::mutex_atomic)]
-    pub fn new(file: &Path, create: bool, size: usize) -> Self {
+    pub fn new(file: &Path, should_recreate: bool, size: usize) -> Self {
         let initial_len = 0;
         AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
 
-        if create {
-            let _ignored = remove_file(file);
-        }
+        let data = Self::open_and_grow(file, should_recreate, size);
 
-        let mut data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(create)
-            .open(file)
-            .map_err(|e| {
-                let mut msg = format!("in current dir {:?}\n", std::env::current_dir());
-                for ancestor in file.ancestors() {
-                    msg.push_str(&format!(
-                        "{:?} is {:?}\n",
-                        ancestor,
-                        std::fs::metadata(ancestor)
-                    ));
-                }
-                panic!(
-                    "{}Unable to {} data file {}, err {:?}",
-                    msg,
-                    if create { "create" } else { "open" },
-                    file.display(),
-                    e
-                );
-            })
-            .unwrap();
-
-        data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
-        data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
-        data.flush().unwrap();
         //UNSAFE: Required to create a Mmap
         let map = unsafe { MmapMut::map_mut(&data) };
         let map =
@@ -176,11 +149,12 @@ impl AppendVec {
             append_offset: Mutex::new(initial_len),
             current_len: AtomicUsize::new(initial_len),
             file_size: size as u64,
+            read_only: false,
         }
     }
 
     #[allow(clippy::mutex_atomic)]
-    pub fn new_empty_map(current_len: usize) -> Self {
+    fn new_empty_map(current_len: usize, read_only: bool) -> Self {
         let map = MmapMut::map_anon(1).expect("failed to map the data file");
 
         AppendVec {
@@ -189,7 +163,48 @@ impl AppendVec {
             append_offset: Mutex::new(current_len),
             current_len: AtomicUsize::new(current_len),
             file_size: 0, // will be filled by set_file()
+            read_only,
         }
+    }
+
+    fn new_empty_map_rw(current_len: usize) -> Self {
+        Self::new_empty_map(current_len, false)
+    }
+
+    pub fn new_empty_map_ro(current_len: usize) -> Self {
+        Self::new_empty_map(current_len, true)
+    }
+
+    pub fn open_and_grow(path: &Path, should_recreate: bool, size: usize) -> File {
+        if should_recreate {
+            let _ignored = remove_file(path);
+        }
+
+        let mut data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(should_recreate)
+            .open(path)
+            .map_err(|e| {
+                let mut msg = format!("in current dir {:?}\n", std::env::current_dir());
+                for ancestor in path.ancestors() {
+                    msg.push_str(&format!("{:?} is {:?}\n", ancestor, metadata(ancestor)));
+                }
+                panic!(
+                    "{}Unable to {} data path {}, err {:?}",
+                    msg,
+                    if should_recreate { "create" } else { "open" },
+                    path.display(),
+                    e
+                );
+            })
+            .unwrap();
+
+        data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
+        data.write_all(&[0]).unwrap();
+        data.seek(SeekFrom::Start(0)).unwrap();
+        data.flush().unwrap();
+        data
     }
 
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> io::Result<()> {
@@ -261,7 +276,7 @@ impl AppendVec {
         let current_len = self.current_len.load(Ordering::Relaxed);
         assert_eq!(current_len, *self.append_offset.lock().unwrap());
 
-        let file_size = std::fs::metadata(&path)?.len();
+        let file_size = metadata(&path)?.len();
         AppendVec::sanitize_len_and_size(current_len, file_size as usize)?;
 
         let map = unsafe { MmapMut::map_mut(&data)? };
@@ -520,7 +535,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
         // Note this does not initialize a valid Mmap in the AppendVec, needs to be done
         // externally
-        Ok(AppendVec::new_empty_map(current_len))
+        Ok(AppendVec::new_empty_map_rw(current_len))
     }
 }
 
@@ -586,7 +601,7 @@ pub mod tests {
     fn test_append_vec_set_file_bad_size() {
         let file = get_append_vec_path("test_append_vec_set_file_bad_size");
         let path = &file.path;
-        let mut av = AppendVec::new_empty_map(0);
+        let mut av = AppendVec::new_empty_map_rw(0);
         assert_eq!(av.accounts(0).len(), 0);
 
         let _data = OpenOptions::new()
@@ -598,6 +613,34 @@ pub mod tests {
 
         let result = av.set_file(path);
         assert_matches!(result, Err(ref message) if message.to_string() == *"too small file size 0 for AppendVec");
+    }
+
+    #[test]
+    fn test_append_vec_new_empty_tmp_rw() {
+        let file = get_append_vec_path("test_append_vec_new_empty_map_rw");
+        let path = &file.path;
+
+        AppendVec::open_and_grow(path, true, 1);
+        assert!(metadata(path).is_ok());
+        {
+            let mut av = AppendVec::new_empty_map_rw(0);
+            assert!(av.set_file(path).is_ok());
+        }
+        assert!(metadata(path).is_err());
+    }
+
+    #[test]
+    fn test_append_vec_new_empty_tmp_ro() {
+        let file = get_append_vec_path("test_append_vec_new_empty_map_ro");
+        let path = &file.path;
+
+        AppendVec::open_and_grow(path, true, 1);
+        assert!(metadata(path).is_ok());
+        {
+            let mut av = AppendVec::new_empty_map_ro(0);
+            assert!(av.set_file(path).is_ok());
+        }
+        assert!(metadata(path).is_ok());
     }
 
     #[test]

@@ -601,7 +601,7 @@ fn print_append_vec_accounts(paths: &[String]) {
         .iter()
         .map(|path| {
             let file_size = std::fs::metadata(&path).unwrap().len() as usize;
-            let mut append_vec = AppendVec::new_empty_map(file_size);
+            let mut append_vec = AppendVec::new_empty_map_ro(file_size);
             // ignore sanitization because we can't do so properly without AccountsDB
             let _ignored = append_vec.set_file(Path::new(path));
             append_vec
@@ -628,9 +628,7 @@ fn print_bank_accounts(bank: &Bank, include_sysvars: bool) {
     let accounts: BTreeMap<_, _> = bank
         .get_program_accounts(None)
         .into_iter()
-        .filter(|(pubkey, _account)| {
-            include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
-        })
+        .filter(|(pubkey, _account)| include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
         .collect();
 
     println!("---");
