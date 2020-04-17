@@ -598,6 +598,13 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Unable to open data path")]
+    fn test_append_vec_new_not_existing() {
+        let path = get_append_vec_path("test_append_vec_new_not_existing");
+        let _av = AppendVec::new(&path.path, false, 1);
+    }
+
+    #[test]
     fn test_append_vec_set_file_bad_size() {
         let file = get_append_vec_path("test_append_vec_set_file_bad_size");
         let path = &file.path;
@@ -616,7 +623,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_append_vec_new_empty_tmp_rw() {
+    fn test_append_vec_new_empty_map_rw() {
         let file = get_append_vec_path("test_append_vec_new_empty_map_rw");
         let path = &file.path;
 
@@ -630,7 +637,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_append_vec_new_empty_tmp_ro() {
+    fn test_append_vec_new_empty_map_ro() {
         let file = get_append_vec_path("test_append_vec_new_empty_map_ro");
         let path = &file.path;
 

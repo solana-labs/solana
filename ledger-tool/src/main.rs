@@ -17,8 +17,8 @@ use solana_ledger::{
 };
 use solana_runtime::{append_vec::AppendVec, bank::Bank};
 use solana_sdk::{
-    account::Account, clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
-    shred_version::compute_shred_version,
+    account::Account, clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol,
+    pubkey::Pubkey, shred_version::compute_shred_version,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
