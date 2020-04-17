@@ -5,7 +5,7 @@ set -ex
 cd "$(dirname "$0")/.."
 
 if ! echo "$BUILDKITE_BRANCH" | grep -E '^pull/[0-9]+/head$'; then
-  echo "not pull request!?"
+  echo "not pull request!?" >&2
   exit 1
 fi
 
