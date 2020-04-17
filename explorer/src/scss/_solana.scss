@@ -10,6 +10,20 @@ code {
   color: $black;
 }
 
+.signature {
+  position: relative;
+
+  &:hover {
+    cursor: pointer;
+  }
+
+  .popover {
+    top: -1rem;
+    right: -5.12rem;
+    left: auto;
+  }
+}
+
 .modal.show {
   display: block;
 }
