@@ -25,3 +25,6 @@ thiserror = "1.0"
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_stake_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

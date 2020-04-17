@@ -31,3 +31,6 @@ matches = "0.1.6"
 
 [[bench]]
 name = "sigverify"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

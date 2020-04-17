@@ -33,3 +33,6 @@ name = "solana_faucet"
 [[bin]]
 name = "solana-faucet"
 path = "src/bin/faucet.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

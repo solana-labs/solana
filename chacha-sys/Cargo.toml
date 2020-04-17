@@ -10,3 +10,6 @@ edition = "2018"
 
 [build-dependencies]
 cc = "1.0.49"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

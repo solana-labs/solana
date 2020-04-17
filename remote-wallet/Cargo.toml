@@ -30,3 +30,6 @@ linux-shared-hidraw = ["hidapi/linux-shared-hidraw"]
 [[bin]]
 name = "solana-ledger-udev"
 path = "src/bin/ledger-udev.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

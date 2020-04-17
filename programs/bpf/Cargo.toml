@@ -49,3 +49,6 @@ members = [
     "rust/param_passing_dep",
     "rust/sysval",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

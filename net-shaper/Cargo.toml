@@ -20,3 +20,6 @@ rand = "0.6.5"
 [[bin]]
 name = "solana-net-shaper"
 path = "src/main.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

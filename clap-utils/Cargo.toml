@@ -20,3 +20,6 @@ chrono = "0.4"
 
 [lib]
 name = "solana_clap_utils"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

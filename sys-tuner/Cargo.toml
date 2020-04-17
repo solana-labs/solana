@@ -28,3 +28,6 @@ name = "solana_sys_tuner"
 [[bin]]
 name = "solana-sys-tuner"
 path = "src/main.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

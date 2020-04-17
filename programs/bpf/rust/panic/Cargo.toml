@@ -24,3 +24,6 @@ default = ["program"]
 [lib]
 name = "solana_bpf_rust_panic"
 crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
