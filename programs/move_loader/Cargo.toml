@@ -37,3 +37,6 @@ vm_runtime_types = { version = "0.0.1-sol4", package = "solana_libra_vm_runtime_
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_move_loader_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -13,3 +13,6 @@ solana-clap-utils = { path = "../clap-utils", version = "1.0.19" }
 solana-core = { path = "../core", version = "1.0.19" }
 solana-logger = { path = "../logger", version = "1.0.19" }
 solana-net-utils = { path = "../net-utils", version = "1.0.19" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

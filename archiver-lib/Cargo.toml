@@ -37,3 +37,6 @@ hex = "0.4.0"
 
 [lib]
 name = "solana_archiver_lib"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

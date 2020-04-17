@@ -34,3 +34,6 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.0.19" }
 assert_matches = "1.3.0"
 serial_test = "0.3.2"
 serial_test_derive = "0.4.0"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

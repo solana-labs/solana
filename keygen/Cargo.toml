@@ -22,3 +22,6 @@ tiny-bip39 = "0.7.0"
 [[bin]]
 name = "solana-keygen"
 path = "src/keygen.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -35,3 +35,6 @@ tar = "0.4.26"
 
 [target."cfg(unix)".dependencies]
 gag = "0.1.10"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
