@@ -1176,38 +1176,37 @@ fn process_confirm(
         true,
     ) {
         Ok(status) => {
-            if let Some(result) = status {
-                match result {
-                    Ok(_) => {
-                        if config.verbose {
-                            match rpc_client.get_confirmed_transaction(
-                                signature,
-                                solana_transaction_status::TransactionEncoding::Binary,
-                            ) {
-                                Ok(confirmed_transaction) => {
-                                    println!("\nTransaction:");
-                                    crate::display::println_transaction(
-                                        &confirmed_transaction
-                                            .transaction
-                                            .transaction
-                                            .decode()
-                                            .expect("Successful decode"),
-                                        &confirmed_transaction.transaction.meta,
-                                        "  ",
-                                    );
-                                    println!();
-                                    Ok(format!("Confirmed in slot {}", confirmed_transaction.slot))
-                                }
-                                Err(err) => Ok(format!(
-                                    "Confirmed. Unable to get confirmed transaction details: {}",
-                                    err
-                                )),
-                            }
-                        } else {
-                            Ok("Confirmed".to_string())
+            if let Some(transaction_status) = status {
+                if config.verbose {
+                    match rpc_client.get_confirmed_transaction(
+                        signature,
+                        solana_transaction_status::TransactionEncoding::Binary,
+                    ) {
+                        Ok(confirmed_transaction) => {
+                            println!(
+                                "\nTransaction executed in slot {}:",
+                                confirmed_transaction.slot
+                            );
+                            crate::display::println_transaction(
+                                &confirmed_transaction
+                                    .transaction
+                                    .transaction
+                                    .decode()
+                                    .expect("Successful decode"),
+                                &confirmed_transaction.transaction.meta,
+                                "  ",
+                            );
+                        }
+                        Err(err) => {
+                            println!("Unable to get confirmed transaction details: {}", err)
                         }
                     }
-                    Err(err) => Ok(format!("Transaction failed with error: {}", err)),
+                    println!();
+                }
+
+                match transaction_status {
+                    Ok(_) => Ok("Confirmed".to_string()),
+                    Err(err) => Ok(format!("Transaction failed: {}", err)),
                 }
             } else {
                 Ok("Not found".to_string())
@@ -3456,10 +3455,7 @@ mod tests {
         config.command = CliCommand::Confirm(any_signature);
         assert_eq!(
             process_command(&config).unwrap(),
-            format!(
-                "Transaction failed with error: {}",
-                TransactionError::AccountInUse
-            )
+            format!("Transaction failed: {}", TransactionError::AccountInUse)
         );
 
         // Failure cases
