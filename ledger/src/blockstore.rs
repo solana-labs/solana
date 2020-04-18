@@ -344,7 +344,7 @@ impl Blockstore {
     }
 
     fn tar_dir(dir: String, archive: String) -> Result<()> {
-        let args = ["cfz", &archive, &dir];
+        let args = ["cfzP", &archive, &dir];
         let output = std::process::Command::new("tar").args(&args).output()?;
         if !output.status.success() {
             warn!(
