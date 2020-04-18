@@ -14,15 +14,12 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
-fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
+fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
     let keypair = Arc::new(Keypair::new());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-    let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
-        test_node.info.clone(),
-        keypair,
-    )));
+    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
     let gossip_service = GossipService::new(&cluster_info, None, test_node.sockets.gossip, exit);
-    let _ = cluster_info.read().unwrap().my_data();
+    let _ = cluster_info.my_contact_info();
     (
         cluster_info,
         gossip_service,
@@ -36,7 +33,7 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(num: usize, topo: F)
 where
-    F: Fn(&Vec<(Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket)>) -> (),
+    F: Fn(&Vec<(Arc<ClusterInfo>, GossipService, UdpSocket)>) -> (),
 {
     let exit = Arc::new(AtomicBool::new(false));
     let listen: Vec<_> = (0..num).map(|_| test_node(&exit)).collect();
@@ -44,10 +41,7 @@ where
     let mut done = true;
     for i in 0..(num * 32) {
         done = true;
-        let total: usize = listen
-            .iter()
-            .map(|v| v.0.read().unwrap().gossip_peers().len())
-            .sum();
+        let total: usize = listen.iter().map(|v| v.0.gossip_peers().len()).sum();
         if (total + num) * 10 > num * num * 9 {
             done = true;
             break;
@@ -147,10 +141,10 @@ pub fn cluster_info_retransmit() {
     let (c2, dr2, tn2) = test_node(&exit);
     trace!("c3:");
     let (c3, dr3, tn3) = test_node(&exit);
-    let c1_data = c1.read().unwrap().my_data().clone();
+    let c1_contact_info = c1.read().unwrap().my_contact_info();
 
-    c2.write().unwrap().insert_info(c1_data.clone());
-    c3.write().unwrap().insert_info(c1_data.clone());
+    c2.write().unwrap().insert_info(c1_contact_info.clone());
+    c3.write().unwrap().insert_info(c1_contact_info);
 
     let num = 3;
 

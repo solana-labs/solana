@@ -104,11 +104,11 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     fn transmit(
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         sock: &UdpSocket,
     ) -> Result<()> {
         for ((stakes, data_shreds), _) in receiver.lock().unwrap().iter() {
-            let peers = cluster_info.read().unwrap().tvu_peers();
+            let peers = cluster_info.tvu_peers();
             peers.iter().enumerate().for_each(|(i, peer)| {
                 if i <= self.partition && stakes.is_some() {
                     // Send fake shreds to the first N peers

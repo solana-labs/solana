@@ -72,7 +72,7 @@ pub struct ServeRepair {
     /// set the keypair that will be used to sign repair responses
     keypair: Arc<Keypair>,
     my_info: ContactInfo,
-    cluster_info: Arc<RwLock<ClusterInfo>>,
+    cluster_info: Arc<ClusterInfo>,
 }
 
 type RepairCache = HashMap<Slot, (Vec<ContactInfo>, Vec<(u64, usize)>)>;
@@ -80,16 +80,13 @@ type RepairCache = HashMap<Slot, (Vec<ContactInfo>, Vec<(u64, usize)>)>;
 impl ServeRepair {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
-        Self::new(Arc::new(RwLock::new(
-            ClusterInfo::new_with_invalid_keypair(contact_info),
+        Self::new(Arc::new(ClusterInfo::new_with_invalid_keypair(
+            contact_info,
         )))
     }
 
-    pub fn new(cluster_info: Arc<RwLock<ClusterInfo>>) -> Self {
-        let (keypair, my_info) = {
-            let r_cluster_info = cluster_info.read().unwrap();
-            (r_cluster_info.keypair.clone(), r_cluster_info.my_data())
-        };
+    pub fn new(cluster_info: Arc<ClusterInfo>) -> Self {
+        let (keypair, my_info) = { (cluster_info.keypair.clone(), cluster_info.my_contact_info()) };
         Self {
             keypair,
             my_info,
@@ -362,11 +359,7 @@ impl ServeRepair {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         if cache.get(&repair_request.slot()).is_none() {
-            let repair_peers: Vec<_> = self
-                .cluster_info
-                .read()
-                .unwrap()
-                .repair_peers(repair_request.slot());
+            let repair_peers: Vec<_> = self.cluster_info.repair_peers(repair_request.slot());
             if repair_peers.is_empty() {
                 return Err(ClusterInfoError::NoPeers.into());
             }

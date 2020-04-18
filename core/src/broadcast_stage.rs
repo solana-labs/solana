@@ -29,7 +29,7 @@ use std::{
     net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -62,14 +62,14 @@ impl BroadcastStageType {
     pub fn new_broadcast_stage(
         &self,
         sock: Vec<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         shred_version: u16,
     ) -> BroadcastStage {
-        let keypair = cluster_info.read().unwrap().keypair.clone();
+        let keypair = cluster_info.keypair.clone();
         match self {
             BroadcastStageType::Standard => BroadcastStage::new(
                 sock,
@@ -116,7 +116,7 @@ trait BroadcastRun {
     fn transmit(
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         sock: &UdpSocket,
     ) -> Result<()>;
     fn record(
@@ -205,7 +205,7 @@ impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn new(
         socks: Vec<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
@@ -357,11 +357,11 @@ fn update_peer_stats(
 }
 
 pub fn get_broadcast_peers<S: std::hash::BuildHasher>(
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    cluster_info: &ClusterInfo,
     stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
 ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
     use crate::cluster_info;
-    let mut peers = cluster_info.read().unwrap().tvu_peers();
+    let mut peers = cluster_info.tvu_peers();
     let peers_and_stakes = cluster_info::stake_weight_peers(&mut peers, stakes);
     (peers, peers_and_stakes)
 }
