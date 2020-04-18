@@ -48,6 +48,7 @@ members = [
     "archiver-lib",
     "archiver-utils",
     "remote-wallet",
+    "ramp-tps",
     "runtime",
     "sdk",
     "sdk-c",
