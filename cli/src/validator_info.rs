@@ -228,7 +228,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
 pub fn parse_validator_info_command(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     // Prepare validator info

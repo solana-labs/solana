@@ -1,6 +1,6 @@
 use clap::ArgMatches;
 use solana_clap_utils::keypair::{pubkey_from_path, signer_from_path};
-use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{pubkey::Pubkey, signature::Signer};
 use std::error::Error;
 use std::sync::Arc;
@@ -64,7 +64,7 @@ pub(crate) struct Args<P, K> {
 }
 
 fn resolve_stake_authority(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -72,7 +72,7 @@ fn resolve_stake_authority(
 }
 
 fn resolve_withdraw_authority(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -80,7 +80,7 @@ fn resolve_withdraw_authority(
 }
 
 fn resolve_new_stake_authority(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Pubkey, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -88,7 +88,7 @@ fn resolve_new_stake_authority(
 }
 
 fn resolve_new_withdraw_authority(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Pubkey, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -96,7 +96,7 @@ fn resolve_new_withdraw_authority(
 }
 
 fn resolve_fee_payer(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -104,7 +104,7 @@ fn resolve_fee_payer(
 }
 
 fn resolve_base_pubkey(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Pubkey, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -112,7 +112,7 @@ fn resolve_base_pubkey(
 }
 
 fn resolve_new_base_keypair(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
 ) -> Result<Box<dyn Signer>, Box<dyn Error>> {
     let matches = ArgMatches::default();
@@ -120,7 +120,7 @@ fn resolve_new_base_keypair(
 }
 
 fn resolve_authorize_args(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     args: &AuthorizeArgs<String, String>,
 ) -> Result<AuthorizeArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
     let resolved_args = AuthorizeArgs {
@@ -142,7 +142,7 @@ fn resolve_authorize_args(
 }
 
 fn resolve_rebase_args(
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     args: &RebaseArgs<String, String>,
 ) -> Result<RebaseArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
     let resolved_args = RebaseArgs {
@@ -158,36 +158,35 @@ fn resolve_rebase_args(
 pub(crate) fn resolve_command(
     command: &Command<String, String>,
 ) -> Result<Command<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
-    let wallet_manager = maybe_wallet_manager()?;
-    let wallet_manager = wallet_manager.as_ref();
+    let mut wallet_manager = None;
     let matches = ArgMatches::default();
     match command {
         Command::New(args) => {
             let resolved_args = NewArgs {
-                fee_payer: resolve_fee_payer(wallet_manager, &args.fee_payer)?,
+                fee_payer: resolve_fee_payer(&mut wallet_manager, &args.fee_payer)?,
                 funding_keypair: signer_from_path(
                     &matches,
                     &args.funding_keypair,
                     "funding keypair",
-                    wallet_manager,
+                    &mut wallet_manager,
                 )?,
                 base_keypair: signer_from_path(
                     &matches,
                     &args.base_keypair,
                     "base keypair",
-                    wallet_manager,
+                    &mut wallet_manager,
                 )?,
                 stake_authority: pubkey_from_path(
                     &matches,
                     &args.stake_authority,
                     "stake authority",
-                    wallet_manager,
+                    &mut wallet_manager,
                 )?,
                 withdraw_authority: pubkey_from_path(
                     &matches,
                     &args.withdraw_authority,
                     "withdraw authority",
-                    wallet_manager,
+                    &mut wallet_manager,
                 )?,
                 lamports: args.lamports,
                 index: args.index,
@@ -196,36 +195,36 @@ pub(crate) fn resolve_command(
         }
         Command::Count(args) => {
             let resolved_args = CountArgs {
-                base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+                base_pubkey: resolve_base_pubkey(&mut wallet_manager, &args.base_pubkey)?,
             };
             Ok(Command::Count(resolved_args))
         }
         Command::Addresses(args) => {
             let resolved_args = QueryArgs {
-                base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+                base_pubkey: resolve_base_pubkey(&mut wallet_manager, &args.base_pubkey)?,
                 num_accounts: args.num_accounts,
             };
             Ok(Command::Addresses(resolved_args))
         }
         Command::Balance(args) => {
             let resolved_args = QueryArgs {
-                base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+                base_pubkey: resolve_base_pubkey(&mut wallet_manager, &args.base_pubkey)?,
                 num_accounts: args.num_accounts,
             };
             Ok(Command::Balance(resolved_args))
         }
         Command::Authorize(args) => {
-            let resolved_args = resolve_authorize_args(wallet_manager, &args)?;
+            let resolved_args = resolve_authorize_args(&mut wallet_manager, &args)?;
             Ok(Command::Authorize(resolved_args))
         }
         Command::Rebase(args) => {
-            let resolved_args = resolve_rebase_args(wallet_manager, &args)?;
+            let resolved_args = resolve_rebase_args(&mut wallet_manager, &args)?;
             Ok(Command::Rebase(resolved_args))
         }
         Command::Move(args) => {
             let resolved_args = MoveArgs {
-                authorize_args: resolve_authorize_args(wallet_manager, &args.authorize_args)?,
-                rebase_args: resolve_rebase_args(wallet_manager, &args.rebase_args)?,
+                authorize_args: resolve_authorize_args(&mut wallet_manager, &args.authorize_args)?,
+                rebase_args: resolve_rebase_args(&mut wallet_manager, &args.rebase_args)?,
             };
             Ok(Command::Move(Box::new(resolved_args)))
         }

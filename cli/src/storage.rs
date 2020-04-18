@@ -102,7 +102,7 @@ impl StorageSubCommands for App<'_, '_> {
 pub fn parse_storage_create_archiver_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner =
         pubkey_of_signer(matches, "storage_account_owner", wallet_manager)?.unwrap();
@@ -130,7 +130,7 @@ pub fn parse_storage_create_archiver_account(
 pub fn parse_storage_create_validator_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_owner =
         pubkey_of_signer(matches, "storage_account_owner", wallet_manager)?.unwrap();
@@ -158,7 +158,7 @@ pub fn parse_storage_create_validator_account(
 pub fn parse_storage_claim_reward(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let node_account_pubkey =
         pubkey_of_signer(matches, "node_account_pubkey", wallet_manager)?.unwrap();
@@ -180,7 +180,7 @@ pub fn parse_storage_claim_reward(
 
 pub fn parse_storage_get_account_command(
     matches: &ArgMatches<'_>,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let storage_account_pubkey =
         pubkey_of_signer(matches, "storage_account_pubkey", wallet_manager)?.unwrap();
@@ -330,7 +330,7 @@ mod tests {
             parse_command(
                 &test_create_archiver_storage_account,
                 &default_keypair_file,
-                None
+                &mut None
             )
             .unwrap(),
             CliCommandInfo {
@@ -362,7 +362,7 @@ mod tests {
             parse_command(
                 &test_create_validator_storage_account,
                 &default_keypair_file,
-                None
+                &mut None
             )
             .unwrap(),
             CliCommandInfo {
@@ -385,7 +385,7 @@ mod tests {
             &storage_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_claim_storage_reward, &default_keypair_file, None).unwrap(),
+            parse_command(&test_claim_storage_reward, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ClaimStorageReward {
                     node_account_pubkey: pubkey,

@@ -2,9 +2,7 @@ use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches
 use console::style;
 
 use solana_clap_utils::{
-    input_validators::is_url,
-    keypair::{check_for_usb, SKIP_SEED_PHRASE_VALIDATION_ARG},
-    offline::SIGN_ONLY_ARG,
+    input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, offline::SIGN_ONLY_ARG,
     DisplayError,
 };
 use solana_cli::{
@@ -13,10 +11,10 @@ use solana_cli::{
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::{Config, CONFIG_FILE};
-use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{error, sync::Arc};
 
-fn parse_settings(matches: &ArgMatches<'_>) -> Result<Option<bool>, Box<dyn error::Error>> {
+fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
         ("config", Some(matches)) => match matches.subcommand() {
             ("get", Some(subcommand_matches)) => {
@@ -54,7 +52,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<Option<bool>, Box<dyn erro
                         style("No config file found.").bold()
                     );
                 }
-                None
+                false
             }
             ("set", Some(subcommand_matches)) => {
                 if let Some(config_file) = matches.value_of("config_file") {
@@ -94,26 +92,18 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<Option<bool>, Box<dyn erro
                         style("No config file found.").bold()
                     );
                 }
-                None
+                false
             }
             _ => unreachable!(),
         },
-        _ => {
-            let need_wallet_manager = if let Some(config_file) = matches.value_of("config_file") {
-                let config = Config::load(config_file).unwrap_or_default();
-                check_for_usb([config.keypair_path].iter())
-            } else {
-                false
-            };
-            Some(need_wallet_manager)
-        }
+        _ => true,
     };
     Ok(parse_args)
 }
 
 pub fn parse_args<'a>(
     matches: &ArgMatches<'_>,
-    wallet_manager: Option<Arc<RemoteWalletManager>>,
+    mut wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
@@ -136,7 +126,7 @@ pub fn parse_args<'a>(
     );
 
     let CliCommandInfo { command, signers } =
-        parse_command(&matches, &default_signer_path, wallet_manager.as_ref())?;
+        parse_command(&matches, &default_signer_path, &mut wallet_manager)?;
 
     let output_format = matches
         .value_of("output_format")
@@ -262,22 +252,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .get_matches();
 
-    do_main(&matches, check_for_usb(std::env::args()))
-        .map_err(|err| DisplayError::new_as_boxed(err).into())
+    do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
-fn do_main(
-    matches: &ArgMatches<'_>,
-    need_wallet_manager: bool,
-) -> Result<(), Box<dyn error::Error>> {
-    if let Some(config_need_wallet_manager) = parse_settings(&matches)? {
-        let wallet_manager = if need_wallet_manager || config_need_wallet_manager {
-            maybe_wallet_manager()?
-        } else {
-            None
-        };
+fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
+    if parse_settings(&matches)? {
+        let mut wallet_manager = None;
 
-        let (mut config, signers) = parse_args(&matches, wallet_manager)?;
+        let (mut config, signers) = parse_args(&matches, &mut wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
         let result = process_command(&config)?;
         let (_, submatches) = matches.subcommand();
