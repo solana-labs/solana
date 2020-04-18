@@ -11,7 +11,7 @@ use solana_cli::{
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::{Config, CONFIG_FILE};
-use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{error, sync::Arc};
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
@@ -103,7 +103,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
 
 pub fn parse_args<'a>(
     matches: &ArgMatches<'_>,
-    wallet_manager: Option<Arc<RemoteWalletManager>>,
+    mut wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
@@ -126,7 +126,7 @@ pub fn parse_args<'a>(
     );
 
     let CliCommandInfo { command, signers } =
-        parse_command(&matches, &default_signer_path, wallet_manager.as_ref())?;
+        parse_command(&matches, &default_signer_path, &mut wallet_manager)?;
 
     let output_format = matches
         .value_of("output_format")
@@ -257,9 +257,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
 fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
     if parse_settings(&matches)? {
-        let wallet_manager = maybe_wallet_manager()?;
+        let mut wallet_manager = None;
 
-        let (mut config, signers) = parse_args(&matches, wallet_manager)?;
+        let (mut config, signers) = parse_args(&matches, &mut wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
         let result = process_command(&config)?;
         let (_, submatches) = matches.subcommand();

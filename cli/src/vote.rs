@@ -223,7 +223,7 @@ impl VoteSubCommands for App<'_, '_> {
 pub fn parse_create_vote_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let (vote_account, _) = signer_of(matches, "vote_account", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
@@ -256,7 +256,7 @@ pub fn parse_create_vote_account(
 pub fn parse_vote_authorize(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     vote_authorize: VoteAuthorize,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
@@ -286,7 +286,7 @@ pub fn parse_vote_authorize(
 pub fn parse_vote_update_validator(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -313,7 +313,7 @@ pub fn parse_vote_update_validator(
 
 pub fn parse_vote_get_account_command(
     matches: &ArgMatches<'_>,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
@@ -336,7 +336,7 @@ pub fn parse_vote_get_account_command(
 pub fn parse_withdraw_from_vote_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();

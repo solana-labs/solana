@@ -8,7 +8,7 @@ use clap::ArgMatches;
 use rpassword::prompt_password_stderr;
 use solana_remote_wallet::{
     remote_keypair::generate_remote_keypair,
-    remote_wallet::{RemoteWalletError, RemoteWalletManager},
+    remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
 };
 use solana_sdk::{
     pubkey::Pubkey,
@@ -64,7 +64,7 @@ pub fn signer_from_path(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     match parse_keypair_path(path) {
         KeypairUrl::Ask => {
@@ -88,6 +88,9 @@ pub fn signer_from_path(
             Ok(Box::new(read_keypair(&mut stdin)?))
         }
         KeypairUrl::Usb(path) => {
+            if wallet_manager.is_none() {
+                *wallet_manager = maybe_wallet_manager()?;
+            }
             if let Some(wallet_manager) = wallet_manager {
                 Ok(Box::new(generate_remote_keypair(
                     path,
@@ -122,7 +125,7 @@ pub fn pubkey_from_path(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Pubkey, Box<dyn error::Error>> {
     match parse_keypair_path(path) {
         KeypairUrl::Pubkey(pubkey) => Ok(pubkey),
@@ -134,7 +137,7 @@ pub fn resolve_signer_from_path(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<String>, Box<dyn error::Error>> {
     match parse_keypair_path(path) {
         KeypairUrl::Ask => {
@@ -158,6 +161,9 @@ pub fn resolve_signer_from_path(
             read_keypair(&mut stdin).map(|_| None)
         }
         KeypairUrl::Usb(path) => {
+            if wallet_manager.is_none() {
+                *wallet_manager = maybe_wallet_manager()?;
+            }
             if let Some(wallet_manager) = wallet_manager {
                 let path = generate_remote_keypair(
                     path,

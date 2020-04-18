@@ -376,7 +376,7 @@ impl StakeSubCommands for App<'_, '_> {
 pub fn parse_stake_create_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
@@ -428,7 +428,7 @@ pub fn parse_stake_create_account(
 pub fn parse_stake_delegate_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -470,7 +470,7 @@ pub fn parse_stake_delegate_stake(
 pub fn parse_stake_authorize(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -553,7 +553,7 @@ pub fn parse_stake_authorize(
 pub fn parse_split_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -598,7 +598,7 @@ pub fn parse_split_stake(
 pub fn parse_stake_deactivate_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -635,7 +635,7 @@ pub fn parse_stake_deactivate_stake(
 pub fn parse_stake_withdraw_stake(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -677,7 +677,7 @@ pub fn parse_stake_withdraw_stake(
 pub fn parse_stake_set_lockup(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
@@ -722,7 +722,7 @@ pub fn parse_stake_set_lockup(
 
 pub fn parse_show_stake_account(
     matches: &ArgMatches<'_>,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();

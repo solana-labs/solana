@@ -263,7 +263,7 @@ pub fn data_from_state(state: &State) -> Result<&Data, CliNonceError> {
 pub fn parse_authorize_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let new_authority = pubkey_of_signer(matches, "new_authority", wallet_manager)?.unwrap();
@@ -291,7 +291,7 @@ pub fn parse_authorize_nonce_account(
 pub fn parse_nonce_create_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let (nonce_account, nonce_account_pubkey) =
         signer_of(matches, "nonce_account_keypair", wallet_manager)?;
@@ -320,7 +320,7 @@ pub fn parse_nonce_create_account(
 
 pub fn parse_get_nonce(
     matches: &ArgMatches<'_>,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
         pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
@@ -334,7 +334,7 @@ pub fn parse_get_nonce(
 pub fn parse_new_nonce(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let (nonce_authority, nonce_authority_pubkey) =
@@ -359,7 +359,7 @@ pub fn parse_new_nonce(
 
 pub fn parse_show_nonce_account(
     matches: &ArgMatches<'_>,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
         pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
@@ -377,7 +377,7 @@ pub fn parse_show_nonce_account(
 pub fn parse_withdraw_from_nonce_account(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =

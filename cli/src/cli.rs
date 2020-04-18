@@ -86,7 +86,7 @@ pub(crate) fn generate_unique_signers(
     bulk_signers: Vec<Option<Box<dyn Signer>>>,
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
     let mut unique_signers = vec![];
 
@@ -574,7 +574,7 @@ impl Default for CliConfig<'_> {
 pub fn parse_command(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         // Cluster Query Commands
@@ -1054,7 +1054,7 @@ pub fn return_signers(tx: &Transaction) -> ProcessResult {
 pub fn parse_create_address_with_seed(
     matches: &ArgMatches<'_>,
     default_signer_path: &str,
-    wallet_manager: Option<&Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let from_pubkey = pubkey_of_signer(matches, "from", wallet_manager)?;
     let signers = if from_pubkey.is_some() {

@@ -14,7 +14,7 @@ use solana_clap_utils::{
     DisplayError,
 };
 use solana_cli_config::{Config, CONFIG_FILE};
-use solana_remote_wallet::remote_wallet::{maybe_wallet_manager, RemoteWalletManager};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
@@ -53,7 +53,7 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
 fn get_keypair_from_matches(
     matches: &ArgMatches,
     config: Config,
-    wallet_manager: Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     let mut path = dirs::home_dir().expect("home directory");
     let path = if matches.is_present("keypair") {
@@ -64,7 +64,7 @@ fn get_keypair_from_matches(
         path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
-    signer_from_path(matches, path, "pubkey recovery", wallet_manager.as_ref())
+    signer_from_path(matches, path, "pubkey recovery", wallet_manager)
 }
 
 fn output_keypair(
@@ -407,11 +407,12 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
         Config::default()
     };
 
-    let wallet_manager = maybe_wallet_manager()?;
+    let mut wallet_manager = None;
 
     match matches.subcommand() {
         ("pubkey", Some(matches)) => {
-            let pubkey = get_keypair_from_matches(matches, config, wallet_manager)?.try_pubkey()?;
+            let pubkey =
+                get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
 
             if matches.is_present("outfile") {
                 let outfile = matches.value_of("outfile").unwrap();
@@ -601,7 +602,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("verify", Some(matches)) => {
-            let keypair = get_keypair_from_matches(matches, config, wallet_manager)?;
+            let keypair = get_keypair_from_matches(matches, config, &mut wallet_manager)?;
             let simple_message = Message::new(&[Instruction::new(
                 Pubkey::default(),
                 &0,
