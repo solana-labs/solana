@@ -790,22 +790,59 @@ impl Blockstore {
             );
 
             num_recovered = recovered_data.len();
-            recovered_data.into_iter().for_each(|shred| {
-                if let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), None) {
-                    if shred.verify(&leader) {
-                        self.check_insert_data_shred(
-                            shred,
-                            &mut erasure_metas,
-                            &mut index_working_set,
-                            &mut slot_meta_working_set,
-                            &mut just_inserted_data_shreds,
-                            &mut index_meta_time,
-                            is_trusted,
-                            &handle_duplicate,
-                        );
-                    }
-                }
+            let verified = PAR_THREAD_POOL.with(|thread_pool| {
+                thread_pool.borrow().install(|| {
+                    let verified: Vec<bool> = recovered_data
+                        .par_iter()
+                        .map(|shred| {
+                            if let Some(leader) =
+                                leader_schedule_cache.slot_leader_at(shred.slot(), None)
+                            {
+                                shred.verify(&leader)
+                            } else {
+                                false
+                            }
+                        })
+                        .collect();
+
+                    recovered_data
+                        .zip(verified.iter())
+                        .par_iter()
+                        .for_each(|(x, is_verified)| {
+                            if is_verified {
+                                let path = if x.is_data() {
+                                    self.data_shred_path(x.slot(), x.index())
+                                } else {
+                                    self.coding_shred_path(x.slot(), x.index())
+                                };
+                                Self::write_tmp(&path, &shred.payload)?;
+                            }
+                        });
+                    verified
+                })
             });
+
+            recovered_data
+                .into_iter()
+                .zip(&verified.into_iter())
+                .for_each(|(shred, is_verified)| {
+                    if is_verified {
+                        if let Some(leader) =
+                            leader_schedule_cache.slot_leader_at(shred.slot(), None)
+                        {
+                            self.check_insert_data_shred(
+                                shred,
+                                &mut erasure_metas,
+                                &mut index_working_set,
+                                &mut slot_meta_working_set,
+                                &mut just_inserted_data_shreds,
+                                &mut index_meta_time,
+                                is_trusted,
+                                &handle_duplicate,
+                            );
+                        }
+                    }
+                });
         }
         start.stop();
         let shred_recovery_elapsed = start.as_us();
@@ -878,6 +915,19 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
     ) -> Result<()> {
+        let verified = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                shreds.par_iter().for_each(|x| {
+                    let path = if x.is_data() {
+                        self.data_shred_path(x.slot(), x.index())
+                    } else {
+                        self.coding_shred_path(x.slot(), x.index())
+                    };
+                    Self::write_tmp(&path, &shred.payload)?;
+                });
+            })
+        });
+
         self.insert_shreds_handle_duplicate(
             shreds,
             leader_schedule,
@@ -1051,14 +1101,19 @@ impl Blockstore {
             || slot <= *last_root.read().unwrap())
     }
 
-    fn write_all(path: &str, payload: &[u8]) -> Result<()> {
+    fn rename(path: &str) -> Result<()> {
+        let tmp_name = format!("{}.tmp", path);
+        let tmp_path = Path::new(&tmp_name);
+        let real_path = Path::new(path);
+        fs::rename(tmp_path, real_path)?;
+        Ok(())
+    }
+
+    fn write_tmp(path: &str, payload: &[u8]) -> Result<()> {
         let tmp_name = format!("{}.tmp", path);
         let tmp_path = Path::new(&tmp_name);
         let mut f = fs::File::create(tmp_path)?;
         f.write_all(payload)?;
-        let real_path = Path::new(path);
-        //after rename syscall returns, the real path is on disk
-        fs::rename(tmp_path, real_path)?;
         Ok(())
     }
 
@@ -1073,7 +1128,7 @@ impl Blockstore {
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
         let path = self.coding_shred_path(slot, shred_index);
-        Self::write_all(&path, &shred.payload)?;
+        Self::rename(&path)?;
         index_meta.coding_mut().set_present(shred_index, true);
 
         Ok(())
@@ -1177,7 +1232,7 @@ impl Blockstore {
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
         let path = self.data_shred_path(slot, index);
-        Self::write_all(&path, &shred.payload)?;
+        Self::rename(&path)?;
         update_slot_meta(
             last_in_slot,
             last_in_data,
