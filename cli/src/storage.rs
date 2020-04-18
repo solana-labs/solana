@@ -330,7 +330,7 @@ mod tests {
             parse_command(
                 &test_create_archiver_storage_account,
                 &default_keypair_file,
-                None
+                &mut None
             )
             .unwrap(),
             CliCommandInfo {
@@ -362,7 +362,7 @@ mod tests {
             parse_command(
                 &test_create_validator_storage_account,
                 &default_keypair_file,
-                None
+                &mut None
             )
             .unwrap(),
             CliCommandInfo {
@@ -385,7 +385,7 @@ mod tests {
             &storage_account_string,
         ]);
         assert_eq!(
-            parse_command(&test_claim_storage_reward, &default_keypair_file, None).unwrap(),
+            parse_command(&test_claim_storage_reward, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ClaimStorageReward {
                     node_account_pubkey: pubkey,

@@ -663,7 +663,7 @@ mod tests {
             &pubkey2_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize_voter, &default_keypair_file, None).unwrap(),
+            parse_command(&test_authorize_voter, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::VoteAuthorize {
                     vote_account_pubkey: pubkey,
@@ -686,7 +686,7 @@ mod tests {
             &pubkey2_string,
         ]);
         assert_eq!(
-            parse_command(&test_authorize_voter, &default_keypair_file, None).unwrap(),
+            parse_command(&test_authorize_voter, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::VoteAuthorize {
                     vote_account_pubkey: pubkey,
@@ -716,7 +716,7 @@ mod tests {
             "10",
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account, &default_keypair_file, None).unwrap(),
+            parse_command(&test_create_vote_account, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -744,7 +744,7 @@ mod tests {
             &identity_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account2, &default_keypair_file, None).unwrap(),
+            parse_command(&test_create_vote_account2, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -776,7 +776,7 @@ mod tests {
             &authed.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account3, &default_keypair_file, None).unwrap(),
+            parse_command(&test_create_vote_account3, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -806,7 +806,7 @@ mod tests {
             &authed.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_create_vote_account4, &default_keypair_file, None).unwrap(),
+            parse_command(&test_create_vote_account4, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateVoteAccount {
                     seed: None,
@@ -831,7 +831,7 @@ mod tests {
             &keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_update_validator, &default_keypair_file, None).unwrap(),
+            parse_command(&test_update_validator, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::VoteUpdateValidator {
                     vote_account_pubkey: pubkey,
@@ -857,7 +857,7 @@ mod tests {
             parse_command(
                 &test_withdraw_from_vote_account,
                 &default_keypair_file,
-                None
+                &mut None
             )
             .unwrap(),
             CliCommandInfo {
@@ -888,7 +888,7 @@ mod tests {
             parse_command(
                 &test_withdraw_from_vote_account,
                 &default_keypair_file,
-                None
+                &mut None
             )
             .unwrap(),
             CliCommandInfo {
