@@ -17,7 +17,7 @@ use crate::{
 use bincode::deserialize;
 use log::*;
 use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
+    iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator},
     ThreadPool,
 };
 use solana_measure::measure::Measure;
@@ -804,43 +804,30 @@ impl Blockstore {
                             }
                         })
                         .collect();
-
-                    recovered_data
-                        .zip(verified.iter())
-                        .par_iter()
-                        .for_each(|(x, is_verified)| {
-                            if is_verified {
-                                let path = if x.is_data() {
-                                    self.data_shred_path(x.slot(), x.index())
-                                } else {
-                                    self.coding_shred_path(x.slot(), x.index())
-                                };
-                                Self::write_tmp(&path, &shred.payload)?;
-                            }
-                        });
+                    recovered_data.par_iter().enumerate().for_each(|(ix, x)| {
+                        if let Some(true) = verified.get(ix) {
+                            self.write_shred(x)
+                        }
+                    });
                     verified
                 })
             });
 
             recovered_data
                 .into_iter()
-                .zip(&verified.into_iter())
-                .for_each(|(shred, is_verified)| {
-                    if is_verified {
-                        if let Some(leader) =
-                            leader_schedule_cache.slot_leader_at(shred.slot(), None)
-                        {
-                            self.check_insert_data_shred(
-                                shred,
-                                &mut erasure_metas,
-                                &mut index_working_set,
-                                &mut slot_meta_working_set,
-                                &mut just_inserted_data_shreds,
-                                &mut index_meta_time,
-                                is_trusted,
-                                &handle_duplicate,
-                            );
-                        }
+                .enumerate()
+                .for_each(|(ix, shred)| {
+                    if let Some(true) = verified.get(ix) {
+                        self.check_insert_data_shred(
+                            shred,
+                            &mut erasure_metas,
+                            &mut index_working_set,
+                            &mut slot_meta_working_set,
+                            &mut just_inserted_data_shreds,
+                            &mut index_meta_time,
+                            is_trusted,
+                            &handle_duplicate,
+                        );
                     }
                 });
         }
@@ -909,23 +896,33 @@ impl Blockstore {
         Ok(())
     }
 
+    fn write_shred(&self, shred: &Shred) {
+        let path = if shred.is_data() {
+            self.data_shred_path(shred.slot(), shred.index() as u64)
+        } else {
+            self.coding_shred_path(shred.slot(), shred.index() as u64)
+        };
+        let e = Self::write_tmp(&path, &shred.payload);
+        if e.is_err() {
+            warn!(
+                "failed to write shred to disk {} {} {:?}",
+                shred.slot(),
+                shred.index(),
+                e
+            );
+        }
+    }
+
     pub fn insert_shreds(
         &self,
         shreds: Vec<Shred>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
     ) -> Result<()> {
-        let verified = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                shreds.par_iter().for_each(|x| {
-                    let path = if x.is_data() {
-                        self.data_shred_path(x.slot(), x.index())
-                    } else {
-                        self.coding_shred_path(x.slot(), x.index())
-                    };
-                    Self::write_tmp(&path, &shred.payload)?;
-                });
-            })
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool
+                .borrow()
+                .install(|| shreds.par_iter().for_each(|x| self.write_shred(x)))
         });
 
         self.insert_shreds_handle_duplicate(
@@ -3484,6 +3481,7 @@ pub mod tests {
 
     #[test]
     fn test_insert_data_shreds_reverse() {
+        solana_logger::setup();
         let num_shreds = 10;
         let num_entries = max_ticks_per_n_shreds(num_shreds);
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
