@@ -1,9 +1,9 @@
 import React, { useState, ReactNode } from "react";
 
 type CopyableProps = {
-  text: string
-  children: ReactNode
-}
+  text: string;
+  children: ReactNode;
+};
 
 const popover = (
   <div className="popover fade bs-popover-right show">
@@ -17,17 +17,14 @@ function Copyable({ text, children }: CopyableProps) {
 
   const copyToClipboard = () => navigator.clipboard.writeText(text);
   const handleClick = () =>
-    copyToClipboard()
-      .then(() => {
-        setShowPopover(true);
-        setTimeout(setShowPopover.bind(null, false), 2500);
-      });
+    copyToClipboard().then(() => {
+      setShowPopover(true);
+      setTimeout(setShowPopover.bind(null, false), 2500);
+    });
 
   return (
     <div className="copyable">
-      <div onClick={handleClick}>
-        {children}
-      </div>
+      <div onClick={handleClick}>{children}</div>
       {showPopover && popover}
     </div>
   );
