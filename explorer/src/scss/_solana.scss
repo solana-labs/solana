@@ -13,7 +13,7 @@ code {
 .copyable {
   position: relative;
 
-  &:hover {
+  & > div:hover {
     cursor: pointer;
   }
 

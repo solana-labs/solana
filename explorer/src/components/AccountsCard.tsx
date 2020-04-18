@@ -148,7 +148,7 @@ const renderAccountRow = (account: Account) => {
     balance = `◎${(1.0 * account.lamports) / LAMPORTS_PER_SOL}`;
   }
 
-  const base58AccountPubkey = account.pubkey.toBase58()
+  const base58AccountPubkey = account.pubkey.toBase58();
   return (
     <tr key={account.id}>
       <td>
