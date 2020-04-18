@@ -897,19 +897,35 @@ impl Blockstore {
     }
 
     fn write_shred(&self, shred: &Shred) {
+        let slot = shred.slot();
         let path = if shred.is_data() {
-            self.data_shred_path(shred.slot(), shred.index() as u64)
+            self.data_shred_path(slot, shred.index() as u64)
         } else {
-            self.coding_shred_path(shred.slot(), shred.index() as u64)
+            self.coding_shred_path(slot, shred.index() as u64)
         };
-        let e = Self::write_tmp(&path, &shred.payload);
-        if e.is_err() {
-            warn!(
-                "failed to write shred to disk {} {} {:?}",
-                shred.slot(),
-                shred.index(),
-                e
-            );
+        loop {
+            let e = Self::write_tmp(&path, &shred.payload);
+            if let Err(BlockstoreError::IO(..)) = e {
+                let dir = if shred.is_data() {
+                    self.slot_data_dir(slot)
+                } else {
+                    self.slot_coding_dir(slot)
+                };
+                let dir = Path::new(&dir);
+                if !dir.exists() {
+                    fs::create_dir_all(dir).unwrap();
+                    continue;
+                }
+            }
+            if e.is_err() {
+                warn!(
+                    "failed to write shred to disk {} {} {:?}",
+                    shred.slot(),
+                    shred.index(),
+                    e
+                );
+            }
+            break;
         }
     }
 
@@ -3434,6 +3450,7 @@ pub mod tests {
 
     #[test]
     fn test_insert_data_shreds_basic() {
+        solana_logger::setup();
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1) + 1;
         assert!(num_entries > 1);
