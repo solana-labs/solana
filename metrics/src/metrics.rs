@@ -103,13 +103,15 @@ impl MetricsWriter for InfluxDbMetricsWriter {
                 .unwrap();
             let response = client.post(write_url.as_str()).body(line).send();
             if let Ok(resp) = response {
-                info!(
-                    "submit response: {} {}",
-                    resp.status(),
-                    resp.text().unwrap()
-                );
+                if !resp.status().is_success() {
+                    warn!(
+                        "submit response unsuccessful: {} {}",
+                        resp.status(),
+                        resp.text().unwrap()
+                    );
+                }
             } else {
-                error!("submit error: {}", response.unwrap_err());
+                warn!("submit error: {}", response.unwrap_err());
             }
         }
     }
