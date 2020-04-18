@@ -161,7 +161,6 @@ fn test_validator_exit_2() {
     let num_nodes = 2;
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_validator_exit = true;
-    validator_config.wait_for_supermajority = Some(0);
 
     let config = ClusterConfig {
         cluster_lamports: 10_000,
