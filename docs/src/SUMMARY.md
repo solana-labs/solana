@@ -115,6 +115,7 @@
   * [Validator](proposals/validator-proposal.md)
   * [Simple Payment and State Verification](proposals/simple-payment-and-state-verification.md)
   * [Cross-Program Invocation](proposals/cross-program-invocation.md)
+  * [Program Keys and Signatures](proposals/program-keys-and-signatures.md)
   * [Inter-chain Transaction Verification](proposals/interchain-transaction-verification.md)
   * [Snapshot Verification](proposals/snapshot-verification.md)
   * [Bankless Leader](proposals/bankless-leader.md)
