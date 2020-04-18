@@ -10,7 +10,7 @@ import {
 import bs58 from "bs58";
 import { assertUnreachable } from "../utils";
 import { useCluster } from "../providers/cluster";
-import Signature from "./Signature";
+import Copyable from "./Copyable";
 
 function TransactionsCard() {
   const { transactions, idCounter } = useTransactions();
@@ -193,7 +193,9 @@ const renderTransactionRow = (
         <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>
       </td>
       <td>
-        <Signature text={transaction.signature} />
+        <Copyable text={transaction.signature}>
+          <code>{transaction.signature}</code>
+        </Copyable>
       </td>
       <td className="text-uppercase">{confirmationsText}</td>
       <td>{slotText}</td>
