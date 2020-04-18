@@ -809,7 +809,8 @@ fn get_stake_percent_in_gossip(
 
     let mut total_activated_stake = 0;
     let all_tvu_peers = cluster_info.read().unwrap().all_tvu_peers();
-    let me = cluster_info.read().unwrap().my_data();
+    let my_shred_version = cluster_info.read().unwrap().my_data().shred_version;
+    let my_id = cluster_info.read().unwrap().id();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
         let vote_state =
@@ -824,7 +825,7 @@ fn get_stake_percent_in_gossip(
             .iter()
             .find(|peer| peer.id == vote_state.node_pubkey)
         {
-            if peer.shred_version == me.shred_version {
+            if peer.shred_version == my_shred_version {
                 trace!(
                     "observed {} in gossip, (activated_stake={})",
                     vote_state.node_pubkey,
@@ -835,6 +836,8 @@ fn get_stake_percent_in_gossip(
                 wrong_shred_stake += activated_stake;
                 wrong_shred_nodes.push((*activated_stake, vote_state.node_pubkey));
             }
+        } else if vote_state.node_pubkey == my_id {
+            online_stake += activated_stake; // This node is online
         } else {
             offline_stake += activated_stake;
             offline_nodes.push((*activated_stake, vote_state.node_pubkey));
