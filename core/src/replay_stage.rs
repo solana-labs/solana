@@ -283,7 +283,11 @@ impl ReplayStage {
 
                         for r in failure_reasons {
                             if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
-                                progress.log_propagated_stats(slot, &bank_forks);
+                                if let Some(latest_leader_slot) =
+                                    progress.get_latest_leader_slot(slot)
+                                {
+                                    progress.log_propagated_stats(latest_leader_slot, &bank_forks);
+                                }
                             }
                         }
                     }
