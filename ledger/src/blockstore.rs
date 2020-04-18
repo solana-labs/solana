@@ -903,6 +903,7 @@ impl Blockstore {
         } else {
             self.coding_shred_path(slot, shred.index() as u64)
         };
+        let mut tried = false;
         loop {
             let e = Self::write_tmp(&path, &shred.payload);
             if let Err(BlockstoreError::IO(..)) = e {
@@ -912,7 +913,8 @@ impl Blockstore {
                     self.slot_coding_dir(slot)
                 };
                 let dir = Path::new(&dir);
-                if !dir.exists() {
+                if !dir.exists() && !tried {
+                    tried = true;
                     fs::create_dir_all(dir).unwrap();
                     continue;
                 }
