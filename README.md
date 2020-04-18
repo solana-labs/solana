@@ -59,7 +59,7 @@ $ cargo test
 ```
 
 ### Starting a local testnet
-Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/building-from-source).
+Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/bench-tps).
 
 ### Accessing the remote testnet
 * `testnet` - public stable testnet accessible via devnet.solana.com. Runs 24/7
