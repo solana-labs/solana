@@ -912,10 +912,10 @@ impl Blockstore {
                 } else {
                     self.slot_coding_dir(slot)
                 };
-                let dir = Path::new(&dir);
-                if !dir.exists() && !tried {
-                    tried = true;
+                if !tried {
+                    let dir = Path::new(&dir);
                     fs::create_dir_all(dir).unwrap();
+                    tried = true;
                     continue;
                 }
             }
