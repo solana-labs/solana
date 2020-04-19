@@ -520,7 +520,9 @@ pub mod test {
         ci.wallclock = std::u64::MAX;
         assert_eq!(num_live_peers(&[ci.clone()]), 1);
         ci.wallclock = timestamp() - 1;
-        assert_eq!(num_live_peers(&[ci]), 2);
+        assert_eq!(num_live_peers(&[ci.clone()]), 2);
+        ci.wallclock = timestamp() - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS - 1;
+        assert_eq!(num_live_peers(&[ci]), 1);
     }
 
     #[test]
