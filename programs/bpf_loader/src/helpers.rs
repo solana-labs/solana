@@ -71,13 +71,13 @@ pub fn register_helpers<'a>(
 #[macro_export]
 macro_rules! translate {
     ($vm_addr:expr, $len:expr, $regions:expr) => {
-        translate_addr(
+        translate_addr::<BPFError>(
             $vm_addr as u64,
             $len as usize,
             file!(),
             line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
             $regions,
-        )?
+        )
     };
 }
 
@@ -85,40 +85,51 @@ macro_rules! translate {
 macro_rules! translate_type_mut {
     ($t:ty, $vm_addr:expr, $regions:expr) => {
         unsafe {
-            &mut *(translate_addr(
+            match translate_addr::<BPFError>(
                 $vm_addr as u64,
                 size_of::<$t>(),
                 file!(),
                 line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
                 $regions,
-            )? as *mut $t)
+            ) {
+                Ok(value) => Ok(&mut *(value as *mut $t)),
+                Err(e) => Err(e),
+            }
         }
     };
 }
 #[macro_export]
 macro_rules! translate_type {
     ($t:ty, $vm_addr:expr, $regions:expr) => {
-        &*translate_type_mut!($t, $vm_addr, $regions)
+        match translate_type_mut!($t, $vm_addr, $regions) {
+            Ok(value) => Ok(&*value),
+            Err(e) => Err(e),
+        }
     };
 }
 
 #[macro_export]
 macro_rules! translate_slice_mut {
-    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {{
-        let host_addr = translate_addr(
+    ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {
+        match translate_addr::<BPFError>(
             $vm_addr as u64,
             $len as usize * size_of::<$t>(),
             file!(),
             line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
             $regions,
-        )? as *mut $t;
-        unsafe { from_raw_parts_mut(host_addr, $len as usize) }
-    }};
+        ) {
+            Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut $t, $len as usize) }),
+            Err(e) => Err(e),
+        }
+    };
 }
 #[macro_export]
 macro_rules! translate_slice {
     ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {
-        &*translate_slice_mut!($t, $vm_addr, $len, $regions)
+        match translate_slice_mut!($t, $vm_addr, $len, $regions) {
+            Ok(value) => Ok(&*value),
+            Err(e) => Err(e),
+        }
     };
 }
 
@@ -130,7 +141,7 @@ fn translate_string_and_do(
     regions: &[MemoryRegion],
     work: &dyn Fn(&str) -> Result<u64, EbpfError<BPFError>>,
 ) -> Result<u64, EbpfError<BPFError>> {
-    let buf = translate_slice!(u8, addr, len, regions);
+    let buf = translate_slice!(u8, addr, len, regions)?;
     let i = match buf.iter().position(|byte| *byte == 0) {
         Some(i) => i,
         None => len as usize,
@@ -240,6 +251,235 @@ impl HelperObject<BPFError> for HelperSolAllocFree {
         } else {
             self.allocator.dealloc(free_addr, layout);
             Ok(0)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_sdk::{
+        instruction::{AccountMeta, Instruction},
+        pubkey::Pubkey,
+    };
+
+    #[test]
+    fn test_translate() {
+        const START: u64 = 100;
+        const LENGTH: u64 = 1000;
+        let data = vec![0u8; LENGTH as usize];
+        let addr = data.as_ptr() as u64;
+        let regions = vec![MemoryRegion::new_from_slice(&data, START)];
+
+        let cases = vec![
+            (true, START, 0, addr),
+            (true, START, 1, addr),
+            (true, START, LENGTH, addr),
+            (true, START + 1, LENGTH - 1, addr + 1),
+            (false, START + 1, LENGTH, 0),
+            (true, START + LENGTH - 1, 1, addr + LENGTH - 1),
+            (true, START + LENGTH, 0, addr + LENGTH),
+            (false, START + LENGTH, 1, 0),
+            (false, START, LENGTH + 1, 0),
+            (false, 0, 0, 0),
+            (false, 0, 1, 0),
+            (false, START - 1, 0, 0),
+            (false, START - 1, 1, 0),
+            (true, START + LENGTH / 2, LENGTH / 2, addr + LENGTH / 2),
+        ];
+        for (ok, start, length, value) in cases {
+            match ok {
+                true => assert_eq!(translate!(start, length, &regions).unwrap(), value),
+                false => assert!(translate!(start, length, &regions).is_err()),
+            }
+        }
+    }
+
+    #[test]
+    fn test_translate_type() {
+        // Pubkey
+        let pubkey = Pubkey::new_rand();
+        let addr = &pubkey as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: std::mem::size_of::<Pubkey>() as u64,
+        }];
+        let translated_pubkey = translate_type!(Pubkey, 100, &regions).unwrap();
+        assert_eq!(pubkey, *translated_pubkey);
+
+        // Instruction
+        let instruction = Instruction::new(
+            Pubkey::new_rand(),
+            &"foobar",
+            vec![AccountMeta::new(Pubkey::new_rand(), false)],
+        );
+        let addr = &instruction as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: std::mem::size_of::<Instruction>() as u64,
+        }];
+        let translated_instruction = translate_type!(Instruction, 100, &regions).unwrap();
+        assert_eq!(instruction, *translated_instruction);
+    }
+
+    #[test]
+    fn test_translate_slice() {
+        // u8
+        let mut data = vec![1u8, 2, 3, 4, 5];
+        let addr = data.as_ptr() as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: data.len() as u64,
+        }];
+        let translated_data = translate_slice!(u8, 100, data.len(), &regions).unwrap();
+        assert_eq!(data, translated_data);
+        data[0] = 10;
+        assert_eq!(data, translated_data);
+
+        // Pubkeys
+        let mut data = vec![Pubkey::new_rand(); 5];
+        let addr = data.as_ptr() as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
+        }];
+        let translated_data = translate_slice!(Pubkey, 100, data.len(), &regions).unwrap();
+        assert_eq!(data, translated_data);
+        data[0] = Pubkey::new_rand(); // Both should point to same place
+        assert_eq!(data, translated_data);
+    }
+
+    #[test]
+    fn test_translate_string_and_do() {
+        let string = "Gaggablaghblagh!";
+        let addr = string.as_ptr() as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: string.len() as u64,
+        }];
+        assert_eq!(
+            42,
+            translate_string_and_do(100, string.len() as u64, &regions, &|string: &str| {
+                assert_eq!(string, "Gaggablaghblagh!");
+                Ok(42)
+            })
+            .unwrap()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "UserError(HelperError(Abort))")]
+    fn test_helper_abort() {
+        let ro_region = MemoryRegion::default();
+        let rw_region = MemoryRegion::default();
+        helper_abort(0, 0, 0, 0, 0, &[ro_region], &[rw_region]).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "UserError(HelperError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
+    fn test_helper_sol_panic() {
+        let string = "Gaggablaghblagh!";
+        let addr = string.as_ptr() as *const _ as u64;
+        let ro_region = MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: string.len() as u64,
+        };
+        let rw_region = MemoryRegion::default();
+        helper_sol_panic(
+            100,
+            string.len() as u64,
+            42,
+            84,
+            0,
+            &[ro_region],
+            &[rw_region],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_helper_sol_log() {
+        let string = "Gaggablaghblagh!";
+        let addr = string.as_ptr() as *const _ as u64;
+        let ro_regions = &[MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: string.len() as u64,
+        }];
+        let rw_regions = &[MemoryRegion::default()];
+        solana_logger::setup_with_default("solana=info");
+        helper_sol_log(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions).unwrap();
+        solana_logger::setup_with_default("solana=info");
+        helper_sol_log(
+            100,
+            string.len() as u64 * 2,
+            0,
+            0,
+            0,
+            ro_regions,
+            rw_regions,
+        )
+        .unwrap_err();
+    }
+
+    #[test]
+    fn test_helper_sol_log_u64() {
+        solana_logger::setup_with_default("solana=info");
+
+        let ro_regions = &[MemoryRegion::default()];
+        let rw_regions = &[MemoryRegion::default()];
+        helper_sol_log_u64(1, 2, 3, 4, 5, ro_regions, rw_regions).unwrap();
+    }
+
+    #[test]
+    fn test_helper_sol_alloc_free() {
+        // large alloc
+        {
+            let heap = vec![0_u8; 100];
+            let ro_regions = &[MemoryRegion::default()];
+            let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
+            let mut helper = HelperSolAllocFree {
+                allocator: BPFAllocator::new(heap, MM_HEAP_START),
+            };
+            assert_ne!(
+                helper
+                    .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
+                    .unwrap(),
+                0
+            );
+            assert_eq!(
+                helper
+                    .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
+                    .unwrap(),
+                0
+            );
+        }
+        // many small allocs
+        {
+            let heap = vec![0_u8; 100];
+            let ro_regions = &[MemoryRegion::default()];
+            let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
+            let mut helper = HelperSolAllocFree {
+                allocator: BPFAllocator::new(heap, MM_HEAP_START),
+            };
+            for _ in 0..100 {
+                assert_ne!(
+                    helper.call(1, 0, 0, 0, 0, ro_regions, rw_regions).unwrap(),
+                    0
+                );
+            }
+            assert_eq!(
+                helper
+                    .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
+                    .unwrap(),
+                0
+            );
         }
     }
 }
