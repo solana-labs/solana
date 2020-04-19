@@ -200,7 +200,7 @@ impl Archiver {
 
         info!("Connecting to the cluster via {:?}", cluster_entrypoint);
         let (nodes, _) =
-            match solana_core::gossip_service::discover_cluster(&cluster_entrypoint.gossip, 1) {
+            match solana_core::gossip_service::discover_cluster(&cluster_entrypoint.gossip, 2) {
                 Ok(nodes_and_archivers) => nodes_and_archivers,
                 Err(e) => {
                     //shutdown services before exiting
