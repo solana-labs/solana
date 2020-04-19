@@ -268,7 +268,7 @@ typedef struct {
  * instead it populates the pointers and lengths in SolAccountInfo and data so
  * that any modification to lamports or account data take place on the original
  * buffer.  Doing so also eliminates the need to serialize back into the buffer
- * at program end.
+ * at the end of the program.
  *
  * @param input Source buffer containing serialized input parameters
  * @param params Pointer to a SolParameters structure

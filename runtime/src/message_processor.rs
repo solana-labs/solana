@@ -170,13 +170,11 @@ pub struct MessageProcessor {
 }
 impl Default for MessageProcessor {
     fn default() -> Self {
-        let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![(
-            system_program::id(),
-            system_instruction_processor::process_instruction,
-        )];
-
         Self {
-            instruction_processors,
+            instruction_processors: vec![(
+                system_program::id(),
+                system_instruction_processor::process_instruction,
+            )],
             native_loader: NativeLoader::default(),
         }
     }
