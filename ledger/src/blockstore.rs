@@ -907,12 +907,11 @@ impl Blockstore {
         loop {
             let e = Self::write_tmp(&path, &shred.payload);
             if let Err(BlockstoreError::IO(..)) = e {
-                let dir = if shred.is_data() {
-                    self.slot_data_dir(slot)
-                } else {
-                    self.slot_coding_dir(slot)
-                };
                 if !tried {
+                    let dir = self.slot_data_dir(slot);
+                    let dir = Path::new(&dir);
+                    fs::create_dir_all(dir).unwrap();
+                    let dir = self.slot_coding_dir(slot);
                     let dir = Path::new(&dir);
                     fs::create_dir_all(dir).unwrap();
                     tried = true;
@@ -1313,7 +1312,7 @@ impl Blockstore {
             .to_string()
     }
     fn extract_data(archive: &str, file: &str) -> Result<Option<Vec<u8>>> {
-        let args = ["xfzO", archive, file];
+        let args = ["xfPzO", archive, file];
         let output = std::process::Command::new("tar").args(&args).output()?;
         if !output.status.success() {
             warn!(
@@ -4758,6 +4757,7 @@ pub mod tests {
 
     #[test]
     pub fn test_should_insert_coding_shred() {
+        solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();

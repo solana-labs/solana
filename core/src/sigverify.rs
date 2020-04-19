@@ -38,12 +38,16 @@ impl SigVerifier for TransactionSigVerifier {
 }
 
 pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
+    let mut total = 0;
     batches.iter_mut().zip(r).for_each(|(b, v)| {
         b.packets
             .iter_mut()
             .zip(v)
-            .for_each(|(p, f)| p.meta.discard = *f == 0)
+            .for_each(|(p, f)| {p.meta.discard = *f == 0; total += 1;})
     });
+    if total > 0 {
+        info!("packets failed sigverify: {}", total);
+    }
 }
 
 #[cfg(test)]
