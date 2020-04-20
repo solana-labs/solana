@@ -249,6 +249,102 @@ impl BroadcastStage {
     }
 }
 
+<<<<<<< HEAD
+=======
+fn update_peer_stats(
+    num_live_peers: i64,
+    broadcast_len: i64,
+    last_datapoint_submit: &Arc<AtomicU64>,
+) {
+    let now = timestamp();
+    let last = last_datapoint_submit.load(Ordering::Relaxed);
+    if now - last > 1000
+        && last_datapoint_submit.compare_and_swap(last, now, Ordering::Relaxed) == last
+    {
+        datapoint_info!(
+            "cluster_info-num_nodes",
+            ("live_count", num_live_peers, i64),
+            ("broadcast_count", broadcast_len, i64)
+        );
+    }
+}
+
+pub fn get_broadcast_peers<S: std::hash::BuildHasher>(
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
+) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
+    use crate::cluster_info;
+    let mut peers = cluster_info.read().unwrap().tvu_peers();
+    let peers_and_stakes = cluster_info::stake_weight_peers(&mut peers, stakes);
+    (peers, peers_and_stakes)
+}
+
+/// broadcast messages from the leader to layer 1 nodes
+/// # Remarks
+pub fn broadcast_shreds(
+    s: &UdpSocket,
+    shreds: &Arc<Vec<Shred>>,
+    peers_and_stakes: &[(u64, usize)],
+    peers: &[ContactInfo],
+    last_datapoint_submit: &Arc<AtomicU64>,
+    send_mmsg_total: &mut u64,
+) -> Result<()> {
+    let broadcast_len = peers_and_stakes.len();
+    if broadcast_len == 0 {
+        update_peer_stats(1, 1, last_datapoint_submit);
+        return Ok(());
+    }
+    let packets: Vec<_> = shreds
+        .iter()
+        .map(|shred| {
+            let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
+
+            (&shred.payload, &peers[broadcast_index].tvu)
+        })
+        .collect();
+
+    let mut sent = 0;
+    let mut send_mmsg_time = Measure::start("send_mmsg");
+    while sent < packets.len() {
+        match send_mmsg(s, &packets[sent..]) {
+            Ok(n) => sent += n,
+            Err(e) => {
+                return Err(Error::IO(e));
+            }
+        }
+    }
+    send_mmsg_time.stop();
+    *send_mmsg_total += send_mmsg_time.as_us();
+
+    let num_live_peers = num_live_peers(&peers);
+    update_peer_stats(
+        num_live_peers,
+        broadcast_len as i64 + 1,
+        last_datapoint_submit,
+    );
+    Ok(())
+}
+
+fn distance(a: u64, b: u64) -> u64 {
+    if a > b {
+        a - b
+    } else {
+        b - a
+    }
+}
+
+fn num_live_peers(peers: &[ContactInfo]) -> i64 {
+    let mut num_live_peers = 1i64;
+    peers.iter().for_each(|p| {
+        // A peer is considered live if they generated their contact info recently
+        if distance(timestamp(), p.wallclock) <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
+            num_live_peers += 1;
+        }
+    });
+    num_live_peers
+}
+
+>>>>>>> 77fb4230d... Calculate distance between u64 without overflow (#9592)
 #[cfg(test)]
 mod test {
     use super::*;
@@ -257,6 +353,7 @@ mod test {
     use solana_ledger::entry::create_ticks;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
     use solana_runtime::bank::Bank;
+<<<<<<< HEAD
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, Signer};
@@ -266,6 +363,138 @@ mod test {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
+=======
+    use solana_sdk::{
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    };
+    use std::{
+        path::Path,
+        sync::atomic::AtomicBool,
+        sync::mpsc::channel,
+        sync::{Arc, RwLock},
+        thread::sleep,
+    };
+
+    pub fn make_transmit_shreds(
+        slot: Slot,
+        num: u64,
+        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
+    ) -> (
+        Vec<Shred>,
+        Vec<Shred>,
+        Vec<TransmitShreds>,
+        Vec<TransmitShreds>,
+    ) {
+        let num_entries = max_ticks_per_n_shreds(num);
+        let (data_shreds, _) = make_slot_entries(slot, 0, num_entries);
+        let keypair = Arc::new(Keypair::new());
+        let shredder = Shredder::new(slot, 0, RECOMMENDED_FEC_RATE, keypair, 0, 0)
+            .expect("Expected to create a new shredder");
+
+        let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..]);
+        (
+            data_shreds.clone(),
+            coding_shreds.clone(),
+            data_shreds
+                .into_iter()
+                .map(|s| (stakes.clone(), Arc::new(vec![s])))
+                .collect(),
+            coding_shreds
+                .into_iter()
+                .map(|s| (stakes.clone(), Arc::new(vec![s])))
+                .collect(),
+        )
+    }
+
+    fn check_all_shreds_received(
+        transmit_receiver: &TransmitReceiver,
+        mut data_index: u64,
+        mut coding_index: u64,
+        num_expected_data_shreds: u64,
+        num_expected_coding_shreds: u64,
+    ) {
+        while let Ok((new_retransmit_slots, _)) = transmit_receiver.try_recv() {
+            if new_retransmit_slots.1[0].is_data() {
+                for data_shred in new_retransmit_slots.1.iter() {
+                    assert_eq!(data_shred.index() as u64, data_index);
+                    data_index += 1;
+                }
+            } else {
+                assert_eq!(new_retransmit_slots.1[0].index() as u64, coding_index);
+                for coding_shred in new_retransmit_slots.1.iter() {
+                    assert_eq!(coding_shred.index() as u64, coding_index);
+                    coding_index += 1;
+                }
+            }
+        }
+
+        assert_eq!(num_expected_data_shreds, data_index);
+        assert_eq!(num_expected_coding_shreds, coding_index);
+    }
+
+    #[test]
+    fn test_num_live_peers() {
+        let mut ci = ContactInfo::default();
+        ci.wallclock = std::u64::MAX;
+        assert_eq!(num_live_peers(&[ci.clone()]), 1);
+        ci.wallclock = timestamp() - 1;
+        assert_eq!(num_live_peers(&[ci.clone()]), 2);
+        ci.wallclock = timestamp() - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS - 1;
+        assert_eq!(num_live_peers(&[ci]), 1);
+    }
+
+    #[test]
+    fn test_duplicate_retransmit_signal() {
+        // Setup
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let (transmit_sender, transmit_receiver) = channel();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Make some shreds
+        let updated_slot = 0;
+        let (all_data_shreds, all_coding_shreds, _, _all_coding_transmit_shreds) =
+            make_transmit_shreds(updated_slot, 10, None);
+        let num_data_shreds = all_data_shreds.len();
+        let num_coding_shreds = all_coding_shreds.len();
+        assert!(num_data_shreds >= 10);
+
+        // Insert all the shreds
+        blockstore
+            .insert_shreds(all_data_shreds, None, true)
+            .unwrap();
+        blockstore
+            .insert_shreds(all_coding_shreds, None, true)
+            .unwrap();
+
+        // Insert duplicate retransmit signal, blocks should
+        // only be retransmitted once
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        retransmit_slots_sender
+            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
+            .unwrap();
+        BroadcastStage::check_retransmit_signals(
+            &blockstore,
+            &retransmit_slots_receiver,
+            &transmit_sender,
+        )
+        .unwrap();
+        // Check all the data shreds were received only once
+        check_all_shreds_received(
+            &transmit_receiver,
+            0,
+            0,
+            num_data_shreds as u64,
+            num_coding_shreds as u64,
+        );
+    }
+>>>>>>> 77fb4230d... Calculate distance between u64 without overflow (#9592)
 
     struct MockBroadcastStage {
         blockstore: Arc<Blockstore>,
