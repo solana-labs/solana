@@ -74,6 +74,11 @@ pub enum ShredError {
 
     #[error("serialization error")]
     Serialize(#[from] Box<bincode::ErrorKind>),
+
+    #[error(
+        "invalid parent offset; parent_offset {parent_offset} must be larger than slot {slot}"
+    )]
+    InvalidParentOffset { slot: Slot, parent_offset: u16 },
 }
 
 pub type Result<T> = std::result::Result<T, ShredError>;
@@ -230,6 +235,12 @@ impl Shred {
         } else if common_header.shred_type == ShredType(DATA_SHRED) {
             let data_header: DataShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
+            if u64::from(data_header.parent_offset) > common_header.slot {
+                return Err(ShredError::InvalidParentOffset {
+                    slot: common_header.slot,
+                    parent_offset: data_header.parent_offset,
+                });
+            }
             Self {
                 common_header,
                 data_header,
@@ -1556,6 +1567,21 @@ pub mod tests {
         assert_eq!(
             coding_shreds.len(),
             MAX_DATA_SHREDS_PER_FEC_BLOCK as usize * 2
+        );
+    }
+
+    #[test]
+    fn test_invalid_parent_offset() {
+        let shred = Shred::new_from_data(10, 0, 1000, Some(&[1, 2, 3]), false, false, 0, 1, 0);
+        let mut packet = Packet::default();
+        shred.copy_to_packet(&mut packet);
+        let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
+        assert_matches!(
+            shred_res,
+            Err(ShredError::InvalidParentOffset {
+                slot: 10,
+                parent_offset: 1000
+            })
         );
     }
 }
