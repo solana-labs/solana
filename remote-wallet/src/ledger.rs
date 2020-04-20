@@ -387,7 +387,11 @@ impl RemoteWallet for LedgerWallet {
         derivation_path: &DerivationPath,
         data: &[u8],
     ) -> Result<Signature, RemoteWalletError> {
-        let mut payload = extend_and_serialize(derivation_path);
+        let mut payload = if self.outdated_app() {
+            extend_and_serialize(derivation_path)
+        } else {
+            extend_and_serialize_multiple(&[derivation_path])
+        };
         if data.len() > u16::max_value() as usize {
             return Err(RemoteWalletError::InvalidInput(
                 "Message to sign is too long".to_string(),
@@ -488,6 +492,14 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
             let hardened_change = change | HARDENED_BIT;
             concat_derivation.extend_from_slice(&hardened_change.to_be_bytes());
         }
+    }
+    concat_derivation
+}
+
+fn extend_and_serialize_multiple(derivation_paths: &[&DerivationPath]) -> Vec<u8> {
+    let mut concat_derivation = vec![derivation_paths.len() as u8];
+    for derivation_path in derivation_paths {
+        concat_derivation.append(&mut extend_and_serialize(derivation_path));
     }
     concat_derivation
 }
