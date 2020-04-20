@@ -188,6 +188,14 @@ pub fn make_accounts_hashes_message(
     Some(CrdsValue::new_signed(message, keypair))
 }
 
+fn distance(a: u64, b: u64) -> u64 {
+    if a > b {
+        a - b
+    } else {
+        b - a
+    }
+}
+
 // TODO These messages should go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -1003,7 +1011,7 @@ impl ClusterInfo {
         let mut num_live_peers = 1i64;
         peers.iter().for_each(|p| {
             // A peer is considered live if they generated their contact info recently
-            if timestamp() - p.wallclock <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
+            if distance(timestamp(), p.wallclock) <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
                 num_live_peers += 1;
             }
         });
