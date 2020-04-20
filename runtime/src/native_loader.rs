@@ -81,17 +81,17 @@ impl NativeLoader {
     }
 
     #[cfg(windows)]
-    fn library_open(path: &PathBuf) -> std::io::Result<Library> {
+    fn library_open(path: &PathBuf) -> Result<Library, libloading::Error> {
         Library::new(path)
     }
 
     #[cfg(not(windows))]
-    fn library_open(path: &PathBuf) -> std::io::Result<Library> {
+    fn library_open(path: &PathBuf) -> Result<Library, libloading::Error> {
         // Linux tls bug can cause crash on dlclose(), workaround by never unloading
         Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
     }
 
-    fn invoke_entrypoint<T>(
+    fn get_entrypoint<T>(
         name: &str,
         cache: &RwLock<HashMap<String, Symbol<T>>>,
     ) -> Result<Symbol<T>, InstructionError> {
@@ -141,11 +141,11 @@ impl NativeLoader {
         trace!("Call native {:?}", name);
         if name.ends_with("loader_program") {
             let entrypoint =
-                Self::invoke_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
+                Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
             unsafe { entrypoint(program.unsigned_key(), params, instruction_data) }
         } else {
             let entrypoint =
-                Self::invoke_entrypoint::<ProgramEntrypoint>(name, &self.program_symbol_cache)?;
+                Self::get_entrypoint::<ProgramEntrypoint>(name, &self.program_symbol_cache)?;
             unsafe { entrypoint(program.unsigned_key(), params, instruction_data) }
         }
     }
