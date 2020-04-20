@@ -40,6 +40,7 @@ use solana_transaction_status::{
     TransactionEncoding, TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::TIMESTAMP_SLOT_INTERVAL};
+use std::string::String;
 use std::{
     cell::RefCell,
     cmp,
@@ -98,6 +99,7 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: Arc<RwLock<u64>>,
     no_compaction: bool,
     shreds_dir: String,
+    leader_schedule: Mutex<Option<Arc<LeaderScheduleCache>>>,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -259,6 +261,7 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
             shreds_dir,
+            leader_schedule: Mutex::new(None),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -351,9 +354,8 @@ impl Blockstore {
                 "tar shreds {} command failed with exit code: {}",
                 dir, output.status,
             );
-            use std::str::from_utf8;
-            info!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
-            info!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+            info!("tar stdout: {}", String::from_utf8_lossy(&output.stdout));
+            info!("tar stderr: {}", String::from_utf8_lossy(&output.stderr));
         } else {
             let _ = fs::remove_dir_all(dir);
         }
@@ -896,6 +898,12 @@ impl Blockstore {
         Ok(())
     }
 
+    fn verify(&self, shred: &Shred) -> Option<bool> {
+        let ls = self.leader_schedule.lock().unwrap();
+        let ls = ls.clone()?;
+        let key = ls.slot_leader_at(shred.slot(), None)?;
+        Some(shred.verify(&key))
+    }
     fn write_shred(&self, shred: &Shred) {
         let slot = shred.slot();
         let path = if shred.is_data() {
@@ -905,6 +913,14 @@ impl Blockstore {
         };
         let mut tried = false;
         loop {
+            info!(
+                "PUT_DATA: {}-{} {} {} {:?}",
+                slot,
+                shred.index(),
+                shred.is_data(),
+                solana_sdk::hash::hashv(&[&shred.payload]),
+                self.verify(&shred)
+            );
             let e = Self::write_tmp(&path, &shred.payload);
             if let Err(BlockstoreError::IO(..)) = e {
                 if !tried {
@@ -936,6 +952,13 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
     ) -> Result<()> {
+        {
+            let mut ls = self.leader_schedule.lock().unwrap();
+            if ls.is_none() {
+                *ls = leader_schedule.cloned();
+            }
+        }
+
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool
                 .borrow()
@@ -1319,9 +1342,8 @@ impl Blockstore {
                 "tar extract shred {} {} command failed with exit code: {}",
                 archive, file, output.status,
             );
-            use std::str::from_utf8;
-            info!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
-            info!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+            info!("tar stdout: {}", String::from_utf8_lossy(&output.stdout));
+            info!("tar stderr: {}", String::from_utf8_lossy(&output.stderr));
             Ok(None)
         } else {
             Ok(Some(output.stdout))
@@ -1346,7 +1368,21 @@ impl Blockstore {
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         let shred_path = self.data_shred_path(slot, index);
         let archive_path = self.slot_data_tar_path(slot);
-        Self::get_data(&shred_path, Some(&archive_path))
+        let d = Self::get_data(&shred_path, Some(&archive_path))?;
+        if let Some(data) = d {
+            info!(
+                "GET_DATA: {}-{} {}",
+                slot,
+                index,
+                solana_sdk::hash::hashv(&[&data])
+            );
+            let s = Shred::new_from_serialized_shred(data.clone()).unwrap();
+            assert_eq!(s.slot(), slot);
+            assert_eq!(s.index() as u64, index);
+            Ok(Some(data))
+        } else {
+            Ok(d)
+        }
     }
 
     pub fn get_data_shreds_for_slot(
@@ -2910,9 +2946,8 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
         .unwrap();
     if !output.status.success() {
         use std::io::{Error as IOError, ErrorKind};
-        use std::str::from_utf8;
-        error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
-        error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+        error!("tar stdout: {}", String::from_utf8_lossy(&output.stdout));
+        error!("tar stderr: {}", String::from_utf8_lossy(&output.stderr));
 
         return Err(BlockstoreError::IO(IOError::new(
             ErrorKind::Other,

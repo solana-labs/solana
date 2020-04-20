@@ -3,10 +3,12 @@ use crate::sigverify;
 use crate::sigverify_stage::SigVerifier;
 use solana_ledger::bank_forks::BankForks;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::shred::{Shred, Shredder};
 use solana_ledger::shred::{OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_SLOT};
 use solana_ledger::sigverify_shreds::verify_shreds_gpu;
 use solana_perf::packet::{limited_deserialize, Packets};
 use solana_perf::recycler_cache::RecyclerCache;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
@@ -65,6 +67,39 @@ impl SigVerifier for ShredSigVerifier {
 
         let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
         sigverify::mark_disabled(&mut batches, &r);
+        let mut total = 0;
+        batches.iter_mut().for_each(|b| {
+            b.packets.iter_mut().for_each(|p| {
+                if p.meta.discard {
+                    total += 1;
+                    let s = Shred::new_from_serialized_shred(p.data.to_vec()).unwrap();
+                    let l1 = self
+                        .leader_schedule_cache
+                        .slot_leader_at(s.slot(), Some(&r_bank));
+                    let v1 = l1.map(|l1| s.verify(&l1)).unwrap_or(false);
+                    let l2 = leader_slots.get(&s.slot()).map(|x| Pubkey::new(x));
+                    let v2 = l2.map(|l2| s.verify(&l2)).unwrap_or(false);
+                    let new_val = !(v1 || v2);
+                    if new_val != p.meta.discard {
+                        info!(
+                            "FAILED SIG: {} {:?} {} {:?} {} {} {}",
+                            solana_sdk::hash::hashv(&[&p.data]),
+                            l1,
+                            v1,
+                            l2,
+                            v2,
+                            p.data.len(),
+                            p.meta.size,
+                        );
+                        p.meta.discard = !(v1 || v2);
+                    }
+                }
+            })
+        });
+        if total > 0 {
+            info!("packets failed sigverify: {}", total);
+        }
+
         batches
     }
 }
