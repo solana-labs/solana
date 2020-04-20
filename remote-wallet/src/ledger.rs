@@ -10,16 +10,25 @@ use std::{cmp::min, fmt, sync::Arc};
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 
+const DEPRECATE_VERSION_BEFORE: FirmwareVersion = FirmwareVersion {
+    major: 0,
+    minor: 2,
+    patch: 0,
+    pre: Vec::new(),
+    build: Vec::new(),
+};
+
 const HARDENED_BIT: u32 = 1 << 31;
 
 const APDU_TAG: u8 = 0x05;
 const APDU_CLA: u8 = 0xe0;
-const APDU_PAYLOAD_HEADER_LEN: usize = 8;
+const APDU_PAYLOAD_HEADER_LEN: usize = 7;
+const DEPRECATED_APDU_PAYLOAD_HEADER_LEN: usize = 8;
 const P1_NON_CONFIRM: u8 = 0x00;
 const P1_CONFIRM: u8 = 0x01;
 const P2_EXTEND: u8 = 0x01;
 const P2_MORE: u8 = 0x02;
-const MAX_CHUNK_SIZE: usize = 300;
+const MAX_CHUNK_SIZE: usize = 255;
 
 const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
 
@@ -46,16 +55,19 @@ const HID_PREFIX_ZERO: usize = 1;
 const HID_PREFIX_ZERO: usize = 0;
 
 mod commands {
-    #[allow(dead_code)]
-    pub const GET_APP_CONFIGURATION: u8 = 0x01;
-    pub const GET_PUBKEY: u8 = 0x02;
-    pub const SIGN_MESSAGE: u8 = 0x03;
+    pub const DEPRECATED_GET_APP_CONFIGURATION: u8 = 0x01;
+    pub const DEPRECATED_GET_PUBKEY: u8 = 0x02;
+    pub const DEPRECATED_SIGN_MESSAGE: u8 = 0x03;
+    pub const GET_APP_CONFIGURATION: u8 = 0x04;
+    pub const GET_PUBKEY: u8 = 0x05;
+    pub const SIGN_MESSAGE: u8 = 0x06;
 }
 
 /// Ledger Wallet device
 pub struct LedgerWallet {
     pub device: hidapi::HidDevice,
     pub pretty_path: String,
+    pub version: FirmwareVersion,
 }
 
 impl fmt::Debug for LedgerWallet {
@@ -69,6 +81,7 @@ impl LedgerWallet {
         Self {
             device,
             pretty_path: String::default(),
+            version: FirmwareVersion::new(0, 0, 0),
         }
     }
 
@@ -84,10 +97,17 @@ impl LedgerWallet {
     //		* APDU_INS				(1 byte)
     //		* APDU_P1				(1 byte)
     //		* APDU_P2				(1 byte)
-    //		* APDU_LENGTH				(2 bytes)
+    //		* APDU_LENGTH 	        (1 byte (2 bytes DEPRECATED))
     //		* APDU_Payload				(Variable)
     //
-    fn write(&self, command: u8, p1: u8, p2: u8, data: &[u8]) -> Result<(), RemoteWalletError> {
+    fn write(
+        &self,
+        command: u8,
+        p1: u8,
+        p2: u8,
+        data: &[u8],
+        outdated_app: bool,
+    ) -> Result<(), RemoteWalletError> {
         let data_len = data.len();
         let mut offset = 0;
         let mut sequence_number = 0;
@@ -95,7 +115,11 @@ impl LedgerWallet {
 
         while sequence_number == 0 || offset < data_len {
             let header = if sequence_number == 0 {
-                LEDGER_TRANSPORT_HEADER_LEN + APDU_PAYLOAD_HEADER_LEN
+                if outdated_app {
+                    LEDGER_TRANSPORT_HEADER_LEN + DEPRECATED_APDU_PAYLOAD_HEADER_LEN
+                } else {
+                    LEDGER_TRANSPORT_HEADER_LEN + APDU_PAYLOAD_HEADER_LEN
+                }
             } else {
                 LEDGER_TRANSPORT_HEADER_LEN
             };
@@ -111,17 +135,30 @@ impl LedgerWallet {
                 ]);
 
                 if sequence_number == 0 {
-                    let data_len = data.len() + 6;
-                    chunk[5..13].copy_from_slice(&[
-                        (data_len >> 8) as u8,
-                        (data_len & 0xff) as u8,
-                        APDU_CLA,
-                        command,
-                        p1,
-                        p2,
-                        (data.len() >> 8) as u8,
-                        data.len() as u8,
-                    ]);
+                    if outdated_app {
+                        let data_len = data.len() + 6;
+                        chunk[5..13].copy_from_slice(&[
+                            (data_len >> 8) as u8,
+                            (data_len & 0xff) as u8,
+                            APDU_CLA,
+                            command,
+                            p1,
+                            p2,
+                            (data.len() >> 8) as u8,
+                            data.len() as u8,
+                        ]);
+                    } else {
+                        let data_len = data.len() + 5;
+                        chunk[5..12].copy_from_slice(&[
+                            (data_len >> 8) as u8,
+                            (data_len & 0xff) as u8,
+                            APDU_CLA,
+                            command,
+                            p1,
+                            p2,
+                            data.len() as u8,
+                        ]);
+                    }
                 }
 
                 chunk[header..header + size].copy_from_slice(&data[offset..offset + size]);
@@ -233,7 +270,7 @@ impl LedgerWallet {
         p2: u8,
         data: &[u8],
     ) -> Result<Vec<u8>, RemoteWalletError> {
-        self.write(command, p1, p2, data)?;
+        self.write(command, p1, p2, data, self.outdated_app())?;
         if p1 == P1_CONFIRM && is_last_part(p2) {
             println!(
                 "Waiting for your approval on {} {}",
@@ -248,16 +285,31 @@ impl LedgerWallet {
         }
     }
 
-    fn _get_firmware_version(&self) -> Result<FirmwareVersion, RemoteWalletError> {
-        let ver = self.send_apdu(commands::GET_APP_CONFIGURATION, 0, 0, &[])?;
-        if ver.len() != 4 {
-            return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
+    fn get_firmware_version(&self) -> Result<FirmwareVersion, RemoteWalletError> {
+        if let Ok(version) = self.send_apdu(commands::GET_APP_CONFIGURATION, 0, 0, &[]) {
+            if version.len() != 5 {
+                return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
+            }
+            Ok(FirmwareVersion::new(
+                version[2].into(),
+                version[3].into(),
+                version[4].into(),
+            ))
+        } else {
+            let version = self.send_apdu(commands::DEPRECATED_GET_APP_CONFIGURATION, 0, 0, &[])?;
+            if version.len() != 4 {
+                return Err(RemoteWalletError::Protocol("Version packet size mismatch"));
+            }
+            Ok(FirmwareVersion::new(
+                version[1].into(),
+                version[2].into(),
+                version[3].into(),
+            ))
         }
-        Ok(FirmwareVersion::new(
-            ver[1].into(),
-            ver[2].into(),
-            ver[3].into(),
-        ))
+    }
+
+    fn outdated_app(&self) -> bool {
+        self.version < DEPRECATE_VERSION_BEFORE
     }
 }
 
@@ -267,7 +319,7 @@ impl RemoteWallet for LedgerWallet {
     }
 
     fn read_device(
-        &self,
+        &mut self,
         dev_info: &hidapi::DeviceInfo,
     ) -> Result<RemoteWalletInfo, RemoteWalletError> {
         let manufacturer = dev_info
@@ -287,6 +339,8 @@ impl RemoteWallet for LedgerWallet {
             .clone()
             .unwrap_or("Unknown")
             .to_string();
+        let version = self.get_firmware_version()?;
+        self.version = version;
         let pubkey_result = self.get_pubkey(&DerivationPath::default(), false);
         let (pubkey, error) = match pubkey_result {
             Ok(pubkey) => (pubkey, None),
@@ -309,7 +363,11 @@ impl RemoteWallet for LedgerWallet {
         let derivation_path = extend_and_serialize(derivation_path);
 
         let key = self.send_apdu(
-            commands::GET_PUBKEY,
+            if self.outdated_app() {
+                commands::DEPRECATED_GET_PUBKEY
+            } else {
+                commands::GET_PUBKEY
+            },
             if confirm_key {
                 P1_CONFIRM
             } else {
@@ -329,7 +387,11 @@ impl RemoteWallet for LedgerWallet {
         derivation_path: &DerivationPath,
         data: &[u8],
     ) -> Result<Signature, RemoteWalletError> {
-        let mut payload = extend_and_serialize(derivation_path);
+        let mut payload = if self.outdated_app() {
+            extend_and_serialize(derivation_path)
+        } else {
+            extend_and_serialize_multiple(&[derivation_path])
+        };
         if data.len() > u16::max_value() as usize {
             return Err(RemoteWalletError::InvalidInput(
                 "Message to sign is too long".to_string(),
@@ -347,8 +409,10 @@ impl RemoteWallet for LedgerWallet {
         };
 
         // Pack the first chunk
-        for byte in (data.len() as u16).to_be_bytes().iter() {
-            payload.push(*byte);
+        if self.outdated_app() {
+            for byte in (data.len() as u16).to_be_bytes().iter() {
+                payload.push(*byte);
+            }
         }
         payload.extend_from_slice(data);
         trace!("Serialized payload length {:?}", payload.len());
@@ -360,14 +424,27 @@ impl RemoteWallet for LedgerWallet {
         };
 
         let p1 = P1_CONFIRM;
-        let mut result = self.send_apdu(commands::SIGN_MESSAGE, p1, p2, &payload)?;
+        let mut result = self.send_apdu(
+            if self.outdated_app() {
+                commands::DEPRECATED_SIGN_MESSAGE
+            } else {
+                commands::SIGN_MESSAGE
+            },
+            p1,
+            p2,
+            &payload,
+        )?;
 
         // Pack and send the remaining chunks
         if !remaining_data.is_empty() {
             let mut chunks: Vec<_> = remaining_data
                 .chunks(MAX_CHUNK_SIZE)
                 .map(|data| {
-                    let mut payload = (data.len() as u16).to_be_bytes().to_vec();
+                    let mut payload = if self.outdated_app() {
+                        (data.len() as u16).to_be_bytes().to_vec()
+                    } else {
+                        vec![]
+                    };
                     payload.extend_from_slice(data);
                     let p2 = P2_EXTEND | P2_MORE;
                     (p2, payload)
@@ -415,6 +492,14 @@ fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
             let hardened_change = change | HARDENED_BIT;
             concat_derivation.extend_from_slice(&hardened_change.to_be_bytes());
         }
+    }
+    concat_derivation
+}
+
+fn extend_and_serialize_multiple(derivation_paths: &[&DerivationPath]) -> Vec<u8> {
+    let mut concat_derivation = vec![derivation_paths.len() as u8];
+    for derivation_path in derivation_paths {
+        concat_derivation.append(&mut extend_and_serialize(derivation_path));
     }
     concat_derivation
 }
