@@ -733,7 +733,7 @@ An array of:
 * `<null>` - Unknown transaction
 * `<object>`
   * `slot: <u64>` - The slot the transaction was processed
-  * `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted
+  * `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
   * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
   * DEPRECATED: `status: <object>` - Transaction status
     * `"Ok": <null>` - Transaction was successful

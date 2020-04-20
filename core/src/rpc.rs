@@ -487,7 +487,9 @@ impl JsonRpcRequestProcessor {
             .map(|(slot, status)| {
                 let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
-                let confirmations = if r_block_commitment_cache.root() >= slot {
+                let confirmations = if r_block_commitment_cache.root() >= slot
+                    && r_block_commitment_cache.is_confirmed_rooted(slot)
+                {
                     None
                 } else {
                     r_block_commitment_cache
@@ -2071,7 +2073,7 @@ pub mod tests {
                 .expect("actual response deserialization");
         let result = result.as_ref().unwrap();
         assert_eq!(expected_res, result.status);
-        assert_eq!(None, result.confirmations);
+        assert_eq!(Some(2), result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
