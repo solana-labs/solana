@@ -84,6 +84,9 @@ impl Uncompressed {
             (min_slot - self.first_slot) as usize
         };
         for i in start..self.num {
+            if i >= self.slots.len() as usize {
+                break;
+            }
             if self.slots.get(i as u64) {
                 rv.push(self.first_slot + i as Slot);
             }
@@ -256,6 +259,14 @@ mod tests {
         assert_eq!(slots.to_slots(1), vec![1]);
         assert!(slots.to_slots(2).is_empty());
     }
+
+    #[test]
+    fn test_epoch_slots_to_slots_overflow() {
+        let mut slots = Uncompressed::new(1);
+        slots.num = 100;
+        assert!(slots.to_slots(0).is_empty());
+    }
+
     #[test]
     fn test_epoch_slots_uncompressed_add_2() {
         let mut slots = Uncompressed::new(1);
