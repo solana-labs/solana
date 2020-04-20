@@ -368,11 +368,15 @@ impl Column for columns::AddressSignatures {
     }
 
     fn index(key: &[u8]) -> (u64, Pubkey, Slot, Signature) {
-        let index = BigEndian::read_u64(&key[0..8]);
-        let pubkey = Pubkey::new(&key[8..40]);
-        let slot = BigEndian::read_u64(&key[40..48]);
-        let signature = Signature::new(&key[48..112]);
-        (index, pubkey, slot, signature)
+        if key.len() != 112 {
+            (0, Pubkey::default(), 0, Signature::default())
+        } else {
+            let index = BigEndian::read_u64(&key[0..8]);
+            let pubkey = Pubkey::new(&key[8..40]);
+            let slot = BigEndian::read_u64(&key[40..48]);
+            let signature = Signature::new(&key[48..112]);
+            (index, pubkey, slot, signature)
+        }
     }
 
     fn primary_index(index: Self::Index) -> u64 {
