@@ -51,6 +51,7 @@ use solana_stake_program::{
     stake_state::{Lockup, StakeAuthorize},
 };
 use solana_storage_program::storage_instruction::StorageAccountType;
+use solana_transaction_status::{EncodedTransaction, TransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
     error,
@@ -399,6 +400,7 @@ pub enum CliCommand {
     },
     Cancel(Pubkey),
     Confirm(Signature),
+    DecodeTransaction(Transaction),
     Pay(PayCommand),
     ResolveSigner(Option<String>),
     ShowAccount {
@@ -798,11 +800,23 @@ pub fn parse_command(
                 command: CliCommand::Confirm(signature),
                 signers: vec![],
             }),
-            _ => {
-                eprintln!("{}", matches.usage());
-                Err(CliError::BadParameter("Invalid signature".to_string()))
-            }
+            _ => Err(CliError::BadParameter("Invalid signature".to_string())),
         },
+        ("decode-transaction", Some(matches)) => {
+            let encoded_transaction = EncodedTransaction::Binary(
+                matches.value_of("base85_transaction").unwrap().to_string(),
+            );
+            if let Some(transaction) = encoded_transaction.decode() {
+                Ok(CliCommandInfo {
+                    command: CliCommand::DecodeTransaction(transaction),
+                    signers: vec![],
+                })
+            } else {
+                Err(CliError::BadParameter(
+                    "Unable to decode transaction".to_string(),
+                ))
+            }
+        }
         ("pay", Some(matches)) => {
             let lamports = lamports_of_sol(matches, "amount").unwrap();
             let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
@@ -1178,10 +1192,9 @@ fn process_confirm(
         Ok(status) => {
             if let Some(transaction_status) = status {
                 if config.verbose {
-                    match rpc_client.get_confirmed_transaction(
-                        signature,
-                        solana_transaction_status::TransactionEncoding::Binary,
-                    ) {
+                    match rpc_client
+                        .get_confirmed_transaction(signature, TransactionEncoding::Binary)
+                    {
                         Ok(confirmed_transaction) => {
                             println!(
                                 "\nTransaction executed in slot {}:",
@@ -1214,6 +1227,11 @@ fn process_confirm(
         }
         Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
     }
+}
+
+fn process_decode_transaction(transaction: &Transaction) -> ProcessResult {
+    crate::display::println_transaction(transaction, &None, "");
+    Ok("".to_string())
 }
 
 fn process_show_account(
@@ -2099,6 +2117,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
         CliCommand::Confirm(signature) => process_confirm(&rpc_client, config, signature),
+        CliCommand::DecodeTransaction(transaction) => process_decode_transaction(transaction),
         // If client has positive balance, pay lamports to another address
         CliCommand::Pay(PayCommand {
             lamports,
@@ -2374,6 +2393,18 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("The transaction signature to confirm"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("decode-transaction")
+                .about("Decode a base-85 binary transaction")
+                .arg(
+                    Arg::with_name("base85_transaction")
+                        .index(1)
+                        .value_name("BASE58_TRANSACTION")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The transaction to decode"),
                 ),
         )
         .subcommand(
