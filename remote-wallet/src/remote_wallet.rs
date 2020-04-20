@@ -179,7 +179,7 @@ pub trait RemoteWallet {
 
     /// Parse device info and get device base pubkey
     fn read_device(
-        &self,
+        &mut self,
         dev_info: &hidapi::DeviceInfo,
     ) -> Result<RemoteWalletInfo, RemoteWalletError>;
 
