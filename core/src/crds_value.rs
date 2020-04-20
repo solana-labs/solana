@@ -1,4 +1,5 @@
 use crate::contact_info::ContactInfo;
+use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::deprecated;
 use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
@@ -55,7 +56,8 @@ impl Signable for CrdsValue {
             CrdsData::EpochSlots(ix, _) => *ix < MAX_EPOCH_SLOTS,
             _ => true,
         };
-        sig_check && data_check
+        let wallclock_check = self.wallclock() <= timestamp() + CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+        sig_check && data_check && wallclock_check
     }
 }
 
@@ -404,6 +406,23 @@ mod test {
         );
         assert!(!item.verify());
     }
+
+    #[test]
+    fn test_verify_wallclock() {
+        let keypair = Keypair::new();
+        let item = CrdsValue::new_signed(
+            CrdsData::ContactInfo(ContactInfo::new_localhost(&keypair.pubkey(), timestamp())),
+            &keypair,
+        );
+        assert!(item.verify());
+        let ts = timestamp() + CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS + 100000;
+        let item = CrdsValue::new_signed(
+            CrdsData::ContactInfo(ContactInfo::new_localhost(&keypair.pubkey(), ts)),
+            &keypair,
+        );
+        assert!(!item.verify());
+    }
+
     #[test]
     fn test_compute_vote_index_empty() {
         for i in 0..MAX_VOTES {
