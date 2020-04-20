@@ -105,15 +105,15 @@ pub struct DataBudget {
     last_timestamp_ms: u64, // Last time that we upped the bytes count,
                   // used to detect when to up the bytes budget again
 }
-#[derive(Clone)]
+
 pub struct ClusterInfo {
     /// The network
     pub gossip: RwLock<CrdsGossip>,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
     pub(crate) keypair: Arc<Keypair>,
     /// The network entrypoint
-    entrypoint: Option<ContactInfo>,
-    outbound_budget: DataBudget,
+    entrypoint: RwLock<Option<ContactInfo>>,
+    outbound_budget: RwLock<DataBudget>,
     id: Pubkey,
     my_contact_info: RwLock<ContactInfo>,
 }
@@ -235,10 +235,10 @@ impl ClusterInfo {
             gossip: RwLock::new(CrdsGossip::default()),
             keypair,
             entrypoint: RwLock::new(None),
-            outbound_budget: DataBudget {
+            outbound_budget: RwLock::new(DataBudget {
                 bytes: 0,
                 last_timestamp_ms: 0,
-            },
+            }),
             id,
             my_contact_info: RwLock::new(contact_info),
         };
@@ -1463,7 +1463,7 @@ impl ClusterInfo {
         let mut addrs = vec![];
         let mut time = Measure::start("handle_pull_requests");
         {
-            let mut cluster_info = me.write().unwrap();
+            let mut w_outbound_budget = me.outbound_budget.write().unwrap();
 
             let now = timestamp();
             const INTERVAL_MS: u64 = 100;
@@ -1471,14 +1471,14 @@ impl ClusterInfo {
             const BYTES_PER_INTERVAL: usize = 5000;
             const MAX_BUDGET_MULTIPLE: usize = 5; // allow budget build-up to 5x the interval default
 
-            if now - cluster_info.outbound_budget.last_timestamp_ms > INTERVAL_MS {
+            if now - w_outbound_budget.last_timestamp_ms > INTERVAL_MS {
                 let len = std::cmp::max(stakes.len(), 2);
-                cluster_info.outbound_budget.bytes += len * BYTES_PER_INTERVAL;
-                cluster_info.outbound_budget.bytes = std::cmp::min(
-                    cluster_info.outbound_budget.bytes,
+                w_outbound_budget.bytes += len * BYTES_PER_INTERVAL;
+                w_outbound_budget.bytes = std::cmp::min(
+                    w_outbound_budget.bytes,
                     MAX_BUDGET_MULTIPLE * len * BYTES_PER_INTERVAL,
                 );
-                cluster_info.outbound_budget.last_timestamp_ms = now;
+                w_outbound_budget.last_timestamp_ms = now;
             }
         }
         for pull_data in requests {
@@ -1544,35 +1544,29 @@ impl ClusterInfo {
 
         let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let mut total_bytes = 0;
-        let outbound_budget = me.read().unwrap().outbound_budget.bytes;
         let mut sent = HashSet::new();
         while sent.len() < stats.len() {
             let index = weighted_index.sample(rng);
             if sent.contains(&index) {
                 continue;
             }
-            sent.insert(index);
             let stat = &stats[index];
             let from_addr = pull_responses[stat.to].1;
             let response = pull_responses[stat.to].0[stat.responses_index].clone();
             let protocol = Protocol::PullResponse(self_id, vec![response]);
-            packets
-                .packets
-                .push(Packet::from_data(&from_addr, protocol));
-            let len = packets.packets.len();
-            total_bytes += packets.packets[len - 1].meta.size;
-
-            if total_bytes > outbound_budget {
-                inc_new_counter_info!("gossip_pull_request-no_budget", 1);
-                break;
+            let new_packet = Packet::from_data(&from_addr, protocol);
+            {
+                let mut w_outbound_budget = me.outbound_budget.write().unwrap();
+                if w_outbound_budget.bytes > new_packet.meta.size {
+                    sent.insert(index);
+                    w_outbound_budget.bytes = w_outbound_budget.bytes - new_packet.meta.size;
+                    total_bytes += new_packet.meta.size;
+                    packets.packets.push(new_packet)
+                } else {
+                    inc_new_counter_info!("gossip_pull_request-no_budget", 1);
+                    break;
+                }
             }
-        }
-        {
-            let mut cluster_info = me.write().unwrap();
-            cluster_info.outbound_budget.bytes = cluster_info
-                .outbound_budget
-                .bytes
-                .saturating_sub(total_bytes);
         }
         time.stop();
         inc_new_counter_info!("gossip_pull_request-sent_requests", sent.len());
