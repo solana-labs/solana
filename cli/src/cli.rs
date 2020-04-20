@@ -1323,7 +1323,7 @@ fn process_deploy(
     rpc_client
         .send_and_confirm_transaction_with_spinner(&mut finalize_tx, &signers)
         .map_err(|e| {
-            CliError::DynamicProgramError(format!("Program finalize transaction failed: {:?}", e))
+            CliError::DynamicProgramError(format!("Program finalize transaction failed: {}", e))
         })?;
 
     Ok(json!({
