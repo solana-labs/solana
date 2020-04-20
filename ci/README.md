@@ -30,20 +30,20 @@ instances.
 
 ##### Non-GPU enabled machines
 ```bash
-sudo ./setup-new-node/setup-new-node.sh
+sudo ./setup-new-buildkite-agent/setup-new-machine.sh
 ```
 
 ##### GPU-enabled machines
  - 1 or more NVIDIA GPUs should be installed in the machine (tested with 2080Ti)
 ```bash
-sudo CUDA=1 ./setup-new-node/setup-new-node.sh
+sudo CUDA=1 ./setup-new-buildkite-agent/setup-new-machine.sh
 ```
 
 ### Configure Node for Buildkite-agent based CI
 
 - Install `buildkite-agent` and set up it user environment with:
 ```bash
-sudo ./setup-new-node/setup-buildkite.sh
+sudo ./setup-new-buildkite-agent/setup-buildkite.sh
 ```
 - Copy the pubkey contents from `~buildkite-agent/.ssh/id_ecdsa.pub` and
 add the pubkey as an authorized SSH key on github.
@@ -51,6 +51,11 @@ add the pubkey as an authorized SSH key on github.
 - Copy `ejson` keys from another CI node at `/opt/ejson/keys/`
 to the same location on the new node.
 - Start the new agent(s) with `sudo systemctl enable --now buildkite-agent`
+
+# Reference
+
+This section contains details regarding previous CI setups that have been used,
+and that we may return to one day.
 
 ## Buildkite Azure Setup
 
@@ -85,11 +90,6 @@ Creating a "queue=cuda" agent follows the same process but additionally:
 1. Run `az image create --resource-group ci --source XYZ --name boilerplate`
 1. Goto the `ci` resource group in the Azure portal and remove all resources
    with the XYZ name in them
-
-# Reference
-
-This section contains details regarding previous CI setups that have been used,
-and that we may return to one day.
 
 ## Buildkite AWS CloudFormation Setup
 

@@ -3,7 +3,7 @@
 HERE="$(dirname "$0")"
 SOLANA_ROOT="$HERE"/../..
 
-# shellcheck source=ci/setup-new-node/utils.sh
+# shellcheck source=ci/setup-new-buildkite-agent/utils.sh
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
