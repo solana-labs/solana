@@ -412,11 +412,19 @@ pub fn broadcast_shreds(
     Ok(())
 }
 
+fn distance(a: u64, b: u64) -> u64 {
+    if a > b {
+        a - b
+    } else {
+        b - a
+    }
+}
+
 fn num_live_peers(peers: &[ContactInfo]) -> i64 {
     let mut num_live_peers = 1i64;
     peers.iter().for_each(|p| {
         // A peer is considered live if they generated their contact info recently
-        if timestamp() - p.wallclock <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
+        if distance(timestamp(), p.wallclock) <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
             num_live_peers += 1;
         }
     });
@@ -504,6 +512,17 @@ pub mod test {
 
         assert_eq!(num_expected_data_shreds, data_index);
         assert_eq!(num_expected_coding_shreds, coding_index);
+    }
+
+    #[test]
+    fn test_num_live_peers() {
+        let mut ci = ContactInfo::default();
+        ci.wallclock = std::u64::MAX;
+        assert_eq!(num_live_peers(&[ci.clone()]), 1);
+        ci.wallclock = timestamp() - 1;
+        assert_eq!(num_live_peers(&[ci.clone()]), 2);
+        ci.wallclock = timestamp() - CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS - 1;
+        assert_eq!(num_live_peers(&[ci]), 1);
     }
 
     #[test]
