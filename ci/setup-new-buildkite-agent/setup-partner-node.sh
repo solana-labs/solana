@@ -2,12 +2,12 @@
 
 HERE="$(dirname "$0")"
 
-# shellcheck source=net/datacenter-node-install/utils.sh
+# shellcheck source=ci/setup-new-buildkite-agent/utils.sh
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
 
-set -xe
+set -ex
 
 "$HERE"/disable-nouveau.sh
 "$HERE"/disable-networkd-wait.sh

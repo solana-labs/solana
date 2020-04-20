@@ -2,12 +2,13 @@
 
 # https://developer.nvidia.com/cuda-toolkit-archive
 VERSIONS=()
-VERSIONS+=("https://developer.nvidia.com/compute/cuda/10.0/Prod/local_installers/cuda_10.0.130_410.48_linux")
-VERSIONS+=("https://developer.nvidia.com/compute/cuda/10.1/Prod/local_installers/cuda_10.1.168_418.67_linux.run")
+#VERSIONS+=("https://developer.nvidia.com/compute/cuda/10.0/Prod/local_installers/cuda_10.0.130_410.48_linux")
+#VERSIONS+=("https://developer.nvidia.com/compute/cuda/10.1/Prod/local_installers/cuda_10.1.168_418.67_linux.run")
+VERSIONS+=("http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run")
 
 HERE="$(dirname "$0")"
 
-# shellcheck source=net/datacenter-node-install/utils.sh
+# shellcheck source=ci/setup-new-buildkite-agent/utils.sh
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
@@ -51,3 +52,14 @@ done
 
 # Allow normal users to use CUDA profiler
 echo 'options nvidia "NVreg_RestrictProfilingToAdminUsers=0"' > /etc/modprobe.d/nvidia-enable-user-profiling.conf
+
+# setup persistence mode across reboots
+TMPDIR="$(mktemp -d)"
+if pushd "$TMPDIR"; then
+  tar -xvf /usr/share/doc/NVIDIA_GLX-1.0/samples/nvidia-persistenced-init.tar.bz2
+  ./nvidia-persistenced-init/install.sh systemd
+  popd
+  rm -rf "$TMPDIR"
+fi
+
+nvidia-smi -pm ENABLED
