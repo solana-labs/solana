@@ -289,14 +289,25 @@ impl RpcClient {
             .client
             .send(
                 &RpcRequest::GetConfirmedSignaturesForAddress,
-                json!([address, start_slot, end_slot]),
+                json!([address.to_string(), start_slot, end_slot]),
                 0,
             )
             .map_err(|err| err.into_with_command("GetConfirmedSignaturesForAddress"))?;
 
-        serde_json::from_value(response).map_err(|err| {
-            ClientError::new_with_command(err.into(), "GetConfirmedSignaturesForAddress")
-        })
+        let signatures_base58_str: Vec<String> =
+            serde_json::from_value(response).map_err(|err| {
+                ClientError::new_with_command(err.into(), "GetConfirmedSignaturesForAddress")
+            })?;
+
+        let mut signatures = vec![];
+        for signature_base58_str in signatures_base58_str {
+            signatures.push(
+                signature_base58_str.parse::<Signature>().map_err(|err| {
+                    Into::<ClientError>::into(RpcError::ParseError(err.to_string()))
+                })?,
+            );
+        }
+        Ok(signatures)
     }
 
     pub fn get_confirmed_transaction(

@@ -273,6 +273,37 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("transaction-history")
+                .about("Show historical transactions affecting the given address, \
+                       ordered based on the slot in which they were confirmed in \
+                       from lowest to highest slot")
+                .arg(
+                    pubkey!(Arg::with_name("address")
+                        .index(1)
+                        .value_name("ADDRESS")
+                        .required(true),
+                        "Account address"),
+                )
+                .arg(
+                    Arg::with_name("start_slot")
+                        .takes_value(false)
+                        .index(2)
+                        .validator(is_slot)
+                        .help(
+                            "Optional slot to start from"
+                        ),
+                )
+                .arg(
+                    Arg::with_name("end_slot")
+                        .takes_value(false)
+                        .index(3)
+                        .validator(is_slot)
+                        .help(
+                            "Optional slot to end at"
+                        ),
+                ),
+        )
     }
 }
 
@@ -431,6 +462,24 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
         command: CliCommand::ShowValidators {
             use_lamports_unit,
             commitment_config,
+        },
+        signers: vec![],
+    })
+}
+
+pub fn parse_transaction_history(
+    matches: &ArgMatches<'_>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
+    let start_slot = value_t!(matches, "start_slot", Slot).ok();
+    let end_slot = value_t!(matches, "end_slot", Slot).ok();
+
+    Ok(CliCommandInfo {
+        command: CliCommand::TransactionHistory {
+            address,
+            start_slot,
+            end_slot,
         },
         signers: vec![],
     })
@@ -1168,6 +1217,37 @@ pub fn process_show_validators(
     };
     config.output_format.formatted_print(&cli_validators);
     Ok("".to_string())
+}
+
+pub fn process_transaction_history(
+    rpc_client: &RpcClient,
+    address: &Pubkey,
+    start_slot: Option<Slot>,
+    end_slot: Option<Slot>,
+) -> ProcessResult {
+    let (start_slot, end_slot) = {
+        if let Some(start_slot) = start_slot {
+            if let Some(end_slot) = end_slot {
+                (start_slot, end_slot)
+            } else {
+                (start_slot, start_slot + 1000)
+            }
+        } else {
+            let current_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
+            (current_slot.saturating_sub(1000), current_slot)
+        }
+    };
+
+    println!(
+        "Transactions affecting {} within slots [{},{}]",
+        address, start_slot, end_slot
+    );
+    let signatures =
+        rpc_client.get_confirmed_signatures_for_address(address, start_slot, end_slot)?;
+    for signature in &signatures {
+        println!("{}", signature);
+    }
+    Ok(format!("{} transactions found", signatures.len(),))
 }
 
 #[cfg(test)]
