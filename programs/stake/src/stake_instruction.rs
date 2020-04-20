@@ -327,8 +327,9 @@ pub fn withdraw(
     withdrawer_pubkey: &Pubkey,
     to_pubkey: &Pubkey,
     lamports: u64,
+    custodian_pubkey: Option<&Pubkey>,
 ) -> Instruction {
-    let account_metas = vec![
+    let mut account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*to_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
@@ -336,24 +337,9 @@ pub fn withdraw(
     ]
     .with_signer(withdrawer_pubkey);
 
-    Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
-}
-
-pub fn withdraw_early(
-    stake_pubkey: &Pubkey,
-    withdrawer_pubkey: &Pubkey,
-    to_pubkey: &Pubkey,
-    lamports: u64,
-    custodian_pubkey: &Pubkey,
-) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new(*to_pubkey, false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(sysvar::stake_history::id(), false),
-    ]
-    .with_signer(withdrawer_pubkey)
-    .with_signer(custodian_pubkey);
+    if let Some(custodian_pubkey) = custodian_pubkey {
+        account_metas = account_metas.with_signer(custodian_pubkey)
+    }
 
     Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
@@ -537,7 +523,8 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::new_rand(),
-                100
+                100,
+                None,
             )),
             Err(InstructionError::InvalidAccountData),
         );
