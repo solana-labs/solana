@@ -24,11 +24,6 @@ use crate::{
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
 };
-
-use rand::distributions::{Distribution, WeightedIndex};
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
-
 use bincode::{serialize, serialized_size};
 use core::cmp;
 use itertools::Itertools;
@@ -99,11 +94,17 @@ pub enum ClusterInfoError {
     BadContactInfo,
     BadGossipAddress,
 }
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct DataBudget {
     bytes: usize, // amount of bytes we have in the budget to send
     last_timestamp_ms: u64, // Last time that we upped the bytes count,
                   // used to detect when to up the bytes budget again
+}
+
+#[derive(Default, Clone)]
+pub struct DataBudgets {
+    overall: DataBudget,
+    peers: HashMap<Pubkey, DataBudget>,
 }
 
 pub struct ClusterInfo {
@@ -113,7 +114,7 @@ pub struct ClusterInfo {
     pub(crate) keypair: Arc<Keypair>,
     /// The network entrypoint
     entrypoint: RwLock<Option<ContactInfo>>,
-    outbound_budget: RwLock<DataBudget>,
+    outbound_budget: RwLock<DataBudgets>,
     my_contact_info: RwLock<ContactInfo>,
     id: Pubkey,
 }
@@ -235,10 +236,7 @@ impl ClusterInfo {
             gossip: RwLock::new(CrdsGossip::default()),
             keypair,
             entrypoint: RwLock::new(None),
-            outbound_budget: RwLock::new(DataBudget {
-                bytes: 0,
-                last_timestamp_ms: 0,
-            }),
+            outbound_budget: RwLock::new(DataBudgets::default()),
             my_contact_info: RwLock::new(contact_info),
             id,
         };
@@ -1468,51 +1466,141 @@ impl ClusterInfo {
         }
     }
 
-    // Pull requests take an incoming bloom filter of contained entries from a node
-    // and tries to send back to them the values it detects are missing.
-    fn handle_pull_requests(
+    // Up the amount of data to send if it has been enough time.
+    fn update_data_budget(me: &Self, num_peers: usize) {
+        let mut w_outbound_budget = me.outbound_budget.write().unwrap();
+
+        let now = timestamp();
+        const INTERVAL_MS: u64 = 100;
+        // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
+        const BYTES_PER_INTERVAL: usize = 5000;
+        const MAX_BUDGET_MULTIPLE: usize = 5; // allow budget build-up to 5x the interval default
+
+        if now - w_outbound_budget.overall.last_timestamp_ms > INTERVAL_MS {
+            let len = std::cmp::max(num_peers, 2);
+            w_outbound_budget.overall.bytes += len * BYTES_PER_INTERVAL;
+            w_outbound_budget.overall.bytes = std::cmp::min(
+                w_outbound_budget.overall.bytes,
+                MAX_BUDGET_MULTIPLE * len * BYTES_PER_INTERVAL,
+            );
+            w_outbound_budget.overall.last_timestamp_ms = now;
+        }
+    }
+
+    fn generate_pull_request_scores(
         me: &Self,
-        recycler: &PacketsRecycler,
-        requests: Vec<PullData>,
+        pull_responses: &[(Vec<CrdsValue>, SocketAddr)],
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Option<Packets> {
-        // split the requests into addrs and filters
-        let mut caller_and_filters = vec![];
-        let mut addrs = vec![];
-        let mut time = Measure::start("handle_pull_requests");
-        {
-            let mut w_outbound_budget = me.outbound_budget.write().unwrap();
+    ) -> Vec<ResponseScore> {
+        let r_outbound_budget = me.outbound_budget.read().unwrap();
+        let now = timestamp();
+        let mut stats: Vec<_> = pull_responses
+            .iter()
+            .enumerate()
+            .map(|(i, (responses, _from_addr))| {
+                let mut peer_score: u64 = if stakes.get(&responses[0].pubkey()).is_some() {
+                    2
+                } else {
+                    1
+                };
+                if let Some(budget) = r_outbound_budget.peers.get(&responses[0].pubkey()) {
+                    if now - budget.last_timestamp_ms > 30_000 {
+                        peer_score += 3;
+                    } else if now - budget.last_timestamp_ms > 10_000 {
+                        peer_score += 2;
+                    }
+                } else {
+                    peer_score += 3;
+                }
+                responses
+                    .iter()
+                    .enumerate()
+                    .map(|(j, response)| {
+                        let response_score = match response.data {
+                            CrdsData::ContactInfo(_) => 3,
+                            CrdsData::Vote(_, _) => 2,
+                            CrdsData::AccountsHashes(_) => 1,
+                            CrdsData::SnapshotHashes(_) => 1,
+                            _ => 0,
+                        };
+                        ResponseScore {
+                            to: i,
+                            responses_index: j,
+                            score: peer_score + response_score,
+                        }
+                    })
+                    .collect::<Vec<ResponseScore>>()
+            })
+            .flatten()
+            .collect();
+        drop(r_outbound_budget);
 
-            let now = timestamp();
-            const INTERVAL_MS: u64 = 100;
-            // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
-            const BYTES_PER_INTERVAL: usize = 5000;
-            const MAX_BUDGET_MULTIPLE: usize = 5; // allow budget build-up to 5x the interval default
+        stats.sort_by(|a, b| b.score.cmp(&a.score));
+        stats
+    }
 
-            if now - w_outbound_budget.last_timestamp_ms > INTERVAL_MS {
-                let len = std::cmp::max(stakes.len(), 2);
-                w_outbound_budget.bytes += len * BYTES_PER_INTERVAL;
-                w_outbound_budget.bytes = std::cmp::min(
-                    w_outbound_budget.bytes,
-                    MAX_BUDGET_MULTIPLE * len * BYTES_PER_INTERVAL,
-                );
-                w_outbound_budget.last_timestamp_ms = now;
+    fn populate_packets(
+        me: &Self,
+        packets: &mut Packets,
+        pull_responses: Vec<(Vec<CrdsValue>, SocketAddr)>,
+        scores: &[ResponseScore],
+        self_id: Pubkey,
+    ) -> usize {
+        let mut total_bytes = 0;
+        for (i, stat) in scores.iter().enumerate() {
+            let from_addr = pull_responses[stat.to].1;
+            let response = pull_responses[stat.to].0[stat.responses_index].clone();
+            let response_id = response.pubkey();
+            debug!("sending: {} : {:?}", from_addr, response);
+            let protocol = Protocol::PullResponse(self_id, vec![response]);
+            let new_packet = Packet::from_data(&from_addr, protocol);
+            {
+                let mut w_outbound_budget = me.outbound_budget.write().unwrap();
+                let now = timestamp();
+                if w_outbound_budget.overall.bytes > new_packet.meta.size {
+                    let mut peer_budget = w_outbound_budget
+                        .peers
+                        .entry(response_id)
+                        .or_insert_with(DataBudget::default);
+                    if now - peer_budget.last_timestamp_ms > 100 {
+                        peer_budget.bytes +=
+                            std::cmp::min((now - peer_budget.last_timestamp_ms) * 20, 5000)
+                                as usize;
+                    }
+                    peer_budget.last_timestamp_ms = now;
+                    if peer_budget.bytes > new_packet.meta.size {
+                        peer_budget.bytes -= new_packet.meta.size;
+                        w_outbound_budget.overall.bytes -= new_packet.meta.size;
+
+                        total_bytes += new_packet.meta.size;
+                        packets.packets.push(new_packet);
+                    } else {
+                        debug!(
+                            "out of peer budget for {} size: {} last_ms: {}",
+                            from_addr,
+                            new_packet.meta.size,
+                            now - peer_budget.last_timestamp_ms
+                        );
+                        inc_new_counter_info!("gossip_pull_request-no_peer_budget", 1);
+                    }
+                } else {
+                    debug!(
+                        "out of gossip budget i: {} budget: {} packets: {}",
+                        i, w_outbound_budget.overall.bytes, new_packet.meta.size
+                    );
+                    inc_new_counter_info!("gossip_pull_request-no_budget", 1);
+                    break;
+                }
             }
         }
-        for pull_data in requests {
-            caller_and_filters.push((pull_data.caller, pull_data.filter));
-            addrs.push(pull_data.from_addr);
-        }
-        let now = timestamp();
-        let self_id = me.id();
-        let pull_responses = me
-            .gossip
-            .write()
-            .unwrap()
-            .process_pull_requests(caller_and_filters, now);
+        total_bytes
+    }
 
-        // Filter bad to addresses
-        let pull_responses: Vec<_> = pull_responses
+    fn filter_response_bad_address(
+        values: Vec<Vec<CrdsValue>>,
+        addrs: Vec<SocketAddr>,
+    ) -> Vec<(Vec<CrdsValue>, SocketAddr)> {
+        values
             .into_iter()
             .zip(addrs.into_iter())
             .filter_map(|(responses, from_addr)| {
@@ -1525,82 +1613,74 @@ impl ClusterInfo {
                     None
                 }
             })
-            .collect();
+            .collect()
+    }
+
+    // Pull requests take an incoming bloom filter of contained entries from a node
+    // and tries to send back to them the values it detects are missing.
+    fn handle_pull_requests(
+        me: &Self,
+        recycler: &PacketsRecycler,
+        requests: Vec<PullData>,
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Option<Packets> {
+        // split the requests into addrs and filters
+        let mut caller_and_filters = vec![];
+        let mut addrs = vec![];
+        let mut time = Measure::start("handle_pull_requests");
+        for pull_data in requests {
+            caller_and_filters.push((pull_data.caller, pull_data.filter));
+            addrs.push(pull_data.from_addr);
+        }
+        Self::update_data_budget(me, stakes.len());
+        let now = timestamp();
+        let self_id = me.id();
+        let pull_responses = me
+            .gossip
+            .write()
+            .unwrap()
+            .process_pull_requests(caller_and_filters, now);
+
+        // Filter bad to addresses
+        let pull_responses = Self::filter_response_bad_address(pull_responses, addrs);
 
         if pull_responses.is_empty() {
             return None;
         }
 
-        let mut stats: Vec<_> = pull_responses
-            .iter()
-            .enumerate()
-            .map(|(i, (responses, _from_addr))| {
-                let score: u64 = if stakes.get(&responses[0].pubkey()).is_some() {
-                    2
-                } else {
-                    1
-                };
-                responses
-                    .iter()
-                    .enumerate()
-                    .map(|(j, _response)| ResponseScore {
-                        to: i,
-                        responses_index: j,
-                        score,
-                    })
-                    .collect::<Vec<ResponseScore>>()
-            })
-            .flatten()
-            .collect();
-
-        stats.sort_by(|a, b| a.score.cmp(&b.score));
-        let weights: Vec<_> = stats.iter().map(|stat| stat.score).collect();
-
-        let seed = [48u8; 32];
-        let rng = &mut ChaChaRng::from_seed(seed);
-        let weighted_index = WeightedIndex::new(weights).unwrap();
+        let scores = Self::generate_pull_request_scores(me, &pull_responses, stakes);
 
         let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
-        let mut total_bytes = 0;
-        let mut sent = HashSet::new();
-        while sent.len() < stats.len() {
-            let index = weighted_index.sample(rng);
-            if sent.contains(&index) {
-                continue;
-            }
-            let stat = &stats[index];
-            let from_addr = pull_responses[stat.to].1;
-            let response = pull_responses[stat.to].0[stat.responses_index].clone();
-            let protocol = Protocol::PullResponse(self_id, vec![response]);
-            let new_packet = Packet::from_data(&from_addr, protocol);
-            {
-                let mut w_outbound_budget = me.outbound_budget.write().unwrap();
-                if w_outbound_budget.bytes > new_packet.meta.size {
-                    sent.insert(index);
-                    w_outbound_budget.bytes -= new_packet.meta.size;
-                    total_bytes += new_packet.meta.size;
-                    packets.packets.push(new_packet)
-                } else {
-                    inc_new_counter_info!("gossip_pull_request-no_budget", 1);
-                    break;
-                }
+
+        let total_bytes =
+            Self::populate_packets(me, &mut packets, pull_responses, &scores, self_id);
+
+        {
+            let mut w_outbound_budget = me.outbound_budget.write().unwrap();
+            let now = timestamp();
+            if w_outbound_budget.peers.len() > 1000 {
+                w_outbound_budget
+                    .peers
+                    .retain(|_id, budget| (now - budget.last_timestamp_ms) > 30_000);
             }
         }
+
         time.stop();
-        inc_new_counter_info!("gossip_pull_request-sent_requests", sent.len());
         inc_new_counter_info!(
             "gossip_pull_request-dropped_requests",
-            stats.len() - sent.len()
+            scores.len() - packets.packets.len()
         );
         debug!(
             "handle_pull_requests: {} sent: {} total: {} total_bytes: {}",
             time,
-            sent.len(),
-            stats.len(),
+            packets.packets.len(),
+            scores.len(),
             total_bytes
         );
         if packets.is_empty() {
             return None;
+        } else {
+            inc_new_counter_info!("gossip_pull_request-sent_requests", packets.packets.len());
         }
         Some(packets)
     }
