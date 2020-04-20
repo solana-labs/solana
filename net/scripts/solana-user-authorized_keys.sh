@@ -65,6 +65,9 @@ SOLANA_PUBKEYS+=('ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdH
 #pacman (used by colo-testnet-deployer)
 SOLANA_USERS+=('buildkite-agent')
 SOLANA_PUBKEYS+=('ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBL5bkSnIRevXXtx/sSvVtioeiLv9GLqchABi8JfMLolyv/az9mJxu77UGsxcK05ebuVQPe3PHne9isQPyrdxaE4= buildkite-agent@pacman')
+#bernal
+SOLANA_USERS+=('buildkite-agent')
+SOLANA_PUBKEYS+=('ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBG0P5eBR9rf96KWfO1PFaE9KhJadXWEHUZxAQhJ4hZ/GmvGq442gjR+7l3Yrh4PDztH+rsEUd3Ibt/x2XfNoiFE= buildkite-agent@bernal')
 
 SOLANA_USERS+=('pankaj')
 SOLANA_PUBKEYS+=('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPBLR4Z2HbksF+MUFmdjf5jkWoMWB0JC9a0Bz0OHvrvp pankaj@Pankajs-MacBook-Pro.local')
