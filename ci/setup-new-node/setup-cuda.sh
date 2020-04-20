@@ -8,7 +8,7 @@ VERSIONS+=("http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_in
 
 HERE="$(dirname "$0")"
 
-# shellcheck source=net/datacenter-node-install/utils.sh
+# shellcheck source=ci/setup-new-node/utils.sh
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
