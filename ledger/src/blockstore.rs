@@ -99,7 +99,6 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: Arc<RwLock<u64>>,
     no_compaction: bool,
     shreds_dir: String,
-    leader_schedule: Mutex<Option<Arc<LeaderScheduleCache>>>,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -261,7 +260,6 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
             shreds_dir,
-            leader_schedule: Mutex::new(None),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -898,12 +896,6 @@ impl Blockstore {
         Ok(())
     }
 
-    fn verify(&self, shred: &Shred) -> Option<bool> {
-        let ls = self.leader_schedule.lock().unwrap();
-        let ls = ls.clone()?;
-        let key = ls.slot_leader_at(shred.slot(), None)?;
-        Some(shred.verify(&key))
-    }
     fn write_shred(&self, shred: &Shred) {
         let slot = shred.slot();
         let path = if shred.is_data() {
@@ -914,12 +906,11 @@ impl Blockstore {
         let mut tried = false;
         loop {
             info!(
-                "PUT_DATA: {}-{} {} {} {:?}",
+                "PUT_DATA: {}-{} {} {}",
                 slot,
                 shred.index(),
                 shred.is_data(),
                 solana_sdk::hash::hashv(&[&shred.payload]),
-                self.verify(&shred)
             );
             let e = Self::write_tmp(&path, &shred.payload);
             if let Err(BlockstoreError::IO(..)) = e {
@@ -952,13 +943,6 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
     ) -> Result<()> {
-        {
-            let mut ls = self.leader_schedule.lock().unwrap();
-            if ls.is_none() {
-                *ls = leader_schedule.cloned();
-            }
-        }
-
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool
                 .borrow()
