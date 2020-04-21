@@ -43,6 +43,48 @@ Read more about [sending and receiving tokens](../cli/transfer-tokens.md) and
 [delegating stake](../cli/delegate-stake.md). You can use your Ledger keypair URL
 anywhere you see an option or argument that accepts a `<KEYPAIR>`.
 
+### Install the Solana Beta App
+
+For those of you that enjoy life on the edge, you can use the command-line to
+install the latest Solana Ledger app release before it has been validated by
+the Ledger team and made available via Ledger Live.  Note that because the app
+is not installed via Ledger Live, you will need to approve installation from an
+"unsafe" manager, as well as see the message, "This app is not genuine" each
+time you open the app. Once the app is available on Ledger Live, you can
+reinstall the app from there, and the message will no longer be displayed.
+
+1. Connect your Ledger device via USB and enter your pin to unlock it
+2. Download and run the Solana Ledger app installer:
+   ```text
+   curl -sSLf https://github.com/solana-labs/ledger-app-solana/releases/download/v0.2.0/install.sh | sh
+   ```
+3. When prompted, approve the "unsafe" manager on your device
+4. When prompted, approve the installation on your device
+5. An installation window appears and your device will display "Processing..."
+6. The app installation is confirmed
+
+If you encounter the following error:
+
+```text
+Traceback (most recent call last):
+ File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.7/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+  "__main__", mod_spec)
+ File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.7/lib/python3.7/runpy.py", line 85, in _run_code
+  exec(code, run_globals)
+ File "ledger-env/lib/python3.7/site-packages/ledgerblue/loadApp.py", line 197, in <module>
+  dongle = getDongle(args.apdu)
+ File "ledger-env/lib/python3.7/site-packages/ledgerblue/comm.py", line 216, in getDongle
+  dev.open_path(hidDevicePath)
+ File "hid.pyx", line 72, in hid.device.open_path
+OSError: open failed
+```
+
+To fix, check the following:
+
+1. Ensure your Ledger device is connected to USB
+2. Ensure your Ledger device is unlocked and not waiting for you to enter your pin
+3. Ensure the Ledger Live application is not open
+
 ## Support
 
 Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
