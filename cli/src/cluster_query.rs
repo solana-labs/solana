@@ -284,11 +284,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                        ordered based on the slot in which they were confirmed in \
                        from lowest to highest slot")
                 .arg(
-                    pubkey!(Arg::with_name("address")
+                    Arg::with_name("address")
                         .index(1)
                         .value_name("ADDRESS")
-                        .required(true),
-                        "Account address"),
+                        .required(true)
+                        .validator(is_valid_pubkey)
+                        .help("Account address"),
                 )
                 .arg(
                     Arg::with_name("end_slot")
