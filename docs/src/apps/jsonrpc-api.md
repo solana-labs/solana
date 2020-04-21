@@ -138,14 +138,15 @@ Returns all information associated with the account of provided Pubkey
 
 #### Results:
 
-The result value will be an RpcResponse JSON object containing an AccountInfo JSON object.
+The result will be an RpcResponse JSON object with `value` equal to:
 
-* `RpcResponse<AccountInfo>`, RpcResponse JSON object with `value` field set to AccountInfo, a JSON object containing:
-* `lamports: <u64>`, number of lamports assigned to this account, as a u64
-* `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
-* `data: <string>`, base-58 encoded data associated with the account
-* `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
-* `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
+* `<null>` - if the requested account doesn't exist
+* `<object>` - otherwise, a JSON object containing:
+  * `lamports: <u64>`, number of lamports assigned to this account, as a u64
+  * `owner: <string>`, base-58 encoded Pubkey of the program this account has been assigned to
+  * `data: <string>`, base-58 encoded data associated with the account
+  * `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
+  * `rentEpoch`: <u64>, the epoch at which this account will next owe rent, as u64
 
 #### Example:
 
@@ -280,22 +281,24 @@ Returns identity and transaction information about a confirmed block in the ledg
 
 The result field will be an object with the following fields:
 
-* `blockhash: <string>` - the blockhash of this block, as base-58 encoded string
-* `previousBlockhash: <string>` - the blockhash of this block's parent, as base-58 encoded string
-* `parentSlot: <u64>` - the slot index of this block's parent
-* `transactions: <array>` - an array of JSON objects containing:
-  * `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
-  * `meta: <object>` - transaction status metadata object, containing `null` or:
-    * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
-    * `fee: <u64>` - fee this transaction was charged, as u64 integer
-    * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
-    * `postBalances: <array>` - array of u64 account balances after the transaction was processed
-    * DEPRECATED: `status: <object>` - Transaction status
-      * `"Ok": <null>` - Transaction was successful
-      * `"Err": <ERR>` - Transaction failed with TransactionError
-* `rewards: <array>` - an array of JSON objects containing:
-  * `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
-  * `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+* `<null>` - if specified block is not confirmed
+* `<object>` - if block is confirmed, an object with the following fields:
+  * `blockhash: <string>` - the blockhash of this block, as base-58 encoded string
+  * `previousBlockhash: <string>` - the blockhash of this block's parent, as base-58 encoded string
+  * `parentSlot: <u64>` - the slot index of this block's parent
+  * `transactions: <array>` - an array of JSON objects containing:
+    * `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
+    * `meta: <object>` - transaction status metadata object, containing `null` or:
+      * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+      * `fee: <u64>` - fee this transaction was charged, as u64 integer
+      * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+      * `postBalances: <array>` - array of u64 account balances after the transaction was processed
+      * DEPRECATED: `status: <object>` - Transaction status
+        * `"Ok": <null>` - Transaction was successful
+        * `"Err": <ERR>` - Transaction failed with TransactionError
+  * `rewards: <array>` - an array of JSON objects containing:
+    * `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+    * `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
 
 #### Example:
 
@@ -395,17 +398,18 @@ Returns transaction details for a confirmed transaction
 
 #### Results:
 
-The result field will be an object with the following fields:
-* `slot: <u64>` - the slot this transaction was processed in
-* `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
-* `meta: <object>` - transaction status metadata object, containing `null` or:
-  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
-  * `fee: <u64>` - fee this transaction was charged, as u64 integer
-  * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
-  * `postBalances: <array>` - array of u64 account balances after the transaction was processed
-  * DEPRECATED: `status: <object>` - Transaction status
-    * `"Ok": <null>` - Transaction was successful
-    * `"Err": <ERR>` - Transaction failed with TransactionError
+* `<null>` - if transaction is not found or not confirmed
+* `<object>` - if transaction is confirmed, an object with the following fields:
+  * `slot: <u64>` - the slot this transaction was processed in
+  * `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
+  * `meta: <object | null>` - transaction status metadata object:
+    * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+    * `fee: <u64>` - fee this transaction was charged, as u64 integer
+    * `preBalances: <array>` - array of u64 account balances from before the transaction was processed
+    * `postBalances: <array>` - array of u64 account balances after the transaction was processed
+    * DEPRECATED: `status: <object>` - Transaction status
+      * `"Ok": <null>` - Transaction was successful
+      * `"Err": <ERR>` - Transaction failed with TransactionError
 
 #### Example:
 
@@ -488,9 +492,11 @@ Returns the fee calculator associated with the query blockhash, or `null` if the
 
 #### Results:
 
-The `result` field will be `null` if the query blockhash has expired, otherwise an `object` with the following fields:
+The result will be an RpcResponse JSON object with `value` equal to:
 
-* `feeCalculator: <object>`, `FeeCalculator` object describing the cluster fee rate at the queried blockhash
+* `<null>` - if the query blockhash has expired
+* `<object>` - otherwise, a JSON object containing:
+  * `feeCalculator: <object>`, `FeeCalculator` object describing the cluster fee rate at the queried blockhash
 
 #### Example:
 
@@ -615,9 +621,10 @@ Returns the leader schedule for an epoch
 
 #### Results:
 
-The result field will be a dictionary of leader public keys \(as base-58 encoded
-strings\) and their corresponding leader slot indices as values (indices are to
-the first slot in the requested epoch)
+* `<null>` - if requested epoch is not found
+* `<object>` - otherwise, the result field will be a dictionary of leader public keys
+  \(as base-58 encoded strings\) and their corresponding leader slot indices as values
+  (indices are to the first slot in the requested epoch)
 
 #### Example:
 
