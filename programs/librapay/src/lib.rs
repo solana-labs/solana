@@ -5,12 +5,10 @@ pub mod librapay_transaction;
 
 extern crate solana_move_loader_program;
 
-use solana_move_loader_program::{account_state::LibraAccountState, processor::MoveProcessor};
+use solana_move_loader_program::account_state::LibraAccountState;
 use solana_runtime::loader_utils::load_program;
 use solana_sdk::{
-    account::KeyedAccount,
     client::Client,
-    instruction::InstructionError,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -79,12 +77,4 @@ pub fn upload_payment_script<T: Client>(from: &Keypair, client: &T) -> Pubkey {
     ";
 
     upload_script(from, client, code)
-}
-
-pub fn process_instruction(
-    program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
-) -> Result<(), InstructionError> {
-    MoveProcessor::process_instruction(program_id, keyed_accounts, data)
 }
