@@ -1,10 +1,13 @@
 // @flow
+import bs58 from 'bs58';
+
 import {
   Account,
   Connection,
   SystemProgram,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
+  PublicKey,
 } from '../src';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
@@ -568,6 +571,331 @@ test('get minimum balance for rent exemption', async () => {
 
   const count = await connection.getMinimumBalanceForRentExemption(512);
   expect(count).toBeGreaterThanOrEqual(0);
+});
+
+test('get confirmed signatures for address', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSlot',
+      params: [],
+    },
+    {
+      error: null,
+      result: 1,
+    },
+  ]);
+
+  while ((await connection.getSlot()) <= 0) {
+    continue;
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedBlock',
+      params: [1],
+    },
+    {
+      error: null,
+      result: {
+        blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [
+          {
+            meta: {
+              fee: 10000,
+              postBalances: [499260347380, 15298080, 1, 1, 1],
+              preBalances: [499260357380, 15298080, 1, 1, 1],
+              status: {Ok: null},
+              err: null,
+            },
+            transaction: {
+              message: {
+                accountKeys: [
+                  'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                  '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                  'SysvarS1otHashes111111111111111111111111111',
+                  'SysvarC1ock11111111111111111111111111111111',
+                  'Vote111111111111111111111111111111111111111',
+                ],
+                header: {
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 3,
+                  numRequiredSignatures: 2,
+                },
+                instructions: [
+                  {
+                    accounts: [1, 2, 3],
+                    data:
+                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    programIdIndex: 4,
+                  },
+                ],
+                recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+              },
+              signatures: [
+                'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  // Find a block that has a transaction, usually Block 1
+  let slot = 0;
+  let address: ?PublicKey;
+  let expectedSignature: ?string;
+  while (!address || !expectedSignature) {
+    slot++;
+    const block = await connection.getConfirmedBlock(slot);
+    if (block.transactions.length > 0) {
+      const {
+        signature,
+        publicKey,
+      } = block.transactions[0].transaction.signatures[0];
+      if (signature) {
+        address = publicKey;
+        expectedSignature = bs58.encode(signature);
+      }
+    }
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedSignaturesForAddress',
+      params: [address.toBase58(), slot, slot + 1],
+    },
+    {
+      error: null,
+      result: [expectedSignature],
+    },
+  ]);
+
+  const confirmedSignatures = await connection.getConfirmedSignaturesForAddress(
+    address,
+    slot,
+    slot + 1,
+  );
+  expect(confirmedSignatures.includes(expectedSignature)).toBe(true);
+
+  const badSlot = Number.MAX_SAFE_INTEGER - 1;
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedSignaturesForAddress',
+      params: [address.toBase58(), badSlot, badSlot + 1],
+    },
+    {
+      error: null,
+      result: [],
+    },
+  ]);
+
+  const emptySignatures = await connection.getConfirmedSignaturesForAddress(
+    address,
+    badSlot,
+    badSlot + 1,
+  );
+  expect(emptySignatures.length).toBe(0);
+});
+
+test('get confirmed transaction', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSlot',
+      params: [],
+    },
+    {
+      error: null,
+      result: 1,
+    },
+  ]);
+
+  while ((await connection.getSlot()) <= 0) {
+    continue;
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedBlock',
+      params: [1],
+    },
+    {
+      error: null,
+      result: {
+        blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [
+          {
+            meta: {
+              fee: 10000,
+              postBalances: [499260347380, 15298080, 1, 1, 1],
+              preBalances: [499260357380, 15298080, 1, 1, 1],
+              status: {Ok: null},
+              err: null,
+            },
+            transaction: {
+              message: {
+                accountKeys: [
+                  'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                  '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                  'SysvarS1otHashes111111111111111111111111111',
+                  'SysvarC1ock11111111111111111111111111111111',
+                  'Vote111111111111111111111111111111111111111',
+                ],
+                header: {
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 3,
+                  numRequiredSignatures: 2,
+                },
+                instructions: [
+                  {
+                    accounts: [1, 2, 3],
+                    data:
+                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    programIdIndex: 4,
+                  },
+                ],
+                recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+              },
+              signatures: [
+                'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  // Find a block that has a transaction, usually Block 1
+  let slot = 0;
+  let confirmedTransaction: ?string;
+  while (!confirmedTransaction) {
+    slot++;
+    const block = await connection.getConfirmedBlock(slot);
+    for (const tx of block.transactions) {
+      if (tx.transaction.signature) {
+        confirmedTransaction = bs58.encode(tx.transaction.signature);
+      }
+    }
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedTransaction',
+      params: [confirmedTransaction],
+    },
+    {
+      error: null,
+      result: {
+        slot,
+        transaction: {
+          message: {
+            accountKeys: [
+              'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+              '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+              'SysvarS1otHashes111111111111111111111111111',
+              'SysvarC1ock11111111111111111111111111111111',
+              'Vote111111111111111111111111111111111111111',
+            ],
+            header: {
+              numReadonlySignedAccounts: 0,
+              numReadonlyUnsignedAccounts: 3,
+              numRequiredSignatures: 2,
+            },
+            instructions: [
+              {
+                accounts: [1, 2, 3],
+                data:
+                  '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                programIdIndex: 4,
+              },
+            ],
+            recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+          },
+          signatures: [
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+            '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+          ],
+        },
+        meta: {
+          fee: 10000,
+          postBalances: [499260347380, 15298080, 1, 1, 1],
+          preBalances: [499260357380, 15298080, 1, 1, 1],
+          status: {Ok: null},
+          err: null,
+        },
+      },
+    },
+  ]);
+
+  const result = await connection.getConfirmedTransaction(confirmedTransaction);
+
+  if (!result) {
+    expect(result).toBeDefined();
+    expect(result).not.toBeNull();
+    return;
+  }
+
+  if (result.transaction.signature === null) {
+    expect(result.transaction.signature).not.toBeNull();
+    return;
+  }
+
+  const resultSignature = bs58.encode(result.transaction.signature);
+  expect(resultSignature).toEqual(confirmedTransaction);
+
+  const newAddress = new Account().publicKey;
+  mockRpc.push([
+    url,
+    {
+      method: 'requestAirdrop',
+      params: [newAddress.toBase58(), 1, {commitment: 'recent'}],
+    },
+    {
+      error: null,
+      result:
+        '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
+
+  const recentSignature = await connection.requestAirdrop(
+    newAddress,
+    1,
+    'recent',
+  );
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedTransaction',
+      params: [recentSignature],
+    },
+    {
+      error: null,
+      result: null,
+    },
+  ]);
+
+  const nullResponse = await connection.getConfirmedTransaction(
+    recentSignature,
+  );
+  expect(nullResponse).toBeNull();
 });
 
 test('get confirmed block', async () => {
