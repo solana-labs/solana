@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.1"
-bs58 = "0.3.0"
+bs58 = "0.3.1"
 indicatif = "0.14.0"
 jsonrpc-core = "14.1.0"
 log = "0.4.8"

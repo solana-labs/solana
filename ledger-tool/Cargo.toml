@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-bs58 = "0.3.0"
+bs58 = "0.3.1"
 clap = "2.33.0"
 histogram = "*"
 serde_json = "1.0.51"

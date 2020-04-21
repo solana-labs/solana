@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 bincode = "1.2.1"
-bs58 = "0.3.0"
+bs58 = "0.3.1"
 chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.0"
 criterion-stats = "0.3.0"
