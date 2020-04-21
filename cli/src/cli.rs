@@ -227,6 +227,11 @@ pub enum CliCommand {
         use_lamports_unit: bool,
         commitment_config: CommitmentConfig,
     },
+    TransactionHistory {
+        address: Pubkey,
+        end_slot: Option<Slot>, // None == latest slot
+        slot_limit: u64,
+    },
     // Nonce commands
     AuthorizeNonceAccount {
         nonce_account: Pubkey,
@@ -618,6 +623,9 @@ pub fn parse_command(
         }),
         ("stakes", Some(matches)) => parse_show_stakes(matches, wallet_manager),
         ("validators", Some(matches)) => parse_show_validators(matches),
+        ("transaction-history", Some(matches)) => {
+            parse_transaction_history(matches, wallet_manager)
+        }
         // Nonce Commands
         ("authorize-nonce-account", Some(matches)) => {
             parse_authorize_nonce_account(matches, default_signer_path, wallet_manager)
@@ -1729,6 +1737,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             use_lamports_unit,
             commitment_config,
         } => process_show_validators(&rpc_client, config, *use_lamports_unit, *commitment_config),
+        CliCommand::TransactionHistory {
+            address,
+            end_slot,
+            slot_limit,
+        } => process_transaction_history(&rpc_client, address, *end_slot, *slot_limit),
 
         // Nonce Commands
 
