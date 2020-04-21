@@ -65,6 +65,33 @@ h4.ix-pill {
   background-color: theme-color-level(info, $badge-soft-bg-level);
 }
 
-.list-group-flush .list-group-item.ix-item:first-child {
-  border-top-width: 1px;
+h4.slot-pill {
+  display: inline-block;
+  padding: 5px;
+  border-radius: $border-radius;
+  margin-left: -5px;
+  background-color: theme-color-level(primary, $badge-soft-bg-level);
+  margin-bottom: 1.5rem;
+}
+
+.list-group-item:last-child {
+  &.ix-item, &.slot-item {
+    border-bottom-width: 0px;
+  }
+}
+
+.list-group:last-child .list-group-item:last-child {
+  &.ix-item, &.slot-item {
+    border-bottom-width: 1px;
+  }
+}
+
+.list-group-item:first-child {
+  &.ix-item, &.slot-item {
+    border-top-width: 1px;
+  }
+}
+
+.min-width-0 {
+  min-width: 0;
 }

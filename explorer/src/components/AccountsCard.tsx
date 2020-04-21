@@ -2,6 +2,7 @@ import React from "react";
 import {
   useAccounts,
   useAccountsDispatch,
+  Dispatch,
   fetchAccountInfo,
   ActionType,
   Account,
@@ -55,6 +56,7 @@ function AccountsCard() {
               <th className="text-muted">Balance (SOL)</th>
               <th className="text-muted">Data (bytes)</th>
               <th className="text-muted">Owner</th>
+              <th className="text-muted">Details</th>
             </tr>
           </thead>
           <tbody className="list">
@@ -86,8 +88,9 @@ function AccountsCard() {
               <td>-</td>
               <td>-</td>
               <td>-</td>
+              <td></td>
             </tr>
-            {accounts.map(account => renderAccountRow(account))}
+            {accounts.map(account => renderAccountRow(account, dispatch, url))}
           </tbody>
         </table>
       </div>
@@ -107,7 +110,11 @@ const renderHeader = () => {
   );
 };
 
-const renderAccountRow = (account: Account) => {
+const renderAccountRow = (
+  account: Account,
+  dispatch: Dispatch,
+  url: string
+) => {
   let statusText;
   let statusClass;
   switch (account.status) {
@@ -116,10 +123,12 @@ const renderAccountRow = (account: Account) => {
       statusText = "Not Found";
       break;
     case Status.CheckFailed:
+    case Status.HistoryFailed:
       statusClass = "danger";
       statusText = "Error";
       break;
     case Status.Checking:
+    case Status.FetchingHistory:
       statusClass = "info";
       statusText = "Fetching";
       break;
@@ -148,6 +157,42 @@ const renderAccountRow = (account: Account) => {
     balance = `◎${(1.0 * account.lamports) / LAMPORTS_PER_SOL}`;
   }
 
+  const renderDetails = () => {
+    let onClick, icon;
+    switch (account.status) {
+      case Status.Success:
+        icon = "more-horizontal";
+        onClick = () =>
+          dispatch({
+            type: ActionType.Select,
+            address: account.pubkey.toBase58()
+          });
+        break;
+
+      case Status.CheckFailed:
+      case Status.HistoryFailed: {
+        icon = "refresh-cw";
+        onClick = () => {
+          fetchAccountInfo(dispatch, account.pubkey.toBase58(), url);
+        };
+        break;
+      }
+
+      default: {
+        return null;
+      }
+    }
+
+    return (
+      <button
+        className="btn btn-rounded-circle btn-white btn-sm"
+        onClick={onClick}
+      >
+        <span className={`fe fe-${icon}`}></span>
+      </button>
+    );
+  };
+
   const base58AccountPubkey = account.pubkey.toBase58();
   return (
     <tr key={account.id}>
@@ -165,6 +210,7 @@ const renderAccountRow = (account: Account) => {
       <td>{balance}</td>
       <td>{data}</td>
       <td>{owner === "-" ? owner : <code>{owner}</code>}</td>
+      <td>{renderDetails()}</td>
     </tr>
   );
 };

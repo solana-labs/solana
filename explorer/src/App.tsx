@@ -8,13 +8,19 @@ import {
   useTransactions,
   ActionType
 } from "./providers/transactions";
-import { AccountsProvider } from "./providers/accounts";
+import {
+  AccountsProvider,
+  useSelectedAccount,
+  useAccountsDispatch,
+  ActionType as AccountActionType
+} from "./providers/accounts";
 import { BlocksProvider } from "./providers/blocks";
 import ClusterStatusButton from "./components/ClusterStatusButton";
 import AccountsCard from "./components/AccountsCard";
 import TransactionsCard from "./components/TransactionsCard";
 import ClusterModal from "./components/ClusterModal";
 import TransactionModal from "./components/TransactionModal";
+import AccountModal from "./components/AccountModal";
 import Logo from "./img/logos-solana/light-explorer-logo.svg";
 import { useCurrentTab, Tab } from "./providers/tab";
 
@@ -31,6 +37,7 @@ function App() {
               onClose={() => setShowClusterModal(false)}
             />
             <TransactionModal />
+            <AccountModal />
             <div className="main-content">
               <nav className="navbar navbar-expand-xl navbar-light">
                 <div className="container">
@@ -120,15 +127,18 @@ type OverlayProps = {
 
 function Overlay({ show, onClick }: OverlayProps) {
   const { selected } = useTransactions();
-  const dispatch = useTransactionsDispatch();
+  const selectedAccount = useSelectedAccount();
+  const txDispatch = useTransactionsDispatch();
+  const accountDispatch = useAccountsDispatch();
 
-  if (show || !!selected)
+  if (show || !!selected || !!selectedAccount)
     return (
       <div
         className="modal-backdrop fade show"
         onClick={() => {
           onClick();
-          dispatch({ type: ActionType.Deselect });
+          txDispatch({ type: ActionType.Deselect });
+          accountDispatch({ type: AccountActionType.Select });
         }}
       ></div>
     );

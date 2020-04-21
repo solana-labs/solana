@@ -1,14 +1,27 @@
 import React from "react";
-import { PublicKey, Connection } from "@solana/web3.js";
+import {
+  PublicKey,
+  Connection,
+  TransactionSignature,
+  TransactionError,
+  SignatureStatus
+} from "@solana/web3.js";
 import { findGetParameter, findPathSegment } from "../utils/url";
 import { useCluster, ClusterStatus } from "./cluster";
 
 export enum Status {
   Checking,
   CheckFailed,
+  FetchingHistory,
+  HistoryFailed,
   NotFound,
   Success
 }
+
+export type History = Map<
+  number,
+  Map<TransactionSignature, TransactionError | null>
+>;
 
 enum Source {
   Url,
@@ -23,30 +36,36 @@ export interface Details {
 
 export interface Account {
   id: number;
-  status: Status;
-  source: Source;
   pubkey: PublicKey;
+  source: Source;
+  status: Status;
   lamports?: number;
   details?: Details;
+  history?: History;
 }
 
 type Accounts = { [address: string]: Account };
 interface State {
   idCounter: number;
   accounts: Accounts;
+  selected?: string;
 }
 
 export enum ActionType {
   Update,
-  Input
+  Input,
+  Select
 }
 
 interface Update {
   type: ActionType.Update;
   address: string;
-  status: Status;
-  lamports?: number;
-  details?: Details;
+  data: {
+    status: Status;
+    lamports?: number;
+    details?: Details;
+    history?: History;
+  };
 }
 
 interface Input {
@@ -54,7 +73,12 @@ interface Input {
   pubkey: PublicKey;
 }
 
-type Action = Update | Input;
+interface Select {
+  type: ActionType.Select;
+  address?: string;
+}
+
+type Action = Update | Input | Select;
 export type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
@@ -74,14 +98,17 @@ function reducer(state: State, action: Action): State {
       };
       return { ...state, accounts, idCounter };
     }
+
+    case ActionType.Select: {
+      return { ...state, selected: action.address };
+    }
+
     case ActionType.Update: {
       let account = state.accounts[action.address];
       if (account) {
         account = {
           ...account,
-          status: action.status,
-          details: action.details,
-          lamports: action.lamports
+          ...action.data
         };
         const accounts = {
           ...state.accounts,
@@ -167,8 +194,10 @@ export async function fetchAccountInfo(
 ) {
   dispatch({
     type: ActionType.Update,
-    status: Status.Checking,
-    address
+    address,
+    data: {
+      status: Status.Checking
+    }
   });
 
   let status;
@@ -188,13 +217,60 @@ export async function fetchAccountInfo(
         executable: result.executable,
         owner: result.owner
       };
-      status = Status.Success;
+      status = Status.FetchingHistory;
+      fetchAccountHistory(dispatch, address, url);
     }
   } catch (error) {
     console.error("Failed to fetch account info", error);
     status = Status.CheckFailed;
   }
-  dispatch({ type: ActionType.Update, status, lamports, details, address });
+  const data = { status, lamports, details };
+  dispatch({ type: ActionType.Update, data, address });
+}
+
+async function fetchAccountHistory(
+  dispatch: Dispatch,
+  address: string,
+  url: string
+) {
+  let history;
+  let status;
+  try {
+    const connection = new Connection(url);
+    const currentSlot = await connection.getSlot();
+    const signatures = await connection.getConfirmedSignaturesForAddress(
+      new PublicKey(address),
+      Math.max(0, currentSlot - 10000 + 1),
+      currentSlot
+    );
+
+    let statuses: (SignatureStatus | null)[] = [];
+    if (signatures.length > 0) {
+      statuses = (
+        await connection.getSignatureStatuses(signatures, {
+          searchTransactionHistory: true
+        })
+      ).value;
+    }
+
+    history = new Map();
+    for (let i = 0; i < statuses.length; i++) {
+      const status = statuses[i];
+      if (!status) continue;
+      let slotSignatures = history.get(status.slot);
+      if (!slotSignatures) {
+        slotSignatures = new Map();
+        history.set(status.slot, slotSignatures);
+      }
+      slotSignatures.set(signatures[i], status.err);
+    }
+    status = Status.Success;
+  } catch (error) {
+    console.error("Failed to fetch account history", error);
+    status = Status.HistoryFailed;
+  }
+  const data = { status, history };
+  dispatch({ type: ActionType.Update, data, address });
 }
 
 export function useAccounts() {
@@ -208,6 +284,18 @@ export function useAccounts() {
       a.id <= b.id ? 1 : -1
     )
   };
+}
+
+export function useSelectedAccount() {
+  const context = React.useContext(StateContext);
+  if (!context) {
+    throw new Error(
+      `useSelectedAccount must be used within a AccountsProvider`
+    );
+  }
+
+  if (!context.selected) return undefined;
+  return context.accounts[context.selected];
 }
 
 export function useAccountsDispatch() {
