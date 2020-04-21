@@ -1361,9 +1361,9 @@ impl RpcSol for RpcSolImpl {
         end_slot: Slot,
     ) -> Result<Vec<String>> {
         let pubkey = verify_pubkey(pubkey_str)?;
-        if end_slot <= start_slot {
+        if end_slot < start_slot {
             return Err(Error::invalid_params(format!(
-                "start_slot {} must be smaller than end_slot {}",
+                "start_slot {} must be less than or equal to end_slot {}",
                 start_slot, end_slot
             )));
         }
