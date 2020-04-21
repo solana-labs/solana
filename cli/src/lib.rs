@@ -1,11 +1,11 @@
 macro_rules! ACCOUNT_STRING {
     () => {
-        r#"Can be:
-  * a bs58 pubkey string
-  * path to keypair file
-  * '-' to take json-encoded keypair string from stdin
-  * 'ASK' to ask for a passphrase
-  * path to hardware wallet (usb://..)"#
+        r#", one of:
+  * a base58-encoded public key
+  * a path to a keypair file
+  * a hyphen; signals a JSON-encoded keypair on stdin
+  * the 'ASK' keyword; to recover a keypair via its seed phrase
+  * a hardware wallet keypair URL (i.e. usb://ledger)"#
     };
 }
 
