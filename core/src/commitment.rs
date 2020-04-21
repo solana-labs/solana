@@ -13,9 +13,11 @@ use std::{
     time::Duration,
 };
 
+pub type BlockCommitmentArray = [u64; MAX_LOCKOUT_HISTORY + 1];
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlockCommitment {
-    pub commitment: [u64; MAX_LOCKOUT_HISTORY],
+    pub commitment: BlockCommitmentArray,
 }
 
 impl BlockCommitment {
@@ -28,8 +30,17 @@ impl BlockCommitment {
         assert!(confirmation_count > 0 && confirmation_count <= MAX_LOCKOUT_HISTORY);
         self.commitment[confirmation_count - 1]
     }
+
+    pub fn increase_rooted_stake(&mut self, stake: u64) {
+        self.commitment[MAX_LOCKOUT_HISTORY] += stake;
+    }
+
+    pub fn get_rooted_stake(&self) -> u64 {
+        self.commitment[MAX_LOCKOUT_HISTORY]
+    }
+
     #[cfg(test)]
-    pub(crate) fn new(commitment: [u64; MAX_LOCKOUT_HISTORY]) -> Self {
+    pub(crate) fn new(commitment: BlockCommitmentArray) -> Self {
         Self { commitment }
     }
 }
@@ -110,6 +121,16 @@ impl BlockCommitmentCache {
             0
         })
     }
+
+    pub fn is_confirmed_rooted(&self, slot: Slot) -> bool {
+        self.get_block_commitment(slot)
+            .map(|block_commitment| {
+                (block_commitment.get_rooted_stake() as f64 / self.total_stake as f64)
+                    > VOTE_THRESHOLD_SIZE
+            })
+            .unwrap_or(false)
+    }
+
     #[cfg(test)]
     pub fn new_for_tests() -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
@@ -259,7 +280,7 @@ impl AggregateCommitmentService {
                     commitment
                         .entry(*a)
                         .or_insert_with(BlockCommitment::default)
-                        .increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
+                        .increase_rooted_stake(lamports);
                 } else {
                     ancestors_index = i;
                     break;
@@ -351,7 +372,7 @@ mod tests {
 
         for a in ancestors {
             let mut expected = BlockCommitment::default();
-            expected.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
+            expected.increase_rooted_stake(lamports);
             assert_eq!(*commitment.get(&a).unwrap(), expected);
         }
     }
@@ -376,7 +397,7 @@ mod tests {
         for a in ancestors {
             if a <= root {
                 let mut expected = BlockCommitment::default();
-                expected.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
+                expected.increase_rooted_stake(lamports);
                 assert_eq!(*commitment.get(&a).unwrap(), expected);
             } else {
                 let mut expected = BlockCommitment::default();
@@ -408,7 +429,7 @@ mod tests {
         for (i, a) in ancestors.iter().enumerate() {
             if *a <= root {
                 let mut expected = BlockCommitment::default();
-                expected.increase_confirmation_stake(MAX_LOCKOUT_HISTORY, lamports);
+                expected.increase_rooted_stake(lamports);
                 assert_eq!(*commitment.get(&a).unwrap(), expected);
             } else if i <= 4 {
                 let mut expected = BlockCommitment::default();
