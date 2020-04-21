@@ -70,15 +70,9 @@ impl AccountsHashVerifier {
         }
     }
 
-<<<<<<< HEAD
     fn process_snapshot(
         snapshot_package: SnapshotPackage,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-=======
-    fn process_accounts_package(
-        accounts_package: AccountsPackage,
         cluster_info: &ClusterInfo,
->>>>>>> bab350226... Push down cluster_info lock (#9594)
         trusted_validators: &Option<HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
         snapshot_package_sender: &Option<SnapshotPackageSender>,

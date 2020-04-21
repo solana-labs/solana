@@ -20,12 +20,7 @@ impl SnapshotPackagerService {
         snapshot_package_receiver: SnapshotPackageReceiver,
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-<<<<<<< HEAD
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-=======
         cluster_info: &Arc<ClusterInfo>,
-        blockstore: Option<Arc<Blockstore>>,
->>>>>>> bab350226... Push down cluster_info lock (#9594)
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
