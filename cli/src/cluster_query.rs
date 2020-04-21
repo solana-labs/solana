@@ -287,21 +287,23 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         "Account address"),
                 )
                 .arg(
-                    Arg::with_name("start_slot")
+                    Arg::with_name("end_slot")
                         .takes_value(false)
+                        .value_name("SLOT")
                         .index(2)
                         .validator(is_slot)
                         .help(
-                            "Optional slot to start from"
+                            "Slot to start from [default: latest slot at maximum commitment]"
                         ),
                 )
                 .arg(
-                    Arg::with_name("end_slot")
-                        .takes_value(false)
-                        .index(3)
+                    Arg::with_name("limit")
+                        .long("limit")
+                        .takes_value(true)
+                        .value_name("NUMBER OF SLOTS")
                         .validator(is_slot)
                         .help(
-                            "Optional slot to end at"
+                            "Limit the search to this many slots"
                         ),
                 ),
         )
@@ -473,14 +475,15 @@ pub fn parse_transaction_history(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
-    let start_slot = value_t!(matches, "start_slot", Slot).ok();
     let end_slot = value_t!(matches, "end_slot", Slot).ok();
+    let slot_limit = value_t!(matches, "limit", u64)
+        .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE);
 
     Ok(CliCommandInfo {
         command: CliCommand::TransactionHistory {
             address,
-            start_slot,
             end_slot,
+            slot_limit,
         },
         signers: vec![],
     })
@@ -1223,27 +1226,17 @@ pub fn process_show_validators(
 pub fn process_transaction_history(
     rpc_client: &RpcClient,
     address: &Pubkey,
-    start_slot: Option<Slot>,
-    end_slot: Option<Slot>,
+    end_slot: Option<Slot>, // None == use latest slot
+    slot_limit: u64,
 ) -> ProcessResult {
-    let (start_slot, end_slot) = {
-        if let Some(start_slot) = start_slot {
-            if let Some(end_slot) = end_slot {
-                (start_slot, end_slot)
-            } else {
-                (
-                    start_slot,
-                    start_slot + MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
-                )
-            }
+    let end_slot = {
+        if let Some(end_slot) = end_slot {
+            end_slot
         } else {
-            let current_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
-            (
-                current_slot.saturating_sub(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE),
-                current_slot,
-            )
+            rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
         }
     };
+    let start_slot = end_slot.saturating_sub(slot_limit);
 
     println!(
         "Transactions affecting {} within slots [{},{}]",

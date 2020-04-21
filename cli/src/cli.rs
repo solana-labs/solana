@@ -229,8 +229,8 @@ pub enum CliCommand {
     },
     TransactionHistory {
         address: Pubkey,
-        start_slot: Option<Slot>,
-        end_slot: Option<Slot>,
+        end_slot: Option<Slot>, // None == latest slot
+        slot_limit: u64,
     },
     // Nonce commands
     AuthorizeNonceAccount {
@@ -1739,9 +1739,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_show_validators(&rpc_client, config, *use_lamports_unit, *commitment_config),
         CliCommand::TransactionHistory {
             address,
-            start_slot,
             end_slot,
-        } => process_transaction_history(&rpc_client, address, *start_slot, *end_slot),
+            slot_limit,
+        } => process_transaction_history(&rpc_client, address, *end_slot, *slot_limit),
 
         // Nonce Commands
 
