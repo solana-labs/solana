@@ -1029,10 +1029,7 @@ mod tests {
         transaction::TransactionError,
     };
     use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta};
-    use std::{
-        sync::atomic::{Ordering, RwLock},
-        thread::sleep,
-    };
+    use std::{sync::atomic::Ordering, thread::sleep};
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -1049,7 +1046,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, _entry_receiever) =
                 create_test_recorder(&bank, &blockstore, None);
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
@@ -1089,7 +1086,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
@@ -1152,7 +1149,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
@@ -1293,7 +1290,7 @@ mod tests {
                     create_test_recorder(&bank, &blockstore, Some(poh_config));
                 let cluster_info =
                     ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-                let cluster_info = Arc::new(RwLock::new(cluster_info));
+                let cluster_info = Arc::new(cluster_info);
                 let _banking_stage = BankingStage::new_num_threads(
                     &cluster_info,
                     &poh_recorder,

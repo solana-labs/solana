@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_tvu_peers_ordering() {
-        let mut cluster = ClusterInfo::new_with_invalid_keypair(ContactInfo::new_localhost(
+        let cluster = ClusterInfo::new_with_invalid_keypair(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
             0,
         ));

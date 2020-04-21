@@ -223,6 +223,19 @@ struct ResponseScore {
     score: u64,             // Relative score of the response
 }
 
+impl Clone for ClusterInfo {
+    fn clone(&self) -> Self {
+        ClusterInfo {
+            gossip: RwLock::new(self.gossip.read().unwrap().clone()),
+            keypair: self.keypair.clone(),
+            entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
+            outbound_budget: RwLock::new(self.outbound_budget.read().unwrap().clone()),
+            id: self.id,
+            my_contact_info: RwLock::new(self.my_contact_info.read().unwrap().clone()),
+        }
+    }
+}
+
 impl ClusterInfo {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
@@ -248,18 +261,20 @@ impl ClusterInfo {
         me
     }
 
+    // Not safe to use, only used in simulations/tests
+    pub fn set_new_id(&self, new_id: Pubkey) {
+        self.my_contact_info.write().unwrap().id = new_id;
+        self.gossip.write().unwrap().set_self(&new_id);
+    }
+
     pub fn update_contact_info<F>(&self, modify: F)
     where
         F: FnOnce(&mut ContactInfo) -> (),
     {
+        let my_id = self.id();
         modify(&mut self.my_contact_info.write().unwrap());
+        assert_eq!(self.my_contact_info.read().unwrap().id, my_id);
         self.insert_self()
-    }
-
-    pub fn insert_self(&self) {
-        let value =
-            CrdsValue::new_signed(CrdsData::ContactInfo(self.my_contact_info()), &self.keypair);
-        let _ = self.gossip.write().unwrap().crds.insert(value, timestamp());
     }
 
     fn push_self(&self, stakes: &HashMap<Pubkey, u64>) {
@@ -1059,6 +1074,12 @@ impl ClusterInfo {
         Ok(())
     }
 
+    fn insert_self(&self) {
+        let value =
+            CrdsValue::new_signed(CrdsData::ContactInfo(self.my_contact_info()), &self.keypair);
+        let _ = self.gossip.write().unwrap().crds.insert(value, timestamp());
+    }
+
     // If the network entrypoint hasn't been discovered yet, add it to the crds table
     fn append_entrypoint_to_pulls(
         &self,
@@ -1559,7 +1580,7 @@ impl ClusterInfo {
                 let mut w_outbound_budget = me.outbound_budget.write().unwrap();
                 if w_outbound_budget.bytes > new_packet.meta.size {
                     sent.insert(index);
-                    w_outbound_budget.bytes = w_outbound_budget.bytes - new_packet.meta.size;
+                    w_outbound_budget.bytes -= new_packet.meta.size;
                     total_bytes += new_packet.meta.size;
                     packets.packets.push(new_packet)
                 } else {
@@ -2086,7 +2107,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, Signer};
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
 
     #[test]
     fn test_gossip_node() {
@@ -2103,10 +2124,8 @@ mod tests {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
         let (spy, _, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            node.info,
-        )));
-        cluster_info.write().unwrap().insert_info(spy);
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
+        cluster_info.insert_info(spy);
         cluster_info
             .gossip
             .write()
@@ -2131,24 +2150,51 @@ mod tests {
     #[test]
     fn insert_info_test() {
         let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(d);
         let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
-        assert!(cluster_info.gossip.crds.lookup(&label).is_some());
+        assert!(cluster_info
+            .gossip
+            .read()
+            .unwrap()
+            .crds
+            .lookup(&label)
+            .is_some());
     }
     #[test]
-    fn test_insert_self() {
+    #[should_panic]
+    fn test_update_contact_info() {
         let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         let entry_label = CrdsValueLabel::ContactInfo(cluster_info.id());
-        assert!(cluster_info.gossip.crds.lookup(&entry_label).is_some());
+        assert!(cluster_info
+            .gossip
+            .read()
+            .unwrap()
+            .crds
+            .lookup(&entry_label)
+            .is_some());
 
-        // inserting something else shouldn't work
-        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
-        cluster_info.insert_self(d.clone());
-        let label = CrdsValueLabel::ContactInfo(d.id);
-        assert!(cluster_info.gossip.crds.lookup(&label).is_none());
+        let now = timestamp();
+        cluster_info.update_contact_info(|ci| ci.wallclock = now);
+        assert_eq!(
+            cluster_info
+                .gossip
+                .read()
+                .unwrap()
+                .crds
+                .lookup(&entry_label)
+                .unwrap()
+                .contact_info()
+                .unwrap()
+                .wallclock,
+            now
+        );
+
+        // Inserting Contactinfo with different pubkey should panic,
+        // and update should fail
+        cluster_info.update_contact_info(|ci| ci.id = Pubkey::new_rand())
     }
 
     fn assert_in_range(x: u16, range: (u16, u16)) {
@@ -2238,11 +2284,19 @@ mod tests {
         let peer_keypair = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer = ContactInfo::new_localhost(&peer_keypair.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
+        let cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
         cluster_info.insert_info(peer.clone());
-        cluster_info.gossip.refresh_push_active_set(&HashMap::new());
+        cluster_info
+            .gossip
+            .write()
+            .unwrap()
+            .refresh_push_active_set(&HashMap::new());
         //check that all types of gossip messages are signed correctly
-        let (_, push_messages) = cluster_info.gossip.new_push_messages(timestamp());
+        let (_, push_messages) = cluster_info
+            .gossip
+            .write()
+            .unwrap()
+            .new_push_messages(timestamp());
         // there should be some pushes ready
         assert_eq!(push_messages.len() > 0, true);
         push_messages
@@ -2251,6 +2305,8 @@ mod tests {
 
         let (_, _, val) = cluster_info
             .gossip
+            .write()
+            .unwrap()
             .new_pull_request(timestamp(), &HashMap::new(), MAX_BLOOM_SIZE)
             .ok()
             .unwrap();
@@ -2405,7 +2461,7 @@ mod tests {
     fn test_push_vote() {
         let keys = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
 
         // make sure empty crds is handled correctly
         let now = timestamp();
@@ -2441,7 +2497,7 @@ mod tests {
     fn test_push_epoch_slots() {
         let keys = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         let (slots, since) = cluster_info.get_epoch_slots_since(None);
         assert!(slots.is_empty());
         assert!(since.is_none());
@@ -2463,7 +2519,7 @@ mod tests {
     #[test]
     fn test_append_entrypoint_to_pulls() {
         let node_keypair = Arc::new(Keypair::new());
-        let mut cluster_info = ClusterInfo::new(
+        let cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
         );
@@ -2489,8 +2545,8 @@ mod tests {
         // now add this message back to the table and make sure after the next pull, the entrypoint is unset
         let entrypoint_crdsvalue =
             CrdsValue::new_unsigned(CrdsData::ContactInfo(entrypoint.clone()));
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let timeouts = cluster_info.read().unwrap().gossip.make_timeouts_test();
+        let cluster_info = Arc::new(cluster_info);
+        let timeouts = cluster_info.gossip.read().unwrap().make_timeouts_test();
         ClusterInfo::handle_pull_response(
             &cluster_info,
             &entrypoint_pubkey,
@@ -2499,7 +2555,7 @@ mod tests {
         );
         let pulls = cluster_info.new_pull_requests(&HashMap::new());
         assert_eq!(1, pulls.len() as u64);
-        assert_eq!(cluster_info.read().unwrap().entrypoint, Some(entrypoint));
+        assert_eq!(*cluster_info.entrypoint.read().unwrap(), Some(entrypoint));
     }
 
     #[test]
@@ -2574,7 +2630,7 @@ mod tests {
     #[test]
     fn test_tvu_peers_and_stakes() {
         let d = ContactInfo::new_localhost(&Pubkey::new(&[0; 32]), timestamp());
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         let mut stakes = HashMap::new();
 
         // no stake
@@ -2621,7 +2677,7 @@ mod tests {
     #[test]
     fn test_pull_from_entrypoint_if_not_present() {
         let node_keypair = Arc::new(Keypair::new());
-        let mut cluster_info = ClusterInfo::new(
+        let cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
         );
@@ -2646,7 +2702,13 @@ mod tests {
 
         // Pull request 2: pretend it's been a while since we've pulled from `entrypoint`.  There should
         // now be two pull requests
-        cluster_info.entrypoint.as_mut().unwrap().wallclock = 0;
+        cluster_info
+            .entrypoint
+            .write()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .wallclock = 0;
         let pulls = cluster_info.new_pull_requests(&stakes);
         assert_eq!(2, pulls.len() as u64);
         assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
@@ -2662,7 +2724,7 @@ mod tests {
     #[test]
     fn test_repair_peers() {
         let node_keypair = Arc::new(Keypair::new());
-        let mut cluster_info = ClusterInfo::new(
+        let cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
         );
@@ -2679,7 +2741,12 @@ mod tests {
                 0,
                 LowestSlot::new(other_node_pubkey, peer_lowest, timestamp()),
             ));
-            let _ = cluster_info.gossip.crds.insert(value, timestamp());
+            let _ = cluster_info
+                .gossip
+                .write()
+                .unwrap()
+                .crds
+                .insert(value, timestamp());
         }
         // only half the visible peers should be eligible to serve this repair
         assert_eq!(cluster_info.repair_peers(5).len(), 5);
@@ -2744,7 +2811,7 @@ mod tests {
     fn test_push_epoch_slots_large() {
         use rand::Rng;
         let node_keypair = Arc::new(Keypair::new());
-        let mut cluster_info = ClusterInfo::new(
+        let cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
         );

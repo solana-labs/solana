@@ -280,7 +280,7 @@ pub mod tests {
         let bank_forks = BankForks::new(0, Bank::new(&genesis_config));
 
         //start cluster_info1
-        let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
+        let cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
         cluster_info1.insert_info(leader.info.clone());
         let cref1 = Arc::new(cluster_info1);
 

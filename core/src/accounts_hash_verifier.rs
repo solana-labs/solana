@@ -203,8 +203,7 @@ mod tests {
         let hash2 = hash(&[2]);
         {
             let message = make_accounts_hashes_message(&validator1, vec![(0, hash1)]).unwrap();
-            let mut cluster_info_w = cluster_info.write().unwrap();
-            cluster_info_w.push_message(message);
+            cluster_info.push_message(message);
         }
         slot_to_hash.insert(0, hash2);
         trusted_validators.insert(validator1.pubkey());
@@ -255,7 +254,7 @@ mod tests {
             );
         }
         let cluster_hashes = cluster_info
-            .get_accounts_hash_for_node(&keypair.pubkey())
+            .get_accounts_hash_for_node(&keypair.pubkey(), |c| c.clone())
             .unwrap();
         info!("{:?}", cluster_hashes);
         assert_eq!(hashes.len(), MAX_SNAPSHOT_HASHES);

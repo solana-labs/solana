@@ -404,7 +404,7 @@ mod test {
         genesis_config::GenesisConfig,
         signature::{Keypair, Signer},
     };
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
     use std::time::Duration;
 
     fn setup(

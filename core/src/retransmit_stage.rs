@@ -313,11 +313,11 @@ mod tests {
             .unwrap();
 
         let other = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(other);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 
         let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
         let t_retransmit = retransmitter(

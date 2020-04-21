@@ -514,7 +514,7 @@ mod test {
         net::UdpSocket,
         sync::atomic::{AtomicBool, Ordering},
         sync::mpsc::channel,
-        sync::{Arc, RwLock},
+        sync::Arc,
         thread::sleep,
         time::Duration,
     };

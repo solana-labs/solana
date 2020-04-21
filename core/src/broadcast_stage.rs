@@ -442,11 +442,7 @@ pub mod test {
         signature::{Keypair, Signer},
     };
     use std::{
-        path::Path,
-        sync::atomic::AtomicBool,
-        sync::mpsc::channel,
-        sync::{Arc, RwLock},
-        thread::sleep,
+        path::Path, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc, thread::sleep,
     };
 
     pub fn make_transmit_shreds(
@@ -579,16 +575,16 @@ pub mod test {
         let broadcast_buddy = Node::new_localhost_with_pubkey(&buddy_keypair.pubkey());
 
         // Fill the cluster_info with the buddy's info
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
         cluster_info.insert_info(broadcast_buddy.info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
 
         let exit_sender = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
 
-        let leader_keypair = cluster_info.read().unwrap().keypair.clone();
+        let leader_keypair = cluster_info.keypair.clone();
         // Start up the broadcast stage
         let broadcast_service = BroadcastStage::new(
             leader_info.sockets.broadcast,

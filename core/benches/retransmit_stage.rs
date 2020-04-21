@@ -45,7 +45,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         peer_sockets.push(socket);
     }
     let peer_sockets = Arc::new(peer_sockets);
-    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let cluster_info = Arc::new(cluster_info);
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank0 = Bank::new(&genesis_config);

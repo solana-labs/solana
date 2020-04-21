@@ -36,7 +36,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         stakes.insert(id, thread_rng().gen_range(1, NUM_PEERS) as u64);
     }
     let stakes = Arc::new(stakes);
-    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let cluster_info = Arc::new(cluster_info);
     let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(stakes.clone()));
     let shreds = Arc::new(shreds);
     let last_datapoint = Arc::new(AtomicU64::new(0));

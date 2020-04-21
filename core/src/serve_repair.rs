@@ -647,7 +647,7 @@ mod tests {
     fn window_index_request() {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(me)));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me));
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let rv = serve_repair.repair_request(
             &cluster_slots,
@@ -673,7 +673,7 @@ mod tests {
             wallclock: 0,
             shred_version: 0,
         };
-        cluster_info.write().unwrap().insert_info(nxt.clone());
+        cluster_info.insert_info(nxt.clone());
         let rv = serve_repair
             .repair_request(
                 &cluster_slots,
@@ -701,7 +701,7 @@ mod tests {
             wallclock: 0,
             shred_version: 0,
         };
-        cluster_info.write().unwrap().insert_info(nxt);
+        cluster_info.insert_info(nxt);
         let mut one = false;
         let mut two = false;
         while !one || !two {

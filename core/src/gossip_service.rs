@@ -266,7 +266,7 @@ mod tests {
     use super::*;
     use crate::cluster_info::{ClusterInfo, Node};
     use std::sync::atomic::AtomicBool;
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
 
     #[test]
     #[ignore]
@@ -275,7 +275,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
-        let c = Arc::new(RwLock::new(cluster_info));
+        let c = Arc::new(cluster_info);
         let d = GossipService::new(&c, None, tn.sockets.gossip, &exit);
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();
@@ -289,16 +289,16 @@ mod tests {
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer0_info = ContactInfo::new_localhost(&peer0, 0);
         let peer1_info = ContactInfo::new_localhost(&peer1, 0);
-        let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
+        let cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
         cluster_info.insert_info(peer0_info.clone());
         cluster_info.insert_info(peer1_info);
 
-        let spy_ref = Arc::new(RwLock::new(cluster_info));
+        let spy_ref = Arc::new(cluster_info);
 
         let (met_criteria, secs, tvu_peers, _) = spy(spy_ref.clone(), None, Some(1), None, None);
         assert_eq!(met_criteria, false);
         assert_eq!(secs, 1);
-        assert_eq!(tvu_peers, spy_ref.read().unwrap().tvu_peers());
+        assert_eq!(tvu_peers, spy_ref.tvu_peers());
 
         // Find num_nodes
         let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), None, None, None);

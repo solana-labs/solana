@@ -1548,9 +1548,7 @@ pub mod tests {
             StorageState::default(),
             validator_exit,
         )));
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::default(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,
@@ -2248,9 +2246,7 @@ pub mod tests {
                 );
                 Arc::new(RwLock::new(request_processor))
             },
-            cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-                ContactInfo::default(),
-            ))),
+            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
             genesis_hash: Hash::default(),
         };
 
@@ -2267,9 +2263,9 @@ pub mod tests {
 
     #[test]
     fn test_rpc_get_tpu_addr() {
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-        )));
+        ));
         assert_eq!(
             get_tpu_addr(&cluster_info),
             Ok(socketaddr!("127.0.0.1:1234"))

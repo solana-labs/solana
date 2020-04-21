@@ -10,7 +10,7 @@ use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -65,11 +65,10 @@ fn gossip_ring() {
         for n in 0..num {
             let y = n % listen.len();
             let x = (n + 1) % listen.len();
-            let mut xv = listen[x].0.write().unwrap();
-            let yv = listen[y].0.read().unwrap();
-            let mut d = yv.lookup(&yv.id()).unwrap().clone();
+            let yv = &listen[y].0;
+            let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             d.wallclock = timestamp();
-            xv.insert_info(d);
+            listen[x].0.insert_info(d);
         }
     });
 }
@@ -84,11 +83,10 @@ fn gossip_ring_large() {
         for n in 0..num {
             let y = n % listen.len();
             let x = (n + 1) % listen.len();
-            let mut xv = listen[x].0.write().unwrap();
-            let yv = listen[y].0.read().unwrap();
-            let mut d = yv.lookup(&yv.id()).unwrap().clone();
+            let yv = &listen[y].0;
+            let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             d.wallclock = timestamp();
-            xv.insert_info(d);
+            listen[x].0.insert_info(d);
         }
     });
 }
@@ -101,10 +99,10 @@ fn gossip_star() {
         for n in 0..(num - 1) {
             let x = 0;
             let y = (n + 1) % listen.len();
-            let mut xv = listen[x].0.write().unwrap();
-            let yv = listen[y].0.read().unwrap();
-            let mut yd = yv.lookup(&yv.id()).unwrap().clone();
+            let yv = &listen[y].0;
+            let mut yd = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             yd.wallclock = timestamp();
+            let xv = &listen[x].0;
             xv.insert_info(yd);
             trace!("star leader {}", &xv.id());
         }
@@ -118,13 +116,13 @@ fn gossip_rstar() {
     run_gossip_topo(10, |listen| {
         let num = listen.len();
         let xd = {
-            let xv = listen[0].0.read().unwrap();
-            xv.lookup(&xv.id()).unwrap().clone()
+            let xv = &listen[0].0;
+            xv.lookup_contact_info(&xv.id(), |ci| ci.clone()).unwrap()
         };
         trace!("rstar leader {}", xd.id);
         for n in 0..(num - 1) {
             let y = (n + 1) % listen.len();
-            let mut yv = listen[y].0.write().unwrap();
+            let yv = &listen[y].0;
             yv.insert_info(xd.clone());
             trace!("rstar insert {} into {}", xd.id, yv.id());
         }
@@ -141,10 +139,10 @@ pub fn cluster_info_retransmit() {
     let (c2, dr2, tn2) = test_node(&exit);
     trace!("c3:");
     let (c3, dr3, tn3) = test_node(&exit);
-    let c1_contact_info = c1.read().unwrap().my_contact_info();
+    let c1_contact_info = c1.my_contact_info();
 
-    c2.write().unwrap().insert_info(c1_contact_info.clone());
-    c3.write().unwrap().insert_info(c1_contact_info);
+    c2.insert_info(c1_contact_info.clone());
+    c3.insert_info(c1_contact_info);
 
     let num = 3;
 
@@ -152,9 +150,9 @@ pub fn cluster_info_retransmit() {
     trace!("waiting to converge:");
     let mut done = false;
     for _ in 0..30 {
-        done = c1.read().unwrap().gossip_peers().len() == num - 1
-            && c2.read().unwrap().gossip_peers().len() == num - 1
-            && c3.read().unwrap().gossip_peers().len() == num - 1;
+        done = c1.gossip_peers().len() == num - 1
+            && c2.gossip_peers().len() == num - 1
+            && c3.gossip_peers().len() == num - 1;
         if done {
             break;
         }
@@ -163,7 +161,7 @@ pub fn cluster_info_retransmit() {
     assert!(done);
     let mut p = Packet::default();
     p.meta.size = 10;
-    let peers = c1.read().unwrap().retransmit_peers();
+    let peers = c1.retransmit_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
     ClusterInfo::retransmit_to(&retransmit_peers, &mut p, None, &tn1, false).unwrap();
     let res: Vec<_> = [tn1, tn2, tn3]

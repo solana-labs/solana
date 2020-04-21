@@ -595,7 +595,9 @@ mod test {
         let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info.clone());
         RepairService::update_lowest_slot(&Pubkey::default(), 5, &cluster_info);
         let lowest = cluster_info
-            .get_lowest_slot_for_node(&Pubkey::default(), None, |lowest_slot, _| *lowest_slot)
+            .get_lowest_slot_for_node(&Pubkey::default(), None, |lowest_slot, _| {
+                lowest_slot.clone()
+            })
             .unwrap();
         assert_eq!(lowest.lowest, 5);
     }
