@@ -27,15 +27,10 @@ impl ClusterSlots {
     pub fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
         self.cluster_slots.read().unwrap().get(&slot).cloned()
     }
-    pub fn update(
-        &self,
-        root: Slot,
-        cluster_info: &RwLock<ClusterInfo>,
-        bank_forks: &RwLock<BankForks>,
-    ) {
+    pub fn update(&self, root: Slot, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
         self.update_peers(cluster_info, bank_forks);
         let since = *self.since.read().unwrap();
-        let epoch_slots = cluster_info.read().unwrap().get_epoch_slots_since(since);
+        let epoch_slots = cluster_info.get_epoch_slots_since(since);
         self.update_internal(root, epoch_slots);
     }
     fn update_internal(&self, root: Slot, epoch_slots: (Vec<EpochSlots>, Option<u64>)) {
@@ -95,7 +90,7 @@ impl ClusterSlots {
             .collect()
     }
 
-    fn update_peers(&self, cluster_info: &RwLock<ClusterInfo>, bank_forks: &RwLock<BankForks>) {
+    fn update_peers(&self, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
         let root_bank = bank_forks.read().unwrap().root_bank().clone();
         let root_epoch = root_bank.epoch();
         let my_epoch = *self.epoch.read().unwrap();
@@ -111,7 +106,7 @@ impl ClusterSlots {
                 .clone();
 
             *self.validator_stakes.write().unwrap() = validator_stakes;
-            let id = cluster_info.read().unwrap().id();
+            let id = cluster_info.id();
             *self.self_id.write().unwrap() = id;
             *self.epoch.write().unwrap() = Some(root_epoch);
         }

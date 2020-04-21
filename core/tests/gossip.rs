@@ -10,19 +10,16 @@ use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
+fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
     let keypair = Arc::new(Keypair::new());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-    let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
-        test_node.info.clone(),
-        keypair,
-    )));
+    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
     let gossip_service = GossipService::new(&cluster_info, None, test_node.sockets.gossip, exit);
-    let _ = cluster_info.read().unwrap().my_data();
+    let _ = cluster_info.my_contact_info();
     (
         cluster_info,
         gossip_service,
@@ -36,7 +33,7 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(num: usize, topo: F)
 where
-    F: Fn(&Vec<(Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket)>) -> (),
+    F: Fn(&Vec<(Arc<ClusterInfo>, GossipService, UdpSocket)>) -> (),
 {
     let exit = Arc::new(AtomicBool::new(false));
     let listen: Vec<_> = (0..num).map(|_| test_node(&exit)).collect();
@@ -44,10 +41,7 @@ where
     let mut done = true;
     for i in 0..(num * 32) {
         done = true;
-        let total: usize = listen
-            .iter()
-            .map(|v| v.0.read().unwrap().gossip_peers().len())
-            .sum();
+        let total: usize = listen.iter().map(|v| v.0.gossip_peers().len()).sum();
         if (total + num) * 10 > num * num * 9 {
             done = true;
             break;
@@ -71,11 +65,10 @@ fn gossip_ring() {
         for n in 0..num {
             let y = n % listen.len();
             let x = (n + 1) % listen.len();
-            let mut xv = listen[x].0.write().unwrap();
-            let yv = listen[y].0.read().unwrap();
-            let mut d = yv.lookup(&yv.id()).unwrap().clone();
+            let yv = &listen[y].0;
+            let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             d.wallclock = timestamp();
-            xv.insert_info(d);
+            listen[x].0.insert_info(d);
         }
     });
 }
@@ -90,11 +83,10 @@ fn gossip_ring_large() {
         for n in 0..num {
             let y = n % listen.len();
             let x = (n + 1) % listen.len();
-            let mut xv = listen[x].0.write().unwrap();
-            let yv = listen[y].0.read().unwrap();
-            let mut d = yv.lookup(&yv.id()).unwrap().clone();
+            let yv = &listen[y].0;
+            let mut d = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             d.wallclock = timestamp();
-            xv.insert_info(d);
+            listen[x].0.insert_info(d);
         }
     });
 }
@@ -107,10 +99,10 @@ fn gossip_star() {
         for n in 0..(num - 1) {
             let x = 0;
             let y = (n + 1) % listen.len();
-            let mut xv = listen[x].0.write().unwrap();
-            let yv = listen[y].0.read().unwrap();
-            let mut yd = yv.lookup(&yv.id()).unwrap().clone();
+            let yv = &listen[y].0;
+            let mut yd = yv.lookup_contact_info(&yv.id(), |ci| ci.clone()).unwrap();
             yd.wallclock = timestamp();
+            let xv = &listen[x].0;
             xv.insert_info(yd);
             trace!("star leader {}", &xv.id());
         }
@@ -124,13 +116,13 @@ fn gossip_rstar() {
     run_gossip_topo(10, |listen| {
         let num = listen.len();
         let xd = {
-            let xv = listen[0].0.read().unwrap();
-            xv.lookup(&xv.id()).unwrap().clone()
+            let xv = &listen[0].0;
+            xv.lookup_contact_info(&xv.id(), |ci| ci.clone()).unwrap()
         };
         trace!("rstar leader {}", xd.id);
         for n in 0..(num - 1) {
             let y = (n + 1) % listen.len();
-            let mut yv = listen[y].0.write().unwrap();
+            let yv = &listen[y].0;
             yv.insert_info(xd.clone());
             trace!("rstar insert {} into {}", xd.id, yv.id());
         }
@@ -147,10 +139,10 @@ pub fn cluster_info_retransmit() {
     let (c2, dr2, tn2) = test_node(&exit);
     trace!("c3:");
     let (c3, dr3, tn3) = test_node(&exit);
-    let c1_data = c1.read().unwrap().my_data().clone();
+    let c1_contact_info = c1.my_contact_info();
 
-    c2.write().unwrap().insert_info(c1_data.clone());
-    c3.write().unwrap().insert_info(c1_data.clone());
+    c2.insert_info(c1_contact_info.clone());
+    c3.insert_info(c1_contact_info);
 
     let num = 3;
 
@@ -158,9 +150,9 @@ pub fn cluster_info_retransmit() {
     trace!("waiting to converge:");
     let mut done = false;
     for _ in 0..30 {
-        done = c1.read().unwrap().gossip_peers().len() == num - 1
-            && c2.read().unwrap().gossip_peers().len() == num - 1
-            && c3.read().unwrap().gossip_peers().len() == num - 1;
+        done = c1.gossip_peers().len() == num - 1
+            && c2.gossip_peers().len() == num - 1
+            && c3.gossip_peers().len() == num - 1;
         if done {
             break;
         }
@@ -169,7 +161,7 @@ pub fn cluster_info_retransmit() {
     assert!(done);
     let mut p = Packet::default();
     p.meta.size = 10;
-    let peers = c1.read().unwrap().retransmit_peers();
+    let peers = c1.retransmit_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
     ClusterInfo::retransmit_to(&retransmit_peers, &mut p, None, &tn1, false).unwrap();
     let res: Vec<_> = [tn1, tn2, tn3]

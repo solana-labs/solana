@@ -38,7 +38,7 @@ const MAX_PACKET_BATCH_SIZE: usize = 100;
 fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    cluster_info: &ClusterInfo,
     r: &Arc<Mutex<PacketReceiver>>,
     sock: &UdpSocket,
     id: u32,
@@ -63,11 +63,8 @@ fn retransmit(
     let mut peers_len = 0;
     let stakes = staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch);
     let stakes = stakes.map(Arc::new);
-    let (peers, stakes_and_index) = cluster_info
-        .read()
-        .unwrap()
-        .sorted_retransmit_peers_and_stakes(stakes);
-    let me = cluster_info.read().unwrap().my_data();
+    let (peers, stakes_and_index) = cluster_info.sorted_retransmit_peers_and_stakes(stakes);
+    let my_id = cluster_info.id();
     let mut discard_total = 0;
     let mut repair_total = 0;
     let mut retransmit_total = 0;
@@ -88,7 +85,7 @@ fn retransmit(
 
             let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
-                &me.id,
+                &my_id,
                 &peers,
                 &stakes_and_index,
                 packet.meta.seed,
@@ -154,7 +151,7 @@ pub fn retransmitter(
     sockets: Arc<Vec<UdpSocket>>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    cluster_info: Arc<RwLock<ClusterInfo>>,
+    cluster_info: Arc<ClusterInfo>,
     r: Arc<Mutex<PacketReceiver>>,
 ) -> Vec<JoinHandle<()>> {
     (0..sockets.len())
@@ -206,7 +203,7 @@ impl RetransmitStage {
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         blockstore: Arc<Blockstore>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
@@ -316,11 +313,11 @@ mod tests {
             .unwrap();
 
         let other = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(other);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 
         let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
         let t_retransmit = retransmitter(

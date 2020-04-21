@@ -540,8 +540,8 @@ impl JsonRpcRequestProcessor {
     }
 }
 
-fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
-    let contact_info = cluster_info.read().unwrap().my_data();
+fn get_tpu_addr(cluster_info: &ClusterInfo) -> Result<SocketAddr> {
+    let contact_info = cluster_info.my_contact_info();
     Ok(contact_info.tpu)
 }
 
@@ -556,7 +556,7 @@ fn verify_signature(input: &str) -> Result<Signature> {
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
-    pub cluster_info: Arc<RwLock<ClusterInfo>>,
+    pub cluster_info: Arc<ClusterInfo>,
     pub genesis_hash: Hash,
 }
 impl Metadata for Meta {}
@@ -902,7 +902,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
-        let cluster_info = meta.cluster_info.read().unwrap();
+        let cluster_info = &meta.cluster_info;
         fn valid_address_or_none(addr: &SocketAddr) -> Option<SocketAddr> {
             if ContactInfo::is_valid_address(addr) {
                 Some(*addr)
@@ -910,12 +910,12 @@ impl RpcSol for RpcSolImpl {
                 None
             }
         }
-        let shred_version = cluster_info.my_data().shred_version;
+        let my_shred_version = cluster_info.my_shred_version();
         Ok(cluster_info
             .all_peers()
             .iter()
             .filter_map(|(contact_info, _)| {
-                if shred_version == contact_info.shred_version
+                if my_shred_version == contact_info.shred_version
                     && ContactInfo::is_valid_address(&contact_info.gossip)
                 {
                     Some(RpcContactInfo {
@@ -1555,17 +1555,12 @@ pub mod tests {
             StorageState::default(),
             validator_exit,
         )));
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::default(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
-        cluster_info
-            .write()
-            .unwrap()
-            .insert_info(ContactInfo::new_with_pubkey_socketaddr(
-                &leader_pubkey,
-                &socketaddr!("127.0.0.1:1234"),
-            ));
+        cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
+            &leader_pubkey,
+            &socketaddr!("127.0.0.1:1234"),
+        ));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -2258,9 +2253,7 @@ pub mod tests {
                 );
                 Arc::new(RwLock::new(request_processor))
             },
-            cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-                ContactInfo::default(),
-            ))),
+            cluster_info: Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default())),
             genesis_hash: Hash::default(),
         };
 
@@ -2277,9 +2270,9 @@ pub mod tests {
 
     #[test]
     fn test_rpc_get_tpu_addr() {
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-        )));
+        ));
         assert_eq!(
             get_tpu_addr(&cluster_info),
             Ok(socketaddr!("127.0.0.1:1234"))

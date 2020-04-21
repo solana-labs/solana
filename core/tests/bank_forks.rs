@@ -25,7 +25,6 @@ mod tests {
         signature::{Keypair, Signer},
         system_transaction,
     };
-    use std::sync::RwLock;
     use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
     use tempfile::TempDir;
 
@@ -319,9 +318,7 @@ mod tests {
         // channel hold hard links to these deleted snapshots. We verify this is the case below.
         let exit = Arc::new(AtomicBool::new(false));
 
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::default(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         let snapshot_packager_service =
             SnapshotPackagerService::new(receiver, None, &exit, &cluster_info, None);

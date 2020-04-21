@@ -235,10 +235,7 @@ impl Validator {
             }
         }
 
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
-            node.info.clone(),
-            keypair.clone(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
 
         let storage_state = StorageState::new(
             &bank.last_blockhash(),
@@ -370,10 +367,7 @@ impl Validator {
         // Insert the entrypoint info, should only be None if this node
         // is the bootstrap validator
         if let Some(entrypoint_info) = entrypoint_info_option {
-            cluster_info
-                .write()
-                .unwrap()
-                .set_entrypoint(entrypoint_info.clone());
+            cluster_info.set_entrypoint(entrypoint_info.clone());
         }
 
         let (snapshot_packager_service, snapshot_package_sender) =
@@ -647,11 +641,7 @@ fn new_banks_from_blockstore(
     )
 }
 
-fn wait_for_supermajority(
-    config: &ValidatorConfig,
-    bank: &Arc<Bank>,
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
-) {
+fn wait_for_supermajority(config: &ValidatorConfig, bank: &Bank, cluster_info: &ClusterInfo) {
     if config.wait_for_supermajority != Some(bank.slot()) {
         return;
     }
@@ -796,11 +786,7 @@ fn report_target_features() {
 }
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
-fn get_stake_percent_in_gossip(
-    bank: &Arc<Bank>,
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
-    log: bool,
-) -> u64 {
+fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: bool) -> u64 {
     let mut online_stake = 0;
     let mut wrong_shred_stake = 0;
     let mut wrong_shred_nodes = vec![];
@@ -808,9 +794,9 @@ fn get_stake_percent_in_gossip(
     let mut offline_nodes = vec![];
 
     let mut total_activated_stake = 0;
-    let all_tvu_peers = cluster_info.read().unwrap().all_tvu_peers();
-    let my_shred_version = cluster_info.read().unwrap().my_data().shred_version;
-    let my_id = cluster_info.read().unwrap().id();
+    let all_tvu_peers = cluster_info.all_tvu_peers();
+    let my_shred_version = cluster_info.my_shred_version();
+    let my_id = cluster_info.id();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
         let vote_state =

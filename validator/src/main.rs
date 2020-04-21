@@ -43,7 +43,7 @@ use std::{
     str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+        Arc,
     },
     thread::sleep,
     time::{Duration, Instant},
@@ -78,10 +78,10 @@ fn hash_validator(hash: String) -> Result<(), String> {
 }
 
 fn get_shred_rpc_peers(
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    cluster_info: &ClusterInfo,
     expected_shred_version: Option<u16>,
 ) -> Vec<ContactInfo> {
-    let rpc_peers = cluster_info.read().unwrap().all_rpc_peers();
+    let rpc_peers = cluster_info.all_rpc_peers();
     match expected_shred_version {
         Some(expected_shred_version) => {
             // Filter out rpc peers that don't match the expected shred version
@@ -114,21 +114,17 @@ fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>
 }
 
 fn get_trusted_snapshot_hashes(
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    cluster_info: &ClusterInfo,
     trusted_validators: &Option<HashSet<Pubkey>>,
 ) -> Option<HashSet<(Slot, Hash)>> {
     if let Some(trusted_validators) = trusted_validators {
         let mut trusted_snapshot_hashes = HashSet::new();
         for trusted_validator in trusted_validators {
-            if let Some(snapshot_hashes) = cluster_info
-                .read()
-                .unwrap()
-                .get_snapshot_hash_for_node(trusted_validator)
-            {
+            cluster_info.get_snapshot_hash_for_node(trusted_validator, |snapshot_hashes| {
                 for snapshot_hash in snapshot_hashes {
                     trusted_snapshot_hashes.insert(*snapshot_hash);
                 }
-            }
+            });
         }
         Some(trusted_snapshot_hashes)
     } else {
@@ -141,13 +137,13 @@ fn start_gossip_node(
     entrypoint_gossip: &SocketAddr,
     gossip_addr: &SocketAddr,
     gossip_socket: UdpSocket,
-) -> (Arc<RwLock<ClusterInfo>>, Arc<AtomicBool>, GossipService) {
-    let mut cluster_info = ClusterInfo::new(
+) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
+    let cluster_info = ClusterInfo::new(
         ClusterInfo::gossip_contact_info(&identity_keypair.pubkey(), *gossip_addr),
         identity_keypair.clone(),
     );
     cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint_gossip));
-    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
     let gossip_service = GossipService::new(
@@ -160,7 +156,7 @@ fn start_gossip_node(
 }
 
 fn get_rpc_node(
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    cluster_info: &ClusterInfo,
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
@@ -173,7 +169,7 @@ fn get_rpc_node(
             validator_config.expected_shred_version
         );
         sleep(Duration::from_secs(1));
-        info!("\n{}", cluster_info.read().unwrap().contact_info_trace());
+        info!("\n{}", cluster_info.contact_info_trace());
 
         let rpc_peers = get_shred_rpc_peers(&cluster_info, validator_config.expected_shred_version);
         let rpc_peers_total = rpc_peers.len();
@@ -222,11 +218,7 @@ fn get_rpc_node(
                 {
                     continue;
                 }
-                if let Some(snapshot_hashes) = cluster_info
-                    .read()
-                    .unwrap()
-                    .get_snapshot_hash_for_node(&rpc_peer.id)
-                {
+                cluster_info.get_snapshot_hash_for_node(&rpc_peer.id, |snapshot_hashes| {
                     for snapshot_hash in snapshot_hashes {
                         if let Some(ref trusted_snapshot_hashes) = trusted_snapshot_hashes {
                             if !trusted_snapshot_hashes.contains(snapshot_hash) {
@@ -247,7 +239,7 @@ fn get_rpc_node(
                             eligible_rpc_peers.push(rpc_peer.clone());
                         }
                     }
-                }
+                });
             }
 
             match highest_snapshot_hash {

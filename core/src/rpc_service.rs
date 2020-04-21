@@ -42,7 +42,7 @@ struct RpcRequestMiddleware {
     ledger_path: PathBuf,
     snapshot_archive_path_regex: Regex,
     snapshot_config: Option<SnapshotConfig>,
-    cluster_info: Arc<RwLock<ClusterInfo>>,
+    cluster_info: Arc<ClusterInfo>,
     trusted_validators: Option<HashSet<Pubkey>>,
 }
 
@@ -50,7 +50,7 @@ impl RpcRequestMiddleware {
     pub fn new(
         ledger_path: PathBuf,
         snapshot_config: Option<SnapshotConfig>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         trusted_validators: Option<HashSet<Pubkey>>,
     ) -> Self {
         Self {
@@ -134,22 +134,27 @@ impl RpcRequestMiddleware {
     fn health_check(&self) -> &'static str {
         let response = if let Some(trusted_validators) = &self.trusted_validators {
             let (latest_account_hash_slot, latest_trusted_validator_account_hash_slot) = {
-                let cluster_info = self.cluster_info.read().unwrap();
                 (
-                    cluster_info
-                        .get_accounts_hash_for_node(&cluster_info.id())
-                        .map(|hashes| hashes.iter().max_by(|a, b| a.0.cmp(&b.0)))
+                    self.cluster_info
+                        .get_accounts_hash_for_node(&self.cluster_info.id(), |hashes| {
+                            hashes
+                                .iter()
+                                .max_by(|a, b| a.0.cmp(&b.0))
+                                .map(|slot_hash| slot_hash.0)
+                        })
                         .flatten()
-                        .map(|slot_hash| slot_hash.0)
                         .unwrap_or(0),
                     trusted_validators
                         .iter()
                         .map(|trusted_validator| {
-                            cluster_info
-                                .get_accounts_hash_for_node(&trusted_validator)
-                                .map(|hashes| hashes.iter().max_by(|a, b| a.0.cmp(&b.0)))
+                            self.cluster_info
+                                .get_accounts_hash_for_node(&trusted_validator, |hashes| {
+                                    hashes
+                                        .iter()
+                                        .max_by(|a, b| a.0.cmp(&b.0))
+                                        .map(|slot_hash| slot_hash.0)
+                                })
                                 .flatten()
-                                .map(|slot_hash| slot_hash.0)
                                 .unwrap_or(0)
                         })
                         .max()
@@ -244,7 +249,7 @@ impl JsonRpcService {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
         ledger_path: &Path,
         storage_state: StorageState,
@@ -367,9 +372,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let bank = Bank::new(&genesis_config);
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::default(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let rpc_addr = SocketAddr::new(
             ip_addr,
@@ -412,9 +415,7 @@ mod tests {
 
     #[test]
     fn test_is_get_path() {
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::default(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         let rrm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info.clone(), None);
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
@@ -451,9 +452,7 @@ mod tests {
 
     #[test]
     fn test_health_check_with_no_trusted_validators() {
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::default(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, cluster_info.clone(), None);
         assert_eq!(rm.health_check(), "ok");
@@ -461,9 +460,7 @@ mod tests {
 
     #[test]
     fn test_health_check_with_trusted_validators() {
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::default(),
-        )));
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         let trusted_validators = vec![Pubkey::new_rand(), Pubkey::new_rand(), Pubkey::new_rand()];
         let rm = RpcRequestMiddleware::new(
@@ -477,66 +474,59 @@ mod tests {
         assert_eq!(rm.health_check(), "behind");
 
         // No account hashes for any trusted validators == "behind"
-        {
-            let mut cluster_info = cluster_info.write().unwrap();
-            cluster_info
-                .push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
-        }
+        cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
         assert_eq!(rm.health_check(), "behind");
 
         // This node is ahead of the trusted validators == "ok"
-        {
-            let mut cluster_info = cluster_info.write().unwrap();
-            cluster_info
-                .gossip
-                .crds
-                .insert(
-                    CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                        trusted_validators[0].clone(),
-                        vec![
-                            (1, Hash::default()),
-                            (1001, Hash::default()),
-                            (2, Hash::default()),
-                        ],
-                    ))),
-                    1,
-                )
-                .unwrap();
-        }
+        cluster_info
+            .gossip
+            .write()
+            .unwrap()
+            .crds
+            .insert(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
+                    trusted_validators[0].clone(),
+                    vec![
+                        (1, Hash::default()),
+                        (1001, Hash::default()),
+                        (2, Hash::default()),
+                    ],
+                ))),
+                1,
+            )
+            .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
         // Node is slightly behind the trusted validators == "ok"
-        {
-            let mut cluster_info = cluster_info.write().unwrap();
-            cluster_info
-                .gossip
-                .crds
-                .insert(
-                    CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                        trusted_validators[1].clone(),
-                        vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE - 1, Hash::default())],
-                    ))),
-                    1,
-                )
-                .unwrap();
-        }
+        cluster_info
+            .gossip
+            .write()
+            .unwrap()
+            .crds
+            .insert(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
+                    trusted_validators[1].clone(),
+                    vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE - 1, Hash::default())],
+                ))),
+                1,
+            )
+            .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
         // Node is far behind the trusted validators == "behind"
-        {
-            let mut cluster_info = cluster_info.write().unwrap();
-            cluster_info
-                .gossip
-                .crds
-                .insert(
-                    CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                        trusted_validators[2].clone(),
-                        vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE, Hash::default())],
-                    ))),
-                    1,
-                )
-                .unwrap();
-        }
+        cluster_info
+            .gossip
+            .write()
+            .unwrap()
+            .crds
+            .insert(
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
+                    trusted_validators[2].clone(),
+                    vec![(1000 + HEALTH_CHECK_SLOT_DISTANCE, Hash::default())],
+                ))),
+                1,
+            )
+            .unwrap();
         assert_eq!(rm.health_check(), "behind");
     }
 }

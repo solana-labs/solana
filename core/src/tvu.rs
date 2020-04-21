@@ -84,7 +84,7 @@ impl Tvu {
         authorized_voter_keypairs: Vec<Arc<Keypair>>,
         storage_keypair: &Arc<Keypair>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         sockets: Sockets,
         blockstore: Arc<Blockstore>,
         storage_state: &StorageState,
@@ -103,11 +103,7 @@ impl Tvu {
         retransmit_slots_sender: RetransmitSlotsSender,
         tvu_config: TvuConfig,
     ) -> Self {
-        let keypair: Arc<Keypair> = cluster_info
-            .read()
-            .expect("Unable to read from cluster_info during Tvu creation")
-            .keypair
-            .clone();
+        let keypair: Arc<Keypair> = cluster_info.keypair.clone();
 
         let Sockets {
             repair: repair_socket,
@@ -178,7 +174,7 @@ impl Tvu {
             accounts_hash_receiver,
             snapshot_package_sender,
             exit,
-            cluster_info,
+            &cluster_info,
             tvu_config.trusted_validators.clone(),
             tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
@@ -286,9 +282,9 @@ pub mod tests {
         let bank_forks = BankForks::new(0, Bank::new(&genesis_config));
 
         //start cluster_info1
-        let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
+        let cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
         cluster_info1.insert_info(leader.info.clone());
-        let cref1 = Arc::new(RwLock::new(cluster_info1));
+        let cref1 = Arc::new(cluster_info1);
 
         let (blockstore_path, _) = create_new_tmp_ledger!(&genesis_config);
         let (blockstore, l_receiver, completed_slots_receiver) =

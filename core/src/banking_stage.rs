@@ -41,7 +41,7 @@ use std::{
     net::UdpSocket,
     sync::atomic::AtomicBool,
     sync::mpsc::Receiver,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     thread::{self, Builder, JoinHandle},
     time::Duration,
     time::Instant,
@@ -76,7 +76,7 @@ impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
@@ -93,7 +93,7 @@ impl BankingStage {
     }
 
     fn new_num_threads(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
@@ -104,7 +104,7 @@ impl BankingStage {
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
-        let my_pubkey = cluster_info.read().unwrap().id();
+        let my_pubkey = cluster_info.id();
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
@@ -287,7 +287,7 @@ impl BankingStage {
         my_pubkey: &Pubkey,
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         buffered_packets: &mut Vec<PacketsAndOffsets>,
         enable_forwarding: bool,
         batch_limit: usize,
@@ -331,10 +331,7 @@ impl BankingStage {
                     next_leader.map_or((), |leader_pubkey| {
                         let leader_addr = {
                             cluster_info
-                                .read()
-                                .unwrap()
-                                .lookup(&leader_pubkey)
-                                .map(|leader| leader.tpu_forwards)
+                                .lookup_contact_info(&leader_pubkey, |leader| leader.tpu_forwards)
                         };
 
                         leader_addr.map_or((), |leader_addr| {
@@ -358,7 +355,7 @@ impl BankingStage {
         my_pubkey: Pubkey,
         verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
         enable_forwarding: bool,
         id: u32,
@@ -1049,7 +1046,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, _entry_receiever) =
                 create_test_recorder(&bank, &blockstore, None);
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
@@ -1089,7 +1086,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
@@ -1152,7 +1149,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
@@ -1293,7 +1290,7 @@ mod tests {
                     create_test_recorder(&bank, &blockstore, Some(poh_config));
                 let cluster_info =
                     ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-                let cluster_info = Arc::new(RwLock::new(cluster_info));
+                let cluster_info = Arc::new(cluster_info);
                 let _banking_stage = BankingStage::new_num_threads(
                     &cluster_info,
                     &poh_recorder,

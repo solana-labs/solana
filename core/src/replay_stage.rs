@@ -114,7 +114,7 @@ impl ReplayStage {
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
@@ -689,7 +689,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_bank_sender: &Sender<Vec<Arc<Bank>>>,
@@ -762,7 +762,7 @@ impl ReplayStage {
     }
 
     fn push_vote(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         bank: &Arc<Bank>,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
@@ -815,7 +815,7 @@ impl ReplayStage {
             }
             Some(authorized_voter_keypair) => authorized_voter_keypair,
         };
-        let node_keypair = cluster_info.read().unwrap().keypair.clone();
+        let node_keypair = cluster_info.keypair.clone();
 
         // Send our last few votes along with the new one
         let vote_ix = vote_instruction::vote(
@@ -829,10 +829,7 @@ impl ReplayStage {
         let blockhash = bank.last_blockhash();
         vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
         vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
-        cluster_info
-            .write()
-            .unwrap()
-            .push_vote(tower_index, vote_tx);
+        cluster_info.push_vote(tower_index, vote_tx);
     }
 
     fn update_commitment_cache(

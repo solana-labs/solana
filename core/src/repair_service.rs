@@ -81,7 +81,7 @@ impl RepairService {
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: Arc<ClusterSlots>,
     ) -> Self {
@@ -106,12 +106,12 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: &Arc<ClusterSlots>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let id = cluster_info.read().unwrap().id();
+        let id = cluster_info.id();
         if let RepairStrategy::RepairAll { .. } = repair_strategy {
             Self::initialize_lowest_slot(id, blockstore, cluster_info);
         }
@@ -308,24 +308,17 @@ impl RepairService {
         }
     }
 
-    fn initialize_lowest_slot(
-        id: Pubkey,
-        blockstore: &Blockstore,
-        cluster_info: &RwLock<ClusterInfo>,
-    ) {
+    fn initialize_lowest_slot(id: Pubkey, blockstore: &Blockstore, cluster_info: &ClusterInfo) {
         // Safe to set into gossip because by this time, the leader schedule cache should
         // also be updated with the latest root (done in blockstore_processor) and thus
         // will provide a schedule to window_service for any incoming shreds up to the
         // last_confirmed_epoch.
-        cluster_info
-            .write()
-            .unwrap()
-            .push_lowest_slot(id, blockstore.lowest_slot());
+        cluster_info.push_lowest_slot(id, blockstore.lowest_slot());
     }
 
     fn update_completed_slots(
         completed_slots_receiver: &CompletedSlotsReceiver,
-        cluster_info: &RwLock<ClusterInfo>,
+        cluster_info: &ClusterInfo,
     ) {
         let mut slots: Vec<Slot> = vec![];
         while let Ok(mut more) = completed_slots_receiver.try_recv() {
@@ -333,20 +326,17 @@ impl RepairService {
         }
         slots.sort();
         if !slots.is_empty() {
-            cluster_info.write().unwrap().push_epoch_slots(&slots);
+            cluster_info.push_epoch_slots(&slots);
         }
     }
 
-    fn update_lowest_slot(id: &Pubkey, lowest_slot: Slot, cluster_info: &RwLock<ClusterInfo>) {
-        cluster_info
-            .write()
-            .unwrap()
-            .push_lowest_slot(*id, lowest_slot);
+    fn update_lowest_slot(id: &Pubkey, lowest_slot: Slot, cluster_info: &ClusterInfo) {
+        cluster_info.push_lowest_slot(*id, lowest_slot);
     }
 
     fn initialize_epoch_slots(
         blockstore: &Blockstore,
-        cluster_info: &RwLock<ClusterInfo>,
+        cluster_info: &ClusterInfo,
         completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
         let root = blockstore.last_root();
@@ -367,7 +357,7 @@ impl RepairService {
         slots.sort();
         slots.dedup();
         if !slots.is_empty() {
-            cluster_info.write().unwrap().push_epoch_slots(&slots);
+            cluster_info.push_epoch_slots(&slots);
         }
     }
 
@@ -602,17 +592,13 @@ mod test {
     #[test]
     pub fn test_update_lowest_slot() {
         let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
-        let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            node_info.info.clone(),
-        ));
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info.clone());
         RepairService::update_lowest_slot(&Pubkey::default(), 5, &cluster_info);
         let lowest = cluster_info
-            .read()
-            .unwrap()
-            .get_lowest_slot_for_node(&Pubkey::default(), None)
-            .unwrap()
-            .0
-            .clone();
+            .get_lowest_slot_for_node(&Pubkey::default(), None, |lowest_slot, _| {
+                lowest_slot.clone()
+            })
+            .unwrap();
         assert_eq!(lowest.lowest, 5);
     }
 }

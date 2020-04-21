@@ -17,10 +17,7 @@ use solana_sdk::{
     genesis_config::create_genesis_config,
     signature::{Keypair, Signer},
 };
-use std::{
-    fs::remove_dir_all,
-    sync::{Arc, RwLock},
-};
+use std::{fs::remove_dir_all, sync::Arc};
 
 /// Start the cluster with the given configuration and wait till the archivers are discovered
 /// Then download shreds from one of them.
@@ -59,9 +56,9 @@ fn run_archiver_startup_basic(num_nodes: usize, num_archivers: usize) {
     }
     assert_eq!(archiver_count, num_archivers);
 
-    let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+    let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
         cluster_nodes[0].clone(),
-    )));
+    ));
     let serve_repair = ServeRepair::new(cluster_info);
     let path = get_tmp_ledger_path!();
     let blockstore = Arc::new(Blockstore::open(&path).unwrap());
