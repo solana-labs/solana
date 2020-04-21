@@ -854,7 +854,7 @@ pub(crate) mod tests {
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 10, bank1, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 0, 10, bank1, 0);
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions =

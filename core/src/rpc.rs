@@ -1477,6 +1477,7 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
+            0,
             10,
             bank.clone(),
             0,
@@ -2430,6 +2431,7 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
+            0,
             42,
             bank_forks.read().unwrap().working_bank(),
             0,

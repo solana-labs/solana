@@ -684,7 +684,7 @@ mod tests {
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
         let mut new_block_commitment =
-            BlockCommitmentCache::new(block_commitment, 10, bank1.clone(), 0);
+            BlockCommitmentCache::new(block_commitment, 0, 10, bank1.clone(), 0);
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         drop(w_block_commitment_cache);
@@ -698,7 +698,7 @@ mod tests {
         cache0.increase_confirmation_stake(2, 10);
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
-        let mut new_block_commitment = BlockCommitmentCache::new(block_commitment, 10, bank2, 0);
+        let mut new_block_commitment = BlockCommitmentCache::new(block_commitment, 0, 10, bank2, 0);
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         drop(w_block_commitment_cache);

@@ -5,7 +5,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
     sync::{Arc, RwLock},
@@ -48,6 +48,7 @@ impl BlockCommitment {
 #[derive(Default)]
 pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
+    largest_confirmed_root: Slot,
     total_stake: u64,
     bank: Arc<Bank>,
     root: Slot,
@@ -70,12 +71,14 @@ impl std::fmt::Debug for BlockCommitmentCache {
 impl BlockCommitmentCache {
     pub fn new(
         block_commitment: HashMap<Slot, BlockCommitment>,
+        largest_confirmed_root: Slot,
         total_stake: u64,
         bank: Arc<Bank>,
         root: Slot,
     ) -> Self {
         Self {
             block_commitment,
+            largest_confirmed_root,
             total_stake,
             bank,
             root,
@@ -84,6 +87,10 @@ impl BlockCommitmentCache {
 
     pub fn get_block_commitment(&self, slot: Slot) -> Option<&BlockCommitment> {
         self.block_commitment.get(&slot)
+    }
+
+    pub fn largest_confirmed_root(&self) -> Slot {
+        self.largest_confirmed_root
     }
 
     pub fn total_stake(&self) -> u64 {
@@ -123,12 +130,12 @@ impl BlockCommitmentCache {
     }
 
     pub fn is_confirmed_rooted(&self, slot: Slot) -> bool {
-        self.get_block_commitment(slot)
-            .map(|block_commitment| {
-                (block_commitment.get_rooted_stake() as f64 / self.total_stake as f64)
-                    > VOTE_THRESHOLD_SIZE
-            })
-            .unwrap_or(false)
+        if let Some(block_commitment) = self.get_block_commitment(slot) {
+            (block_commitment.get_rooted_stake() as f64 / self.total_stake as f64)
+                > VOTE_THRESHOLD_SIZE
+        } else {
+            slot <= self.largest_confirmed_root()
+        }
     }
 
     #[cfg(test)]
@@ -216,10 +223,21 @@ impl AggregateCommitmentService {
             }
 
             let mut aggregate_commitment_time = Measure::start("aggregate-commitment-ms");
-            let block_commitment = Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
+            let (block_commitment, rooted_stake) =
+                Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
+
+            let largest_confirmed_root = rooted_stake
+                .into_iter()
+                .rev()
+                .find(|(_, stake)| {
+                    (*stake as f64 / aggregation_data.total_staked as f64) > VOTE_THRESHOLD_SIZE
+                })
+                .unwrap_or_default()
+                .0;
 
             let mut new_block_commitment = BlockCommitmentCache::new(
                 block_commitment,
+                largest_confirmed_root,
                 aggregation_data.total_staked,
                 aggregation_data.bank,
                 aggregation_data.root,
@@ -236,7 +254,10 @@ impl AggregateCommitmentService {
         }
     }
 
-    pub fn aggregate_commitment(ancestors: &[Slot], bank: &Bank) -> HashMap<Slot, BlockCommitment> {
+    pub fn aggregate_commitment(
+        ancestors: &[Slot],
+        bank: &Bank,
+    ) -> (HashMap<Slot, BlockCommitment>, BTreeMap<Slot, u64>) {
         assert!(!ancestors.is_empty());
 
         // Check ancestors is sorted
@@ -245,6 +266,7 @@ impl AggregateCommitmentService {
         }
 
         let mut commitment = HashMap::new();
+        let mut rooted_stake = BTreeMap::new();
         for (_, (lamports, account)) in bank.vote_accounts().into_iter() {
             if lamports == 0 {
                 continue;
@@ -257,17 +279,19 @@ impl AggregateCommitmentService {
             let vote_state = vote_state.unwrap();
             Self::aggregate_commitment_for_vote_account(
                 &mut commitment,
+                &mut rooted_stake,
                 &vote_state,
                 ancestors,
                 lamports,
             );
         }
 
-        commitment
+        (commitment, rooted_stake)
     }
 
     fn aggregate_commitment_for_vote_account(
         commitment: &mut HashMap<Slot, BlockCommitment>,
+        rooted_stake: &mut BTreeMap<Slot, u64>,
         vote_state: &VoteState,
         ancestors: &[Slot],
         lamports: u64,
@@ -286,6 +310,19 @@ impl AggregateCommitmentService {
                     break;
                 }
             }
+            let mut insert_amount = lamports;
+            for (slot, stake) in rooted_stake.iter_mut() {
+                if slot < &root {
+                    *stake += lamports;
+                } else if slot > &root {
+                    insert_amount += *stake;
+                    break;
+                }
+            }
+            rooted_stake
+                .entry(root)
+                .and_modify(|stake| *stake += lamports)
+                .or_insert(insert_amount);
         }
 
         for vote in &vote_state.votes {
@@ -346,7 +383,7 @@ mod tests {
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
         block_commitment.entry(2).or_insert(cache2.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 50, bank, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 0, 50, bank, 0);
 
         assert_eq!(block_commitment_cache.get_confirmation_count(0), Some(2));
         assert_eq!(block_commitment_cache.get_confirmation_count(1), Some(1));
@@ -355,9 +392,36 @@ mod tests {
     }
 
     #[test]
+    fn test_is_confirmed_rooted() {
+        let bank = Arc::new(Bank::default());
+        // Build BlockCommitmentCache with rooted slots
+        let mut cache0 = BlockCommitment::default();
+        cache0.increase_rooted_stake(50);
+        let mut cache1 = BlockCommitment::default();
+        cache1.increase_rooted_stake(40);
+        let mut cache2 = BlockCommitment::default();
+        cache2.increase_rooted_stake(20);
+
+        let mut block_commitment = HashMap::new();
+        block_commitment.entry(2).or_insert(cache0.clone());
+        block_commitment.entry(3).or_insert(cache1.clone());
+        block_commitment.entry(4).or_insert(cache2.clone());
+        let largest_confirmed_root = 1;
+        let block_commitment_cache =
+            BlockCommitmentCache::new(block_commitment, largest_confirmed_root, 50, bank, 0);
+
+        assert!(block_commitment_cache.is_confirmed_rooted(0));
+        assert!(block_commitment_cache.is_confirmed_rooted(1));
+        assert!(block_commitment_cache.is_confirmed_rooted(2));
+        assert!(block_commitment_cache.is_confirmed_rooted(3));
+        assert!(!block_commitment_cache.is_confirmed_rooted(4));
+    }
+
+    #[test]
     fn test_aggregate_commitment_for_vote_account_1() {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut commitment = HashMap::new();
+        let mut rooted_stake = BTreeMap::new();
         let lamports = 5;
         let mut vote_state = VoteState::default();
 
@@ -365,6 +429,7 @@ mod tests {
         vote_state.root_slot = Some(*root);
         AggregateCommitmentService::aggregate_commitment_for_vote_account(
             &mut commitment,
+            &mut rooted_stake,
             &vote_state,
             &ancestors,
             lamports,
@@ -381,6 +446,7 @@ mod tests {
     fn test_aggregate_commitment_for_vote_account_2() {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut commitment = HashMap::new();
+        let mut rooted_stake = BTreeMap::new();
         let lamports = 5;
         let mut vote_state = VoteState::default();
 
@@ -389,6 +455,7 @@ mod tests {
         vote_state.process_slot_vote_unchecked(*ancestors.last().unwrap());
         AggregateCommitmentService::aggregate_commitment_for_vote_account(
             &mut commitment,
+            &mut rooted_stake,
             &vote_state,
             &ancestors,
             lamports,
@@ -405,12 +472,14 @@ mod tests {
                 assert_eq!(*commitment.get(&a).unwrap(), expected);
             }
         }
+        assert_eq!(rooted_stake.get(&root).unwrap(), &lamports);
     }
 
     #[test]
     fn test_aggregate_commitment_for_vote_account_3() {
         let ancestors = vec![3, 4, 5, 7, 9, 10, 11];
         let mut commitment = HashMap::new();
+        let mut rooted_stake = BTreeMap::new();
         let lamports = 5;
         let mut vote_state = VoteState::default();
 
@@ -421,6 +490,7 @@ mod tests {
         vote_state.process_slot_vote_unchecked(ancestors[6]);
         AggregateCommitmentService::aggregate_commitment_for_vote_account(
             &mut commitment,
+            &mut rooted_stake,
             &vote_state,
             &ancestors,
             lamports,
@@ -441,6 +511,7 @@ mod tests {
                 assert_eq!(*commitment.get(&a).unwrap(), expected);
             }
         }
+        assert_eq!(rooted_stake.get(&root).unwrap(), &lamports);
     }
 
     #[test]
@@ -449,6 +520,8 @@ mod tests {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(10_000);
+
+        let rooted_stake_amount = 33;
 
         let sk1 = Pubkey::new_rand();
         let pk1 = Pubkey::new_rand();
@@ -460,12 +533,36 @@ mod tests {
         let mut vote_account2 = vote_state::create_account(&pk2, &Pubkey::new_rand(), 0, 50);
         let stake_account2 =
             stake_state::create_account(&sk2, &pk2, &vote_account2, &genesis_config.rent, 50);
+        let sk3 = Pubkey::new_rand();
+        let pk3 = Pubkey::new_rand();
+        let mut vote_account3 = vote_state::create_account(&pk3, &Pubkey::new_rand(), 0, 1);
+        let stake_account3 = stake_state::create_account(
+            &sk3,
+            &pk3,
+            &vote_account3,
+            &genesis_config.rent,
+            rooted_stake_amount,
+        );
+        let sk4 = Pubkey::new_rand();
+        let pk4 = Pubkey::new_rand();
+        let mut vote_account4 = vote_state::create_account(&pk4, &Pubkey::new_rand(), 0, 1);
+        let stake_account4 = stake_state::create_account(
+            &sk4,
+            &pk4,
+            &vote_account4,
+            &genesis_config.rent,
+            rooted_stake_amount,
+        );
 
         genesis_config.accounts.extend(vec![
             (pk1, vote_account1.clone()),
             (sk1, stake_account1),
             (pk2, vote_account2.clone()),
             (sk2, stake_account2),
+            (pk3, vote_account3.clone()),
+            (sk3, stake_account3),
+            (pk4, vote_account4.clone()),
+            (sk4, stake_account4),
         ]);
 
         // Create bank
@@ -485,7 +582,20 @@ mod tests {
         VoteState::to(&versioned, &mut vote_account2).unwrap();
         bank.store_account(&pk2, &vote_account2);
 
-        let commitment = AggregateCommitmentService::aggregate_commitment(&ancestors, &bank);
+        let mut vote_state3 = VoteState::from(&vote_account3).unwrap();
+        vote_state3.root_slot = Some(1);
+        let versioned = VoteStateVersions::Current(Box::new(vote_state3));
+        VoteState::to(&versioned, &mut vote_account3).unwrap();
+        bank.store_account(&pk3, &vote_account3);
+
+        let mut vote_state4 = VoteState::from(&vote_account4).unwrap();
+        vote_state4.root_slot = Some(2);
+        let versioned = VoteStateVersions::Current(Box::new(vote_state4));
+        VoteState::to(&versioned, &mut vote_account4).unwrap();
+        bank.store_account(&pk4, &vote_account4);
+
+        let (commitment, rooted_stake) =
+            AggregateCommitmentService::aggregate_commitment(&ancestors, &bank);
 
         for a in ancestors {
             if a <= 3 {
@@ -509,5 +619,7 @@ mod tests {
                 assert!(commitment.get(&a).is_none());
             }
         }
+        assert_eq!(*rooted_stake.get(&1).unwrap(), 2 * rooted_stake_amount);
+        assert_eq!(*rooted_stake.get(&2).unwrap(), rooted_stake_amount);
     }
 }
