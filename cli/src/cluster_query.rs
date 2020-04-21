@@ -14,6 +14,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_f
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
     rpc_client::RpcClient,
+    rpc_request::MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1230,11 +1231,17 @@ pub fn process_transaction_history(
             if let Some(end_slot) = end_slot {
                 (start_slot, end_slot)
             } else {
-                (start_slot, start_slot + 1000)
+                (
+                    start_slot,
+                    start_slot + MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+                )
             }
         } else {
             let current_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
-            (current_slot.saturating_sub(1000), current_slot)
+            (
+                current_slot.saturating_sub(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE),
+                current_slot,
+            )
         }
     };
 

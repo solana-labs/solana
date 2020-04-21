@@ -7,7 +7,12 @@ use crate::{
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
-use solana_client::rpc_response::*;
+use solana_client::{
+    rpc_request::{
+        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    },
+    rpc_response::*,
+};
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{
     bank_forks::BankForks, blockstore::Blockstore, rooted_slot_iterator::RootedSlotIterator,
@@ -37,9 +42,6 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-
-const MAX_QUERY_ITEMS: usize = 256;
-const MAX_SLOT_RANGE: u64 = 10_000;
 
 type RpcResponse<T> = Result<Response<T>>;
 
@@ -1058,10 +1060,10 @@ impl RpcSol for RpcSolImpl {
         signature_strs: Vec<String>,
         config: Option<RpcSignatureStatusConfig>,
     ) -> RpcResponse<Vec<Option<TransactionStatus>>> {
-        if signature_strs.len() > MAX_QUERY_ITEMS {
+        if signature_strs.len() > MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
-                MAX_QUERY_ITEMS
+                MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS
             )));
         }
         let mut signatures: Vec<Signature> = vec![];
@@ -1360,10 +1362,10 @@ impl RpcSol for RpcSolImpl {
                 start_slot, end_slot
             )));
         }
-        if end_slot - start_slot > MAX_SLOT_RANGE {
+        if end_slot - start_slot > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE {
             return Err(Error::invalid_params(format!(
                 "Slot range too large; max {}",
-                MAX_SLOT_RANGE
+                MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE
             )));
         }
         meta.request_processor
