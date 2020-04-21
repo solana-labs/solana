@@ -204,9 +204,9 @@ checksum = "c95ee6bba9d950218b6cc910cf62bc9e0a171d0f4537e3627b0f54d08549b188"
 
 [[package]]
 name = "bs58"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b170cd256a3f9fa6b9edae3e44a7dfdfc77e8124dbc3e2612d75f9c3e2396dae"
+checksum = "476e9cd489f9e121e02ffa6014a8ef220ecb15c05ed23fc34cca13925dc283fb"
 
 [[package]]
 name = "bumpalo"
@@ -2607,7 +2607,7 @@ version = "1.2.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "bs58 0.3.0",
+ "bs58 0.3.1",
  "bv",
  "byteorder",
  "chrono",
@@ -2638,7 +2638,7 @@ dependencies = [
 name = "solana-sdk-macro"
 version = "1.2.0"
 dependencies = [
- "bs58 0.3.0",
+ "bs58 0.3.1",
  "proc-macro2 1.0.9",
  "quote 1.0.2",
  "syn 1.0.16",
