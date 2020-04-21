@@ -248,6 +248,7 @@ impl RepairService {
         // Try to resolve orphans in blockstore
         let orphans = blockstore.orphans_iterator(root + 1).unwrap();
         Self::generate_repairs_for_orphans(orphans, &mut repairs);
+        info!("REPAIRS {:?}", repairs);
         Ok(repairs)
     }
 

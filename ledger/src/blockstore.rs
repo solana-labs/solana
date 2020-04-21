@@ -552,7 +552,11 @@ impl Blockstore {
         path: String,
         index: u64,
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)>> {
-        let dir = fs::read_dir(path)?;
+        let dir = Path::new(&path);
+        if !dir.exists() {
+            fs::create_dir_all(dir)?;
+        }
+        let dir = fs::read_dir(dir)?;
         Ok(dir.filter_map(move |e| {
             let e = e.ok()?;
             let ix: u64 = std::str::FromStr::from_str(e.file_name().to_str()?).ok()?;
@@ -731,6 +735,12 @@ impl Blockstore {
         F: Fn(Shred) -> (),
     {
         let mut total_start = Measure::start("Total elapsed");
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool
+                .borrow()
+                .install(|| shreds.par_iter().for_each(|x| self.write_shred(x)))
+        });
+
         let mut start = Measure::start("Blockstore lock");
         let _lock = self.insert_shreds_lock.lock().unwrap();
         start.stop();
@@ -943,12 +953,6 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_trusted: bool,
     ) -> Result<()> {
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool
-                .borrow()
-                .install(|| shreds.par_iter().for_each(|x| self.write_shred(x)))
-        });
-
         self.insert_shreds_handle_duplicate(
             shreds,
             leader_schedule,
