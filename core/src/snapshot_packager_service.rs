@@ -5,7 +5,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::RecvTimeoutError,
-        Arc, RwLock,
+        Arc,
     },
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -20,7 +20,7 @@ impl SnapshotPackagerService {
         snapshot_package_receiver: SnapshotPackageReceiver,
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -32,10 +32,7 @@ impl SnapshotPackagerService {
                 if let Some(starting_snapshot_hash) = starting_snapshot_hash {
                     hashes.push(starting_snapshot_hash);
                 }
-                cluster_info
-                    .write()
-                    .unwrap()
-                    .push_snapshot_hashes(hashes.clone());
+                cluster_info.push_snapshot_hashes(hashes.clone());
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -58,10 +55,7 @@ impl SnapshotPackagerService {
                                 while hashes.len() > MAX_SNAPSHOT_HASHES {
                                     hashes.remove(0);
                                 }
-                                cluster_info
-                                    .write()
-                                    .unwrap()
-                                    .push_snapshot_hashes(hashes.clone());
+                                cluster_info.push_snapshot_hashes(hashes.clone());
                             }
                         }
                         Err(RecvTimeoutError::Disconnected) => break,

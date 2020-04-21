@@ -120,7 +120,7 @@ impl StandardBroadcastRun {
     #[cfg(test)]
     fn test_process_receive_results(
         &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         sock: &UdpSocket,
         blockstore: &Arc<Blockstore>,
         receive_results: ReceiveResults,
@@ -288,7 +288,7 @@ impl StandardBroadcastRun {
     fn broadcast(
         &mut self,
         sock: &UdpSocket,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         stakes: Option<Arc<HashMap<Pubkey, u64>>>,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
@@ -374,7 +374,7 @@ impl BroadcastRun for StandardBroadcastRun {
     fn transmit(
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         sock: &UdpSocket,
     ) -> Result<()> {
         let ((stakes, shreds), slot_start_ts) = receiver.lock().unwrap().recv()?;
@@ -404,7 +404,7 @@ mod test {
         genesis_config::GenesisConfig,
         signature::{Keypair, Signer},
     };
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
     use std::time::Duration;
 
     fn setup(
@@ -412,7 +412,7 @@ mod test {
     ) -> (
         Arc<Blockstore>,
         GenesisConfig,
-        Arc<RwLock<ClusterInfo>>,
+        Arc<ClusterInfo>,
         Arc<Bank>,
         Arc<Keypair>,
         UdpSocket,
@@ -425,9 +425,9 @@ mod test {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
             leader_info.info.clone(),
-        )));
+        ));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
         genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot) + 1;

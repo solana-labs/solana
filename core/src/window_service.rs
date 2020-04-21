@@ -249,7 +249,7 @@ impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub fn new<F>(
         blockstore: Arc<Blockstore>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         retransmit: PacketSender,
         repair_socket: Arc<UdpSocket>,
@@ -294,7 +294,7 @@ impl WindowService {
         );
 
         let t_window = Self::start_recv_window_thread(
-            cluster_info.read().unwrap().id(),
+            cluster_info.id(),
             exit,
             &blockstore,
             insert_sender,
@@ -514,7 +514,7 @@ mod test {
         net::UdpSocket,
         sync::atomic::{AtomicBool, Ordering},
         sync::mpsc::channel,
-        sync::{Arc, RwLock},
+        sync::Arc,
         thread::sleep,
         time::Duration,
     };
@@ -630,9 +630,9 @@ mod test {
 
         let blockstore = Arc::new(blockstore);
         let (retransmit_sender, _retransmit_receiver) = channel();
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
             ContactInfo::new_localhost(&Pubkey::default(), 0),
-        )));
+        ));
         let cluster_slots = Arc::new(ClusterSlots::default());
         let repair_sock = Arc::new(UdpSocket::bind(socketaddr_any!()).unwrap());
         let window = WindowService::new(

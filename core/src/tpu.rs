@@ -36,7 +36,7 @@ pub struct Tpu {
 impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,

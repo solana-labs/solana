@@ -184,7 +184,7 @@ impl StorageStage {
         storage_keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     ) -> Self {
         let (instruction_sender, instruction_receiver) = channel();
@@ -286,7 +286,7 @@ impl StorageStage {
 
     fn send_transaction(
         bank_forks: &Arc<RwLock<BankForks>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         instruction: Instruction,
         keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
@@ -323,7 +323,7 @@ impl StorageStage {
         for _ in 0..5 {
             transactions_socket.send_to(
                 &bincode::serialize(&transaction).unwrap(),
-                cluster_info.read().unwrap().my_data().tpu,
+                cluster_info.my_contact_info().tpu,
             )?;
             sleep(Duration::from_millis(100));
             if Self::poll_for_signature_confirmation(
@@ -652,10 +652,10 @@ impl StorageStage {
     }
 }
 
-pub fn test_cluster_info(id: &Pubkey) -> Arc<RwLock<ClusterInfo>> {
+pub fn test_cluster_info(id: &Pubkey) -> Arc<ClusterInfo> {
     let contact_info = ContactInfo::new_localhost(id, 0);
     let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
-    Arc::new(RwLock::new(cluster_info))
+    Arc::new(cluster_info)
 }
 
 #[cfg(test)]

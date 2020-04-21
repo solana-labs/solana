@@ -190,7 +190,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
         let _banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,

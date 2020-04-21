@@ -53,7 +53,7 @@ use std::{
     result,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, Sender},
-    sync::{Arc, RwLock},
+    sync::Arc,
     thread::{sleep, spawn, JoinHandle},
     time::Duration,
 };
@@ -185,9 +185,9 @@ impl Archiver {
 
         info!("Archiver: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
-        let mut cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
+        let cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
         cluster_info.set_entrypoint(cluster_entrypoint.clone());
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
         let cluster_slots = Arc::new(ClusterSlots::default());
         // Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
@@ -308,7 +308,7 @@ impl Archiver {
     fn run(
         meta: &mut ArchiverMeta,
         blockstore: &Arc<Blockstore>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
@@ -365,12 +365,12 @@ impl Archiver {
     }
 
     fn redeem_rewards(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         client_commitment: CommitmentConfig,
     ) {
-        let nodes = cluster_info.read().unwrap().tvu_peers();
+        let nodes = cluster_info.tvu_peers();
         let client = solana_core::gossip_service::get_client(&nodes);
 
         if let Ok(Some(account)) =
@@ -405,7 +405,7 @@ impl Archiver {
     #[allow(clippy::too_many_arguments)]
     fn setup(
         meta: &mut ArchiverMeta,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         blockstore: &Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
         node_info: &ContactInfo,
@@ -491,7 +491,7 @@ impl Archiver {
         blockstore: &Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
         node_info: &ContactInfo,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
     ) {
         info!(
             "window created, waiting for ledger download starting at slot {:?}",
@@ -519,11 +519,8 @@ impl Archiver {
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         contact_info.wallclock = timestamp();
         // copy over the adopted shred_version from the entrypoint
-        contact_info.shred_version = cluster_info.read().unwrap().my_data().shred_version;
-        {
-            let mut cluster_info_w = cluster_info.write().unwrap();
-            cluster_info_w.insert_self(contact_info);
-        }
+        contact_info.shred_version = cluster_info.my_shred_version();
+        cluster_info.update_contact_info(|current| *current = contact_info);
     }
 
     fn encrypt_ledger(meta: &mut ArchiverMeta, blockstore: &Arc<Blockstore>) -> Result<()> {
@@ -626,12 +623,12 @@ impl Archiver {
 
     fn submit_mining_proof(
         meta: &ArchiverMeta,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         archiver_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
     ) {
         // No point if we've got no storage account...
-        let nodes = cluster_info.read().unwrap().tvu_peers();
+        let nodes = cluster_info.tvu_peers();
         let client = solana_core::gossip_service::get_client(&nodes);
         let storage_balance = client
             .poll_get_balance_with_commitment(&storage_keypair.pubkey(), meta.client_commitment);
@@ -689,13 +686,10 @@ impl Archiver {
     }
 
     fn get_segment_config(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         client_commitment: CommitmentConfig,
     ) -> Result<u64> {
-        let rpc_peers = {
-            let cluster_info = cluster_info.read().unwrap();
-            cluster_info.all_rpc_peers()
-        };
+        let rpc_peers = cluster_info.all_rpc_peers();
         debug!("rpc peers: {:?}", rpc_peers);
         if !rpc_peers.is_empty() {
             let rpc_client = {
@@ -721,7 +715,7 @@ impl Archiver {
 
     /// Waits until the first segment is ready, and returns the current segment
     fn poll_for_segment(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         slots_per_segment: u64,
         previous_blockhash: &Hash,
         exit: &Arc<AtomicBool>,
@@ -741,17 +735,14 @@ impl Archiver {
 
     /// Poll for a different blockhash and associated max_slot than `previous_blockhash`
     fn poll_for_blockhash_and_slot(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         slots_per_segment: u64,
         previous_blockhash: &Hash,
         exit: &Arc<AtomicBool>,
     ) -> Result<(Hash, u64)> {
         info!("waiting for the next turn...");
         loop {
-            let rpc_peers = {
-                let cluster_info = cluster_info.read().unwrap();
-                cluster_info.all_rpc_peers()
-            };
+            let rpc_peers = cluster_info.all_rpc_peers();
             debug!("rpc peers: {:?}", rpc_peers);
             if !rpc_peers.is_empty() {
                 let rpc_client = {
