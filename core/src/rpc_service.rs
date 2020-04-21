@@ -379,16 +379,18 @@ mod tests {
             solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
             None,
             bank_forks,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             cluster_info,
             Hash::default(),
             &PathBuf::from("farf"),

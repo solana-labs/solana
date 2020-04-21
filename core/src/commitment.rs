@@ -1,4 +1,5 @@
 use crate::consensus::VOTE_THRESHOLD_SIZE;
+use solana_ledger::blockstore::Blockstore;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
@@ -46,12 +47,12 @@ impl BlockCommitment {
     }
 }
 
-#[derive(Default)]
 pub struct BlockCommitmentCache {
     block_commitment: HashMap<Slot, BlockCommitment>,
     largest_confirmed_root: Slot,
     total_stake: u64,
     bank: Arc<Bank>,
+    blockstore: Arc<Blockstore>,
     root: Slot,
 }
 
@@ -75,6 +76,7 @@ impl BlockCommitmentCache {
         largest_confirmed_root: Slot,
         total_stake: u64,
         bank: Arc<Bank>,
+        blockstore: Arc<Blockstore>,
         root: Slot,
     ) -> Self {
         Self {
@@ -82,7 +84,19 @@ impl BlockCommitmentCache {
             largest_confirmed_root,
             total_stake,
             bank,
+            blockstore,
             root,
+        }
+    }
+
+    pub fn default_with_blockstore(blockstore: Arc<Blockstore>) -> Self {
+        Self {
+            block_commitment: HashMap::default(),
+            largest_confirmed_root: Slot::default(),
+            total_stake: u64::default(),
+            bank: Arc::new(Bank::default()),
+            blockstore,
+            root: Slot::default(),
         }
     }
 
@@ -131,22 +145,20 @@ impl BlockCommitmentCache {
     }
 
     pub fn is_confirmed_rooted(&self, slot: Slot) -> bool {
-        if let Some(block_commitment) = self.get_block_commitment(slot) {
-            (block_commitment.get_rooted_stake() as f64 / self.total_stake as f64)
-                > VOTE_THRESHOLD_SIZE
-        } else {
-            slot <= self.largest_confirmed_root()
-        }
+        slot <= self.largest_confirmed_root() && self.blockstore.is_root(slot)
     }
 
     #[cfg(test)]
-    pub fn new_for_tests() -> Self {
+    pub fn new_for_tests_with_blockstore(blockstore: Arc<Blockstore>) -> Self {
         let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
         block_commitment.insert(0, BlockCommitment::default());
         Self {
             block_commitment,
+            blockstore,
             total_stake: 42,
-            ..Self::default()
+            largest_confirmed_root: Slot::default(),
+            bank: Arc::new(Bank::default()),
+            root: Slot::default(),
         }
     }
 }
@@ -241,6 +253,7 @@ impl AggregateCommitmentService {
                 largest_confirmed_root,
                 aggregation_data.total_staked,
                 aggregation_data.bank,
+                block_commitment_cache.read().unwrap().blockstore.clone(),
                 aggregation_data.root,
             );
 
@@ -353,7 +366,10 @@ impl AggregateCommitmentService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_ledger::{
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        get_tmp_ledger_path,
+    };
     use solana_sdk::pubkey::Pubkey;
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state::{self, VoteStateVersions};
@@ -371,6 +387,8 @@ mod tests {
     #[test]
     fn test_get_confirmations() {
         let bank = Arc::new(Bank::default());
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         // Build BlockCommitmentCache with votes at depths 0 and 1 for 2 slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_confirmation_stake(1, 5);
@@ -388,7 +406,8 @@ mod tests {
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
         block_commitment.entry(2).or_insert(cache2.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 0, 50, bank, 0);
+        let block_commitment_cache =
+            BlockCommitmentCache::new(block_commitment, 0, 50, bank, blockstore, 0);
 
         assert_eq!(block_commitment_cache.get_confirmation_count(0), Some(2));
         assert_eq!(block_commitment_cache.get_confirmation_count(1), Some(1));
@@ -399,6 +418,9 @@ mod tests {
     #[test]
     fn test_is_confirmed_rooted() {
         let bank = Arc::new(Bank::default());
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        blockstore.set_roots(&[0, 1]).unwrap();
         // Build BlockCommitmentCache with rooted slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_rooted_stake(50);
@@ -408,18 +430,23 @@ mod tests {
         cache2.increase_rooted_stake(20);
 
         let mut block_commitment = HashMap::new();
-        block_commitment.entry(2).or_insert(cache0.clone());
-        block_commitment.entry(3).or_insert(cache1.clone());
-        block_commitment.entry(4).or_insert(cache2.clone());
+        block_commitment.entry(1).or_insert(cache0.clone());
+        block_commitment.entry(2).or_insert(cache1.clone());
+        block_commitment.entry(3).or_insert(cache2.clone());
         let largest_confirmed_root = 1;
-        let block_commitment_cache =
-            BlockCommitmentCache::new(block_commitment, largest_confirmed_root, 50, bank, 0);
+        let block_commitment_cache = BlockCommitmentCache::new(
+            block_commitment,
+            largest_confirmed_root,
+            50,
+            bank,
+            blockstore,
+            0,
+        );
 
         assert!(block_commitment_cache.is_confirmed_rooted(0));
         assert!(block_commitment_cache.is_confirmed_rooted(1));
-        assert!(block_commitment_cache.is_confirmed_rooted(2));
-        assert!(block_commitment_cache.is_confirmed_rooted(3));
-        assert!(!block_commitment_cache.is_confirmed_rooted(4));
+        assert!(!block_commitment_cache.is_confirmed_rooted(2));
+        assert!(!block_commitment_cache.is_confirmed_rooted(3));
     }
 
     #[test]

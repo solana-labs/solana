@@ -298,7 +298,9 @@ pub mod tests {
         let vote_keypair = Keypair::new();
         let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
@@ -317,10 +319,7 @@ pub mod tests {
             blockstore,
             &StorageState::default(),
             l_receiver,
-            &Arc::new(RpcSubscriptions::new(
-                &exit,
-                Arc::new(RwLock::new(BlockCommitmentCache::default())),
-            )),
+            &Arc::new(RpcSubscriptions::new(&exit, block_commitment_cache.clone())),
             &poh_recorder,
             &leader_schedule_cache,
             &exit,

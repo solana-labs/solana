@@ -211,7 +211,6 @@ impl Validator {
         }
 
         let bank_forks = Arc::new(RwLock::new(bank_forks));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -244,6 +243,9 @@ impl Validator {
         );
 
         let blockstore = Arc::new(blockstore);
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
 
         let subscriptions = Arc::new(RpcSubscriptions::new(&exit, block_commitment_cache.clone()));
 

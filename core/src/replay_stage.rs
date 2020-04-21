@@ -88,7 +88,6 @@ struct SkippedSlotsInfo {
     last_skipped_slot: u64,
 }
 
-#[derive(Default)]
 pub struct ReplayStageConfig {
     pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
@@ -1980,7 +1979,9 @@ pub(crate) mod tests {
             let exit = Arc::new(AtomicBool::new(false));
             let subscriptions = Arc::new(RpcSubscriptions::new(
                 &exit,
-                Arc::new(RwLock::new(BlockCommitmentCache::default())),
+                Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
+                    blockstore.clone(),
+                ))),
             ));
             let mut bank_forks = BankForks::new(0, bank0);
 
@@ -2368,7 +2369,11 @@ pub(crate) mod tests {
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let (lockouts_sender, _) = AggregateCommitmentService::new(
             &Arc::new(AtomicBool::new(false)),
             block_commitment_cache.clone(),
