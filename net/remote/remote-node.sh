@@ -96,7 +96,7 @@ waitForNodeToInit() {
   echo "--- waiting for $hostname to boot up"
   SECONDS=
   while [[ ! -r $initCompleteFile ]]; do
-    if [[ $SECONDS -ge 240 ]]; then
+    if [[ $SECONDS -ge 600 ]]; then
       echo "^^^ +++"
       echo "Error: $initCompleteFile not found in $SECONDS seconds"
       exit 1
@@ -254,11 +254,11 @@ EOF
     ~/solana/on-reboot
     waitForNodeToInit
 
-    if [[ $skipSetup != true ]]; then
-      solana --url http://"$entrypointIp":8899 \
-        --keypair ~/solana/config/bootstrap-validator/identity.json \
-        validator-info publish "$(hostname)" -n team/solana --force || true
-    fi
+#    if [[ $skipSetup != true ]]; then
+#      solana --url http://"$entrypointIp":8899 \
+#        --keypair ~/solana/config/bootstrap-validator/identity.json \
+#        validator-info publish "$(hostname)" -n team/solana --force || true
+#    fi
     ;;
   validator|blockstreamer)
     if [[ $deployMethod != skip ]]; then
@@ -395,11 +395,11 @@ EOF
       multinode-demo/delegate-stake.sh "${args[@]}" "$internalNodesStakeLamports"
     fi
 
-    if [[ $skipSetup != true ]]; then
-      solana --url http://"$entrypointIp":8899 \
-        --keypair config/validator-identity.json \
-        validator-info publish "$(hostname)" -n team/solana --force || true
-    fi
+#    if [[ $skipSetup != true ]]; then
+#      solana --url http://"$entrypointIp":8899 \
+#        --keypair config/validator-identity.json \
+#        validator-info publish "$(hostname)" -n team/solana --force || true
+#    fi
     ;;
   archiver)
     if [[ $deployMethod != skip ]]; then
