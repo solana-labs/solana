@@ -224,6 +224,7 @@ fn test_stake_account_lifetime() {
             &stake_pubkey,
             &Pubkey::new_rand(),
             1,
+            None,
         )],
         Some(&mint_pubkey),
     );
@@ -318,6 +319,7 @@ fn test_stake_account_lifetime() {
             &stake_pubkey,
             &Pubkey::new_rand(),
             lamports / 2 - split_staked + 1,
+            None,
         )],
         Some(&mint_pubkey),
     );
@@ -339,6 +341,7 @@ fn test_stake_account_lifetime() {
             &stake_pubkey,
             &Pubkey::new_rand(),
             lamports / 2,
+            None,
         )],
         Some(&mint_pubkey),
     );
@@ -354,6 +357,7 @@ fn test_stake_account_lifetime() {
             &stake_pubkey,
             &Pubkey::new_rand(),
             lamports / 2 - split_staked,
+            None,
         )],
         Some(&mint_pubkey),
     );
@@ -378,6 +382,7 @@ fn test_stake_account_lifetime() {
             &stake_pubkey,
             &Pubkey::new_rand(),
             split_staked,
+            None,
         )],
         Some(&mint_pubkey),
     );

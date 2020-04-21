@@ -1028,6 +1028,7 @@ pub fn process_withdraw_stake(
         &withdraw_authority.pubkey(),
         destination_account_pubkey,
         lamports,
+        None,
     )];
 
     let fee_payer = config.signers[fee_payer];
