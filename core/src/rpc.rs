@@ -1,8 +1,11 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use crate::{
-    cluster_info::ClusterInfo, commitment::BlockCommitmentCache, contact_info::ContactInfo,
-    storage_stage::StorageState, validator::ValidatorExit,
+    cluster_info::ClusterInfo,
+    commitment::{BlockCommitmentArray, BlockCommitmentCache},
+    contact_info::ContactInfo,
+    storage_stage::StorageState,
+    validator::ValidatorExit,
 };
 use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
@@ -219,7 +222,7 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn get_block_commitment(&self, block: Slot) -> RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]> {
+    fn get_block_commitment(&self, block: Slot) -> RpcBlockCommitment<BlockCommitmentArray> {
         let r_block_commitment = self.block_commitment_cache.read().unwrap();
         RpcBlockCommitment {
             commitment: r_block_commitment
@@ -493,7 +496,9 @@ impl JsonRpcRequestProcessor {
             .map(|(slot, status)| {
                 let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
-                let confirmations = if r_block_commitment_cache.root() >= slot {
+                let confirmations = if r_block_commitment_cache.root() >= slot
+                    && r_block_commitment_cache.is_confirmed_rooted(slot)
+                {
                     None
                 } else {
                     r_block_commitment_cache
@@ -651,7 +656,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]>>;
+    ) -> Result<RpcBlockCommitment<BlockCommitmentArray>>;
 
     #[rpc(meta, name = "getGenesisHash")]
     fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
@@ -955,7 +960,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         block: Slot,
-    ) -> Result<RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]>> {
+    ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
         Ok(meta
             .request_processor
             .read()
@@ -2077,7 +2082,7 @@ pub mod tests {
                 .expect("actual response deserialization");
         let result = result.as_ref().unwrap();
         assert_eq!(expected_res, result.status);
-        assert_eq!(None, result.confirmations);
+        assert_eq!(Some(2), result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
@@ -2428,8 +2433,8 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let bank_forks = new_bank_forks().0;
 
-        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY]);
-        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY]);
+        let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY + 1]);
+        let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY + 1]);
         let mut block_commitment: HashMap<u64, BlockCommitment> = HashMap::new();
         block_commitment
             .entry(0)
@@ -2521,7 +2526,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta);
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let commitment_response: RpcBlockCommitment<[u64; MAX_LOCKOUT_HISTORY]> =
+        let commitment_response: RpcBlockCommitment<BlockCommitmentArray> =
             if let Response::Single(res) = result {
                 if let Output::Success(res) = res {
                     serde_json::from_value(res.result).unwrap()
