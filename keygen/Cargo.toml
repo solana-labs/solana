@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-bs58 = "0.3.0"
+bs58 = "0.3.1"
 clap = "2.33"
 dirs = "2.0.2"
 num_cpus = "1.12.0"
