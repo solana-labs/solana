@@ -499,6 +499,17 @@ fn analyze_storage(database: &Database) -> Result<(), String> {
         "TransactionStatus",
         TransactionStatus::key_size(),
     )?;
+    analyze_column::<TransactionStatus>(
+        database,
+        "TransactionStatusIndex",
+        TransactionStatusIndex::key_size(),
+    )?;
+    analyze_column::<AddressSignatures>(
+        database,
+        "AddressSignatures",
+        AddressSignatures::key_size(),
+    )?;
+    analyze_column::<Rewards>(database, "Rewards", Rewards::key_size())?;
 
     Ok(())
 }

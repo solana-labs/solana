@@ -14,6 +14,7 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_f
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
     rpc_client::RpcClient,
+    rpc_request::MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -273,6 +274,39 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Display balance in lamports instead of SOL"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("transaction-history")
+                .about("Show historical transactions affecting the given address, \
+                       ordered based on the slot in which they were confirmed in \
+                       from lowest to highest slot")
+                .arg(
+                    pubkey!(Arg::with_name("address")
+                        .index(1)
+                        .value_name("ADDRESS")
+                        .required(true),
+                        "Account address"),
+                )
+                .arg(
+                    Arg::with_name("end_slot")
+                        .takes_value(false)
+                        .value_name("SLOT")
+                        .index(2)
+                        .validator(is_slot)
+                        .help(
+                            "Slot to start from [default: latest slot at maximum commitment]"
+                        ),
+                )
+                .arg(
+                    Arg::with_name("limit")
+                        .long("limit")
+                        .takes_value(true)
+                        .value_name("NUMBER OF SLOTS")
+                        .validator(is_slot)
+                        .help(
+                            "Limit the search to this many slots"
+                        ),
+                ),
+        )
     }
 }
 
@@ -431,6 +465,25 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
         command: CliCommand::ShowValidators {
             use_lamports_unit,
             commitment_config,
+        },
+        signers: vec![],
+    })
+}
+
+pub fn parse_transaction_history(
+    matches: &ArgMatches<'_>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
+    let end_slot = value_t!(matches, "end_slot", Slot).ok();
+    let slot_limit = value_t!(matches, "limit", u64)
+        .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE);
+
+    Ok(CliCommandInfo {
+        command: CliCommand::TransactionHistory {
+            address,
+            end_slot,
+            slot_limit,
         },
         signers: vec![],
     })
@@ -1168,6 +1221,33 @@ pub fn process_show_validators(
     };
     config.output_format.formatted_print(&cli_validators);
     Ok("".to_string())
+}
+
+pub fn process_transaction_history(
+    rpc_client: &RpcClient,
+    address: &Pubkey,
+    end_slot: Option<Slot>, // None == use latest slot
+    slot_limit: u64,
+) -> ProcessResult {
+    let end_slot = {
+        if let Some(end_slot) = end_slot {
+            end_slot
+        } else {
+            rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
+        }
+    };
+    let start_slot = end_slot.saturating_sub(slot_limit);
+
+    println!(
+        "Transactions affecting {} within slots [{},{}]",
+        address, start_slot, end_slot
+    );
+    let signatures =
+        rpc_client.get_confirmed_signatures_for_address(address, start_slot, end_slot)?;
+    for signature in &signatures {
+        println!("{}", signature);
+    }
+    Ok(format!("{} transactions found", signatures.len(),))
 }
 
 #[cfg(test)]
