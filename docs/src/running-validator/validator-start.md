@@ -9,10 +9,10 @@ set the `--url` argument for cli commands. For example:
 solana config set --url http://devnet.solana.com
 ```
 
-\(You can always override the set configuration by explicitly passing the
-`--url` argument with a command, eg: `solana --url http://tds.solana.com balance`\)
+While this section demonstrates how to connect to the Devnet cluster, the steps
+are similar for the other [Solana Clusters](../clusters.md).
 
-## Confirm The Testnet Is Reachable
+## Confirm The Cluster Is Reachable
 
 Before attaching a validator node, sanity check that the cluster is accessible
 to your machine by fetching the transaction count:
@@ -20,9 +20,6 @@ to your machine by fetching the transaction count:
 ```bash
 solana transaction-count
 ```
-
-Inspect the network explorer at
-[https://explorer.solana.com/](https://explorer.solana.com/) for activity.
 
 View the [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-telemetry) for more
 detail on cluster activity.
@@ -111,7 +108,7 @@ network. **It is crucial to back-up this information.**
 
 If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR
 VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR
-ALLOCATION OF LAMPORTS TOO.
+ALLOCATION OF SOL TOO.
 
 To back-up your validator identify keypair, **back-up your
 "validator-keypair.json” file or your seed phrase to a secure location.**
@@ -138,8 +135,10 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 Airdrop yourself some SOL to get started:
 
 ```bash
-solana airdrop 1000
+solana airdrop 10
 ```
+Note that airdrops are only available on Devnet. Testnet SOL can be obtained by
+participating in the [Tour de SOL](../tour-de-sol) program.
 
 To view your current balance:
 
@@ -187,12 +186,16 @@ account state divergence.
 
 ## Connect Your Validator
 
-Connect to a testnet cluster by running:
+Connect to the cluster by running:
 
 ```bash
-solana-validator --identity ~/validator-keypair.json --vote-account ~/vote-account-keypair.json \
-    --ledger ~/validator-ledger --rpc-port 8899 --entrypoint devnet.solana.com:8001 \
-    --limit-ledger-size
+solana-validator \
+  --identity ~/validator-keypair.json \
+  --vote-account ~/vote-account-keypair.json \
+  --ledger ~/validator-ledger \
+  --rpc-port 8899 \
+  --entrypoint devnet.solana.com:8001 \
+  --limit-ledger-size
 ```
 
 To force validator logging to the console add a `--log -` argument, otherwise
@@ -219,9 +222,9 @@ If your validator is connected, its public key and IP address will appear in the
 By default the validator will dynamically select available network ports in the
 8000-10000 range, and may be overridden with `--dynamic-port-range`. For
 example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict
-the validator to ports 11000-11011.
+the validator to ports 11000-11010.
 
 ### Limiting ledger size to conserve disk space
 
-The `--limit-ledger-size` arg will instruct the validator to only retain the
+The `--limit-ledger-size` argument will instruct the validator to only retain the
 last couple hours of ledger. To retain the full ledger, simply remove that arg.
