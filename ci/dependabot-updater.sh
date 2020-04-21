@@ -8,7 +8,7 @@ commit_range="$(git merge-base HEAD origin/master)..HEAD"
 parsed_update_args="$(
   git log "$commit_range" --author "dependabot-preview" --oneline -n1 |
     grep -o 'Bump.*$' |
-    sed -r 's/Bump ([^ ]+) from [^ ]+ to ([^ ]+)/-p \1 --precise \2/'
+    sed -r 's/Bump ([^ ]+) from ([^ ]+) to ([^ ]+)/-p \1:\2 --precise \3/'
 )"
 package=$(echo "$parsed_update_args" | awk '{print $2}')
 if [[ -n $parsed_update_args ]]; then
