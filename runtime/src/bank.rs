@@ -37,8 +37,8 @@ use solana_metrics::{
 use solana_sdk::{
     account::Account,
     clock::{
-        get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_PROCESSING_AGE,
-        MAX_RECENT_BLOCKHASHES,
+        get_segment_from_slot, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp,
+        MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
     },
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -1652,24 +1652,24 @@ impl Bank {
         &self,
         start_slot_index: Slot,
         end_slot_index: Slot,
-        subrange_count: Slot,
+        partition_count: Slot,
     ) {
         // pubkey (= account address, including derived ones?) distribution should be uniform?
         error!(
             "ryoqun: {}, {}, {}",
-            start_slot_index, end_slot_index, subrange_count
+            start_slot_index, end_slot_index, partition_count
         );
 
         let start_key_prefix = if start_slot_index == 0 && end_slot_index == 0 {
             0
         } else {
-            (start_slot_index + 1) * (Slot::max_value() / subrange_count)
+            (start_slot_index + 1) * (Slot::max_value() / partition_count)
         };
 
-        let end_key_prefix = if end_slot_index + 1 == subrange_count {
+        let end_key_prefix = if end_slot_index + 1 == partition_count {
             Slot::max_value()
         } else {
-            (end_slot_index + 1) * (Slot::max_value() / subrange_count) - 1
+            (end_slot_index + 1) * (Slot::max_value() / partition_count) - 1
         };
 
         let mut start_pubkey = [0x00u8; 32];
@@ -1681,7 +1681,7 @@ impl Bank {
             "ryoqun: ({}-{})/{}, {:064b} {:064b} {:?} {:?}",
             start_slot_index,
             end_slot_index,
-            subrange_count,
+            partition_count,
             start_slot_index,
             start_key_prefix,
             start_pubkey,
@@ -1712,22 +1712,34 @@ impl Bank {
         );
     }
 
-    fn collect_rent_eagerly(&self) {
+    fn eager_rent_ranges_for_epochs(&self) -> Vec<(SlotIndex, SlotIndex, SlotCount)> {
         let (current_epoch, current_slot_index) = self.get_epoch_and_slot_index(self.slot());
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
+
+        let mut ranges = vec![];
 
         if parent_epoch < current_epoch {
             if current_slot_index > 0 {
                 let parent_slot_count = self.get_slots_in_epoch(parent_epoch);
                 let last_slot_index = parent_slot_count - 1;
-                self.collect_rent_by_range(parent_slot_index, last_slot_index, parent_slot_count);
+                ranges.push((parent_slot_index, last_slot_index, parent_slot_count));
             }
             parent_slot_index = 0;
         }
 
         let current_slot_count = self.get_slots_in_epoch(current_epoch);
-        self.collect_rent_by_range(parent_slot_index, current_slot_index, current_slot_count);
+        ranges.push((parent_slot_index, current_slot_index, current_slot_count));
+
+        ranges
+    }
+
+    fn collect_rent_eagerly(&self) {
+        for (start_slot_index, end_slot_index, partition_count) in
+            self.eager_rent_ranges_for_epochs()
+        {
+            self.collect_rent_by_range(start_slot_index, end_slot_index, partition_count);
+        }
     }
 
     /// Process a batch of transactions.
@@ -2269,7 +2281,7 @@ impl Bank {
     ///
     ///  ( slot/slots_per_epoch, slot % slots_per_epoch )
     ///
-    pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (u64, u64) {
+    pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (Epoch, SlotIndex) {
         self.epoch_schedule.get_epoch_and_slot_index(slot)
     }
 
@@ -3307,6 +3319,43 @@ mod tests {
 
         // Bank's collected rent should be sum of rent collected from all accounts
         assert_eq!(bank.collected_rent.load(Ordering::Relaxed), rent_collected);
+    }
+
+    #[test]
+    fn test_rent_eager_across_epoch_without_gap() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 32)]);
+
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 32)]);
+        for _ in 2..32 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(30, 31, 32)]);
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 64)]);
+    }
+
+    #[test]
+    fn test_rent_eager_across_epoch_with_gap() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 32)]);
+
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 32)]);
+        for _ in 2..15 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(13, 14, 32)]);
+        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 49));
+        assert_eq!(
+            bank.eager_rent_ranges_for_epochs(),
+            vec![(14, 31, 32), (0, 17, 64)]
+        );
     }
 
     #[test]
