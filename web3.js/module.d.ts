@@ -98,6 +98,17 @@ declare module '@solana/web3.js' {
     }>;
   };
 
+  export type ConfirmedTransaction = {
+    slot: number;
+    transaction: Transaction;
+    meta: {
+      fee: number;
+      preBalances: Array<number>;
+      postBalances: Array<number>;
+      err: TransactionError | null;
+    } | null;
+  };
+
   export type KeyedAccountInfo = {
     accountId: PublicKey;
     accountInfo: AccountInfo;
@@ -184,6 +195,14 @@ declare module '@solana/web3.js' {
     getBalance(publicKey: PublicKey, commitment?: Commitment): Promise<number>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getConfirmedBlock(slot: number): Promise<ConfirmedBlock>;
+    getConfirmedTransaction(
+      signature: TransactionSignature,
+    ): Promise<ConfirmedTransaction | null>;
+    getConfirmedSignaturesForAddress(
+      address: PublicKey,
+      startSlot: number,
+      endSlot: number,
+    ): Promise<Array<TransactionSignature>>;
     getVoteAccounts(commitment?: Commitment): Promise<VoteAccountStatus>;
     confirmTransactionAndContext(
       signature: TransactionSignature,

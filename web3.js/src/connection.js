@@ -234,6 +234,25 @@ const Version = struct({
 });
 
 /**
+ * A confirmed transaction on the ledger
+ *
+ * @typedef {Object} ConfirmedTransaction
+ * @property {number} slot The slot during which the transaction was processed
+ * @property {Transaction} transaction The details of the transaction
+ * @property {object} meta Slot index of this block's parent
+ */
+type ConfirmedTransaction = {
+  slot: number,
+  transaction: Transaction,
+  meta: {
+    fee: number,
+    err: TransactionError | null,
+    preBalances: Array<number>,
+    postBalances: Array<number>,
+  } | null,
+};
+
+/**
  * A ConfirmedBlock on the ledger
  *
  * @typedef {Object} ConfirmedBlock
@@ -355,6 +374,13 @@ const AccountInfoResult = struct({
  */
 const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
   struct.union(['null', AccountInfoResult]),
+);
+
+/**
+ * @private
+ */
+const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
+  struct.array(['string']),
 );
 
 /***
@@ -520,6 +546,45 @@ const GetTotalSupplyRpcResult = jsonRpcResult('number');
 const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
 
 /**
+ * @private
+ */
+const ConfirmedTransactionResult = struct({
+  signatures: struct.array(['string']),
+  message: struct({
+    accountKeys: struct.array(['string']),
+    header: struct({
+      numRequiredSignatures: 'number',
+      numReadonlySignedAccounts: 'number',
+      numReadonlyUnsignedAccounts: 'number',
+    }),
+    instructions: struct.array([
+      struct.union([
+        struct.array(['number']),
+        struct({
+          accounts: struct.array(['number']),
+          data: 'string',
+          programIdIndex: 'number',
+        }),
+      ]),
+    ]),
+    recentBlockhash: 'string',
+  }),
+});
+
+/**
+ * @private
+ */
+const ConfirmedTransactionMetaResult = struct.union([
+  'null',
+  struct.pick({
+    err: TransactionErrorResult,
+    fee: 'number',
+    preBalances: struct.array(['number']),
+    postBalances: struct.array(['number']),
+  }),
+]);
+
+/**
  * Expected JSON RPC response for the "getConfirmedBlock" message
  */
 export const GetConfirmedBlockRpcResult = jsonRpcResult(
@@ -531,37 +596,8 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
       parentSlot: 'number',
       transactions: struct.array([
         struct({
-          transaction: struct({
-            signatures: struct.array(['string']),
-            message: struct({
-              accountKeys: struct.array(['string']),
-              header: struct({
-                numRequiredSignatures: 'number',
-                numReadonlySignedAccounts: 'number',
-                numReadonlyUnsignedAccounts: 'number',
-              }),
-              instructions: struct.array([
-                struct.union([
-                  struct.array(['number']),
-                  struct({
-                    accounts: struct.array(['number']),
-                    data: 'string',
-                    programIdIndex: 'number',
-                  }),
-                ]),
-              ]),
-              recentBlockhash: 'string',
-            }),
-          }),
-          meta: struct.union([
-            'null',
-            struct.pick({
-              err: TransactionErrorResult,
-              fee: 'number',
-              preBalances: struct.array(['number']),
-              postBalances: struct.array(['number']),
-            }),
-          ]),
+          transaction: ConfirmedTransactionResult,
+          meta: ConfirmedTransactionMetaResult,
         }),
       ]),
       rewards: struct.union([
@@ -573,6 +609,20 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
           }),
         ]),
       ]),
+    }),
+  ]),
+);
+
+/**
+ * Expected JSON RPC response for the "getConfirmedTransaction" message
+ */
+const GetConfirmedTransactionRpcResult = jsonRpcResult(
+  struct.union([
+    'null',
+    struct({
+      slot: 'number',
+      transaction: ConfirmedTransactionResult,
+      meta: ConfirmedTransactionMetaResult,
     }),
   ]),
 );
@@ -1264,6 +1314,59 @@ export class Connection {
       }),
       rewards: result.result.rewards || [],
     };
+  }
+
+  /**
+   * Fetch a transaction details for a confirmed transaction
+   */
+  async getConfirmedTransaction(
+    signature: TransactionSignature,
+  ): Promise<ConfirmedTransaction | null> {
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', [
+      signature,
+    ]);
+    const {result, error} = GetConfirmedTransactionRpcResult(unsafeRes);
+    if (error) {
+      throw new Error('failed to get confirmed transaction: ' + error.message);
+    }
+    assert(typeof result !== 'undefined');
+    if (result === null) {
+      return result;
+    }
+
+    return {
+      slot: result.slot,
+      transaction: Transaction.fromRpcResult(result.transaction),
+      meta: result.meta,
+    };
+  }
+
+  /**
+   * Fetch a list of all the confirmed signatures for transactions involving an address
+   * within a specified slot range. Max range allowed is 10,000 slots.
+   *
+   * @param address queried address
+   * @param startSlot start slot, inclusive
+   * @param endSlot end slot, inclusive
+   */
+  async getConfirmedSignaturesForAddress(
+    address: PublicKey,
+    startSlot: number,
+    endSlot: number,
+  ): Promise<Array<TransactionSignature>> {
+    const unsafeRes = await this._rpcRequest(
+      'getConfirmedSignaturesForAddress',
+      [address.toBase58(), startSlot, endSlot],
+    );
+    const result = GetConfirmedSignaturesForAddressRpcResult(unsafeRes);
+    if (result.error) {
+      throw new Error(
+        'failed to get confirmed signatures for address: ' +
+          result.error.message,
+      );
+    }
+    assert(typeof result.result !== 'undefined');
+    return result.result;
   }
 
   /**
