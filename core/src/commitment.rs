@@ -5,6 +5,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
 use std::{
+    cmp,
     collections::{BTreeMap, HashMap},
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
@@ -312,11 +313,15 @@ impl AggregateCommitmentService {
             }
             let mut insert_amount = lamports;
             for (slot, stake) in rooted_stake.iter_mut() {
-                if slot < &root {
-                    *stake += lamports;
-                } else if slot > &root {
-                    insert_amount += *stake;
-                    break;
+                match slot.cmp(&root) {
+                    cmp::Ordering::Less => {
+                        *stake += lamports;
+                    }
+                    cmp::Ordering::Greater => {
+                        insert_amount += *stake;
+                        break;
+                    }
+                    _ => {}
                 }
             }
             rooted_stake
