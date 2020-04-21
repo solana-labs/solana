@@ -1,4 +1,4 @@
-use clap::{value_t, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_core::contact_info::ContactInfo;
@@ -92,9 +92,9 @@ fn run_dos(
 
 fn main() {
     solana_logger::setup();
-    let matches = App::new("crate")
-        .about("about")
-        .version("version")
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
+        .version(solana_clap_utils::version!())
         .arg(
             Arg::with_name("entrypoint")
                 .long("entrypoint")
@@ -106,26 +106,32 @@ fn main() {
             Arg::with_name("mode")
                 .long("mode")
                 .takes_value(true)
-                .value_name("DOS_MODE")
-                .help(
-                    "Interface to dos.\n\
-                       Valid values: gossip, tvu, tvu_forwards, tpu,\n\
-                       tpu_forwards, repair, serve_repair",
-                ),
+                .value_name("MODE")
+                .possible_values(&[
+                    "gossip",
+                    "tvu",
+                    "tvu_forwards",
+                    "tpu",
+                    "tpu_forwards",
+                    "repair",
+                    "serve_repair",
+                ])
+                .help("Interface to DoS"),
         )
         .arg(
             Arg::with_name("data_size")
-                .long("data_size")
+                .long("data-size")
                 .takes_value(true)
-                .value_name("SIZE_BYTES")
-                .help("Size of packet to dos with."),
+                .value_name("BYTES")
+                .help("Size of packet to DoS with"),
         )
         .arg(
             Arg::with_name("data_type")
-                .long("data_type")
+                .long("data-type")
                 .takes_value(true)
-                .value_name("DATA_TYPE")
-                .help("Type of data to send."),
+                .value_name("TYPE")
+                .possible_values(&["repair_highest", "repair_shred", "repair_orphan", "random"])
+                .help("Type of data to send"),
         )
         .get_matches();
 
