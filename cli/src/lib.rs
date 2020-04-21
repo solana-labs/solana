@@ -1,3 +1,26 @@
+<<<<<<< HEAD
+=======
+macro_rules! ACCOUNT_STRING {
+    () => {
+        r#", one of:
+  * a base58-encoded public key
+  * a path to a keypair file
+  * a hyphen; signals a JSON-encoded keypair on stdin
+  * the 'ASK' keyword; to recover a keypair via its seed phrase
+  * a hardware wallet keypair URL (i.e. usb://ledger)"#
+    };
+}
+
+#[macro_use]
+macro_rules! pubkey {
+    ($arg:expr, $help:expr) => {
+        $arg.takes_value(true)
+            .validator(is_valid_pubkey)
+            .help(concat!($help, ACCOUNT_STRING!()))
+    };
+}
+
+>>>>>>> cbc7b3b0b... Cleanup CLI help message (#9632)
 #[macro_use]
 extern crate serde_derive;
 
