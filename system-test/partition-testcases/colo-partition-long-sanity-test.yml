@@ -8,7 +8,7 @@ steps:
       NUMBER_OF_VALIDATOR_NODES: 4
       ENABLE_GPU: "false"
       NUMBER_OF_CLIENT_NODES: 1
-      CLIENT_OPTIONS: "bench-tps=1=--tx_count 15000 --thread-batch-sleep-ms 250"
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 5000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
       APPLY_PARTITIONS: "true"
       NETEM_CONFIG_FILE: "system-test/netem-configs/partial-loss-three-partitions"

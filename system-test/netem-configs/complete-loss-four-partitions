@@ -1,0 +1,70 @@
+{
+    "partitions":[
+         25,
+         25,
+         25,
+         25
+    ],
+    "interconnects":[
+        {
+            "a":0,
+            "b":1,
+            "config":"loss 100%"
+        },
+        {
+            "a":1,
+            "b":0,
+            "config":"loss 100%"
+        },
+        {
+            "a":0,
+            "b":2,
+            "config":"loss 100%"
+        },
+        {
+            "a":2,
+            "b":0,
+            "config":"loss 100%"
+        },
+        {
+            "a":0,
+            "b":3,
+            "config":"loss 100%"
+        },
+        {
+            "a":3,
+            "b":0,
+            "config":"loss 100%"
+        },
+        {
+            "a":1,
+            "b":2,
+            "config":"loss 100%"
+        },
+        {
+            "a":2,
+            "b":1,
+            "config":"loss 100%"
+        },
+        {
+            "a":1,
+            "b":3,
+            "config":"loss 100%"
+        },
+        {
+            "a":3,
+            "b":1,
+            "config":"loss 100%"
+        },
+        {
+            "a":2,
+            "b":3,
+            "config":"loss 100%"
+        },
+        {
+            "a":3,
+            "b":2,
+            "config":"loss 100%"
+        }
+    ]
+}
