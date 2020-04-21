@@ -1340,8 +1340,8 @@ fn process_deploy(
     trace!("Finalizing program account");
     rpc_client
         .send_and_confirm_transaction_with_spinner(&mut finalize_tx, &signers)
-        .map_err(|_| {
-            CliError::DynamicProgramError("Program finalize transaction failed".to_string())
+        .map_err(|e| {
+            CliError::DynamicProgramError(format!("Program finalize transaction failed: {}", e))
         })?;
 
     Ok(json!({
