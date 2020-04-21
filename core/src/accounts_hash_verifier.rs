@@ -15,7 +15,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::RecvTimeoutError,
-        Arc, RwLock,
+        Arc,
     },
     thread::{self, Builder, JoinHandle},
     time::Duration,
@@ -30,7 +30,7 @@ impl AccountsHashVerifier {
         snapshot_package_receiver: SnapshotPackageReceiver,
         snapshot_package_sender: Option<SnapshotPackageSender>,
         exit: &Arc<AtomicBool>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<ClusterInfo>,
         trusted_validators: Option<HashSet<Pubkey>>,
         halt_on_trusted_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
@@ -70,9 +70,15 @@ impl AccountsHashVerifier {
         }
     }
 
+<<<<<<< HEAD
     fn process_snapshot(
         snapshot_package: SnapshotPackage,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+=======
+    fn process_accounts_package(
+        accounts_package: AccountsPackage,
+        cluster_info: &ClusterInfo,
+>>>>>>> bab350226... Push down cluster_info lock (#9594)
         trusted_validators: &Option<HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
         snapshot_package_sender: &Option<SnapshotPackageSender>,
@@ -111,14 +117,11 @@ impl AccountsHashVerifier {
             if sender.send(snapshot_package).is_err() {}
         }
 
-        cluster_info
-            .write()
-            .unwrap()
-            .push_accounts_hashes(hashes.clone());
+        cluster_info.push_accounts_hashes(hashes.clone());
     }
 
     fn should_halt(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         trusted_validators: &Option<HashSet<Pubkey>>,
         slot_to_hash: &mut HashMap<Slot, Hash>,
     ) -> bool {
@@ -126,11 +129,9 @@ impl AccountsHashVerifier {
         let mut highest_slot = 0;
         if let Some(trusted_validators) = trusted_validators.as_ref() {
             for trusted_validator in trusted_validators {
-                let cluster_info_r = cluster_info.read().unwrap();
-                if let Some(accounts_hashes) =
-                    cluster_info_r.get_accounts_hash_for_node(trusted_validator)
+                let is_conflicting = cluster_info.get_accounts_hash_for_node(trusted_validator, |accounts_hashes|
                 {
-                    for (slot, hash) in accounts_hashes {
+                    accounts_hashes.iter().any(|(slot, hash)| {
                         if let Some(reference_hash) = slot_to_hash.get(slot) {
                             if *hash != *reference_hash {
                                 error!("Trusted validator {} produced conflicting hashes for slot: {} ({} != {})",
@@ -139,16 +140,21 @@ impl AccountsHashVerifier {
                                     hash,
                                     reference_hash,
                                 );
-
-                                return true;
+                                true
                             } else {
                                 verified_count += 1;
+                                false
                             }
                         } else {
                             highest_slot = std::cmp::max(*slot, highest_slot);
                             slot_to_hash.insert(*slot, *hash);
+                            false
                         }
-                    }
+                    })
+                }).unwrap_or(false);
+
+                if is_conflicting {
+                    return true;
                 }
             }
         }
@@ -181,7 +187,7 @@ mod tests {
 
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
 
         let mut trusted_validators = HashSet::new();
         let mut slot_to_hash = HashMap::new();
@@ -196,8 +202,7 @@ mod tests {
         let hash2 = hash(&[2]);
         {
             let message = make_accounts_hashes_message(&validator1, vec![(0, hash1)]).unwrap();
-            let mut cluster_info_w = cluster_info.write().unwrap();
-            cluster_info_w.push_message(message);
+            cluster_info.push_message(message);
         }
         slot_to_hash.insert(0, hash2);
         trusted_validators.insert(validator1.pubkey());
@@ -217,7 +222,7 @@ mod tests {
 
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
 
         let trusted_validators = HashSet::new();
         let exit = Arc::new(AtomicBool::new(false));
@@ -244,9 +249,8 @@ mod tests {
                 0,
             );
         }
-        let cluster_info_r = cluster_info.read().unwrap();
-        let cluster_hashes = cluster_info_r
-            .get_accounts_hash_for_node(&keypair.pubkey())
+        let cluster_hashes = cluster_info
+            .get_accounts_hash_for_node(&keypair.pubkey(), |c| c.clone())
             .unwrap();
         info!("{:?}", cluster_hashes);
         assert_eq!(hashes.len(), MAX_SNAPSHOT_HASHES);

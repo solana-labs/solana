@@ -29,7 +29,7 @@ use std::{
     net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -62,14 +62,14 @@ impl BroadcastStageType {
     pub fn new_broadcast_stage(
         &self,
         sock: Vec<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         shred_version: u16,
     ) -> BroadcastStage {
-        let keypair = cluster_info.read().unwrap().keypair.clone();
+        let keypair = cluster_info.keypair.clone();
         match self {
             BroadcastStageType::Standard => BroadcastStage::new(
                 sock,
@@ -116,7 +116,7 @@ trait BroadcastRun {
     fn transmit(
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         sock: &UdpSocket,
     ) -> Result<()>;
     fn record(
@@ -205,7 +205,7 @@ impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn new(
         socks: Vec<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
@@ -357,11 +357,11 @@ fn update_peer_stats(
 }
 
 pub fn get_broadcast_peers<S: std::hash::BuildHasher>(
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    cluster_info: &ClusterInfo,
     stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
 ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
     use crate::cluster_info;
-    let mut peers = cluster_info.read().unwrap().tvu_peers();
+    let mut peers = cluster_info.tvu_peers();
     let peers_and_stakes = cluster_info::stake_weight_peers(&mut peers, stakes);
     (peers, peers_and_stakes)
 }
@@ -450,11 +450,7 @@ pub mod test {
         signature::{Keypair, Signer},
     };
     use std::{
-        path::Path,
-        sync::atomic::AtomicBool,
-        sync::mpsc::channel,
-        sync::{Arc, RwLock},
-        thread::sleep,
+        path::Path, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc, thread::sleep,
     };
 
     pub fn make_transmit_shreds(
@@ -598,16 +594,16 @@ pub mod test {
         let broadcast_buddy = Node::new_localhost_with_pubkey(&buddy_keypair.pubkey());
 
         // Fill the cluster_info with the buddy's info
-        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
         cluster_info.insert_info(broadcast_buddy.info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
 
         let exit_sender = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
 
-        let leader_keypair = cluster_info.read().unwrap().keypair.clone();
+        let leader_keypair = cluster_info.keypair.clone();
         // Start up the broadcast stage
         let broadcast_service = BroadcastStage::new(
             leader_info.sockets.broadcast,

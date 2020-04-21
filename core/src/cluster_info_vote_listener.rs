@@ -197,7 +197,7 @@ pub struct ClusterInfoVoteListener {
 impl ClusterInfoVoteListener {
     pub fn new(
         exit: &Arc<AtomicBool>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<ClusterInfo>,
         sigverify_disabled: bool,
         sender: CrossbeamSender<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -262,7 +262,7 @@ impl ClusterInfoVoteListener {
 
     fn recv_loop(
         exit: Arc<AtomicBool>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: &ClusterInfo,
         sigverify_disabled: bool,
         verified_vote_packets_sender: VerifiedVotePacketsSender,
         verified_vote_transactions_sender: VerifiedVoteTransactionsSender,
@@ -272,7 +272,7 @@ impl ClusterInfoVoteListener {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            let (labels, votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
+            let (labels, votes, new_ts) = cluster_info.get_votes(last_ts);
             inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
 
             last_ts = new_ts;

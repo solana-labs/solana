@@ -28,7 +28,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{
-    sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
+    sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex},
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -152,7 +152,7 @@ fn main() {
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let cluster_info = Arc::new(cluster_info);
         let banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
