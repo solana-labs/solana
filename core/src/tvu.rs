@@ -266,11 +266,8 @@ pub mod tests {
     use super::*;
     use crate::banking_stage::create_test_recorder;
     use crate::cluster_info::{ClusterInfo, Node};
-<<<<<<< HEAD
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-=======
     use serial_test_derive::serial;
->>>>>>> ad186b865... Flag test_tvu_exit as serial to hopefully reduce CI flakiness (#9509)
     use solana_ledger::create_new_tmp_ledger;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
