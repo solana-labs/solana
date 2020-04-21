@@ -105,7 +105,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
             senders.lock().unwrap().insert(node.id, s);
         })
     });
-    let c_info = cluster_info.clone();
+    let c_info = cluster_info.clone_with_id(&cluster_info.id());
 
     let staked_nodes = Arc::new(staked_nodes);
     let shreds_len = 100;
@@ -140,7 +140,6 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     // start turbine simulation
     let now = Instant::now();
     batches.par_iter_mut().for_each(|batch| {
-        let cluster = c_info.clone();
         let mut remaining = batch.len();
         let senders: HashMap<_, _> = senders.lock().unwrap().clone();
         while remaining > 0 {
@@ -150,7 +149,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                     "Timed out with {:?} remaining nodes",
                     remaining
                 );
-                cluster.set_new_id(*id);
+                let cluster = c_info.clone_with_id(id);
                 if !*layer1_done {
                     recv.iter().for_each(|i| {
                         retransmit(

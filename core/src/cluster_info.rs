@@ -114,8 +114,8 @@ pub struct ClusterInfo {
     /// The network entrypoint
     entrypoint: RwLock<Option<ContactInfo>>,
     outbound_budget: RwLock<DataBudget>,
-    id: Pubkey,
     my_contact_info: RwLock<ContactInfo>,
+    id: Pubkey,
 }
 
 #[derive(Default, Clone)]
@@ -223,19 +223,6 @@ struct ResponseScore {
     score: u64,             // Relative score of the response
 }
 
-impl Clone for ClusterInfo {
-    fn clone(&self) -> Self {
-        ClusterInfo {
-            gossip: RwLock::new(self.gossip.read().unwrap().clone()),
-            keypair: self.keypair.clone(),
-            entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
-            outbound_budget: RwLock::new(self.outbound_budget.read().unwrap().clone()),
-            id: self.id,
-            my_contact_info: RwLock::new(self.my_contact_info.read().unwrap().clone()),
-        }
-    }
-}
-
 impl ClusterInfo {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
@@ -252,8 +239,8 @@ impl ClusterInfo {
                 bytes: 0,
                 last_timestamp_ms: 0,
             }),
-            id,
             my_contact_info: RwLock::new(contact_info),
+            id,
         };
         me.gossip.write().unwrap().set_self(&id);
         me.insert_self();
@@ -261,10 +248,20 @@ impl ClusterInfo {
         me
     }
 
-    // Not safe to use, only used in simulations/tests
-    pub fn set_new_id(&self, new_id: Pubkey) {
-        self.my_contact_info.write().unwrap().id = new_id;
-        self.gossip.write().unwrap().set_self(&new_id);
+    // Should only be used by tests and simulations
+    pub fn clone_with_id(&self, new_id: &Pubkey) -> Self {
+        let mut gossip = self.gossip.read().unwrap().clone();
+        gossip.id = *new_id;
+        let mut my_contact_info = self.my_contact_info.read().unwrap().clone();
+        my_contact_info.id = *new_id;
+        ClusterInfo {
+            gossip: RwLock::new(gossip),
+            keypair: self.keypair.clone(),
+            entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
+            outbound_budget: RwLock::new(self.outbound_budget.read().unwrap().clone()),
+            my_contact_info: RwLock::new(my_contact_info),
+            id: *new_id,
+        }
     }
 
     pub fn update_contact_info<F>(&self, modify: F)
@@ -339,7 +336,7 @@ impl ClusterInfo {
         let now = timestamp();
         let mut spy_nodes = 0;
         let mut archivers = 0;
-        let my_pubkey = self.id;
+        let my_pubkey = self.id();
         let nodes: Vec<_> = self
             .all_peers()
             .into_iter()
@@ -670,7 +667,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != self.id && ContactInfo::is_valid_address(&x.rpc))
+            .filter(|x| x.id != self.id() && ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
     }
@@ -692,7 +689,7 @@ impl ClusterInfo {
     }
 
     pub fn gossip_peers(&self) -> Vec<ContactInfo> {
-        let me = self.id;
+        let me = self.id();
         self.gossip
             .read()
             .unwrap()
@@ -718,7 +715,7 @@ impl ClusterInfo {
             .filter(|x| {
                 ContactInfo::is_valid_address(&x.tvu)
                     && !ClusterInfo::is_archiver(x)
-                    && x.id != self.id
+                    && x.id != self.id()
             })
             .cloned()
             .collect()
@@ -752,7 +749,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr) && x.id != self.id)
+            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr) && x.id != self.id())
             .cloned()
             .collect()
     }
@@ -768,7 +765,7 @@ impl ClusterInfo {
             .filter_map(|x| x.value.contact_info())
             .filter(|x| {
                 ContactInfo::is_valid_address(&x.storage_addr)
-                    && x.id != self.id
+                    && x.id != self.id()
                     && x.shred_version == self.my_shred_version()
             })
             .cloned()
@@ -785,7 +782,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| {
-                x.id != self.id
+                x.id != self.id()
                     && x.shred_version == self.my_shred_version()
                     && ContactInfo::is_valid_address(&x.tvu)
                     && ContactInfo::is_valid_address(&x.tvu_forwards)
@@ -905,7 +902,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != self.id && ContactInfo::is_valid_address(&x.tpu))
+            .filter(|x| x.id != self.id() && ContactInfo::is_valid_address(&x.tpu))
             .cloned()
             .collect()
     }
@@ -1213,7 +1210,7 @@ impl ClusterInfo {
             .collect()
     }
     fn new_push_requests(&self) -> Vec<(SocketAddr, Protocol)> {
-        let self_id = self.id;
+        let self_id = self.id();
         let (_, push_messages) = self.gossip.write().unwrap().new_push_messages(timestamp());
         push_messages
             .into_iter()
@@ -1376,7 +1373,7 @@ impl ClusterInfo {
                                 1
                             );
                         } else if let Some(contact_info) = caller.contact_info() {
-                            if contact_info.id == me.id {
+                            if contact_info.id == me.id() {
                                 warn!("PullRequest ignored, I'm talking to myself");
                                 inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
                             } else {
@@ -1635,7 +1632,7 @@ impl ClusterInfo {
         data: Vec<CrdsValue>,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Option<Packets> {
-        let self_id = me.id;
+        let self_id = me.id();
         inc_new_counter_debug!("cluster_info-push_message", 1);
 
         let updated: Vec<_> =
@@ -1770,7 +1767,7 @@ impl ClusterInfo {
                         let r_gossip = me.gossip.read().unwrap();
                         debug!(
                             "{}: run_listen timeout, table size: {}",
-                            me.id,
+                            me.id(),
                             r_gossip.crds.table.len()
                         );
                     }
