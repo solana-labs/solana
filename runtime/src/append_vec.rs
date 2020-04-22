@@ -124,6 +124,18 @@ impl Drop for AppendVec {
 impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
+        let map = Self::new_mmap(path, create, size);
+        AppendVec {
+            path: file.to_path_buf(),
+            map,
+            // This mutex forces append to be single threaded, but concurrent with reads
+            // See UNSAFE usage in `append_ptr`
+            append_offset: Mutex::new(initial_len),
+            current_len: AtomicUsize::new(initial_len),
+            file_size: size as u64,
+        }
+    }
+    pub new_mmap(file: &Path, create: bool, size: usize) -> MmapMut {
         let initial_len = 0;
         AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
 
@@ -163,17 +175,9 @@ impl AppendVec {
         let map = unsafe { MmapMut::map_mut(&data) };
         let map =
             map.unwrap_or_else(|e| panic!("failed to map the data file (size: {}): {}", size, e));
-
-        AppendVec {
-            path: file.to_path_buf(),
-            map,
-            // This mutex forces append to be single threaded, but concurrent with reads
-            // See UNSAFE usage in `append_ptr`
-            append_offset: Mutex::new(initial_len),
-            current_len: AtomicUsize::new(initial_len),
-            file_size: size as u64,
-        }
+        map
     }
+
 
     #[allow(clippy::mutex_atomic)]
     fn new_empty_map(current_len: usize) -> Self {
@@ -295,12 +299,12 @@ impl AppendVec {
         offset == aligned_current_len
     }
 
-    fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
+    pub fn read_slice(map: &MmapMut, max_len: usize, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let (next, overflow) = offset.overflowing_add(size);
-        if overflow || next > self.len() {
+        if overflow || next > max_len {
             return None;
-        }
-        let data = &self.map[offset..next];
+        
+        let data = &map[offset..next];
         let next = u64_align!(next);
 
         Some((
@@ -311,9 +315,13 @@ impl AppendVec {
         ))
     }
 
-    fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
+
+    fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
+        Self::read_slice(&self.map, self.len(), offset, size)
+    }
+    pub fn write_ptr(map: &MmapMut, offset: &mut usize, src: *const u8, len: usize) {
         let pos = u64_align!(*offset);
-        let data = &self.map[pos..(pos + len)];
+        let data = &map[pos..(pos + len)];
         //UNSAFE: This mut append is safe because only 1 thread can append at a time
         //Mutex<append_offset> guarantees exclusive write access to the memory occupied in
         //the range.
@@ -322,6 +330,10 @@ impl AppendVec {
             std::ptr::copy(src, dst, len);
         };
         *offset = pos + len;
+    }
+
+    fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
+        Self::write_ptr(&self.map, offset, src, len)
     }
 
     fn append_ptrs_locked(&self, offset: &mut usize, vals: &[(*const u8, usize)]) -> Option<usize> {

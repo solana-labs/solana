@@ -906,45 +906,11 @@ impl Blockstore {
         Ok(())
     }
 
-    fn write_shred(&self, shred: &Shred) {
-        let slot = shred.slot();
-        let path = if shred.is_data() {
-            self.data_shred_path(slot, shred.index() as u64)
-        } else {
-            self.coding_shred_path(slot, shred.index() as u64)
-        };
-        let mut tried = false;
-        loop {
-            info!(
-                "PUT_DATA: {}-{} {} {}",
-                slot,
-                shred.index(),
-                shred.is_data(),
-                solana_sdk::hash::hashv(&[&shred.payload]),
-            );
-            let e = Self::write_tmp(&path, &shred.payload);
-            if let Err(BlockstoreError::IO(..)) = e {
-                if !tried {
-                    let dir = self.slot_data_dir(slot);
-                    let dir = Path::new(&dir);
-                    fs::create_dir_all(dir).unwrap();
-                    let dir = self.slot_coding_dir(slot);
-                    let dir = Path::new(&dir);
-                    fs::create_dir_all(dir).unwrap();
-                    tried = true;
-                    continue;
-                }
-            }
-            if e.is_err() {
-                warn!(
-                    "failed to write shred to disk {} {} {:?}",
-                    shred.slot(),
-                    shred.index(),
-                    e
-                );
-            }
-            break;
-        }
+    fn write_shred(&self, shred: &Shred) -> Result<()> {
+        let key = SlotTable::key(shred.slot(), shred.index());
+        let mmap = SlotTable::create_or_get(&self.slot_table, key)?;
+        mmap.read().unlock().get((slot, ix)).set_once(shred.index(), &shred.payload)?;
+        Ok(())
     }
 
     pub fn insert_shreds(
@@ -1322,55 +1288,10 @@ impl Blockstore {
             .unwrap()
             .to_string()
     }
-    fn extract_data(archive: &str, file: &str) -> Result<Option<Vec<u8>>> {
-        let args = ["xfPzO", archive, file];
-        let output = std::process::Command::new("tar").args(&args).output()?;
-        if !output.status.success() {
-            warn!(
-                "tar extract shred {} {} command failed with exit code: {}",
-                archive, file, output.status,
-            );
-            info!("tar stdout: {}", String::from_utf8_lossy(&output.stdout));
-            info!("tar stderr: {}", String::from_utf8_lossy(&output.stderr));
-            Ok(None)
-        } else {
-            Ok(Some(output.stdout))
-        }
-    }
-    fn get_data(shred_path: &str, tgz: Option<&str>) -> Result<Option<Vec<u8>>> {
-        let path = Path::new(shred_path);
-        let f = fs::File::open(path);
-        if f.is_err() {
-            if let Some(archive) = tgz {
-                if Path::new(archive).is_file() {
-                    return Self::extract_data(archive, shred_path);
-                }
-            }
-            Ok(None)
-        } else {
-            let mut buf = vec![];
-            f?.read_to_end(&mut buf)?;
-            Ok(Some(buf))
-        }
-    }
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        let shred_path = self.data_shred_path(slot, index);
-        let archive_path = self.slot_data_tar_path(slot);
-        let d = Self::get_data(&shred_path, Some(&archive_path))?;
-        if let Some(data) = d {
-            info!(
-                "GET_DATA: {}-{} {}",
-                slot,
-                index,
-                solana_sdk::hash::hashv(&[&data])
-            );
-            let s = Shred::new_from_serialized_shred(data.clone()).unwrap();
-            assert_eq!(s.slot(), slot);
-            assert_eq!(s.index() as u64, index);
-            Ok(Some(data))
-        } else {
-            Ok(d)
-        }
+        let key = SlotTable::key(slot, index);
+        let mmap = SlotTable::create_or_load(&self.slot_table, key)?;
+        Ok(mmap.get(shred.index()))
     }
 
     pub fn get_data_shreds_for_slot(
