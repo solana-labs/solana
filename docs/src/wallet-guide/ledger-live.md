@@ -49,4 +49,4 @@ instructions on how to
 
 ## Support
 
-Check out our [Wallet Support Page](/support.md) for ways to get help.
+Check out our [Wallet Support Page](support.md) for ways to get help.
