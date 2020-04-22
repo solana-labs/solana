@@ -145,18 +145,16 @@ impl Meta {
     pub fn authorize_withdraw(
         &mut self,
         authority: &Pubkey,
-        stake_authorize: StakeAuthorize,
         signers: &HashSet<Pubkey>,
         clock: &Clock,
     ) -> Result<(), InstructionError> {
         // verify that lockup has expired or that the authorization
         //  is *also* signed by the custodian
-        if stake_authorize == StakeAuthorize::Withdrawer && self.lockup.is_in_force(clock, signers)
-        {
+        if self.lockup.is_in_force(clock, signers) {
             return Err(StakeError::LockupInForce.into());
         }
         self.authorized
-            .authorize(signers, authority, stake_authorize)
+            .authorize(signers, authority, StakeAuthorize::Withdrawer)
     }
 }
 
@@ -941,38 +939,29 @@ mod tests {
         let mut clock = Clock::default();
 
         assert_eq!(
-            meta.authorize_withdraw(&staker, StakeAuthorize::Staker, &signers, &clock),
+            meta.authorized
+                .authorize(&signers, &staker, StakeAuthorize::Staker),
             Err(InstructionError::MissingRequiredSignature)
         );
         signers.insert(staker);
         assert_eq!(
-            meta.authorize_withdraw(&staker, StakeAuthorize::Staker, &signers, &clock),
-            Ok(())
-        );
-        // verify staker not subject to lockup, but withdrawer is
-        meta.lockup.epoch = 1;
-        assert_eq!(
-            meta.authorize_withdraw(&staker, StakeAuthorize::Staker, &signers, &clock),
+            meta.authorized
+                .authorize(&signers, &staker, StakeAuthorize::Staker),
             Ok(())
         );
         // verify lockup check
+        meta.lockup.epoch = 1;
         assert_eq!(
-            meta.authorize_withdraw(&staker, StakeAuthorize::Withdrawer, &signers, &clock),
+            meta.authorize_withdraw(&staker, &signers, &clock),
             Err(StakeError::LockupInForce.into())
         );
         // verify lockup check defeated by custodian
         signers.insert(custodian);
-        assert_eq!(
-            meta.authorize_withdraw(&staker, StakeAuthorize::Withdrawer, &signers, &clock),
-            Ok(())
-        );
+        assert_eq!(meta.authorize_withdraw(&staker, &signers, &clock), Ok(()));
         // verify lock expiry
         signers.remove(&custodian);
         clock.epoch = 1;
-        assert_eq!(
-            meta.authorize_withdraw(&staker, StakeAuthorize::Withdrawer, &signers, &clock),
-            Ok(())
-        );
+        assert_eq!(meta.authorize_withdraw(&staker, &signers, &clock), Ok(()));
     }
 
     #[test]
