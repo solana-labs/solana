@@ -234,22 +234,33 @@ const Version = struct({
 });
 
 /**
+ * Metadata for a confirmed transaction on the ledger
+ *
+ * @typedef {Object} ConfirmedTransactionMeta
+ * @property {number} fee The fee charged for processing the transaction
+ * @property {Array<number>} preBalances The balances of the transaction accounts before processing
+ * @property {Array<number>} postBalances The balances of the transaction accounts after processing
+ * @property {object|null} err The error result of transaction processing
+ */
+type ConfirmedTransactionMeta = {
+  fee: number,
+  preBalances: Array<number>,
+  postBalances: Array<number>,
+  err: TransactionError | null,
+};
+
+/**
  * A confirmed transaction on the ledger
  *
  * @typedef {Object} ConfirmedTransaction
  * @property {number} slot The slot during which the transaction was processed
  * @property {Transaction} transaction The details of the transaction
- * @property {object} meta Slot index of this block's parent
+ * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
  */
 type ConfirmedTransaction = {
   slot: number,
   transaction: Transaction,
-  meta: {
-    fee: number,
-    err: TransactionError | null,
-    preBalances: Array<number>,
-    postBalances: Array<number>,
-  } | null,
+  meta: ConfirmedTransactionMeta | null,
 };
 
 /**
@@ -268,12 +279,7 @@ type ConfirmedBlock = {
   parentSlot: number,
   transactions: Array<{
     transaction: Transaction,
-    meta: {
-      fee: number,
-      preBalances: Array<number>,
-      postBalances: Array<number>,
-      err: TransactionError | null,
-    } | null,
+    meta: ConfirmedTransactionMeta | null,
   }>,
   rewards: Array<{
     pubkey: string,
