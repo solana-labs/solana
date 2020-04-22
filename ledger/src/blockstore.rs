@@ -1633,7 +1633,9 @@ impl Blockstore {
                     .iter()
                     .cloned()
                     .flat_map(|entry| entry.transactions);
-                let parent_slot_entries = self.get_slot_entries(slot_meta.parent_slot, 0)?;
+                let parent_slot_entries = self
+                    .get_slot_entries(slot_meta.parent_slot, 0)
+                    .unwrap_or_default();
                 let previous_blockhash = if !parent_slot_entries.is_empty() {
                     get_last_hash(parent_slot_entries.iter()).unwrap()
                 } else {
