@@ -27,6 +27,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getEpochSchedule](jsonrpc-api.md#getepochschedule)
 * [getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash)
 * [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
+* [getFirstAvailableBlock](jsonrpc-api.md#getfirstavailableblock)
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
 * [getIdentity](jsonrpc-api.md#getidentity)
 * [getInflation](jsonrpc-api.md#getinflation)
@@ -284,7 +285,7 @@ The result field will be an object with the following fields:
 * `<null>` - if specified block is not confirmed
 * `<object>` - if block is confirmed, an object with the following fields:
   * `blockhash: <string>` - the blockhash of this block, as base-58 encoded string
-  * `previousBlockhash: <string>` - the blockhash of this block's parent, as base-58 encoded string
+  * `previousBlockhash: <string>` - the blockhash of this block's parent, as base-58 encoded string; if the parent block is not available due to ledger cleanup, this field will return "11111111111111111111111111111111"
   * `parentSlot: <u64>` - the slot index of this block's parent
   * `transactions: <array>` - an array of JSON objects containing:
     * `transaction: <object|string>` - [Transaction](#transaction-structure) object, either in JSON format or base-58 encoded binary data, depending on encoding parameter
@@ -534,6 +535,28 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":54},"value":{"feeRateGovernor":{"burnPercent":50,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
+```
+
+### getFirstAvailableBlock
+
+Returns the slot of the lowest confirmed block that has not been purged from the ledger
+
+#### Parameters:
+
+None
+
+#### Results:
+
+* `<u64>` - Slot
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":250000,"id":1}
 ```
 
 ### getGenesisHash
