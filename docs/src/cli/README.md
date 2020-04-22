@@ -9,3 +9,13 @@ known as the CLI. We use the command-line because it is the first place the
 Solana core team deploys new functionality. The command-line interface is not
 necessarily the easiest to use, but it provides the most direct, flexible, and
 secure access to your Solana accounts.
+<<<<<<< HEAD
+=======
+
+## Getting Started
+To get started using the Solana Command Line (CLI) tools:
+ - [Install the Solana Tools](install-solana-cli-tools.md)
+ - [Choose a Cluster](choose-a-cluster.md)
+ - [Create a Wallet](../wallet-guide/cli.md)
+ - [Check out our CLI conventions](conventions.md)
+>>>>>>> 24354ccd6... Clean up wallet URL paths (#9667)
