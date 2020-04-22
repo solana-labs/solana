@@ -6,8 +6,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
 use solana_vote_program::{vote_state::VoteState, vote_state::MAX_LOCKOUT_HISTORY};
 use std::{
-    cmp,
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
     sync::{Arc, RwLock},
@@ -180,13 +179,16 @@ impl CommitmentAggregationData {
     }
 }
 
-fn get_largest_confirmed_root(rooted_stake: BTreeMap<Slot, u64>, total_stake: u64) -> Slot {
-    rooted_stake
-        .into_iter()
-        .rev()
-        .find(|(_, stake)| (*stake as f64 / total_stake as f64) > VOTE_THRESHOLD_SIZE)
-        .unwrap_or_default()
-        .0
+fn get_largest_confirmed_root(mut rooted_stake: Vec<(Slot, u64)>, total_stake: u64) -> Slot {
+    rooted_stake.sort_by(|a, b| a.0.cmp(&b.0).reverse());
+    let mut stake_sum = 0;
+    for (root, stake) in rooted_stake {
+        stake_sum += stake;
+        if (stake_sum as f64 / total_stake as f64) > VOTE_THRESHOLD_SIZE {
+            return root;
+        }
+    }
+    0
 }
 
 pub struct AggregateCommitmentService {
@@ -275,7 +277,7 @@ impl AggregateCommitmentService {
     pub fn aggregate_commitment(
         ancestors: &[Slot],
         bank: &Bank,
-    ) -> (HashMap<Slot, BlockCommitment>, BTreeMap<Slot, u64>) {
+    ) -> (HashMap<Slot, BlockCommitment>, Vec<(Slot, u64)>) {
         assert!(!ancestors.is_empty());
 
         // Check ancestors is sorted
@@ -284,7 +286,7 @@ impl AggregateCommitmentService {
         }
 
         let mut commitment = HashMap::new();
-        let mut rooted_stake = BTreeMap::new();
+        let mut rooted_stake: Vec<(Slot, u64)> = Vec::new();
         for (_, (lamports, account)) in bank.vote_accounts().into_iter() {
             if lamports == 0 {
                 continue;
@@ -309,7 +311,7 @@ impl AggregateCommitmentService {
 
     fn aggregate_commitment_for_vote_account(
         commitment: &mut HashMap<Slot, BlockCommitment>,
-        rooted_stake: &mut BTreeMap<Slot, u64>,
+        rooted_stake: &mut Vec<(Slot, u64)>,
         vote_state: &VoteState,
         ancestors: &[Slot],
         lamports: u64,
@@ -328,23 +330,7 @@ impl AggregateCommitmentService {
                     break;
                 }
             }
-            let mut insert_amount = lamports;
-            for (slot, stake) in rooted_stake.iter_mut() {
-                match slot.cmp(&root) {
-                    cmp::Ordering::Less => {
-                        *stake += lamports;
-                    }
-                    cmp::Ordering::Greater => {
-                        insert_amount += *stake;
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            rooted_stake
-                .entry(root)
-                .and_modify(|stake| *stake += lamports)
-                .or_insert(insert_amount);
+            rooted_stake.push((root, lamports));
         }
 
         for vote in &vote_state.votes {
@@ -455,15 +441,16 @@ mod tests {
 
     #[test]
     fn test_get_largest_confirmed_root() {
-        assert_eq!(get_largest_confirmed_root(BTreeMap::default(), 10), 0);
-        let mut rooted_stake = BTreeMap::new();
-        rooted_stake.insert(0, 5);
-        rooted_stake.insert(1, 5);
+        assert_eq!(get_largest_confirmed_root(vec![], 10), 0);
+        let mut rooted_stake = vec![];
+        rooted_stake.push((0, 5));
+        rooted_stake.push((1, 5));
         assert_eq!(get_largest_confirmed_root(rooted_stake, 10), 0);
-        let mut rooted_stake = BTreeMap::new();
-        rooted_stake.insert(0, 10);
-        rooted_stake.insert(1, 9);
-        rooted_stake.insert(2, 5);
+        let mut rooted_stake = vec![];
+        rooted_stake.push((1, 5));
+        rooted_stake.push((0, 10));
+        rooted_stake.push((2, 5));
+        rooted_stake.push((1, 4));
         assert_eq!(get_largest_confirmed_root(rooted_stake, 10), 1);
     }
 
@@ -471,12 +458,12 @@ mod tests {
     fn test_aggregate_commitment_for_vote_account_1() {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut commitment = HashMap::new();
-        let mut rooted_stake = BTreeMap::new();
+        let mut rooted_stake = vec![];
         let lamports = 5;
         let mut vote_state = VoteState::default();
 
-        let root = ancestors.last().unwrap();
-        vote_state.root_slot = Some(*root);
+        let root = ancestors.last().unwrap().clone();
+        vote_state.root_slot = Some(root);
         AggregateCommitmentService::aggregate_commitment_for_vote_account(
             &mut commitment,
             &mut rooted_stake,
@@ -490,13 +477,14 @@ mod tests {
             expected.increase_rooted_stake(lamports);
             assert_eq!(*commitment.get(&a).unwrap(), expected);
         }
+        assert_eq!(rooted_stake[0], (root, lamports));
     }
 
     #[test]
     fn test_aggregate_commitment_for_vote_account_2() {
         let ancestors = vec![3, 4, 5, 7, 9, 11];
         let mut commitment = HashMap::new();
-        let mut rooted_stake = BTreeMap::new();
+        let mut rooted_stake = vec![];
         let lamports = 5;
         let mut vote_state = VoteState::default();
 
@@ -522,14 +510,14 @@ mod tests {
                 assert_eq!(*commitment.get(&a).unwrap(), expected);
             }
         }
-        assert_eq!(rooted_stake.get(&root).unwrap(), &lamports);
+        assert_eq!(rooted_stake[0], (root, lamports));
     }
 
     #[test]
     fn test_aggregate_commitment_for_vote_account_3() {
         let ancestors = vec![3, 4, 5, 7, 9, 10, 11];
         let mut commitment = HashMap::new();
-        let mut rooted_stake = BTreeMap::new();
+        let mut rooted_stake = vec![];
         let lamports = 5;
         let mut vote_state = VoteState::default();
 
@@ -561,7 +549,7 @@ mod tests {
                 assert_eq!(*commitment.get(&a).unwrap(), expected);
             }
         }
-        assert_eq!(rooted_stake.get(&root).unwrap(), &lamports);
+        assert_eq!(rooted_stake[0], (root, lamports));
     }
 
     #[test]
@@ -571,7 +559,7 @@ mod tests {
             mut genesis_config, ..
         } = create_genesis_config(10_000);
 
-        let rooted_stake_amount = 33;
+        let rooted_stake_amount = 40;
 
         let sk1 = Pubkey::new_rand();
         let pk1 = Pubkey::new_rand();
@@ -669,7 +657,7 @@ mod tests {
                 assert!(commitment.get(&a).is_none());
             }
         }
-        assert_eq!(*rooted_stake.get(&1).unwrap(), 2 * rooted_stake_amount);
-        assert_eq!(*rooted_stake.get(&2).unwrap(), rooted_stake_amount);
+        assert_eq!(rooted_stake.len(), 2);
+        assert_eq!(get_largest_confirmed_root(rooted_stake, 100), 1)
     }
 }
