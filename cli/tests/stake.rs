@@ -1439,6 +1439,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         destination_account_pubkey: recipient_pubkey,
         lamports: 42,
         withdraw_authority: 0,
+        custodian: None,
         sign_only: true,
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_pubkey),
@@ -1454,6 +1455,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         destination_account_pubkey: recipient_pubkey,
         lamports: 42,
         withdraw_authority: 0,
+        custodian: None,
         sign_only: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_pubkey),
