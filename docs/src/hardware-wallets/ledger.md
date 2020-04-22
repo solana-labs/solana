@@ -6,7 +6,7 @@ secure transaction signing.
 
 ## Before You Begin
 
-- [Set up a Ledger Nano S with the Solana App](../wallet/ledger-live.md)
+- [Set up a Ledger Nano S with the Solana App](../wallet-guide/ledger-live.md)
 - [Install the Solana command-line tools](../cli/install-solana-cli-tools.md)
 
 ## Use Ledger Device with Solana CLI
@@ -87,4 +87,4 @@ To fix, check the following:
 
 ## Support
 
-Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
+Check out our [Wallet Support Page](../wallet-guide/support.md) for ways to get help.

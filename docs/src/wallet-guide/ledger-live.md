@@ -10,7 +10,7 @@ Integration with Ledger Live to use Solana wallet accounts on Ledger Live
 will be available in the future.**
 
 Users may [use a Ledger Nano S with the Solana command
-line tools](../remote-wallet/ledger.md).
+line tools](../hardware-wallets/ledger.md).
 
 ## Set up a Ledger Nano S
  - Order a [Nano S from Ledger](https://shop.ledger.com/products/ledger-nano-s)
@@ -45,8 +45,8 @@ line tools](../remote-wallet/ledger.md).
 ## Interact with Solana network
 - To interact with your Ledger wallet on our live network, please see our
 instructions on how to
-[use a Ledger Nano S with the Solana command line tools](../remote-wallet/ledger.md).
+[use a Ledger Nano S with the Solana command line tools](../hardware-wallets/ledger.md).
 
 ## Support
 
-Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
+Check out our [Wallet Support Page](support.md) for ways to get help.
