@@ -179,6 +179,15 @@ impl CommitmentAggregationData {
     }
 }
 
+fn get_largest_confirmed_root(rooted_stake: BTreeMap<Slot, u64>, total_stake: u64) -> Slot {
+    rooted_stake
+        .into_iter()
+        .rev()
+        .find(|(_, stake)| (*stake as f64 / total_stake as f64) > VOTE_THRESHOLD_SIZE)
+        .unwrap_or_default()
+        .0
+}
+
 pub struct AggregateCommitmentService {
     t_commitment: JoinHandle<()>,
 }
@@ -239,14 +248,8 @@ impl AggregateCommitmentService {
             let (block_commitment, rooted_stake) =
                 Self::aggregate_commitment(&ancestors, &aggregation_data.bank);
 
-            let largest_confirmed_root = rooted_stake
-                .into_iter()
-                .rev()
-                .find(|(_, stake)| {
-                    (*stake as f64 / aggregation_data.total_staked as f64) > VOTE_THRESHOLD_SIZE
-                })
-                .unwrap_or_default()
-                .0;
+            let largest_confirmed_root =
+                get_largest_confirmed_root(rooted_stake, aggregation_data.total_staked);
 
             let mut new_block_commitment = BlockCommitmentCache::new(
                 block_commitment,
@@ -447,6 +450,20 @@ mod tests {
         assert!(block_commitment_cache.is_confirmed_rooted(1));
         assert!(!block_commitment_cache.is_confirmed_rooted(2));
         assert!(!block_commitment_cache.is_confirmed_rooted(3));
+    }
+
+    #[test]
+    fn test_get_largest_confirmed_root() {
+        assert_eq!(get_largest_confirmed_root(BTreeMap::default(), 10), 0);
+        let mut rooted_stake = BTreeMap::new();
+        rooted_stake.insert(0, 5);
+        rooted_stake.insert(1, 5);
+        assert_eq!(get_largest_confirmed_root(rooted_stake, 10), 0);
+        let mut rooted_stake = BTreeMap::new();
+        rooted_stake.insert(0, 10);
+        rooted_stake.insert(1, 9);
+        rooted_stake.insert(2, 5);
+        assert_eq!(get_largest_confirmed_root(rooted_stake, 10), 1);
     }
 
     #[test]
