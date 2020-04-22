@@ -321,7 +321,7 @@ mod tests {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
         let snapshot_packager_service =
-            SnapshotPackagerService::new(receiver, None, &exit, &cluster_info, None);
+            SnapshotPackagerService::new(receiver, None, &exit, &cluster_info);
 
         // Close the channel so that the package service will exit after reading all the
         // packages off the channel

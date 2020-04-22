@@ -206,9 +206,6 @@ fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool 
         (["rocksdb"], Directory) => true,
         (["rocksdb", ..], GNUSparse) => true,
         (["rocksdb", ..], Regular) => true,
-        (["shreds", ..], Directory) => true,
-        (["shreds", ..], GNUSparse) => true,
-        (["shreds", ..], Regular) => true,
         _ => false,
     }
 }

@@ -262,7 +262,7 @@ impl RepairService {
         } else if slot_meta.consumed == slot_meta.received {
             vec![RepairType::HighestShred(slot, slot_meta.received)]
         } else {
-            let reqs = blockstore.find_missing_data_indexes_ts(
+            let reqs = blockstore.find_missing_data_indexes(
                 slot,
                 slot_meta.first_shred_timestamp,
                 slot_meta.consumed,

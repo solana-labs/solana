@@ -238,7 +238,7 @@ impl CrdsGossipPull {
                         if now > r.wallclock().checked_add(timeout).unwrap_or_else(|| 0)
                             || now + timeout < r.wallclock()
                         {
-                            inc_new_counter_info!(
+                            inc_new_counter_warn!(
                                 "cluster_info-gossip_pull_response_value_timeout",
                                 1
                             );
@@ -250,7 +250,7 @@ impl CrdsGossipPull {
                         // Before discarding this value, check if a ContactInfo for the owner
                         // exists in the table. If it doesn't, that implies that this value can be discarded
                         if crds.lookup(&CrdsValueLabel::ContactInfo(owner)).is_none() {
-                            inc_new_counter_info!(
+                            inc_new_counter_warn!(
                                 "cluster_info-gossip_pull_response_value_timeout",
                                 1
                             );

@@ -131,6 +131,7 @@ impl LedgerCleanupService {
         while let Ok(new_root) = new_root_receiver.try_recv() {
             root = new_root;
         }
+
         if root - *last_purge_slot > purge_interval {
             let disk_utilization_pre = blockstore.storage_size();
             info!(
