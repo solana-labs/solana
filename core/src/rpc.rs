@@ -1528,7 +1528,7 @@ pub mod tests {
                     Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
                 parent_bank = bank_forks.write().unwrap().insert(new_bank);
                 parent_bank.squash();
-                bank_forks.write().unwrap().set_root(*root, &None);
+                bank_forks.write().unwrap().set_root(*root, &None, None);
                 let parent = if i > 0 { roots[i - 1] } else { 1 };
                 fill_blockstore_slot_with_ticks(&blockstore, 5, *root, parent, Hash::default());
             }
