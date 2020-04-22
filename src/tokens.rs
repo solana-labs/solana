@@ -9,7 +9,6 @@ use solana_sdk::{
     native_token::{lamports_to_sol, sol_to_lamports},
     signature::{Signature, Signer},
     system_instruction,
-    transport::TransportError,
 };
 use std::fs;
 use std::path::Path;
@@ -81,7 +80,7 @@ fn distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     allocations: &[Allocation],
     args: &DistributeArgs<Box<dyn Signer>>,
-) -> Vec<Result<Signature, TransportError>> {
+) -> Result<(), csv::Error> {
     let signers = if args.dry_run {
         vec![]
     } else {
@@ -92,27 +91,32 @@ fn distribute_tokens<T: Client>(
         signers
     };
 
-    allocations
-        .iter()
-        .map(|allocation| {
-            println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
-            if args.dry_run {
-                return Ok(Signature::default());
-            }
+    for allocation in allocations {
+        println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
+        let result = if args.dry_run {
+            Ok(Signature::default())
+        } else {
             let fee_payer_pubkey = args.fee_payer.as_ref().unwrap().pubkey();
             let from = args.sender_keypair.as_ref().unwrap().pubkey();
             let to = allocation.recipient.parse().unwrap();
             let lamports = sol_to_lamports(allocation.amount);
             let instruction = system_instruction::transfer(&from, &to, lamports);
             let message = Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey));
-
-            let result = client.send_message(message, &signers);
-            if let Ok(signature) = result {
+            client.send_message(message, &signers)
+        };
+        match result {
+            Ok(signature) => {
                 println!("Finalized transaction with signature {}", signature);
+                if !args.dry_run {
+                    append_transaction_info(&allocation, &signature, &args.transactions_csv)?;
+                }
             }
-            result
-        })
-        .collect()
+            Err(e) => {
+                eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
+            }
+        };
+    }
+    Ok(())
 }
 
 fn read_transaction_infos(path: &str) -> Vec<TransactionInfo> {
@@ -123,24 +127,12 @@ fn read_transaction_infos(path: &str) -> Vec<TransactionInfo> {
     rdr.deserialize().map(|x| x.unwrap()).collect()
 }
 
-fn append_transaction_infos(
-    allocations: &[Allocation],
-    results: &[Result<Signature, TransportError>],
+fn append_transaction_info(
+    allocation: &Allocation,
+    signature: &Signature,
     transactions_csv: &str,
 ) -> Result<(), csv::Error> {
-    if results.iter().all(|x| x.is_err()) {
-        for (i, allocation) in allocations.iter().enumerate() {
-            let e = results[i].as_ref().unwrap_err();
-            eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
-        }
-        return Ok(());
-    }
-
     let existed = Path::new(&transactions_csv).exists();
-    if existed {
-        let transactions_bak = format!("{}.bak", &transactions_csv);
-        fs::copy(&transactions_csv, transactions_bak)?;
-    }
     let file = fs::OpenOptions::new()
         .create_new(!existed)
         .write(true)
@@ -150,21 +142,12 @@ fn append_transaction_infos(
         .has_headers(!existed)
         .from_writer(file);
 
-    for (i, allocation) in allocations.iter().enumerate() {
-        match &results[i] {
-            Ok(signature) => {
-                let transaction_info = TransactionInfo {
-                    recipient: allocation.recipient.clone(),
-                    amount: allocation.amount,
-                    signature: signature.to_string(),
-                };
-                wtr.serialize(transaction_info)?;
-            }
-            Err(e) => {
-                eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
-            }
-        }
-    }
+    let transaction_info = TransactionInfo {
+        recipient: allocation.recipient.clone(),
+        amount: allocation.amount,
+        signature: signature.to_string(),
+    };
+    wtr.serialize(transaction_info)?;
     wtr.flush()?;
     Ok(())
 }
@@ -255,10 +238,7 @@ pub fn process_distribute<T: Client>(
         .bold()
     );
 
-    let results = distribute_tokens(&client, &allocations, &args);
-    if !args.dry_run {
-        append_transaction_infos(&allocations, &results, &args.transactions_csv)?;
-    }
+    distribute_tokens(&client, &allocations, &args)?;
 
     Ok(())
 }
@@ -404,27 +384,5 @@ mod tests {
         // Ensure that we applied the transaction to the allocation with
         // a matching recipient address (to "b", not "a").
         assert_eq!(allocations[0].recipient, "a");
-    }
-
-    #[test]
-    fn test_append_transaction_infos_all_errors() {
-        let allocations = vec![Allocation {
-            recipient: "a".to_string(),
-            amount: 1.0,
-        }];
-        let results = vec![Err(TransportError::Custom("".to_string()))];
-        let dir = tempdir().unwrap();
-        let transactions_csv = dir
-            .path()
-            .join("transactions.csv")
-            .to_str()
-            .unwrap()
-            .to_string();
-        append_transaction_infos(&allocations, &results, &transactions_csv).unwrap();
-        assert!(!Path::new(&transactions_csv).exists());
-
-        let results = vec![Ok(Signature::default())];
-        append_transaction_infos(&allocations, &results, &transactions_csv).unwrap();
-        assert!(Path::new(&transactions_csv).exists());
     }
 }
