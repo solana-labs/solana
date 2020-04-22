@@ -432,7 +432,10 @@ mod tests {
         .unwrap_err();
     }
 
+    // Serialize this test: solana_logger conflicts when running tests concurrently,
+    // this results in the bad string length being ignored and not returning an error
     #[test]
+    #[serial]
     fn test_helper_sol_log_u64() {
         solana_logger::setup_with_default("solana=info");
 
