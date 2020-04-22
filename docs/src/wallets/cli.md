@@ -5,7 +5,7 @@ directly with the Solana command-line tools.
 
 **If you are unfamiliar with using command line programs and just want to be able
 to send and receive SOL tokens, we recommend setting up a third-party
-[App Wallet](app-wallets.md)**.
+[App Wallet](apps.md)**.
 
 To use a Command Line Wallet, you must first [install the Solana CLI tools](../cli/install-solana-cli-tools.md)
 
@@ -62,4 +62,4 @@ security and convenience for cryptocurrencies. It effectively automates the
 process of offline signing while retaining nearly all the convenience of an FS
 wallet.
 
-{% page-ref page="../remote-wallet/README.md" %}
+{% page-ref page="../hardware-wallet/README.md" %}
