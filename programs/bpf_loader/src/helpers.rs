@@ -258,11 +258,11 @@ impl HelperObject<BPFError> for HelperSolAllocFree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test_derive::serial;
     use solana_sdk::{
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
     };
-    use serial_test_derive::serial;
 
     #[test]
     fn test_translate() {
