@@ -12,7 +12,7 @@ homepage = "https://solana.com/"
 clap = "2.33"
 jsonrpc-core = "14.1.0"
 jsonrpc-derive = "14.0.5"
-jsonrpc-http-server = "14.0.6"
+jsonrpc-http-server = "14.1.0"
 log = "0.4.8"
 serde_json = "1.0.51"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
