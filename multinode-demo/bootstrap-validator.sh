@@ -83,7 +83,7 @@ args+=(
   --enable-rpc-set-log-filter
   --ledger "$ledger_dir"
   --rpc-port 8899
-  --snapshot-interval-slots 100
+  --snapshot-interval-slots 200
   --identity "$identity"
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
