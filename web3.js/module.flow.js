@@ -96,30 +96,27 @@ declare module '@solana/web3.js' {
     rpc: string | null,
   };
 
+  declare export type ConfirmedTransactionMeta = {
+    fee: number,
+    preBalances: Array<number>,
+    postBalances: Array<number>,
+    err: TransactionError | null,
+  };
+
   declare export type ConfirmedBlock = {
     blockhash: Blockhash,
     previousBlockhash: Blockhash,
     parentSlot: number,
     transactions: Array<{
       transaction: Transaction,
-      meta: {
-        fee: number,
-        preBalances: Array<number>,
-        postBalances: Array<number>,
-        err: TransactionError | null,
-      } | null,
+      meta: ConfirmedTransactionMeta | null,
     }>,
   };
 
   declare export type ConfirmedTransaction = {
     slot: number,
     transaction: Transaction,
-    meta: {
-      fee: number,
-      preBalances: Array<number>,
-      postBalances: Array<number>,
-      err: TransactionError | null,
-    } | null,
+    meta: ConfirmedTransactionMeta | null,
   };
 
   declare export type KeyedAccountInfo = {
