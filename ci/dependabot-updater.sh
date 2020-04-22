@@ -13,9 +13,11 @@ parsed_update_args="$(
 package=$(echo "$parsed_update_args" | awk '{print $2}' | grep -o "^[^:]*")
 if [[ -n $parsed_update_args ]]; then
   # shellcheck disable=SC2086
-  _ scripts/cargo-for-all-lock-files.sh \
-    "$(git grep --files-with-matches "$package" :**/Cargo.lock)" -- \
-    update $parsed_update_args
+  for lock in $(git grep --files-with-matches --fixed-strings "$package" :**/Cargo.lock); do
+    _ scripts/cargo-for-all-lock-files.sh \
+      "$lock" -- \
+      update $parsed_update_args
+  done
 fi
 
 echo --- ok
