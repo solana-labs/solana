@@ -2,7 +2,7 @@
 This page decribes how to receive and send SOL tokens using the command line
 tools with a command line wallet such as a [paper wallet](../paper-wallet/README.md),
 a [file system wallet](../file-system-wallet/README.md), or a
-[hardware wallet](../remote-wallet/README.md).  Before you begin, make sure
+[hardware wallet](../hardware-wallets/README.md).  Before you begin, make sure
 you have created a wallet and have access to its address (pubkey) and the
 signing keypair.  Check out our
 [conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
@@ -58,7 +58,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 You can also create a second (or more) wallet of any type:
 [paper](../paper-wallet/paper-wallet-usage.md#creating-multiple-paper-wallet-addresses),
 [file system](../file-system-wallet/README.md#creating-multiple-file-system-wallet-addresses),
-or [hardware](../remote-wallet/README.md#multiple-addresses-on-a-single-hardware-wallet).
+or [hardware](../hardware-wallets/README.md#multiple-addresses-on-a-single-hardware-wallet).
 
 #### Transfer tokens from your first wallet to the second address
 
@@ -131,7 +131,7 @@ To receive tokens, you will need an address for others to send tokens to. In
 Solana, the wallet address is the public key of a keypair. There are a variety
 of techniques for generating keypairs. The method you choose will depend on how
 you choose to store keypairs.  Keypairs are stored in wallets. Before receiving
-tokens, you will need to [create a wallet](../wallet/cli-wallets.md).
+tokens, you will need to [create a wallet](../wallet-guide/cli.md).
 Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
 characters. Its length varies from 32 to 44 characters.

@@ -89,7 +89,7 @@ Currently smart contracts, rewards, and inflation are disabled.
  * If you have paid money to purchase/be issued tokens, such as through our
  CoinList auction, these tokens will be transferred on Mainnet Beta.
    * Note: If you are using a non-command-line wallet such as
-   [Trust Wallet](wallet/trust-wallet.md),
+   [Trust Wallet](wallet-guide/trust-wallet.md),
    the wallet will always be connecting to Mainnet Beta.
  * Gossip entrypoint for Mainnet Beta: `mainnet-beta.solana.com:8001`
  * RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
