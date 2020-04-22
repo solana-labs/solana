@@ -73,7 +73,10 @@ fn rebase_stake_account(
     fee_payer_pubkey: &Pubkey,
     stake_authority_pubkey: &Pubkey,
     lamports: u64,
-) -> Message {
+) -> Option<Message> {
+    if lamports == 0 {
+        return None;
+    }
     let new_stake_account_address = derive_stake_account_address(new_base_pubkey, i);
     let instructions = stake_instruction::split_with_seed(
         stake_account_address,
@@ -83,7 +86,8 @@ fn rebase_stake_account(
         new_base_pubkey,
         &i.to_string(),
     );
-    Message::new_with_payer(&instructions, Some(&fee_payer_pubkey))
+    let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
+    Some(message)
 }
 
 fn move_stake_account(
@@ -96,7 +100,10 @@ fn move_stake_account(
     new_stake_authority_pubkey: &Pubkey,
     new_withdraw_authority_pubkey: &Pubkey,
     lamports: u64,
-) -> Message {
+) -> Option<Message> {
+    if lamports == 0 {
+        return None;
+    }
     let new_stake_account_address = derive_stake_account_address(new_base_pubkey, i);
     let mut instructions = stake_instruction::split_with_seed(
         stake_account_address,
@@ -116,7 +123,8 @@ fn move_stake_account(
     );
 
     instructions.extend(authorize_instructions.into_iter());
-    Message::new_with_payer(&instructions, Some(&fee_payer_pubkey))
+    let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
+    Some(message)
 }
 
 pub(crate) fn authorize_stake_accounts(
@@ -153,7 +161,7 @@ pub(crate) fn rebase_stake_accounts(
     balances
         .iter()
         .enumerate()
-        .map(|(i, (stake_account_address, lamports))| {
+        .filter_map(|(i, (stake_account_address, lamports))| {
             rebase_stake_account(
                 stake_account_address,
                 new_base_pubkey,
@@ -178,7 +186,7 @@ pub(crate) fn move_stake_accounts(
     balances
         .iter()
         .enumerate()
-        .map(|(i, (stake_account_address, lamports))| {
+        .filter_map(|(i, (stake_account_address, lamports))| {
             move_stake_account(
                 stake_account_address,
                 new_base_pubkey,
@@ -337,6 +345,22 @@ mod tests {
         let authorized = StakeState::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, new_stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, new_withdraw_authority_pubkey);
+    }
+
+    #[test]
+    fn test_rebase_empty_account() {
+        let pubkey = Pubkey::default();
+        let message = rebase_stake_account(&pubkey, &pubkey, 0, &pubkey, &pubkey, 0);
+        assert_eq!(message, None);
+    }
+
+    #[test]
+    fn test_move_empty_account() {
+        let pubkey = Pubkey::default();
+        let message = move_stake_account(
+            &pubkey, &pubkey, 0, &pubkey, &pubkey, &pubkey, &pubkey, &pubkey, 0,
+        );
+        assert_eq!(message, None);
     }
 
     #[test]
