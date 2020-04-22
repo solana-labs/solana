@@ -145,7 +145,8 @@ impl BlockCommitmentCache {
     }
 
     pub fn is_confirmed_rooted(&self, slot: Slot) -> bool {
-        slot <= self.largest_confirmed_root() && self.blockstore.is_root(slot)
+        slot <= self.largest_confirmed_root()
+            && (self.blockstore.is_root(slot) || self.bank.status_cache_ancestors().contains(&slot))
     }
 
     #[cfg(test)]
