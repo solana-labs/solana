@@ -403,6 +403,9 @@ mod tests {
         .unwrap();
     }
 
+    // Ignore this test: solana_logger conflicts when running tests concurrently,
+    // this results in the bad string length being ignored and not returning an error
+    #[ignore]
     #[test]
     fn test_helper_sol_log() {
         let string = "Gaggablaghblagh!";
