@@ -20,6 +20,10 @@ solana-sdk = { path = "../../sdk", version = "1.2.0" }
 solana_rbpf = "=0.1.25"
 thiserror = "1.0"
 
+[dev-dependencies]
+serial_test = "0.4.0"
+serial_test_derive = "0.4.0"
+
 [lib]
 crate-type = ["lib", "cdylib"]
 name = "solana_bpf_loader_program"

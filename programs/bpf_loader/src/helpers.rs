@@ -262,6 +262,7 @@ mod tests {
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
     };
+    use serial_test_derive::serial;
 
     #[test]
     fn test_translate() {
@@ -403,10 +404,10 @@ mod tests {
         .unwrap();
     }
 
-    // Ignore this test: solana_logger conflicts when running tests concurrently,
+    // Serialize this test: solana_logger conflicts when running tests concurrently,
     // this results in the bad string length being ignored and not returning an error
-    #[ignore]
     #[test]
+    #[serial]
     fn test_helper_sol_log() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;

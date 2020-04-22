@@ -3754,6 +3754,8 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial_test 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial_test_derive 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 1.2.0",
  "solana-sdk 1.2.0",
  "solana_rbpf 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
