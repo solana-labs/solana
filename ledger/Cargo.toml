@@ -52,7 +52,7 @@ lazy_static = "1.4.0"
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
 # when also using the bzip2 crate
-version = "0.13.0"
+version = "0.14.0"
 default-features = false
 features = ["lz4"]
 
