@@ -62,7 +62,8 @@ pub enum StakeInstruction {
     /// Expects 2 Accounts:
     ///    0 - StakeAccount to be updated with the Pubkey for
     ///          authorization
-    ///    1 - Clock sysvar Account that carries clock bank epoch
+    ///    1 - (reserved for future use) Clock sysvar Account that carries
+    ///        clock bank epoch
     Authorize(Pubkey, StakeAuthorize),
 
     /// `Delegate` a stake to a particular vote account
@@ -383,12 +384,9 @@ pub fn process_instruction(
             &lockup,
             &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
-        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => me.authorize(
-            &authorized_pubkey,
-            stake_authorize,
-            &signers,
-            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-        ),
+        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
+            me.authorize(&authorized_pubkey, stake_authorize, &signers)
+        }
         StakeInstruction::DelegateStake => {
             let vote = next_keyed_account(keyed_accounts)?;
 
