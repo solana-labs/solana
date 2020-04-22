@@ -922,6 +922,22 @@ mod tests {
     }
 
     #[test]
+    fn test_authorized_authorize() {
+        let staker = Pubkey::new_rand();
+        let mut authorized = Authorized::auto(&staker);
+        let mut signers = HashSet::new();
+        assert_eq!(
+            authorized.authorize(&signers, &staker, StakeAuthorize::Staker),
+            Err(InstructionError::MissingRequiredSignature)
+        );
+        signers.insert(staker);
+        assert_eq!(
+            authorized.authorize(&signers, &staker, StakeAuthorize::Staker),
+            Ok(())
+        );
+    }
+
+    #[test]
     fn test_meta_authorize_withdraw() {
         let staker = Pubkey::new_rand();
         let custodian = Pubkey::new_rand();
@@ -936,19 +952,9 @@ mod tests {
         };
         // verify sig check
         let mut signers = HashSet::new();
+        signers.insert(staker);
         let mut clock = Clock::default();
 
-        assert_eq!(
-            meta.authorized
-                .authorize(&signers, &staker, StakeAuthorize::Staker),
-            Err(InstructionError::MissingRequiredSignature)
-        );
-        signers.insert(staker);
-        assert_eq!(
-            meta.authorized
-                .authorize(&signers, &staker, StakeAuthorize::Staker),
-            Ok(())
-        );
         // verify lockup check
         meta.lockup.epoch = 1;
         assert_eq!(
