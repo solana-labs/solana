@@ -293,6 +293,14 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(nonce_arg())
                 .arg(nonce_authority_arg())
                 .arg(fee_payer_arg())
+                .arg(
+                    Arg::with_name("custodian")
+                        .long("custodian")
+                        .takes_value(true)
+                        .value_name("KEYPAIR")
+                        .validator(is_valid_signer)
+                        .help("Authority to override account lockup")
+                )
         )
         .subcommand(
             SubCommand::with_name("stake-set-lockup")
@@ -650,10 +658,14 @@ pub fn parse_stake_withdraw_stake(
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+    let (custodian, custodian_pubkey) = signer_of(matches, "custodian", wallet_manager)?;
 
     let mut bulk_signers = vec![withdraw_authority, fee_payer];
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
+    }
+    if custodian.is_some() {
+        bulk_signers.push(custodian);
     }
     let signer_info =
         generate_unique_signers(bulk_signers, matches, default_signer_path, wallet_manager)?;
@@ -669,6 +681,7 @@ pub fn parse_stake_withdraw_stake(
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
         },
         signers: signer_info.signers,
     })
@@ -987,6 +1000,7 @@ pub fn process_withdraw_stake(
     destination_account_pubkey: &Pubkey,
     lamports: u64,
     withdraw_authority: SignerIndex,
+    custodian: Option<SignerIndex>,
     sign_only: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
@@ -996,13 +1010,14 @@ pub fn process_withdraw_stake(
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
     let withdraw_authority = config.signers[withdraw_authority];
+    let custodian = custodian.map(|index| config.signers[index]);
 
     let ixs = vec![stake_instruction::withdraw(
         stake_account_pubkey,
         &withdraw_authority.pubkey(),
         destination_account_pubkey,
         lamports,
-        None,
+        custodian.map(|signer| signer.pubkey()).as_ref(),
     )];
 
     let fee_payer = config.signers[fee_payer];
@@ -2409,6 +2424,7 @@ mod tests {
                     destination_account_pubkey: stake_account_pubkey,
                     lamports: 42_000_000_000,
                     withdraw_authority: 0,
+                    custodian: None,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -2438,6 +2454,7 @@ mod tests {
                     destination_account_pubkey: stake_account_pubkey,
                     lamports: 42_000_000_000,
                     withdraw_authority: 1,
+                    custodian: None,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -2482,6 +2499,7 @@ mod tests {
                     destination_account_pubkey: stake_account_pubkey,
                     lamports: 42_000_000_000,
                     withdraw_authority: 0,
+                    custodian: None,
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
