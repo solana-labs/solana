@@ -7,8 +7,13 @@ use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
 use solana_client::rpc_response::{
     Response as RpcResponse, RpcAccount, RpcKeyedAccount, RpcSignatureResult,
 };
+#[cfg(test)]
+use solana_ledger::blockstore::Blockstore;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-use std::sync::{atomic, Arc};
+use std::{
+    str::FromStr,
+    sync::{atomic, Arc},
+};
 
 // Suppress needless_return due to
 //   https://github.com/paritytech/jsonrpc/blob/2d38e6424d8461cdf72e78425ce67d51af9c6586/derive/src/lib.rs#L204
@@ -118,7 +123,6 @@ pub trait RpcSolPubSub {
     fn root_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
 
-#[derive(Default)]
 pub struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
     subscriptions: Arc<RpcSubscriptions>,
@@ -129,9 +133,14 @@ impl RpcSolPubSubImpl {
         let uid = Arc::new(atomic::AtomicUsize::default());
         Self { uid, subscriptions }
     }
-}
 
-use std::str::FromStr;
+    #[cfg(test)]
+    fn default_with_blockstore(blockstore: Arc<Blockstore>) -> Self {
+        let uid = Arc::new(atomic::AtomicUsize::default());
+        let subscriptions = Arc::new(RpcSubscriptions::default_with_blockstore(blockstore));
+        Self { uid, subscriptions }
+    }
+}
 
 fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
     param_str.parse::<T>().map_err(|_e| Error {
@@ -322,8 +331,11 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_budget_program::{self, budget_instruction};
-    use solana_ledger::bank_forks::BankForks;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_ledger::{
+        bank_forks::BankForks,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        get_tmp_ledger_path,
+    };
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         pubkey::Pubkey,
@@ -370,12 +382,16 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let rpc = RpcSolPubSubImpl {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
-                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+                Arc::new(RwLock::new(
+                    BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+                )),
             )),
-            ..RpcSolPubSubImpl::default()
+            uid: Arc::new(atomic::AtomicUsize::default()),
         };
 
         // Test signature subscriptions
@@ -416,11 +432,13 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let arc_bank = Arc::new(bank);
         let blockhash = arc_bank.last_blockhash();
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let session = create_session();
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
         io.extend_with(rpc.to_delegate());
 
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
@@ -475,13 +493,17 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let rpc = RpcSolPubSubImpl {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
-                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+                Arc::new(RwLock::new(
+                    BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+                )),
             )),
-            ..RpcSolPubSubImpl::default()
+            uid: Arc::new(atomic::AtomicUsize::default()),
         };
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
@@ -569,9 +591,11 @@ mod tests {
     fn test_account_unsubscribe() {
         let bob_pubkey = Pubkey::new_rand();
         let session = create_session();
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
 
         io.extend_with(rpc.to_delegate());
 
@@ -615,13 +639,17 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bob = Keypair::new();
 
-        let mut rpc = RpcSolPubSubImpl::default();
+        let mut rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore.clone());
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            Arc::new(RwLock::new(
+                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+            )),
         );
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
@@ -652,11 +680,15 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bob = Keypair::new();
 
-        let mut rpc = RpcSolPubSubImpl::default();
+        let mut rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore.clone());
         let exit = Arc::new(AtomicBool::new(false));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests()));
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_blockstore(blockstore.clone()),
+        ));
 
         let subscriptions = RpcSubscriptions::new(&exit, block_commitment_cache.clone());
         rpc.subscriptions = Arc::new(subscriptions);
@@ -683,8 +715,14 @@ mod tests {
         cache0.increase_confirmation_stake(1, 10);
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
-        let mut new_block_commitment =
-            BlockCommitmentCache::new(block_commitment, 10, bank1.clone(), 0);
+        let mut new_block_commitment = BlockCommitmentCache::new(
+            block_commitment,
+            0,
+            10,
+            bank1.clone(),
+            blockstore.clone(),
+            0,
+        );
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         drop(w_block_commitment_cache);
@@ -698,7 +736,8 @@ mod tests {
         cache0.increase_confirmation_stake(2, 10);
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
-        let mut new_block_commitment = BlockCommitmentCache::new(block_commitment, 10, bank2, 0);
+        let mut new_block_commitment =
+            BlockCommitmentCache::new(block_commitment, 0, 10, bank2, blockstore.clone(), 0);
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         drop(w_block_commitment_cache);
@@ -728,7 +767,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_slot_subscribe() {
-        let rpc = RpcSolPubSubImpl::default();
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
         rpc.slot_subscribe(session, subscriber);
@@ -753,7 +794,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_slot_unsubscribe() {
-        let rpc = RpcSolPubSubImpl::default();
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
         rpc.slot_subscribe(session, subscriber);

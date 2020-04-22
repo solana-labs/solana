@@ -1477,8 +1477,10 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
+            0,
             10,
             bank.clone(),
+            blockstore.clone(),
             0,
         )));
 
@@ -1591,14 +1593,16 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice, _) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let request_processor = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );
@@ -2070,7 +2074,7 @@ pub mod tests {
                 .expect("actual response deserialization");
         let result = result.as_ref().unwrap();
         assert_eq!(expected_res, result.status);
-        assert_eq!(Some(2), result.confirmations);
+        assert_eq!(None, result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
@@ -2234,9 +2238,11 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -2247,7 +2253,7 @@ pub mod tests {
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
                     block_commitment_cache,
-                    Arc::new(blockstore),
+                    blockstore,
                     StorageState::default(),
                     validator_exit,
                 );
@@ -2335,14 +2341,16 @@ pub mod tests {
     fn test_rpc_request_processor_config_default_trait_validator_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let request_processor = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             new_bank_forks().0,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );
@@ -2354,16 +2362,18 @@ pub mod tests {
     fn test_rpc_request_processor_allow_validator_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             config,
             new_bank_forks().0,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );
@@ -2418,6 +2428,8 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let bank_forks = new_bank_forks().0;
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY + 1]);
         let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY + 1]);
@@ -2430,12 +2442,12 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
+            0,
             42,
             bank_forks.read().unwrap().working_bank(),
+            blockstore.clone(),
             0,
         )));
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
 
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
@@ -2443,7 +2455,7 @@ pub mod tests {
             config,
             bank_forks,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );

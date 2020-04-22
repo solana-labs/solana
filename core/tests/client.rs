@@ -6,6 +6,7 @@ use solana_core::{
     commitment::BlockCommitmentCache, rpc_pubsub_service::PubSubService,
     rpc_subscriptions::RpcSubscriptions, validator::TestValidator,
 };
+use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::Signer,
     system_transaction,
@@ -85,9 +86,13 @@ fn test_slot_subscription() {
         rpc_port::DEFAULT_RPC_PUBSUB_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
+    let ledger_path = get_tmp_ledger_path!();
+    let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
     let subscriptions = Arc::new(RpcSubscriptions::new(
         &exit,
-        Arc::new(RwLock::new(BlockCommitmentCache::default())),
+        Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
+            blockstore,
+        ))),
     ));
     let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
     std::thread::sleep(Duration::from_millis(400));
