@@ -28,7 +28,7 @@ itertools = "0.9.0"
 jsonrpc-core = "14.1.0"
 jsonrpc-core-client = { version = "14.0.5", features = ["ws"] }
 jsonrpc-derive = "14.0.5"
-jsonrpc-http-server = "14.0.6"
+jsonrpc-http-server = "14.1.0"
 jsonrpc-pubsub = "14.1.0"
 jsonrpc-ws-server = "14.0.6"
 log = "0.4.8"
