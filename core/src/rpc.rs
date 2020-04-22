@@ -17,9 +17,7 @@ use solana_client::{
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
-use solana_ledger::{
-    bank_forks::BankForks, blockstore::Blockstore, rooted_slot_iterator::RootedSlotIterator,
-};
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -380,18 +378,12 @@ impl JsonRpcRequestProcessor {
         if end_slot < start_slot {
             return Ok(vec![]);
         }
-
-        let start_slot = (start_slot..end_slot).find(|&slot| self.blockstore.is_root(slot));
-        if let Some(start_slot) = start_slot {
-            let mut slots: Vec<Slot> = RootedSlotIterator::new(start_slot, &self.blockstore)
-                .unwrap()
-                .map(|(slot, _)| slot)
-                .collect();
-            slots.retain(|&x| x <= end_slot);
-            Ok(slots)
-        } else {
-            Ok(vec![])
-        }
+        Ok(self
+            .blockstore
+            .rooted_slot_iterator(start_slot)
+            .map_err(|_| Error::internal_error())?
+            .filter(|&slot| slot <= end_slot)
+            .collect())
     }
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
@@ -537,6 +529,13 @@ impl JsonRpcRequestProcessor {
         } else {
             Ok(vec![])
         }
+    }
+
+    pub fn get_first_available_block(&self) -> Result<Slot> {
+        Ok(self
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default())
     }
 }
 
@@ -796,6 +795,9 @@ pub trait RpcSol {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<String>>;
+
+    #[rpc(meta, name = "getFirstAvailableBlock")]
+    fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot>;
 }
 
 pub struct RpcSolImpl;
@@ -1383,6 +1385,13 @@ impl RpcSol for RpcSolImpl {
                     .map(|signature| signature.to_string())
                     .collect()
             })
+    }
+
+    fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_first_available_block()
     }
 }
 
