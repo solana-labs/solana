@@ -158,7 +158,7 @@ pub fn process_distribute<T: Client>(
 ) -> Result<(), csv::Error> {
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
-        .from_path(&args.allocations_csv)?;
+        .from_path(&args.bids_csv)?;
     let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
     let allocations: Vec<Allocation> = bids
         .into_iter()
@@ -249,7 +249,7 @@ pub fn process_balances<T: Client>(
 ) -> Result<(), csv::Error> {
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
-        .from_path(&args.allocations_csv)?;
+        .from_path(&args.bids_csv)?;
     let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
     let allocations: Vec<Allocation> = bids
         .into_iter()
@@ -298,9 +298,9 @@ pub fn test_process_distribute_with_client<C: Client>(
         primary_address: alice_pubkey.to_string(),
         accepted_amount_dollars: 1000.0,
     };
-    let allocations_file = NamedTempFile::new().unwrap();
-    let allocations_csv = allocations_file.path().to_str().unwrap().to_string();
-    let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
+    let bids_file = NamedTempFile::new().unwrap();
+    let bids_csv = bids_file.path().to_str().unwrap().to_string();
+    let mut wtr = csv::WriterBuilder::new().from_writer(bids_file);
     wtr.serialize(&bid).unwrap();
     wtr.flush().unwrap();
 
@@ -316,7 +316,7 @@ pub fn test_process_distribute_with_client<C: Client>(
         sender_keypair: Some(Box::new(sender_keypair)),
         fee_payer: Some(Box::new(fee_payer)),
         dry_run: false,
-        allocations_csv,
+        bids_csv,
         transactions_csv: transactions_csv.clone(),
         dollars_per_sol: 0.22,
     };

@@ -34,20 +34,20 @@ where
             SubCommand::with_name("distribute")
                 .about("Distribute tokens")
                 .arg(
-                    Arg::with_name("allocations_csv")
+                    Arg::with_name("transactions_csv")
                         .required(true)
                         .index(1)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Allocations CSV file"),
+                        .help("Transactions CSV file"),
                 )
                 .arg(
-                    Arg::with_name("transactions_csv")
+                    Arg::with_name("bids_csv")
+                        .long("bids-csv")
                         .required(true)
-                        .index(2)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Transactions CSV file"),
+                        .help("Bids CSV file"),
                 )
                 .arg(
                     Arg::with_name("dollars_per_sol")
@@ -83,12 +83,12 @@ where
             SubCommand::with_name("balances")
                 .about("Balance of each account")
                 .arg(
-                    Arg::with_name("allocations_csv")
+                    Arg::with_name("bids_csv")
+                        .long("bids-csv")
                         .required(true)
-                        .index(1)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Allocations CSV file"),
+                        .help("Bids CSV file"),
                 )
                 .arg(
                     Arg::with_name("dollars_per_sol")
@@ -104,7 +104,7 @@ where
 
 fn parse_distribute_args(matches: &ArgMatches<'_>) -> DistributeArgs<String> {
     DistributeArgs {
-        allocations_csv: value_t_or_exit!(matches, "allocations_csv", String),
+        bids_csv: value_t_or_exit!(matches, "bids_csv", String),
         transactions_csv: value_t_or_exit!(matches, "transactions_csv", String),
         dollars_per_sol: value_t_or_exit!(matches, "dollars_per_sol", f64),
         dry_run: matches.is_present("dry_run"),
@@ -115,7 +115,7 @@ fn parse_distribute_args(matches: &ArgMatches<'_>) -> DistributeArgs<String> {
 
 fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
     BalancesArgs {
-        allocations_csv: value_t_or_exit!(matches, "allocations_csv", String),
+        bids_csv: value_t_or_exit!(matches, "bids_csv", String),
         dollars_per_sol: value_t_or_exit!(matches, "dollars_per_sol", f64),
     }
 }

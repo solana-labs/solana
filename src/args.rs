@@ -5,7 +5,7 @@ use solana_sdk::signature::Signer;
 use std::error::Error;
 
 pub struct DistributeArgs<K> {
-    pub allocations_csv: String,
+    pub bids_csv: String,
     pub transactions_csv: String,
     pub dollars_per_sol: f64,
     pub dry_run: bool,
@@ -14,7 +14,7 @@ pub struct DistributeArgs<K> {
 }
 
 pub struct BalancesArgs {
-    pub allocations_csv: String,
+    pub bids_csv: String,
     pub dollars_per_sol: f64,
 }
 
@@ -38,7 +38,7 @@ pub fn resolve_command(
             let wallet_manager = wallet_manager.as_ref();
             let matches = ArgMatches::default();
             let resolved_args = DistributeArgs {
-                allocations_csv: args.allocations_csv,
+                bids_csv: args.bids_csv,
                 transactions_csv: args.transactions_csv,
                 dollars_per_sol: args.dollars_per_sol,
                 dry_run: args.dry_run,
