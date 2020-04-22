@@ -131,7 +131,7 @@ To receive tokens, you will need an address for others to send tokens to. In
 Solana, the wallet address is the public key of a keypair. There are a variety
 of techniques for generating keypairs. The method you choose will depend on how
 you choose to store keypairs.  Keypairs are stored in wallets. Before receiving
-tokens, you will need to [create a wallet](../wallets/cli.md).
+tokens, you will need to [create a wallet](../wallet-guide/cli.md).
 Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
 characters. Its length varies from 32 to 44 characters.
