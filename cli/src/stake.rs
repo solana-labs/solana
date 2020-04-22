@@ -1486,6 +1486,9 @@ mod tests {
         let (stake_authority_keypair_file, mut tmp_file) = make_tmp_file();
         let stake_authority_keypair = Keypair::new();
         write_keypair(&stake_authority_keypair, tmp_file.as_file_mut()).unwrap();
+        let (custodian_keypair_file, mut tmp_file) = make_tmp_file();
+        let custodian_keypair = Keypair::new();
+        write_keypair(&custodian_keypair, tmp_file.as_file_mut()).unwrap();
 
         // stake-authorize subcommand
         let stake_account_string = stake_account_pubkey.to_string();
@@ -2466,6 +2469,39 @@ mod tests {
                     read_keypair_file(&stake_authority_keypair_file)
                         .unwrap()
                         .into()
+                ],
+            }
+        );
+
+        // Test WithdrawStake Subcommand w/ custodian
+        let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-stake",
+            &stake_account_string,
+            &stake_account_string,
+            "42",
+            "--custodian",
+            &custodian_keypair_file,
+        ]);
+
+        assert_eq!(
+            parse_command(&test_withdraw_stake, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawStake {
+                    stake_account_pubkey,
+                    destination_account_pubkey: stake_account_pubkey,
+                    lamports: 42_000_000_000,
+                    withdraw_authority: 0,
+                    custodian: Some(1),
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&custodian_keypair_file).unwrap().into()
                 ],
             }
         );
