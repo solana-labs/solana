@@ -209,7 +209,15 @@ const renderAccountRow = (
       </td>
       <td>{balance}</td>
       <td>{data}</td>
-      <td>{owner === "-" ? owner : <code>{owner}</code>}</td>
+      <td>
+        {owner === "-" ? (
+          owner
+        ) : (
+          <Copyable text={owner}>
+            <code>{owner}</code>
+          </Copyable>
+        )}
+      </td>
       <td>{renderDetails()}</td>
     </tr>
   );

@@ -13,6 +13,7 @@ import {
   CreateAccountParams,
   TransactionInstruction
 } from "@solana/web3.js";
+import Copyable from "./Copyable";
 
 function TransactionModal() {
   const { selected } = useTransactions();
@@ -106,15 +107,21 @@ function TransferDetails({
   transfer: TransferParams;
   index: number;
 }) {
+  const from = transfer.fromPubkey.toBase58();
+  const to = transfer.toPubkey.toBase58();
   return (
     <div className="card-body">
       <h4 className="ix-pill">{`Instruction #${index + 1} (Transfer)`}</h4>
       <div className="list-group list-group-flush my-n3">
         <ListGroupItem label="From">
-          <code>{transfer.fromPubkey.toBase58()}</code>
+          <Copyable text={from}>
+            <code>{from}</code>
+          </Copyable>
         </ListGroupItem>
         <ListGroupItem label="To">
-          <code>{transfer.toPubkey.toBase58()}</code>
+          <Copyable text={to}>
+            <code>{to}</code>
+          </Copyable>
         </ListGroupItem>
         <ListGroupItem label="Amount (SOL)">
           {`◎${(1.0 * transfer.lamports) / LAMPORTS_PER_SOL}`}
@@ -131,16 +138,22 @@ function CreateDetails({
   create: CreateAccountParams;
   index: number;
 }) {
+  const from = create.fromPubkey.toBase58();
+  const newKey = create.newAccountPubkey.toBase58();
   return (
     <div className="card-body">
       <h4 className="ix-pill">{`Instruction #${index +
         1} (Create Account)`}</h4>
       <div className="list-group list-group-flush my-n3">
         <ListGroupItem label="From">
-          <code>{create.fromPubkey.toBase58()}</code>
+          <Copyable text={from}>
+            <code>{from}</code>
+          </Copyable>
         </ListGroupItem>
         <ListGroupItem label="New Account">
-          <code>{create.newAccountPubkey.toBase58()}</code>
+          <Copyable text={newKey}>
+            <code>{newKey}</code>
+          </Copyable>
         </ListGroupItem>
         <ListGroupItem label="Amount (SOL)">
           {`◎${(1.0 * create.lamports) / LAMPORTS_PER_SOL}`}
@@ -167,7 +180,9 @@ function InstructionDetails({
       <div className="list-group list-group-flush my-n3">
         {ix.keys.map(({ pubkey }, keyIndex) => (
           <ListGroupItem key={keyIndex} label={`Address #${keyIndex + 1}`}>
-            <code>{pubkey.toBase58()}</code>
+            <Copyable text={pubkey.toBase58()}>
+              <code>{pubkey.toBase58()}</code>
+            </Copyable>
           </ListGroupItem>
         ))}
         <ListGroupItem label="Data (Bytes)">{ix.data.length}</ListGroupItem>

@@ -7,6 +7,7 @@ import {
   Status
 } from "../providers/accounts";
 import { TransactionError } from "@solana/web3.js";
+import Copyable from "./Copyable";
 
 function AccountModal() {
   const selected = useSelectedAccount();
@@ -135,9 +136,11 @@ function ListGroupItem({
           </span>
         </div>
         <div className="col min-width-0">
-          <h5 className="mb-0 text-truncate">
-            <code>{signature}</code>
-          </h5>
+          <Copyable text={signature}>
+            <h5 className="mb-0 text-truncate">
+              <code>{signature}</code>
+            </h5>
+          </Copyable>
         </div>
       </div>
     </div>

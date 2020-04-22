@@ -17,10 +17,18 @@ code {
     cursor: pointer;
   }
 
-  .popover {
-    top: -1rem;
-    right: -5.12rem;
-    left: auto;
+  .popover.bs-popover-top {
+    background-color: $dark;
+    top: -4rem;
+    left: 40%;
+
+    .popover-body {
+      color: white;
+    }
+
+    .arrow::after {
+      border-top-color: $dark;
+    }
   }
 }
 
