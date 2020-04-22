@@ -1,7 +1,7 @@
 use crate::{
-    cli_output::{CliAccount, OutputFormat},
+    cli_output::{CliAccount, CliSignOnlyCommand, CliSignature, OutputFormat},
     cluster_query::*,
-    display::{println_name_value, println_signers},
+    display::println_name_value,
     nonce::{self, *},
     offline::{blockhash_query::BlockhashQuery, *},
     stake::*,
@@ -1050,7 +1050,7 @@ pub fn get_blockhash_and_fee_calculator(
     })
 }
 
-pub fn return_signers(tx: &Transaction) -> ProcessResult {
+pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
     let verify_results = tx.verify_with_results();
     let mut signers = Vec::new();
     let mut absent = Vec::new();
@@ -1069,15 +1069,16 @@ pub fn return_signers(tx: &Transaction) -> ProcessResult {
             }
         });
 
-    println_signers(&tx.message.recent_blockhash, &signers, &absent, &bad_sig);
+    let cli_command = CliSignOnlyCommand {
+        blockhash: tx.message.recent_blockhash,
+        signers: signers,
+        absent: absent,
+        bad_sig: bad_sig,
+    };
 
-    Ok(json!({
-        "blockhash": tx.message.recent_blockhash.to_string(),
-        "signers": &signers,
-        "absent": &absent,
-        "badSig": &bad_sig,
-    })
-    .to_string())
+    config.output_format.formatted_print(&cli_command);
+
+    Ok("".to_string())
 }
 
 pub fn parse_create_address_with_seed(
@@ -1165,7 +1166,7 @@ fn process_airdrop(
         }
     };
 
-    request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports)?;
+    request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports, &config)?;
 
     let current_balance = rpc_client
         .retry_get_balance(&pubkey, 5)?
@@ -1346,9 +1347,8 @@ fn process_deploy(
     trace!("Creating program account");
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut create_account_tx, &signers);
-    log_instruction_custom_error::<SystemError>(result).map_err(|_| {
-        CliError::DynamicProgramError("Program account allocation failed".to_string())
-    })?;
+    log_instruction_custom_error::<SystemError>(result, &config)
+        .map_err(|_| CliError::DynamicProgramError("Program account allocation failed".to_string()))?;
 
     trace!("Writing program data");
     rpc_client
@@ -1411,7 +1411,7 @@ fn process_pay(
 
         if sign_only {
             tx.try_partial_sign(&config.signers, blockhash)?;
-            return_signers(&tx)
+            return_signers(&tx, &config)
         } else {
             tx.try_sign(&config.signers, blockhash)?;
             if let Some(nonce_account) = &nonce_account {
@@ -1426,7 +1426,7 @@ fn process_pay(
             )?;
             let result =
                 rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-            log_instruction_custom_error::<SystemError>(result)
+            log_instruction_custom_error::<SystemError>(result, &config)
         }
     } else if *witnesses == None {
         let dt = timestamp.unwrap();
@@ -1451,7 +1451,7 @@ fn process_pay(
         let mut tx = Transaction::new_unsigned(message);
         if sign_only {
             tx.try_partial_sign(&[config.signers[0], &contract_state], blockhash)?;
-            return_signers(&tx)
+            return_signers(&tx, &config)
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
             check_account_for_fee(
@@ -1464,13 +1464,7 @@ fn process_pay(
                 &mut tx,
                 &[config.signers[0], &contract_state],
             );
-            let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
-
-            Ok(json!({
-                "signature": signature_str,
-                "processId": format!("{}", contract_state.pubkey()),
-            })
-            .to_string())
+            log_instruction_custom_error::<BudgetError>(result, &config)
         }
     } else if timestamp == None {
         let witness = if let Some(ref witness_vec) = *witnesses {
@@ -1497,7 +1491,7 @@ fn process_pay(
         let mut tx = Transaction::new_unsigned(message);
         if sign_only {
             tx.try_partial_sign(&[config.signers[0], &contract_state], blockhash)?;
-            return_signers(&tx)
+            return_signers(&tx, &config)
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
             let result = rpc_client.send_and_confirm_transaction_with_spinner(
@@ -1510,13 +1504,7 @@ fn process_pay(
                 &fee_calculator,
                 &tx.message,
             )?;
-            let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
-
-            Ok(json!({
-                "signature": signature_str,
-                "processId": format!("{}", contract_state.pubkey()),
-            })
-            .to_string())
+            log_instruction_custom_error::<BudgetError>(result, &config)
         }
     } else {
         Ok("Combo transactions not yet handled".to_string())
@@ -1541,7 +1529,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &CliConfig, pubkey: &Pubkey) -
     )?;
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
-    log_instruction_custom_error::<BudgetError>(result)
+    log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
 fn process_time_elapsed(
@@ -1565,7 +1553,7 @@ fn process_time_elapsed(
     )?;
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
-    log_instruction_custom_error::<BudgetError>(result)
+    log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1610,7 +1598,7 @@ fn process_transfer(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1628,7 +1616,7 @@ fn process_transfer(
         } else {
             rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers)
         };
-        log_instruction_custom_error::<SystemError>(result)
+        log_instruction_custom_error::<SystemError>(result, &config)
     }
 }
 
@@ -1652,7 +1640,7 @@ fn process_witness(
     )?;
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
-    log_instruction_custom_error::<BudgetError>(result)
+    log_instruction_custom_error::<BudgetError>(result, &config)
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
@@ -2268,6 +2256,7 @@ pub fn request_and_confirm_airdrop(
     faucet_addr: &SocketAddr,
     to_pubkey: &Pubkey,
     lamports: u64,
+    config: &CliConfig,
 ) -> ProcessResult {
     let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let keypair = {
@@ -2283,10 +2272,10 @@ pub fn request_and_confirm_airdrop(
     }?;
     let mut tx = keypair.airdrop_transaction();
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[&keypair]);
-    log_instruction_custom_error::<SystemError>(result)
+    log_instruction_custom_error::<SystemError>(result, &config)
 }
 
-pub fn log_instruction_custom_error<E>(result: ClientResult<Signature>) -> ProcessResult
+pub fn log_instruction_custom_error<E>(result: ClientResult<Signature>, config: &CliConfig) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
@@ -2303,7 +2292,11 @@ where
             }
             Err(err.into())
         }
-        Ok(sig) => Ok(sig.to_string()),
+        Ok(sig) => {
+                    let signature = CliSignature {signature: sig.to_string()};
+                    config.output_format.formatted_print(&signature);
+                    Ok("".to_string())
+        }
     }
 }
 
@@ -3827,6 +3820,7 @@ mod tests {
             }
         }
 
+        let config = CliConfig::default();
         let present: Box<dyn Signer> = Box::new(keypair_from_seed(&[2u8; 32]).unwrap());
         let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::new(&[3u8; 32])));
         let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::new(&[4u8; 32])));
@@ -3845,7 +3839,7 @@ mod tests {
         let signers = vec![present.as_ref(), absent.as_ref(), bad.as_ref()];
         let blockhash = Hash::new(&[7u8; 32]);
         tx.try_partial_sign(&signers, blockhash).unwrap();
-        let res = return_signers(&tx).unwrap();
+        let res = return_signers(&tx, &config).unwrap();
         let sign_only = parse_sign_only_reply_string(&res);
         assert_eq!(sign_only.blockhash, blockhash);
         assert_eq!(sign_only.present_signers[0].0, present.pubkey());

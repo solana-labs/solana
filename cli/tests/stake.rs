@@ -47,6 +47,7 @@ fn test_stake_delegation_force() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         100_000,
+        &config,
     )
     .unwrap();
 
@@ -143,6 +144,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         &faucet_addr,
         &config_validator.signers[0].pubkey(),
         100_000,
+        &config_validator,
     )
     .unwrap();
     check_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
@@ -233,6 +235,7 @@ fn test_stake_delegation_and_deactivation() {
         &faucet_addr,
         &config_validator.signers[0].pubkey(),
         100_000,
+        &config_validator,
     )
     .unwrap();
     check_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
@@ -329,6 +332,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         &faucet_addr,
         &config_validator.signers[0].pubkey(),
         100_000,
+        &config_offline,
     )
     .unwrap();
     check_balance(100_000, &rpc_client, &config_validator.signers[0].pubkey());
@@ -338,6 +342,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         &faucet_addr,
         &config_offline.signers[0].pubkey(),
         100_000,
+        &config_validator,
     )
     .unwrap();
     check_balance(100_000, &rpc_client, &config_offline.signers[0].pubkey());
@@ -458,6 +463,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         100_000,
+        &config,
     )
     .unwrap();
 
@@ -567,6 +573,7 @@ fn test_stake_authorize() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         100_000,
+        &config,
     )
     .unwrap();
 
@@ -584,6 +591,7 @@ fn test_stake_authorize() {
         &faucet_addr,
         &config_offline.signers[0].pubkey(),
         100_000,
+        &config,
     )
     .unwrap();
 
@@ -829,13 +837,13 @@ fn test_stake_authorize_with_fee_payer() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &default_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &default_pubkey, 100_000, &config).unwrap();
     check_balance(100_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &payer_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &payer_pubkey, 100_000, &config).unwrap();
     check_balance(100_000, &rpc_client, &payer_pubkey);
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config).unwrap();
     check_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
@@ -954,11 +962,12 @@ fn test_stake_split() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         500_000,
+        &config,
     )
     .unwrap();
     check_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config).unwrap();
     check_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
@@ -1102,11 +1111,12 @@ fn test_stake_set_lockup() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         500_000,
+        &config,
     )
     .unwrap();
     check_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config).unwrap();
     check_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
@@ -1352,11 +1362,12 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         200_000,
+        &config,
     )
     .unwrap();
     check_balance(200_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000, &config).unwrap();
     check_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create nonce account
