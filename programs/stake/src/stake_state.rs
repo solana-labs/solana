@@ -588,15 +588,17 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         authority: &Pubkey,
         stake_authorize: StakeAuthorize,
         signers: &HashSet<Pubkey>,
-        clock: &Clock,
+        _clock: &Clock,
     ) -> Result<(), InstructionError> {
         match self.state()? {
             StakeState::Stake(mut meta, stake) => {
-                meta.authorize_withdraw(authority, stake_authorize, signers, clock)?;
+                meta.authorized
+                    .authorize(signers, authority, stake_authorize)?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
             StakeState::Initialized(mut meta) => {
-                meta.authorize_withdraw(authority, stake_authorize, signers, clock)?;
+                meta.authorized
+                    .authorize(signers, authority, stake_authorize)?;
                 self.set_state(&StakeState::Initialized(meta))
             }
             _ => Err(InstructionError::InvalidAccountData),
