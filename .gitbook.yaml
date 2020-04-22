@@ -3,3 +3,16 @@ root: ./docs/src
 structure:
     readme: introduction.md
     summary: SUMMARY.md
+
+redirects:
+    wallet: ./wallet-guide/README.md
+    wallet/app-wallets: ./wallet-guide/apps.md
+    wallet/app-wallets/trust-wallet: ./wallet-guide/trust-wallet.md
+    wallet/app-wallets/ledger-live:  ./wallet-guide/ledger-live.md
+    wallet/cli-wallets:  ./wallet-guide/cli.md
+    wallet/cli-wallets/paper-wallet:  ./paper-wallet/README.md
+    wallet/cli-wallets/paper-wallet/paper-wallet-usage: ./paper-wallet/paper-wallet-usage.md
+    wallet/cli-wallets/remote-wallet: ./hardware-wallets/README.md
+    wallet/cli-wallets/remote-wallet/ledger: ./hardware-wallets/ledger.md
+    wallet/cli-wallets/file-system-wallet: ./file-system-wallet/README.md
+    wallet/support: ./wallet-guide/support.md
