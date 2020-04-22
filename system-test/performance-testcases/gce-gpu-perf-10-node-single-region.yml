@@ -1,0 +1,19 @@
+steps:
+  - command: "system-test/testnet-automation.sh"
+    label: "GCE - GPU Enabled 10 Nodes"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+      CLOUD_PROVIDER: "gce"
+      TESTNET_TAG: "gce-perf-gpu-enabled"
+      TEST_DURATION_SECONDS: 600
+      NUMBER_OF_VALIDATOR_NODES: 10
+      ENABLE_GPU: "true"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+      NUMBER_OF_CLIENT_NODES: 2
+      CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
+      TESTNET_ZONES: "us-west1-a"
+      USE_PUBLIC_IP_ADDRESSES: "true"
+      ADDITIONAL_FLAGS: "--dedicated"
+      TEST_TYPE: "fixed_duration"
+    agents:
+      - "queue=gce-deploy"
