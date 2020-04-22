@@ -205,7 +205,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }),
             );
 
-            let (nodes, _archivers) = discover(
+            let (_all_peers, validators, _archivers) = discover(
                 entrypoint_addr.as_ref(),
                 num_nodes,
                 timeout,
@@ -216,28 +216,28 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
             if timeout.is_some() {
                 if let Some(num) = num_nodes {
-                    if nodes.len() < num {
+                    if validators.len() < num {
                         let add = if num_nodes_exactly.is_some() {
                             ""
                         } else {
                             " or more"
                         };
                         eprintln!(
-                            "Error: Insufficient nodes discovered.  Expecting {}{}",
+                            "Error: Insufficient validators discovered.  Expecting {}{}",
                             num, add,
                         );
                         exit(1);
                     }
                 }
                 if let Some(node) = pubkey {
-                    if nodes.iter().find(|x| x.id == node).is_none() {
+                    if validators.iter().find(|x| x.id == node).is_none() {
                         eprintln!("Error: Could not find node {:?}", node);
                         exit(1);
                     }
                 }
             }
             if let Some(num_nodes_exactly) = num_nodes_exactly {
-                if nodes.len() > num_nodes_exactly {
+                if validators.len() > num_nodes_exactly {
                     eprintln!(
                         "Error: Extra nodes discovered.  Expecting exactly {}",
                         num_nodes_exactly
@@ -251,7 +251,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let all = matches.is_present("all");
             let entrypoint_addr = parse_entrypoint(&matches);
             let timeout = value_t_or_exit!(matches, "timeout", u64);
-            let (nodes, _archivers) = discover(
+            let (_all_peers, validators, _archivers) = discover(
                 entrypoint_addr.as_ref(),
                 Some(1),
                 Some(timeout),
@@ -260,7 +260,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 None,
             )?;
 
-            let rpc_addrs: Vec<_> = nodes
+            let rpc_addrs: Vec<_> = validators
                 .iter()
                 .filter_map(|contact_info| {
                     if (any || all || Some(contact_info.gossip) == entrypoint_addr)
@@ -291,7 +291,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let (nodes, _archivers) = discover(
+            let (_all_peers, validators, _archivers) = discover(
                 entrypoint_addr.as_ref(),
                 None,
                 None,
@@ -299,15 +299,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 None,
                 None,
             )?;
-            let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
+            let validator = validators.iter().find(|x| x.id == pubkey).unwrap();
 
-            if !ContactInfo::is_valid_address(&node.rpc) {
-                eprintln!("Error: RPC service is not enabled on node {:?}", pubkey);
+            if !ContactInfo::is_valid_address(&validator.rpc) {
+                eprintln!(
+                    "Error: RPC service is not enabled on validator {:?}",
+                    pubkey
+                );
                 exit(1);
             }
-            println!("\nSending stop request to node {:?}", pubkey);
+            println!("\nSending stop request to validator {:?}", pubkey);
 
-            let result = RpcClient::new_socket(node.rpc).validator_exit()?;
+            let result = RpcClient::new_socket(validator.rpc).validator_exit()?;
             if result {
                 println!("Stop signal accepted");
             } else {

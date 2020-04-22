@@ -25,6 +25,10 @@ bootstrapInstall() {
 }
 
 bootstrapInstall "edge"
+solana-install-init --version
+solana-install-init edge
+solana-gossip --version
+solana-dos --version
 
 killall solana-gossip || true
 solana-gossip spy --gossip-port 8001 > "$logDir"/gossip.log 2>&1 &
