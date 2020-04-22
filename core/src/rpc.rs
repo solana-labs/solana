@@ -531,10 +531,10 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_lowest_nonpurged_block(&self) -> Result<Slot> {
+    pub fn get_first_available_block(&self) -> Result<Slot> {
         Ok(self
             .blockstore
-            .get_lowest_nonpurged_block()
+            .get_first_available_block()
             .unwrap_or_default())
     }
 }
@@ -796,8 +796,8 @@ pub trait RpcSol {
         end_slot: Slot,
     ) -> Result<Vec<String>>;
 
-    #[rpc(meta, name = "getLowestNonpurgedBlock")]
-    fn get_lowest_nonpurged_block(&self, meta: Self::Metadata) -> Result<Slot>;
+    #[rpc(meta, name = "getFirstAvailableBlock")]
+    fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot>;
 }
 
 pub struct RpcSolImpl;
@@ -1387,11 +1387,11 @@ impl RpcSol for RpcSolImpl {
             })
     }
 
-    fn get_lowest_nonpurged_block(&self, meta: Self::Metadata) -> Result<Slot> {
+    fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_lowest_nonpurged_block()
+            .get_first_available_block()
     }
 }
 

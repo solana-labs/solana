@@ -1601,7 +1601,7 @@ impl Blockstore {
         slots
     }
 
-    pub fn get_lowest_nonpurged_block(&self) -> Result<Slot> {
+    pub fn get_first_available_block(&self) -> Result<Slot> {
         let mut root_iterator = self.rooted_slot_iterator(0)?;
         Ok(root_iterator.next().unwrap_or_default())
     }
