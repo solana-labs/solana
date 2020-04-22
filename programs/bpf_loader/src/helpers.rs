@@ -403,7 +403,7 @@ mod tests {
         .unwrap();
     }
 
-    // Ignore this test: solana_logger conflicts when running tests concurrently, 
+    // Ignore this test: solana_logger conflicts when running tests concurrently,
     // this results in the bad string length being ignored and not returning an error
     #[ignore]
     #[test]
