@@ -171,11 +171,28 @@ impl CompressedSlots {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq)]
 pub struct EpochSlots {
     pub from: Pubkey,
     pub slots: Vec<CompressedSlots>,
     pub wallclock: u64,
+}
+
+use std::fmt;
+impl fmt::Debug for EpochSlots {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let num_slots: usize = self.slots.iter().map(|s| s.num_slots()).sum();
+        let lowest_slot = self
+            .slots
+            .iter()
+            .map(|s| s.first_slot())
+            .fold(0, std::cmp::min);
+        write!(
+            f,
+            "EpochSlots {{ from: {} num_slots: {} lowest_slot: {} wallclock: {} }}",
+            self.from, num_slots, lowest_slot, self.wallclock
+        )
+    }
 }
 
 impl EpochSlots {
