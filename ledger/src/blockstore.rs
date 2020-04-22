@@ -1601,6 +1601,11 @@ impl Blockstore {
         slots
     }
 
+    pub fn get_lowest_nonpurged_block(&self) -> Result<Slot> {
+        let mut root_iterator = self.rooted_slot_iterator(0)?;
+        Ok(root_iterator.next().unwrap_or_default())
+    }
+
     pub fn get_confirmed_block(
         &self,
         slot: Slot,

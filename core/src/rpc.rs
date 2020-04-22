@@ -538,6 +538,13 @@ impl JsonRpcRequestProcessor {
             Ok(vec![])
         }
     }
+
+    pub fn get_lowest_nonpurged_block(&self) -> Result<Slot> {
+        Ok(self
+            .blockstore
+            .get_lowest_nonpurged_block()
+            .unwrap_or_default())
+    }
 }
 
 fn get_tpu_addr(cluster_info: &ClusterInfo) -> Result<SocketAddr> {
@@ -796,6 +803,9 @@ pub trait RpcSol {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<String>>;
+
+    #[rpc(meta, name = "getLowestNonpurgedBlock")]
+    fn get_lowest_nonpurged_block(&self, meta: Self::Metadata) -> Result<Slot>;
 }
 
 pub struct RpcSolImpl;
@@ -1383,6 +1393,13 @@ impl RpcSol for RpcSolImpl {
                     .map(|signature| signature.to_string())
                     .collect()
             })
+    }
+
+    fn get_lowest_nonpurged_block(&self, meta: Self::Metadata) -> Result<Slot> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_lowest_nonpurged_block()
     }
 }
 
