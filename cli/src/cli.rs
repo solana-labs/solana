@@ -1071,9 +1071,9 @@ pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
 
     let cli_command = CliSignOnlyData {
         blockhash: tx.message.recent_blockhash,
-        signers: signers,
-        absent: absent,
-        bad_sig: bad_sig,
+        signers,
+        absent,
+        bad_sig,
     };
 
     config.output_format.formatted_print(&cli_command);
