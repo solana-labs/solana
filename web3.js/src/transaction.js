@@ -180,9 +180,9 @@ export class Transaction {
   }
 
   /**
-   * @private
+   * Get a buffer of the Transaction data that need to be covered by signatures
    */
-  _getSignData(): Buffer {
+  get signData(): Buffer {
     const {nonceInfo} = this;
     if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
       this.recentBlockhash = nonceInfo.nonce;
@@ -377,7 +377,7 @@ export class Transaction {
       },
     );
     this.signatures = signatures;
-    const signData = this._getSignData();
+    const signData = this.signData;
 
     partialSigners.forEach((accountOrPublicKey, index) => {
       if (accountOrPublicKey instanceof PublicKey) {
@@ -405,7 +405,7 @@ export class Transaction {
       throw new Error(`Unknown signer: ${signer.publicKey.toString()}`);
     }
 
-    const signData = this._getSignData();
+    const signData = this.signData;
     const signature = nacl.sign.detached(signData, signer.secretKey);
     invariant(signature.length === 64);
     this.signatures[index].signature = Buffer.from(signature);
@@ -416,7 +416,7 @@ export class Transaction {
    */
   verifySignatures(): boolean {
     let verified = true;
-    const signData = this._getSignData();
+    const signData = this.signData;
     for (const {signature, publicKey} of this.signatures) {
       if (
         !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
@@ -438,7 +438,7 @@ export class Transaction {
       throw new Error('Transaction has not been signed');
     }
 
-    const signData = this._getSignData();
+    const signData = this.signData;
     const signatureCount = [];
     shortvec.encodeLength(signatureCount, signatures.length);
     const transactionLength =
