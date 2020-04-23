@@ -47,6 +47,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
+    ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex, RwLock},
@@ -1130,7 +1131,7 @@ impl AccountsDB {
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
         A: Default,
-        R: std::ops::RangeBounds<solana_sdk::pubkey::Pubkey>,
+        R: RangeBounds<Pubkey>,
     {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();

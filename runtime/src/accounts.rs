@@ -494,6 +494,7 @@ impl Accounts {
             ancestors,
             range,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
+                // THINK ABOUT ZERO LAMPORTS FILTERING RAMIFICATION
                 Self::load_while_filtering(collector, option, |account| account.lamports != 0)
             },
         )
