@@ -103,6 +103,10 @@ fn process_rebase_stake_accounts(
         &args.stake_authority.pubkey(),
         &balances,
     );
+    if messages.is_empty() {
+        eprintln!("No accounts found");
+        return Ok(());
+    }
     let signers = vec![
         &*args.fee_payer,
         &*args.new_base_keypair,
@@ -134,6 +138,10 @@ fn process_move_stake_accounts(
         &authorize_args.new_withdraw_authority,
         &balances,
     );
+    if messages.is_empty() {
+        eprintln!("No accounts found");
+        return Ok(());
+    }
     let signers = vec![
         &*args.fee_payer,
         &*args.new_base_keypair,
