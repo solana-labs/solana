@@ -1285,12 +1285,13 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
-        let vec: ShredResult<Vec<Shred>> = self
+        let mut vec: Vec<Shred> = self
             .slot_data_iterator(slot, start_index)
-            .expect("blockstore couldn't fetch iterator")
-            .map(|data| Shred::new_from_serialized_shred(data.1.to_vec()))
-            .collect();
-        let mut vec = vec?;
+            .map(|iter| {
+                iter.filter_map(|data| Shred::new_from_serialized_shred(data.1.to_vec()).ok())
+                    .collect()
+            })
+            .unwrap_or_else(|_| vec![]);
         vec.sort_by_key(|s| s.index());
         Ok(vec)
     }
@@ -1351,12 +1352,13 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
-        let vec: ShredResult<Vec<Shred>> = self
+        let mut vec: Vec<Shred> = self
             .slot_coding_iterator(slot, start_index)
-            .expect("blockstore couldn't fetch iterator")
-            .map(|code| Shred::new_from_serialized_shred(code.1.to_vec()))
-            .collect();
-        let mut vec = vec?;
+            .map(|iter| {
+                iter.filter_map(|code| Shred::new_from_serialized_shred(code.1.to_vec()).ok())
+                    .collect()
+            })
+            .unwrap_or_else(|_| vec![]);
         vec.sort_by_key(|s| s.index());
         Ok(vec)
     }
