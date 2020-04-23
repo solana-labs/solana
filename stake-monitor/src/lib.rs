@@ -450,6 +450,7 @@ mod test {
                         &stake3_keypair.pubkey(),
                         &payer.pubkey(),
                         one_sol,
+                        None,
                     )],
                     Some(&payer.pubkey()),
                 ),
