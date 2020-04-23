@@ -34,8 +34,7 @@ pub fn resolve_command(
 ) -> Result<Command<Box<dyn Signer>>, Box<dyn Error>> {
     match command {
         Command::Distribute(args) => {
-            let wallet_manager = maybe_wallet_manager()?;
-            let wallet_manager = wallet_manager.as_ref();
+            let mut wallet_manager = maybe_wallet_manager()?;
             let matches = ArgMatches::default();
             let resolved_args = DistributeArgs {
                 bids_csv: args.bids_csv,
@@ -43,10 +42,10 @@ pub fn resolve_command(
                 dollars_per_sol: args.dollars_per_sol,
                 dry_run: args.dry_run,
                 sender_keypair: args.sender_keypair.as_ref().map(|key_url| {
-                    signer_from_path(&matches, &key_url, "sender", wallet_manager).unwrap()
+                    signer_from_path(&matches, &key_url, "sender", &mut wallet_manager).unwrap()
                 }),
                 fee_payer: args.fee_payer.as_ref().map(|key_url| {
-                    signer_from_path(&matches, &key_url, "fee-payer", wallet_manager).unwrap()
+                    signer_from_path(&matches, &key_url, "fee-payer", &mut wallet_manager).unwrap()
                 }),
             };
             Ok(Command::Distribute(resolved_args))
