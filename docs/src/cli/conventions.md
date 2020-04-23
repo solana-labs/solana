@@ -29,7 +29,7 @@ the base58 encoding of your public key, such as
 
 Many commands using the CLI tools require a value for a `<KEYPAIR>`.  The value
 you should use for the keypair depend on what type of
-[command line wallet you created](../wallet/cli-wallets.md).
+[command line wallet you created](../wallet-guide/cli.md).
 
 For example, the way to display any wallet's address
 (also known as the keypair's pubkey), the CLI help document shows:
@@ -66,7 +66,7 @@ solana-keygen pubkey /home/solana/my_wallet.json
 #### Hardware Wallet
 
 If you chose a hardware wallet, use your
-[keypair URL](../remote-wallet/README.md#specify-a-hardware-wallet-key),
+[keypair URL](../hardware-wallets/README.md#specify-a-hardware-wallet-key),
 such as `usb://ledger?key=0`.
 ```bash
 solana-keygen pubkey usb://ledger?key=0

@@ -1,12 +1,9 @@
 # Create a validator public key
 
-In order to participate in any Tour de SOL dry-runs or stages, you need to register for the Tour de SOL.
+In order to participate you need to first register.  See [Registration info](../registration/how-to-register.md).
 
-See [Registration info](../../registration/README.md).
-
-In order to obtain your allotment of lamports at the start of a Tour de SOL stage or dry run, you need to publish your validator's identity public key under your keybase.io account.
-
-**If these steps are not completed by the cut-off time you will not be able to participate.**
+In order to obtain your allotment of SOL you need to publish your
+validator's identity public key under your keybase.io account.
 
 ## **Generate Keypair**
 
@@ -28,7 +25,7 @@ Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
 
 Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
 
-If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR, if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF LAMPORTS TOO.
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR, if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
 
 To back-up your validator identify keypair, **back-up your "validator-keypair.json” file to a secure location.**
 

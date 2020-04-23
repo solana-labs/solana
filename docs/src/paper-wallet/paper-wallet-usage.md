@@ -168,4 +168,4 @@ your own accounts for different purposes.
 
 ## Support
 
-Check out our [Wallet Support Page](../wallet/support.md) for ways to get help.
+Check out our [Wallet Support Page](../wallet-guide/support.md) for ways to get help.
