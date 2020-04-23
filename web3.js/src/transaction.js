@@ -398,16 +398,24 @@ export class Transaction {
    * `signPartial`
    */
   addSigner(signer: Account) {
-    const index = this.signatures.findIndex(sigpair =>
-      signer.publicKey.equals(sigpair.publicKey),
-    );
-    if (index < 0) {
-      throw new Error(`Unknown signer: ${signer.publicKey.toString()}`);
-    }
-
     const signData = this.signData;
     const signature = nacl.sign.detached(signData, signer.secretKey);
+    this.addSignature(signer.publicKey, signature);
+  }
+
+  /**
+   * Add an externally created signature to a transaction
+   */
+  addSignature(pubkey: PublicKey, signature: Buffer) {
     invariant(signature.length === 64);
+
+    const index = this.signatures.findIndex(sigpair =>
+      pubkey.equals(sigpair.publicKey),
+    );
+    if (index < 0) {
+      throw new Error(`Unknown signer: ${pubkey.toString()}`);
+    }
+
     this.signatures[index].signature = Buffer.from(signature);
   }
 
