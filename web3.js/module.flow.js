@@ -415,6 +415,7 @@ declare module '@solana/web3.js' {
     sign(...signers: Array<Account>): void;
     signPartial(...partialSigners: Array<PublicKey | Account>): void;
     addSigner(signer: Account): void;
+    addSignature(pubkey: PublicKey, signature: Buffer): void;
     verifySignatures(): boolean;
     serialize(): Buffer;
   }
