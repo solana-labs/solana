@@ -47,7 +47,8 @@ fn test_transfer() {
     let sender_pubkey = config.signers[0].pubkey();
     let recipient_pubkey = Pubkey::new(&[1u8; 32]);
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &sender_pubkey, 50_000, &config).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &sender_pubkey, 50_000, &config)
+        .unwrap();
     check_balance(50_000, &rpc_client, &sender_pubkey);
     check_balance(0, &rpc_client, &recipient_pubkey);
 
@@ -239,8 +240,14 @@ fn test_transfer_multisession_signing() {
 
     // Setup accounts
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_from_signer.pubkey(), 43, &config)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &offline_from_signer.pubkey(),
+        43,
+        &config,
+    )
+    .unwrap();
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,

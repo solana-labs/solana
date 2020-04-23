@@ -2275,7 +2275,10 @@ pub fn request_and_confirm_airdrop(
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
-pub fn log_instruction_custom_error<E>(result: ClientResult<Signature>, config: &CliConfig) -> ProcessResult
+pub fn log_instruction_custom_error<E>(
+    result: ClientResult<Signature>,
+    config: &CliConfig,
+) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
@@ -2293,9 +2296,11 @@ where
             Err(err.into())
         }
         Ok(sig) => {
-                    let signature = CliSignature {signature: sig.to_string()};
-                    config.output_format.formatted_print(&signature);
-                    Ok("".to_string())
+            let signature = CliSignature {
+                signature: sig.to_string(),
+            };
+            config.output_format.formatted_print(&signature);
+            Ok("".to_string())
         }
     }
 }
