@@ -10,7 +10,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
-num_cpus = "1.0.0"
+num_cpus = "1.13.0"
 lazy_static = "1.4.0"
 
 [package.metadata.docs.rs]

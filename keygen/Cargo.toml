@@ -12,7 +12,7 @@ edition = "2018"
 bs58 = "0.3.1"
 clap = "2.33"
 dirs = "2.0.2"
-num_cpus = "1.12.0"
+num_cpus = "1.13.0"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-cli-config = { path = "../cli-config", version = "1.2.0" }
 solana-remote-wallet = { path = "../remote-wallet", version = "1.2.0" }
