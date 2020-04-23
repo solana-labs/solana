@@ -27,6 +27,7 @@ use solana_sdk::{
 use std::{
     collections::{HashMap, HashSet},
     io::{BufReader, Error as IOError, Read},
+    ops::RangeBounds,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, RwLock},
 };
@@ -455,6 +456,19 @@ impl Accounts {
         }
     }
 
+    fn load_while_filtering<F: Fn(&Account) -> bool>(
+        collector: &mut Vec<(Pubkey, Account)>,
+        option: Option<(&Pubkey, Account, Slot)>,
+        filter: F,
+    ) {
+        if let Some(data) = option
+            .filter(|(_, account, _)| filter(account))
+            .map(|(pubkey, account, _slot)| (*pubkey, account))
+        {
+            collector.push(data)
+        }
+    }
+
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
@@ -463,34 +477,24 @@ impl Accounts {
         self.accounts_db.scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
-                if let Some(data) = option
-                    .filter(|(_, account, _)| {
-                        (program_id.is_none() || Some(&account.owner) == program_id)
-                            && account.lamports != 0
-                    })
-                    .map(|(pubkey, account, _slot)| (*pubkey, account))
-                {
-                    collector.push(data)
-                }
+                Self::load_while_filtering(collector, option, |account| {
+                    (program_id.is_none() || Some(&account.owner) == program_id)
+                        && account.lamports != 0
+                })
             },
         )
     }
 
-    pub fn load_to_collect_rent_eargerly<R: std::ops::RangeBounds<solana_sdk::pubkey::Pubkey>>(
+    pub fn load_to_collect_rent_eargerly<R: RangeBounds<Pubkey>>(
         &self,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         range: R,
     ) -> Vec<(Pubkey, Account)> {
-        self.accounts_db.scan_accounts_under_range(
+        self.accounts_db.range_scan_accounts(
             ancestors,
             range,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
-                if let Some(data) = option
-                    .filter(|(_, account, _)| account.lamports != 0)
-                    .map(|(pubkey, account, _slot)| (*pubkey, account))
-                {
-                    collector.push(data)
-                }
+                Self::load_while_filtering(collector, option, |account| account.lamports != 0)
             },
         )
     }

@@ -2,6 +2,7 @@ use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    ops::RangeBounds,
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -20,13 +21,14 @@ pub struct AccountsIndex<T> {
     pub uncleaned_roots: HashSet<Slot>,
 }
 
-impl<T: Clone> AccountsIndex<T> {
+impl<'a, T: 'a + Clone> AccountsIndex<T> {
     /// call func with every pubkey and index visible from a given set of ancestors
-    pub fn scan_accounts<F>(&self, ancestors: &Ancestors, mut func: F)
+    pub fn do_scan_accounts<F, I>(&self, ancestors: &Ancestors, mut func: F, iter: I)
     where
         F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        I: Iterator<Item = (&'a Pubkey, &'a AccountMapEntry<T>)>,
     {
-        for (pubkey, list) in self.account_maps.iter() {
+        for (pubkey, list) in iter {
             let list_r = &list.1.read().unwrap();
             if let Some(index) = self.latest_slot(ancestors, &list_r) {
                 func(pubkey, (&list_r[index].1, list_r[index].0));
@@ -34,21 +36,19 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
-    pub fn scan_accounts_under_range<F, R>(
-        &self,
-        ancestors: &HashMap<Slot, usize>,
-        range: R,
-        mut func: F,
-    ) where
+    pub fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
+    where
         F: FnMut(&Pubkey, (&T, Slot)) -> (),
-        R: std::ops::RangeBounds<solana_sdk::pubkey::Pubkey>,
     {
-        for (pubkey, list) in self.account_maps.range(range) {
-            let list_r = &list.1.read().unwrap();
-            if let Some(index) = self.latest_slot(ancestors, &list_r) {
-                func(pubkey, (&list_r[index].1, list_r[index].0));
-            }
-        }
+        self.do_scan_accounts(ancestors, func, self.account_maps.iter());
+    }
+
+    pub fn range_scan_accounts<F, R>(&self, ancestors: &Ancestors, range: R, func: F)
+    where
+        F: FnMut(&Pubkey, (&T, Slot)) -> (),
+        R: RangeBounds<Pubkey>,
+    {
+        self.do_scan_accounts(ancestors, func, self.account_maps.range(range));
     }
 
     fn get_rooted_entries(&self, slice: SlotSlice<T>) -> SlotList<T> {

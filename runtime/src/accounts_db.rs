@@ -173,6 +173,25 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
 
 #[derive(Clone, Default, Debug)]
 pub struct AccountStorage(pub HashMap<Slot, SlotStores>);
+
+impl AccountStorage {
+    fn scan_accounts(&self, account_info: &AccountInfo, slot: Slot) -> Option<(Account, Slot)> {
+        self.0
+            .get(&slot)
+            .and_then(|storage_map| storage_map.get(&account_info.store_id))
+            .and_then(|store| {
+                Some(
+                    store
+                        .accounts
+                        .get_account(account_info.offset)?
+                        .0
+                        .clone_account(),
+                )
+            })
+            .map(|account| (account, slot))
+    }
+}
+
 impl<'de> Deserialize<'de> for AccountStorage {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -1095,27 +1114,16 @@ impl AccountsDB {
             scan_func(
                 &mut collector,
                 storage
-                    .0
-                    .get(&slot)
-                    .and_then(|storage_map| storage_map.get(&account_info.store_id))
-                    .and_then(|store| {
-                        Some(
-                            store
-                                .accounts
-                                .get_account(account_info.offset)?
-                                .0
-                                .clone_account(),
-                        )
-                    })
-                    .map(|account| (pubkey, account, slot)),
+                    .scan_accounts(account_info, slot)
+                    .map(|(account, slot)| (pubkey, account, slot)),
             )
         });
         collector
     }
 
-    pub fn scan_accounts_under_range<F, A, R>(
+    pub fn range_scan_accounts<F, A, R>(
         &self,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         range: R,
         scan_func: F,
     ) -> A
@@ -1127,29 +1135,14 @@ impl AccountsDB {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
-        accounts_index.scan_accounts_under_range(
-            ancestors,
-            range,
-            |pubkey, (account_info, slot)| {
-                scan_func(
-                    &mut collector,
-                    storage
-                        .0
-                        .get(&slot)
-                        .and_then(|storage_map| storage_map.get(&account_info.store_id))
-                        .and_then(|store| {
-                            Some(
-                                store
-                                    .accounts
-                                    .get_account(account_info.offset)?
-                                    .0
-                                    .clone_account(),
-                            )
-                        })
-                        .map(|account| (pubkey, account, slot)),
-                )
-            },
-        );
+        accounts_index.range_scan_accounts(ancestors, range, |pubkey, (account_info, slot)| {
+            scan_func(
+                &mut collector,
+                storage
+                    .scan_accounts(account_info, slot)
+                    .map(|(account, slot)| (pubkey, account, slot)),
+            )
+        });
         collector
     }
 
