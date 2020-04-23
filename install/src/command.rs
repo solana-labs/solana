@@ -581,7 +581,7 @@ pub fn info(config_file: &str, local_info_only: bool) -> Result<Option<UpdateMan
     if let Some(explicit_release) = &config.explicit_release {
         match explicit_release {
             ExplicitRelease::Semver(release_semver) => {
-                println_name_value(&format!("v{}Release version:", BULLET), &release_semver);
+                println_name_value(&format!("{}Release version:", BULLET), &release_semver);
                 println_name_value(
                     &format!("{}Release URL:", BULLET),
                     &github_release_download_url(release_semver),
