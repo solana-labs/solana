@@ -1,6 +1,5 @@
 # Send and Receive Tokens
-<<<<<<< HEAD
-=======
+
 This page decribes how to receive and send SOL tokens using the command line
 tools with a command line wallet such as a [paper wallet](../paper-wallet/README.md),
 a [file system wallet](../file-system-wallet/README.md), or a
@@ -8,7 +7,6 @@ a [file system wallet](../file-system-wallet/README.md), or a
 you have created a wallet and have access to its address (pubkey) and the
 signing keypair.  Check out our
 [conventions for entering keypairs for different wallet types](../cli/conventions.md#keypair-conventions).
->>>>>>> 24354ccd6... Clean up wallet URL paths (#9667)
 
 ## Receive Tokens
 
@@ -93,8 +91,6 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ============================================================================
 ```
 
-<<<<<<< HEAD
-=======
 You can also create a second (or more) wallet of any type:
 [paper](../paper-wallet/paper-wallet-usage.md#creating-multiple-paper-wallet-addresses),
 [file system](../file-system-wallet/README.md#creating-multiple-file-system-wallet-addresses),
@@ -107,7 +103,6 @@ The Solana cluster will only accept the transfer if you sign the transaction
 with the private keypair corresponding to the sender's public key in the
 transaction.
 
->>>>>>> 24354ccd6... Clean up wallet URL paths (#9667)
 ```bash
 solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5--url http://devnet.solana.com --fee-payer <KEYPAIR>
 ```
@@ -124,8 +119,6 @@ solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
 recipient's public key.
 
-<<<<<<< HEAD
-=======
 #### Full example of test transfer
 ```bash
 $ solana-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
@@ -178,7 +171,6 @@ Once completed, you should have a public key
 for each keypair you generated. The public key is a long string of base58
 characters. Its length varies from 32 to 44 characters.
 
->>>>>>> 24354ccd6... Clean up wallet URL paths (#9667)
 ## Send Tokens
 
 If you already hold SOL and want to send tokens to someone, you will need
