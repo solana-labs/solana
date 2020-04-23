@@ -1678,10 +1678,6 @@ impl Bank {
         }
         self.collected_rent.fetch_add(rent, Ordering::Relaxed);
 
-        error!(
-            "ryoqun: collected rent eagerly: {} from {} accounts",
-            rent, account_count
-        );
         datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
     }
 
@@ -1691,7 +1687,6 @@ impl Bank {
         partition_count: PartitionCount,
     ) -> std::ops::RangeInclusive<Pubkey> {
         // pubkey (= account address, including derived ones?) distribution should be uniform?
-        error!("ryoqun: {}, {}, {}", start_index, end_index, end_index);
 
         let partition_width = Slot::max_value() / partition_count;
         let start_key_prefix = if start_index == 0 && end_index == 0 {
@@ -1711,13 +1706,11 @@ impl Bank {
         BigEndian::write_u64(&mut start_pubkey[..], start_key_prefix);
         BigEndian::write_u64(&mut end_pubkey[..], end_key_prefix);
         // special case parent_slot is in previous current_epoch
-        error!(
-            "ryoqun: ({}-{})/{}, {:064b} {:064b} {:?} {:?}",
+        trace!(
+            "pubkey_range_by_partition: ({}-{})/{}: {:02x?}-{:02x?}",
             start_index,
             end_index,
             partition_count,
-            start_index,
-            start_key_prefix,
             start_pubkey,
             end_pubkey
         );
@@ -1796,14 +1789,6 @@ impl Bank {
             epoch_count_per_cycle,
             slot_count_per_epoch,
         );
-        //error!("ryoqun: {}, {}, {}", start_slot_index, end_slot_index, start_slot_in
-        if (start_slot_index == end_slot_index
-            || (start_slot_index == 0 && (end_slot_index - start_slot_index > 1)))
-            && start_partition_index > 0
-            && is_in_longer_cycle
-        {
-            start_partition_index -= 1;
-        }
         let end_partition_index = Self::partition_index_in_collection_cycle(
             end_slot_index,
             current_epoch,
@@ -1812,7 +1797,27 @@ impl Bank {
             slot_count_per_epoch,
         );
 
+        // do special handling...
+        let is_across_epoch_boundary = Self::across_epoch_boundary_in_collection_cycle(
+            start_slot_index,
+            end_slot_index,
+            start_partition_index,
+        );
+        if is_in_longer_cycle && is_across_epoch_boundary {
+            start_partition_index -= 1;
+        }
+
         (start_partition_index, end_partition_index, partition_count)
+    }
+
+    fn across_epoch_boundary_in_collection_cycle(
+        start_slot_index: SlotIndex,
+        end_slot_index: SlotIndex,
+        start_partition_index: PartitionIndex,
+    ) -> bool {
+        (start_slot_index == end_slot_index
+            || (start_slot_index == 0 && (end_slot_index - start_slot_index > 1)))
+            && start_partition_index > 0
     }
 
     fn partition_index_in_collection_cycle(
@@ -1838,10 +1843,8 @@ impl Bank {
 
     fn collect_rent_eagerly(&self) {
         let mut measure = Measure::start("collect_rent_eagerly-ms");
-        for (start_slot_index, end_slot_index, partition_count) in
-            self.eager_rent_ranges_for_epochs()
-        {
-            self.collect_rent_by_range(start_slot_index, end_slot_index, partition_count);
+        for (start_index, end_index, partition_count) in self.eager_rent_ranges_for_epochs() {
+            self.collect_rent_by_range(start_index, end_index, partition_count);
         }
         measure.stop();
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
@@ -3638,6 +3641,117 @@ mod tests {
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1690, 0));
         assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 431872)]);
+    }
+
+    #[test]
+    fn test_rent_eager_pubkey_range_minimal() {
+        let range = Bank::pubkey_range_by_partition(0, 0, 1);
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([0x00; 32])..=Pubkey::new_from_array([0xff; 32])
+        );
+    }
+
+    #[test]
+    fn test_rent_eager_pubkey_range_dividable() {
+        let range = Bank::pubkey_range_by_partition(0, 0, 2);
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+
+        let range = Bank::pubkey_range_by_partition(0, 1, 2);
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+    }
+
+    #[test]
+    fn test_rent_eager_pubkey_range_not_dividable() {
+        solana_logger::setup();
+
+        let range = Bank::pubkey_range_by_partition(0, 0, 3);
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+
+        let range = Bank::pubkey_range_by_partition(0, 1, 3);
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xa9, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+
+        let range = Bank::pubkey_range_by_partition(1, 2, 3);
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
+    }
+
+    #[test]
+    fn test_rent_eager_pubkey_range_gap() {
+        solana_logger::setup();
+        let range = Bank::pubkey_range_by_partition(120, 1023, 12345);
+        assert_eq!(
+            range,
+            Pubkey::new_from_array([
+                0x02, 0x82, 0x5a, 0x89, 0xd1, 0xac, 0x58, 0x9c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+            ])
+                ..=Pubkey::new_from_array([
+                    0x15, 0x3c, 0x1d, 0xf1, 0xc6, 0x39, 0xef, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+        );
     }
 
     #[test]
