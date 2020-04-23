@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-bench-tps"
-version = "1.0.19"
+version = "1.0.20"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,24 +14,24 @@ log = "0.4.8"
 rayon = "1.2.0"
 serde_json = "1.0.46"
 serde_yaml = "0.8.11"
-solana-clap-utils = { path = "../clap-utils", version = "1.0.19" }
-solana-core = { path = "../core", version = "1.0.19" }
-solana-genesis = { path = "../genesis", version = "1.0.19" }
-solana-client = { path = "../client", version = "1.0.19" }
-solana-faucet = { path = "../faucet", version = "1.0.19" }
-solana-librapay = { path = "../programs/librapay", version = "1.0.19", optional = true }
-solana-logger = { path = "../logger", version = "1.0.19" }
-solana-metrics = { path = "../metrics", version = "1.0.19" }
-solana-measure = { path = "../measure", version = "1.0.19" }
-solana-net-utils = { path = "../net-utils", version = "1.0.19" }
-solana-runtime = { path = "../runtime", version = "1.0.19" }
-solana-sdk = { path = "../sdk", version = "1.0.19" }
-solana-move-loader-program = { path = "../programs/move_loader", version = "1.0.19", optional = true }
+solana-clap-utils = { path = "../clap-utils", version = "1.0.20" }
+solana-core = { path = "../core", version = "1.0.20" }
+solana-genesis = { path = "../genesis", version = "1.0.20" }
+solana-client = { path = "../client", version = "1.0.20" }
+solana-faucet = { path = "../faucet", version = "1.0.20" }
+solana-librapay = { path = "../programs/librapay", version = "1.0.20", optional = true }
+solana-logger = { path = "../logger", version = "1.0.20" }
+solana-metrics = { path = "../metrics", version = "1.0.20" }
+solana-measure = { path = "../measure", version = "1.0.20" }
+solana-net-utils = { path = "../net-utils", version = "1.0.20" }
+solana-runtime = { path = "../runtime", version = "1.0.20" }
+solana-sdk = { path = "../sdk", version = "1.0.20" }
+solana-move-loader-program = { path = "../programs/move_loader", version = "1.0.20", optional = true }
 
 [dev-dependencies]
 serial_test = "0.3.2"
 serial_test_derive = "0.4.0"
-solana-local-cluster = { path = "../local-cluster", version = "1.0.19" }
+solana-local-cluster = { path = "../local-cluster", version = "1.0.20" }
 
 [features]
 move = ["solana-librapay", "solana-move-loader-program"]

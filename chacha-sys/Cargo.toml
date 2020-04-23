@@ -1,6 +1,6 @@
 [package]
 name = "solana-chacha-sys"
-version = "1.0.19"
+version = "1.0.20"
 description = "Solana chacha-sys"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
