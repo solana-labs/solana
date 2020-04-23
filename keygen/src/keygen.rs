@@ -6,7 +6,6 @@ use clap::{
 };
 use num_cpus;
 use solana_clap_utils::{
-    input_validators::is_derivation,
     keypair::{
         keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
@@ -361,14 +360,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
-                .arg(
-                    Arg::with_name("derivation_path")
-                        .long("derivation-path")
-                        .value_name("ACCOUNT or ACCOUNT/CHANGE")
-                        .takes_value(true)
-                        .validator(is_derivation)
-                        .help("Derivation path to use: m/44'/501'/ACCOUNT'/CHANGE'; default key is device base pubkey: m/44'/501'/0'")
-                ),
         )
         .subcommand(
             SubCommand::with_name("recover")
