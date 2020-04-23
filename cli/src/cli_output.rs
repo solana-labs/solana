@@ -859,7 +859,7 @@ impl fmt::Display for CliBlockTime {
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct CliSignOnlyCommand {
+pub struct CliSignOnlyData {
     pub blockhash: Hash,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub signers: Vec<String>,
@@ -869,7 +869,7 @@ pub struct CliSignOnlyCommand {
     pub bad_sig: Vec<String>,
 }
 
-impl fmt::Display for CliSignOnlyCommand {
+impl fmt::Display for CliSignOnlyData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         writeln_name_value(f, "Blockhash:", &bs58::encode(self.blockhash).into_string())?;

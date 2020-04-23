@@ -1,5 +1,5 @@
 use crate::{
-    cli_output::{CliAccount, CliSignOnlyCommand, CliSignature, OutputFormat},
+    cli_output::{CliAccount, CliSignOnlyData, CliSignature, OutputFormat},
     cluster_query::*,
     display::println_name_value,
     nonce::{self, *},
@@ -1069,7 +1069,7 @@ pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
             }
         });
 
-    let cli_command = CliSignOnlyCommand {
+    let cli_command = CliSignOnlyData {
         blockhash: tx.message.recent_blockhash,
         signers: signers,
         absent: absent,
