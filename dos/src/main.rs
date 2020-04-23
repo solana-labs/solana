@@ -91,7 +91,7 @@ fn run_dos(
 }
 
 fn main() {
-    solana_logger::setup();
+    solana_logger::setup_with_default("solana=info");
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_clap_utils::version!())
@@ -148,7 +148,7 @@ fn main() {
     let data_type = value_t_or_exit!(matches, "data_type", String);
 
     info!("Finding cluster entry: {:?}", entrypoint_addr);
-    let (nodes, _archivers) = discover(
+    let (nodes, _validators, _archivers) = discover(
         Some(&entrypoint_addr),
         None,
         Some(60),
