@@ -247,12 +247,12 @@ impl Rocks {
             IteratorMode::Start => RocksIteratorMode::Start,
             IteratorMode::End => RocksIteratorMode::End,
         };
-        let iter = self.0.iterator_cf(cf, iterator_mode)?;
+        let iter = self.0.iterator_cf(cf, iterator_mode);
         Ok(iter)
     }
 
     fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator> {
-        let raw_iter = self.0.raw_iterator_cf(cf)?;
+        let raw_iter = self.0.raw_iterator_cf(cf);
 
         Ok(raw_iter)
     }
@@ -783,13 +783,12 @@ where
 impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), bytes)?;
+            .put_cf(self.get_cf::<C>(), &C::key(key), bytes);
         Ok(())
     }
 
     pub fn delete<C: Column + ColumnName>(&mut self, key: C::Index) -> Result<()> {
-        self.write_batch
-            .delete_cf(self.get_cf::<C>(), &C::key(key))?;
+        self.write_batch.delete_cf(self.get_cf::<C>(), &C::key(key));
         Ok(())
     }
 
@@ -800,7 +799,7 @@ impl<'a> WriteBatch<'a> {
     ) -> Result<()> {
         let serialized_value = serialize(&value)?;
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value)?;
+            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value);
         Ok(())
     }
 
@@ -816,7 +815,7 @@ impl<'a> WriteBatch<'a> {
         to: C::Index,
     ) -> Result<()> {
         self.write_batch
-            .delete_range_cf(cf, C::key(from), C::key(to))?;
+            .delete_range_cf(cf, C::key(from), C::key(to));
         Ok(())
     }
 }
@@ -844,5 +843,9 @@ fn get_db_options() -> Options {
     options.create_missing_column_families(true);
     // A good value for this is the number of cores on the machine
     options.increase_parallelism(num_cpus::get() as i32);
+
+    // Set max total wal size to 4G.
+    options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
+
     options
 }
