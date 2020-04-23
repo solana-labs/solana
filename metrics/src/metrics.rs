@@ -5,13 +5,17 @@ use gethostname::gethostname;
 use lazy_static::lazy_static;
 use log::*;
 use solana_sdk::hash::hash;
-use std::collections::HashMap;
-use std::convert::Into;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Barrier, Mutex, Once, RwLock};
-use std::thread;
-use std::time::{Duration, Instant};
-use std::{cmp, env};
+use std::{
+    collections::HashMap,
+    convert::Into,
+    sync::{
+        mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+        Arc, Barrier, Mutex, Once, RwLock,
+    },
+    thread,
+    time::{Duration, Instant},
+    {cmp, env},
+};
 
 type CounterMap = HashMap<(&'static str, u64), CounterPoint>;
 
@@ -418,11 +422,10 @@ pub fn flush() {
 
 /// Hook the panic handler to generate a data point on each panic
 pub fn set_panic_hook(program: &'static str) {
-    use std::panic;
     static SET_HOOK: Once = Once::new();
     SET_HOOK.call_once(|| {
-        let default_hook = panic::take_hook();
-        panic::set_hook(Box::new(move |ono| {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |ono| {
             default_hook(ono);
             let location = match ono.location() {
                 Some(location) => location.to_string(),
@@ -440,9 +443,11 @@ pub fn set_panic_hook(program: &'static str) {
                     .to_owned(),
                 Level::Error,
             );
-            // Flush metrics immediately in case the process exits immediately
-            // upon return
+            // Flush metrics immediately
             flush();
+
+            // Exit cleanly so the process don't limp along in a half-dead state
+            std::process::exit(1);
         }));
     });
 }
