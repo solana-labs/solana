@@ -342,6 +342,10 @@ impl BankForks {
                 || descendants[&root].contains(slot)
                 || slot < &root && slot >= &largest_confirmed_root.unwrap_or(root)
         });
+        datapoint_debug!(
+            "bank_forks_purge_non_root",
+            ("num_banks_retained", self.banks.len(), i64),
+        );
     }
 
     pub fn set_snapshot_config(&mut self, snapshot_config: Option<SnapshotConfig>) {
