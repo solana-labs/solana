@@ -8,16 +8,10 @@
   * [Command-line Wallets](wallet-guide/cli.md)
     * [Paper Wallet](paper-wallet/README.md)
       * [Paper Wallet Usage](paper-wallet/paper-wallet-usage.md)
-<<<<<<< HEAD
-    * [Hardware Wallets](remote-wallet/README.md)
-      * [Ledger Hardware Wallet](remote-wallet/ledger.md)
-  * [Support / Troubleshooting](wallet/support.md)
-=======
     * [Hardware Wallets](hardware-wallets/README.md)
       * [Ledger Hardware Wallet](hardware-wallets/ledger.md)
     * [File System Wallet](file-system-wallet/README.md)
   * [Support / Troubleshooting](wallet-guide/support.md)
->>>>>>> 24354ccd6... Clean up wallet URL paths (#9667)
 * [Command Line Guide](cli/README.md)
   * [Install the Solana Command Line Tool Suite](cli/install-solana-cli-tools.md)
   * [Generate Keys](cli/generate-keys.md)
