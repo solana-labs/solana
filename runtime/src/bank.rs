@@ -3755,6 +3755,100 @@ mod tests {
     }
 
     #[test]
+    fn test_rent_eager_collect_rent_by_range() {
+        solana_logger::setup();
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+
+        let rent_due_pubkey = Pubkey::new_rand();
+        let rent_exempt_pubkey = Pubkey::new_rand();
+
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        let little_lamports = 1234;
+        let large_lamports = 123456789;
+        let rent_collected = 22;
+
+        bank.store_account(
+            &rent_due_pubkey,
+            &Account::new(little_lamports, 0, &Pubkey::default()),
+        );
+        bank.store_account(
+            &rent_exempt_pubkey,
+            &Account::new(large_lamports, 0, &Pubkey::default()),
+        );
+
+        let genesis_slot = 0;
+        let some_slot = 1000;
+        let ancestors = vec![(some_slot, 0), (0, 1)].into_iter().collect();
+
+        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), some_slot));
+
+        assert_eq!(bank.collected_rent.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            bank.get_account(&rent_due_pubkey).unwrap().lamports,
+            little_lamports
+        );
+        assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch, 0);
+        {
+            let accounts_index = bank.rc.accounts.accounts_db.accounts_index.read().unwrap();
+            let (accounts, _) = accounts_index.get(&rent_due_pubkey, &ancestors).unwrap();
+            assert_eq!(
+                accounts
+                    .iter()
+                    .map(|(slot, _)| *slot)
+                    .collect::<Vec<Slot>>(),
+                vec![genesis_slot]
+            );
+            let (accounts, _) = accounts_index.get(&rent_exempt_pubkey, &ancestors).unwrap();
+            assert_eq!(
+                accounts
+                    .iter()
+                    .map(|(slot, _)| *slot)
+                    .collect::<Vec<Slot>>(),
+                vec![genesis_slot]
+            );
+        }
+
+        bank.collect_rent_by_range(0, 0, 1); // all range
+
+        // unrelated 1-lamport account exists
+        assert_eq!(
+            bank.collected_rent.load(Ordering::Relaxed),
+            rent_collected + 1
+        );
+        assert_eq!(
+            bank.get_account(&rent_due_pubkey).unwrap().lamports,
+            little_lamports - rent_collected
+        );
+        assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch, 6);
+        assert_eq!(
+            bank.get_account(&rent_exempt_pubkey).unwrap().lamports,
+            large_lamports
+        );
+        assert_eq!(bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch, 6);
+
+        {
+            let accounts_index = bank.rc.accounts.accounts_db.accounts_index.read().unwrap();
+            let (accounts, _) = accounts_index.get(&rent_due_pubkey, &ancestors).unwrap();
+            assert_eq!(
+                accounts
+                    .iter()
+                    .map(|(slot, _)| *slot)
+                    .collect::<Vec<Slot>>(),
+                vec![genesis_slot, some_slot]
+            );
+            let (accounts, _) = accounts_index.get(&rent_exempt_pubkey, &ancestors).unwrap();
+            assert_eq!(
+                accounts
+                    .iter()
+                    .map(|(slot, _)| *slot)
+                    .collect::<Vec<Slot>>(),
+                vec![genesis_slot, some_slot]
+            );
+        }
+    }
+
+    #[test]
     fn test_bank_update_rewards() {
         // create a bank that ticks really slowly...
         let bank = Arc::new(Bank::new(&GenesisConfig {
