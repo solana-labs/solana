@@ -37,7 +37,7 @@ $ solana-validator \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
-    --dynamic-port-range 8000-8010
+    --dynamic-port-range 8000-8010 \
     --entrypoint devnet.solana.com:8001 \
     --expected-genesis-hash HzyuivuNXMHJKjM6q6BE2qBsR3etqW21BSvuJTpJFj9A \
     --expected-shred-version 61357 \
@@ -75,7 +75,7 @@ $ solana-validator \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
-    --dynamic-port-range 8000-8010
+    --dynamic-port-range 8000-8010 \
     --entrypoint 35.203.170.30:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
     --expected-shred-version 28769 \
@@ -111,7 +111,7 @@ $ solana-validator \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
-    --dynamic-port-range 8000-8010
+    --dynamic-port-range 8000-8010 \
     --entrypoint mainnet-beta.solana.com:8001 \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
     --expected-shred-version 54208 \
