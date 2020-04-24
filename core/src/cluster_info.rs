@@ -18,13 +18,14 @@ use crate::{
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
-        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash, Vote,
+        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash, Vote, MAX_WALLCLOCK,
     },
     epoch_slots::EpochSlots,
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
 };
 
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -156,6 +157,17 @@ pub struct PruneData {
     pub wallclock: u64,
 }
 
+impl Sanitize for PruneData {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        Ok(())
+    }
+}
+
+
+
 impl Signable for PruneData {
     fn pubkey(&self) -> Pubkey {
         self.pubkey
@@ -210,6 +222,17 @@ enum Protocol {
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
     PruneMessage(Pubkey, PruneData),
+}
+
+impl Sanitize for Protocol {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        match self {
+            Protocol::PullRequest(filter, val) => {filter.sanitize()?; val.sanitize()},
+            Protocol::PullResponse(_, val) => val.sanitize(),
+            Protocol::PushMessage(_, val) => val.sanitize(),
+            Protocol::PruneMessage(_, val) => val.sanitize(),
+        }
+    }
 }
 
 // Rating for pull requests
@@ -1364,6 +1387,7 @@ impl ClusterInfo {
             let from_addr = packet.meta.addr();
             limited_deserialize(&packet.data[..packet.meta.size])
                 .into_iter()
+                .filter(|r: &Protocol| r.sanitize().is_ok())
                 .for_each(|request| match request {
                     Protocol::PullRequest(filter, caller) => {
                         let start = allocated.get();

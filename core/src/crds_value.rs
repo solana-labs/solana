@@ -58,15 +58,9 @@ impl Signable for CrdsValue {
     }
 
     fn verify(&self) -> bool {
-        let sig_check = self
+        self
             .get_signature()
-            .verify(&self.pubkey().as_ref(), self.signable_data().borrow());
-        let data_check = match &self.data {
-            CrdsData::Vote(ix, _) => *ix < MAX_VOTES,
-            CrdsData::EpochSlots(ix, _) => *ix < MAX_EPOCH_SLOTS,
-            _ => true,
-        };
-        sig_check && data_check
+            .verify(&self.pubkey().as_ref(), self.signable_data().borrow())
     }
 }
 
