@@ -453,7 +453,7 @@ test('get sign data for transaction', () => {
     lamports: 42,
   });
   tx.recentBlockhash = bs58.encode(recentBlockhash);
-  const tx_bytes = tx.signData;
+  const tx_bytes = tx.serializeMessage();
   const signature = nacl.sign.detached(tx_bytes, from.secretKey);
   tx.addSignature(from.publicKey, signature);
   expect(tx.verifySignatures()).toBe(true);

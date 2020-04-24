@@ -182,7 +182,7 @@ export class Transaction {
   /**
    * Get a buffer of the Transaction data that need to be covered by signatures
    */
-  get signData(): Buffer {
+  serializeMessage(): Buffer {
     const {nonceInfo} = this;
     if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
       this.recentBlockhash = nonceInfo.nonce;
@@ -377,7 +377,7 @@ export class Transaction {
       },
     );
     this.signatures = signatures;
-    const signData = this.signData;
+    const signData = this.serializeMessage();
 
     partialSigners.forEach((accountOrPublicKey, index) => {
       if (accountOrPublicKey instanceof PublicKey) {
@@ -398,7 +398,7 @@ export class Transaction {
    * `signPartial`
    */
   addSigner(signer: Account) {
-    const signData = this.signData;
+    const signData = this.serializeMessage();
     const signature = nacl.sign.detached(signData, signer.secretKey);
     this.addSignature(signer.publicKey, signature);
   }
@@ -424,7 +424,7 @@ export class Transaction {
    */
   verifySignatures(): boolean {
     let verified = true;
-    const signData = this.signData;
+    const signData = this.serializeMessage();
     for (const {signature, publicKey} of this.signatures) {
       if (
         !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
@@ -446,7 +446,7 @@ export class Transaction {
       throw new Error('Transaction has not been signed');
     }
 
-    const signData = this.signData;
+    const signData = this.serializeMessage();
     const signatureCount = [];
     shortvec.encodeLength(signatureCount, signatures.length);
     const transactionLength =
