@@ -936,7 +936,7 @@ fn fund_move_keys<T: Client>(
         .collect();
     let tx = Transaction::new_signed_instructions(
         &[funding_key],
-        system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts),
+        &system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts),
         blockhash,
     );
     client.send_message(&[funding_key], tx.message).unwrap();
