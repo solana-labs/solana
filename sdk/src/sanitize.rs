@@ -3,7 +3,9 @@ pub enum SanitizeError {
 }
 
 pub trait Sanitize {
-    fn sanitize(&self) -> Result<(), SanitizeError>;
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        Ok(())
+    }
 }
 
 impl<T: Sanitize> Sanitize for Vec<T> {

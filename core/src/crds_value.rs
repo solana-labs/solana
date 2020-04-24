@@ -17,6 +17,9 @@ use std::{
     fmt,
 };
 
+pub const MAX_WALLCLOCK: u64 = 1_000_000_000_000_000;
+pub const MAX_SLOT: u64 = 1_000_000_000_000_000;
+
 pub type VoteIndex = u8;
 pub const MAX_VOTES: VoteIndex = 32;
 
@@ -111,6 +114,22 @@ pub struct SnapshotHash {
     pub wallclock: u64,
 }
 
+impl Sanitize for SnapshotHash {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        for (slot, _) in &self.hashes {
+            if *slot >= MAX_SLOT {
+                return Err(SanitizeError::Failed);
+            }
+        }
+        self.from.sanitize()
+    }
+}
+
+
+
 impl SnapshotHash {
     pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
         Self {
@@ -143,12 +162,36 @@ impl LowestSlot {
     }
 }
 
+impl Sanitize for LowestSlot {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        if self.lowest >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        self.from.sanitize()
+    }
+}
+
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Vote {
     pub from: Pubkey,
     pub transaction: Transaction,
     pub wallclock: u64,
 }
+
+impl Sanitize for Vote {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        self.from.sanitize()?;
+        self.transaction.sanitize()
+    }
+}
+
 
 impl Vote {
     pub fn new(from: &Pubkey, transaction: Transaction, wallclock: u64) -> Self {

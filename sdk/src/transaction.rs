@@ -11,6 +11,7 @@ use crate::{
     system_instruction,
 };
 use std::result;
+use crate::sanitize::{Sanitize, SanitizeError};
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
@@ -84,6 +85,12 @@ pub struct Transaction {
 
     /// The message to sign.
     pub message: Message,
+}
+
+impl Sanitize for Transaction {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        self.message.sanitize()
+    }
 }
 
 impl Transaction {

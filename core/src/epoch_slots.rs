@@ -1,5 +1,6 @@
 use crate::cluster_info::MAX_CRDS_OBJECT_SIZE;
-use solana_sdk::timing::MAX_WALLCLOCK;
+use crate::crds_value::MAX_WALLCLOCK;
+use crate::crds_value::MAX_SLOT;
 use bincode::serialized_size;
 use bv::BitVec;
 use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress};
@@ -7,6 +8,7 @@ use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
+const MAX_SLOTS_PER_ENTRY: usize = 2048*8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Uncompressed {
     pub first_slot: Slot,
@@ -14,11 +16,36 @@ pub struct Uncompressed {
     pub slots: BitVec<u8>,
 }
 
+impl Sanitize for Uncompressed {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.first_slot >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        if self.num >= MAX_SLOTS_PER_ENTRY {
+            return Err(SanitizeError::Failed);
+        }
+        Ok(())
+    }
+}
+
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Flate2 {
     pub first_slot: Slot,
     pub num: usize,
     pub compressed: Vec<u8>,
+}
+
+impl Sanitize for Flate2 {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.first_slot >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        if self.num >= MAX_SLOTS_PER_ENTRY {
+            return Err(SanitizeError::Failed);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -100,6 +127,9 @@ impl Uncompressed {
             if self.num == 0 {
                 self.first_slot = *s;
             }
+            if self.num >= MAX_SLOTS_PER_ENTRY {
+                return i;
+            }
             if *s < self.first_slot {
                 return i;
             }
@@ -118,6 +148,16 @@ pub enum CompressedSlots {
     Flate2(Flate2),
     Uncompressed(Uncompressed),
 }
+
+impl Sanitize for CompressedSlots {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        match self {
+            CompressedSlots::Uncompressed(a) => a.sanitize(),
+            CompressedSlots::Flate2(b) => b.sanitize(),
+        }
+    }
+}
+
 
 impl Default for CompressedSlots {
     fn default() -> Self {

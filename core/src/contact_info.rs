@@ -4,7 +4,8 @@ use solana_sdk::rpc_port;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 #[cfg(test)]
 use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::timing::{MAX_WALLCLOCK, timestamp};
+use solana_sdk::timing::{timestamp};
+use crate::crds_value::MAX_WALLCLOCK;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, SocketAddr};
 
@@ -44,10 +45,7 @@ impl Sanitize for ContactInfo {
         if self.wallclock >= MAX_WALLCLOCK {
             return Err(SanitizeError::Failed);
         }
-        self.id.sanitize()?;
-        self.gossip.sanitize()?;
-        self.tvu.sanitize()?;
-        self.serve_repair.sanitize()
+        Ok(())
     }
 }
 
