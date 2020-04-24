@@ -10,6 +10,7 @@ import {
   Cluster
 } from "../providers/cluster";
 import { assertUnreachable } from "../utils";
+import Overlay from "./Overlay";
 
 type Props = {
   show: boolean;
@@ -18,24 +19,28 @@ type Props = {
 
 function ClusterModal({ show, onClose }: Props) {
   return (
-    <div
-      className={`modal fade fixed-right${show ? " show" : ""}`}
-      onClick={onClose}
-    >
-      <div className="modal-dialog modal-dialog-vertical">
-        <div className="modal-content">
-          <div className="modal-body" onClick={e => e.stopPropagation()}>
-            <span className="close" onClick={onClose}>
-              &times;
-            </span>
+    <>
+      <div
+        className={`modal fade fixed-right${show ? " show" : ""}`}
+        onClick={onClose}
+      >
+        <div className="modal-dialog modal-dialog-vertical">
+          <div className="modal-content">
+            <div className="modal-body" onClick={e => e.stopPropagation()}>
+              <span className="close" onClick={onClose}>
+                &times;
+              </span>
 
-            <h2 className="text-center mb-4 mt-4">Choose a Cluster</h2>
+              <h2 className="text-center mb-4 mt-4">Choose a Cluster</h2>
 
-            <ClusterToggle />
+              <ClusterToggle />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      <Overlay show={show} />
+    </>
   );
 }
 

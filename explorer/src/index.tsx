@@ -4,12 +4,24 @@ import { BrowserRouter as Router } from "react-router-dom";
 import "./scss/theme.scss";
 import App from "./App";
 import * as serviceWorker from "./serviceWorker";
+import { ClusterProvider } from "./providers/cluster";
+import { BlocksProvider } from "./providers/blocks";
+import { TransactionsProvider } from "./providers/transactions";
+import { AccountsProvider } from "./providers/accounts";
 import { TabProvider } from "./providers/tab";
 
 ReactDOM.render(
   <Router>
     <TabProvider>
-      <App />
+      <ClusterProvider>
+        <AccountsProvider>
+          <TransactionsProvider>
+            <BlocksProvider>
+              <App />
+            </BlocksProvider>
+          </TransactionsProvider>
+        </AccountsProvider>
+      </ClusterProvider>
     </TabProvider>
   </Router>,
   document.getElementById("root")
