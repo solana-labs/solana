@@ -78,7 +78,7 @@ $ solana-validator \
     --dynamic-port-range 8000-8010
     --entrypoint 35.203.170.30:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
-    --expected-shred-version 56419 \
+    --expected-shred-version 28769 \
     --limit-ledger-size
 ```
 
