@@ -412,7 +412,7 @@ mod tests {
             vec![prog1, prog2],
             instructions,
         );
-        assert!(tx.sanitize());
+        assert!(tx.sanitize().is_ok());
 
         assert_eq!(tx.key(0, 0), Some(&key.pubkey()));
         assert_eq!(tx.signer_key(0, 0), Some(&key.pubkey()));
