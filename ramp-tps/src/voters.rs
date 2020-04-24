@@ -140,7 +140,7 @@ fn delegate_stake(
 
         let mut transaction = Transaction::new_signed_instructions(
             &[faucet_keypair, &stake_account_keypair],
-            stake_instruction::create_account_and_delegate_stake(
+            &stake_instruction::create_account_and_delegate_stake(
                 &faucet_keypair.pubkey(),
                 &stake_account_keypair.pubkey(),
                 &vote_account_pubkey,

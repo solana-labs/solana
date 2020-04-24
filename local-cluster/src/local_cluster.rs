@@ -502,7 +502,7 @@ impl LocalCluster {
 
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref(), vote_account],
-                vote_instruction::create_account(
+                &vote_instruction::create_account(
                     &from_account.pubkey(),
                     &vote_account_pubkey,
                     &VoteInit {
@@ -531,7 +531,7 @@ impl LocalCluster {
 
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref(), &stake_account_keypair],
-                stake_instruction::create_account_and_delegate_stake(
+                &stake_instruction::create_account_and_delegate_stake(
                     &from_account.pubkey(),
                     &stake_account_pubkey,
                     &vote_account_pubkey,

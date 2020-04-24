@@ -490,19 +490,19 @@ mod tests {
         let budget_contract = Keypair::new();
         let budget_pubkey = budget_contract.pubkey();
         let ixs = budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1);
-        Transaction::new_signed_instructions(&[keypair, &budget_contract], ixs, hash)
+        Transaction::new_signed_instructions(&[keypair, &budget_contract], &ixs, hash)
     }
 
     fn create_sample_timestamp(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = budget_instruction::apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
-        Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
+        Transaction::new_signed_instructions(&[keypair], &[ix], hash)
     }
 
     fn create_sample_apply_signature(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = budget_instruction::apply_signature(&pubkey, &pubkey, &pubkey);
-        Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
+        Transaction::new_signed_instructions(&[keypair], &[ix], hash)
     }
 
     #[test]

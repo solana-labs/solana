@@ -86,7 +86,7 @@ mod tests {
 
         // create accounts
         let bank = Arc::new(Bank::new_from_parent(&bank, &keypair.pubkey(), 1));
-        let account_ix = storage_instruction::create_storage_account(
+        let account_ixs = storage_instruction::create_storage_account(
             &mint_keypair.pubkey(),
             &Pubkey::new_rand(),
             &archiver_keypair.pubkey(),
@@ -95,7 +95,7 @@ mod tests {
         );
         let account_tx = Transaction::new_signed_instructions(
             &[&mint_keypair, &archiver_keypair],
-            account_ix,
+            &account_ixs,
             bank.last_blockhash(),
         );
         bank.process_transaction(&account_tx).expect("create");
