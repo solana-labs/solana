@@ -411,7 +411,7 @@ declare module '@solana/web3.js' {
         Transaction | TransactionInstruction | TransactionInstructionCtorFields,
       >
     ): Transaction;
-    signData: Buffer;
+    serializeMessage(): Buffer;
     sign(...signers: Array<Account>): void;
     signPartial(...partialSigners: Array<PublicKey | Account>): void;
     addSigner(signer: Account): void;
