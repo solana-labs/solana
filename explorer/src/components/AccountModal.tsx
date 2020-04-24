@@ -8,6 +8,7 @@ import {
 } from "../providers/accounts";
 import { TransactionError } from "@solana/web3.js";
 import Copyable from "./Copyable";
+import Overlay from "./Overlay";
 
 function AccountModal() {
   const selected = useSelectedAccount();
@@ -37,9 +38,12 @@ function AccountModal() {
   };
 
   return (
-    <div className={`modal fade${show ? " show" : ""}`} onClick={onClose}>
-      {renderContent()}
-    </div>
+    <>
+      <div className={`modal fade${show ? " show" : ""}`} onClick={onClose}>
+        {renderContent()}
+      </div>
+      <Overlay show={show} />
+    </>
   );
 }
 

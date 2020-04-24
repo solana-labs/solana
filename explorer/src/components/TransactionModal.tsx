@@ -14,6 +14,7 @@ import {
   TransactionInstruction
 } from "@solana/web3.js";
 import Copyable from "./Copyable";
+import Overlay from "./Overlay";
 
 function TransactionModal() {
   const { selected } = useTransactions();
@@ -43,9 +44,12 @@ function TransactionModal() {
   };
 
   return (
-    <div className={`modal fade${show ? " show" : ""}`} onClick={onClose}>
-      {renderContent()}
-    </div>
+    <>
+      <div className={`modal fade${show ? " show" : ""}`} onClick={onClose}>
+        {renderContent()}
+      </div>
+      <Overlay show={show} />
+    </>
   );
 }
 

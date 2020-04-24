@@ -32,6 +32,10 @@ code {
   }
 }
 
+.modal-backdrop {
+  pointer-events: none;
+}
+
 .modal.show {
   display: block;
 }
