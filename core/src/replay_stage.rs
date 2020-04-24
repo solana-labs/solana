@@ -217,13 +217,15 @@ impl ReplayStage {
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     let descendants = HashMap::new();
+                    let forks_root = bank_forks.read().unwrap().root();
                     let start = allocated.get();
                     let mut frozen_banks: Vec<_> = bank_forks
                         .read()
                         .unwrap()
                         .frozen_banks()
-                        .values()
-                        .cloned()
+                        .into_iter()
+                        .filter(|(slot, _)| *slot >= forks_root)
+                        .map(|(_, bank)| bank)
                         .collect();
                     let newly_computed_slot_stats = Self::compute_bank_stats(
                         &my_pubkey,
@@ -326,6 +328,7 @@ impl ReplayStage {
                             &latest_root_senders,
                             &mut all_pubkeys,
                             &subscriptions,
+                            &block_commitment_cache,
                         )?;
                     };
 
@@ -697,6 +700,7 @@ impl ReplayStage {
         latest_root_senders: &[Sender<Slot>],
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
         subscriptions: &Arc<RpcSubscriptions>,
+        block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -722,12 +726,19 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
+            let largest_confirmed_root = Some(
+                block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .largest_confirmed_root(),
+            );
             Self::handle_new_root(
                 new_root,
                 &bank_forks,
                 progress,
                 accounts_hash_sender,
                 all_pubkeys,
+                largest_confirmed_root,
             );
             subscriptions.notify_roots(rooted_slots);
             latest_root_senders.iter().for_each(|s| {
@@ -1482,17 +1493,19 @@ impl ReplayStage {
     }
 
     pub(crate) fn handle_new_root(
-        new_root: u64,
+        new_root: Slot,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
         accounts_hash_sender: &Option<AccountsPackageSender>,
         all_pubkeys: &mut HashSet<Rc<Pubkey>>,
+        largest_confirmed_root: Option<Slot>,
     ) {
         let old_epoch = bank_forks.read().unwrap().root_bank().epoch();
-        bank_forks
-            .write()
-            .unwrap()
-            .set_root(new_root, accounts_hash_sender);
+        bank_forks.write().unwrap().set_root(
+            new_root,
+            accounts_hash_sender,
+            largest_confirmed_root,
+        );
         let r_bank_forks = bank_forks.read().unwrap();
         let new_epoch = bank_forks.read().unwrap().root_bank().epoch();
         if old_epoch != new_epoch {
@@ -1513,7 +1526,11 @@ impl ReplayStage {
         // Find the next slot that chains to the old slot
         let forks = bank_forks.read().unwrap();
         let frozen_banks = forks.frozen_banks();
-        let frozen_bank_slots: Vec<u64> = frozen_banks.keys().cloned().collect();
+        let frozen_bank_slots: Vec<u64> = frozen_banks
+            .keys()
+            .cloned()
+            .filter(|s| *s >= forks.root())
+            .collect();
         let next_slots = blockstore
             .get_slots_since(&frozen_bank_slots)
             .expect("Db error");
@@ -2097,10 +2114,64 @@ pub(crate) mod tests {
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default(), None, None, 0, 0));
         }
-        ReplayStage::handle_new_root(root, &bank_forks, &mut progress, &None, &mut HashSet::new());
+        ReplayStage::handle_new_root(
+            root,
+            &bank_forks,
+            &mut progress,
+            &None,
+            &mut HashSet::new(),
+            None,
+        );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
         assert!(progress.get(&root).is_some());
+    }
+
+    #[test]
+    fn test_handle_new_root_ahead_of_largest_confirmed_root() {
+        let genesis_config = create_genesis_config(10_000).genesis_config;
+        let bank0 = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+        let confirmed_root = 1;
+        let fork = 2;
+        let bank1 = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(0).unwrap(),
+            &Pubkey::default(),
+            confirmed_root,
+        );
+        bank_forks.write().unwrap().insert(bank1);
+        let bank2 = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
+            &Pubkey::default(),
+            fork,
+        );
+        bank_forks.write().unwrap().insert(bank2);
+        let root = 3;
+        let root_bank = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
+            &Pubkey::default(),
+            root,
+        );
+        bank_forks.write().unwrap().insert(root_bank);
+        let mut progress = ProgressMap::default();
+        for i in 0..=root {
+            progress.insert(i, ForkProgress::new(Hash::default(), None, None, 0, 0));
+        }
+        ReplayStage::handle_new_root(
+            root,
+            &bank_forks,
+            &mut progress,
+            &None,
+            &mut HashSet::new(),
+            Some(confirmed_root),
+        );
+        assert_eq!(bank_forks.read().unwrap().root(), root);
+        assert!(bank_forks.read().unwrap().get(confirmed_root).is_some());
+        assert!(bank_forks.read().unwrap().get(fork).is_none());
+        assert_eq!(progress.len(), 2);
+        assert!(progress.get(&root).is_some());
+        assert!(progress.get(&confirmed_root).is_some());
+        assert!(progress.get(&fork).is_none());
     }
 
     #[test]
@@ -3072,7 +3143,7 @@ pub(crate) mod tests {
         bank_forks.insert(Bank::new_from_parent(&bank0, &Pubkey::default(), 9));
         let bank9 = bank_forks.get(9).unwrap().clone();
         bank_forks.insert(Bank::new_from_parent(&bank9, &Pubkey::default(), 10));
-        bank_forks.set_root(9, &None);
+        bank_forks.set_root(9, &None, None);
         let total_epoch_stake = bank0.total_epoch_stake();
 
         // Insert new ForkProgress for slot 10 and its
@@ -3165,7 +3236,7 @@ pub(crate) mod tests {
 
         let stake_per_validator = 10_000;
         let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake_per_validator);
-        bank_forks.set_root(0, &None);
+        bank_forks.set_root(0, &None, None);
         let total_epoch_stake = bank_forks.root_bank().total_epoch_stake();
 
         // Insert new ForkProgress representing a slot for all slots 1..=num_banks. Only
@@ -3247,7 +3318,7 @@ pub(crate) mod tests {
 
         let stake_per_validator = 10_000;
         let (mut bank_forks, mut progress_map) = initialize_state(&keypairs, stake_per_validator);
-        bank_forks.set_root(0, &None);
+        bank_forks.set_root(0, &None, None);
 
         let total_epoch_stake = num_validators as u64 * stake_per_validator;
 
