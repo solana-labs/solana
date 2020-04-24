@@ -388,17 +388,6 @@ fn download_then_check_genesis_hash(
     Ok(genesis_config.hash())
 }
 
-<<<<<<< HEAD
-=======
-fn is_snapshot_config_invalid(
-    snapshot_interval_slots: u64,
-    accounts_hash_interval_slots: u64,
-) -> bool {
-    snapshot_interval_slots != 0
-        && (snapshot_interval_slots < accounts_hash_interval_slots
-            || snapshot_interval_slots % accounts_hash_interval_slots != 0)
-}
-
 #[cfg(unix)]
 fn redirect_stderr(filename: &str) {
     use std::{fs::OpenOptions, os::unix::io::AsRawFd};
@@ -457,7 +446,6 @@ fn start_logger(logfile: Option<String>) -> Option<JoinHandle<()>> {
     logger_thread
 }
 
->>>>>>> 50f1ec037... Add support for log rotation, sending SIGUSR1 will cause the log file to be re-opened (#9713)
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
     let default_dynamic_port_range =
