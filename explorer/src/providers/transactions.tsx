@@ -138,20 +138,21 @@ function reducer(state: State, action: Action): State {
 }
 
 export const TX_PATHS = [
-  "tx",
-  "txs",
-  "txn",
-  "txns",
-  "transaction",
-  "transactions"
+  "/tx",
+  "/txs",
+  "/txn",
+  "/txns",
+  "/transaction",
+  "/transactions"
 ];
 
 function urlSignatures(): Array<string> {
   const signatures: Array<string> = [];
 
   TX_PATHS.forEach(path => {
-    const params = findGetParameter(path)?.split(",") || [];
-    const segments = findPathSegment(path)?.split(",") || [];
+    const name = path.slice(1);
+    const params = findGetParameter(name)?.split(",") || [];
+    const segments = findPathSegment(name)?.split(",") || [];
     signatures.push(...params);
     signatures.push(...segments);
   });
