@@ -92,7 +92,7 @@ impl Sanitize for Transaction {
         if self.message.header.num_required_signatures as usize > self.signatures.len() {
             return Err(SanitizeError::Failed);
         }
-        if self.signatures.len() > self.message.accounts.len() {
+        if self.signatures.len() > self.message.account_keys.len() {
             return Err(SanitizeError::Failed);
         }
         self.message.sanitize()
