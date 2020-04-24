@@ -291,7 +291,6 @@ pub mod tests {
             Blockstore::open_with_signal(&blockstore_path)
                 .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
-
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&bank, &blockstore, None);

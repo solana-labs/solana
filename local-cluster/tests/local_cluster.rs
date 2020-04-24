@@ -5,7 +5,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_client::thin_client::create_client;
 use solana_core::{
     broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
-    contact_info::ContactInfo, gossip_service::discover_cluster, validator::ValidatorConfig,
+    gossip_service::discover_cluster, validator::ValidatorConfig,
 };
 use solana_download_utils::download_snapshot;
 use solana_ledger::bank_forks::CompressionType;
@@ -274,7 +274,7 @@ fn run_cluster_partition(
         for node in &cluster_nodes {
             let node_client = RpcClient::new_socket(node.rpc);
             if let Ok(epoch_info) = node_client.get_epoch_info() {
-                debug!("slots_per_epoch: {:?}", epoch_info);
+                info!("slots_per_epoch: {:?}", epoch_info);
                 if epoch_info.slots_in_epoch <= (1 << VOTE_THRESHOLD_DEPTH) {
                     reached_epoch = false;
                     break;
@@ -343,16 +343,13 @@ fn run_cluster_partition(
         alive_node_contact_infos.len(),
     )
     .unwrap();
-    assert!(wait_for_new_roots(&alive_node_contact_infos, 1024, 16));
     info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
-}
-
-pub fn wait_for_new_roots(nodes: &[ContactInfo], mut tries: usize, min_roots: usize) -> bool {
-    info!("looking for new roots on all nodes");
-    let mut roots = vec![HashSet::new(); nodes.len()];
+    info!("PARTITION_TEST looking for new roots on all nodes");
+    let mut roots = vec![HashSet::new(); alive_node_contact_infos.len()];
+    let mut done = false;
     let mut last_print = Instant::now();
-    while tries > 0 {
-        for (i, ingress_node) in nodes.iter().enumerate() {
+    while !done {
+        for (i, ingress_node) in alive_node_contact_infos.iter().enumerate() {
             let client = create_client(
                 ingress_node.client_facing_addr(),
                 solana_core::cluster_info::VALIDATOR_PORT_RANGE,
@@ -361,24 +358,14 @@ pub fn wait_for_new_roots(nodes: &[ContactInfo], mut tries: usize, min_roots: us
             roots[i].insert(slot);
             let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
             if last_print.elapsed().as_secs() > 3 {
-                info!(
-                    "{}: min observed roots {}/{} in {} nodes",
-                    tries,
-                    min_node,
-                    min_roots,
-                    roots.len()
-                );
+                info!("PARTITION_TEST min observed roots {}/16", min_node);
                 last_print = Instant::now();
             }
-            if min_node >= min_roots {
-                return true;
-            }
+            done = min_node >= 16;
         }
         sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
-        tries -= 1;
     }
-    info!("failed waiting for roots");
-    false
+    info!("PARTITION_TEST done waiting for roots");
 }
 
 #[allow(unused_attributes)]
@@ -876,7 +863,6 @@ fn test_snapshot_download() {
 #[test]
 #[serial]
 fn test_snapshot_restart_tower() {
-    solana_logger::setup();
     // First set up the cluster with 2 nodes
     let snapshot_interval_slots = 10;
     let num_account_paths = 2;
@@ -934,11 +920,12 @@ fn test_snapshot_restart_tower() {
     // Use the restarted node as the discovery point so that we get updated
     // validator's ContactInfo
     let restarted_node_info = cluster.get_contact_info(&validator_id).unwrap();
-
-    let (cluster_nodes, _) =
-        discover_cluster(&restarted_node_info.gossip, cluster.validators.len()).unwrap();
-
-    assert!(wait_for_new_roots(&cluster_nodes, 512, 16));
+    cluster_tests::spend_and_verify_all_nodes(
+        &restarted_node_info,
+        &cluster.funding_keypair,
+        1,
+        HashSet::new(),
+    );
 }
 
 #[test]

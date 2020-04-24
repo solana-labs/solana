@@ -354,7 +354,7 @@ impl PohRecorder {
     pub fn tick(&mut self) {
         let now = Instant::now();
         let poh_entry = self.poh.lock().unwrap().tick();
-        inc_new_counter_info!(
+        inc_new_counter_warn!(
             "poh_recorder-tick_lock_contention",
             timing::duration_as_us(&now.elapsed()) as usize
         );
@@ -364,7 +364,7 @@ impl PohRecorder {
             trace!("tick_height {}", self.tick_height);
 
             if self.leader_first_tick_height.is_none() {
-                inc_new_counter_info!(
+                inc_new_counter_warn!(
                     "poh_recorder-tick_overhead",
                     timing::duration_as_us(&now.elapsed()) as usize
                 );
@@ -380,7 +380,7 @@ impl PohRecorder {
             self.tick_cache.push((entry, self.tick_height));
             let _ = self.flush_cache(true);
         }
-        inc_new_counter_info!(
+        inc_new_counter_warn!(
             "poh_recorder-tick_overhead",
             timing::duration_as_us(&now.elapsed()) as usize
         );
@@ -409,13 +409,13 @@ impl PohRecorder {
             {
                 let now = Instant::now();
                 let mut poh_lock = self.poh.lock().unwrap();
-                inc_new_counter_info!(
+                inc_new_counter_warn!(
                     "poh_recorder-record_lock_contention",
                     timing::duration_as_us(&now.elapsed()) as usize
                 );
                 let now = Instant::now();
                 let res = poh_lock.record(mixin);
-                inc_new_counter_info!(
+                inc_new_counter_warn!(
                     "poh_recorder-record_ms",
                     timing::duration_as_us(&now.elapsed()) as usize
                 );

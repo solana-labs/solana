@@ -198,10 +198,6 @@ impl Validator {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
 
-        blockstore
-            .reconcile_shreds(Some(&leader_schedule_cache))
-            .expect("Expected to successfully reconcile shreds");
-
         info!("Starting validator from slot {}", bank.slot());
         {
             let hard_forks: Vec<_> = bank.hard_forks().read().unwrap().iter().copied().collect();
@@ -376,13 +372,8 @@ impl Validator {
             if config.snapshot_config.is_some() {
                 // Start a snapshot packaging service
                 let (sender, receiver) = channel();
-                let snapshot_packager_service = SnapshotPackagerService::new(
-                    receiver,
-                    snapshot_hash,
-                    &exit,
-                    &cluster_info,
-                    Some(blockstore.clone()),
-                );
+                let snapshot_packager_service =
+                    SnapshotPackagerService::new(receiver, snapshot_hash, &exit, &cluster_info);
                 (Some(snapshot_packager_service), Some(sender))
             } else {
                 (None, None)
