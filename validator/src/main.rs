@@ -42,7 +42,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    thread::sleep,
+    thread::{sleep, JoinHandle},
     time::{Duration, Instant},
 };
 
@@ -388,6 +388,64 @@ fn download_then_check_genesis_hash(
     Ok(genesis_config.hash())
 }
 
+#[cfg(unix)]
+fn redirect_stderr(filename: &str) {
+    use std::{fs::OpenOptions, os::unix::io::AsRawFd};
+    match OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(filename)
+    {
+        Ok(file) => unsafe {
+            libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO);
+        },
+        Err(err) => eprintln!("Unable to open {}: {}", filename, err),
+    }
+}
+
+fn start_logger(logfile: Option<String>) -> Option<JoinHandle<()>> {
+    let logger_thread = match logfile {
+        None => None,
+        Some(logfile) => {
+            #[cfg(unix)]
+            {
+                let signals = signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1])
+                    .unwrap_or_else(|err| {
+                        eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
+                        exit(1);
+                    });
+
+                redirect_stderr(&logfile);
+                Some(std::thread::spawn(move || {
+                    for signal in signals.forever() {
+                        info!(
+                            "received SIGUSR1 ({}), reopening log file: {:?}",
+                            signal, logfile
+                        );
+                        redirect_stderr(&logfile);
+                    }
+                }))
+            }
+            #[cfg(not(unix))]
+            {
+                println!("logging to a file is not supported on this platform");
+                ()
+            }
+        }
+    };
+
+    solana_logger::setup_with_default(
+        &[
+            "solana=info", /* info logging for all solana modules */
+            "rpc=trace",   /* json_rpc request/response logging */
+        ]
+        .join(","),
+    );
+
+    logger_thread
+}
+
 #[allow(clippy::cognitive_complexity)]
 pub fn main() {
     let default_dynamic_port_range =
@@ -641,7 +699,9 @@ pub fn main() {
                 .long("log")
                 .value_name("FILE")
                 .takes_value(true)
-                .help("Redirect logging to the specified file, '-' for standard error"),
+                .help("Redirect logging to the specified file, '-' for standard error. \
+                       Sending the SIGUSR1 signal to the validator process will cause it \
+                       to re-open the log file"),
         )
         .arg(
             Arg::with_name("wait_for_supermajority")
@@ -871,42 +931,20 @@ pub fn main() {
         warn!("--vote-signer-address ignored");
     }
 
-    let _log_redirect = {
-        #[cfg(unix)]
-        {
-            let default_logfile = format!(
-                "solana-validator-{}-{}.log",
-                identity_keypair.pubkey(),
-                chrono::Utc::now().format("%Y%m%d-%H%M%S")
-            );
-            let logfile = matches.value_of("logfile").unwrap_or(&default_logfile);
+    let logfile = {
+        let logfile = matches
+            .value_of("logfile")
+            .map(|s| s.into())
+            .unwrap_or_else(|| format!("solana-validator-{}.log", identity_keypair.pubkey()));
 
-            if logfile == "-" {
-                None
-            } else {
-                println!("log file: {}", logfile);
-                Some(gag::Redirect::stderr(File::create(logfile).unwrap_or_else(
-                    |err| {
-                        eprintln!("Unable to create {}: {:?}", logfile, err);
-                        exit(1);
-                    },
-                )))
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            println!("logging to a file is not supported on this platform");
-            ()
+        if logfile == "-" {
+            None
+        } else {
+            println!("log file: {}", logfile);
+            Some(logfile)
         }
     };
-
-    solana_logger::setup_with_default(
-        &[
-            "solana=info", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
+    let _logger_thread = start_logger(logfile);
 
     // Default to RUST_BACKTRACE=1 for more informative validator logs
     if env::var_os("RUST_BACKTRACE").is_none() {
