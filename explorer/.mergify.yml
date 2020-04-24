@@ -1,7 +1,7 @@
 pull_request_rules:
   - name: automatic merge on CI success
     conditions:
-      - status-success=continuous-integration/travis-ci/pr
+      - status-success=Travis CI - Pull Request
       - label=automerge
     actions:
       merge:
@@ -9,7 +9,7 @@ pull_request_rules:
         strict: true
   - name: remove automerge label on CI failure
     conditions:
-      - status-failure=continuous-integration/travis-ci/pr
+      - status-failure=Travis CI - Pull Request
       - label=automerge
     actions:
       label:
