@@ -117,7 +117,7 @@ fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
                 let to_key = Pubkey::new_rand();
                 instructions.push(system_instruction::transfer(&from_key.pubkey(), &to_key, 1));
             }
-            let mut new = Transaction::new_unsigned_instructions(instructions);
+            let mut new = Transaction::new_unsigned_instructions(&instructions);
             new.sign(&[&from_key], hash);
             new
         })
