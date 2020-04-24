@@ -122,14 +122,20 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
-export const ACCOUNT_PATHS = ["account", "accounts", "address", "addresses"];
+export const ACCOUNT_PATHS = [
+  "/account",
+  "/accounts",
+  "/address",
+  "/addresses"
+];
 
 function urlAddresses(): Array<string> {
   const addresses: Array<string> = [];
 
   ACCOUNT_PATHS.forEach(path => {
-    const params = findGetParameter(path)?.split(",") || [];
-    const segments = findPathSegment(path)?.split(",") || [];
+    const name = path.slice(1);
+    const params = findGetParameter(name)?.split(",") || [];
+    const segments = findPathSegment(name)?.split(",") || [];
     addresses.push(...params);
     addresses.push(...segments);
   });

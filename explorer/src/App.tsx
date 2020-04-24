@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, Switch, Route, Redirect } from "react-router-dom";
 
 import ClusterStatusButton from "./components/ClusterStatusButton";
 import AccountsCard from "./components/AccountsCard";
@@ -9,10 +9,11 @@ import TransactionModal from "./components/TransactionModal";
 import AccountModal from "./components/AccountModal";
 import Logo from "./img/logos-solana/light-explorer-logo.svg";
 import { useCurrentTab, Tab } from "./providers/tab";
+import { TX_PATHS } from "./providers/transactions";
+import { ACCOUNT_PATHS } from "./providers/accounts";
 
 function App() {
   const [showClusterModal, setShowClusterModal] = React.useState(false);
-  const currentTab = useCurrentTab();
   return (
     <>
       <ClusterModal
@@ -65,16 +66,17 @@ function App() {
         </div>
 
         <div className="container">
-          <div className="row">
-            <div className="col-12">
-              {currentTab === "Transactions" ? <TransactionsCard /> : null}
-            </div>
-          </div>
-          <div className="row">
-            <div className="col-12">
-              {currentTab === "Accounts" ? <AccountsCard /> : null}
-            </div>
-          </div>
+          <Switch>
+            <Route exact path="/">
+              <Redirect to="/transactions" />
+            </Route>
+            <Route path={TX_PATHS}>
+              <TransactionsCard />
+            </Route>
+            <Route path={ACCOUNT_PATHS}>
+              <AccountsCard />
+            </Route>
+          </Switch>
         </div>
       </div>
     </>

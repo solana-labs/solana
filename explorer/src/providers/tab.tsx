@@ -9,7 +9,10 @@ const StateContext = React.createContext<Tab | undefined>(undefined);
 type TabProviderProps = { children: React.ReactNode };
 export function TabProvider({ children }: TabProviderProps) {
   const location = useLocation();
-  const paths = location.pathname.slice(1).split("/");
+  const paths = location.pathname
+    .slice(1)
+    .split("/")
+    .map(name => `/${name}`);
   let tab: Tab = "Transactions";
   if (ACCOUNT_PATHS.includes(paths[0].toLowerCase())) {
     tab = "Accounts";
