@@ -1,4 +1,5 @@
 use crate::contact_info::ContactInfo;
+use solana_ledger::sanitize::{Sanitize, SanitizeError};
 use crate::deprecated;
 use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
@@ -27,6 +28,13 @@ pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 pub struct CrdsValue {
     pub signature: Signature,
     pub data: CrdsData,
+}
+
+impl Sanitize for CrdsValue {
+    fn sanitize(&self) -> Result<SanitizeError, ()> {
+        self.signature.sanitize()?;
+        self.data.sanitize()
+    }
 }
 
 impl Signable for CrdsValue {
