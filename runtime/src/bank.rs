@@ -79,10 +79,12 @@ pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 
-// eager rent collection cycle is composed of <partiion_count> number of tiny pubkey ranges to scan
-// the whole pubkey value domain.
+// Eager rent collection repeats in cyclic manner.
+// Each cycle is composed of <partiion_count> number of tiny pubkey subranges
+// to scan, which is always multiple of the number of slots in epoch.
 type PartitionIndex = u64;
 type PartitionCount = u64;
+type RentCollectionCycleParams = (Epoch, SlotCount, bool, Epoch, EpochCount, PartitionCount);
 
 type EpochCount = u64;
 
@@ -1749,19 +1751,42 @@ impl Bank {
     }
 
     fn determine_collection_cycle_params(
-        is_in_longer_cycle: bool,
-        slot_count_in_two_day: SlotCount,
+        &self,
+        current_epoch: Epoch,
         slot_count_per_epoch: SlotCount,
-        first_normal_epoch: Epoch,
-    ) -> (EpochCount, Epoch, PartitionCount) {
+    ) -> RentCollectionCycleParams {
+        // Assume 500GB account data set as the extreme, then for 2 day (=48 hours) to collect rent
+        // eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
+        let slot_count_in_two_day: SlotCount =
+            2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
+        let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
+        let is_in_longer_cycle = Self::use_longer_collection_cycle(
+            current_epoch,
+            first_normal_epoch,
+            slot_count_per_epoch,
+            slot_count_in_two_day,
+        );
+
         if !is_in_longer_cycle {
-            (1, 0, slot_count_per_epoch)
+            (
+                current_epoch,
+                slot_count_per_epoch,
+                false,
+                0,
+                1,
+                slot_count_per_epoch,
+            )
         } else {
             let epoch_count_in_cycle = slot_count_in_two_day / slot_count_per_epoch;
+            let partition_count = slot_count_per_epoch * epoch_count_in_cycle;
+
             (
-                epoch_count_in_cycle,
+                current_epoch,
+                slot_count_per_epoch,
+                true,
                 first_normal_epoch,
-                slot_count_per_epoch * epoch_count_in_cycle,
+                epoch_count_in_cycle,
+                partition_count,
             )
         }
     }
@@ -1772,46 +1797,21 @@ impl Bank {
         end_slot_index: SlotIndex,
         current_epoch: Epoch,
     ) -> (PartitionIndex, PartitionIndex, PartitionCount) {
-        // Assume 500GB account data set as the extreme, then for 2 day (=48 hours) to collect rent
-        // eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
-        let slot_count_in_two_day: SlotCount =
-            2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
         let slot_count_per_epoch = self.get_slots_in_epoch(current_epoch);
-        let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
-        let is_in_longer_cycle = Self::use_longer_collection_cycle(
-            current_epoch,
-            first_normal_epoch,
-            slot_count_per_epoch,
-            slot_count_in_two_day,
-        );
-        let (epoch_count_per_cycle, base_epoch, partition_count) =
-            Self::determine_collection_cycle_params(
-                is_in_longer_cycle,
-                slot_count_in_two_day,
-                slot_count_per_epoch,
-                first_normal_epoch,
-            );
+        let cycle_params =
+            self.determine_collection_cycle_params(current_epoch, slot_count_per_epoch);
+        let (_, _, is_in_longer_cycle, _, _, partition_count) = cycle_params;
 
         // use common code-path for both very-likely and very-unlikely for the sake of minimized
         // risk of any mis-calculation instead of neligilbe faster computation per slot for the
         // likely case.
-        let mut start_partition_index = Self::partition_index_in_collection_cycle(
-            start_slot_index,
-            current_epoch,
-            base_epoch,
-            epoch_count_per_cycle,
-            slot_count_per_epoch,
-        );
-        let end_partition_index = Self::partition_index_in_collection_cycle(
-            end_slot_index,
-            current_epoch,
-            base_epoch,
-            epoch_count_per_cycle,
-            slot_count_per_epoch,
-        );
+        let mut start_partition_index =
+            Self::partition_index_in_collection_cycle(start_slot_index, cycle_params);
+        let end_partition_index =
+            Self::partition_index_in_collection_cycle(end_slot_index, cycle_params);
 
         // do special handling...
-        let is_across_epoch_boundary = Self::across_epoch_boundary_in_collection_cycle(
+        let is_across_epoch_boundary = Self::across_gapped_epoch_boundary_in_collection_cycle(
             start_slot_index,
             end_slot_index,
             start_partition_index,
@@ -1823,22 +1823,17 @@ impl Bank {
         (start_partition_index, end_partition_index, partition_count)
     }
 
-    fn across_epoch_boundary_in_collection_cycle(
+    fn across_gapped_epoch_boundary_in_collection_cycle(
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
         start_partition_index: PartitionIndex,
     ) -> bool {
-        (start_slot_index == end_slot_index
-            || (start_slot_index == 0 && (end_slot_index - start_slot_index > 1)))
-            && start_partition_index > 0
+        start_slot_index == 0 && end_slot_index != 1 && start_partition_index > 0
     }
 
     fn partition_index_in_collection_cycle(
         slot_index_in_epoch: SlotIndex,
-        current_epoch: Epoch,
-        base_epoch: Epoch,
-        epoch_count_per_cycle: EpochCount,
-        slot_count_per_epoch: SlotCount,
+        (current_epoch, slot_count_per_epoch, _, base_epoch, epoch_count_per_cycle, _): RentCollectionCycleParams,
     ) -> PartitionIndex {
         let epoch_offset = current_epoch - base_epoch;
         let epoch_index_in_cycle = epoch_offset % epoch_count_per_cycle;
