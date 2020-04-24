@@ -1,12 +1,12 @@
 import React from "react";
 import {
+  useDetails,
   useTransactions,
   useTransactionsDispatch,
   ActionType,
   Selected
 } from "../providers/transactions";
 import { displayAddress, decodeCreate, decodeTransfer } from "../utils/tx";
-import { useBlocks } from "../providers/blocks";
 import {
   LAMPORTS_PER_SOL,
   TransferParams,
@@ -54,8 +54,7 @@ function TransactionModal() {
 }
 
 function TransactionDetails({ selected }: { selected: Selected }) {
-  const { blocks } = useBlocks();
-  const block = blocks[selected.slot];
+  const details = useDetails(selected.signature);
 
   const renderError = (content: React.ReactNode) => {
     return (
@@ -65,9 +64,9 @@ function TransactionDetails({ selected }: { selected: Selected }) {
     );
   };
 
-  if (!block) return renderError("Transaction block not found");
+  if (!details) return renderError("Transaction details not found");
 
-  if (!block.transactions) {
+  if (!details.transaction) {
     return renderError(
       <>
         <span className="spinner-grow spinner-grow-sm mr-2"></span>
@@ -76,7 +75,7 @@ function TransactionDetails({ selected }: { selected: Selected }) {
     );
   }
 
-  const transaction = block.transactions[selected.signature];
+  const { transaction } = details.transaction;
   if (!transaction) return renderError("Transaction not found");
 
   if (transaction.instructions.length === 0)

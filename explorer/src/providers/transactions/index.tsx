@@ -5,15 +5,20 @@ import {
   SystemProgram,
   Account
 } from "@solana/web3.js";
-import { findGetParameter, findPathSegment } from "../utils/url";
-import { useCluster, ClusterStatus } from "../providers/cluster";
+import { findGetParameter, findPathSegment } from "../../utils/url";
+import { useCluster, ClusterStatus } from "../cluster";
+import {
+  DetailsProvider,
+  StateContext as DetailsStateContext,
+  DispatchContext as DetailsDispatchContext
+} from "./details";
 import base58 from "bs58";
 import {
   useAccountsDispatch,
   fetchAccountInfo,
   Dispatch as AccountsDispatch,
   ActionType as AccountsActionType
-} from "./accounts";
+} from "../accounts";
 
 export enum Status {
   Checking,
@@ -207,7 +212,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   return (
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
-        {children}
+        <DetailsProvider>{children}</DetailsProvider>
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
@@ -329,4 +334,22 @@ export function useTransactionsDispatch() {
     );
   }
   return context;
+}
+
+export function useDetailsDispatch() {
+  const context = React.useContext(DetailsDispatchContext);
+  if (!context) {
+    throw new Error(
+      `useDetailsDispatch must be used within a TransactionsProvider`
+    );
+  }
+  return context;
+}
+
+export function useDetails(signature: TransactionSignature) {
+  const context = React.useContext(DetailsStateContext);
+  if (!context) {
+    throw new Error(`useDetails must be used within a TransactionsProvider`);
+  }
+  return context[signature];
 }
