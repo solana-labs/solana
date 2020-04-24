@@ -51,7 +51,6 @@ pub struct Signature(GenericArray<u8, U64>);
 
 impl crate::sanitize::Sanitize for Signature {}
 
-
 impl Signature {
     pub fn new(signature_slice: &[u8]) -> Self {
         Self(GenericArray::clone_from_slice(&signature_slice))

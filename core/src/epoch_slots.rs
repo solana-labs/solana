@@ -1,6 +1,6 @@
 use crate::cluster_info::MAX_CRDS_OBJECT_SIZE;
-use crate::crds_value::MAX_WALLCLOCK;
 use crate::crds_value::MAX_SLOT;
+use crate::crds_value::MAX_WALLCLOCK;
 use bincode::serialized_size;
 use bv::BitVec;
 use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress};
@@ -8,7 +8,7 @@ use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
-const MAX_SLOTS_PER_ENTRY: usize = 2048*8;
+const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Uncompressed {
     pub first_slot: Slot,
@@ -27,7 +27,6 @@ impl Sanitize for Uncompressed {
         Ok(())
     }
 }
-
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Flate2 {
@@ -157,7 +156,6 @@ impl Sanitize for CompressedSlots {
         }
     }
 }
-
 
 impl Default for CompressedSlots {
     fn default() -> Self {

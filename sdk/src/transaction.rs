@@ -1,5 +1,6 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
+use crate::sanitize::{Sanitize, SanitizeError};
 use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -11,7 +12,6 @@ use crate::{
     system_instruction,
 };
 use std::result;
-use crate::sanitize::{Sanitize, SanitizeError};
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
@@ -89,6 +89,9 @@ pub struct Transaction {
 
 impl Sanitize for Transaction {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.message.header.num_required_signatures as usize > self.signatures.len() {
+            return Err(SanitizeError::Failed);
+        }
         self.message.sanitize()
     }
 }
@@ -371,22 +374,6 @@ impl Transaction {
             .iter()
             .all(|signature| *signature != Signature::default())
     }
-
-    /// Verify that references in the instructions are valid
-    pub fn verify_refs(&self) -> bool {
-        let message = self.message();
-        for instruction in &message.instructions {
-            if (instruction.program_id_index as usize) >= message.account_keys.len() {
-                return false;
-            }
-            for account_index in &instruction.accounts {
-                if (*account_index as usize) >= message.account_keys.len() {
-                    return false;
-                }
-            }
-        }
-        true
-    }
 }
 
 #[cfg(test)]
@@ -425,7 +412,7 @@ mod tests {
             vec![prog1, prog2],
             instructions,
         );
-        assert!(tx.verify_refs());
+        assert!(tx.sanitize());
 
         assert_eq!(tx.key(0, 0), Some(&key.pubkey()));
         assert_eq!(tx.signer_key(0, 0), Some(&key.pubkey()));
@@ -459,7 +446,7 @@ mod tests {
             vec![],
             instructions,
         );
-        assert!(!tx.verify_refs());
+        assert!(tx.sanitize().is_err());
     }
     #[test]
     fn test_refs_invalid_account() {
@@ -473,7 +460,7 @@ mod tests {
             instructions,
         );
         assert_eq!(*get_program_id(&tx, 0), Pubkey::default());
-        assert!(!tx.verify_refs());
+        assert!(tx.sanitize().is_err());
     }
 
     fn create_sample_transaction() -> Transaction {

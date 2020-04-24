@@ -128,8 +128,6 @@ impl Sanitize for SnapshotHash {
     }
 }
 
-
-
 impl SnapshotHash {
     pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
         Self {
@@ -174,7 +172,6 @@ impl Sanitize for LowestSlot {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Vote {
     pub from: Pubkey,
@@ -191,7 +188,6 @@ impl Sanitize for Vote {
         self.transaction.sanitize()
     }
 }
-
 
 impl Vote {
     pub fn new(from: &Pubkey, transaction: Transaction, wallclock: u64) -> Self {
