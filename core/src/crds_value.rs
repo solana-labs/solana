@@ -1,5 +1,5 @@
 use crate::contact_info::ContactInfo;
-use solana_ledger::sanitize::{Sanitize, SanitizeError};
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use crate::deprecated;
 use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
@@ -31,7 +31,7 @@ pub struct CrdsValue {
 }
 
 impl Sanitize for CrdsValue {
-    fn sanitize(&self) -> Result<SanitizeError, ()> {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
         self.signature.sanitize()?;
         self.data.sanitize()
     }
@@ -80,6 +80,30 @@ pub enum CrdsData {
     AccountsHashes(SnapshotHash),
     EpochSlots(EpochSlotsIndex, EpochSlots),
 }
+
+impl Sanitize for CrdsData {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        match self {
+            CrdsData::ContactInfo(val) => val.sanitize(),
+            CrdsData::Vote(ix, val) => {
+                if *ix >= MAX_VOTES {
+                    return Err(SanitizeError::Failed);
+                }
+                val.sanitize()
+            },
+            CrdsData::LowestSlot(_, val) => val.sanitize(),
+            CrdsData::SnapshotHashes(val) => val.sanitize(),
+            CrdsData::AccountsHash(val) => val.sanitize(),
+            CrdsData::EpochSlots(ix, val) => {
+                if *ix >= MAX_EPOCH_SLOTS {
+                    return Err(SanitizeError::Failed);
+                }
+                val.sanitize()
+            },
+        }
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SnapshotHash {

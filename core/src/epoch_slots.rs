@@ -178,6 +178,15 @@ pub struct EpochSlots {
     pub wallclock: u64,
 }
 
+impl Sanitize for EpochSlots {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        self.from.sanitize()?;
+        self.slots.sanitize()?;
+        self.wallclock.sanitize()
+    }
+}
+
+
 use std::fmt;
 impl fmt::Debug for EpochSlots {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

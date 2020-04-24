@@ -1,6 +1,7 @@
 //! The `signature` module provides functionality for public, and private keys.
 
 use crate::{pubkey::Pubkey, transaction::TransactionError};
+use crate::sanitize::{Sanitize, SanitizeError};
 use generic_array::{typenum::U64, GenericArray};
 use hmac::Hmac;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
@@ -48,6 +49,13 @@ impl Keypair {
 #[repr(transparent)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Signature(GenericArray<u8, U64>);
+
+impl Sanitize for Signature {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        Ok(())
+    }
+}
+
 
 impl Signature {
     pub fn new(signature_slice: &[u8]) -> Self {

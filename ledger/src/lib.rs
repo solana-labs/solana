@@ -21,7 +21,6 @@ pub mod sigverify_shreds;
 pub mod snapshot_package;
 pub mod snapshot_utils;
 pub mod staking_utils;
-pub mod sanitize;
 
 #[macro_use]
 extern crate solana_metrics;
