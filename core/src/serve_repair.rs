@@ -309,7 +309,7 @@ impl ServeRepair {
         response_sender: &PacketSender,
         stats: &mut ServeRepairStats,
     ) {
-        // iter over the packets, collect pulls separately and process everything else
+        // iter over the packets
         let allocated = thread_mem_usage::Allocatedp::default();
         packets.packets.iter().for_each(|packet| {
             let start = allocated.get();
