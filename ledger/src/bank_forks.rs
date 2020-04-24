@@ -338,9 +338,9 @@ impl BankForks {
     fn prune_non_root(&mut self, root: Slot, largest_confirmed_root: Option<Slot>) {
         let descendants = self.descendants();
         self.banks.retain(|slot, _| {
-            slot == &root
+            *slot == root
                 || descendants[&root].contains(slot)
-                || slot < &root && slot >= &largest_confirmed_root.unwrap_or(root)
+                || *slot < root && *slot >= largest_confirmed_root.unwrap_or(root)
         });
         datapoint_debug!(
             "bank_forks_purge_non_root",
