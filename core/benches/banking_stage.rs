@@ -29,7 +29,7 @@ use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::transaction::Transaction;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use test::Bencher;
 

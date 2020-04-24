@@ -29,7 +29,7 @@ use test::Bencher;
 #[bench]
 fn bench_retransmitter(bencher: &mut Bencher) {
     solana_logger::setup();
-    let mut cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+    let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();
     for _ in 0..NUM_PEERS {
