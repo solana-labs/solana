@@ -1,29 +1,34 @@
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
-use solana_faucet::faucet::{request_airdrop_transaction, run_local_faucet};
-use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::{
+    signature::{Keypair, Signer},
+    system_instruction,
+    transaction::Transaction,
+};
 use solana_tokens::{thin_client::ThinClient, tokens::test_process_distribute_with_client};
-use std::sync::mpsc::channel;
+use std::fs::remove_dir_all;
 
 #[test]
 #[ignore]
 fn test_process_distribute_with_rpc_client() {
     let validator = TestValidator::run();
-    let (sender, receiver) = channel();
-    run_local_faucet(validator.alice, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
-
     let rpc_client = RpcClient::new_socket(validator.leader_data.rpc);
+
+    let bob = Keypair::new();
+    let instruction = system_instruction::transfer(&validator.alice.pubkey(), &bob.pubkey(), 1);
     let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash().unwrap();
-    let funding_keypair = Keypair::new();
-    let lamports = 1_000;
+    let signers = vec![&validator.alice];
+
     let mut transaction =
-        request_airdrop_transaction(&faucet_addr, &funding_keypair.pubkey(), lamports, blockhash)
-            .unwrap();
+        Transaction::new_signed_instructions(&signers, vec![instruction], blockhash);
     rpc_client
-        .send_and_confirm_transaction_with_spinner(&mut transaction, &[&funding_keypair])
+        .send_and_confirm_transaction_with_spinner(&mut transaction, &signers)
         .unwrap();
+    assert_ne!(rpc_client.get_balance(&bob.pubkey()).unwrap(), 0);
 
     let thin_client = ThinClient(rpc_client);
-    test_process_distribute_with_client(&thin_client, funding_keypair);
+    test_process_distribute_with_client(&thin_client, bob);
+
+    validator.server.close().unwrap();
+    remove_dir_all(validator.ledger_path).unwrap();
 }
