@@ -340,7 +340,9 @@ impl BankForks {
         self.banks.retain(|slot, _| {
             *slot == root
                 || descendants[&root].contains(slot)
-                || *slot < root && *slot >= largest_confirmed_root.unwrap_or(root)
+                || (*slot < root
+                    && *slot >= largest_confirmed_root.unwrap_or(root)
+                    && descendants[slot].contains(&root))
         });
         datapoint_debug!(
             "bank_forks_purge_non_root",

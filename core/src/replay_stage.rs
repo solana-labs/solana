@@ -2127,15 +2127,22 @@ pub(crate) mod tests {
         let bank0 = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
         let confirmed_root = 1;
+        let fork = 2;
         let bank1 = Bank::new_from_parent(
             bank_forks.read().unwrap().get(0).unwrap(),
             &Pubkey::default(),
             confirmed_root,
         );
         bank_forks.write().unwrap().insert(bank1);
+        let bank2 = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
+            &Pubkey::default(),
+            fork,
+        );
+        bank_forks.write().unwrap().insert(bank2);
         let root = 3;
         let root_bank = Bank::new_from_parent(
-            bank_forks.read().unwrap().get(1).unwrap(),
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
             &Pubkey::default(),
             root,
         );
@@ -2154,9 +2161,11 @@ pub(crate) mod tests {
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert!(bank_forks.read().unwrap().get(confirmed_root).is_some());
+        assert!(bank_forks.read().unwrap().get(fork).is_none());
         assert_eq!(progress.len(), 2);
         assert!(progress.get(&root).is_some());
         assert!(progress.get(&confirmed_root).is_some());
+        assert!(progress.get(&fork).is_none());
     }
 
     #[test]
