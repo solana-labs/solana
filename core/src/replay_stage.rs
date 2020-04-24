@@ -217,13 +217,15 @@ impl ReplayStage {
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
                     let descendants = HashMap::new();
+                    let forks_root = bank_forks.read().unwrap().root();
                     let start = allocated.get();
                     let mut frozen_banks: Vec<_> = bank_forks
                         .read()
                         .unwrap()
                         .frozen_banks()
-                        .values()
-                        .cloned()
+                        .into_iter()
+                        .filter(|(slot, _)| *slot >= forks_root)
+                        .map(|(_, bank)| bank)
                         .collect();
                     let newly_computed_slot_stats = Self::compute_bank_stats(
                         &my_pubkey,
@@ -1524,7 +1526,11 @@ impl ReplayStage {
         // Find the next slot that chains to the old slot
         let forks = bank_forks.read().unwrap();
         let frozen_banks = forks.frozen_banks();
-        let frozen_bank_slots: Vec<u64> = frozen_banks.keys().cloned().collect();
+        let frozen_bank_slots: Vec<u64> = frozen_banks
+            .keys()
+            .cloned()
+            .filter(|s| *s >= forks.root())
+            .collect();
         let next_slots = blockstore
             .get_slots_since(&frozen_bank_slots)
             .expect("Db error");
