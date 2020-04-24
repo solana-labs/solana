@@ -1,9 +1,11 @@
 use crate::cluster_info::MAX_CRDS_OBJECT_SIZE;
+use solana_sdk::timing::MAX_WALLCLOCK;
 use bincode::serialized_size;
 use bv::BitVec;
 use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress};
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Uncompressed {
@@ -179,13 +181,14 @@ pub struct EpochSlots {
 }
 
 impl Sanitize for EpochSlots {
-    fn sanitize(&self) -> Result<(), SanitizeError> {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
         self.from.sanitize()?;
-        self.slots.sanitize()?;
-        self.wallclock.sanitize()
+        self.slots.sanitize()
     }
 }
-
 
 use std::fmt;
 impl fmt::Debug for EpochSlots {

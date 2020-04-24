@@ -1,11 +1,13 @@
 use solana_sdk::pubkey::Pubkey;
 #[cfg(test)]
 use solana_sdk::rpc_port;
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 #[cfg(test)]
 use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::timing::timestamp;
+use solana_sdk::timing::{MAX_WALLCLOCK, timestamp};
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, SocketAddr};
+
 
 /// Structure representing a node on the network
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -35,6 +37,18 @@ pub struct ContactInfo {
     pub wallclock: u64,
     /// node shred version
     pub shred_version: u16,
+}
+
+impl Sanitize for ContactInfo {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        self.id.sanitize()?;
+        self.gossip.sanitize()?;
+        self.tvu.sanitize()?;
+        self.serve_repair.sanitize()
+    }
 }
 
 impl Ord for ContactInfo {

@@ -1,8 +1,8 @@
 use crate::contact_info::ContactInfo;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use crate::deprecated;
 use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{
     clock::Slot,
@@ -90,20 +90,19 @@ impl Sanitize for CrdsData {
                     return Err(SanitizeError::Failed);
                 }
                 val.sanitize()
-            },
+            }
             CrdsData::LowestSlot(_, val) => val.sanitize(),
             CrdsData::SnapshotHashes(val) => val.sanitize(),
-            CrdsData::AccountsHash(val) => val.sanitize(),
+            CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
                 if *ix >= MAX_EPOCH_SLOTS {
                     return Err(SanitizeError::Failed);
                 }
                 val.sanitize()
-            },
+            }
         }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SnapshotHash {
