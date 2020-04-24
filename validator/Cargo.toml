@@ -31,7 +31,8 @@ solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.2.0" }
 
 [target."cfg(unix)".dependencies]
-gag = "0.1.10"
+libc = "0.2.66"
+signal-hook = "0.1.13"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
