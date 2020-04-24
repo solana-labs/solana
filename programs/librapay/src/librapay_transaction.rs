@@ -17,12 +17,7 @@ use std::{boxed::Box, error, fmt};
 
 pub fn create_genesis(keypair: &Keypair, microlibras: u64, recent_blockhash: Hash) -> Transaction {
     let ix = librapay_instruction::genesis(&keypair.pubkey(), microlibras);
-    Transaction::new_signed_with_payer(
-        vec![ix],
-        Some(&keypair.pubkey()),
-        &[keypair],
-        recent_blockhash,
-    )
+    Transaction::new_signed_with_payer(&[ix], Some(&keypair.pubkey()), &[keypair], recent_blockhash)
 }
 
 pub fn mint_tokens(
@@ -40,7 +35,7 @@ pub fn mint_tokens(
         microlibras,
     );
     Transaction::new_signed_with_payer(
-        vec![ix],
+        &[ix],
         Some(&payer_keypair.pubkey()),
         &[payer_keypair, genesis_keypair],
         recent_blockhash,
@@ -64,7 +59,7 @@ pub fn transfer(
         microlibras,
     );
     Transaction::new_signed_with_payer(
-        vec![ix],
+        &[ix],
         Some(&payer_keypair.pubkey()),
         &[payer_keypair, from_keypair],
         recent_blockhash,
@@ -77,7 +72,7 @@ pub fn create_accounts(
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let instructions = to_keypair
+    let instructions: Vec<_> = to_keypair
         .iter()
         .map(|keypair| {
             system_instruction::create_account(
@@ -92,7 +87,7 @@ pub fn create_accounts(
 
     let mut from_signers = vec![from_keypair];
     from_signers.extend_from_slice(to_keypair);
-    Transaction::new_signed_instructions(&from_signers, instructions, recent_blockhash)
+    Transaction::new_signed_instructions(&from_signers, &instructions, recent_blockhash)
 }
 
 pub fn create_account(
