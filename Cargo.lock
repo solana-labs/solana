@@ -1854,7 +1854,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-ws-server"
-version = "14.0.6"
+version = "14.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3948,7 +3948,7 @@ dependencies = [
  "jsonrpc-derive 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-http-server 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-pubsub 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-ws-server 14.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-ws-server 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6530,7 +6530,7 @@ dependencies = [
 "checksum jsonrpc-http-server 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d52860f0549694aa4abb12766856f56952ab46d3fb9f0815131b2db3d9cc2f29"
 "checksum jsonrpc-pubsub 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c4ca5e391d6c6a2261d4adca029f427fe63ea546ad6cef2957c654c08495ec16"
 "checksum jsonrpc-server-utils 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1f06add502b48351e05dd95814835327fb115e4e9f834ca42fd522d3b769d4d2"
-"checksum jsonrpc-ws-server 14.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "b94e5773b2ae66e0e02c80775ce6bbba6f15d5bb47c14ec36a36fcf94f8df851"
+"checksum jsonrpc-ws-server 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "017a7dd5083d9ed62c5e1dd3e317975c33c3115dac5447f4480fe05a8c354754"
 "checksum keccak 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "67c21572b4949434e4fc1e1978b99c5f77064153c59d998bf13ecd96fb5ecba7"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum lalrpop 0.17.2 (registry+https://github.com/rust-lang/crates.io-index)" = "64dc3698e75d452867d9bd86f4a723f452ce9d01fe1d55990b79f0c790aa67db"

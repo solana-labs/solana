@@ -30,7 +30,7 @@ jsonrpc-core-client = { version = "14.1.0", features = ["ws"] }
 jsonrpc-derive = "14.0.5"
 jsonrpc-http-server = "14.1.0"
 jsonrpc-pubsub = "14.1.0"
-jsonrpc-ws-server = "14.0.6"
+jsonrpc-ws-server = "14.1.0"
 log = "0.4.8"
 num_cpus = "1.13.0"
 num-traits = "0.2"
