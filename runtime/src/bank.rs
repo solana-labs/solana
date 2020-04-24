@@ -42,7 +42,7 @@ use solana_sdk::{
     },
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
-    genesis_config::GenesisConfig,
+    genesis_config::{GenesisConfig, OperatingMode},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
@@ -73,6 +73,12 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
+
+pub const MAINNET_BETA_GENESIS_HASH: Hash = Hash::new_from_array([
+    69, 41, 105, 152, 166, 248, 226, 167, 132, 219, 93, 159, 149, 225, 143, 194, 63, 112, 68, 26,
+    16, 57, 68, 104, 1, 8, 152, 121, 176, 140, 126, 240,
+]);
+const EAGER_RENT_COLLECTION_START_EPOCH: Epoch = 30;
 
 type BankStatusCache = StatusCache<Result<()>>;
 pub type BankSlotDelta = SlotDelta<Result<()>>;
@@ -367,6 +373,15 @@ pub struct Bank {
 
     #[serde(skip)]
     pub skip_drop: AtomicBool,
+
+    #[serde(skip)]
+    pub operating_mode: Option<OperatingMode>,
+
+    #[serde(skip)]
+    pub genesis_hash: Option<Hash>,
+
+    #[serde(skip)]
+    pub lazy_rent_collection: AtomicBool,
 }
 
 impl Default for BlockhashQueue {
@@ -386,6 +401,8 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
     ) -> Self {
         let mut bank = Self::default();
+        bank.operating_mode = Some(genesis_config.operating_mode);
+        bank.genesis_hash = Some(genesis_config.hash());
         bank.ancestors.insert(bank.slot(), 0);
 
         bank.rc.accounts = Arc::new(Accounts::new(paths));
@@ -479,6 +496,11 @@ impl Bank {
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
             skip_drop: AtomicBool::new(false),
+            operating_mode: parent.operating_mode,
+            genesis_hash: parent.genesis_hash,
+            lazy_rent_collection: AtomicBool::new(
+                parent.lazy_rent_collection.load(Ordering::Relaxed),
+            ),
         };
 
         datapoint_info!(
@@ -1689,8 +1711,6 @@ impl Bank {
         end_index: PartitionIndex,
         partition_count: PartitionCount,
     ) -> std::ops::RangeInclusive<Pubkey> {
-        // pubkey (= account address, including derived ones?) distribution should be uniform?
-
         let partition_width = Slot::max_value() / partition_count;
         let start_key_prefix = if start_index == 0 && end_index == 0 {
             0
@@ -1708,7 +1728,6 @@ impl Bank {
         let mut end_pubkey = [0xffu8; 32];
         BigEndian::write_u64(&mut start_pubkey[..], start_key_prefix);
         BigEndian::write_u64(&mut end_pubkey[..], end_key_prefix);
-        // special case parent_slot is in previous current_epoch
         trace!(
             "pubkey_range_by_partition: ({}-{})/{}: {:02x?}-{:02x?}",
             start_index,
@@ -1728,6 +1747,36 @@ impl Bank {
             self.get_epoch_and_slot_index(self.parent_slot());
 
         let mut ranges = vec![];
+
+        let slot_count_per_normal_epoch =
+            self.get_slots_in_epoch(self.epoch_schedule.first_normal_epoch);
+        let slot_count_in_two_day: SlotCount =
+            2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
+        let is_in_constant_cycle =
+            self.use_constant_collection_cycle(slot_count_per_normal_epoch, slot_count_in_two_day);
+        if is_in_constant_cycle {
+            let parent_cycle = self.parent_slot() / slot_count_in_two_day;
+            let current_cycle = self.slot() / slot_count_in_two_day;
+            let mut parent_cycle_index = self.parent_slot() % slot_count_in_two_day;
+            let current_cycle_index = self.slot() % slot_count_in_two_day;
+            if parent_cycle < current_cycle {
+                if current_cycle_index > 0 {
+                    ranges.push((
+                        parent_cycle_index,
+                        slot_count_in_two_day - 1,
+                        slot_count_in_two_day,
+                    ));
+                }
+                parent_cycle_index = 0;
+            }
+
+            ranges.push((
+                parent_cycle_index,
+                current_cycle_index,
+                slot_count_in_two_day,
+            ));
+            return ranges;
+        }
 
         if parent_epoch < current_epoch {
             if current_slot_index > 0 {
@@ -1760,10 +1809,10 @@ impl Bank {
         let slot_count_in_two_day: SlotCount =
             2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
         let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
-        let is_in_longer_cycle = Self::use_longer_collection_cycle(
+        let slot_count_per_normal_epoch = self.get_slots_in_epoch(first_normal_epoch);
+        let is_in_longer_cycle = self.use_longer_collection_cycle(
             current_epoch,
-            first_normal_epoch,
-            slot_count_per_epoch,
+            slot_count_per_normal_epoch,
             slot_count_in_two_day,
         );
 
@@ -1833,34 +1882,63 @@ impl Bank {
 
     fn partition_index_in_collection_cycle(
         slot_index_in_epoch: SlotIndex,
-        (current_epoch, slot_count_per_epoch, _, base_epoch, epoch_count_per_cycle, _): RentCollectionCycleParams,
+        (
+            current_epoch,
+            slot_count_per_epoch,
+            _,
+            base_epoch,
+            epoch_count_per_cycle,
+            _,
+        ): RentCollectionCycleParams,
     ) -> PartitionIndex {
         let epoch_offset = current_epoch - base_epoch;
         let epoch_index_in_cycle = epoch_offset % epoch_count_per_cycle;
         slot_index_in_epoch + epoch_index_in_cycle * slot_count_per_epoch
     }
 
+    // Given short epochs, it's too costly to collect rent eagerly
+    // within an epoch, so lower the frequency of it.
+    // These logic is't strictly eager anymore and should only be used
+    // for development/performance purpose.
+    // Absolutely not under OperationMode::Stable!!!!
     fn use_longer_collection_cycle(
+        &self,
         current_epoch: Epoch,
-        first_normal_epoch: Epoch,
-        slot_count_per_epoch: SlotCount,
+        slot_count_per_normal_epoch: SlotCount,
         slot_count_in_two_day: SlotCount,
     ) -> bool {
-        // Given short epochs, it's too costly to collect rent eagerly
-        // within an epoch, so lower the frequency of it.
-        // These logic is't strictly eager anymore and should only be used
-        // for development/performance purpose.
-        // Absolutely not under OperationMode::Stable!!!!
-        current_epoch >= first_normal_epoch && slot_count_per_epoch < slot_count_in_two_day
+        let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
+        current_epoch >= first_normal_epoch && slot_count_per_normal_epoch < slot_count_in_two_day
+    }
+
+    fn use_constant_collection_cycle(
+        &self,
+        slot_count_per_normal_epoch: SlotCount,
+        slot_count_in_two_day: SlotCount,
+    ) -> bool {
+        self.operating_mode.unwrap() != OperatingMode::Stable
+            && slot_count_per_normal_epoch < slot_count_in_two_day
     }
 
     fn collect_rent_eagerly(&self) {
         let mut measure = Measure::start("collect_rent_eagerly-ms");
-        for (start_index, end_index, partition_count) in self.eager_rent_ranges_for_epochs() {
-            self.collect_rent_by_range(start_index, end_index, partition_count);
+        if self.enable_eager_rent_collection() {
+            for (start_index, end_index, partition_count) in self.eager_rent_ranges_for_epochs() {
+                self.collect_rent_by_range(start_index, end_index, partition_count);
+            }
         }
         measure.stop();
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
+    }
+
+    fn enable_eager_rent_collection(&self) -> bool {
+        if self.lazy_rent_collection.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        !(self.operating_mode.unwrap() == OperatingMode::Stable
+            && self.genesis_hash.unwrap() == MAINNET_BETA_GENESIS_HASH
+            && self.epoch() < EAGER_RENT_COLLECTION_START_EPOCH)
     }
 
     /// Process a batch of transactions.
@@ -3271,6 +3349,7 @@ mod tests {
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_rent_complex() {
+        solana_logger::setup();
         let mock_program_id = Pubkey::new(&[2u8; 32]);
 
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
@@ -3285,7 +3364,13 @@ mod tests {
             burn_percent: 10,
         };
 
-        let root_bank = Arc::new(Bank::new(&genesis_config));
+        let root_bank = Bank::new(&genesis_config);
+        // until we completely transition to the eager rent collection,
+        // we must ensure lazy rent collection doens't get broken!
+        root_bank
+            .lazy_rent_collection
+            .store(true, Ordering::Relaxed);
+        let root_bank = Arc::new(root_bank);
         let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, mock_program_id);
 
         assert_eq!(bank.last_blockhash(), genesis_config.hash());
@@ -3486,6 +3571,7 @@ mod tests {
         let leader_lamports = 3;
         let mut genesis_config =
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
+        genesis_config.operating_mode = OperatingMode::Stable;
 
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
@@ -3555,6 +3641,7 @@ mod tests {
         let leader_lamports = 3;
         let mut genesis_config =
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
+        genesis_config.operating_mode = OperatingMode::Stable;
 
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
@@ -3603,11 +3690,12 @@ mod tests {
     }
 
     #[test]
-    fn test_rent_eager_without_warmup_epochs_under_longer_cycle() {
+    fn test_rent_eager_with_warmup_epochs_under_longer_cycle() {
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
         let mut genesis_config =
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
+        genesis_config.operating_mode = OperatingMode::Stable;
 
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64 * 8;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
@@ -3622,7 +3710,7 @@ mod tests {
         assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 32)]);
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 222));
-        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 223));
+        bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 128);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (2, 127));
         assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(126, 127, 128)]);
@@ -3655,6 +3743,77 @@ mod tests {
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1690, 0));
         assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 431872)]);
+    }
+
+    #[test]
+    fn test_rent_eager_under_longer_cycle_for_developemnt() {
+        solana_logger::setup();
+        let leader_pubkey = Pubkey::new_rand();
+        let leader_lamports = 3;
+        let mut genesis_config =
+            create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
+
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64 * 8;
+        const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
+        genesis_config.epoch_schedule =
+            EpochSchedule::custom(SLOTS_PER_EPOCH, LEADER_SCHEDULE_SLOT_OFFSET, true);
+
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
+        assert_eq!(bank.epoch_schedule.first_normal_epoch, 3);
+        assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 0));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 432000)]);
+
+        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 222));
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 128);
+        assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (2, 127));
+        assert_eq!(
+            bank.eager_rent_ranges_for_epochs(),
+            vec![(222, 223, 432000)]
+        );
+
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
+        assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 0));
+        assert_eq!(
+            bank.eager_rent_ranges_for_epochs(),
+            vec![(223, 224, 432000)]
+        );
+
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
+        assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 1));
+        assert_eq!(
+            bank.eager_rent_ranges_for_epochs(),
+            vec![(224, 225, 432000)]
+        );
+
+        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 432000 - 2));
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(
+            bank.eager_rent_ranges_for_epochs(),
+            vec![(431998, 431999, 432000)]
+        );
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 432000)]);
+        bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 432000)]);
+
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            864000 - 20,
+        ));
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            864000 + 39,
+        ));
+        assert_eq!(
+            bank.eager_rent_ranges_for_epochs(),
+            vec![(431980, 431999, 432000), (0, 39, 432000)]
+        );
     }
 
     #[test]

@@ -60,6 +60,7 @@ pub fn load(
                     &snapshot_config.snapshot_path,
                     &archive_filename,
                     compression,
+                    genesis_config,
                 )
                 .expect("Load from snapshot failed");
 
