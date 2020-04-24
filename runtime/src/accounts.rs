@@ -462,7 +462,9 @@ impl Accounts {
         filter: F,
     ) {
         if let Some(data) = option
-            .filter(|(_, account, _)| filter(account))
+            // Don't ever load zero lamport accounts into runtime because
+            // the existence of zero-lamport accounts are never deterministic!!
+            .filter(|(_, account, _)| account.lamports > 0 && filter(account))
             .map(|(pubkey, account, _slot)| (*pubkey, account))
         {
             collector.push(data)
@@ -478,8 +480,7 @@ impl Accounts {
             ancestors,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
                 Self::load_while_filtering(collector, option, |account| {
-                    (program_id.is_none() || Some(&account.owner) == program_id)
-                        && account.lamports != 0
+                    program_id.is_none() || Some(&account.owner) == program_id
                 })
             },
         )
@@ -494,8 +495,7 @@ impl Accounts {
             ancestors,
             range,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
-                // THINK ABOUT ZERO LAMPORTS FILTERING RAMIFICATION
-                Self::load_while_filtering(collector, option, |account| account.lamports != 0)
+                Self::load_while_filtering(collector, option, |_| true)
             },
         )
     }

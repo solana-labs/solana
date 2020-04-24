@@ -1673,7 +1673,8 @@ impl Bank {
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
             rent += self.rent_collector.update(&pubkey, &mut account);
-            // to purge old AppendVec, store even regardless rent is zero or not
+            // Store all of them unconditionally to purge old AppendVec,
+            // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
         }
         self.collected_rent.fetch_add(rent, Ordering::Relaxed);
@@ -1747,12 +1748,32 @@ impl Bank {
         ranges
     }
 
+    fn determine_collection_cycle_params(
+        is_in_longer_cycle: bool,
+        slot_count_in_two_day: SlotCount,
+        slot_count_per_epoch: SlotCount,
+        first_normal_epoch: Epoch,
+    ) -> (EpochCount, Epoch, PartitionCount) {
+        if !is_in_longer_cycle {
+            (1, 0, slot_count_per_epoch)
+        } else {
+            let epoch_count_in_cycle = slot_count_in_two_day / slot_count_per_epoch;
+            (
+                epoch_count_in_cycle,
+                first_normal_epoch,
+                slot_count_per_epoch * epoch_count_in_cycle,
+            )
+        }
+    }
+
     fn partition_in_collection_cycle(
         &self,
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
         current_epoch: Epoch,
     ) -> (PartitionIndex, PartitionIndex, PartitionCount) {
+        // Assume 500GB account data set as the extreme, then for 2 day (=48 hours) to collect rent
+        // eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
         let slot_count_in_two_day: SlotCount =
             2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
         let slot_count_per_epoch = self.get_slots_in_epoch(current_epoch);
@@ -1763,21 +1784,13 @@ impl Bank {
             slot_count_per_epoch,
             slot_count_in_two_day,
         );
-        let (epoch_count_per_cycle, base_epoch, partition_count) = if !is_in_longer_cycle {
-            (1, 0, slot_count_per_epoch)
-        } else {
-            // Given short epochs, it's too costly to collect rent eagerly within an epoch, so lower the frequency of
-            // it.
-            // these logics aren't strictly eager rent collection anymore; should only used for
-            // development/performance
-            // purpose not under OperationMode::Stable!!!!
-            let epoch_count_in_cycle = slot_count_in_two_day / slot_count_per_epoch;
-            (
-                epoch_count_in_cycle,
+        let (epoch_count_per_cycle, base_epoch, partition_count) =
+            Self::determine_collection_cycle_params(
+                is_in_longer_cycle,
+                slot_count_in_two_day,
+                slot_count_per_epoch,
                 first_normal_epoch,
-                slot_count_per_epoch * epoch_count_in_cycle,
-            )
-        };
+            );
 
         // use common code-path for both very-likely and very-unlikely for the sake of minimized
         // risk of any mis-calculation instead of neligilbe faster computation per slot for the
@@ -1838,6 +1851,11 @@ impl Bank {
         slot_count_per_epoch: SlotCount,
         slot_count_in_two_day: SlotCount,
     ) -> bool {
+        // Given short epochs, it's too costly to collect rent eagerly
+        // within an epoch, so lower the frequency of it.
+        // These logic is't strictly eager anymore and should only be used
+        // for development/performance purpose.
+        // Absolutely not under OperationMode::Stable!!!!
         current_epoch >= first_normal_epoch && slot_count_per_epoch < slot_count_in_two_day
     }
 
@@ -2516,6 +2534,7 @@ mod tests {
     use super::*;
     use crate::{
         accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
+        accounts_index::AncestorList,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
@@ -3754,20 +3773,37 @@ mod tests {
         );
     }
 
+    impl Bank {
+        fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &AncestorList) -> Vec<Slot> {
+            let accounts_index = self.rc.accounts.accounts_db.accounts_index.read().unwrap();
+            let (accounts, _) = accounts_index.get(&pubkey, &ancestors).unwrap();
+            accounts
+                .iter()
+                .map(|(slot, _)| *slot)
+                .collect::<Vec<Slot>>()
+        }
+    }
+
     #[test]
     fn test_rent_eager_collect_rent_by_range() {
         solana_logger::setup();
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
 
+        let zero_lamport_pubkey = Pubkey::new_rand();
         let rent_due_pubkey = Pubkey::new_rand();
         let rent_exempt_pubkey = Pubkey::new_rand();
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
+        let zero_lamports = 0;
         let little_lamports = 1234;
         let large_lamports = 123456789;
         let rent_collected = 22;
 
+        bank.store_account(
+            &zero_lamport_pubkey,
+            &Account::new(zero_lamports, 0, &Pubkey::default()),
+        );
         bank.store_account(
             &rent_due_pubkey,
             &Account::new(little_lamports, 0, &Pubkey::default()),
@@ -3789,25 +3825,18 @@ mod tests {
             little_lamports
         );
         assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch, 0);
-        {
-            let accounts_index = bank.rc.accounts.accounts_db.accounts_index.read().unwrap();
-            let (accounts, _) = accounts_index.get(&rent_due_pubkey, &ancestors).unwrap();
-            assert_eq!(
-                accounts
-                    .iter()
-                    .map(|(slot, _)| *slot)
-                    .collect::<Vec<Slot>>(),
-                vec![genesis_slot]
-            );
-            let (accounts, _) = accounts_index.get(&rent_exempt_pubkey, &ancestors).unwrap();
-            assert_eq!(
-                accounts
-                    .iter()
-                    .map(|(slot, _)| *slot)
-                    .collect::<Vec<Slot>>(),
-                vec![genesis_slot]
-            );
-        }
+        assert_eq!(
+            bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
+            vec![genesis_slot]
+        );
+        assert_eq!(
+            bank.slots_by_pubkey(&rent_exempt_pubkey, &ancestors),
+            vec![genesis_slot]
+        );
+        assert_eq!(
+            bank.slots_by_pubkey(&zero_lamport_pubkey, &ancestors),
+            vec![genesis_slot]
+        );
 
         bank.collect_rent_by_range(0, 0, 1); // all range
 
@@ -3826,26 +3855,81 @@ mod tests {
             large_lamports
         );
         assert_eq!(bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch, 6);
+        assert_eq!(
+            bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
+            vec![genesis_slot, some_slot]
+        );
+        assert_eq!(
+            bank.slots_by_pubkey(&rent_exempt_pubkey, &ancestors),
+            vec![genesis_slot, some_slot]
+        );
+        assert_eq!(
+            bank.slots_by_pubkey(&zero_lamport_pubkey, &ancestors),
+            vec![genesis_slot]
+        );
+    }
 
-        {
-            let accounts_index = bank.rc.accounts.accounts_db.accounts_index.read().unwrap();
-            let (accounts, _) = accounts_index.get(&rent_due_pubkey, &ancestors).unwrap();
-            assert_eq!(
-                accounts
-                    .iter()
-                    .map(|(slot, _)| *slot)
-                    .collect::<Vec<Slot>>(),
-                vec![genesis_slot, some_slot]
-            );
-            let (accounts, _) = accounts_index.get(&rent_exempt_pubkey, &ancestors).unwrap();
-            assert_eq!(
-                accounts
-                    .iter()
-                    .map(|(slot, _)| *slot)
-                    .collect::<Vec<Slot>>(),
-                vec![genesis_slot, some_slot]
-            );
-        }
+    #[test]
+    fn test_rent_eager_collect_rent_zero_lamport_deterministic() {
+        solana_logger::setup();
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+
+        let zero_lamport_pubkey = Pubkey::new_rand();
+
+        let genesis_bank1 = Arc::new(Bank::new(&genesis_config));
+        let genesis_bank2 = Arc::new(Bank::new(&genesis_config));
+        let bank1_with_zero = Arc::new(new_from_parent(&genesis_bank1));
+        let bank1_without_zero = Arc::new(new_from_parent(&genesis_bank2));
+        let zero_lamports = 0;
+
+        let account = Account::new(zero_lamports, 0, &Pubkey::default());
+        bank1_with_zero.store_account(&zero_lamport_pubkey, &account);
+        bank1_without_zero.store_account(&zero_lamport_pubkey, &account);
+
+        bank1_without_zero
+            .rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .write()
+            .unwrap()
+            .add_root(genesis_bank1.slot() + 1);
+        bank1_without_zero
+            .rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .write()
+            .unwrap()
+            .purge(&zero_lamport_pubkey);
+
+        let some_slot = 1000;
+        let bank2_with_zero = Arc::new(Bank::new_from_parent(
+            &bank1_with_zero,
+            &Pubkey::default(),
+            some_slot,
+        ));
+        let bank2_without_zero = Arc::new(Bank::new_from_parent(
+            &bank1_without_zero,
+            &Pubkey::default(),
+            some_slot,
+        ));
+        let hash1_with_zero = bank1_with_zero.hash();
+        let hash1_without_zero = bank1_without_zero.hash();
+        assert_eq!(hash1_with_zero, hash1_without_zero);
+        assert_ne!(hash1_with_zero, Hash::default());
+
+        bank2_with_zero.collect_rent_by_range(0, 0, 1); // all range
+        bank2_without_zero.collect_rent_by_range(0, 0, 1); // all range
+
+        bank2_with_zero.freeze();
+        let hash2_with_zero = bank2_with_zero.hash();
+        bank2_without_zero.freeze();
+        let hash2_without_zero = bank2_without_zero.hash();
+
+        assert_eq!(hash2_with_zero, hash2_without_zero);
+        assert_ne!(hash2_with_zero, Hash::default());
     }
 
     #[test]
