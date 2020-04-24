@@ -58,8 +58,7 @@ impl Signable for CrdsValue {
     }
 
     fn verify(&self) -> bool {
-        self
-            .get_signature()
+        self.get_signature()
             .verify(&self.pubkey().as_ref(), self.signable_data().borrow())
     }
 }
