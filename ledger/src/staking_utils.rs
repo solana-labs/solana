@@ -134,7 +134,7 @@ pub(crate) mod tests {
         amount: u64,
     ) {
         let vote_pubkey = vote_account.pubkey();
-        fn process_instructions<T: Signers>(bank: &Bank, keypairs: &T, ixs: Vec<Instruction>) {
+        fn process_instructions<T: Signers>(bank: &Bank, keypairs: &T, ixs: &[Instruction]) {
             let tx = Transaction::new_signed_with_payer(
                 ixs,
                 Some(&keypairs.pubkeys()[0]),
@@ -147,7 +147,7 @@ pub(crate) mod tests {
         process_instructions(
             bank,
             &[from_account, vote_account, validator_identity_account],
-            vote_instruction::create_account(
+            &vote_instruction::create_account(
                 &from_account.pubkey(),
                 &vote_pubkey,
                 &VoteInit {
@@ -166,7 +166,7 @@ pub(crate) mod tests {
         process_instructions(
             bank,
             &[from_account, &stake_account_keypair],
-            stake_instruction::create_account_and_delegate_stake(
+            &stake_instruction::create_account_and_delegate_stake(
                 &from_account.pubkey(),
                 &stake_account_pubkey,
                 &vote_pubkey,

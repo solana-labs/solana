@@ -94,18 +94,18 @@ impl Transaction {
         }
     }
 
-    pub fn new_with_payer(instructions: Vec<Instruction>, payer: Option<&Pubkey>) -> Self {
-        let message = Message::new_with_payer(&instructions, payer);
+    pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
+        let message = Message::new_with_payer(instructions, payer);
         Self::new_unsigned(message)
     }
 
     pub fn new_signed_with_payer<T: Signers>(
-        instructions: Vec<Instruction>,
+        instructions: &[Instruction],
         payer: Option<&Pubkey>,
         signing_keypairs: &T,
         recent_blockhash: Hash,
     ) -> Self {
-        let message = Message::new_with_payer(&instructions, payer);
+        let message = Message::new_with_payer(instructions, payer);
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
@@ -122,11 +122,11 @@ impl Transaction {
             &nonce_authority_pubkey,
         );
         instructions.insert(0, nonce_ix);
-        Self::new_signed_with_payer(instructions, payer, signing_keypairs, nonce_hash)
+        Self::new_signed_with_payer(&instructions, payer, signing_keypairs, nonce_hash)
     }
 
-    pub fn new_unsigned_instructions(instructions: Vec<Instruction>) -> Self {
-        let message = Message::new(&instructions);
+    pub fn new_unsigned_instructions(instructions: &[Instruction]) -> Self {
+        let message = Message::new(instructions);
         Self::new_unsigned(message)
     }
 
@@ -142,10 +142,10 @@ impl Transaction {
 
     pub fn new_signed_instructions<T: Signers>(
         from_keypairs: &T,
-        instructions: Vec<Instruction>,
+        instructions: &[Instruction],
         recent_blockhash: Hash,
     ) -> Transaction {
-        let message = Message::new(&instructions);
+        let message = Message::new(instructions);
         Self::new(from_keypairs, message, recent_blockhash)
     }
 
@@ -578,14 +578,14 @@ mod tests {
     #[should_panic]
     fn test_transaction_missing_key() {
         let keypair = Keypair::new();
-        Transaction::new_unsigned_instructions(vec![]).sign(&[&keypair], Hash::default());
+        Transaction::new_unsigned_instructions(&[]).sign(&[&keypair], Hash::default());
     }
 
     #[test]
     #[should_panic]
     fn test_partial_sign_mismatched_key() {
         let keypair = Keypair::new();
-        Transaction::new_unsigned_instructions(vec![Instruction::new(
+        Transaction::new_unsigned_instructions(&[Instruction::new(
             Pubkey::default(),
             &0,
             vec![AccountMeta::new(Pubkey::new_rand(), true)],
@@ -598,7 +598,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let mut tx = Transaction::new_unsigned_instructions(vec![Instruction::new(
+        let mut tx = Transaction::new_unsigned_instructions(&[Instruction::new(
             Pubkey::default(),
             &0,
             vec![
@@ -627,7 +627,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        Transaction::new_unsigned_instructions(vec![ix])
+        Transaction::new_unsigned_instructions(&[ix])
             .sign(&Vec::<&Keypair>::new(), Hash::default());
     }
 
@@ -638,7 +638,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let wrong_id = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(wrong_id, true)]);
-        Transaction::new_unsigned_instructions(vec![ix]).sign(&[&keypair0], Hash::default());
+        Transaction::new_unsigned_instructions(&[ix]).sign(&[&keypair0], Hash::default());
     }
 
     #[test]
@@ -647,7 +647,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(
             tx.message.instructions[0],
@@ -672,7 +672,7 @@ mod tests {
                 AccountMeta::new(id1, false),
             ],
         );
-        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(
             tx.message.instructions[0],
@@ -697,7 +697,7 @@ mod tests {
                 AccountMeta::new(presigner_pubkey, true),
             ],
         );
-        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
 
         let presigner_sig = presigner_keypair.sign_message(&tx.message_data());
         let presigner = Presigner::new(&presigner_pubkey, &presigner_sig);
@@ -719,7 +719,7 @@ mod tests {
                 AccountMeta::new(presigner_pubkey, true),
             ],
         );
-        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+        let mut tx = Transaction::new_unsigned_instructions(&[ix]);
 
         let res = tx.try_sign(&signers, Hash::default());
         assert!(res.is_err());

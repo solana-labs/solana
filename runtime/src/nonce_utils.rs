@@ -108,7 +108,7 @@ mod tests {
         let nonce_pubkey = nonce_keypair.pubkey();
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
             ],
@@ -125,8 +125,7 @@ mod tests {
 
     #[test]
     fn tx_uses_nonce_empty_ix_fail() {
-        let tx =
-            Transaction::new_signed_instructions(&[&Keypair::new(); 0], vec![], Hash::default());
+        let tx = Transaction::new_signed_instructions(&[&Keypair::new(); 0], &[], Hash::default());
         assert!(transaction_uses_durable_nonce(&tx).is_none());
     }
 
@@ -145,7 +144,7 @@ mod tests {
         let nonce_pubkey = nonce_keypair.pubkey();
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
-            vec![
+            &[
                 system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
             ],
@@ -162,7 +161,7 @@ mod tests {
         let nonce_pubkey = nonce_keypair.pubkey();
         let tx = Transaction::new_signed_instructions(
             &[&from_keypair, &nonce_keypair],
-            vec![
+            &[
                 system_instruction::withdraw_nonce_account(
                     &nonce_pubkey,
                     &nonce_pubkey,

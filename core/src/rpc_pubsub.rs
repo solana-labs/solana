@@ -527,7 +527,7 @@ mod tests {
         );
         let tx = Transaction::new_signed_instructions(
             &[&contract_funds, &contract_state],
-            ixs,
+            &ixs,
             blockhash,
         );
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
@@ -571,7 +571,7 @@ mod tests {
             &contract_state.pubkey(),
             &bob_pubkey,
         );
-        let tx = Transaction::new_signed_instructions(&[&witness], vec![ix], blockhash);
+        let tx = Transaction::new_signed_instructions(&[&witness], &[ix], blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 

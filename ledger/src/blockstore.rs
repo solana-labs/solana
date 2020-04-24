@@ -5431,7 +5431,7 @@ pub mod tests {
             let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
 
             let vote_tx =
-                Transaction::new_signed_instructions(&[keypair], vec![vote_ix], Hash::default());
+                Transaction::new_signed_instructions(&[keypair], &[vote_ix], Hash::default());
 
             vote_entries.push(next_entry_mut(&mut Hash::default(), 0, vec![vote_tx]));
             let mut tick = create_ticks(1, 0, hash(&serialize(&i).unwrap()));

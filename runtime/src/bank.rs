@@ -2610,7 +2610,7 @@ mod tests {
         let deduct_instruction =
             Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
         Transaction::new_signed_with_payer(
-            vec![deduct_instruction],
+            &[deduct_instruction],
             Some(&payer.pubkey()),
             &[payer, keypair1, keypair2],
             recent_blockhash,
@@ -3391,7 +3391,7 @@ mod tests {
             system_instruction::transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
         let tx = Transaction::new_signed_instructions(
             &[&mint_keypair],
-            instructions,
+            &instructions,
             genesis_config.hash(),
         );
         assert_eq!(
@@ -3416,7 +3416,7 @@ mod tests {
             system_instruction::transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
         let tx = Transaction::new_signed_instructions(
             &[&mint_keypair],
-            instructions,
+            &instructions,
             genesis_config.hash(),
         );
         bank.process_transaction(&tx).unwrap();
@@ -3809,14 +3809,14 @@ mod tests {
         let vote = Vote::new(vec![1], Hash::default());
         let ix0 = vote_instruction::vote(&vote_pubkey0, &authorized_voter.pubkey(), vote.clone());
         let tx0 = Transaction::new_signed_with_payer(
-            vec![ix0],
+            &[ix0],
             Some(&payer0.pubkey()),
             &[&payer0, &authorized_voter],
             bank.last_blockhash(),
         );
         let ix1 = vote_instruction::vote(&vote_pubkey1, &authorized_voter.pubkey(), vote.clone());
         let tx1 = Transaction::new_signed_with_payer(
-            vec![ix1],
+            &[ix1],
             Some(&payer1.pubkey()),
             &[&payer1, &authorized_voter],
             bank.last_blockhash(),
@@ -3831,7 +3831,7 @@ mod tests {
 
         let ix0 = vote_instruction::vote(&vote_pubkey2, &authorized_voter.pubkey(), vote.clone());
         let tx0 = Transaction::new_signed_with_payer(
-            vec![ix0],
+            &[ix0],
             Some(&payer0.pubkey()),
             &[&payer0, &authorized_voter],
             bank.last_blockhash(),
@@ -4554,7 +4554,7 @@ mod tests {
 
         let tx = Transaction::new_signed_instructions(
             &Vec::<&Keypair>::new(),
-            vec![transfer_instruction],
+            &[transfer_instruction],
             bank.last_blockhash(),
         );
 
@@ -4735,7 +4735,7 @@ mod tests {
 
         let transaction = Transaction::new_signed_instructions(
             &[&mint_keypair, &vote_keypair],
-            instructions,
+            &instructions,
             bank.last_blockhash(),
         );
 
@@ -4792,7 +4792,7 @@ mod tests {
 
         let transaction = Transaction::new_signed_instructions(
             &[&mint_keypair, &vote_keypair, &stake_keypair],
-            instructions,
+            &instructions,
             bank.last_blockhash(),
         );
 
@@ -5051,7 +5051,7 @@ mod tests {
 
         let transaction = Transaction::new_signed_instructions(
             &[&mint_keypair, &mock_account, &mock_validator_identity],
-            instructions,
+            &instructions,
             bank.last_blockhash(),
         );
 
@@ -5096,7 +5096,7 @@ mod tests {
 
         let transaction = Transaction::new_signed_instructions(
             &[&mint_keypair, &mock_account, &mock_validator_identity],
-            instructions,
+            &instructions,
             bank.last_blockhash(),
         );
 
@@ -5281,7 +5281,7 @@ mod tests {
         ));
         let setup_tx = Transaction::new_signed_instructions(
             &[mint_keypair, &custodian_keypair, &nonce_keypair],
-            setup_ixs,
+            &setup_ixs,
             bank.last_blockhash(),
         );
         bank.process_transaction(&setup_tx)?;
@@ -5329,7 +5329,7 @@ mod tests {
 
         let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
@@ -5353,7 +5353,7 @@ mod tests {
 
         let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
             ],
@@ -5373,7 +5373,7 @@ mod tests {
 
         let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let mut tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
@@ -5396,7 +5396,7 @@ mod tests {
 
         let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
         let tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&missing_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
@@ -5415,7 +5415,7 @@ mod tests {
         let nonce_pubkey = nonce_keypair.pubkey();
 
         let tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             ],
@@ -5444,7 +5444,7 @@ mod tests {
 
         let tx = Transaction::new_signed_instructions(
             &[&nonce],
-            vec![system_instruction::assign(
+            &[system_instruction::assign(
                 &nonce.pubkey(),
                 &Pubkey::new(&[9u8; 32]),
             )],
@@ -5502,7 +5502,7 @@ mod tests {
 
         /* Durable Nonce transfer */
         let durable_tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
@@ -5523,7 +5523,7 @@ mod tests {
 
         /* Durable Nonce re-use fails */
         let durable_tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000),
             ],
@@ -5548,7 +5548,7 @@ mod tests {
         }
 
         let durable_tx = Transaction::new_signed_with_payer(
-            vec![
+            &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
                 system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000_000),
             ],
@@ -5705,7 +5705,7 @@ mod tests {
         ];
         let instruction = Instruction::new(mock_program_id, &10, account_metas);
         let tx = Transaction::new_signed_with_payer(
-            vec![instruction],
+            &[instruction],
             Some(&mint_keypair.pubkey()),
             &[&mint_keypair],
             bank.last_blockhash(),
@@ -5749,7 +5749,7 @@ mod tests {
         ];
         let instruction = Instruction::new(mock_program_id, &10, account_metas);
         let tx = Transaction::new_signed_with_payer(
-            vec![instruction],
+            &[instruction],
             Some(&mint_keypair.pubkey()),
             &[&mint_keypair],
             bank.last_blockhash(),

@@ -373,7 +373,7 @@ mod test {
         let stake1_signature = rpc_client
             .send_transaction(&Transaction::new_signed_instructions(
                 &[&payer, &stake1_keypair],
-                stake_instruction::create_account(
+                &stake_instruction::create_account(
                     &payer.pubkey(),
                     &stake1_keypair.pubkey(),
                     &Authorized::auto(&payer.pubkey()),
@@ -403,7 +403,7 @@ mod test {
         let stake2_signature = rpc_client
             .send_transaction(&Transaction::new_signed_instructions(
                 &[&payer, &stake2_keypair],
-                stake_instruction::create_account(
+                &stake_instruction::create_account(
                     &payer.pubkey(),
                     &stake2_keypair.pubkey(),
                     &Authorized::auto(&payer.pubkey()),
@@ -422,7 +422,7 @@ mod test {
         let stake3_initialize_signature = rpc_client
             .send_transaction(&Transaction::new_signed_instructions(
                 &[&payer, &stake3_keypair],
-                stake_instruction::create_account(
+                &stake_instruction::create_account(
                     &payer.pubkey(),
                     &stake3_keypair.pubkey(),
                     &Authorized::auto(&payer.pubkey()),
@@ -470,7 +470,7 @@ mod test {
         let stake4_initialize_signature = rpc_client
             .send_transaction(&Transaction::new_signed_instructions(
                 &[&payer, &stake4_keypair],
-                stake_instruction::create_account(
+                &stake_instruction::create_account(
                     &payer.pubkey(),
                     &stake4_keypair.pubkey(),
                     &Authorized::auto(&payer.pubkey()),

@@ -563,10 +563,9 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
         let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
             .par_iter()
             .map(|(k, t)| {
-                let tx = Transaction::new_unsigned_instructions(system_instruction::transfer_many(
-                    &k.pubkey(),
-                    &t,
-                ));
+                let tx = Transaction::new_unsigned_instructions(
+                    &system_instruction::transfer_many(&k.pubkey(), &t),
+                );
                 (*k, tx)
             })
             .collect();
@@ -937,7 +936,7 @@ fn fund_move_keys<T: Client>(
         .collect();
     let tx = Transaction::new_signed_instructions(
         &[funding_key],
-        system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts),
+        &system_instruction::transfer_many(&funding_key.pubkey(), &pubkey_amounts),
         blockhash,
     );
     client.send_message(&[funding_key], tx.message).unwrap();

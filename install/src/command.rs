@@ -212,13 +212,13 @@ fn new_update_manifest(
         let lamports = rpc_client
             .get_minimum_balance_for_rent_exemption(SignedUpdateManifest::max_space() as usize)?;
 
-        let new_account = config_instruction::create_account::<SignedUpdateManifest>(
+        let instructions = config_instruction::create_account::<SignedUpdateManifest>(
             &from_keypair.pubkey(),
             &update_manifest_keypair.pubkey(),
             lamports,
             vec![], // additional keys
         );
-        let mut transaction = Transaction::new_unsigned_instructions(new_account);
+        let mut transaction = Transaction::new_unsigned_instructions(&instructions);
         let signers = [from_keypair, update_manifest_keypair];
         transaction.sign(&signers, recent_blockhash);
 

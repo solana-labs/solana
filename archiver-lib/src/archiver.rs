@@ -598,14 +598,14 @@ impl Archiver {
                 }
             };
 
-            let ix = storage_instruction::create_storage_account(
+            let ixs = storage_instruction::create_storage_account(
                 &keypair.pubkey(),
                 &keypair.pubkey(),
                 &storage_keypair.pubkey(),
                 1,
                 StorageAccountType::Archiver,
             );
-            let tx = Transaction::new_signed_instructions(&[keypair], ix, blockhash);
+            let tx = Transaction::new_signed_instructions(&[keypair], &ixs, blockhash);
             let signature = client.async_send_transaction(tx)?;
             client
                 .poll_for_signature_with_commitment(&signature, client_commitment)

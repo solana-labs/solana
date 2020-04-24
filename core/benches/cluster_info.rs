@@ -9,7 +9,6 @@ use solana_core::contact_info::ContactInfo;
 use solana_ledger::shred::Shred;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
-use std::sync::RwLock;
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -22,7 +21,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
     let leader_pubkey = Pubkey::new_rand();
     let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
-    let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
+    let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     const NUM_SHREDS: usize = 32;

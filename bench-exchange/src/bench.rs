@@ -459,7 +459,7 @@ fn swapper<T>(
                     let owner = &signer.pubkey();
                     Transaction::new_signed_instructions(
                         &[s],
-                        vec![exchange_instruction::swap_request(
+                        &[exchange_instruction::swap_request(
                             owner,
                             &swap.0.pubkey,
                             &swap.1.pubkey,
@@ -590,7 +590,7 @@ fn trader<T>(
                     let space = mem::size_of::<ExchangeState>() as u64;
                     Transaction::new_signed_instructions(
                         &[owner.as_ref(), trade],
-                        vec![
+                        &[
                             system_instruction::create_account(
                                 owner_pubkey,
                                 trade_pubkey,
@@ -749,7 +749,7 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
                 .map(|(k, m)| {
                     (
                         k.clone(),
-                        Transaction::new_unsigned_instructions(system_instruction::transfer_many(
+                        Transaction::new_unsigned_instructions(&system_instruction::transfer_many(
                             &k.pubkey(),
                             &m,
                         )),
@@ -849,7 +849,7 @@ pub fn create_token_accounts<T: Client>(
                         exchange_instruction::account_request(owner_pubkey, &new_keypair.pubkey());
                     (
                         (from_keypair, new_keypair),
-                        Transaction::new_unsigned_instructions(vec![create_ix, request_ix]),
+                        Transaction::new_unsigned_instructions(&[create_ix, request_ix]),
                     )
                 })
                 .collect();

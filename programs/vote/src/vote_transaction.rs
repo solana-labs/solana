@@ -22,7 +22,7 @@ pub fn new_vote_transaction(
         votes,
     );
 
-    let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
+    let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
 
     vote_tx.partial_sign(&[node_keypair], blockhash);
     vote_tx.partial_sign(&[authorized_voter_keypair], blockhash);

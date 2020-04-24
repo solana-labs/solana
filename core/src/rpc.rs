@@ -1506,7 +1506,7 @@ pub mod tests {
         );
         let vote_tx = Transaction::new_signed_instructions(
             &[&leader_vote_keypair],
-            vec![vote_ix],
+            &[vote_ix],
             Hash::default(),
         );
         let shreds = entries_to_test_shreds(
@@ -2777,7 +2777,7 @@ pub mod tests {
 
         let transaction = Transaction::new_signed_instructions(
             &[&alice, &alice_vote_keypair],
-            instructions,
+            &instructions,
             bank.last_blockhash(),
         );
         bank.process_transaction(&transaction)
@@ -2807,7 +2807,7 @@ pub mod tests {
             bank.freeze();
 
             // Votes
-            let instructions = vec![
+            let instructions = [
                 vote_instruction::vote(
                     &leader_vote_keypair.pubkey(),
                     &leader_vote_keypair.pubkey(),
@@ -2835,7 +2835,7 @@ pub mod tests {
             ));
 
             let transaction = Transaction::new_signed_with_payer(
-                instructions,
+                &instructions,
                 Some(&alice.pubkey()),
                 &[&alice, &leader_vote_keypair, &alice_vote_keypair],
                 bank.last_blockhash(),
