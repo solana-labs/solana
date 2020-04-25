@@ -1,5 +1,8 @@
+#[derive(PartialEq, Debug)]
 pub enum SanitizeError {
     Failed,
+    IndexOutOfBounds,
+    ValueOutOfRange,
 }
 
 pub trait Sanitize {
