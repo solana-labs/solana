@@ -6,7 +6,6 @@ use crate::{
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
     rpc_error::RpcCustomError,
-    storage_stage::StorageState,
     validator::ValidatorExit,
 };
 use bincode::serialize;
@@ -73,7 +72,6 @@ pub struct JsonRpcRequestProcessor {
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     blockstore: Arc<Blockstore>,
     config: JsonRpcConfig,
-    storage_state: StorageState,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
 }
 
@@ -111,7 +109,6 @@ impl JsonRpcRequestProcessor {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
-        storage_state: StorageState,
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         JsonRpcRequestProcessor {
@@ -119,7 +116,6 @@ impl JsonRpcRequestProcessor {
             bank_forks,
             block_commitment_cache,
             blockstore,
-            storage_state,
             validator_exit,
         }
     }
@@ -373,31 +369,6 @@ impl JsonRpcRequestProcessor {
             current: current_vote_accounts,
             delinquent: delinquent_staked_vote_accounts,
         })
-    }
-
-    fn get_storage_turn_rate(&self) -> Result<u64> {
-        Ok(self.storage_state.get_storage_turn_rate())
-    }
-
-    fn get_storage_turn(&self) -> Result<RpcStorageTurn> {
-        Ok(RpcStorageTurn {
-            blockhash: self.storage_state.get_storage_blockhash().to_string(),
-            slot: self.storage_state.get_slot(),
-        })
-    }
-
-    fn get_slots_per_segment(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
-        Ok(self.bank(commitment)?.slots_per_segment())
-    }
-
-    fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<String>> {
-        let pubkeys: Vec<String> = self
-            .storage_state
-            .get_pubkeys_for_slot(slot, &self.bank_forks)
-            .iter()
-            .map(|pubkey| pubkey.to_string())
-            .collect();
-        Ok(pubkeys)
     }
 
     pub fn set_log_filter(&self, filter: String) -> Result<()> {
@@ -878,22 +849,6 @@ pub trait RpcSol {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcVoteAccountStatus>;
-
-    #[rpc(meta, name = "getStorageTurnRate")]
-    fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64>;
-
-    #[rpc(meta, name = "getStorageTurn")]
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<RpcStorageTurn>;
-
-    #[rpc(meta, name = "getSlotsPerSegment")]
-    fn get_slots_per_segment(
-        &self,
-        meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<u64>;
-
-    #[rpc(meta, name = "getStoragePubkeysForSlot")]
-    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<String>>;
 
     #[rpc(meta, name = "validatorExit")]
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool>;
@@ -1419,39 +1374,6 @@ impl RpcSol for RpcSolImpl {
             .get_vote_accounts(commitment)
     }
 
-    fn get_storage_turn_rate(&self, meta: Self::Metadata) -> Result<u64> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_storage_turn_rate()
-    }
-
-    fn get_storage_turn(&self, meta: Self::Metadata) -> Result<RpcStorageTurn> {
-        meta.request_processor.read().unwrap().get_storage_turn()
-    }
-
-    fn get_slots_per_segment(
-        &self,
-        meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<u64> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_slots_per_segment(commitment)
-    }
-
-    fn get_storage_pubkeys_for_slot(
-        &self,
-        meta: Self::Metadata,
-        slot: Slot,
-    ) -> Result<Vec<String>> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_storage_pubkeys_for_slot(slot)
-    }
-
     fn validator_exit(&self, meta: Self::Metadata) -> Result<bool> {
         meta.request_processor.read().unwrap().validator_exit()
     }
@@ -1736,7 +1658,6 @@ pub mod tests {
             bank_forks.clone(),
             block_commitment_cache.clone(),
             blockstore,
-            StorageState::default(),
             validator_exit,
         )));
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
@@ -1785,7 +1706,6 @@ pub mod tests {
             bank_forks,
             block_commitment_cache,
             blockstore,
-            StorageState::default(),
             validator_exit,
         );
         thread::spawn(move || {
@@ -2524,7 +2444,6 @@ pub mod tests {
                     new_bank_forks().0,
                     block_commitment_cache,
                     blockstore,
-                    StorageState::default(),
                     validator_exit,
                 );
                 Arc::new(RwLock::new(request_processor))
@@ -2621,7 +2540,6 @@ pub mod tests {
             new_bank_forks().0,
             block_commitment_cache,
             blockstore,
-            StorageState::default(),
             validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(false));
@@ -2644,7 +2562,6 @@ pub mod tests {
             new_bank_forks().0,
             block_commitment_cache,
             blockstore,
-            StorageState::default(),
             validator_exit,
         );
         assert_eq!(request_processor.validator_exit(), Ok(true));
@@ -2726,7 +2643,6 @@ pub mod tests {
             bank_forks,
             block_commitment_cache,
             blockstore,
-            StorageState::default(),
             validator_exit,
         );
         assert_eq!(

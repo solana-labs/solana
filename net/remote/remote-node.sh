@@ -389,31 +389,6 @@ EOF
       multinode-demo/delegate-stake.sh "${args[@]}" "$internalNodesStakeLamports"
     fi
     ;;
-  archiver)
-    if [[ $deployMethod != skip ]]; then
-      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
-    fi
-
-    args=(
-      --entrypoint "$entrypointIp:8001"
-    )
-
-    if [[ $airdropsEnabled != true ]]; then
-      # If this ever becomes a problem, we need to provide the `--identity`
-      # argument to an existing system account with lamports in it
-      echo "Error: archivers not supported without airdrops"
-      exit 1
-    fi
-
-cat >> ~/solana/on-reboot <<EOF
-    nohup multinode-demo/archiver.sh ${args[@]} > validator.log.\$now 2>&1 &
-    pid=\$!
-    oom_score_adj "\$pid" 1000
-    disown
-EOF
-    ~/solana/on-reboot
-    sleep 1
-    ;;
   *)
     echo "Error: unknown node type: $nodeType"
     exit 1

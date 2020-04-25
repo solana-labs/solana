@@ -18,7 +18,6 @@ use crate::{
     serve_repair_service::ServeRepairService,
     sigverify,
     snapshot_packager_service::SnapshotPackagerService,
-    storage_stage::StorageState,
     tpu::Tpu,
     transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu, TvuConfig},
@@ -36,7 +35,7 @@ use solana_ledger::{
 use solana_metrics::datapoint_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-    clock::{Slot, DEFAULT_SLOTS_PER_TURN},
+    clock::Slot,
     epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -63,7 +62,6 @@ pub struct ValidatorConfig {
     pub expected_genesis_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
-    pub storage_slots_per_turn: u64,
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
     pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
@@ -90,7 +88,6 @@ impl Default for ValidatorConfig {
             expected_genesis_hash: None,
             expected_shred_version: None,
             voting_disabled: false,
-            storage_slots_per_turn: DEFAULT_SLOTS_PER_TURN,
             max_ledger_shreds: None,
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
@@ -153,7 +150,6 @@ impl Validator {
         ledger_path: &Path,
         vote_account: &Pubkey,
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
-        storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
         poh_verify: bool,
         config: &ValidatorConfig,
@@ -227,13 +223,6 @@ impl Validator {
         }
 
         let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
-
-        let storage_state = StorageState::new(
-            &bank.last_blockhash(),
-            config.storage_slots_per_turn,
-            bank.slots_per_segment(),
-        );
-
         let blockstore = Arc::new(blockstore);
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
@@ -264,7 +253,6 @@ impl Validator {
                     cluster_info.clone(),
                     genesis_config.hash(),
                     ledger_path,
-                    storage_state.clone(),
                     validator_exit.clone(),
                     config.trusted_validators.clone(),
                 ),
@@ -394,7 +382,6 @@ impl Validator {
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
-            storage_keypair,
             &bank_forks,
             &cluster_info,
             Sockets {
@@ -423,7 +410,6 @@ impl Validator {
                     .collect(),
             },
             blockstore.clone(),
-            &storage_state,
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
@@ -715,7 +701,6 @@ impl TestValidator {
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let leader_voting_keypair = Arc::new(voting_keypair);
-        let storage_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
             rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
             ..ValidatorConfig::default()
@@ -726,7 +711,6 @@ impl TestValidator {
             &ledger_path,
             &leader_voting_keypair.pubkey(),
             vec![leader_voting_keypair.clone()],
-            &storage_keypair,
             None,
             true,
             &config,
@@ -882,7 +866,6 @@ mod tests {
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let voting_keypair = Arc::new(Keypair::new());
-        let storage_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
             rpc_ports: Some((
                 validator_node.info.rpc.port(),
@@ -896,7 +879,6 @@ mod tests {
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
-            &storage_keypair,
             Some(&leader_node.info),
             true,
             &config,
@@ -921,7 +903,6 @@ mod tests {
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
                 ledger_paths.push(validator_ledger_path.clone());
                 let vote_account_keypair = Arc::new(Keypair::new());
-                let storage_keypair = Arc::new(Keypair::new());
                 let config = ValidatorConfig {
                     rpc_ports: Some((
                         validator_node.info.rpc.port(),
@@ -935,7 +916,6 @@ mod tests {
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     vec![vote_account_keypair.clone()],
-                    &storage_keypair,
                     Some(&leader_node.info),
                     true,
                     &config,

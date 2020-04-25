@@ -4,7 +4,7 @@ use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_slots::ClusterSlots,
     repair_service::DuplicateSlotsResetSender,
-    repair_service::RepairStrategy,
+    repair_service::RepairInfo,
     result::{Error, Result},
     window_service::{should_retransmit_and_persist, WindowService},
 };
@@ -353,7 +353,7 @@ impl RetransmitStage {
             retransmit_receiver,
         );
 
-        let repair_strategy = RepairStrategy::RepairAll {
+        let repair_info = RepairInfo {
             bank_forks,
             completed_slots_receiver,
             epoch_schedule,
@@ -367,7 +367,7 @@ impl RetransmitStage {
             retransmit_sender,
             repair_socket,
             exit,
-            repair_strategy,
+            repair_info,
             &leader_schedule_cache.clone(),
             move |id, shred, working_bank, last_root| {
                 let is_connected = cfg

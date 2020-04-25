@@ -67,11 +67,10 @@ fn main() {
     }
 
     info!("Connecting to the cluster");
-    let (nodes, _archivers) =
-        discover_cluster(&entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
-            eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
-            exit(1);
-        });
+    let nodes = discover_cluster(&entrypoint_addr, *num_nodes).unwrap_or_else(|err| {
+        eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
+        exit(1);
+    });
 
     let client = if *multi_client {
         let (client, num_clients) = get_multi_client(&nodes);

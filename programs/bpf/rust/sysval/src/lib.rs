@@ -3,7 +3,7 @@
 extern crate solana_sdk;
 use solana_sdk::{
     account_info::AccountInfo,
-    clock::{get_segment_from_slot, DEFAULT_SLOTS_PER_EPOCH, DEFAULT_SLOTS_PER_SEGMENT},
+    clock::DEFAULT_SLOTS_PER_EPOCH,
     entrypoint,
     entrypoint::ProgramResult,
     info,
@@ -27,10 +27,6 @@ fn process_instruction(
     sysvar::clock::id().log();
     let clock = Clock::from_account_info(&accounts[2]).expect("clock");
     assert_eq!(clock.slot, DEFAULT_SLOTS_PER_EPOCH + 1);
-    assert_eq!(
-        clock.segment,
-        get_segment_from_slot(clock.slot, DEFAULT_SLOTS_PER_SEGMENT)
-    );
 
     // Fees
     info!("Fees identifier:");

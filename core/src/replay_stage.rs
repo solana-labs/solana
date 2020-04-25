@@ -45,7 +45,7 @@ use std::{
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+        mpsc::{Receiver, RecvTimeoutError, Sender},
         Arc, Mutex, RwLock,
     },
     thread::{self, Builder, JoinHandle},
@@ -157,7 +157,7 @@ impl ReplayStage {
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
         duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
-    ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
+    ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
             vote_account,
@@ -172,7 +172,6 @@ impl ReplayStage {
             rewards_recorder_sender,
         } = config;
 
-        let (root_bank_sender, root_bank_receiver) = channel();
         trace!("replay stage");
         let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
 
@@ -377,7 +376,6 @@ impl ReplayStage {
                             &cluster_info,
                             &blockstore,
                             &leader_schedule_cache,
-                            &root_bank_sender,
                             &lockouts_sender,
                             &accounts_hash_sender,
                             &latest_root_senders,
@@ -497,13 +495,11 @@ impl ReplayStage {
                 Ok(())
             })
             .unwrap();
-        (
-            Self {
-                t_replay,
-                commitment_service,
-            },
-            root_bank_receiver,
-        )
+
+        Self {
+            t_replay,
+            commitment_service,
+        }
     }
 
     fn report_memory(
@@ -852,7 +848,6 @@ impl ReplayStage {
         cluster_info: &Arc<ClusterInfo>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        root_bank_sender: &Sender<Vec<Arc<Bank>>>,
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_hash_sender: &Option<AccountsPackageSender>,
         latest_root_senders: &[Sender<Slot>],
@@ -905,10 +900,6 @@ impl ReplayStage {
                 }
             });
             info!("new root {}", new_root);
-            if let Err(e) = root_bank_sender.send(rooted_banks) {
-                trace!("root_bank_sender failed: {:?}", e);
-                return Err(e.into());
-            }
         }
 
         Self::update_commitment_cache(

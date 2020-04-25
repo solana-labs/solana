@@ -4,7 +4,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
-    repair_service::{RepairService, RepairStrategy},
+    repair_service::{RepairInfo, RepairService},
     result::{Error, Result},
 };
 use crossbeam_channel::{
@@ -254,7 +254,7 @@ impl WindowService {
         retransmit: PacketSender,
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
-        repair_strategy: RepairStrategy,
+        repair_info: RepairInfo,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         shred_filter: F,
         cluster_slots: Arc<ClusterSlots>,
@@ -265,17 +265,14 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-        let bank_forks = match repair_strategy {
-            RepairStrategy::RepairRange(_) => None,
-            RepairStrategy::RepairAll { ref bank_forks, .. } => Some(bank_forks.clone()),
-        };
+        let bank_forks = Some(repair_info.bank_forks.clone());
 
         let repair_service = RepairService::new(
             blockstore.clone(),
             exit.clone(),
             repair_socket,
             cluster_info.clone(),
-            repair_strategy,
+            repair_info,
             cluster_slots,
         );
 
@@ -491,10 +488,6 @@ impl WindowService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        cluster_info::ClusterInfo, contact_info::ContactInfo, repair_service::RepairSlotRange,
-    };
-    use rand::thread_rng;
     use solana_ledger::shred::DataShredHeader;
     use solana_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
@@ -503,21 +496,13 @@ mod test {
         get_tmp_ledger_path,
         shred::Shredder,
     };
-    use solana_perf::packet::Packet;
     use solana_sdk::{
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
         signature::{Keypair, Signer},
     };
-    use std::{
-        net::UdpSocket,
-        sync::atomic::{AtomicBool, Ordering},
-        sync::mpsc::channel,
-        sync::Arc,
-        thread::sleep,
-        time::Duration,
-    };
+    use std::sync::Arc;
 
     fn local_entries_to_shred(
         entries: &[Entry],
@@ -618,71 +603,6 @@ mod test {
             should_retransmit_and_persist(&shreds[0], None, &cache, &me_id, 0, 0),
             false
         );
-    }
-
-    fn make_test_window(
-        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
-        exit: Arc<AtomicBool>,
-    ) -> WindowService {
-        let blockstore_path = get_tmp_ledger_path!();
-        let (blockstore, _, _) = Blockstore::open_with_signal(&blockstore_path)
-            .expect("Expected to be able to open database ledger");
-
-        let blockstore = Arc::new(blockstore);
-        let (retransmit_sender, _retransmit_receiver) = channel();
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
-            ContactInfo::new_localhost(&Pubkey::default(), 0),
-        ));
-        let cluster_slots = Arc::new(ClusterSlots::default());
-        let repair_sock = Arc::new(UdpSocket::bind(socketaddr_any!()).unwrap());
-        let window = WindowService::new(
-            blockstore,
-            cluster_info,
-            verified_receiver,
-            retransmit_sender,
-            repair_sock,
-            &exit,
-            RepairStrategy::RepairRange(RepairSlotRange { start: 0, end: 0 }),
-            &Arc::new(LeaderScheduleCache::default()),
-            |_, _, _, _| true,
-            cluster_slots,
-        );
-        window
-    }
-
-    #[test]
-    fn test_recv_window() {
-        let (packet_sender, packet_receiver) = unbounded();
-        let exit = Arc::new(AtomicBool::new(false));
-        let window = make_test_window(packet_receiver, exit.clone());
-        // send 5 slots worth of data to the window
-        let (shreds, _) = make_many_slot_entries(0, 5, 10);
-        let packets: Vec<_> = shreds
-            .into_iter()
-            .map(|mut s| {
-                let mut p = Packet::default();
-                p.data.copy_from_slice(&mut s.payload);
-                p
-            })
-            .collect();
-        let mut packets = Packets::new(packets);
-        packet_sender.send(vec![packets.clone()]).unwrap();
-        sleep(Duration::from_millis(500));
-
-        // add some empty packets to the data set. These should fail to deserialize
-        packets.packets.append(&mut vec![Packet::default(); 10]);
-        packets.packets.shuffle(&mut thread_rng());
-        packet_sender.send(vec![packets.clone()]).unwrap();
-        sleep(Duration::from_millis(500));
-
-        // send 1 empty packet that cannot deserialize into a shred
-        packet_sender
-            .send(vec![Packets::new(vec![Packet::default(); 1])])
-            .unwrap();
-        sleep(Duration::from_millis(500));
-
-        exit.store(true, Ordering::Relaxed);
-        window.join().unwrap();
     }
 
     #[test]

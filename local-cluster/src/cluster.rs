@@ -10,7 +10,6 @@ use std::sync::Arc;
 pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
     pub voting_keypair: Arc<Keypair>,
-    pub storage_keypair: Arc<Keypair>,
     pub ledger_path: PathBuf,
     pub contact_info: ContactInfo,
 }

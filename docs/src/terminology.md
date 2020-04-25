@@ -88,10 +88,6 @@ See [Proof of History](terminology.md#proof-of-history).
 
 The time, i.e. number of [slots](terminology.md#slot), for which a [leader schedule](terminology.md#leader-schedule) is valid.
 
-## fake storage proof
-
-A proof which has the same format as a storage proof, but the sha state is actually from hashing a known ledger value which the storage client can reveal and is also easily verifiable by the network on-chain.
-
 ## fee account
 
 The fee account in the transaction is the account pays for the cost of including the transaction in the ledger. This is the first account in the transaction. This account must be declared as Read-Write (writable) in the transaction since paying for the transaction reduces the account balance.
@@ -118,7 +114,7 @@ A digital fingerprint of a sequence of bytes.
 
 ## inflation
 
-An increase in token supply over time used to fund rewards for validation and replication and to fund continued development of Solana.
+An increase in token supply over time used to fund rewards for validation and to fund continued development of Solana.
 
 ## instruction
 
@@ -143,10 +139,6 @@ A sequence of [validator](terminology.md#validator) [public keys](terminology.md
 ## ledger
 
 A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-
-## ledger segment
-
-Portion of the ledger which is downloaded by the archiver where storage proof data is derived.
 
 ## ledger vote
 
@@ -204,10 +196,6 @@ A stack of proofs, each which proves that some data existed before the proof was
 
 The public key of a [keypair](terminology.md#keypair).
 
-## archiver
-
-Storage mining client, stores some part of the ledger enumerated in blocks and submits storage proofs to the chain. Not a validator.
-
 ## root
 
 A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a validator. The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
@@ -235,26 +223,6 @@ The [native token](terminology.md#native-token) tracked by a [cluster](terminolo
 ## stake
 
 Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
-
-## storage proof
-
-A set of sha hash state which is constructed by sampling the encrypted version of the stored ledger segment at certain offsets.
-
-## storage proof challenge
-
-A transaction from an archiver that verifiably proves that a validator confirmed a fake proof.
-
-## storage proof claim
-
-A transaction from a validator which is after the timeout period given from the storage proof confirmation and which no successful challenges have been observed which rewards the parties of the storage proofs and confirmations.
-
-## storage proof confirmation
-
-A transaction by a validator which indicates the set of real and fake proofs submitted by a storage miner. The transaction would contain a list of proof hash values and a bit which says if this hash is valid or fake.
-
-## storage validation capacity
-
-The number of keys and samples that a validator can verify each storage epoch.
 
 ## supermajority
 

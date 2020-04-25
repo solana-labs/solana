@@ -18,7 +18,7 @@ Another difference between PoH and VDFs is that a VDF is used only for tracking 
 
 ## Relationship to Consensus Mechanisms
 
-Proof of History is not a consensus mechanism, but it is used to improve the performance of Solana's Proof of Stake consensus. It is also used to improve the performance of the data plane and replication protocols.
+Proof of History is not a consensus mechanism, but it is used to improve the performance of Solana's Proof of Stake consensus. It is also used to improve the performance of the data plane protocols.
 
 ## More on Proof of History
 

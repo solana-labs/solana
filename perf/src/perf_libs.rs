@@ -57,26 +57,6 @@ pub struct Api<'a> {
         ) -> u32,
     >,
 
-    pub chacha_cbc_encrypt_many_sample: Symbol<
-        'a,
-        unsafe extern "C" fn(
-            input: *const u8,
-            sha_state: *mut u8,
-            in_len: usize,
-            keys: *const u8,
-            ivec: *mut u8,
-            num_keys: u32,
-            samples: *const u64,
-            num_samples: u32,
-            starting_block: u64,
-            time_us: *mut f32,
-        ),
-    >,
-
-    pub chacha_init_sha_state: Symbol<'a, unsafe extern "C" fn(sha_state: *mut u8, num_keys: u32)>,
-    pub chacha_end_sha_state:
-        Symbol<'a, unsafe extern "C" fn(sha_state_in: *const u8, out: *mut u8, num_keys: u32)>,
-
     pub poh_verify_many: Symbol<
         'a,
         unsafe extern "C" fn(

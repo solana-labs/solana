@@ -63,11 +63,11 @@ impl GossipService {
     }
 }
 
-/// Discover Validators and Archivers in a cluster
+/// Discover Validators in a cluster
 pub fn discover_cluster(
     entrypoint: &SocketAddr,
     num_nodes: usize,
-) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>)> {
+) -> std::io::Result<Vec<ContactInfo>> {
     discover(
         Some(entrypoint),
         Some(num_nodes),
@@ -77,18 +77,18 @@ pub fn discover_cluster(
         None,
         0,
     )
-    .map(|(_all_peers, validators, archivers)| (validators, archivers))
+    .map(|(_all_peers, validators)| validators)
 }
 
 pub fn discover(
     entrypoint: Option<&SocketAddr>,
-    num_nodes: Option<usize>, // num_nodes only counts validators and archivers, excludes spy nodes
+    num_nodes: Option<usize>, // num_nodes only counts validators, excludes spy nodes
     timeout: Option<u64>,
     find_node_by_pubkey: Option<Pubkey>,
     find_node_by_gossip_addr: Option<&SocketAddr>,
     my_gossip_addr: Option<&SocketAddr>,
     my_shred_version: u16,
-) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>, Vec<ContactInfo>)> {
+) -> std::io::Result<(Vec<ContactInfo>, Vec<ContactInfo>)> {
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, ip_echo, spy_ref) =
         make_gossip_node(entrypoint, &exit, my_gossip_addr, my_shred_version);
@@ -102,7 +102,7 @@ pub fn discover(
 
     let _ip_echo_server = ip_echo.map(solana_net_utils::ip_echo_server);
 
-    let (met_criteria, secs, all_peers, tvu_peers, storage_peers) = spy(
+    let (met_criteria, secs, all_peers, tvu_peers) = spy(
         spy_ref.clone(),
         num_nodes,
         timeout,
@@ -119,7 +119,7 @@ pub fn discover(
             secs,
             spy_ref.contact_info_trace()
         );
-        return Ok((all_peers, tvu_peers, storage_peers));
+        return Ok((all_peers, tvu_peers));
     }
 
     if !tvu_peers.is_empty() {
@@ -127,7 +127,7 @@ pub fn discover(
             "discover failed to match criteria by timeout...\n{}",
             spy_ref.contact_info_trace()
         );
-        return Ok((all_peers, tvu_peers, storage_peers));
+        return Ok((all_peers, tvu_peers));
     }
 
     info!("discover failed...\n{}", spy_ref.contact_info_trace());
@@ -182,18 +182,11 @@ fn spy(
     timeout: Option<u64>,
     find_node_by_pubkey: Option<Pubkey>,
     find_node_by_gossip_addr: Option<&SocketAddr>,
-) -> (
-    bool,
-    u64,
-    Vec<ContactInfo>,
-    Vec<ContactInfo>,
-    Vec<ContactInfo>,
-) {
+) -> (bool, u64, Vec<ContactInfo>, Vec<ContactInfo>) {
     let now = Instant::now();
     let mut met_criteria = false;
     let mut all_peers: Vec<ContactInfo> = Vec::new();
     let mut tvu_peers: Vec<ContactInfo> = Vec::new();
-    let mut storage_peers: Vec<ContactInfo> = Vec::new();
     let mut i = 1;
     while !met_criteria {
         if let Some(secs) = timeout {
@@ -208,7 +201,6 @@ fn spy(
             .map(|x| x.0)
             .collect::<Vec<_>>();
         tvu_peers = spy_ref.all_tvu_peers().into_iter().collect::<Vec<_>>();
-        storage_peers = spy_ref.all_storage_peers();
 
         let found_node_by_pubkey = if let Some(pubkey) = find_node_by_pubkey {
             all_peers.iter().any(|x| x.id == pubkey)
@@ -224,7 +216,7 @@ fn spy(
 
         if let Some(num) = num_nodes {
             // Only consider validators and archives for `num_nodes`
-            let mut nodes: Vec<_> = tvu_peers.iter().chain(storage_peers.iter()).collect();
+            let mut nodes: Vec<_> = tvu_peers.iter().collect();
             nodes.sort();
             nodes.dedup();
 
@@ -248,13 +240,7 @@ fn spy(
         ));
         i += 1;
     }
-    (
-        met_criteria,
-        now.elapsed().as_secs(),
-        all_peers,
-        tvu_peers,
-        storage_peers,
-    )
+    (met_criteria, now.elapsed().as_secs(), all_peers, tvu_peers)
 }
 
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
@@ -314,21 +300,21 @@ mod tests {
 
         let spy_ref = Arc::new(cluster_info);
 
-        let (met_criteria, secs, _, tvu_peers, _) = spy(spy_ref.clone(), None, Some(1), None, None);
+        let (met_criteria, secs, _, tvu_peers) = spy(spy_ref.clone(), None, Some(1), None, None);
         assert_eq!(met_criteria, false);
         assert_eq!(secs, 1);
         assert_eq!(tvu_peers, spy_ref.tvu_peers());
 
         // Find num_nodes
-        let (met_criteria, _, _, _, _) = spy(spy_ref.clone(), Some(1), None, None, None);
+        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), None, None, None);
         assert_eq!(met_criteria, true);
-        let (met_criteria, _, _, _, _) = spy(spy_ref.clone(), Some(2), None, None, None);
+        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(2), None, None, None);
         assert_eq!(met_criteria, true);
 
         // Find specific node by pubkey
-        let (met_criteria, _, _, _, _) = spy(spy_ref.clone(), None, None, Some(peer0), None);
+        let (met_criteria, _, _, _) = spy(spy_ref.clone(), None, None, Some(peer0), None);
         assert_eq!(met_criteria, true);
-        let (met_criteria, _, _, _, _) = spy(
+        let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             None,
             Some(0),
@@ -338,11 +324,11 @@ mod tests {
         assert_eq!(met_criteria, false);
 
         // Find num_nodes *and* specific node by pubkey
-        let (met_criteria, _, _, _, _) = spy(spy_ref.clone(), Some(1), None, Some(peer0), None);
+        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(1), None, Some(peer0), None);
         assert_eq!(met_criteria, true);
-        let (met_criteria, _, _, _, _) = spy(spy_ref.clone(), Some(3), Some(0), Some(peer0), None);
+        let (met_criteria, _, _, _) = spy(spy_ref.clone(), Some(3), Some(0), Some(peer0), None);
         assert_eq!(met_criteria, false);
-        let (met_criteria, _, _, _, _) = spy(
+        let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             Some(1),
             Some(0),
@@ -352,11 +338,11 @@ mod tests {
         assert_eq!(met_criteria, false);
 
         // Find specific node by gossip address
-        let (met_criteria, _, _, _, _) =
+        let (met_criteria, _, _, _) =
             spy(spy_ref.clone(), None, None, None, Some(&peer0_info.gossip));
         assert_eq!(met_criteria, true);
 
-        let (met_criteria, _, _, _, _) = spy(
+        let (met_criteria, _, _, _) = spy(
             spy_ref.clone(),
             None,
             Some(0),

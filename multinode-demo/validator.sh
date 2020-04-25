@@ -78,10 +78,6 @@ while [[ -n $1 ]]; do
       vote_account=$2
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --storage-keypair ]]; then
-      storage_keypair=$2
-      args+=("$1" "$2")
-      shift 2
     elif [[ $1 = --init-complete-file ]]; then
       args+=("$1" "$2")
       shift 2
@@ -214,7 +210,6 @@ faucet_address="${gossip_entrypoint%:*}":9900
 
 : "${identity:=$ledger_dir/identity.json}"
 : "${vote_account:=$ledger_dir/vote-account.json}"
-: "${storage_keypair:=$ledger_dir/storage-keypair.json}"
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
@@ -223,7 +218,6 @@ fi
 
 default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"
-default_arg --storage-keypair "$storage_keypair"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
 default_arg --enable-rpc-exit
@@ -279,12 +273,6 @@ setup_validator_accounts() {
   fi
   echo "Validator vote account configured"
 
-  if ! wallet storage-account "$storage_keypair"; then
-    echo "Creating validator storage account"
-    wallet create-validator-storage-account "$identity" "$storage_keypair" || return $?
-  fi
-  echo "Validator storage account configured"
-
   echo "Validator identity account balance:"
   wallet balance || return $?
 
@@ -295,7 +283,6 @@ rpc_url=$($solana_gossip rpc-url --entrypoint "$gossip_entrypoint" --any)
 
 [[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
 [[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"
-[[ -r "$storage_keypair" ]] || $solana_keygen new --no-passphrase -so "$storage_keypair"
 
 setup_validator_accounts "$node_sol"
 

@@ -266,7 +266,7 @@ fn run_cluster_partition(
     );
     let mut cluster = LocalCluster::new(&config);
 
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, num_nodes).unwrap();
 
     info!("PARTITION_TEST sleeping until partition starting condition",);
     loop {
@@ -338,7 +338,7 @@ fn run_cluster_partition(
 
     assert!(alive_node_contact_infos.len() > 0);
     info!("PARTITION_TEST discovering nodes");
-    let (cluster_nodes, _) = discover_cluster(
+    let cluster_nodes = discover_cluster(
         &alive_node_contact_infos[0].gossip,
         alive_node_contact_infos.len(),
     )
@@ -461,7 +461,7 @@ fn test_forwarding() {
     };
     let cluster = LocalCluster::new(&config);
 
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 2).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 2).unwrap();
     assert!(cluster_nodes.len() >= 2);
 
     let leader_pubkey = cluster.entry_point_info.id;
@@ -525,7 +525,7 @@ fn test_listener_startup() {
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&config);
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
 }
 
@@ -542,7 +542,7 @@ fn test_stable_operating_mode() {
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&config);
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
     let client = create_client(
@@ -571,13 +571,7 @@ fn test_stable_operating_mode() {
     }
 
     // Programs that are not available at epoch 0
-    for program_id in [
-        &solana_sdk::bpf_loader::id(),
-        &solana_storage_program::id(),
-        &solana_vest_program::id(),
-    ]
-    .iter()
-    {
+    for program_id in [&solana_sdk::bpf_loader::id(), &solana_vest_program::id()].iter() {
         assert_eq!(
             (
                 program_id,
@@ -719,7 +713,7 @@ fn test_consistency_halt() {
     let mut cluster = LocalCluster::new(&config);
 
     sleep(Duration::from_millis(5000));
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
     info!("num_nodes: {}", cluster_nodes.len());
 
     // Add a validator with the leader as trusted, it should halt when it detects
@@ -747,7 +741,6 @@ fn test_consistency_halt() {
     assert_eq!(
         discover_cluster(&cluster.entry_point_info.gossip, num_nodes)
             .unwrap()
-            .0
             .len(),
         num_nodes
     );
@@ -762,11 +755,11 @@ fn test_consistency_halt() {
                 break;
             }
             Ok(nodes) => {
-                if nodes.0.len() < 2 {
+                if nodes.len() < 2 {
                     encountered_error = true;
                     break;
                 }
-                info!("checking cluster for fewer nodes.. {:?}", nodes.0.len());
+                info!("checking cluster for fewer nodes.. {:?}", nodes.len());
             }
         }
         let client = cluster
@@ -962,7 +955,7 @@ fn test_snapshots_blockstore_floor() {
     // Start up a new node from a snapshot
     let validator_stake = 5;
 
-    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
+    let cluster_nodes = discover_cluster(&cluster.entry_point_info.gossip, 1).unwrap();
     let mut trusted_validators = HashSet::new();
     trusted_validators.insert(cluster_nodes[0].id);
     validator_snapshot_test_config

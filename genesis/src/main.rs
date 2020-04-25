@@ -516,9 +516,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         );
     }
 
-    if operating_mode == OperatingMode::Development {
-        solana_storage_program::rewards_pools::add_genesis_accounts(&mut genesis_config);
-    }
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
 
     if let Some(files) = matches.values_of("primordial_accounts_file") {
@@ -762,8 +759,6 @@ mod tests {
             &mut genesis_config,
         )
         .expect("genesis");
-
-        solana_storage_program::rewards_pools::add_genesis_accounts(&mut genesis_config);
 
         remove_file(path).unwrap();
 

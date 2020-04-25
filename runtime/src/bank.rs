@@ -19,8 +19,6 @@ use crate::{
     },
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
-    storage_utils,
-    storage_utils::StorageAccounts,
     system_instruction_processor::{self, get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
@@ -37,8 +35,8 @@ use solana_metrics::{
 use solana_sdk::{
     account::Account,
     clock::{
-        get_segment_from_slot, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp,
-        DEFAULT_TICKS_PER_SECOND, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
+        Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
+        MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
     },
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -237,6 +235,13 @@ impl HashAgeKind {
     }
 }
 
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
+struct UnusedAccounts {
+    unused1: HashSet<Pubkey>,
+    unused2: HashSet<Pubkey>,
+    unused3: HashMap<Pubkey, u64>,
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default, Deserialize, Serialize)]
 pub struct Bank {
@@ -303,8 +308,8 @@ pub struct Bank {
     /// The number of slots per year, used for inflation
     slots_per_year: f64,
 
-    /// The number of slots per Storage segment
-    slots_per_segment: u64,
+    /// Unused
+    unused: u64,
 
     /// Bank slot (i.e. block)
     slot: Slot,
@@ -346,8 +351,8 @@ pub struct Bank {
     /// cache of vote_account and stake_account state for this fork
     stakes: RwLock<Stakes>,
 
-    /// cache of validator and archiver storage accounts for this fork
-    storage_accounts: RwLock<StorageAccounts>,
+    /// unused
+    unused_accounts: RwLock<UnusedAccounts>,
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
@@ -466,7 +471,7 @@ impl Bank {
             ticks_per_slot: parent.ticks_per_slot,
             ns_per_slot: parent.ns_per_slot,
             genesis_creation_time: parent.genesis_creation_time,
-            slots_per_segment: parent.slots_per_segment,
+            unused: parent.unused,
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
@@ -480,7 +485,7 @@ impl Bank {
             transaction_count: AtomicU64::new(parent.transaction_count()),
             stakes: RwLock::new(parent.stakes.read().unwrap().clone_with_epoch(epoch)),
             epoch_stakes: parent.epoch_stakes.clone(),
-            storage_accounts: RwLock::new(parent.storage_accounts.read().unwrap().clone()),
+            unused_accounts: RwLock::new(parent.unused_accounts.read().unwrap().clone()),
             parent_hash: parent.hash(),
             parent_slot: parent.slot(),
             collector_id: *collector_id,
@@ -595,7 +600,7 @@ impl Bank {
     pub fn clock(&self) -> sysvar::clock::Clock {
         sysvar::clock::Clock {
             slot: self.slot,
-            segment: get_segment_from_slot(self.slot, self.slots_per_segment),
+            unused: 0,
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             unix_timestamp: self.unix_timestamp(),
@@ -716,35 +721,26 @@ impl Bank {
         //  years_elapsed =   slots_elapsed                               /  slots/year
         let period = self.epoch_schedule.get_slots_in_epoch(epoch) as f64 / self.slots_per_year;
 
-        let (validator_rewards, storage_rewards) = {
+        let validator_rewards = {
             let inflation = self.inflation.read().unwrap();
 
-            (
-                (*inflation).validator(year) * self.capitalization() as f64 * period,
-                (*inflation).storage(year) * self.capitalization() as f64 * period,
-            )
+            (*inflation).validator(year) * self.capitalization() as f64 * period
         };
 
         let validator_points = self.stakes.write().unwrap().claim_points();
-        let storage_points = self.storage_accounts.write().unwrap().claim_points();
-
-        let (validator_point_value, storage_point_value) = self.check_point_values(
-            validator_rewards / validator_points as f64,
-            storage_rewards / storage_points as f64,
-        );
+        let validator_point_value =
+            self.check_point_value(validator_rewards / validator_points as f64);
         self.update_sysvar_account(&sysvar::rewards::id(), |account| {
             sysvar::rewards::create_account(
                 self.inherit_sysvar_account_balance(account),
                 validator_point_value,
-                storage_point_value,
             )
         });
 
         let validator_rewards = self.pay_validator_rewards(validator_point_value);
-        self.capitalization.fetch_add(
-            validator_rewards + storage_rewards as u64,
-            Ordering::Relaxed,
-        );
+
+        self.capitalization
+            .fetch_add(validator_rewards as u64, Ordering::Relaxed);
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
@@ -815,24 +811,17 @@ impl Bank {
 
     // If the point values are not `normal`, bring them back into range and
     // set them to the last value or 0.
-    fn check_point_values(
-        &self,
-        mut validator_point_value: f64,
-        mut storage_point_value: f64,
-    ) -> (f64, f64) {
+    fn check_point_value(&self, mut validator_point_value: f64) -> f64 {
         let rewards = sysvar::rewards::Rewards::from_account(
             &self
                 .get_account(&sysvar::rewards::id())
-                .unwrap_or_else(|| sysvar::rewards::create_account(1, 0.0, 0.0)),
+                .unwrap_or_else(|| sysvar::rewards::create_account(1, 0.0)),
         )
         .unwrap_or_else(Default::default);
         if !validator_point_value.is_normal() {
             validator_point_value = rewards.validator_point_value;
         }
-        if !storage_point_value.is_normal() {
-            storage_point_value = rewards.storage_point_value
-        }
-        (validator_point_value, storage_point_value)
+        validator_point_value
     }
 
     fn collect_fees(&self) {
@@ -945,7 +934,7 @@ impl Bank {
         self.ns_per_slot = genesis_config.poh_config.target_tick_duration.as_nanos()
             * genesis_config.ticks_per_slot as u128;
         self.genesis_creation_time = genesis_config.creation_time;
-        self.slots_per_segment = genesis_config.slots_per_segment;
+        self.unused = genesis_config.unused;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
         self.slots_per_year = years_as_slots(
             1.0,
@@ -2063,11 +2052,6 @@ impl Bank {
 
         if Stakes::is_stake(account) {
             self.stakes.write().unwrap().store(pubkey, account);
-        } else if storage_utils::is_storage(account) {
-            self.storage_accounts
-                .write()
-                .unwrap()
-                .store(pubkey, account);
         }
     }
 
@@ -2369,11 +2353,6 @@ impl Bank {
         self.slots_per_year
     }
 
-    /// Return the number of slots per segment
-    pub fn slots_per_segment(&self) -> u64 {
-        self.slots_per_segment
-    }
-
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
         self.tick_height.load(Ordering::Relaxed)
@@ -2384,7 +2363,7 @@ impl Bank {
         *self.inflation.read().unwrap()
     }
 
-    /// Return the total capititalization of the Bank
+    /// Return the total capitalization of the Bank
     pub fn capitalization(&self) -> u64 {
         self.capitalization.load(Ordering::Relaxed)
     }
@@ -2431,29 +2410,17 @@ impl Bank {
             let message = &tx.message();
             let acc = raccs.as_ref().unwrap();
 
-            for (pubkey, account) in
-                message
-                    .account_keys
-                    .iter()
-                    .zip(acc.0.iter())
-                    .filter(|(_key, account)| {
-                        (Stakes::is_stake(account)) || storage_utils::is_storage(account)
-                    })
+            for (pubkey, account) in message
+                .account_keys
+                .iter()
+                .zip(acc.0.iter())
+                .filter(|(_key, account)| (Stakes::is_stake(account)))
             {
                 if Stakes::is_stake(account) {
                     self.stakes.write().unwrap().store(pubkey, account);
-                } else if storage_utils::is_storage(account) {
-                    self.storage_accounts
-                        .write()
-                        .unwrap()
-                        .store(pubkey, account);
                 }
             }
         }
-    }
-
-    pub fn storage_accounts(&self) -> StorageAccounts {
-        self.storage_accounts.read().unwrap().clone()
     }
 
     /// current stake delegations for this bank
@@ -2831,35 +2798,6 @@ mod tests {
         assert_eq!(bank.capitalization(), 42 * 42);
         let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
         assert_eq!(bank1.capitalization(), 42 * 42);
-    }
-
-    #[test]
-    fn test_bank_inflation() {
-        let key = Pubkey::default();
-        let bank = Arc::new(Bank::new(&GenesisConfig {
-            accounts: (0..42)
-                .into_iter()
-                .map(|_| (Pubkey::new_rand(), Account::new(42, 0, &key)))
-                .collect(),
-            ..GenesisConfig::default()
-        }));
-        assert_eq!(bank.capitalization(), 42 * 42);
-
-        // With inflation
-        bank.set_entered_epoch_callback(Box::new(move |bank: &mut Bank| {
-            let mut inflation = Inflation::default();
-            inflation.initial = 1_000_000.0;
-            bank.set_inflation(inflation)
-        }));
-        let bank1 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH + 1);
-        assert_ne!(bank.capitalization(), bank1.capitalization());
-
-        // Without inflation
-        bank.set_entered_epoch_callback(Box::new(move |bank: &mut Bank| {
-            bank.set_inflation(Inflation::new_disabled())
-        }));
-        let bank2 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH * 2 + 1);
-        assert_eq!(bank.capitalization(), bank2.capitalization());
     }
 
     #[test]
@@ -4158,13 +4096,8 @@ mod tests {
         let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
-        let ((validator_id, validator_account), (archiver_id, archiver_account)) =
-            crate::storage_utils::tests::create_storage_accounts_with_credits(100);
-
-        // set up stakes, vote, and storage accounts
+        // set up accounts
         bank.store_account(&stake_id, &stake_account);
-        bank.store_account(&validator_id, &validator_account);
-        bank.store_account(&archiver_id, &archiver_account);
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -4185,7 +4118,6 @@ mod tests {
         bank.store_account(&vote_id, &vote_account);
 
         let validator_points = bank.stakes.read().unwrap().points();
-        let storage_points = bank.storage_accounts.read().unwrap().points();
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -4215,15 +4147,11 @@ mod tests {
 
         // verify the rewards are the right size
         assert!(
-            ((rewards.validator_point_value * validator_points as f64
-                + rewards.storage_point_value * storage_points as f64)
-                - inflation as f64)
-                .abs()
+            ((rewards.validator_point_value * validator_points as f64) - inflation as f64).abs()
                 < 1.0 // rounding, truncating
         );
 
         // verify validator rewards show up in bank1.rewards vector
-        // (currently storage rewards will not show up)
         assert_eq!(
             bank1.rewards,
             Some(vec![(
@@ -5900,25 +5828,19 @@ mod tests {
     }
 
     #[test]
-    fn test_check_point_values() {
+    fn test_check_point_value() {
         let (genesis_config, _) = create_genesis_config(500);
         let bank = Arc::new(Bank::new(&genesis_config));
 
         // check that point values are 0 if no previous value was known and current values are not normal
-        assert_eq!(
-            bank.check_point_values(std::f64::INFINITY, std::f64::NAN),
-            (0.0, 0.0)
-        );
+        assert_eq!(bank.check_point_value(std::f64::INFINITY), 0.0);
 
         bank.store_account(
             &sysvar::rewards::id(),
-            &sysvar::rewards::create_account(1, 1.0, 1.0),
+            &sysvar::rewards::create_account(1, 1.0),
         );
         // check that point values are the previous value if current values are not normal
-        assert_eq!(
-            bank.check_point_values(std::f64::INFINITY, std::f64::NAN),
-            (1.0, 1.0)
-        );
+        assert_eq!(bank.check_point_value(std::f64::INFINITY), 1.0);
     }
 
     #[test]

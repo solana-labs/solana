@@ -215,7 +215,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }),
             );
 
-            let (_all_peers, validators, _archivers) = discover(
+            let (_all_peers, validators) = discover(
                 entrypoint_addr.as_ref(),
                 num_nodes,
                 timeout,
@@ -263,7 +263,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let entrypoint_addr = parse_entrypoint(&matches);
             let timeout = value_t_or_exit!(matches, "timeout", u64);
             let shred_version = value_t_or_exit!(matches, "shred_version", u16);
-            let (_all_peers, validators, _archivers) = discover(
+            let (_all_peers, validators) = discover(
                 entrypoint_addr.as_ref(),
                 Some(1),
                 Some(timeout),
@@ -304,7 +304,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let (_all_peers, validators, _archivers) = discover(
+            let (_all_peers, validators) = discover(
                 entrypoint_addr.as_ref(),
                 None,
                 None,

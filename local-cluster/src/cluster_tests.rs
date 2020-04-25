@@ -45,7 +45,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
     nodes: usize,
     ignore_nodes: HashSet<Pubkey, S>,
 ) {
-    let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for ingress_node in &cluster_nodes {
         if ignore_nodes.contains(&ingress_node.id) {
@@ -126,7 +126,7 @@ pub fn send_many_transactions(
 }
 
 pub fn validator_exit(entry_point_info: &ContactInfo, nodes: usize) {
-    let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for node in &cluster_nodes {
         let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
@@ -197,7 +197,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     slot_millis: u64,
 ) {
     solana_logger::setup();
-    let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
     // sleep long enough to make sure we are in epoch 3

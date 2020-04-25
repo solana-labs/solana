@@ -439,7 +439,7 @@ mod tests {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
                     sysvar::clock::Clock::default().create_account(1)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
-                    sysvar::rewards::create_account(1, 0.0, 0.0)
+                    sysvar::rewards::create_account(1, 0.0)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
                     sysvar::stake_history::create_account(1, &StakeHistory::default())
                 } else if config::check_id(&meta.pubkey) {
@@ -680,7 +680,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0, 0.0))
+                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
@@ -719,7 +719,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0, 0.0))
+                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
                     ),
                 ],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
