@@ -161,7 +161,7 @@ pub struct PruneData {
 impl Sanitize for PruneData {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfRange);
         }
         Ok(())
     }
@@ -2815,6 +2815,14 @@ mod tests {
 
         // finally assert the header size estimation is correct
         assert_eq!(MAX_PROTOCOL_HEADER_SIZE, max_protocol_size);
+    }
+
+    #[test]
+    fn test_protocol_sanitize() {
+        let mut pd = PruneData::default();
+        pd.wallclock = MAX_WALLCLOCK;
+        let msg = Protocol::PruneMessage(Pubkey::default(), pd);
+        assert_eq!(msg.sanitize(), Err(SanitizeError::ValueOutOfRange));
     }
 
     // computes the maximum size for pull request blooms
