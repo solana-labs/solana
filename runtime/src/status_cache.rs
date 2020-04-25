@@ -1,4 +1,4 @@
-use crate::accounts_index::AncestorList;
+use crate::accounts_index::Ancestors;
 
 use log::*;
 use rand::{thread_rng, Rng};
@@ -87,7 +87,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         &self,
         sig: &Signature,
         transaction_blockhash: &Hash,
-        ancestors: &AncestorList,
+        ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
         let map = self.cache.get(transaction_blockhash)?;
         let (_, index, sigmap) = map;
@@ -108,7 +108,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     pub fn get_signature_slot(
         &self,
         signature: &Signature,
-        ancestors: &AncestorList,
+        ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
         let mut keys = vec![];
         let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
