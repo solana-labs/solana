@@ -466,6 +466,50 @@ mod tests {
         assert!(tx.sanitize().is_err());
     }
 
+    #[test]
+    fn test_sanitize_txs() {
+        let key = Keypair::new();
+        let id0 = Pubkey::default();
+        let program_id = Pubkey::new_rand();
+        let ix = Instruction::new(
+            program_id,
+            &0,
+            vec![AccountMeta::new(key.pubkey(), true), AccountMeta::new(id0, true)],
+        );
+        let ixs = vec![ix];
+        let mut tx = Transaction::new_with_payer(ixs, Some(&key.pubkey()));
+        let o = tx.clone();
+        assert!(tx.sanitize().is_ok());
+        assert_eq!(tx.message.account_keys.len(), 3);
+
+        tx = o.clone();
+        tx.message.header.num_required_signatures = 3;
+        assert!(tx.sanitize().is_err());
+        
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 4;
+        tx.message.header.num_readonly_unsigned_accounts = 0;
+        assert!(tx.sanitize().is_err());
+        
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 2;
+        tx.message.header.num_readonly_unsigned_accounts = 2;
+        assert!(tx.sanitize().is_err());
+
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 0;
+        tx.message.header.num_readonly_unsigned_accounts = 4;
+        assert!(tx.sanitize().is_err());
+        
+        tx = o.clone();
+        tx.message.instructions[0].program_id_index = 3;
+        assert!(tx.sanitize().is_err());
+
+        tx = o.clone();
+        tx.message.instructions[0].accounts[0] = 3;
+        assert!(tx.sanitize().is_err());
+    }
+
     fn create_sample_transaction() -> Transaction {
         let keypair = Keypair::from_bytes(&[
             48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 255, 101, 36, 24, 124, 23,
