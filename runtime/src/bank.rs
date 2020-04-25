@@ -78,7 +78,13 @@ pub const MAINNET_BETA_GENESIS_HASH: Hash = Hash::new_from_array([
     69, 41, 105, 152, 166, 248, 226, 167, 132, 219, 93, 159, 149, 225, 143, 194, 63, 112, 68, 26,
     16, 57, 68, 104, 1, 8, 152, 121, 176, 140, 126, 240,
 ]);
-const EAGER_RENT_COLLECTION_START_EPOCH: Epoch = 30;
+const MAINNET_BETA_EAGER_RENT_COLLECTION_START_EPOCH: Epoch = 30; // TENTATIVE!!!!
+
+pub const TESTNET_GENESIS_HASH: Hash = Hash::new_from_array([
+    58, 19, 46, 206, 16, 48, 94, 193, 131, 7, 37, 80, 47, 162, 183, 231, 235, 129, 87, 233, 18, 61,
+    76, 31, 101, 74, 113, 120, 113, 97, 220, 33,
+]);
+const TESTNET_EAGER_RENT_COLLECTION_START_EPOCH: Epoch = 40; // TENTATIVE!!!!
 
 type BankStatusCache = StatusCache<Result<()>>;
 pub type BankSlotDelta = SlotDelta<Result<()>>;
@@ -89,8 +95,16 @@ type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 // Each cycle is composed of <partiion_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
 type PartitionIndex = u64;
-type PartitionCount = u64;
-type RentCollectionCycleParams = (Epoch, SlotCount, bool, Epoch, EpochCount, PartitionCount);
+type PartitionsPerCycle = u64;
+type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
+type RentCollectionCycleParams = (
+    Epoch,
+    SlotCount,
+    bool,
+    Epoch,
+    EpochCount,
+    PartitionsPerCycle,
+);
 
 type EpochCount = u64;
 
@@ -1679,12 +1693,7 @@ impl Bank {
         }
     }
 
-    fn collect_rent_by_range(
-        &self,
-        range_start: PartitionIndex,
-        range_end: PartitionIndex,
-        partition_count: PartitionCount,
-    ) {
+    fn collect_rent_in_partition(&self, (range_start, range_end, partition_count): Partition) {
         let subrange = Self::pubkey_range_by_partition(range_start, range_end, partition_count);
 
         let accounts = self
@@ -1709,7 +1718,7 @@ impl Bank {
     fn pubkey_range_by_partition(
         start_index: PartitionIndex,
         end_index: PartitionIndex,
-        partition_count: PartitionCount,
+        partition_count: PartitionsPerCycle,
     ) -> std::ops::RangeInclusive<Pubkey> {
         let partition_width = Slot::max_value() / partition_count;
         let start_key_prefix = if start_index == 0 && end_index == 0 {
@@ -1741,47 +1750,42 @@ impl Bank {
         Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey)
     }
 
-    fn eager_rent_ranges_for_epochs(&self) -> Vec<(SlotIndex, SlotIndex, SlotCount)> {
+    fn constant_cycle_partitions(&self, slot_count_in_two_day: SlotCount) -> Vec<Partition> {
+        let parent_cycle = self.parent_slot() / slot_count_in_two_day;
+        let current_cycle = self.slot() / slot_count_in_two_day;
+        let mut parent_cycle_index = self.parent_slot() % slot_count_in_two_day;
+        let current_cycle_index = self.slot() % slot_count_in_two_day;
+        let mut partitions = vec![];
+        if parent_cycle < current_cycle {
+            if current_cycle_index > 0 {
+                partitions.push((
+                    parent_cycle_index,
+                    slot_count_in_two_day - 1,
+                    slot_count_in_two_day,
+                ));
+            }
+            parent_cycle_index = 0;
+        }
+
+        partitions.push((
+            parent_cycle_index,
+            current_cycle_index,
+            slot_count_in_two_day,
+        ));
+
+        partitions
+    }
+
+    fn normal_cycle_partitions(&self) -> Vec<Partition> {
         let (current_epoch, current_slot_index) = self.get_epoch_and_slot_index(self.slot());
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
 
-        let mut ranges = vec![];
-
-        let slot_count_per_normal_epoch =
-            self.get_slots_in_epoch(self.epoch_schedule.first_normal_epoch);
-        let slot_count_in_two_day: SlotCount =
-            2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
-        let is_in_constant_cycle =
-            self.use_constant_collection_cycle(slot_count_per_normal_epoch, slot_count_in_two_day);
-        if is_in_constant_cycle {
-            let parent_cycle = self.parent_slot() / slot_count_in_two_day;
-            let current_cycle = self.slot() / slot_count_in_two_day;
-            let mut parent_cycle_index = self.parent_slot() % slot_count_in_two_day;
-            let current_cycle_index = self.slot() % slot_count_in_two_day;
-            if parent_cycle < current_cycle {
-                if current_cycle_index > 0 {
-                    ranges.push((
-                        parent_cycle_index,
-                        slot_count_in_two_day - 1,
-                        slot_count_in_two_day,
-                    ));
-                }
-                parent_cycle_index = 0;
-            }
-
-            ranges.push((
-                parent_cycle_index,
-                current_cycle_index,
-                slot_count_in_two_day,
-            ));
-            return ranges;
-        }
-
+        let mut partitions = vec![];
         if parent_epoch < current_epoch {
             if current_slot_index > 0 {
                 let last_slot_index = self.get_slots_in_epoch(parent_epoch) - 1;
-                ranges.push(self.partition_in_collection_cycle(
+                partitions.push(self.partition_in_collection_cycle(
                     parent_slot_index,
                     last_slot_index,
                     parent_epoch,
@@ -1790,13 +1794,28 @@ impl Bank {
             parent_slot_index = 0;
         }
 
-        ranges.push(self.partition_in_collection_cycle(
+        partitions.push(self.partition_in_collection_cycle(
             parent_slot_index,
             current_slot_index,
             current_epoch,
         ));
 
-        ranges
+        partitions
+    }
+
+    fn rent_collection_partitions(&self) -> Vec<Partition> {
+        let slot_count_per_normal_epoch =
+            self.get_slots_in_epoch(self.epoch_schedule.first_normal_epoch);
+        let slot_count_in_two_day: SlotCount =
+            2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
+        let is_in_constant_cycle =
+            self.use_constant_collection_cycle(slot_count_per_normal_epoch, slot_count_in_two_day);
+
+        if !is_in_constant_cycle {
+            self.normal_cycle_partitions()
+        } else {
+            self.constant_cycle_partitions(slot_count_in_two_day)
+        }
     }
 
     fn determine_collection_cycle_params(
@@ -1845,7 +1864,7 @@ impl Bank {
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
         current_epoch: Epoch,
-    ) -> (PartitionIndex, PartitionIndex, PartitionCount) {
+    ) -> Partition {
         let slot_count_per_epoch = self.get_slots_in_epoch(current_epoch);
         let cycle_params =
             self.determine_collection_cycle_params(current_epoch, slot_count_per_epoch);
@@ -1916,16 +1935,18 @@ impl Bank {
         slot_count_per_normal_epoch: SlotCount,
         slot_count_in_two_day: SlotCount,
     ) -> bool {
-        self.operating_mode.unwrap() != OperatingMode::Stable
+        self.operating_mode() != OperatingMode::Stable
             && slot_count_per_normal_epoch < slot_count_in_two_day
     }
 
     fn collect_rent_eagerly(&self) {
+        if !self.enable_eager_rent_collection() {
+            return;
+        }
+
         let mut measure = Measure::start("collect_rent_eagerly-ms");
-        if self.enable_eager_rent_collection() {
-            for (start_index, end_index, partition_count) in self.eager_rent_ranges_for_epochs() {
-                self.collect_rent_by_range(start_index, end_index, partition_count);
-            }
+        for partition in self.rent_collection_partitions() {
+            self.collect_rent_in_partition(partition);
         }
         measure.stop();
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
@@ -1936,9 +1957,20 @@ impl Bank {
             return false;
         }
 
-        !(self.operating_mode.unwrap() == OperatingMode::Stable
+        let not_yet_for_existing_clusters = (self.operating_mode() == OperatingMode::Stable
             && self.genesis_hash.unwrap() == MAINNET_BETA_GENESIS_HASH
-            && self.epoch() < EAGER_RENT_COLLECTION_START_EPOCH)
+            && self.epoch() < MAINNET_BETA_EAGER_RENT_COLLECTION_START_EPOCH)
+            || (self.operating_mode() == OperatingMode::Preview
+                && self.genesis_hash.unwrap() == TESTNET_GENESIS_HASH
+                && self.epoch() < TESTNET_EAGER_RENT_COLLECTION_START_EPOCH);
+
+        !not_yet_for_existing_clusters
+    }
+
+    fn operating_mode(&self) -> OperatingMode {
+        // unwrap is safe; self.operating_mode is ensured to be Some() always...
+        // we only using Option here for ABI compatibility...
+        self.operating_mode.unwrap()
     }
 
     /// Process a batch of transactions.
@@ -3533,16 +3565,16 @@ mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 32)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
 
         bank = Arc::new(new_from_parent(&bank));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 32)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 32)]);
         for _ in 2..32 {
             bank = Arc::new(new_from_parent(&bank));
         }
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(30, 31, 32)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(30, 31, 32)]);
         bank = Arc::new(new_from_parent(&bank));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 64)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 64)]);
     }
 
     #[test]
@@ -3550,17 +3582,17 @@ mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 32)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
 
         bank = Arc::new(new_from_parent(&bank));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 32)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 32)]);
         for _ in 2..15 {
             bank = Arc::new(new_from_parent(&bank));
         }
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(13, 14, 32)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(13, 14, 32)]);
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 49));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(14, 31, 32), (0, 17, 64)]
         );
     }
@@ -3582,36 +3614,36 @@ mod tests {
         assert_eq!(DEFAULT_SLOTS_PER_EPOCH, 432000);
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 432000)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 1));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 432000)]);
 
         for _ in 2..32 {
             bank = Arc::new(new_from_parent(&bank));
         }
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 31));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(30, 31, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(30, 31, 432000)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(31, 32, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(31, 32, 432000)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1, 1));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(32, 33, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(32, 33, 432000)]);
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1000));
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1001));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (31, 9));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(1000, 1001, 432000)]
         );
 
@@ -3620,19 +3652,19 @@ mod tests {
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (13499, 31));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(431998, 431999, 432000)]
         );
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (13500, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 432000)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (13500, 1));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 432000)]);
     }
 
     #[test]
@@ -3652,39 +3684,39 @@ mod tests {
         assert_eq!(DEFAULT_SLOTS_PER_EPOCH, 432000);
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 432000)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 1));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 432000)]);
 
         for _ in 2..19 {
             bank = Arc::new(new_from_parent(&bank));
         }
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 18));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(17, 18, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(17, 18, 432000)]);
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 44));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1, 12));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(18, 31, 432000), (31, 44, 432000)]
         );
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1, 13));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(44, 45, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(44, 45, 432000)]);
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 431993));
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 432011));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (13500, 11));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(431993, 431999, 432000), (0, 11, 432000)]
         );
     }
@@ -3707,24 +3739,24 @@ mod tests {
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.epoch_schedule.first_normal_epoch, 3);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 32)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 222));
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 128);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (2, 127));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(126, 127, 128)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(126, 127, 128)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 431872)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 431872)]);
         assert_eq!(431872 % bank.get_slots_in_epoch(bank.epoch()), 0);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 1));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 431872)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 431872)]);
 
         bank = Arc::new(Bank::new_from_parent(
             &bank,
@@ -3735,14 +3767,14 @@ mod tests {
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1689, 255));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(431870, 431871, 431872)]
         );
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (1690, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 431872)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 431872)]);
     }
 
     #[test]
@@ -3762,43 +3794,34 @@ mod tests {
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
         assert_eq!(bank.epoch_schedule.first_normal_epoch, 3);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 0));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 432000)]);
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 222));
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 128);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (2, 127));
-        assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
-            vec![(222, 223, 432000)]
-        );
+        assert_eq!(bank.rent_collection_partitions(), vec![(222, 223, 432000)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 0));
-        assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
-            vec![(223, 224, 432000)]
-        );
+        assert_eq!(bank.rent_collection_partitions(), vec![(223, 224, 432000)]);
 
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 256);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (3, 1));
-        assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
-            vec![(224, 225, 432000)]
-        );
+        assert_eq!(bank.rent_collection_partitions(), vec![(224, 225, 432000)]);
 
         bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 432000 - 2));
         bank = Arc::new(new_from_parent(&bank));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(431998, 431999, 432000)]
         );
         bank = Arc::new(new_from_parent(&bank));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 0, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 432000)]);
         bank = Arc::new(new_from_parent(&bank));
-        assert_eq!(bank.eager_rent_ranges_for_epochs(), vec![(0, 1, 432000)]);
+        assert_eq!(bank.rent_collection_partitions(), vec![(0, 1, 432000)]);
 
         bank = Arc::new(Bank::new_from_parent(
             &bank,
@@ -3811,7 +3834,7 @@ mod tests {
             864000 + 39,
         ));
         assert_eq!(
-            bank.eager_rent_ranges_for_epochs(),
+            bank.rent_collection_partitions(),
             vec![(431980, 431999, 432000), (0, 39, 432000)]
         );
     }
@@ -3939,7 +3962,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rent_eager_collect_rent_by_range() {
+    fn test_rent_eager_collect_rent_in_partition() {
         solana_logger::setup();
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
@@ -3992,7 +4015,7 @@ mod tests {
             vec![genesis_slot]
         );
 
-        bank.collect_rent_by_range(0, 0, 1); // all range
+        bank.collect_rent_in_partition((0, 0, 1)); // all range
 
         // unrelated 1-lamport account exists
         assert_eq!(
@@ -4074,8 +4097,8 @@ mod tests {
         assert_eq!(hash1_with_zero, hash1_without_zero);
         assert_ne!(hash1_with_zero, Hash::default());
 
-        bank2_with_zero.collect_rent_by_range(0, 0, 1); // all range
-        bank2_without_zero.collect_rent_by_range(0, 0, 1); // all range
+        bank2_with_zero.collect_rent_in_partition((0, 0, 1)); // all
+        bank2_without_zero.collect_rent_in_partition((0, 0, 1)); // all
 
         bank2_with_zero.freeze();
         let hash2_with_zero = bank2_with_zero.hash();
