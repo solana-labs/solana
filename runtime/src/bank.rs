@@ -64,6 +64,7 @@ use std::{
     collections::{HashMap, HashSet},
     io::{BufReader, Cursor, Error as IOError, Read},
     mem,
+    ops::RangeInclusive,
     path::{Path, PathBuf},
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -1718,7 +1719,7 @@ impl Bank {
 
     fn pubkey_range_by_partition(
         (start_index, end_index, partition_count): Partition,
-    ) -> std::ops::RangeInclusive<Pubkey> {
+    ) -> RangeInclusive<Pubkey> {
         type Prefix = u64;
         const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
         let partition_width = Prefix::max_value() / partition_count;
