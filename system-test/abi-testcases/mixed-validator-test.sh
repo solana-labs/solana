@@ -116,7 +116,6 @@ for v in "${otherVersions[@]}"; do
       $SOLANA_BIN/solana-validator \
       --ledger $ledger \
       --no-snapshot-fetch \
-      --snapshot-interval-slots 10 \
       --entrypoint 127.0.0.1:8001 \
       -o - 2>&1 | tee $logDir/$v.log \
     "
@@ -125,9 +124,9 @@ for v in "${otherVersions[@]}"; do
       --num-nodes-exactly $nodeCount \
       --timeout 30
 
-    # Wait for it to make a root
+    # Wait for it to make a snapshot root
     SECONDS=
-    while [[ ! -f $ledger/snapshot.tar.bz2 ]]; do
+    while [[ ! -d $ledger/snapshot ]]; do
       sleep 5
       if [[ $SECONDS -gt 60 ]]; then
         echo "Error: validator failed to create a snapshot"
