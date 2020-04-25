@@ -1694,8 +1694,8 @@ impl Bank {
         }
     }
 
-    fn collect_rent_in_partition(&self, (range_start, range_end, partition_count): Partition) {
-        let subrange = Self::pubkey_range_by_partition(range_start, range_end, partition_count);
+    fn collect_rent_in_partition(&self, partition: Partition) {
+        let subrange = Self::pubkey_range_by_partition(partition);
 
         let accounts = self
             .rc
@@ -1717,9 +1717,7 @@ impl Bank {
     }
 
     fn pubkey_range_by_partition(
-        start_index: PartitionIndex,
-        end_index: PartitionIndex,
-        partition_count: PartitionsPerCycle,
+        (start_index, end_index, partition_count): Partition,
     ) -> std::ops::RangeInclusive<Pubkey> {
         type Prefix = u64;
         const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
@@ -3844,7 +3842,7 @@ mod tests {
 
     #[test]
     fn test_rent_eager_pubkey_range_minimal() {
-        let range = Bank::pubkey_range_by_partition(0, 0, 1);
+        let range = Bank::pubkey_range_by_partition((0, 0, 1));
         assert_eq!(
             range,
             Pubkey::new_from_array([0x00; 32])..=Pubkey::new_from_array([0xff; 32])
@@ -3853,7 +3851,7 @@ mod tests {
 
     #[test]
     fn test_rent_eager_pubkey_range_dividable() {
-        let range = Bank::pubkey_range_by_partition(0, 0, 2);
+        let range = Bank::pubkey_range_by_partition((0, 0, 2));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3868,7 +3866,7 @@ mod tests {
                 ])
         );
 
-        let range = Bank::pubkey_range_by_partition(0, 1, 2);
+        let range = Bank::pubkey_range_by_partition((0, 1, 2));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3888,7 +3886,7 @@ mod tests {
     fn test_rent_eager_pubkey_range_not_dividable() {
         solana_logger::setup();
 
-        let range = Bank::pubkey_range_by_partition(0, 0, 3);
+        let range = Bank::pubkey_range_by_partition((0, 0, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3903,7 +3901,7 @@ mod tests {
                 ])
         );
 
-        let range = Bank::pubkey_range_by_partition(0, 1, 3);
+        let range = Bank::pubkey_range_by_partition((0, 1, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3918,7 +3916,7 @@ mod tests {
                 ])
         );
 
-        let range = Bank::pubkey_range_by_partition(1, 2, 3);
+        let range = Bank::pubkey_range_by_partition((1, 2, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3937,7 +3935,7 @@ mod tests {
     #[test]
     fn test_rent_eager_pubkey_range_gap() {
         solana_logger::setup();
-        let range = Bank::pubkey_range_by_partition(120, 1023, 12345);
+        let range = Bank::pubkey_range_by_partition((120, 1023, 12345));
         assert_eq!(
             range,
             Pubkey::new_from_array([
