@@ -836,6 +836,33 @@ impl Blockstore {
         Ok(())
     }
 
+    pub fn clear_slot_shreds(&self, slot: Slot) {
+        let slot_confirmation_status = self
+            .slot_confirmation_status_cf
+            .get(slot)
+            .expect("Couldn't fetch from SlotConfirmationStatus column family")
+            .unwrap_or_default();
+
+        // Should not be clearing a confirmed version of a slot
+        assert!(slot_confirmation_status.confirmed_blockhash.is_none());
+        let _lock = self.insert_shreds_lock.lock().unwrap();
+        let mut slot_meta = self
+            .meta(slot)
+            .expect("Couldn't fetch from SlotMeta column family")
+            .expect("Should only be called on dead slots, which means meta must exist");
+
+        // Clear all slot related information
+        self.run_purge(slot, slot)
+            .expect("Purge database operations failed");
+
+        // Reinsert parts of `slot_meta` that are important to retain, like the `next_slots`
+        // field.
+        slot_meta.clear_unconfirmed_slot();
+        self.meta_cf
+            .put(slot, &slot_meta)
+            .expect("Couldn't insert into SlotMeta column family");
+    }
+
     pub fn insert_shreds(
         &self,
         shreds: Vec<Shred>,
@@ -2139,6 +2166,13 @@ impl Blockstore {
         Ok(orphans_iter.map(|(slot, _)| slot))
     }
 
+    pub fn dead_slots_iterator<'a>(&'a self, slot: Slot) -> Result<impl Iterator<Item = u64> + 'a> {
+        let dead_slots_iterator = self
+            .db
+            .iter::<cf::DeadSlots>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+        Ok(dead_slots_iterator.map(|(slot, _)| slot))
+    }
+
     /// Prune blockstore such that slots higher than `target_slot` are deleted and all references to
     /// higher slots are removed
     pub fn prune(&self, target_slot: Slot) {
@@ -2397,10 +2431,7 @@ fn find_slot_meta_in_db_else_create<'a>(
         // If this slot doesn't exist, make a orphan slot. This way we
         // remember which slots chained to this one when we eventually get a real shred
         // for this slot
-        insert_map.insert(
-            slot,
-            Rc::new(RefCell::new(SlotMeta::new(slot, std::u64::MAX))),
-        );
+        insert_map.insert(slot, Rc::new(RefCell::new(SlotMeta::new_orphan(slot))));
         Ok(insert_map.get(&slot).unwrap().clone())
     }
 }

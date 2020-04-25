@@ -3,6 +3,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
+    consensus::VOTE_THRESHOLD_SIZE,
     result::Result,
     serve_repair::{RepairType, ServeRepair},
 };
@@ -10,6 +11,7 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
 };
+use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey};
 use std::{
     collections::HashMap,
@@ -145,12 +147,18 @@ impl RepairService {
                         ref bank_forks,
                         ..
                     } => {
-                        let new_root = blockstore.last_root();
+                        let root_bank = bank_forks.read().unwrap().root_bank().clone();
+                        let new_root = root_bank.slot();
                         let lowest_slot = blockstore.lowest_slot();
                         Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
                         Self::update_completed_slots(completed_slots_receiver, &cluster_info);
                         cluster_slots.update(new_root, cluster_info, bank_forks);
-                        Self::generate_repairs(blockstore, new_root, MAX_REPAIR_LENGTH)
+                        Self::generate_repairs(
+                            blockstore,
+                            MAX_REPAIR_LENGTH,
+                            cluster_slots,
+                            &root_bank,
+                        )
                     }
                 }
             };
@@ -236,9 +244,11 @@ impl RepairService {
 
     fn generate_repairs(
         blockstore: &Blockstore,
-        root: Slot,
         max_repairs: usize,
+        cluster_slots: &ClusterSlots,
+        root_bank: &Bank,
     ) -> Result<Vec<RepairType>> {
+        let root = root_bank.slot();
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<RepairType> = vec![];
         Self::generate_repairs_for_fork(blockstore, &mut repairs, max_repairs, root);
@@ -246,9 +256,73 @@ impl RepairService {
         // TODO: Incorporate gossip to determine priorities for repair?
 
         // Try to resolve orphans in blockstore
-        let orphans = blockstore.orphans_iterator(root + 1).unwrap();
-        Self::generate_repairs_for_orphans(orphans, &mut repairs);
+        {
+            let orphans = blockstore.orphans_iterator(root + 1).unwrap();
+            Self::generate_repairs_for_orphans(orphans, &mut repairs);
+        }
+
+        // Try to look for alternate versions of dead slots in blockstore
+        {
+            let dead_slots = blockstore.dead_slots_iterator(root + 1).unwrap();
+            Self::generate_repairs_for_dead_slots(
+                dead_slots,
+                &mut repairs,
+                &cluster_slots,
+                root_bank,
+                blockstore,
+            );
+        }
+
         Ok(repairs)
+    }
+
+    fn generate_repairs_for_dead_slots(
+        dead_slots: impl Iterator<Item = u64>,
+        repairs: &mut Vec<RepairType>,
+        cluster_slots: &ClusterSlots,
+        root_bank: &Bank,
+        blockstore: &Blockstore,
+    ) {
+        for dead_slot in dead_slots {
+            if let Some(completed_dead_slot_pubkeys) = cluster_slots.lookup(dead_slot) {
+                let epoch = root_bank.get_epoch_and_slot_index(dead_slot).0;
+                if let Some(epoch_stakes) = root_bank.epoch_stakes(epoch) {
+                    let total_stake = epoch_stakes.total_stake();
+                    let node_id_to_vote_accounts = epoch_stakes.node_id_to_vote_accounts();
+                    let total_completed_slot_stake: u64 = completed_dead_slot_pubkeys
+                        .read()
+                        .unwrap()
+                        .iter()
+                        .map(|(node_key, _)| {
+                            node_id_to_vote_accounts
+                                .get(node_key)
+                                .map(|v| v.total_stake)
+                                .unwrap_or(0)
+                        })
+                        .sum();
+                    if total_completed_slot_stake as f64 / total_stake as f64 > VOTE_THRESHOLD_SIZE
+                    {
+                        // Clear the slot signatures from status cache for this slot
+                        root_bank.clear_slot_signatures(dead_slot);
+
+                        // Clear the slot-related data in blockstore. This will:
+                        // 1) Clear old shreds allowing new ones to be inserted
+                        // 2) Clear the "dead" flag allowing ReplayStage to start replaying
+                        // this slot
+                        blockstore.clear_slot_shreds(dead_slot);
+
+                        // Signal ReplayStage to clear its progress map so that a different
+                        // version of this slot can be replayed
+                    }
+                } else {
+                    warn!(
+                        "Dead slot {} is too far ahead of root bank {}",
+                        dead_slot,
+                        root_bank.slot()
+                    );
+                }
+            }
+        }
     }
 
     fn generate_repairs_for_slot(
@@ -388,7 +462,13 @@ mod test {
             shreds.extend(shreds2);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, 2).unwrap(),
+                RepairService::generate_repairs(
+                    &blockstore,
+                    2,
+                    &ClusterSlots::default(),
+                    &Bank::default()
+                )
+                .unwrap(),
                 vec![RepairType::HighestShred(0, 0), RepairType::Orphan(2)]
             );
         }
@@ -410,7 +490,13 @@ mod test {
 
             // Check that repair tries to patch the empty slot
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, 2).unwrap(),
+                RepairService::generate_repairs(
+                    &blockstore,
+                    2,
+                    &ClusterSlots::default(),
+                    &Bank::default()
+                )
+                .unwrap(),
                 vec![RepairType::HighestShred(0, 0)]
             );
         }
@@ -456,12 +542,24 @@ mod test {
                 .collect();
 
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, std::usize::MAX).unwrap(),
+                RepairService::generate_repairs(
+                    &blockstore,
+                    std::usize::MAX,
+                    &ClusterSlots::default(),
+                    &Bank::default()
+                )
+                .unwrap(),
                 expected
             );
 
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, expected.len() - 2).unwrap()[..],
+                RepairService::generate_repairs(
+                    &blockstore,
+                    expected.len() - 2,
+                    &ClusterSlots::default(),
+                    &Bank::default()
+                )
+                .unwrap()[..],
                 expected[0..expected.len() - 2]
             );
         }
@@ -490,7 +588,13 @@ mod test {
                 vec![RepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
             assert_eq!(
-                RepairService::generate_repairs(&blockstore, 0, std::usize::MAX).unwrap(),
+                RepairService::generate_repairs(
+                    &blockstore,
+                    std::usize::MAX,
+                    &ClusterSlots::default(),
+                    &Bank::default()
+                )
+                .unwrap(),
                 expected
             );
         }
@@ -535,7 +639,7 @@ mod test {
                         RepairService::generate_repairs_in_range(
                             &blockstore,
                             std::usize::MAX,
-                            &repair_slot_range
+                            &repair_slot_range,
                         )
                         .unwrap(),
                         expected
@@ -580,7 +684,7 @@ mod test {
                 RepairService::generate_repairs_in_range(
                     &blockstore,
                     std::usize::MAX,
-                    &repair_slot_range
+                    &repair_slot_range,
                 )
                 .unwrap(),
                 expected
