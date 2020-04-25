@@ -1070,15 +1070,21 @@ pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
         });
 
     let cli_command = CliSignOnlyData {
-        blockhash: tx.message.recent_blockhash,
-        signers,
-        absent,
-        bad_sig,
+        blockhash: tx.message.recent_blockhash.clone(),
+        signers: signers.clone(),
+        absent: absent.clone(),
+        bad_sig: bad_sig.clone(),
     };
 
     config.output_format.formatted_print(&cli_command);
 
-    Ok("".to_string())
+    Ok(json!({
+        "blockhash": tx.message.recent_blockhash.to_string(),
+        "signers": &signers,
+        "absent": &absent,
+        "badSig": &bad_sig,
+    })
+    .to_string())
 }
 
 pub fn parse_create_address_with_seed(
@@ -1464,7 +1470,12 @@ fn process_pay(
                 &mut tx,
                 &[config.signers[0], &contract_state],
             );
-            log_instruction_custom_error::<BudgetError>(result, &config)
+            let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
+            Ok(json!({
+                "signature": signature,
+                "processId": format!("{}", contract_state.pubkey()),
+            })
+            .to_string())
         }
     } else if timestamp == None {
         let witness = if let Some(ref witness_vec) = *witnesses {
@@ -1504,7 +1515,12 @@ fn process_pay(
                 &fee_calculator,
                 &tx.message,
             )?;
-            log_instruction_custom_error::<BudgetError>(result, &config)
+            let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
+            Ok(json!({
+                "signature": signature,
+                "processId": format!("{}", contract_state.pubkey()),
+            })
+            .to_string())
         }
     } else {
         Ok("Combo transactions not yet handled".to_string())
@@ -2297,10 +2313,10 @@ where
         }
         Ok(sig) => {
             let signature = CliSignature {
-                signature: sig.to_string(),
+                signature: sig.clone().to_string(),
             };
             config.output_format.formatted_print(&signature);
-            Ok("".to_string())
+            Ok(sig.to_string())
         }
     }
 }
