@@ -26,7 +26,7 @@ if [[ -n $escape_marker && ${#shifted_args[@]} -gt 0 ]]; then
   done
   shifted_args=()
 else
-  files="$(git ls-files :**/Cargo.lock)"
+  files="$(git ls-files :**Cargo.lock)"
 fi
 
 for lock_file in $files; do
