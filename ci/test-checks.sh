@@ -13,7 +13,7 @@ export RUSTFLAGS="-D warnings"
 # Look for failed mergify.io backports
 _ git show HEAD --check --oneline
 
-if _ scripts/cargo-for-all-lock-files.sh check --locked; then
+if _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets; then
   true
 else
   check_status=$?
