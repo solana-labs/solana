@@ -377,6 +377,44 @@ mod tests {
         assert_eq!(slots.num, 701);
         assert_eq!(slots.to_slots(1), vec![1, 2, 701]);
     }
+
+    #[test]
+    fn test_epoch_slots_sanitize() {
+        let mut slots = Uncompressed::new(100);
+        slots.add(&[1, 701, 2]);
+        assert_eq!(slots.num, 701);
+        assert!(slots.sanitize().is_ok());
+
+        let mut o = slots.clone();
+        o.first_slot = MAX_SLOT;
+        assert!(o.sanitize().is_err());
+
+        let mut o = slots.clone();
+        o.num = MAX_SLOTS_PER_ENTRY;
+        assert!(o.sanitize().is_err());
+
+        let compressed = Flate2::deflate(slots).unwrap();
+        assert!(compressed.sanitize().is_ok());
+
+        let mut o = compressed.clone();
+        o.first_slot = MAX_SLOT;
+        assert!(o.sanitize().is_err());
+
+        let mut o = compressed.clone();
+        o.num = MAX_SLOTS_PER_ENTRY;
+        assert!(o.sanitize().is_err());
+
+        let mut slots = EpochSlots::default();
+        let range: Vec<Slot> = (0..5000).into_iter().collect();
+        assert_eq!(slots.fill(&range, 1), 5000);
+        assert_eq!(slots.wallclock, 1);
+        assert!(slots.sanitize().is_ok());
+
+        let mut o = slots.clone();
+        o.wallclock = MAX_WALLCLOCK;
+        assert!(o.sanitize().is_err());
+    }
+
     #[test]
     fn test_epoch_slots_fill_range() {
         let range: Vec<Slot> = (0..5000).into_iter().collect();
