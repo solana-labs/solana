@@ -20,6 +20,7 @@ mod tests {
     };
     use solana_sdk::{
         clock::Slot,
+        genesis_config::GenesisConfig,
         hash::hashv,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -95,6 +96,7 @@ mod tests {
                 &CompressionType::Bzip2,
             ),
             CompressionType::Bzip2,
+            &GenesisConfig::default(),
         )
         .unwrap();
 
