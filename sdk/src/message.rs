@@ -166,21 +166,21 @@ pub struct Message {
 impl Sanitize for Message {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.header.num_required_signatures as usize > self.account_keys.len() {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::IndexOutOfBounds);
         }
         if self.header.num_readonly_unsigned_accounts as usize
             + self.header.num_readonly_signed_accounts as usize
             > self.account_keys.len()
         {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::IndexOutOfBounds);
         }
         for ci in &self.instructions {
             if ci.program_id_index as usize >= self.account_keys.len() {
-                return Err(SanitizeError::Failed);
+                return Err(SanitizeError::IndexOutOfBounds);
             }
             for ai in &ci.accounts {
                 if *ai as usize >= self.account_keys.len() {
-                    return Err(SanitizeError::Failed);
+                    return Err(SanitizeError::IndexOutOfBounds);
                 }
             }
         }

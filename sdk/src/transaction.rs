@@ -90,10 +90,10 @@ pub struct Transaction {
 impl Sanitize for Transaction {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.message.header.num_required_signatures as usize > self.signatures.len() {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::IndexOutOfBounds);
         }
         if self.signatures.len() > self.message.account_keys.len() {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::IndexOutOfBounds);
         }
         self.message.sanitize()
     }
@@ -449,7 +449,7 @@ mod tests {
             vec![],
             instructions,
         );
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
     }
     #[test]
     fn test_refs_invalid_account() {
@@ -463,7 +463,7 @@ mod tests {
             instructions,
         );
         assert_eq!(*get_program_id(&tx, 0), Pubkey::default());
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
     }
 
     #[test]
@@ -482,35 +482,35 @@ mod tests {
         let ixs = vec![ix];
         let mut tx = Transaction::new_with_payer(ixs, Some(&key.pubkey()));
         let o = tx.clone();
-        assert!(tx.sanitize().is_ok());
+        assert_eq!(tx.sanitize(), Ok(()));
         assert_eq!(tx.message.account_keys.len(), 3);
 
         tx = o.clone();
         tx.message.header.num_required_signatures = 3;
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
 
         tx = o.clone();
         tx.message.header.num_readonly_signed_accounts = 4;
         tx.message.header.num_readonly_unsigned_accounts = 0;
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
 
         tx = o.clone();
         tx.message.header.num_readonly_signed_accounts = 2;
         tx.message.header.num_readonly_unsigned_accounts = 2;
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
 
         tx = o.clone();
         tx.message.header.num_readonly_signed_accounts = 0;
         tx.message.header.num_readonly_unsigned_accounts = 4;
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
 
         tx = o.clone();
         tx.message.instructions[0].program_id_index = 3;
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
 
         tx = o.clone();
         tx.message.instructions[0].accounts[0] = 3;
-        assert!(tx.sanitize().is_err());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
     }
 
     fn create_sample_transaction() -> Transaction {
