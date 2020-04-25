@@ -474,7 +474,10 @@ mod tests {
         let ix = Instruction::new(
             program_id,
             &0,
-            vec![AccountMeta::new(key.pubkey(), true), AccountMeta::new(id0, true)],
+            vec![
+                AccountMeta::new(key.pubkey(), true),
+                AccountMeta::new(id0, true),
+            ],
         );
         let ixs = vec![ix];
         let mut tx = Transaction::new_with_payer(ixs, Some(&key.pubkey()));
@@ -485,12 +488,12 @@ mod tests {
         tx = o.clone();
         tx.message.header.num_required_signatures = 3;
         assert!(tx.sanitize().is_err());
-        
+
         tx = o.clone();
         tx.message.header.num_readonly_signed_accounts = 4;
         tx.message.header.num_readonly_unsigned_accounts = 0;
         assert!(tx.sanitize().is_err());
-        
+
         tx = o.clone();
         tx.message.header.num_readonly_signed_accounts = 2;
         tx.message.header.num_readonly_unsigned_accounts = 2;
@@ -500,7 +503,7 @@ mod tests {
         tx.message.header.num_readonly_signed_accounts = 0;
         tx.message.header.num_readonly_unsigned_accounts = 4;
         assert!(tx.sanitize().is_err());
-        
+
         tx = o.clone();
         tx.message.instructions[0].program_id_index = 3;
         assert!(tx.sanitize().is_err());
