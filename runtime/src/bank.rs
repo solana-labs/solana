@@ -26,7 +26,7 @@ use crate::{
     transaction_utils::OrderedIterator,
 };
 use bincode::{deserialize_from, serialize_into};
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -63,6 +63,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     io::{BufReader, Cursor, Error as IOError, Read},
+    mem,
     path::{Path, PathBuf},
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -1720,7 +1721,9 @@ impl Bank {
         end_index: PartitionIndex,
         partition_count: PartitionsPerCycle,
     ) -> std::ops::RangeInclusive<Pubkey> {
-        let partition_width = Slot::max_value() / partition_count;
+        type Prefix = u64;
+        const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
+        let partition_width = Prefix::max_value() / partition_count;
         let start_key_prefix = if start_index == 0 && end_index == 0 {
             0
         } else {
@@ -1728,15 +1731,15 @@ impl Bank {
         };
 
         let end_key_prefix = if end_index + 1 == partition_count {
-            Slot::max_value()
+            Prefix::max_value()
         } else {
             (end_index + 1) * partition_width - 1
         };
 
         let mut start_pubkey = [0x00u8; 32];
         let mut end_pubkey = [0xffu8; 32];
-        BigEndian::write_u64(&mut start_pubkey[..], start_key_prefix);
-        BigEndian::write_u64(&mut end_pubkey[..], end_key_prefix);
+        start_pubkey[0..PREFIX_SIZE].copy_from_slice(&start_key_prefix.to_be_bytes());
+        end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
         trace!(
             "pubkey_range_by_partition: ({}-{})/{}: {:02x?}-{:02x?}",
             start_index,
