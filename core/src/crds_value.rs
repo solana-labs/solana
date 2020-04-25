@@ -91,7 +91,7 @@ impl Sanitize for CrdsData {
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
-                if *ix >= MAX_EPOCH_SLOTS {
+                if *ix as usize >= MAX_EPOCH_SLOTS as usize {
                     return Err(SanitizeError::Failed);
                 }
                 val.sanitize()
