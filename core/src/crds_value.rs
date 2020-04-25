@@ -452,7 +452,7 @@ mod test {
             ),
             &keypair,
         );
-        assert!(!vote.verify());
+        assert!(vote.sanitize().is_err());
     }
 
     #[test]
@@ -465,7 +465,7 @@ mod test {
             ),
             &keypair,
         );
-        assert!(!item.verify());
+        assert!(item.sanitize().is_err());
     }
     #[test]
     fn test_compute_vote_index_empty() {
