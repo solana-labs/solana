@@ -2483,6 +2483,7 @@ dependencies = [
  "rayon 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-config-program 1.2.0",
  "solana-logger 1.2.0",
  "solana-measure 1.2.0",
  "solana-metrics 1.2.0",

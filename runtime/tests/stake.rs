@@ -100,13 +100,10 @@ fn test_stake_create_and_split_single_signature() {
     solana_logger::setup();
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair: staker_keypair,
         ..
     } = create_genesis_config_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
-    genesis_config
-        .native_instruction_processors
-        .push(solana_stake_program::solana_stake_program!());
 
     let staker_pubkey = staker_keypair.pubkey();
 
@@ -166,13 +163,10 @@ fn test_stake_account_lifetime() {
     let identity_pubkey = identity_keypair.pubkey();
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
-    genesis_config
-        .native_instruction_processors
-        .push(solana_stake_program::solana_stake_program!());
     let bank = Bank::new(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
     let mut bank = Arc::new(bank);
@@ -403,13 +397,10 @@ fn test_create_stake_account_from_seed() {
     let identity_pubkey = identity_keypair.pubkey();
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config_with_leader(100_000_000_000, &Pubkey::new_rand(), 1_000_000);
-    genesis_config
-        .native_instruction_processors
-        .push(solana_stake_program::solana_stake_program!());
     let bank = Bank::new(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
     let bank = Arc::new(bank);

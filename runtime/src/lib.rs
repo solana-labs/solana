@@ -21,15 +21,12 @@ mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod transaction_utils;
 
-#[macro_use]
-extern crate solana_metrics;
-
-#[macro_use]
+extern crate solana_config_program;
+extern crate solana_stake_program;
 extern crate solana_vote_program;
 
 #[macro_use]
-extern crate solana_stake_program;
-
+extern crate solana_metrics;
 #[macro_use]
 extern crate serde_derive;
 

@@ -161,11 +161,12 @@ mod tests {
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
         let mut bank = Bank::new(&genesis_config);
-        bank.add_instruction_processor(
+        bank.add_static_program(
+            "config_program",
             solana_config_program::id(),
             solana_config_program::config_processor::process_instruction,
         );
-        bank.add_instruction_processor(id(), process_instruction);
+        bank.add_static_program("vest_program", id(), process_instruction);
         (bank, mint_keypair)
     }
 
