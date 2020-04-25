@@ -137,6 +137,27 @@ impl ClusterSlots {
             .collect()
     }
 
+    pub fn compute_weights_exclude_noncomplete(
+        &self,
+        slot: Slot,
+        repair_peers: &[ContactInfo],
+    ) -> Vec<(u64, usize)> {
+        let slot_peers = self.lookup(slot);
+        repair_peers
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                (
+                    slot_peers
+                        .as_ref()
+                        .and_then(|v| v.read().unwrap().get(&x.id).cloned())
+                        .unwrap_or(0),
+                    i,
+                )
+            })
+            .collect()
+    }
+
     pub fn generate_repairs_for_missing_slots(
         &self,
         self_id: &Pubkey,
