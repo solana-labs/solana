@@ -650,6 +650,9 @@ impl Accounts {
                 .account_keys
                 .iter()
                 .enumerate()
+                .filter(|(i, key)| {
+                    !message.program_ids().contains(key) || message.is_key_passed_to_program(*i)
+                })
                 .zip(acc.0.iter_mut())
             {
                 nonce_utils::prepare_if_nonce_account(
