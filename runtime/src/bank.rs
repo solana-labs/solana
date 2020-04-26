@@ -5094,7 +5094,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_add_duplicate_program() {
+    fn test_add_duplicate_static_program() {
         let GenesisConfigInfo { genesis_config, .. } =
             create_genesis_config_with_leader(500, &Pubkey::new_rand(), 0);
         let mut bank = Bank::new(&genesis_config);
