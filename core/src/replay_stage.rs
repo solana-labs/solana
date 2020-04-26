@@ -9,6 +9,7 @@ use crate::{
     consensus::{StakeLockout, Tower},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ForkStats, ProgressMap, PropagatedStats},
+    repair_service::DuplicateSlotsResetReceiver,
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -119,6 +120,7 @@ impl ReplayStage {
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
+        duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,

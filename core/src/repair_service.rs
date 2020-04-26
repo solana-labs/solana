@@ -7,6 +7,7 @@ use crate::{
     result::Result,
     serve_repair::{RepairType, ServeRepair},
 };
+use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
@@ -24,6 +25,9 @@ use std::{
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
+
+pub type DuplicateSlotsResetSender = CrossbeamSender<Slot>;
+pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Slot>;
 
 #[derive(Default)]
 pub struct RepairStatsGroup {
@@ -59,6 +63,7 @@ pub enum RepairStrategy {
         bank_forks: Arc<RwLock<BankForks>>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
+        duplicate_slots_reset_sender: DuplicateSlotsResetSender,
     },
 }
 
@@ -155,6 +160,7 @@ impl RepairService {
                     RepairStrategy::RepairAll {
                         ref completed_slots_receiver,
                         ref bank_forks,
+                        ref duplicate_slots_reset_sender,
                         ..
                     } => {
                         let root_bank = bank_forks.read().unwrap().root_bank().clone();
@@ -176,6 +182,7 @@ impl RepairService {
                             &root_bank,
                             blockstore,
                             &serve_repair,
+                            &duplicate_slots_reset_sender,
                         );
                         Self::generate_and_send_duplicate_repairs(
                             &mut duplicate_slot_repair_statuses,
@@ -383,6 +390,7 @@ impl RepairService {
         root_bank: &Bank,
         blockstore: &Blockstore,
         serve_repair: &ServeRepair,
+        duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
     ) {
         for slot in new_duplicate_slots {
             // Clear the slot signatures from status cache for this slot
@@ -396,6 +404,7 @@ impl RepairService {
 
             // Signal ReplayStage to clear its progress map so that a different
             // version of this slot can be replayed
+            let _ = duplicate_slots_reset_sender.send(*slot);
 
             // Mark this slot as special repair, try to download from single
             // validator to avoid corruption
