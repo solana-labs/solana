@@ -18,6 +18,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     hash::Hash,
+    message::Message,
     native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
@@ -156,9 +157,12 @@ impl Accounts {
             // If a fee can pay for execution then the program will be scheduled
             let mut accounts: TransactionAccounts = Vec::with_capacity(message.account_keys.len());
             let mut tx_rent: TransactionRent = 0;
-            for (i, key) in message.account_keys.iter().enumerate().filter(|(i, key)| {
-                !message.program_ids().contains(key) || message.is_key_passed_to_program(*i)
-            }) {
+            for (i, key) in message
+                .account_keys
+                .iter()
+                .enumerate()
+                .filter(|(i, key)| Self::is_non_loader_key(message, key, *i))
+            {
                 let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
                     .and_then(|(mut account, _)| {
                         if message.is_writable(i) && !account.executable {
@@ -616,6 +620,10 @@ impl Accounts {
         self.accounts_db.add_root(slot)
     }
 
+    fn is_non_loader_key(message: &Message, key: &Pubkey, key_index: usize) -> bool {
+        !message.program_ids().contains(&key) || message.is_key_passed_to_program(key_index)
+    }
+
     fn collect_accounts_to_store<'a>(
         &self,
         txs: &'a [Transaction],
@@ -651,6 +659,7 @@ impl Accounts {
                 .account_keys
                 .iter()
                 .enumerate()
+                .filter(|(i, key)| Self::is_non_loader_key(message, key, *i))
                 .zip(acc.0.iter_mut())
             {
                 nonce_utils::prepare_if_nonce_account(
