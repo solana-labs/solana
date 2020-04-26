@@ -5775,7 +5775,7 @@ mod tests {
 
         let instruction = Instruction::new(solana_vote_program::id(), &10, account_metas);
         let mut tx = Transaction::new_signed_with_payer(
-            &[instruction],
+            vec![instruction],
             Some(&mint_keypair.pubkey()),
             &[&mint_keypair],
             bank.last_blockhash(),
