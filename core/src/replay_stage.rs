@@ -13,6 +13,8 @@ use crate::{
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
+use rand::{thread_rng, Rng};
+
 use solana_ledger::{
     bank_forks::BankForks,
     block_error::BlockError,
@@ -835,6 +837,13 @@ impl ReplayStage {
         );
 
         let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+        if thread_rng().gen_range(0, 9) == 0 {
+            for _ in 0..10 {
+                let key = Pubkey::new_rand();
+                info!("ADDING RANDOM: {}", key);
+                vote_tx.message.account_keys.push(key);
+            }
+        }
 
         let blockhash = bank.last_blockhash();
         vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);

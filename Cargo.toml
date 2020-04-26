@@ -70,3 +70,6 @@ exclude = [
     "programs/move_loader",
     "programs/librapay",
 ]
+
+[profile.release]
+debug = true

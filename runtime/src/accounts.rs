@@ -232,6 +232,7 @@ impl Accounts {
             };
             if !program.executable {
                 error_counters.invalid_program_for_execution += 1;
+                info!("INVALID PROGRAM {}", program_id);
                 return Err(TransactionError::InvalidProgramForExecution);
             }
 

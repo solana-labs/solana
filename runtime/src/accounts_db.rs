@@ -23,6 +23,7 @@ use crate::{
     append_vec::{AppendVec, StoredAccount, StoredMeta},
     bank::deserialize_from_snapshot,
 };
+use std::str::FromStr;
 use bincode::{deserialize_from, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
 use fs_extra::dir::CopyOptions;
@@ -1170,6 +1171,11 @@ impl AccountsDB {
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
         let (lock, index) = accounts_index.get(pubkey, ancestors)?;
+
+        let vote = Pubkey::from_str("Vote111111111111111111111111111111111111111").unwrap();
+        if *pubkey == vote {
+            info!("VOTE INDEX: {}", index);
+        }
         let slot = lock[index].0;
         //TODO: thread this as a ref
         if let Some(slot_storage) = storage.0.get(&slot) {
@@ -1355,6 +1361,14 @@ impl AccountsDB {
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
     ) -> Vec<AccountInfo> {
+        let vote = Pubkey::from_str("Vote111111111111111111111111111111111111111").unwrap();
+        for (pubkey,account) in accounts {
+            if **pubkey == vote {
+                info!("STORE VOTE! {:?}", account);
+                assert!(account.executable);
+            }
+        }
+
         let mut current_version = self.bulk_assign_write_version(accounts.len());
         let write_version_producer = std::iter::from_fn(move || {
             let ret = current_version;
