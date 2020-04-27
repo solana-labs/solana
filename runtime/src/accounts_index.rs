@@ -1,7 +1,7 @@
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -14,7 +14,7 @@ type AccountMapEntry<T> = (AtomicU64, RwLock<SlotList<T>>);
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: HashMap<Pubkey, AccountMapEntry<T>>,
+    pub account_maps: BTreeMap<Pubkey, AccountMapEntry<T>>,
 
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
