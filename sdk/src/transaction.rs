@@ -479,8 +479,7 @@ mod tests {
                 AccountMeta::new(id0, true),
             ],
         );
-        let ixs = vec![ix];
-        let mut tx = Transaction::new_with_payer(ixs, Some(&key.pubkey()));
+        let mut tx = Transaction::new_with_payer(&[ix], Some(&key.pubkey()));
         let o = tx.clone();
         assert_eq!(tx.sanitize(), Ok(()));
         assert_eq!(tx.message.account_keys.len(), 3);
