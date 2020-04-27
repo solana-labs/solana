@@ -1256,53 +1256,85 @@ pub fn process_stake_set_lockup(
     }
 }
 
+fn u64_some_if_not_zero(n: u64) -> Option<u64> {
+    if n > 0 {
+        Some(n)
+    } else {
+        None
+    }
+}
+
 pub fn build_stake_state(
-    stake_lamports: u64,
+    account_balance: u64,
     stake_state: &StakeState,
     use_lamports_unit: bool,
+    stake_history: &StakeHistory,
 ) -> CliStakeState {
     match stake_state {
         StakeState::Stake(
             Meta {
-                authorized, lockup, ..
+                rent_exempt_reserve,
+                authorized,
+                lockup,
             },
             stake,
-        ) => CliStakeState {
-            stake_type: CliStakeType::Stake,
-            total_stake: stake_lamports,
-            delegated_stake: Some(stake.delegation.stake),
-            delegated_vote_account_address: if stake.delegation.voter_pubkey != Pubkey::default() {
-                Some(stake.delegation.voter_pubkey.to_string())
-            } else {
-                None
-            },
-            activation_epoch: Some(if stake.delegation.activation_epoch < std::u64::MAX {
-                stake.delegation.activation_epoch
-            } else {
-                0
-            }),
-            deactivation_epoch: if stake.delegation.deactivation_epoch < std::u64::MAX {
-                Some(stake.delegation.deactivation_epoch)
-            } else {
-                None
-            },
-            authorized: Some(authorized.into()),
-            lockup: Some(lockup.into()),
-            use_lamports_unit,
-        },
+        ) => {
+            // The first entry in stake history is the previous epoch, so +1 for current
+            let current_epoch = stake_history.iter().next().unwrap().0 + 1;
+            let (active_stake, activating_stake, deactivating_stake) = stake
+                .delegation
+                .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+            CliStakeState {
+                stake_type: CliStakeType::Stake,
+                account_balance,
+                delegated_stake: Some(stake.delegation.stake),
+                delegated_vote_account_address: if stake.delegation.voter_pubkey
+                    != Pubkey::default()
+                {
+                    Some(stake.delegation.voter_pubkey.to_string())
+                } else {
+                    None
+                },
+                activation_epoch: Some(if stake.delegation.activation_epoch < std::u64::MAX {
+                    stake.delegation.activation_epoch
+                } else {
+                    0
+                }),
+                deactivation_epoch: if stake.delegation.deactivation_epoch < std::u64::MAX {
+                    Some(stake.delegation.deactivation_epoch)
+                } else {
+                    None
+                },
+                authorized: Some(authorized.into()),
+                lockup: Some(lockup.into()),
+                use_lamports_unit,
+                current_epoch,
+                rent_exempt_reserve: Some(*rent_exempt_reserve),
+                active_stake: u64_some_if_not_zero(active_stake),
+                activating_stake: u64_some_if_not_zero(activating_stake),
+                deactivating_stake: u64_some_if_not_zero(deactivating_stake),
+            }
+        }
         StakeState::RewardsPool => CliStakeState {
             stake_type: CliStakeType::RewardsPool,
+            account_balance,
             ..CliStakeState::default()
         },
-        StakeState::Uninitialized => CliStakeState::default(),
+        StakeState::Uninitialized => CliStakeState {
+            account_balance,
+            ..CliStakeState::default()
+        },
         StakeState::Initialized(Meta {
-            authorized, lockup, ..
+            rent_exempt_reserve,
+            authorized,
+            lockup,
         }) => CliStakeState {
             stake_type: CliStakeType::Initialized,
-            total_stake: stake_lamports,
+            account_balance,
             authorized: Some(authorized.into()),
             lockup: Some(lockup.into()),
             use_lamports_unit,
+            rent_exempt_reserve: Some(*rent_exempt_reserve),
             ..CliStakeState::default()
         },
     }
@@ -1324,7 +1356,18 @@ pub fn process_show_stake_account(
     }
     match stake_account.state() {
         Ok(stake_state) => {
-            let state = build_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
+            let stake_history_account = rpc_client.get_account(&stake_history::id())?;
+            let stake_history =
+                StakeHistory::from_account(&stake_history_account).ok_or_else(|| {
+                    CliError::RpcRequestError("Failed to deserialize stake history".to_string())
+                })?;
+
+            let state = build_stake_state(
+                stake_account.lamports,
+                &stake_state,
+                use_lamports_unit,
+                &stake_history,
+            );
             Ok(config.output_format.formatted_string(&state))
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
