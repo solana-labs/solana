@@ -6,8 +6,13 @@ extern crate solana_sdk;
 
 use solana_bpf_rust_invoked::instruction::create_instruction;
 use solana_sdk::{
-    account_info::AccountInfo, cross_program, entrypoint, entrypoint::ProgramResult, info,
-    program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo,
+    entrypoint,
+    entrypoint::ProgramResult,
+    info,
+    program::{invoke, invoke_signed},
+    program_error::ProgramError,
+    pubkey::Pubkey,
 };
 
 // const MINT_INDEX: usize = 0;
@@ -46,7 +51,7 @@ fn process_instruction(
             ],
             vec![0, 1, 2, 3, 4, 5],
         );
-        cross_program::process_instruction(&instruction, accounts)?;
+        invoke(&instruction, accounts)?;
     }
 
     info!("Test return error");
@@ -57,7 +62,7 @@ fn process_instruction(
             vec![1],
         );
         assert_eq!(
-            cross_program::process_instruction(&instruction, accounts),
+            invoke(&instruction, accounts),
             Err(ProgramError::Custom(42))
         );
     }
@@ -75,7 +80,7 @@ fn process_instruction(
             ],
             vec![2],
         );
-        cross_program::process_signed_instruction(
+        invoke_signed(
             &invoked_instruction,
             accounts,
             &[&["Lil'", "Bits"], &["Gar Ma Nar Nar"]],
@@ -89,7 +94,7 @@ fn process_instruction(
             &[(accounts[ARGUMENT_INDEX].key, false, true)],
             vec![3],
         );
-        cross_program::process_instruction(&invoked_instruction, accounts)?;
+        invoke(&invoked_instruction, accounts)?;
     }
 
     info!("Test nested invoke");
@@ -113,9 +118,9 @@ fn process_instruction(
             ],
             vec![4],
         );
-        cross_program::process_instruction(&instruction, accounts)?;
+        invoke(&instruction, accounts)?;
         info!("2nd invoke from first program");
-        cross_program::process_instruction(&instruction, accounts)?;
+        invoke(&instruction, accounts)?;
 
         assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42 - 5 + 1 + 1 + 1 + 1);
         assert_eq!(

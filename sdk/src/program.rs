@@ -6,21 +6,18 @@ use crate::{
 };
 
 /// Invoke a cross-program instruction
-pub fn process_instruction(
-    instruction: &Instruction,
-    account_infos: &[AccountInfo],
-) -> ProgramResult {
-    process_signed_instruction(instruction, account_infos, &[])
+pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
+    invoke_signed(instruction, account_infos, &[])
 }
 
 /// Invoke a cross-program instruction with program signatures
-pub fn process_signed_instruction(
+pub fn invoke_signed(
     instruction: &Instruction,
     account_infos: &[AccountInfo],
     signers_seeds: &[&[&str]],
 ) -> ProgramResult {
     let result = unsafe {
-        sol_process_signed_instruction_(
+        sol_invoke_signed_rust(
             instruction as *const _ as *const u8,
             account_infos as *const _ as *const u8,
             account_infos.len() as u64,
@@ -35,7 +32,7 @@ pub fn process_signed_instruction(
 }
 
 extern "C" {
-    fn sol_process_signed_instruction_(
+    fn sol_invoke_signed_rust(
         instruction_addr: *const u8,
         account_infos_addr: *const u8,
         account_infos_len: u64,

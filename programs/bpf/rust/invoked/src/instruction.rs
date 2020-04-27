@@ -10,14 +10,16 @@ pub fn create_instruction(
     arguments: &[(&Pubkey, bool, bool)],
     data: Vec<u8>,
 ) -> Instruction {
-    let mut accounts = Vec::with_capacity(arguments.len() + 1);
-    for (key, is_writable, is_signer) in arguments.iter() {
-        if *is_writable {
-            accounts.push(AccountMeta::new(**key, *is_signer));
-        } else {
-            accounts.push(AccountMeta::new_readonly(**key, *is_signer));
-        }
-    }
+    let accounts = arguments
+        .iter()
+        .map(|(key, is_writable, is_signer)| {
+            if *is_writable {
+                AccountMeta::new(**key, *is_signer)
+            } else {
+                AccountMeta::new_readonly(**key, *is_signer)
+            }
+        })
+        .collect();
     Instruction {
         program_id,
         accounts,

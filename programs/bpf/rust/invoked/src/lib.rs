@@ -8,8 +8,8 @@ extern crate solana_sdk;
 
 use crate::instruction::create_instruction;
 use solana_sdk::{
-    account_info::AccountInfo, bpf_loader, cross_program, entrypoint, entrypoint::ProgramResult,
-    info, program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo, bpf_loader, entrypoint, entrypoint::ProgramResult, info,
+    program::invoke_signed, program_error::ProgramError, pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
@@ -141,11 +141,7 @@ fn process_instruction(
                     ],
                     vec![4],
                 );
-                cross_program::process_signed_instruction(
-                    &invoked_instruction,
-                    accounts,
-                    &[&["Lil'", "Bits"]],
-                )?;
+                invoke_signed(&invoked_instruction, accounts, &[&["Lil'", "Bits"]])?;
             } else {
                 info!("Last invoked");
                 assert!(accounts[DERIVED_KEY_INDEX].is_signer);

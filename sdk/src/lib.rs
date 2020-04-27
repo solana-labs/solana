@@ -59,9 +59,9 @@ pub use solana_sdk_macro::declare_id;
 
 // On-chain program specific modules
 pub mod account_info;
-pub mod cross_program;
 pub mod entrypoint;
 pub mod log;
+pub mod program;
 pub mod program_error;
 
 // Modules not usable by on-chain programs

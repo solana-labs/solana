@@ -87,7 +87,7 @@ pub enum InstructionError {
     RentEpochModified,
 
     /// The instruction expected additional account keys
-    #[error("insufficient account key count for instruction")]
+    #[error("insufficient account keys for instruction")]
     NotEnoughAccountKeys,
 
     /// A non-system program changed the size of the account data

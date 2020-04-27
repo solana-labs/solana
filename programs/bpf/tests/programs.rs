@@ -306,7 +306,7 @@ mod bpf {
     }
 
     #[test]
-    fn test_program_bpf_cross_program_invocation() {
+    fn test_program_bpf_invoke() {
         solana_logger::setup();
 
         let mut programs = Vec::new();

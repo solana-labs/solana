@@ -38,7 +38,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, 4, data, 6};
 
-    sol_assert(SUCCESS == sol_process_instruction(&instruction, accounts,
+    sol_assert(SUCCESS == sol_invoke(&instruction, accounts,
                                                   SOL_ARRAY_SIZE(accounts)));
   }
 
@@ -50,7 +50,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
 
-    sol_assert(42 == sol_process_instruction(&instruction, accounts,
+    sol_assert(42 == sol_invoke(&instruction, accounts,
                                              SOL_ARRAY_SIZE(accounts)));
   }
 
@@ -68,7 +68,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
                                             {seeds2, SOL_ARRAY_SIZE(seeds2)}};
 
-    sol_assert(SUCCESS == sol_process_signed_instruction(
+    sol_assert(SUCCESS == sol_invoke_signed(
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
                               signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
   }
@@ -82,7 +82,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
 
-    sol_assert(SUCCESS == sol_process_instruction(&instruction, accounts,
+    sol_assert(SUCCESS == sol_invoke(&instruction, accounts,
                                                   SOL_ARRAY_SIZE(accounts)));
   }
 
@@ -107,11 +107,11 @@ extern uint64_t entrypoint(const uint8_t *input) {
     const SolSignerSeeds signers_seeds[] = {{seeds, SOL_ARRAY_SIZE(seeds)}};
 
     sol_log("Fist invoke");
-    sol_assert(SUCCESS == sol_process_signed_instruction(
+    sol_assert(SUCCESS == sol_invoke_signed(
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
                               signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
     sol_log("2nd invoke from first program");
-    sol_assert(SUCCESS == sol_process_signed_instruction(
+    sol_assert(SUCCESS == sol_invoke_signed(
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
                               signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
 

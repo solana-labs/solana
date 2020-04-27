@@ -412,25 +412,41 @@ typedef struct {
  * @param seeds Seed strings used to sign program accounts
  * @param seeds_len Length of the seeds array
  */
-uint64_t sol_process_signed_instruction(
+SOL_FN_PREFIX uint64_t sol_invoke_signed(
     const SolInstruction *instruction,
     const SolAccountInfo *account_infos,
     int account_infos_len,
     const SolSignerSeeds *signers_seeds,
     int signers_seeds_len
-);
+) {
+  uint64_t sol_invoke_signed_c(
+    const SolInstruction *instruction,
+    const SolAccountInfo *account_infos,
+    int account_infos_len,
+    const SolSignerSeeds *signers_seeds,
+    int signers_seeds_len
+  );
+
+  return sol_invoke_signed_c(
+    instruction,
+    account_infos,
+    account_infos_len,
+    signers_seeds,
+    signers_seeds_len
+  );
+}
 /*
 * @param instruction Instruction to process
 * @param account_infos Accounts used by instruction
 * @param account_infos_len Length of account_infos array
 */
-SOL_FN_PREFIX uint64_t sol_process_instruction(
+SOL_FN_PREFIX uint64_t sol_invoke(
     const SolInstruction *instruction,
     const SolAccountInfo *account_infos,
     int account_infos_len
 ) {
   const SolSignerSeeds signers_seeds[] = {{}};
-  return sol_process_signed_instruction(
+  return sol_invoke_signed(
     instruction,
     account_infos,
     account_infos_len,

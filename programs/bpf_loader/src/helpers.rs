@@ -40,7 +40,7 @@ pub enum HelperError {
     #[error("BPF program Panicked at {0}, {1}:{2}")]
     Panic(String, u64, u64),
     #[error("cannot borrow invoke context")]
-    InvokeContextBorrorFailed,
+    InvokeContextBorrowFailed,
     #[error("malformed signer seed: {0}: {1:?}")]
     MalformedSignerSeed(Utf8Error, Vec<u8>),
     #[error("Could not create program address with signer seeds: {0}")]
@@ -82,14 +82,14 @@ pub fn register_helpers<'a>(
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
     vm.register_helper_with_context_ex(
-        "sol_process_signed_instruction_", // Rust version
+        "sol_invoke_signed_rust",
         Box::new(HelperProcessInstructionRust {
             invoke_context: invoke_context.clone(),
         }),
     )?;
     vm.register_helper_with_context_ex(
-        "sol_process_signed_instruction", // C version
-        Box::new(HelperProcessSolInstruction {
+        "sol_invoke_signed_c",
+        Box::new(HelperProcessSolInstructionC {
             invoke_context: invoke_context.clone(),
         }),
     )?;
@@ -319,7 +319,7 @@ trait HelperProcessInstruction<'a> {
         signers_seeds_addr: u64,
         signers_seeds_len: usize,
         ro_regions: &[MemoryRegion],
-    ) -> Result<Option<Vec<Pubkey>>, EbpfError<BPFError>>;
+    ) -> Result<Vec<Pubkey>, EbpfError<BPFError>>;
 }
 
 /// Cross-program invocation called from Rust
@@ -330,7 +330,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
         self.invoke_context
             .try_borrow_mut()
-            .map_err(|_| HelperError::InvokeContextBorrorFailed.into())
+            .map_err(|_| HelperError::InvokeContextBorrowFailed.into())
     }
     fn translate_instruction(
         &self,
@@ -372,7 +372,6 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
             &[]
         };
 
-        // TODO ro vs rw translate given the pointers are passed to another program...
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         let mut refs = Vec::with_capacity(message.account_keys.len());
         'root: for account_key in message.account_keys.iter() {
@@ -404,9 +403,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
                     continue 'root;
                 }
             }
-            return Err(
-                HelperError::InstructionError(InstructionError::NotEnoughAccountKeys).into(),
-            );
+            return Err(HelperError::InstructionError(InstructionError::MissingAccount).into());
         }
 
         Ok((accounts, refs))
@@ -418,7 +415,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
         signers_seeds_addr: u64,
         signers_seeds_len: usize,
         ro_regions: &[MemoryRegion],
-    ) -> Result<Option<Vec<Pubkey>>, EbpfError<BPFError>> {
+    ) -> Result<Vec<Pubkey>, EbpfError<BPFError>> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
             let signers_seeds =
@@ -444,9 +441,9 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
                     .map_err(HelperError::BadSeeds)?;
                 signers.push(signer);
             }
-            Ok(Some(signers))
+            Ok(signers)
         } else {
-            Ok(None)
+            Ok(vec![])
         }
     }
 }
@@ -521,14 +518,14 @@ struct SolSignerSeedsC {
 }
 
 /// Cross-program invocation called from C
-pub struct HelperProcessSolInstruction<'a> {
+pub struct HelperProcessSolInstructionC<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
 }
-impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstruction<'a> {
+impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstructionC<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
         self.invoke_context
             .try_borrow_mut()
-            .map_err(|_| HelperError::InvokeContextBorrorFailed.into())
+            .map_err(|_| HelperError::InvokeContextBorrowFailed.into())
     }
 
     fn translate_instruction(
@@ -590,7 +587,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstruction<'a> {
                         u8,
                         account_info.data_addr,
                         account_info.data_len,
-                        ro_regions
+                        rw_regions
                     )?;
                     let owner = translate_type!(Pubkey, account_info.owner_addr, ro_regions)?;
 
@@ -606,9 +603,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstruction<'a> {
                     continue 'root;
                 }
             }
-            return Err(
-                HelperError::InstructionError(InstructionError::NotEnoughAccountKeys).into(),
-            );
+            return Err(HelperError::InstructionError(InstructionError::MissingAccount).into());
         }
 
         Ok((accounts, refs))
@@ -620,7 +615,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstruction<'a> {
         signers_seeds_addr: u64,
         signers_seeds_len: usize,
         ro_regions: &[MemoryRegion],
-    ) -> Result<Option<Vec<Pubkey>>, EbpfError<BPFError>> {
+    ) -> Result<Vec<Pubkey>, EbpfError<BPFError>> {
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice!(
                 SolSignerSeedC,
@@ -628,38 +623,34 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstruction<'a> {
                 signers_seeds_len,
                 ro_regions
             )?;
-            Ok(Some(
-                signers_seeds
-                    .iter()
-                    .map(|signer_seeds| {
-                        let seeds = translate_slice!(
-                            SolSignerSeedC,
-                            signer_seeds.addr,
-                            signer_seeds.len,
-                            ro_regions
-                        )?;
-                        let seed_strs = seeds
-                            .iter()
-                            .map(|seed| {
-                                let seed_bytes =
-                                    translate_slice!(u8, seed.addr, seed.len, ro_regions)?;
-                                std::str::from_utf8(seed_bytes).map_err(|err| {
-                                    HelperError::MalformedSignerSeed(err, seed_bytes.to_vec())
-                                        .into()
-                                })
+            Ok(signers_seeds
+                .iter()
+                .map(|signer_seeds| {
+                    let seeds = translate_slice!(
+                        SolSignerSeedC,
+                        signer_seeds.addr,
+                        signer_seeds.len,
+                        ro_regions
+                    )?;
+                    let seed_strs = seeds
+                        .iter()
+                        .map(|seed| {
+                            let seed_bytes = translate_slice!(u8, seed.addr, seed.len, ro_regions)?;
+                            std::str::from_utf8(seed_bytes).map_err(|err| {
+                                HelperError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
                             })
-                            .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-                        Pubkey::create_program_address(&seed_strs, program_id)
-                            .map_err(|err| HelperError::BadSeeds(err).into())
-                    })
-                    .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?,
-            ))
+                        })
+                        .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
+                    Pubkey::create_program_address(&seed_strs, program_id)
+                        .map_err(|err| HelperError::BadSeeds(err).into())
+                })
+                .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?)
         } else {
-            Ok(None)
+            Ok(vec![])
         }
     }
 }
-impl<'a> HelperObject<BPFError> for HelperProcessSolInstruction<'a> {
+impl<'a> HelperObject<BPFError> for HelperProcessSolInstructionC<'a> {
     fn call(
         &mut self,
         instruction_addr: u64,
@@ -730,7 +721,7 @@ fn call<'a>(
         &message,
         &executable_accounts,
         &accounts,
-        signers.as_deref(),
+        &signers,
         crate::process_instruction,
         *(&mut *invoke_context),
     ) {
@@ -742,9 +733,12 @@ fn call<'a>(
     }
 
     // Copy results back into caller's AccountInfos
-    for (account, (lamport_ref, data)) in accounts.iter().zip(refs) {
-        *lamport_ref = account.borrow().lamports;
-        data.clone_from_slice(&account.borrow().data);
+    for (i, (account, (lamport_ref, data))) in accounts.iter().zip(refs).enumerate() {
+        let account = account.borrow();
+        if message.is_writable(i) && !account.executable {
+            *lamport_ref = account.lamports;
+            data.clone_from_slice(&account.data);
+        }
     }
 
     Ok(SUCCESS)

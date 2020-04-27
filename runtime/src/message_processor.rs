@@ -23,7 +23,6 @@ pub struct PreAccount {
     is_writable: bool,
     is_executable: bool,
     lamports: u64,
-    data_len: usize,
     data: Vec<u8>,
     owner: Pubkey,
     rent_epoch: Epoch,
@@ -35,7 +34,6 @@ impl PreAccount {
             is_signer,
             is_writable,
             lamports: account.lamports,
-            data_len: account.data.len(),
             data: account.data.clone(),
             owner: account.owner,
             is_executable: account.executable,
@@ -79,7 +77,7 @@ impl PreAccount {
 
         // Only the system program can change the size of the data
         //  and only if the system program owns the account
-        if self.data_len != post.data.len()
+        if self.data.len() != post.data.len()
             && (!system_program::check_id(program_id) // line coverage used to get branch coverage
                 || !system_program::check_id(&self.owner))
         {
@@ -128,7 +126,7 @@ impl PreAccount {
         &self,
         is_writable: bool,
         is_signer: bool,
-        signers: Option<&[Pubkey]>,
+        signers: &[Pubkey],
         program_id: &Pubkey,
         rent: &Rent,
         post: &Account,
@@ -141,10 +139,7 @@ impl PreAccount {
         if is_signer && // If message indicates account is signed
         !( // one of the following needs to be true:
             self.is_signer // Signed in the original transaction
-            || match signers { // Signed by the program
-                Some(keys) => keys.contains(&self.key),
-                None => false,
-            }
+            || signers.contains(&self.key) // Signed by the program
         ) {
             return Err(InstructionError::SignerModified);
         }
@@ -154,8 +149,13 @@ impl PreAccount {
 
     pub fn update(&mut self, account: &Account) {
         self.lamports = account.lamports;
-        self.data_len = account.data.len();
-        self.data.clone_from_slice(&account.data);
+        if self.data.len() != account.data.len() {
+            // Only system account can change data size, copy with alloc
+            self.data = account.data.clone();
+        } else {
+            // Copy without allocate
+            self.data.clone_from_slice(&account.data);
+        }
     }
 
     pub fn key(&self) -> Pubkey {
@@ -209,7 +209,7 @@ impl InvokeContext for ThisInvokeContext {
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
-        signers: Option<&[Pubkey]>,
+        signers: &[Pubkey],
         accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         match self.program_ids.last() {
@@ -335,7 +335,7 @@ impl MessageProcessor {
         message: &Message,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
-        signers: Option<&[Pubkey]>,
+        signers: &[Pubkey],
         process_instruction: ProcessInstructionWithContext,
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
@@ -442,7 +442,7 @@ impl MessageProcessor {
         pre_accounts: &mut [PreAccount],
         program_id: &Pubkey,
         rent: &Rent,
-        signers: Option<&[Pubkey]>,
+        signers: &[Pubkey],
         accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
@@ -611,7 +611,7 @@ mod tests {
                 .verify_and_update(
                     &message,
                     &message.instructions[0],
-                    None,
+                    &[],
                     &accounts[not_owned_index..owned_index + 1],
                 )
                 .unwrap();
@@ -627,7 +627,7 @@ mod tests {
                 invoke_context.verify_and_update(
                     &message,
                     &message.instructions[0],
-                    None,
+                    7[],
                     &accounts[not_owned_index..owned_index + 1],
                 ),
                 Err(InstructionError::ExternalAccountDataModified)
@@ -678,7 +678,7 @@ mod tests {
         program_id: Pubkey,
         message_is_writable: bool,
         message_is_signer: bool,
-        signers: Option<&'a [Pubkey]>,
+        signers: &'a [Pubkey],
         rent: Rent,
         pre: PreAccount,
         post: Account,
@@ -724,12 +724,7 @@ mod tests {
             self.message_is_writable = message_is_writable;
             self
         }
-        pub fn signer(
-            mut self,
-            pre: bool,
-            message_is_signer: bool,
-            signers: Option<&'a [Pubkey]>,
-        ) -> Self {
+        pub fn signer(mut self, pre: bool, message_is_signer: bool, signers: &'a [Pubkey]) -> Self {
             self.pre.is_signer = pre;
             self.message_is_signer = message_is_signer;
             self.signers = signers;
@@ -750,7 +745,6 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.data_len = pre.len();
             self.pre.data = pre;
             self.post.data = post;
             self
