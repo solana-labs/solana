@@ -1774,7 +1774,18 @@ impl Bank {
     ) -> RangeInclusive<Pubkey> {
         type Prefix = u64;
         const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
-        let partition_width = Prefix::max_value() / partition_count;
+
+        let mut start_pubkey = [0x00u8; 32];
+        let mut end_pubkey = [0xffu8; 32];
+
+        if partition_count == 1 {
+            assert_eq!(start_index, 0);
+            assert_eq!(end_index, 0);
+            return Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey);
+        }
+
+        // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
+        let partition_width = (Prefix::max_value() - partition_count + 1) / partition_count + 1;
         let start_key_prefix = if start_index == 0 && end_index == 0 {
             0
         } else {
@@ -1787,15 +1798,14 @@ impl Bank {
             (end_index + 1) * partition_width - 1
         };
 
-        let mut start_pubkey = [0x00u8; 32];
-        let mut end_pubkey = [0xffu8; 32];
         start_pubkey[0..PREFIX_SIZE].copy_from_slice(&start_key_prefix.to_be_bytes());
         end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
         trace!(
-            "pubkey_range_from_partition: ({}-{})/{}: {:02x?}-{:02x?}",
+            "pubkey_range_from_partition: ({}-{})/{} [{}]: {:02x?}-{:02x?}",
             start_index,
             end_index,
             partition_count,
+            (end_key_prefix - start_key_prefix),
             start_pubkey,
             end_pubkey
         );
@@ -3866,7 +3876,7 @@ mod tests {
                 0x00, 0x00, 0x00, 0x00
             ])
                 ..=Pubkey::new_from_array([
-                    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
@@ -3876,7 +3886,7 @@ mod tests {
         assert_eq!(
             range,
             Pubkey::new_from_array([
-                0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00
             ])
