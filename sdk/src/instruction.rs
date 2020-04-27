@@ -1,5 +1,6 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
+use crate::sanitize::Sanitize;
 use crate::{pubkey::Pubkey, short_vec, system_instruction::SystemError};
 use bincode::serialize;
 use serde::Serialize;
@@ -251,6 +252,8 @@ pub struct CompiledInstruction {
     #[serde(with = "short_vec")]
     pub data: Vec<u8>,
 }
+
+impl Sanitize for CompiledInstruction {}
 
 impl CompiledInstruction {
     pub fn new<T: Serialize>(program_ids_index: u8, data: &T, accounts: Vec<u8>) -> Self {
