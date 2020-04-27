@@ -11,10 +11,10 @@ edition = "2018"
 [dependencies]
 bincode = "1.2.1"
 crossbeam-channel = "0.4"
-ed25519-dalek = "=1.0.0-pre.1"
+ed25519-dalek = "=1.0.0-pre.3"
 log = "0.4.8"
-rand = "0.6.5"
-rand_chacha = "0.1.1"
+rand = "0.7.0"
+rand_chacha = "0.2.2"
 solana-client = { path = "../client", version = "1.2.0" }
 solana-storage-program = { path = "../programs/storage", version = "1.2.0" }
 thiserror = "1.0"

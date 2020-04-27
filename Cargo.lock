@@ -724,15 +724,15 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "1.2.3"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b7dcd30ba50cdf88b55b033456138b7c0ac4afdc436d82e1b79f370f24cc66d"
+checksum = "26778518a7f6cffa1d25a44b602b62b979bd88adb9e99ffec546998cf3404839"
 dependencies = [
  "byteorder",
- "clear_on_drop",
  "digest 0.8.1",
- "rand_core 0.3.1",
+ "rand_core 0.5.1",
  "subtle 2.2.2",
+ "zeroize",
 ]
 
 [[package]]
@@ -838,14 +838,13 @@ checksum = "4358a9e11b9a09cf52383b451b49a169e8d797b68aa02301ff586d70d9661ea3"
 
 [[package]]
 name = "ed25519-dalek"
-version = "1.0.0-pre.1"
+version = "1.0.0-pre.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81956bcf7ef761fb4e1d88de3fa181358a0d26cbcb9755b587a08f9119824b86"
+checksum = "978710b352437433c97b2bff193f2fb1dfd58a093f863dd95e225a19baa599a2"
 dependencies = [
  "clear_on_drop",
  "curve25519-dalek",
- "failure",
- "rand 0.6.5",
+ "rand 0.7.3",
  "serde",
  "sha2 0.8.1",
 ]
@@ -3055,7 +3054,7 @@ dependencies = [
  "clap",
  "crossbeam-channel",
  "log 0.4.8",
- "rand 0.6.5",
+ "rand 0.7.3",
  "rayon",
  "solana-logger",
  "solana-measure",
@@ -3087,8 +3086,8 @@ dependencies = [
  "ed25519-dalek",
  "hex",
  "log 0.4.8",
- "rand 0.6.5",
- "rand_chacha 0.1.1",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3114,7 +3113,7 @@ version = "1.2.0"
 dependencies = [
  "hex",
  "log 0.4.8",
- "rand 0.6.5",
+ "rand 0.7.3",
  "solana-chacha",
  "solana-chacha-sys",
  "solana-ledger",
@@ -3129,7 +3128,7 @@ version = "1.2.0"
 dependencies = [
  "crossbeam-channel",
  "log 0.4.8",
- "rand 0.6.5",
+ "rand 0.7.3",
  "rayon",
  "solana-core",
  "solana-ledger",
@@ -3150,7 +3149,7 @@ dependencies = [
  "log 0.4.8",
  "num-derive 0.3.0",
  "num-traits 0.2.11",
- "rand 0.6.5",
+ "rand 0.7.3",
  "rayon",
  "serde_json",
  "serde_yaml",
@@ -3258,8 +3257,8 @@ version = "1.2.0"
 dependencies = [
  "hex-literal",
  "log 0.4.8",
- "rand 0.6.5",
- "rand_chacha 0.1.1",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "solana-chacha-sys",
  "solana-ledger",
  "solana-logger",
@@ -3423,8 +3422,8 @@ dependencies = [
  "matches",
  "num-traits 0.2.11",
  "num_cpus",
- "rand 0.6.5",
- "rand_chacha 0.1.1",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "regex",
  "reqwest",
@@ -3479,7 +3478,7 @@ dependencies = [
  "failure",
  "lazy_static",
  "libc",
- "rand_chacha 0.1.1",
+ "rand_chacha 0.2.2",
  "regex-syntax",
  "reqwest",
  "serde",
@@ -3496,7 +3495,7 @@ dependencies = [
  "bincode",
  "clap",
  "log 0.4.8",
- "rand 0.6.5",
+ "rand 0.7.3",
  "rayon",
  "solana-clap-utils",
  "solana-core",
@@ -3678,8 +3677,8 @@ dependencies = [
  "log 0.4.8",
  "matches",
  "num_cpus",
- "rand 0.6.5",
- "rand_chacha 0.1.1",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "reed-solomon-erasure",
  "regex",
@@ -3736,7 +3735,7 @@ dependencies = [
  "assert_matches",
  "itertools 0.9.0",
  "log 0.4.8",
- "rand 0.6.5",
+ "rand 0.7.3",
  "serial_test",
  "serial_test_derive",
  "solana-archiver-lib",
@@ -3808,7 +3807,7 @@ dependencies = [
  "gethostname",
  "lazy_static",
  "log 0.4.8",
- "rand 0.6.5",
+ "rand 0.7.3",
  "reqwest",
  "serial_test",
  "serial_test_derive",
@@ -3820,7 +3819,7 @@ name = "solana-net-shaper"
 version = "1.2.0"
 dependencies = [
  "clap",
- "rand 0.6.5",
+ "rand 0.7.3",
  "serde",
  "serde_json",
  "solana-clap-utils",
@@ -3836,7 +3835,7 @@ dependencies = [
  "clap",
  "log 0.4.8",
  "nix",
- "rand 0.6.5",
+ "rand 0.7.3",
  "serde",
  "serde_derive",
  "socket2",
@@ -3877,7 +3876,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "matches",
- "rand 0.6.5",
+ "rand 0.7.3",
  "rayon",
  "serde",
  "solana-budget-program",
@@ -3951,7 +3950,7 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits 0.2.11",
  "num_cpus",
- "rand 0.6.5",
+ "rand 0.7.3",
  "rayon",
  "serde",
  "serde_derive",
@@ -3997,8 +3996,8 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits 0.2.11",
  "pbkdf2",
- "rand 0.6.5",
- "rand_chacha 0.1.1",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -4020,8 +4019,8 @@ dependencies = [
  "cbindgen",
  "ed25519-dalek",
  "libc",
- "rand_chacha 0.1.1",
- "rand_core 0.3.1",
+ "rand_chacha 0.2.2",
+ "rand_core 0.5.1",
  "solana-sdk",
 ]
 
@@ -4100,7 +4099,7 @@ dependencies = [
  "log 0.4.8",
  "num-derive 0.3.0",
  "num-traits 0.2.11",
- "rand 0.6.5",
+ "rand 0.7.3",
  "serde",
  "serde_derive",
  "solana-logger",
@@ -4165,7 +4164,7 @@ dependencies = [
  "console 0.10.3",
  "libc",
  "log 0.4.8",
- "rand 0.6.5",
+ "rand 0.7.3",
  "serde_json",
  "signal-hook",
  "solana-clap-utils",
@@ -5284,6 +5283,12 @@ checksum = "65923dd1784f44da1d2c3dbbc5e822045628c590ba72123e1c73d3c230c4434d"
 dependencies = [
  "linked-hash-map",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cbac2ed2ba24cc90f5e06485ac8c7c1e5449fe8911aef4d8877218af021a5b8"
 
 [[package]]
 name = "zstd"

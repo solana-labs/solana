@@ -28,7 +28,7 @@ impl Keypair {
 
     /// Return a new ED25519 keypair
     pub fn new() -> Self {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng::default();
         Self::generate(&mut rng)
     }
 
@@ -64,7 +64,7 @@ impl Signature {
         }
         pubkey
             .unwrap()
-            .verify(message_bytes, &signature.unwrap())
+            .verify_strict(message_bytes, &signature.unwrap())
             .is_ok()
     }
 }

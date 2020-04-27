@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.8"
-rand = "0.6.5"
+rand = "0.7.0"
 solana-chacha = { path = "../chacha", version = "1.2.0" }
 solana-chacha-sys = { path = "../chacha-sys", version = "1.2.0" }
 solana-ledger = { path = "../ledger", version = "1.2.0" }
