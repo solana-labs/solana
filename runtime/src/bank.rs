@@ -5,6 +5,7 @@
 use crate::{
     accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
+    accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
@@ -90,7 +91,7 @@ impl BankRc {
     pub fn from_stream<R: Read, P: AsRef<Path>>(
         account_paths: &[PathBuf],
         slot: Slot,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         frozen_account_pubkeys: &[Pubkey],
         mut stream: &mut BufReader<R>,
         stream_append_vecs_path: P,
@@ -227,7 +228,7 @@ pub struct Bank {
     blockhash_queue: RwLock<BlockhashQueue>,
 
     /// The set of parents including this bank
-    pub ancestors: HashMap<Slot, usize>,
+    pub ancestors: Ancestors,
 
     /// Hash of this Bank's state. Only meaningful after freezing.
     hash: RwLock<Hash>,
@@ -1818,7 +1819,7 @@ impl Bank {
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
-        let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
+        let just_self: Ancestors = vec![(self.slot(), 0)].into_iter().collect();
         if let Some((account, slot)) = self.rc.accounts.load_slow(&just_self, pubkey) {
             if slot == self.slot() {
                 return Some((account, slot));

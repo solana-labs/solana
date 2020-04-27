@@ -19,7 +19,7 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
-    accounts_index::{AccountsIndex, SlotList, SlotSlice},
+    accounts_index::{AccountsIndex, Ancestors, SlotList, SlotSlice},
     append_vec::{AppendVec, StoredAccount, StoredMeta},
     bank::deserialize_from_snapshot,
 };
@@ -1083,7 +1083,7 @@ impl AccountsDB {
         }
     }
 
-    pub fn scan_accounts<F, A>(&self, ancestors: &HashMap<Slot, usize>, scan_func: F) -> A
+    pub fn scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
         A: Default,
@@ -1165,7 +1165,7 @@ impl AccountsDB {
 
     pub fn load(
         storage: &AccountStorage,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
     ) -> Option<(Account, Slot)> {
@@ -1183,11 +1183,7 @@ impl AccountsDB {
         }
     }
 
-    pub fn load_slow(
-        &self,
-        ancestors: &HashMap<Slot, usize>,
-        pubkey: &Pubkey,
-    ) -> Option<(Account, Slot)> {
+    pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
         Self::load(&storage, ancestors, &accounts_index, pubkey)
@@ -1540,7 +1536,7 @@ impl AccountsDB {
 
     fn calculate_accounts_hash(
         &self,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         check_hash: bool,
     ) -> Result<Hash, BankHashVerificationError> {
         use BankHashVerificationError::*;
@@ -1598,7 +1594,7 @@ impl AccountsDB {
         bank_hash_info.snapshot_hash
     }
 
-    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> Hash {
+    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> Hash {
         let hash = self.calculate_accounts_hash(ancestors, false).unwrap();
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
@@ -1609,7 +1605,7 @@ impl AccountsDB {
     pub fn verify_bank_hash(
         &self,
         slot: Slot,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -1806,11 +1802,7 @@ impl AccountsDB {
         hashes
     }
 
-    pub fn freeze_accounts(
-        &mut self,
-        ancestors: &HashMap<Slot, usize>,
-        account_pubkeys: &[Pubkey],
-    ) {
+    pub fn freeze_accounts(&mut self, ancestors: &Ancestors, account_pubkeys: &[Pubkey]) {
         for account_pubkey in account_pubkeys {
             if let Some((account, _slot)) = self.load_slow(ancestors, &account_pubkey) {
                 let frozen_account_info = FrozenAccountInfo {
@@ -2011,8 +2003,8 @@ pub mod tests {
     use std::{fs, str::FromStr};
     use tempfile::TempDir;
 
-    fn linear_ancestors(end_slot: u64) -> HashMap<Slot, usize> {
-        let mut ancestors: HashMap<Slot, usize> = vec![(0, 0)].into_iter().collect();
+    fn linear_ancestors(end_slot: u64) -> Ancestors {
+        let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
         for i in 1..end_slot {
             ancestors.insert(i, (i - 1) as usize);
         }

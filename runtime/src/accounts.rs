@@ -2,7 +2,7 @@ use crate::{
     accounts_db::{
         AccountInfo, AccountStorage, AccountsDB, AppendVecId, BankHashInfo, ErrorCounters,
     },
-    accounts_index::AccountsIndex,
+    accounts_index::{AccountsIndex, Ancestors},
     append_vec::StoredAccount,
     bank::{HashAgeKind, TransactionProcessResult},
     blockhash_queue::BlockhashQueue,
@@ -77,7 +77,7 @@ impl Accounts {
 
     pub fn new_with_frozen_accounts(
         paths: Vec<PathBuf>,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         frozen_account_pubkeys: &[Pubkey],
     ) -> Self {
         let mut accounts = Accounts {
@@ -90,11 +90,7 @@ impl Accounts {
         accounts
     }
 
-    pub fn freeze_accounts(
-        &mut self,
-        ancestors: &HashMap<Slot, usize>,
-        frozen_account_pubkeys: &[Pubkey],
-    ) {
+    pub fn freeze_accounts(&mut self, ancestors: &Ancestors, frozen_account_pubkeys: &[Pubkey]) {
         Arc::get_mut(&mut self.accounts_db)
             .unwrap()
             .freeze_accounts(ancestors, frozen_account_pubkeys);
@@ -102,7 +98,7 @@ impl Accounts {
 
     pub fn from_stream<R: Read, P: AsRef<Path>>(
         account_paths: &[PathBuf],
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         frozen_account_pubkeys: &[Pubkey],
         stream: &mut BufReader<R>,
         stream_append_vecs_path: P,
@@ -135,7 +131,7 @@ impl Accounts {
     fn load_tx_accounts(
         &self,
         storage: &AccountStorage,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
         fee: u64,
@@ -205,7 +201,7 @@ impl Accounts {
 
     fn load_executable_accounts(
         storage: &AccountStorage,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         accounts_index: &AccountsIndex<AccountInfo>,
         program_id: &Pubkey,
         error_counters: &mut ErrorCounters,
@@ -250,7 +246,7 @@ impl Accounts {
     /// For each program_id in the transaction, load its loaders.
     fn load_loaders(
         storage: &AccountStorage,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
@@ -278,7 +274,7 @@ impl Accounts {
 
     pub fn load_accounts(
         &self,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
         lock_results: Vec<TransactionProcessResult>,
@@ -342,11 +338,7 @@ impl Accounts {
     }
 
     /// Slow because lock is held for 1 operation instead of many
-    pub fn load_slow(
-        &self,
-        ancestors: &HashMap<Slot, usize>,
-        pubkey: &Pubkey,
-    ) -> Option<(Account, Slot)> {
+    pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let (account, slot) = self
             .accounts_db
             .load_slow(ancestors, pubkey)
@@ -404,7 +396,7 @@ impl Accounts {
     }
 
     #[must_use]
-    pub fn verify_bank_hash(&self, slot: Slot, ancestors: &HashMap<Slot, usize>) -> bool {
+    pub fn verify_bank_hash(&self, slot: Slot, ancestors: &Ancestors) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash(slot, ancestors) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
@@ -415,7 +407,7 @@ impl Accounts {
 
     pub fn load_by_program(
         &self,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
         program_id: Option<&Pubkey>,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.scan_accounts(
