@@ -561,6 +561,10 @@ impl Bank {
         self.epoch
     }
 
+    pub fn first_normal_epoch(&self) -> Epoch {
+        self.epoch_schedule.first_normal_epoch
+    }
+
     pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
         self.hash.read().unwrap()
     }
@@ -1725,18 +1729,26 @@ impl Bank {
 
     fn rent_collection_partitions(&self) -> Vec<Partition> {
         if !self.use_fixed_collection_cycle() {
-            self.normal_cycle_partitions()
+            // This mode is for production/development/testing.
+            // In this mode, we iterate over the whole pubkey value range for each epochs
+            // including warm-up epochs.
+            // The only exception is the situation where normal epochs are relatively short
+            // (currently less than 2 day). In that case, we arrange a single collection
+            // cycle to be multiple of epochs so that a cycle could be greater than the 2 day.
+            self.variable_cycle_partitions()
         } else {
-            // This mode is mainly for benchmarking only
-            // we always iterate over the whole pubkey value range with <slot_count_in_two_day>
-            // slots as a collection cycle, regardless warm-up or alignment between collection
-            // cycles and epochs.
+            // This mode is mainly for benchmarking only.
+            // In this mode, we always iterate over the whole pubkey value range with
+            // <slot_count_in_two_day> slots as a collection cycle, regardless warm-up or
+            // alignment between collection cycles and epochs.
+            // Thus, we can simulate stable processing load of eager rent collection,
+            // strictly proportional to the number of pubkeys since genesis.
             self.fixed_cycle_partitions()
         }
     }
 
     fn collect_rent_in_partition(&self, partition: Partition) {
-        let subrange = Self::pubkey_range_by_partition(partition);
+        let subrange = Self::pubkey_range_from_partition(partition);
 
         let accounts = self
             .rc
@@ -1757,7 +1769,7 @@ impl Bank {
         datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
     }
 
-    fn pubkey_range_by_partition(
+    fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
         type Prefix = u64;
@@ -1780,7 +1792,7 @@ impl Bank {
         start_pubkey[0..PREFIX_SIZE].copy_from_slice(&start_key_prefix.to_be_bytes());
         end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
         trace!(
-            "pubkey_range_by_partition: ({}-{})/{}: {:02x?}-{:02x?}",
+            "pubkey_range_from_partition: ({}-{})/{}: {:02x?}-{:02x?}",
             start_index,
             end_index,
             partition_count,
@@ -1802,9 +1814,10 @@ impl Bank {
         let mut partitions = vec![];
         if parent_cycle < current_cycle {
             if current_cycle_index > 0 {
+                let parent_last_cycle_index = slot_count_in_two_day - 1;
                 partitions.push((
                     parent_cycle_index,
-                    slot_count_in_two_day - 1,
+                    parent_last_cycle_index,
                     slot_count_in_two_day,
                 ));
             }
@@ -1820,7 +1833,7 @@ impl Bank {
         partitions
     }
 
-    fn normal_cycle_partitions(&self) -> Vec<Partition> {
+    fn variable_cycle_partitions(&self) -> Vec<Partition> {
         let (current_epoch, current_slot_index) = self.get_epoch_and_slot_index(self.slot());
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
@@ -1828,10 +1841,10 @@ impl Bank {
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
             if current_slot_index > 0 {
-                let last_slot_index = self.get_slots_in_epoch(parent_epoch) - 1;
+                let parent_last_slot_index = self.get_slots_in_epoch(parent_epoch) - 1;
                 partitions.push(self.partition_in_collection_cycle(
                     parent_slot_index,
-                    last_slot_index,
+                    parent_last_slot_index,
                     parent_epoch,
                 ));
             }
@@ -1854,7 +1867,7 @@ impl Bank {
         current_epoch: Epoch,
     ) -> Partition {
         let cycle_params = self.determine_collection_cycle_params(current_epoch);
-        let (_, _, is_in_longer_cycle, _, _, partition_count) = cycle_params;
+        let (_, _, is_in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
 
         // use common code-path for both very-likely and very-unlikely for the sake of minimized
         // risk of any mis-calculation instead of neligilbe faster computation per slot for the
@@ -1864,10 +1877,28 @@ impl Bank {
         let end_partition_index =
             Self::partition_index_in_collection_cycle(end_slot_index, cycle_params);
 
-        // do special handling...
         let is_across_epoch_boundary =
             start_slot_index == 0 && end_slot_index != 1 && start_partition_index > 0;
-        if is_in_longer_cycle && is_across_epoch_boundary {
+        if is_in_multi_epoch_cycle && is_across_epoch_boundary {
+            // When an epoch boundary is crossed, the caller gives us off-by-one indexes.
+            // Usually there should be no need for adjustment because cycles are aligned
+            // with epochs. But for multi-epoch cycles, adjust the start index if it
+            // happens in the middle of a cycle for both gapped and non-gapped cases:
+            //
+            // epoch & slot range| *slot idx. | raw partition idx.| adj. partition idx.
+            // ------------------+------------+-------------------+-----------------------
+            // 3       20..30    | [7..8]     |    7.. 8          |    7.. 8
+            //                   | [8..9]     |    8.. 9          |    8.. 9
+            // 4       30..40    | [0..0]     | <10>..10          |  <9>..10 <= not gapped
+            //                   | [0..1]     |   10..11          |   10..11
+            //                   | [1..2]     |   11..12          |   11..12
+            //                   | [2..9      |   12..19          |   12..19
+            // 5       40..50    |  0..4]     | <20>..24          | <19>..24 <= gapped
+            //                   | [4..5]     |   24..25          |   24..25
+            //                   | [5..6]     |   25..26          |   25..26
+            // *: The range of parent_bank.slot() and current_bank.slot() is firstly
+            //    split by the epoch boundaries and then the split ones are given to us.
+            //    The oritinal ranges are denoted as [...]
             start_partition_index -= 1;
         }
 
@@ -1877,7 +1908,7 @@ impl Bank {
     fn determine_collection_cycle_params(&self, current_epoch: Epoch) -> RentCollectionCycleParams {
         let slot_count_per_epoch = self.get_slots_in_epoch(current_epoch);
 
-        if !self.use_longer_collection_cycle(current_epoch) {
+        if !self.use_multi_epoch_collection_cycle(current_epoch) {
             (
                 current_epoch,
                 slot_count_per_epoch,
@@ -1887,7 +1918,6 @@ impl Bank {
                 slot_count_per_epoch,
             )
         } else {
-            let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
             let epoch_count_in_cycle = self.slot_count_in_two_day() / slot_count_per_epoch;
             let partition_count = slot_count_per_epoch * epoch_count_in_cycle;
 
@@ -1895,7 +1925,7 @@ impl Bank {
                 current_epoch,
                 slot_count_per_epoch,
                 true,
-                first_normal_epoch,
+                self.first_normal_epoch(),
                 epoch_count_in_cycle,
                 partition_count,
             )
@@ -1920,22 +1950,17 @@ impl Bank {
 
     // Given short epochs, it's too costly to collect rent eagerly
     // within an epoch, so lower the frequency of it.
-    // These logic is't strictly eager anymore and should only be used
+    // These logic isn't strictly eager anymore and should only be used
     // for development/performance purpose.
     // Absolutely not under OperationMode::Stable!!!!
-    fn use_longer_collection_cycle(&self, current_epoch: Epoch) -> bool {
-        let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
-        let slot_count_per_normal_epoch = self.get_slots_in_epoch(first_normal_epoch);
-        current_epoch >= first_normal_epoch
-            && slot_count_per_normal_epoch < self.slot_count_in_two_day()
+    fn use_multi_epoch_collection_cycle(&self, current_epoch: Epoch) -> bool {
+        current_epoch >= self.first_normal_epoch()
+            && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
     fn use_fixed_collection_cycle(&self) -> bool {
-        let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
-        let slot_count_per_normal_epoch = self.get_slots_in_epoch(first_normal_epoch);
-
         self.operating_mode() != OperatingMode::Stable
-            && slot_count_per_normal_epoch < self.slot_count_in_two_day()
+            && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
     // This value is specially chosen to align with slots per epoch in mainnet-beta and testnet
@@ -1943,6 +1968,10 @@ impl Bank {
     // rent eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
     fn slot_count_in_two_day(&self) -> SlotCount {
         2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot
+    }
+
+    fn slot_count_per_normal_epoch(&self) -> SlotCount {
+        self.get_slots_in_epoch(self.first_normal_epoch())
     }
 
     fn operating_mode(&self) -> OperatingMode {
@@ -3576,7 +3605,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rent_eager_across_epoch_without_gap_under_longer_cycle() {
+    fn test_rent_eager_across_epoch_without_gap_under_multi_epoch_cycle() {
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
         let mut genesis_config =
@@ -3646,7 +3675,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rent_eager_across_epoch_with_gap_under_longer_cycle() {
+    fn test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle() {
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
         let mut genesis_config =
@@ -3700,7 +3729,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rent_eager_with_warmup_epochs_under_longer_cycle() {
+    fn test_rent_eager_with_warmup_epochs_under_multi_epoch_cycle() {
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
         let mut genesis_config =
@@ -3715,7 +3744,7 @@ mod tests {
         let mut bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(DEFAULT_SLOTS_PER_EPOCH, 432000);
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
-        assert_eq!(bank.epoch_schedule.first_normal_epoch, 3);
+        assert_eq!(bank.first_normal_epoch(), 3);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 0));
         assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
 
@@ -3756,7 +3785,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rent_eager_under_longer_cycle_for_developemnt() {
+    fn test_rent_eager_under_fixed_cycle_for_developemnt() {
         solana_logger::setup();
         let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
@@ -3770,7 +3799,7 @@ mod tests {
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(bank.get_slots_in_epoch(bank.epoch()), 32);
-        assert_eq!(bank.epoch_schedule.first_normal_epoch, 3);
+        assert_eq!(bank.first_normal_epoch(), 3);
         assert_eq!(bank.get_epoch_and_slot_index(bank.slot()), (0, 0));
         assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 432000)]);
 
@@ -3819,7 +3848,7 @@ mod tests {
 
     #[test]
     fn test_rent_eager_pubkey_range_minimal() {
-        let range = Bank::pubkey_range_by_partition((0, 0, 1));
+        let range = Bank::pubkey_range_from_partition((0, 0, 1));
         assert_eq!(
             range,
             Pubkey::new_from_array([0x00; 32])..=Pubkey::new_from_array([0xff; 32])
@@ -3828,7 +3857,7 @@ mod tests {
 
     #[test]
     fn test_rent_eager_pubkey_range_dividable() {
-        let range = Bank::pubkey_range_by_partition((0, 0, 2));
+        let range = Bank::pubkey_range_from_partition((0, 0, 2));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3843,7 +3872,7 @@ mod tests {
                 ])
         );
 
-        let range = Bank::pubkey_range_by_partition((0, 1, 2));
+        let range = Bank::pubkey_range_from_partition((0, 1, 2));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3863,7 +3892,7 @@ mod tests {
     fn test_rent_eager_pubkey_range_not_dividable() {
         solana_logger::setup();
 
-        let range = Bank::pubkey_range_by_partition((0, 0, 3));
+        let range = Bank::pubkey_range_from_partition((0, 0, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3878,7 +3907,7 @@ mod tests {
                 ])
         );
 
-        let range = Bank::pubkey_range_by_partition((0, 1, 3));
+        let range = Bank::pubkey_range_from_partition((0, 1, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3893,7 +3922,7 @@ mod tests {
                 ])
         );
 
-        let range = Bank::pubkey_range_by_partition((1, 2, 3));
+        let range = Bank::pubkey_range_from_partition((1, 2, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -3912,7 +3941,7 @@ mod tests {
     #[test]
     fn test_rent_eager_pubkey_range_gap() {
         solana_logger::setup();
-        let range = Bank::pubkey_range_by_partition((120, 1023, 12345));
+        let range = Bank::pubkey_range_from_partition((120, 1023, 12345));
         assert_eq!(
             range,
             Pubkey::new_from_array([
