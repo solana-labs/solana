@@ -218,8 +218,6 @@ pub struct EpochSlots {
     pub wallclock: u64,
 }
 
-<<<<<<< HEAD
-=======
 impl Sanitize for EpochSlots {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
@@ -247,7 +245,6 @@ impl fmt::Debug for EpochSlots {
     }
 }
 
->>>>>>> 8ef097bf6... Input values are not sanitized after they are deserialized, making it far too easy for Leo to earn SOL (#9706)
 impl EpochSlots {
     pub fn new(from: Pubkey, now: u64) -> Self {
         Self {
