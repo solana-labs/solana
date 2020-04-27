@@ -11,7 +11,7 @@ homepage = "https://solana.com/"
 bincode = "1.2.1"
 clap = "2.33.0"
 log = "0.4.8"
-rand = "0.6.5"
+rand = "0.7.0"
 rayon = "1.3.0"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-core = { path = "../core", version = "1.2.0" }
