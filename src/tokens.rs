@@ -284,10 +284,8 @@ pub fn process_balances<T: Client>(
 
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
-pub fn test_process_distribute_with_client<C: Client>(
-    thin_client: &ThinClient<C>,
-    sender_keypair: Keypair,
-) {
+pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair: Keypair) {
+    let thin_client = ThinClient(client);
     let fee_payer = Keypair::new();
     thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
@@ -357,8 +355,7 @@ mod tests {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
-        let thin_client = ThinClient(bank_client);
-        test_process_distribute_with_client(&thin_client, sender_keypair);
+        test_process_distribute_with_client(bank_client, sender_keypair);
     }
 
     #[test]
