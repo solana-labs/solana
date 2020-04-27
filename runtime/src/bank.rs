@@ -1695,6 +1695,46 @@ impl Bank {
         }
     }
 
+    fn collect_rent_eagerly(&self) {
+        if !self.enable_eager_rent_collection() {
+            return;
+        }
+
+        let mut measure = Measure::start("collect_rent_eagerly-ms");
+        for partition in self.rent_collection_partitions() {
+            self.collect_rent_in_partition(partition);
+        }
+        measure.stop();
+        inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
+    }
+
+    fn enable_eager_rent_collection(&self) -> bool {
+        if self.lazy_rent_collection.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        let not_yet_for_existing_clusters = (self.operating_mode() == OperatingMode::Stable
+            && self.genesis_hash.unwrap() == MAINNET_BETA_GENESIS_HASH
+            && self.epoch() < MAINNET_BETA_EAGER_RENT_COLLECTION_START_EPOCH)
+            || (self.operating_mode() == OperatingMode::Preview
+                && self.genesis_hash.unwrap() == TESTNET_GENESIS_HASH
+                && self.epoch() < TESTNET_EAGER_RENT_COLLECTION_START_EPOCH);
+
+        !not_yet_for_existing_clusters
+    }
+
+    fn rent_collection_partitions(&self) -> Vec<Partition> {
+        if !self.use_fixed_collection_cycle() {
+            self.normal_cycle_partitions()
+        } else {
+            // This mode is mainly for benchmarking only
+            // we always iterate over the whole pubkey value range with <slot_count_in_two_day>
+            // slots as a collection cycle, regardless warm-up or alignment between collection
+            // cycles and epochs.
+            self.fixed_cycle_partitions()
+        }
+    }
+
     fn collect_rent_in_partition(&self, partition: Partition) {
         let subrange = Self::pubkey_range_by_partition(partition);
 
@@ -1752,7 +1792,9 @@ impl Bank {
         Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey)
     }
 
-    fn constant_cycle_partitions(&self, slot_count_in_two_day: SlotCount) -> Vec<Partition> {
+    fn fixed_cycle_partitions(&self) -> Vec<Partition> {
+        let slot_count_in_two_day = self.slot_count_in_two_day();
+
         let parent_cycle = self.parent_slot() / slot_count_in_two_day;
         let current_cycle = self.slot() / slot_count_in_two_day;
         let mut parent_cycle_index = self.parent_slot() % slot_count_in_two_day;
@@ -1805,71 +1847,13 @@ impl Bank {
         partitions
     }
 
-    fn rent_collection_partitions(&self) -> Vec<Partition> {
-        let slot_count_per_normal_epoch =
-            self.get_slots_in_epoch(self.epoch_schedule.first_normal_epoch);
-        let slot_count_in_two_day: SlotCount =
-            2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
-        let is_in_constant_cycle =
-            self.use_constant_collection_cycle(slot_count_per_normal_epoch, slot_count_in_two_day);
-
-        if !is_in_constant_cycle {
-            self.normal_cycle_partitions()
-        } else {
-            self.constant_cycle_partitions(slot_count_in_two_day)
-        }
-    }
-
-    fn determine_collection_cycle_params(
-        &self,
-        current_epoch: Epoch,
-        slot_count_per_epoch: SlotCount,
-    ) -> RentCollectionCycleParams {
-        // Assume 500GB account data set as the extreme, then for 2 day (=48 hours) to collect rent
-        // eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
-        let slot_count_in_two_day: SlotCount =
-            2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot;
-        let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
-        let slot_count_per_normal_epoch = self.get_slots_in_epoch(first_normal_epoch);
-        let is_in_longer_cycle = self.use_longer_collection_cycle(
-            current_epoch,
-            slot_count_per_normal_epoch,
-            slot_count_in_two_day,
-        );
-
-        if !is_in_longer_cycle {
-            (
-                current_epoch,
-                slot_count_per_epoch,
-                false,
-                0,
-                1,
-                slot_count_per_epoch,
-            )
-        } else {
-            let epoch_count_in_cycle = slot_count_in_two_day / slot_count_per_epoch;
-            let partition_count = slot_count_per_epoch * epoch_count_in_cycle;
-
-            (
-                current_epoch,
-                slot_count_per_epoch,
-                true,
-                first_normal_epoch,
-                epoch_count_in_cycle,
-                partition_count,
-            )
-        }
-    }
-
     fn partition_in_collection_cycle(
         &self,
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
         current_epoch: Epoch,
     ) -> Partition {
-        let slot_count_per_epoch = self.get_slots_in_epoch(current_epoch);
-        let cycle_params =
-            self.determine_collection_cycle_params(current_epoch, slot_count_per_epoch);
+        let cycle_params = self.determine_collection_cycle_params(current_epoch);
         let (_, _, is_in_longer_cycle, _, _, partition_count) = cycle_params;
 
         // use common code-path for both very-likely and very-unlikely for the sake of minimized
@@ -1881,11 +1865,8 @@ impl Bank {
             Self::partition_index_in_collection_cycle(end_slot_index, cycle_params);
 
         // do special handling...
-        let is_across_epoch_boundary = Self::across_gapped_epoch_boundary_in_collection_cycle(
-            start_slot_index,
-            end_slot_index,
-            start_partition_index,
-        );
+        let is_across_epoch_boundary =
+            start_slot_index == 0 && end_slot_index != 1 && start_partition_index > 0;
         if is_in_longer_cycle && is_across_epoch_boundary {
             start_partition_index -= 1;
         }
@@ -1893,12 +1874,32 @@ impl Bank {
         (start_partition_index, end_partition_index, partition_count)
     }
 
-    fn across_gapped_epoch_boundary_in_collection_cycle(
-        start_slot_index: SlotIndex,
-        end_slot_index: SlotIndex,
-        start_partition_index: PartitionIndex,
-    ) -> bool {
-        start_slot_index == 0 && end_slot_index != 1 && start_partition_index > 0
+    fn determine_collection_cycle_params(&self, current_epoch: Epoch) -> RentCollectionCycleParams {
+        let slot_count_per_epoch = self.get_slots_in_epoch(current_epoch);
+
+        if !self.use_longer_collection_cycle(current_epoch) {
+            (
+                current_epoch,
+                slot_count_per_epoch,
+                false,
+                0,
+                1,
+                slot_count_per_epoch,
+            )
+        } else {
+            let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
+            let epoch_count_in_cycle = self.slot_count_in_two_day() / slot_count_per_epoch;
+            let partition_count = slot_count_per_epoch * epoch_count_in_cycle;
+
+            (
+                current_epoch,
+                slot_count_per_epoch,
+                true,
+                first_normal_epoch,
+                epoch_count_in_cycle,
+                partition_count,
+            )
+        }
     }
 
     fn partition_index_in_collection_cycle(
@@ -1922,51 +1923,26 @@ impl Bank {
     // These logic is't strictly eager anymore and should only be used
     // for development/performance purpose.
     // Absolutely not under OperationMode::Stable!!!!
-    fn use_longer_collection_cycle(
-        &self,
-        current_epoch: Epoch,
-        slot_count_per_normal_epoch: SlotCount,
-        slot_count_in_two_day: SlotCount,
-    ) -> bool {
+    fn use_longer_collection_cycle(&self, current_epoch: Epoch) -> bool {
         let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
-        current_epoch >= first_normal_epoch && slot_count_per_normal_epoch < slot_count_in_two_day
+        let slot_count_per_normal_epoch = self.get_slots_in_epoch(first_normal_epoch);
+        current_epoch >= first_normal_epoch
+            && slot_count_per_normal_epoch < self.slot_count_in_two_day()
     }
 
-    fn use_constant_collection_cycle(
-        &self,
-        slot_count_per_normal_epoch: SlotCount,
-        slot_count_in_two_day: SlotCount,
-    ) -> bool {
+    fn use_fixed_collection_cycle(&self) -> bool {
+        let first_normal_epoch = self.epoch_schedule.first_normal_epoch;
+        let slot_count_per_normal_epoch = self.get_slots_in_epoch(first_normal_epoch);
+
         self.operating_mode() != OperatingMode::Stable
-            && slot_count_per_normal_epoch < slot_count_in_two_day
+            && slot_count_per_normal_epoch < self.slot_count_in_two_day()
     }
 
-    fn collect_rent_eagerly(&self) {
-        if !self.enable_eager_rent_collection() {
-            return;
-        }
-
-        let mut measure = Measure::start("collect_rent_eagerly-ms");
-        for partition in self.rent_collection_partitions() {
-            self.collect_rent_in_partition(partition);
-        }
-        measure.stop();
-        inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
-    }
-
-    fn enable_eager_rent_collection(&self) -> bool {
-        if self.lazy_rent_collection.load(Ordering::Relaxed) {
-            return false;
-        }
-
-        let not_yet_for_existing_clusters = (self.operating_mode() == OperatingMode::Stable
-            && self.genesis_hash.unwrap() == MAINNET_BETA_GENESIS_HASH
-            && self.epoch() < MAINNET_BETA_EAGER_RENT_COLLECTION_START_EPOCH)
-            || (self.operating_mode() == OperatingMode::Preview
-                && self.genesis_hash.unwrap() == TESTNET_GENESIS_HASH
-                && self.epoch() < TESTNET_EAGER_RENT_COLLECTION_START_EPOCH);
-
-        !not_yet_for_existing_clusters
+    // This value is specially chosen to align with slots per epoch in mainnet-beta and testnet
+    // Also, assume 500GB account data set as the extreme, then for 2 day (=48 hours) to collect
+    // rent eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
+    fn slot_count_in_two_day(&self) -> SlotCount {
+        2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot
     }
 
     fn operating_mode(&self) -> OperatingMode {
