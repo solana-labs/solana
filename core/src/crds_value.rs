@@ -22,6 +22,7 @@ pub type VoteIndex = u8;
 pub const MAX_VOTES: VoteIndex = 32;
 
 pub type EpochSlotIndex = u8;
+pub const MAX_EPOCH_SLOTS: EpochSlotIndex = 1;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -102,7 +103,6 @@ impl Sanitize for CrdsData {
                 }
                 val.sanitize()
             }
-            CrdsData::LowestSlot(_, val) => val.sanitize(),
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
@@ -176,7 +176,7 @@ impl EpochSlots {
     }
 }
 
-impl Sanitize for LowestSlot {
+impl Sanitize for EpochSlots {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
             return Err(SanitizeError::Failed);
@@ -466,9 +466,9 @@ mod test {
     fn test_max_epoch_slots_index() {
         let keypair = Keypair::new();
         let item = CrdsValue::new_signed(
-            CrdsData::EpochSlots(
-                MAX_EPOCH_SLOTS,
-                EpochSlots::new(keypair.pubkey(), timestamp()),
+            CrdsData::Vote(
+                MAX_VOTES,
+                Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
             ),
             &keypair,
         );
