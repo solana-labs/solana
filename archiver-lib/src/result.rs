@@ -1,4 +1,3 @@
-use serde_json;
 use solana_client::client_error;
 use solana_ledger::blockstore;
 use solana_sdk::transport;

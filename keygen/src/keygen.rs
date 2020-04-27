@@ -1,10 +1,8 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
-use bs58;
 use clap::{
     crate_description, crate_name, value_t, values_t_or_exit, App, AppSettings, Arg, ArgMatches,
     SubCommand,
 };
-use num_cpus;
 use solana_clap_utils::{
     keypair::{
         keypair_from_seed_phrase, prompt_passphrase, signer_from_path,

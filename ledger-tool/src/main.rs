@@ -2,7 +2,6 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
     ArgMatches, SubCommand,
 };
-use histogram;
 use serde_json::json;
 use solana_clap_utils::input_validators::is_slot;
 use solana_ledger::bank_forks::CompressionType;
