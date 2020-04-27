@@ -1117,14 +1117,14 @@ fn test_fake_shreds_broadcast_leader() {
 
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup();
-    let num_nodes = 4;
+    let num_nodes = 3;
     let validator_config = ValidatorConfig::default();
     let mut error_validator_config = ValidatorConfig::default();
     error_validator_config.broadcast_stage_type = faulty_node_type.clone();
     let mut validator_configs = vec![validator_config; num_nodes - 1];
     validator_configs.push(error_validator_config);
-    let mut node_stakes = vec![100; num_nodes - 1];
-    node_stakes.push(50);
+    let node_stakes = vec![101, 100, 100];
+    assert_eq!(node_stakes.len(), num_nodes);
     let cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes,
