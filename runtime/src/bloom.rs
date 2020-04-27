@@ -19,6 +19,8 @@ pub struct Bloom<T: BloomHashIndex> {
     _phantom: PhantomData<T>,
 }
 
+impl<T: BloomHashIndex> solana_sdk::sanitize::Sanitize for Bloom<T> {}
+
 impl<T: BloomHashIndex> Bloom<T> {
     pub fn new(num_bits: usize, keys: Vec<u64>) -> Self {
         let bits = BitVec::new_fill(false, num_bits as u64);

@@ -21,8 +21,16 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
+<<<<<<< HEAD
     crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Vote},
     packet::{Packet, PACKET_DATA_SIZE},
+=======
+    crds_value::{
+        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash, Vote,
+        MAX_WALLCLOCK,
+    },
+    epoch_slots::EpochSlots,
+>>>>>>> 8ef097bf6... Input values are not sanitized after they are deserialized, making it far too easy for Leo to earn SOL (#9706)
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
     weighted_shuffle::{weighted_best, weighted_shuffle},
@@ -31,6 +39,7 @@ use crate::{
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
 use bincode::{serialize, serialized_size};
 use compression::prelude::*;
@@ -157,6 +166,15 @@ pub struct PruneData {
     pub wallclock: u64,
 }
 
+impl Sanitize for PruneData {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfRange);
+        }
+        Ok(())
+    }
+}
+
 impl Signable for PruneData {
     fn pubkey(&self) -> Pubkey {
         self.pubkey
@@ -219,6 +237,20 @@ enum Protocol {
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
     PruneMessage(Pubkey, PruneData),
+}
+
+impl Sanitize for Protocol {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        match self {
+            Protocol::PullRequest(filter, val) => {
+                filter.sanitize()?;
+                val.sanitize()
+            }
+            Protocol::PullResponse(_, val) => val.sanitize(),
+            Protocol::PushMessage(_, val) => val.sanitize(),
+            Protocol::PruneMessage(_, val) => val.sanitize(),
+        }
+    }
 }
 
 // Rating for pull requests
@@ -1358,6 +1390,7 @@ impl ClusterInfo {
             let from_addr = packet.meta.addr();
             limited_deserialize(&packet.data[..packet.meta.size])
                 .into_iter()
+                .filter(|r: &Protocol| r.sanitize().is_ok())
                 .for_each(|request| match request {
                     Protocol::PullRequest(filter, caller) => {
                         let start = allocated.get();
@@ -2747,6 +2780,14 @@ mod tests {
 
         // finally assert the header size estimation is correct
         assert_eq!(MAX_PROTOCOL_HEADER_SIZE, max_protocol_size);
+    }
+
+    #[test]
+    fn test_protocol_sanitize() {
+        let mut pd = PruneData::default();
+        pd.wallclock = MAX_WALLCLOCK;
+        let msg = Protocol::PruneMessage(Pubkey::default(), pd);
+        assert_eq!(msg.sanitize(), Err(SanitizeError::ValueOutOfRange));
     }
 
     // computes the maximum size for pull request blooms

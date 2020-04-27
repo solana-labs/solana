@@ -6,7 +6,13 @@ pub use bs58;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey([u8; 32]);
 
+<<<<<<< HEAD
 #[derive(Debug, Clone, PartialEq, Eq)]
+=======
+impl crate::sanitize::Sanitize for Pubkey {}
+
+#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+>>>>>>> 8ef097bf6... Input values are not sanitized after they are deserialized, making it far too easy for Leo to earn SOL (#9706)
 pub enum ParsePubkeyError {
     WrongSize,
     Invalid,
