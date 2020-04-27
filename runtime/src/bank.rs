@@ -45,6 +45,7 @@ use solana_sdk::{
     inflation::Inflation,
     native_loader, nonce,
     pubkey::Pubkey,
+    sanitize::Sanitize,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
@@ -1077,7 +1078,7 @@ impl Bank {
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results)
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !tx.verify_refs() {
+                if lock_res.is_ok() && tx.sanitize().is_err() {
                     error_counters.invalid_account_index += 1;
                     Err(TransactionError::InvalidAccountIndex)
                 } else {

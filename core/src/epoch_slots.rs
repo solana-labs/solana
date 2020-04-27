@@ -1,10 +1,14 @@
 use crate::cluster_info::MAX_CRDS_OBJECT_SIZE;
+use crate::crds_value::MAX_SLOT;
+use crate::crds_value::MAX_WALLCLOCK;
 use bincode::serialized_size;
 use bv::BitVec;
 use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress};
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
+const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Uncompressed {
     pub first_slot: Slot,
@@ -12,11 +16,35 @@ pub struct Uncompressed {
     pub slots: BitVec<u8>,
 }
 
+impl Sanitize for Uncompressed {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.first_slot >= MAX_SLOT {
+            return Err(SanitizeError::ValueOutOfRange);
+        }
+        if self.num >= MAX_SLOTS_PER_ENTRY {
+            return Err(SanitizeError::ValueOutOfRange);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Flate2 {
     pub first_slot: Slot,
     pub num: usize,
     pub compressed: Vec<u8>,
+}
+
+impl Sanitize for Flate2 {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.first_slot >= MAX_SLOT {
+            return Err(SanitizeError::ValueOutOfRange);
+        }
+        if self.num >= MAX_SLOTS_PER_ENTRY {
+            return Err(SanitizeError::ValueOutOfRange);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -98,6 +126,9 @@ impl Uncompressed {
             if self.num == 0 {
                 self.first_slot = *s;
             }
+            if self.num >= MAX_SLOTS_PER_ENTRY {
+                return i;
+            }
             if *s < self.first_slot {
                 return i;
             }
@@ -115,6 +146,15 @@ impl Uncompressed {
 pub enum CompressedSlots {
     Flate2(Flate2),
     Uncompressed(Uncompressed),
+}
+
+impl Sanitize for CompressedSlots {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        match self {
+            CompressedSlots::Uncompressed(a) => a.sanitize(),
+            CompressedSlots::Flate2(b) => b.sanitize(),
+        }
+    }
 }
 
 impl Default for CompressedSlots {
@@ -176,6 +216,16 @@ pub struct EpochSlots {
     pub from: Pubkey,
     pub slots: Vec<CompressedSlots>,
     pub wallclock: u64,
+}
+
+impl Sanitize for EpochSlots {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfRange);
+        }
+        self.from.sanitize()?;
+        self.slots.sanitize()
+    }
 }
 
 use std::fmt;
@@ -327,6 +377,44 @@ mod tests {
         assert_eq!(slots.num, 701);
         assert_eq!(slots.to_slots(1), vec![1, 2, 701]);
     }
+
+    #[test]
+    fn test_epoch_slots_sanitize() {
+        let mut slots = Uncompressed::new(100);
+        slots.add(&[1, 701, 2]);
+        assert_eq!(slots.num, 701);
+        assert!(slots.sanitize().is_ok());
+
+        let mut o = slots.clone();
+        o.first_slot = MAX_SLOT;
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+
+        let mut o = slots.clone();
+        o.num = MAX_SLOTS_PER_ENTRY;
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+
+        let compressed = Flate2::deflate(slots).unwrap();
+        assert!(compressed.sanitize().is_ok());
+
+        let mut o = compressed.clone();
+        o.first_slot = MAX_SLOT;
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+
+        let mut o = compressed.clone();
+        o.num = MAX_SLOTS_PER_ENTRY;
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+
+        let mut slots = EpochSlots::default();
+        let range: Vec<Slot> = (0..5000).into_iter().collect();
+        assert_eq!(slots.fill(&range, 1), 5000);
+        assert_eq!(slots.wallclock, 1);
+        assert!(slots.sanitize().is_ok());
+
+        let mut o = slots.clone();
+        o.wallclock = MAX_WALLCLOCK;
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+    }
+
     #[test]
     fn test_epoch_slots_fill_range() {
         let range: Vec<Slot> = (0..5000).into_iter().collect();

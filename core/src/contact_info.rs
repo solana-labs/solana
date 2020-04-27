@@ -1,6 +1,8 @@
+use crate::crds_value::MAX_WALLCLOCK;
 use solana_sdk::pubkey::Pubkey;
 #[cfg(test)]
 use solana_sdk::rpc_port;
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 #[cfg(test)]
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::timing::timestamp;
@@ -35,6 +37,15 @@ pub struct ContactInfo {
     pub wallclock: u64,
     /// node shred version
     pub shred_version: u16,
+}
+
+impl Sanitize for ContactInfo {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        Ok(())
+    }
 }
 
 impl Ord for ContactInfo {

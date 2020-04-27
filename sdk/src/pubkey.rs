@@ -28,6 +28,8 @@ impl<T> DecodeError<T> for PubkeyError {
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey([u8; 32]);
 
+impl crate::sanitize::Sanitize for Pubkey {}
+
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum ParsePubkeyError {
     #[error("String is the wrong size")]

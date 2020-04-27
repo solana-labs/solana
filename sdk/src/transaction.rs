@@ -1,5 +1,6 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
+use crate::sanitize::{Sanitize, SanitizeError};
 use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -84,6 +85,18 @@ pub struct Transaction {
 
     /// The message to sign.
     pub message: Message,
+}
+
+impl Sanitize for Transaction {
+    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
+        if self.message.header.num_required_signatures as usize > self.signatures.len() {
+            return Err(SanitizeError::IndexOutOfBounds);
+        }
+        if self.signatures.len() > self.message.account_keys.len() {
+            return Err(SanitizeError::IndexOutOfBounds);
+        }
+        self.message.sanitize()
+    }
 }
 
 impl Transaction {
@@ -364,22 +377,6 @@ impl Transaction {
             .iter()
             .all(|signature| *signature != Signature::default())
     }
-
-    /// Verify that references in the instructions are valid
-    pub fn verify_refs(&self) -> bool {
-        let message = self.message();
-        for instruction in &message.instructions {
-            if (instruction.program_id_index as usize) >= message.account_keys.len() {
-                return false;
-            }
-            for account_index in &instruction.accounts {
-                if (*account_index as usize) >= message.account_keys.len() {
-                    return false;
-                }
-            }
-        }
-        true
-    }
 }
 
 #[cfg(test)]
@@ -418,7 +415,7 @@ mod tests {
             vec![prog1, prog2],
             instructions,
         );
-        assert!(tx.verify_refs());
+        assert!(tx.sanitize().is_ok());
 
         assert_eq!(tx.key(0, 0), Some(&key.pubkey()));
         assert_eq!(tx.signer_key(0, 0), Some(&key.pubkey()));
@@ -452,7 +449,7 @@ mod tests {
             vec![],
             instructions,
         );
-        assert!(!tx.verify_refs());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
     }
     #[test]
     fn test_refs_invalid_account() {
@@ -466,7 +463,54 @@ mod tests {
             instructions,
         );
         assert_eq!(*get_program_id(&tx, 0), Pubkey::default());
-        assert!(!tx.verify_refs());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+    }
+
+    #[test]
+    fn test_sanitize_txs() {
+        let key = Keypair::new();
+        let id0 = Pubkey::default();
+        let program_id = Pubkey::new_rand();
+        let ix = Instruction::new(
+            program_id,
+            &0,
+            vec![
+                AccountMeta::new(key.pubkey(), true),
+                AccountMeta::new(id0, true),
+            ],
+        );
+        let ixs = vec![ix];
+        let mut tx = Transaction::new_with_payer(ixs, Some(&key.pubkey()));
+        let o = tx.clone();
+        assert_eq!(tx.sanitize(), Ok(()));
+        assert_eq!(tx.message.account_keys.len(), 3);
+
+        tx = o.clone();
+        tx.message.header.num_required_signatures = 3;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 4;
+        tx.message.header.num_readonly_unsigned_accounts = 0;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 2;
+        tx.message.header.num_readonly_unsigned_accounts = 2;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 0;
+        tx.message.header.num_readonly_unsigned_accounts = 4;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.instructions[0].program_id_index = 3;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.instructions[0].accounts[0] = 3;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
     }
 
     fn create_sample_transaction() -> Transaction {

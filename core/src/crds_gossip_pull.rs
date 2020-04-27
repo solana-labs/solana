@@ -37,6 +37,13 @@ pub struct CrdsFilter {
     mask_bits: u32,
 }
 
+impl solana_sdk::sanitize::Sanitize for CrdsFilter {
+    fn sanitize(&self) -> std::result::Result<(), solana_sdk::sanitize::SanitizeError> {
+        self.filter.sanitize()?;
+        Ok(())
+    }
+}
+
 impl CrdsFilter {
     pub fn new_rand(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
