@@ -1,10 +1,6 @@
 #[macro_use]
 extern crate serde_derive;
 
-<<<<<<< HEAD
-use bincode::serialize;
-=======
->>>>>>> c11abf88b... Clean up `use` to keep rust 1.43.0 from complaining (#9740)
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,
@@ -175,7 +171,9 @@ impl EncodedTransaction {
                 },
             })
         } else {
-            EncodedTransaction::Binary(bs58::encode(serialize(&transaction).unwrap()).into_string())
+            EncodedTransaction::Binary(
+                bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
+            )
         }
     }
     pub fn decode(&self) -> Option<Transaction> {
