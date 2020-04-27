@@ -1842,7 +1842,7 @@ impl Bank {
         if parent_epoch < current_epoch {
             if current_slot_index > 0 {
                 let parent_last_slot_index = self.get_slots_in_epoch(parent_epoch) - 1;
-                partitions.push(self.partition_in_collection_cycle(
+                partitions.push(self.partition_from_slot_indexes(
                     parent_slot_index,
                     parent_last_slot_index,
                     parent_epoch,
@@ -1851,7 +1851,7 @@ impl Bank {
             parent_slot_index = 0;
         }
 
-        partitions.push(self.partition_in_collection_cycle(
+        partitions.push(self.partition_from_slot_indexes(
             parent_slot_index,
             current_slot_index,
             current_epoch,
@@ -1860,22 +1860,22 @@ impl Bank {
         partitions
     }
 
-    fn partition_in_collection_cycle(
+    fn partition_from_slot_indexes(
         &self,
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
-        current_epoch: Epoch,
+        epoch: Epoch,
     ) -> Partition {
-        let cycle_params = self.determine_collection_cycle_params(current_epoch);
+        let cycle_params = self.determine_collection_cycle_params(epoch);
         let (_, _, is_in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
 
         // use common code-path for both very-likely and very-unlikely for the sake of minimized
         // risk of any mis-calculation instead of neligilbe faster computation per slot for the
         // likely case.
         let mut start_partition_index =
-            Self::partition_index_in_collection_cycle(start_slot_index, cycle_params);
+            Self::partition_index_from_slot_index(start_slot_index, cycle_params);
         let end_partition_index =
-            Self::partition_index_in_collection_cycle(end_slot_index, cycle_params);
+            Self::partition_index_from_slot_index(end_slot_index, cycle_params);
 
         let is_across_epoch_boundary =
             start_slot_index == 0 && end_slot_index != 1 && start_partition_index > 0;
@@ -1905,12 +1905,12 @@ impl Bank {
         (start_partition_index, end_partition_index, partition_count)
     }
 
-    fn determine_collection_cycle_params(&self, current_epoch: Epoch) -> RentCollectionCycleParams {
-        let slot_count_per_epoch = self.get_slots_in_epoch(current_epoch);
+    fn determine_collection_cycle_params(&self, epoch: Epoch) -> RentCollectionCycleParams {
+        let slot_count_per_epoch = self.get_slots_in_epoch(epoch);
 
-        if !self.use_multi_epoch_collection_cycle(current_epoch) {
+        if !self.use_multi_epoch_collection_cycle(epoch) {
             (
-                current_epoch,
+                epoch,
                 slot_count_per_epoch,
                 false,
                 0,
@@ -1922,7 +1922,7 @@ impl Bank {
             let partition_count = slot_count_per_epoch * epoch_count_in_cycle;
 
             (
-                current_epoch,
+                epoch,
                 slot_count_per_epoch,
                 true,
                 self.first_normal_epoch(),
@@ -1932,10 +1932,10 @@ impl Bank {
         }
     }
 
-    fn partition_index_in_collection_cycle(
+    fn partition_index_from_slot_index(
         slot_index_in_epoch: SlotIndex,
         (
-            current_epoch,
+            epoch,
             slot_count_per_epoch,
             _,
             base_epoch,
@@ -1943,7 +1943,7 @@ impl Bank {
             _,
         ): RentCollectionCycleParams,
     ) -> PartitionIndex {
-        let epoch_offset = current_epoch - base_epoch;
+        let epoch_offset = epoch - base_epoch;
         let epoch_index_in_cycle = epoch_offset % epoch_count_per_cycle;
         slot_index_in_epoch + epoch_index_in_cycle * slot_count_per_epoch
     }
@@ -1953,8 +1953,8 @@ impl Bank {
     // These logic isn't strictly eager anymore and should only be used
     // for development/performance purpose.
     // Absolutely not under OperationMode::Stable!!!!
-    fn use_multi_epoch_collection_cycle(&self, current_epoch: Epoch) -> bool {
-        current_epoch >= self.first_normal_epoch()
+    fn use_multi_epoch_collection_cycle(&self, epoch: Epoch) -> bool {
+        epoch >= self.first_normal_epoch()
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
