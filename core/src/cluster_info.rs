@@ -21,16 +21,10 @@ use crate::{
     crds_gossip::CrdsGossip,
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
-<<<<<<< HEAD
-    crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Vote},
-    packet::{Packet, PACKET_DATA_SIZE},
-=======
     crds_value::{
-        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash, Vote,
-        MAX_WALLCLOCK,
+        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Vote, MAX_WALLCLOCK,
     },
-    epoch_slots::EpochSlots,
->>>>>>> 8ef097bf6... Input values are not sanitized after they are deserialized, making it far too easy for Leo to earn SOL (#9706)
+    packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
     sendmmsg::{multicast, send_mmsg},
     weighted_shuffle::{weighted_best, weighted_shuffle},

@@ -55,19 +55,8 @@ impl Signable for CrdsValue {
     }
 
     fn verify(&self) -> bool {
-<<<<<<< HEAD
-        let sig_check = self
-            .get_signature()
-            .verify(&self.pubkey().as_ref(), self.signable_data().borrow());
-        let data_check = match &self.data {
-            CrdsData::Vote(ix, _) => *ix < MAX_VOTES,
-            _ => true,
-        };
-        sig_check && data_check
-=======
         self.get_signature()
             .verify(&self.pubkey().as_ref(), self.signable_data().borrow())
->>>>>>> 8ef097bf6... Input values are not sanitized after they are deserialized, making it far too easy for Leo to earn SOL (#9706)
     }
 }
 
@@ -474,8 +463,6 @@ mod test {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
     fn test_max_epoch_slots_index() {
         let keypair = Keypair::new();
         let item = CrdsValue::new_signed(
@@ -488,7 +475,6 @@ mod test {
         assert!(item.sanitize().is_err());
     }
     #[test]
->>>>>>> 8ef097bf6... Input values are not sanitized after they are deserialized, making it far too easy for Leo to earn SOL (#9706)
     fn test_compute_vote_index_empty() {
         for i in 0..MAX_VOTES {
             let votes = vec![];
