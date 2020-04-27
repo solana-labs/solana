@@ -14,7 +14,6 @@ use crate::crds::Crds;
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
-use rand;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
 use solana_runtime::bloom::Bloom;

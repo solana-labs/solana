@@ -26,7 +26,6 @@ use std::{
 use tar::Archive;
 use tempfile::TempDir;
 use thiserror::Error;
-use zstd;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
