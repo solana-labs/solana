@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-console = "0.10.0"
+console = "0.10.1"
 log = "0.4.8"
 serde = "1.0.106"
 serde_yaml = "0.8.11"
