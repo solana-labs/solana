@@ -2641,7 +2641,7 @@ mod tests {
     use super::*;
     use crate::{
         accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
-        accounts_index::AncestorList,
+        accounts_index::Ancestors,
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
@@ -3953,7 +3953,7 @@ mod tests {
     }
 
     impl Bank {
-        fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &AncestorList) -> Vec<Slot> {
+        fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &Ancestors) -> Vec<Slot> {
             let accounts_index = self.rc.accounts.accounts_db.accounts_index.read().unwrap();
             let (accounts, _) = accounts_index.get(&pubkey, &ancestors).unwrap();
             accounts

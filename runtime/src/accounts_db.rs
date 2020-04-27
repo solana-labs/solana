@@ -1122,12 +1122,7 @@ impl AccountsDB {
         collector
     }
 
-    pub fn range_scan_accounts<F, A, R>(
-        &self,
-        ancestors: &Ancestors,
-        range: R,
-        scan_func: F,
-    ) -> A
+    pub fn range_scan_accounts<F, A, R>(&self, ancestors: &Ancestors, range: R, scan_func: F) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>) -> (),
         A: Default,
