@@ -146,14 +146,10 @@ impl ClusterSlots {
         repair_peers
             .iter()
             .enumerate()
-            .map(|(i, x)| {
-                (
-                    slot_peers
-                        .as_ref()
-                        .and_then(|v| v.read().unwrap().get(&x.id).cloned())
-                        .unwrap_or(0),
-                    i,
-                )
+            .filter_map(|(i, x)| {
+                slot_peers
+                    .as_ref()
+                    .and_then(|v| v.read().unwrap().get(&x.id).map(|stake| (*stake + 1, i)))
             })
             .collect()
     }

@@ -1104,7 +1104,6 @@ fn test_snapshots_restart_validity() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
-#[ignore]
 fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
