@@ -393,6 +393,10 @@ impl RepairService {
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
     ) {
         for slot in new_duplicate_slots {
+            warn!(
+                "Cluster completed slot: {}, dumping our current version and repairing",
+                slot
+            );
             // Clear the slot signatures from status cache for this slot
             root_bank.clear_slot_signatures(*slot);
 

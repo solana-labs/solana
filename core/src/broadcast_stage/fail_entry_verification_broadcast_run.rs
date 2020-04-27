@@ -3,10 +3,14 @@ use solana_ledger::shred::Shredder;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 
+pub const NUM_BAD_SLOTS: u64 = 10;
+pub const SLOT_TO_RESOLVE: u64 = 64;
+
 #[derive(Clone)]
 pub(super) struct FailEntryVerificationBroadcastRun {
     shred_version: u16,
     keypair: Arc<Keypair>,
+    good_shreds: Vec<Shred>,
 }
 
 impl FailEntryVerificationBroadcastRun {
@@ -14,6 +18,7 @@ impl FailEntryVerificationBroadcastRun {
         Self {
             shred_version,
             keypair,
+            good_shreds: vec![],
         }
     }
 }
@@ -31,10 +36,18 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
-        // 2) Convert entries to shreds + generate coding shreds. Set a garbage PoH on the last entry
+        // 2) If we're past SLOT_TO_RESOLVE, insert the correct shreds so validators can repair
+        // and make progress
+        if bank.slot() > SLOT_TO_RESOLVE && !self.good_shreds.is_empty() {
+            let mut shreds = vec![];
+            std::mem::swap(&mut shreds, &mut self.good_shreds);
+            blockstore_sender.send((Arc::new(shreds), None))?;
+        }
+
+        // 3) Convert entries to shreds + generate coding shreds. Set a garbage PoH on the last entry
         // in the slot to make verification fail on validators
         let last_entries = {
-            if last_tick_height == bank.max_tick_height() {
+            if last_tick_height == bank.max_tick_height() && bank.slot() < NUM_BAD_SLOTS {
                 let good_last_entry = receive_results.entries.pop().unwrap();
                 let mut bad_last_entry = good_last_entry.clone();
                 bad_last_entry.hash = Hash::default();
@@ -81,7 +94,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
 
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
-        // 3) Start broadcast step
+        // 4) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
         let stakes = stakes.map(Arc::new);
@@ -90,6 +103,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             let bad_last_data_shred = Arc::new(bad_last_data_shred);
             // Store the bad shred so we serve bad repairs to validators catching up
             blockstore_sender.send((bad_last_data_shred.clone(), None))?;
+            // Stash away the good shred so we can rewrite them later
+            self.good_shreds.extend(good_last_data_shred.clone());
             // Send good shreds to rest of network
             socket_sender.send(((stakes.clone(), Arc::new(good_last_data_shred)), None))?;
         }

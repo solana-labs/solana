@@ -1122,8 +1122,9 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     let mut error_validator_config = ValidatorConfig::default();
     error_validator_config.broadcast_stage_type = faulty_node_type.clone();
     let mut validator_configs = vec![validator_config; num_nodes - 1];
-    validator_configs.push(error_validator_config);
-    let node_stakes = vec![101, 100, 100];
+    // Push a faulty_bootstrap = vec![error_validator_config];
+    validator_configs.insert(0, error_validator_config);
+    let node_stakes = vec![401, 100, 100];
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -1134,7 +1135,15 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
         ..ClusterConfig::default()
     };
 
-    let cluster = LocalCluster::new(&cluster_config);
+    let mut cluster = LocalCluster::new(&cluster_config);
+
+    // Shut down one of the nonbootstrap nodes
+    let all_pubkeys = cluster.get_node_pubkeys();
+    let validator_id = all_pubkeys
+        .into_iter()
+        .find(|x| *x != cluster.entry_point_info.id)
+        .unwrap();
+    let validator_info = cluster.exit_node(&validator_id);
     let epoch_schedule = EpochSchedule::custom(
         cluster_config.slots_per_epoch,
         cluster_config.stakers_slot_offset,
@@ -1142,13 +1151,15 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
     let num_warmup_epochs = epoch_schedule.get_leader_schedule_epoch(0) + 1;
 
-    // Wait for the corrupted leader to be scheduled afer the warmup epochs expire
-    cluster_tests::sleep_n_epochs(
+    // Wait for warmup epochs expire
+    /*cluster_tests::sleep_n_epochs(
         (num_warmup_epochs + 1) as f64,
         &cluster.genesis_config.poh_config,
         cluster_config.ticks_per_slot,
         cluster_config.slots_per_epoch,
     );
+
+    cluster.restart_node(&validator_id, validator_info);
 
     let corrupt_node = cluster
         .validators
@@ -1157,15 +1168,16 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
         .unwrap()
         .0;
     let mut ignore = HashSet::new();
-    ignore.insert(*corrupt_node);
+    ignore.insert(*corrupt_node);*/
 
+    sleep(Duration::from_secs(30));
     // Verify that we can still spend and verify even in the presence of corrupt nodes
-    cluster_tests::spend_and_verify_all_nodes(
+    /*cluster_tests::spend_and_verify_all_nodes(
         &cluster.entry_point_info,
         &cluster.funding_keypair,
         num_nodes,
         ignore,
-    );
+    );*/
 }
 
 #[test]
