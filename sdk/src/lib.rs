@@ -24,6 +24,7 @@ pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
 pub mod rpc_port;
+pub mod sanitize;
 pub mod short_vec;
 pub mod slot_hashes;
 pub mod slot_history;
