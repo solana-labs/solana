@@ -1070,21 +1070,15 @@ pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
         });
 
     let cli_command = CliSignOnlyData {
-        blockhash: tx.message.recent_blockhash.clone(),
-        signers: signers.clone(),
-        absent: absent.clone(),
-        bad_sig: bad_sig.clone(),
+        blockhash: tx.message.recent_blockhash.to_string(),
+        signers,
+        absent,
+        bad_sig,
     };
 
     config.output_format.formatted_print(&cli_command);
 
-    Ok(json!({
-        "blockhash": tx.message.recent_blockhash.to_string(),
-        "signers": &signers,
-        "absent": &absent,
-        "badSig": &bad_sig,
-    })
-    .to_string())
+    Ok(json!(cli_command).to_string())
 }
 
 pub fn parse_create_address_with_seed(

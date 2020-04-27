@@ -79,32 +79,56 @@ pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
     let object: Value = serde_json::from_str(&reply).unwrap();
     let blockhash_str = object.get("blockhash").unwrap().as_str().unwrap();
     let blockhash = blockhash_str.parse::<Hash>().unwrap();
-    let signer_strings = object.get("signers").unwrap().as_array().unwrap();
-    let present_signers = signer_strings
-        .iter()
-        .map(|signer_string| {
-            let mut signer = signer_string.as_str().unwrap().split('=');
-            let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
-            let sig = Signature::from_str(signer.next().unwrap()).unwrap();
-            (key, sig)
-        })
-        .collect();
-    let signer_strings = object.get("absent").unwrap().as_array().unwrap();
-    let absent_signers = signer_strings
-        .iter()
-        .map(|val| {
-            let s = val.as_str().unwrap();
-            Pubkey::from_str(s).unwrap()
-        })
-        .collect();
-    let signer_strings = object.get("badSig").unwrap().as_array().unwrap();
-    let bad_signers = signer_strings
-        .iter()
-        .map(|val| {
-            let s = val.as_str().unwrap();
-            Pubkey::from_str(s).unwrap()
-        })
-        .collect();
+    let mut present_signers: Vec<(Pubkey, Signature)> = Vec::new();
+    let signer_strings = object.get("signers");
+    match signer_strings {
+        Some(sig_strings) => {
+            present_signers = sig_strings
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|signer_string| {
+                    let mut signer = signer_string.as_str().unwrap().split('=');
+                    let key = Pubkey::from_str(signer.next().unwrap()).unwrap();
+                    let sig = Signature::from_str(signer.next().unwrap()).unwrap();
+                    (key, sig)
+                })
+                .collect();
+        }
+        _ => {}
+    }
+    let mut absent_signers: Vec<Pubkey> = Vec::new();
+    let signer_strings = object.get("absent");
+    match signer_strings {
+        Some(sig_strings) => {
+            absent_signers = sig_strings
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|val| {
+                    let s = val.as_str().unwrap();
+                    Pubkey::from_str(s).unwrap()
+                })
+                .collect();
+        }
+        _ => {}
+    }
+    let mut bad_signers: Vec<Pubkey> = Vec::new();
+    let signer_strings = object.get("badSig");
+    match signer_strings {
+        Some(sig_strings) => {
+            bad_signers = sig_strings
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|val| {
+                    let s = val.as_str().unwrap();
+                    Pubkey::from_str(s).unwrap()
+                })
+                .collect();
+        }
+        _ => {}
+    }
     SignOnly {
         blockhash,
         present_signers,

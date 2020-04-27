@@ -7,7 +7,6 @@ use serde_json::{Map, Value};
 use solana_client::rpc_response::{RpcEpochInfo, RpcKeyedAccount, RpcVoteAccountInfo};
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
-    hash::Hash,
     stake_history::StakeHistoryEntry,
 };
 use solana_stake_program::stake_state::{Authorized, Lockup};
@@ -859,8 +858,9 @@ impl fmt::Display for CliBlockTime {
 }
 
 #[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct CliSignOnlyData {
-    pub blockhash: Hash,
+    pub blockhash: String,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub signers: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -872,7 +872,7 @@ pub struct CliSignOnlyData {
 impl fmt::Display for CliSignOnlyData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
-        writeln_name_value(f, "Blockhash:", &bs58::encode(self.blockhash).into_string())?;
+        writeln_name_value(f, "Blockhash:", &self.blockhash)?;
         if !self.signers.is_empty() {
             writeln!(f, "{}", style("Signers (Pubkey=Signature):").bold())?;
             for signer in self.signers.iter() {
