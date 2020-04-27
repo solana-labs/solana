@@ -9,6 +9,7 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     cluster_slots::ClusterSlots,
     commitment::BlockCommitmentCache,
+    consensus::Tower,
     ledger_cleanup_service::LedgerCleanupService,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
@@ -20,19 +21,19 @@ use crate::{
     sigverify_stage::SigVerifyStage,
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
+    leader_schedule_cache::LeaderScheduleCache,
     snapshot_package::AccountsPackageSender,
 };
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::collections::HashSet;
 use std::{
+    collections::HashSet,
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
@@ -86,6 +87,7 @@ impl Tvu {
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
+        tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
@@ -191,6 +193,7 @@ impl Tvu {
             cluster_info.clone(),
             ledger_signal_receiver,
             poh_recorder.clone(),
+            tower,
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
@@ -236,11 +239,15 @@ impl Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::banking_stage::create_test_recorder;
-    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::{
+        banking_stage::create_test_recorder,
+        cluster_info::{ClusterInfo, Node},
+    };
     use serial_test_derive::serial;
-    use solana_ledger::create_new_tmp_ledger;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_ledger::{
+        create_new_tmp_ledger,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    };
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 
@@ -278,6 +285,7 @@ pub mod tests {
         ));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let tower = Tower::new_with_key(&target1_keypair.pubkey());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             vec![Arc::new(vote_keypair)],
@@ -299,6 +307,7 @@ pub mod tests {
                 block_commitment_cache.clone(),
             )),
             &poh_recorder,
+            tower,
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,

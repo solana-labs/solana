@@ -4,8 +4,10 @@ use serial_test_derive::serial;
 use solana_client::rpc_client::RpcClient;
 use solana_client::thin_client::create_client;
 use solana_core::{
-    broadcast_stage::BroadcastStageType, consensus::VOTE_THRESHOLD_DEPTH,
-    gossip_service::discover_cluster, validator::ValidatorConfig,
+    broadcast_stage::BroadcastStageType,
+    consensus::{Tower, VOTE_THRESHOLD_DEPTH},
+    gossip_service::discover_cluster,
+    validator::ValidatorConfig,
 };
 use solana_download_utils::download_snapshot;
 use solana_ledger::bank_forks::CompressionType;
@@ -1159,6 +1161,127 @@ fn test_no_voting() {
         let expected_parent = i.saturating_sub(1);
         assert_eq!(parent, expected_parent as u64);
     }
+}
+
+#[test]
+#[serial]
+fn test_validator_saves_tower() {
+    solana_logger::setup();
+
+    let validator_config = ValidatorConfig {
+        require_tower: true,
+        ..ValidatorConfig::default()
+    };
+    let validator_identity_keypair = Arc::new(Keypair::new());
+    let validator_id = validator_identity_keypair.pubkey();
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100],
+        validator_configs: vec![validator_config],
+        validator_keys: Some(vec![validator_identity_keypair.clone()]),
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    let ledger_path = cluster
+        .validators
+        .get(&validator_id)
+        .unwrap()
+        .info
+        .ledger_path
+        .clone();
+
+    // Wait for some votes to be generated
+    loop {
+        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
+            trace!("current slot: {}", slot);
+            if slot > 2 {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(10));
+    }
+
+    // Stop validator and check saved tower
+    let validator_info = cluster.exit_node(&validator_id);
+    let tower1 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower1: {:?}", tower1);
+    assert_eq!(tower1.root(), Some(0));
+
+    // Restart the validator and wait for a new root
+    cluster.restart_node(&validator_id, validator_info);
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    // Wait for the first root
+    loop {
+        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+            trace!("current root: {}", root);
+            if root > 0 {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+
+    // Stop validator, and check saved tower
+    let validator_info = cluster.exit_node(&validator_id);
+    let tower2 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower2: {:?}", tower2);
+    assert_eq!(tower2.root(), Some(1));
+
+    // Rollback saved tower to `tower1` to simulate a validator starting from a newer snapshot
+    // without having to wait for that snapshot to be generated in this test
+    tower1.save(&validator_identity_keypair).unwrap();
+
+    cluster.restart_node(&validator_id, validator_info);
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    // Wait for a new root, demonstrating the validator was able to make progress from the older `tower1`
+    loop {
+        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+            trace!("current root: {}", root);
+            if root > 1 {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+
+    // Check the new root is reflected in the saved tower state
+    let mut validator_info = cluster.exit_node(&validator_id);
+    let tower3 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower3: {:?}", tower3);
+    assert!(tower3.root().unwrap() > 1);
+
+    // Remove the tower file entirely and allow the validator to start without a tower.  It will
+    // rebuild tower from its vote account contents
+    fs::remove_file(Tower::get_filename(&ledger_path, &validator_id)).unwrap();
+    validator_info.config.require_tower = false;
+
+    cluster.restart_node(&validator_id, validator_info);
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    // Wait for a couple more slots to pass so another vote occurs
+    let current_slot = validator_client
+        .get_slot_with_commitment(CommitmentConfig::recent())
+        .unwrap();
+    loop {
+        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
+            trace!("current_slot: {}, slot: {}", current_slot, slot);
+            if slot > current_slot + 1 {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+
+    cluster.close_preserve_ledgers();
+
+    let tower4 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower4: {:?}", tower4);
+    assert_eq!(tower4.root(), tower3.root());
 }
 
 fn wait_for_next_snapshot(

@@ -5,6 +5,7 @@ use crate::{
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     commitment::BlockCommitmentCache,
+    consensus::{reconcile_blockstore_roots_with_tower, Tower},
     contact_info::ContactInfo,
     gossip_service::{discover_cluster, GossipService},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
@@ -44,6 +45,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     timing::timestamp,
 };
+use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -79,6 +81,7 @@ pub struct ValidatorConfig {
     pub no_rocksdb_compaction: bool,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
+    pub require_tower: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -105,6 +108,7 @@ impl Default for ValidatorConfig {
             no_rocksdb_compaction: false,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+            require_tower: false,
         }
     }
 }
@@ -176,7 +180,6 @@ impl Validator {
         sigverify::init();
         info!("Done.");
 
-        info!("creating bank...");
         let (
             genesis_config,
             bank_forks,
@@ -185,14 +188,14 @@ impl Validator {
             completed_slots_receiver,
             leader_schedule_cache,
             snapshot_hash,
-        ) = new_banks_from_blockstore(config, ledger_path, poh_verify);
+            tower,
+        ) = new_banks_from_ledger(&id, vote_account, config, ledger_path, poh_verify);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
-        let exit = Arc::new(AtomicBool::new(false));
         let bank = bank_forks.working_bank();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
-        info!("Starting validator from slot {}", bank.slot());
+        info!("Starting validator with working bank slot {}", bank.slot());
         {
             let hard_forks: Vec<_> = bank.hard_forks().read().unwrap().iter().copied().collect();
             if !hard_forks.is_empty() {
@@ -200,16 +203,12 @@ impl Validator {
             }
         }
 
-        let mut validator_exit = ValidatorExit::default();
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
-
         node.info.wallclock = timestamp();
         node.info.shred_version = compute_shred_version(
             &genesis_config.hash(),
             Some(&bank.hard_forks().read().unwrap()),
         );
+
         Self::print_node_info(&node);
 
         if let Some(expected_shred_version) = config.expected_shred_version {
@@ -221,6 +220,12 @@ impl Validator {
                 process::exit(1);
             }
         }
+
+        let mut validator_exit = ValidatorExit::default();
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_ = exit.clone();
+        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
+        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
 
         let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
         let blockstore = Arc::new(blockstore);
@@ -420,6 +425,7 @@ impl Validator {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
+            tower,
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
@@ -542,10 +548,21 @@ impl Validator {
     }
 }
 
+fn empty_vote_account(bank: &Arc<Bank>, vote_account: &Pubkey) -> Option<bool> {
+    if let Some(account) = &bank.get_account(vote_account) {
+        if let Some(vote_state) = VoteState::from(&account) {
+            return Some(vote_state.votes.is_empty());
+        }
+    }
+    None
+}
+
 #[allow(clippy::type_complexity)]
-fn new_banks_from_blockstore(
+fn new_banks_from_ledger(
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
     config: &ValidatorConfig,
-    blockstore_path: &Path,
+    ledger_path: &Path,
     poh_verify: bool,
 ) -> (
     GenesisConfig,
@@ -555,9 +572,10 @@ fn new_banks_from_blockstore(
     CompletedSlotsReceiver,
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
+    Tower,
 ) {
-    let genesis_config =
-        open_genesis_config(blockstore_path, config.max_genesis_archive_unpacked_size);
+    info!("loading ledger from {:?}...", ledger_path);
+    let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
 
     // This needs to be limited otherwise the state in the VoteAccount data
     // grows too large
@@ -572,17 +590,22 @@ fn new_banks_from_blockstore(
     if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
             error!("genesis hash mismatch: expected {}", expected_genesis_hash);
-            error!(
-                "Delete the ledger directory to continue: {:?}",
-                blockstore_path
-            );
+            error!("Delete the ledger directory to continue: {:?}", ledger_path);
             process::exit(1);
         }
     }
 
     let (mut blockstore, ledger_signal_receiver, completed_slots_receiver) =
-        Blockstore::open_with_signal(blockstore_path).expect("Failed to open ledger database");
+        Blockstore::open_with_signal(ledger_path).expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
+
+    let restored_tower = Tower::restore(ledger_path, &validator_identity);
+    if let Ok(tower) = &restored_tower {
+        reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
+            error!("Failed to reconcile blockstore with tower: {:?}", err);
+            std::process::exit(1);
+        });
+    }
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify,
@@ -601,8 +624,38 @@ fn new_banks_from_blockstore(
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
-        std::process::exit(1);
+        process::exit(1);
     });
+
+    let tower = match restored_tower {
+        Ok(mut tower) => {
+            // The tower root can be older if the validator booted from a newer snapshot, so
+            // tower lockouts may need adjustment
+            tower.adjust_lockouts_if_newer_root(bank_forks.root());
+            tower
+        }
+        Err(err) => {
+            if config.require_tower
+                && empty_vote_account(&bank_forks.working_bank(), &vote_account) != Some(true)
+            {
+                error!("Tower restore failed: {:?}", err);
+                process::exit(1);
+            }
+            info!("Rebuilding tower from the latest vote account");
+            Tower::new(
+                &validator_identity,
+                &vote_account,
+                &bank_forks,
+                &ledger_path,
+            )
+        }
+    };
+
+    info!(
+        "Tower state: root slot={:?}, last vote slot={:?}",
+        tower.root(),
+        tower.last_lockout_vote_slot()
+    );
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
 
@@ -617,6 +670,7 @@ fn new_banks_from_blockstore(
         completed_slots_receiver,
         leader_schedule_cache,
         snapshot_hash,
+        tower,
     )
 }
 
@@ -776,8 +830,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     let my_id = cluster_info.id();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
-        let vote_state =
-            solana_vote_program::vote_state::VoteState::from(&vote_account).unwrap_or_default();
+        let vote_state = VoteState::from(&vote_account).unwrap_or_default();
         total_activated_stake += activated_stake;
 
         if *activated_stake == 0 {

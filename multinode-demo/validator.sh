@@ -222,6 +222,7 @@ default_arg --ledger "$ledger_dir"
 default_arg --log -
 default_arg --enable-rpc-exit
 default_arg --enable-rpc-set-log-filter
+default_arg --require-tower
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda

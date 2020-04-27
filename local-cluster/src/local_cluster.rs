@@ -181,7 +181,6 @@ impl LocalCluster {
         );
 
         let mut validators = HashMap::new();
-        error!("leader_pubkey: {}", leader_pubkey);
         let leader_info = ValidatorInfo {
             keypair: leader_keypair.clone(),
             voting_keypair: leader_voting_keypair,

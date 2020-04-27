@@ -153,6 +153,7 @@ impl ReplayStage {
         cluster_info: Arc<ClusterInfo>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
+        mut tower: Tower,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -173,7 +174,6 @@ impl ReplayStage {
         } = config;
 
         trace!("replay stage");
-        let mut tower = Tower::new(&my_pubkey, &vote_account, &bank_forks.read().unwrap());
 
         // Start the replay stage loop
         let (lockouts_sender, commitment_service) = AggregateCommitmentService::new(
@@ -861,7 +861,15 @@ impl ReplayStage {
         }
         trace!("handle votable bank {}", bank.slot());
         let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account_pubkey);
-        if let Some(new_root) = tower.record_bank_vote(vote) {
+        let new_root = tower.record_bank_vote(vote);
+        let last_vote = tower.last_vote_and_timestamp();
+
+        if let Err(err) = tower.save(&cluster_info.keypair) {
+            error!("Unable to save tower: {:?}", err);
+            std::process::exit(1);
+        }
+
+        if let Some(new_root) = new_root {
             // get the root bank before squash
             let root_bank = bank_forks
                 .read()
@@ -915,7 +923,7 @@ impl ReplayStage {
             bank,
             vote_account_pubkey,
             authorized_voter_keypairs,
-            tower.last_vote_and_timestamp(),
+            last_vote,
             tower_index,
         );
         Ok(())

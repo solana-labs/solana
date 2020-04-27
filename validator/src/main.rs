@@ -701,6 +701,12 @@ pub fn main() {
                 .help("Use CUDA"),
         )
         .arg(
+            clap::Arg::with_name("require_tower")
+                .long("require-tower")
+                .takes_value(false)
+                .help("Refuse to start if saved tower state is not found"),
+        )
+        .arg(
             Arg::with_name("expected_genesis_hash")
                 .long("expected-genesis-hash")
                 .value_name("HASH")
@@ -860,6 +866,7 @@ pub fn main() {
     };
 
     let mut validator_config = ValidatorConfig {
+        require_tower: matches.is_present("require_tower"),
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")

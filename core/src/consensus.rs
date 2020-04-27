@@ -3,26 +3,33 @@ use crate::{
     pubkey_references::PubkeyReferences,
 };
 use chrono::prelude::*;
-use solana_ledger::bank_forks::BankForks;
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore, blockstore_db};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
     hash::Hash,
     pubkey::Pubkey,
+    signature::{Keypair, Signature, Signer},
 };
 use solana_vote_program::vote_state::{
     BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fs::{self, File},
+    io::BufReader,
     ops::Bound::{Included, Unbounded},
+    path::{Path, PathBuf},
     sync::Arc,
 };
+use thiserror::Error;
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
+
+pub type Result<T> = std::result::Result<T, TowerError>;
 
 #[derive(Default, Debug, Clone)]
 pub struct StakeLockout {
@@ -42,6 +49,7 @@ impl StakeLockout {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Tower {
     node_pubkey: Pubkey,
     threshold_depth: usize,
@@ -49,6 +57,8 @@ pub struct Tower {
     lockouts: VoteState,
     last_vote: Vote,
     last_timestamp: BlockTimestamp,
+    #[serde(skip)]
+    save_path: PathBuf,
 }
 
 impl Default for Tower {
@@ -60,19 +70,29 @@ impl Default for Tower {
             lockouts: VoteState::default(),
             last_vote: Vote::default(),
             last_timestamp: BlockTimestamp::default(),
+            save_path: PathBuf::default(),
         }
     }
 }
 
 impl Tower {
-    pub fn new(node_pubkey: &Pubkey, vote_account_pubkey: &Pubkey, bank_forks: &BankForks) -> Self {
-        let mut tower = Self::new_with_key(node_pubkey);
-
+    pub fn new(
+        node_pubkey: &Pubkey,
+        vote_account_pubkey: &Pubkey,
+        bank_forks: &BankForks,
+        save_path: &Path,
+    ) -> Self {
+        let mut tower = Self {
+            node_pubkey: *node_pubkey,
+            save_path: PathBuf::from(save_path),
+            ..Tower::default()
+        };
         tower.initialize_lockouts_from_bank_forks(&bank_forks, vote_account_pubkey);
 
         tower
     }
 
+    #[cfg(test)]
     pub fn new_with_key(node_pubkey: &Pubkey) -> Self {
         Self {
             node_pubkey: *node_pubkey,
@@ -288,6 +308,14 @@ impl Tower {
 
     pub fn root(&self) -> Option<Slot> {
         self.lockouts.root_slot
+    }
+
+    pub fn last_lockout_vote_slot(&self) -> Option<Slot> {
+        self.lockouts
+            .votes
+            .iter()
+            .max_by(|x, y| x.slot.cmp(&y.slot))
+            .map(|v| v.slot)
     }
 
     // a slot is not recent if it's older than the newest vote we have
@@ -533,6 +561,14 @@ impl Tower {
         bank_weights.pop().map(|b| b.2)
     }
 
+    pub fn adjust_lockouts_if_newer_root(&mut self, root_slot: Slot) {
+        let my_root_slot = self.lockouts.root_slot.unwrap_or(0);
+        if root_slot > my_root_slot {
+            self.lockouts.root_slot = Some(root_slot);
+            self.lockouts.votes.retain(|v| v.slot > root_slot);
+        }
+    }
+
     fn initialize_lockouts_from_bank_forks(
         &mut self,
         bank_forks: &BankForks,
@@ -556,6 +592,12 @@ impl Tower {
                     "vote account's node_pubkey doesn't match",
                 );
                 self.lockouts = vote_state;
+            } else {
+                info!(
+                    "vote account({}) not found in heaviest bank (slot={})",
+                    vote_account_pubkey,
+                    bank.slot()
+                );
             }
         }
     }
@@ -574,6 +616,113 @@ impl Tower {
             None
         }
     }
+
+    pub fn get_filename(path: &Path, node_pubkey: &Pubkey) -> PathBuf {
+        PathBuf::from(path)
+            .join(format!("tower-{}", node_pubkey))
+            .with_extension("bin")
+    }
+
+    pub fn save(&self, node_keypair: &Arc<Keypair>) -> Result<()> {
+        if self.node_pubkey != node_keypair.pubkey() {
+            return Err(TowerError::WrongTower(format!(
+                "node_pubkey is {:?} but found tower for {:?}",
+                node_keypair.pubkey(),
+                self.node_pubkey
+            )));
+        }
+
+        fs::create_dir_all(&self.save_path)?;
+        let filename = Self::get_filename(&self.save_path, &self.node_pubkey);
+        let new_filename = filename.with_extension("new");
+        {
+            let mut file = File::create(&new_filename)?;
+            let saveable_tower = SavedTower::new(self, node_keypair)?;
+            bincode::serialize_into(&mut file, &saveable_tower)?;
+        }
+        fs::rename(&new_filename, &filename)?;
+        Ok(())
+    }
+
+    pub fn restore(save_path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
+        let filename = Self::get_filename(save_path, node_pubkey);
+
+        let file = File::open(&filename)?;
+        let mut stream = BufReader::new(file);
+
+        let saved_tower: SavedTower = bincode::deserialize_from(&mut stream)?;
+        if !saved_tower.verify(node_pubkey) {
+            return Err(TowerError::InvalidSignature);
+        }
+        let mut tower = saved_tower.deserialize()?;
+        tower.save_path = save_path.to_path_buf();
+
+        // check that the tower actually belongs to this node
+        if &tower.node_pubkey != node_pubkey {
+            return Err(TowerError::WrongTower(format!(
+                "node_pubkey is {:?} but found tower for {:?}",
+                node_pubkey, tower.node_pubkey
+            )));
+        }
+        Ok(tower)
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum TowerError {
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
+
+    #[error("Serialization Error: {0}")]
+    SerializeError(#[from] Box<bincode::ErrorKind>),
+
+    #[error("The signature on the saved tower is invalid")]
+    InvalidSignature,
+
+    #[error("The tower does not match this validator: {0}")]
+    WrongTower(String),
+}
+
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct SavedTower {
+    signature: Signature,
+    data: Vec<u8>,
+}
+
+impl SavedTower {
+    pub fn new<T: Signer>(tower: &Tower, keypair: &Arc<T>) -> Result<Self> {
+        let data = bincode::serialize(tower)?;
+        let signature = keypair.sign_message(&data);
+        Ok(Self { data, signature })
+    }
+
+    pub fn verify(&self, pubkey: &Pubkey) -> bool {
+        self.signature.verify(pubkey.as_ref(), &self.data)
+    }
+
+    pub fn deserialize(&self) -> Result<Tower> {
+        bincode::deserialize(&self.data).map_err(|e| e.into())
+    }
+}
+
+// Given an untimely crash, tower may have roots that are not reflected in blockstore because
+// `ReplayState::handle_votable_bank()` saves tower before setting blockstore roots
+pub fn reconcile_blockstore_roots_with_tower(
+    tower: &Tower,
+    blockstore: &Blockstore,
+) -> blockstore_db::Result<()> {
+    if let Some(tower_root) = tower.root() {
+        let last_blockstore_root = blockstore.last_root();
+        if last_blockstore_root < tower_root {
+            let new_roots: Vec<_> = blockstore
+                .slot_meta_iterator(last_blockstore_root + 1)?
+                .map(|(slot, _)| slot)
+                .take_while(|slot| *slot <= tower_root)
+                .collect();
+            blockstore.set_roots(&new_roots)?
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -585,7 +734,9 @@ pub mod test {
         progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
     };
-    use solana_ledger::bank_forks::BankForks;
+    use solana_ledger::{
+        bank_forks::BankForks, blockstore::make_slot_entries, get_tmp_ledger_path,
+    };
     use solana_runtime::{
         bank::Bank,
         genesis_utils::{
@@ -604,10 +755,13 @@ pub mod test {
     };
     use std::{
         collections::HashMap,
+        fs::{remove_file, OpenOptions},
+        io::{Read, Seek, SeekFrom, Write},
         rc::Rc,
         sync::RwLock,
         {thread::sleep, time::Duration},
     };
+    use tempfile::TempDir;
     use trees::{tr, Tree, TreeWalk};
 
     pub(crate) struct VoteSimulator {
@@ -1717,5 +1871,114 @@ pub mod test {
             .maybe_timestamp(slot + TIMESTAMP_SLOT_INTERVAL + 1)
             .is_some());
         assert!(tower.last_timestamp.timestamp > timestamp);
+    }
+
+    fn run_test_load_tower_snapshot<F, G>(
+        modify_original: F,
+        modify_serialized: G,
+    ) -> (Tower, Result<Tower>)
+    where
+        F: Fn(&mut Tower, &Pubkey) -> (),
+        G: Fn(&PathBuf) -> (),
+    {
+        let dir = TempDir::new().unwrap();
+
+        // Use values that will not match the default derived from BankForks
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.save_path = dir.path().to_path_buf();
+
+        let identity_keypair = Arc::new(Keypair::new());
+        modify_original(&mut tower, &identity_keypair.pubkey());
+
+        tower.save(&identity_keypair).unwrap();
+        modify_serialized(&Tower::get_filename(
+            &tower.save_path,
+            &identity_keypair.pubkey(),
+        ));
+        let loaded = Tower::restore(&dir.path(), &identity_keypair.pubkey());
+
+        (tower, loaded)
+    }
+
+    #[test]
+    fn test_load_tower_ok() {
+        let (tower, loaded) =
+            run_test_load_tower_snapshot(|tower, pubkey| tower.node_pubkey = *pubkey, |_| ());
+        assert_eq!(loaded.unwrap(), tower)
+    }
+
+    #[test]
+    fn test_load_tower_wrong_identity() {
+        let identity_keypair = Arc::new(Keypair::new());
+        let tower = Tower::new_with_key(&Pubkey::default());
+        assert_matches!(
+            tower.save(&identity_keypair),
+            Err(TowerError::WrongTower(_))
+        )
+    }
+
+    #[test]
+    fn test_load_tower_invalid_signature() {
+        let (_, loaded) = run_test_load_tower_snapshot(
+            |tower, pubkey| tower.node_pubkey = *pubkey,
+            |path| {
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(path)
+                    .unwrap();
+                let mut buf = [0u8];
+                assert_eq!(file.read(&mut buf).unwrap(), 1);
+                buf[0] = buf[0] + 1;
+                assert_eq!(file.seek(SeekFrom::Start(0)).unwrap(), 0);
+                assert_eq!(file.write(&buf).unwrap(), 1);
+            },
+        );
+        assert_matches!(loaded, Err(TowerError::InvalidSignature))
+    }
+
+    #[test]
+    fn test_load_tower_deser_failure() {
+        let (_, loaded) = run_test_load_tower_snapshot(
+            |tower, pubkey| tower.node_pubkey = *pubkey,
+            |path| {
+                OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(&path)
+                    .expect(&format!("Failed to truncate file: {:?}", path));
+            },
+        );
+        assert_matches!(loaded, Err(TowerError::SerializeError(_)))
+    }
+
+    #[test]
+    fn test_load_tower_missing() {
+        let (_, loaded) = run_test_load_tower_snapshot(
+            |tower, pubkey| tower.node_pubkey = *pubkey,
+            |path| {
+                remove_file(path).unwrap();
+            },
+        );
+        assert_matches!(loaded, Err(TowerError::IOError(_)))
+    }
+
+    #[test]
+    fn test_reconcile_blockstore_roots_with_tower() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            assert_eq!(blockstore.last_root(), 0);
+
+            let (shreds, _) = make_slot_entries(1, 0, 42);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            assert_eq!(blockstore.last_root(), 0);
+
+            let mut tower = Tower::new_with_key(&Pubkey::default());
+            tower.lockouts.root_slot = Some(1);
+            reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
+            assert_eq!(blockstore.last_root(), 1);
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
