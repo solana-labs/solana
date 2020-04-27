@@ -1,7 +1,4 @@
-use clap;
 use clap::{App, Arg};
-use hex;
-use reqwest;
 use std::fs::File;
 use std::io::prelude::*;
 

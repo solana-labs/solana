@@ -1,7 +1,10 @@
 #[macro_use]
 extern crate serde_derive;
 
+<<<<<<< HEAD
 use bincode::serialize;
+=======
+>>>>>>> c11abf88b... Clean up `use` to keep rust 1.43.0 from complaining (#9740)
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,
