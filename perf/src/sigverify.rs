@@ -312,7 +312,7 @@ pub fn ed25519_verify(
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
-    if count < 64 {
+    if count < std::usize::MAX {
         return ed25519_verify_cpu(batches);
     }
 

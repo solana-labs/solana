@@ -1,7 +1,7 @@
 use crate::result::ArchiverError;
 use crossbeam_channel::unbounded;
-use rand::{thread_rng, Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{thread_rng, Rng};
+use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use solana_archiver_utils::sample_file;
 use solana_chacha::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use solana_client::{

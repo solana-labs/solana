@@ -21,8 +21,8 @@ itertools = "0.8.2"
 libc = "0.2.66"
 log = { version = "0.4.8" }
 num_cpus = "1.0.0"
-rand = "0.6.5"
-rand_chacha = "0.1.1"
+rand = "0.7.0"
+rand_chacha = "0.2.2"
 rayon = "1.2.0"
 reed-solomon-erasure = { package = "solana-reed-solomon-erasure", version = "4.0.1-3", features = ["simd-accel"] }
 regex = "1.3.4"
