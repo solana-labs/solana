@@ -2174,7 +2174,13 @@ impl Bank {
         program_id: Pubkey,
         process_instruction: ProcessInstruction,
     ) {
-        assert!(self.get_account(&program_id).is_none());
+        assert!(
+            self.get_account(&program_id).is_none(),
+            format!(
+                "Static program {} with program id {:?} already added to the bank",
+                name, program_id
+            )
+        );
 
         // Register a bogus executable account, which will be loaded and ignored.
         let account = native_loader::create_loadable_account(name);
