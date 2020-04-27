@@ -199,6 +199,10 @@ impl InvokeContext for ThisInvokeContext {
         if self.program_ids.len() >= Self::MAX_INVOCATION_DEPTH {
             return Err(InstructionError::CallDepth);
         }
+        if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
+            // Reentrancy not allowed unless caller is calling itself
+            return Err(InstructionError::ReentrancyNotAllowed);
+        }
         self.program_ids.push(*key);
         Ok(())
     }
@@ -627,7 +631,7 @@ mod tests {
                 invoke_context.verify_and_update(
                     &message,
                     &message.instructions[0],
-                    7[],
+                    &[],
                     &accounts[not_owned_index..owned_index + 1],
                 ),
                 Err(InstructionError::ExternalAccountDataModified)
@@ -690,7 +694,7 @@ mod tests {
                 program_id: *program_id,
                 message_is_writable: false,
                 message_is_signer: false,
-                signers: None,
+                signers: &[],
                 rent: Rent::default(),
                 pre: PreAccount::new(
                     &Pubkey::new_rand(),
@@ -959,7 +963,7 @@ mod tests {
 
         assert_eq!(
             Change::new_cross_program(&owner, &system_program_id, &key)
-                .signer(false, true, Some(&[key.clone()]))
+                .signer(false, true, &[key.clone()])
                 .verify_cross_program(),
             Ok(()),
             "account signed by a signer"
@@ -967,7 +971,7 @@ mod tests {
 
         assert_eq!(
             Change::new_cross_program(&owner, &system_program_id, &key)
-                .signer(false, true, None)
+                .signer(false, true, &[])
                 .verify_cross_program(),
             Err(InstructionError::SignerModified),
             "account cannot be changed to signed if no signer"
@@ -975,7 +979,7 @@ mod tests {
 
         assert_eq!(
             Change::new_cross_program(&owner, &system_program_id, &key)
-                .signer(false, true, Some(&[Pubkey::new_rand(), Pubkey::new_rand()]))
+                .signer(false, true, &[Pubkey::new_rand(), Pubkey::new_rand()])
                 .verify_cross_program(),
             Err(InstructionError::SignerModified),
             "account cannot be changed to signed if no signer exists"
@@ -1438,7 +1442,7 @@ mod tests {
                 &message,
                 &executable_accounts,
                 &accounts,
-                None,
+                &[],
                 mock_process_instruction,
                 &mut invoke_context,
             ),
@@ -1467,7 +1471,7 @@ mod tests {
                     &message,
                     &executable_accounts,
                     &accounts,
-                    None,
+                    &[],
                     mock_process_instruction,
                     &mut invoke_context,
                 ),

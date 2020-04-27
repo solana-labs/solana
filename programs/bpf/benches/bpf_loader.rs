@@ -143,7 +143,7 @@ impl InvokeContext for MockInvokeContext {
         &mut self,
         _message: &Message,
         _instruction: &CompiledInstruction,
-        _signers: Option<&[Pubkey]>,
+        _signers: &[Pubkey],
         _accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         Ok(())

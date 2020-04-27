@@ -154,6 +154,10 @@ pub enum InstructionError {
     /// An account required by the instruction is missing
     #[error("An account required by the instruction is missing")]
     MissingAccount,
+
+    /// Cross-program invocation reentrancy not allowed for this instruction
+    #[error("Cross-program invocation reentrancy not allowed for this instruction")]
+    ReentrancyNotAllowed,
 }
 
 impl InstructionError {
