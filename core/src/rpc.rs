@@ -36,6 +36,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
+    cmp::max,
     collections::HashMap,
     net::{SocketAddr, UdpSocket},
     str::FromStr,
@@ -380,7 +381,7 @@ impl JsonRpcRequestProcessor {
         }
         Ok(self
             .blockstore
-            .rooted_slot_iterator(start_slot)
+            .rooted_slot_iterator(max(start_slot, self.blockstore.lowest_slot()))
             .map_err(|_| Error::internal_error())?
             .filter(|&slot| slot <= end_slot)
             .collect())
@@ -2657,7 +2658,7 @@ pub mod tests {
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
-        assert_eq!(confirmed_blocks, roots);
+        assert_eq!(confirmed_blocks, roots[1..].to_vec());
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[2]}}"#);
@@ -2673,7 +2674,7 @@ pub mod tests {
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
-        assert_eq!(confirmed_blocks, vec![0, 1, 3, 4]);
+        assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0, 7]}}"#);
@@ -2681,7 +2682,7 @@ pub mod tests {
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
-        assert_eq!(confirmed_blocks, vec![0, 1, 3, 4]);
+        assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9, 11]}}"#);
