@@ -93,6 +93,17 @@ pub struct EpochIncompleteSlots {
     pub compressed_list: Vec<u8>,
 }
 
+impl Sanitize for EpochIncompleteSlots {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.first >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        //rest of the data doesn't matter since we no longer decompress
+        //these values
+        Ok(())
+    }
+}
+
 impl Sanitize for CrdsData {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
@@ -149,28 +160,21 @@ impl SnapshotHash {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EpochSlots {
     pub from: Pubkey,
-    pub root: Slot,
+    root: Slot,
     pub lowest: Slot,
-    pub slots: BTreeSet<Slot>,
-    pub stash: Vec<EpochIncompleteSlots>,
+    slots: BTreeSet<Slot>,
+    stash: Vec<EpochIncompleteSlots>,
     pub wallclock: u64,
 }
 
 impl EpochSlots {
-    pub fn new(
-        from: Pubkey,
-        root: Slot,
-        lowest: Slot,
-        slots: BTreeSet<Slot>,
-        stash: Vec<EpochIncompleteSlots>,
-        wallclock: u64,
-    ) -> Self {
+    pub fn new(from: Pubkey, lowest: Slot, wallclock: u64) -> Self {
         Self {
             from,
-            root,
+            root: 0,
             lowest,
-            slots,
-            stash,
+            slots: BTreeSet::new(),
+            stash: vec![],
             wallclock,
         }
     }
@@ -184,6 +188,15 @@ impl Sanitize for EpochSlots {
         if self.lowest >= MAX_SLOT {
             return Err(SanitizeError::Failed);
         }
+        if self.root >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        for slot in &self.slots {
+            if *slot >= MAX_SLOT {
+                return Err(SanitizeError::Failed);
+            }
+        }
+        self.stash.sanitize()?;
         self.from.sanitize()
     }
 }
@@ -420,7 +433,7 @@ mod test {
 
         let v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
-            EpochSlots::new(Pubkey::default(), 0, 0, BTreeSet::new(), vec![], 0),
+            EpochSlots::new(Pubkey::default(), 0, 0),
         ));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
@@ -441,10 +454,9 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        let btreeset: BTreeSet<Slot> = vec![1, 2, 3, 6, 8].into_iter().collect();
         v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
-            EpochSlots::new(keypair.pubkey(), 0, 0, btreeset, vec![], timestamp()),
+            EpochSlots::new(keypair.pubkey(), 0, timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
