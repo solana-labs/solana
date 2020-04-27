@@ -29,7 +29,11 @@ use solana_sdk::{
     native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
     system_instruction, system_program,
-    sysvar::{self, Sysvar},
+    sysvar::{
+        self,
+        stake_history::{self, StakeHistory},
+        Sysvar,
+    },
     transaction::Transaction,
 };
 use std::{
@@ -1184,7 +1188,12 @@ pub fn process_show_stakes(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Fetching stake accounts...");
     let all_stake_accounts = rpc_client.get_program_accounts(&solana_stake_program::id())?;
+    let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     progress_bar.finish_and_clear();
+
+    let stake_history = StakeHistory::from_account(&stake_history_account).ok_or_else(|| {
+        CliError::RpcRequestError("Failed to deserialize stake history".to_string())
+    })?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
@@ -1198,6 +1207,7 @@ pub fn process_show_stakes(
                                 stake_account.lamports,
                                 &stake_state,
                                 use_lamports_unit,
+                                &stake_history,
                             ),
                         });
                     }
@@ -1214,6 +1224,7 @@ pub fn process_show_stakes(
                                 stake_account.lamports,
                                 &stake_state,
                                 use_lamports_unit,
+                                &stake_history,
                             ),
                         });
                     }

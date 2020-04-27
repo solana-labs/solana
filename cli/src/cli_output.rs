@@ -482,7 +482,7 @@ impl fmt::Display for CliKeyedStakeState {
 #[serde(rename_all = "camelCase")]
 pub struct CliStakeState {
     pub stake_type: CliStakeType,
-    pub total_stake: u64,
+    pub account_balance: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_stake: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -497,6 +497,16 @@ pub struct CliStakeState {
     pub lockup: Option<CliLockup>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
+    #[serde(skip_serializing)]
+    pub current_epoch: Epoch,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rent_exempt_reserve: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_stake: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activating_stake: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deactivating_stake: Option<u64>,
 }
 
 impl fmt::Display for CliStakeState {
@@ -522,52 +532,122 @@ impl fmt::Display for CliStakeState {
             Ok(())
         }
 
+        writeln!(
+            f,
+            "Balance: {}",
+            build_balance_message(self.account_balance, self.use_lamports_unit, true)
+        )?;
+
+        if let Some(rent_exempt_reserve) = self.rent_exempt_reserve {
+            writeln!(
+                f,
+                "Rent Exempt Reserve: {}",
+                build_balance_message(rent_exempt_reserve, self.use_lamports_unit, true)
+            )?;
+        }
+
         match self.stake_type {
             CliStakeType::RewardsPool => writeln!(f, "Stake account is a rewards pool")?,
             CliStakeType::Uninitialized => writeln!(f, "Stake account is uninitialized")?,
             CliStakeType::Initialized => {
-                writeln!(
-                    f,
-                    "Total Stake: {}",
-                    build_balance_message(self.total_stake, self.use_lamports_unit, true)
-                )?;
                 writeln!(f, "Stake account is undelegated")?;
                 show_authorized(f, self.authorized.as_ref().unwrap())?;
                 show_lockup(f, self.lockup.as_ref().unwrap())?;
             }
             CliStakeType::Stake => {
-                writeln!(
-                    f,
-                    "Total Stake: {}",
-                    build_balance_message(self.total_stake, self.use_lamports_unit, true)
-                )?;
-                writeln!(
-                    f,
-                    "Delegated Stake: {}",
-                    build_balance_message(
-                        self.delegated_stake.unwrap(),
-                        self.use_lamports_unit,
-                        true
-                    )
-                )?;
-                if let Some(delegated_vote_account_address) = &self.delegated_vote_account_address {
+                let show_delegation = {
+                    self.active_stake.is_some()
+                        || self.activating_stake.is_some()
+                        || self.deactivating_stake.is_some()
+                        || self
+                            .deactivation_epoch
+                            .map(|de| de > self.current_epoch)
+                            .unwrap_or(true)
+                };
+                if show_delegation {
+                    let delegated_stake = self.delegated_stake.unwrap();
                     writeln!(
                         f,
-                        "Delegated Vote Account Address: {}",
-                        delegated_vote_account_address
+                        "Delegated Stake: {}",
+                        build_balance_message(delegated_stake, self.use_lamports_unit, true)
                     )?;
-                }
-                writeln!(
-                    f,
-                    "Stake activates starting from epoch: {}",
-                    self.activation_epoch.unwrap()
-                )?;
-                if let Some(deactivation_epoch) = self.deactivation_epoch {
-                    writeln!(
-                        f,
-                        "Stake deactivates starting from epoch: {}",
-                        deactivation_epoch
-                    )?;
+                    if self
+                        .deactivation_epoch
+                        .map(|d| self.current_epoch <= d)
+                        .unwrap_or(true)
+                    {
+                        let active_stake = self.active_stake.unwrap_or(0);
+                        writeln!(
+                            f,
+                            "Active Stake: {}",
+                            build_balance_message(active_stake, self.use_lamports_unit, true),
+                        )?;
+                        let activating_stake = self.activating_stake.or_else(|| {
+                            if self.active_stake.is_none() {
+                                Some(delegated_stake)
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(activating_stake) = activating_stake {
+                            writeln!(
+                                f,
+                                "Activating Stake: {}",
+                                build_balance_message(
+                                    activating_stake,
+                                    self.use_lamports_unit,
+                                    true
+                                ),
+                            )?;
+                            writeln!(
+                                f,
+                                "Stake activates starting from epoch: {}",
+                                self.activation_epoch.unwrap()
+                            )?;
+                        }
+                    }
+
+                    if let Some(deactivation_epoch) = self.deactivation_epoch {
+                        if self.current_epoch > deactivation_epoch {
+                            let deactivating_stake = self.deactivating_stake.or(self.active_stake);
+                            if let Some(deactivating_stake) = deactivating_stake {
+                                writeln!(
+                                    f,
+                                    "Inactive Stake: {}",
+                                    build_balance_message(
+                                        delegated_stake - deactivating_stake,
+                                        self.use_lamports_unit,
+                                        true
+                                    ),
+                                )?;
+                                writeln!(
+                                    f,
+                                    "Deactivating Stake: {}",
+                                    build_balance_message(
+                                        deactivating_stake,
+                                        self.use_lamports_unit,
+                                        true
+                                    ),
+                                )?;
+                            }
+                        }
+                        writeln!(
+                            f,
+                            "Stake deactivates starting from epoch: {}",
+                            deactivation_epoch
+                        )?;
+                    }
+                    if let Some(delegated_vote_account_address) =
+                        &self.delegated_vote_account_address
+                    {
+                        writeln!(
+                            f,
+                            "Delegated Vote Account Address: {}",
+                            delegated_vote_account_address
+                        )?;
+                    }
+                } else {
+                    writeln!(f, "Stake account is undelegated")?;
                 }
                 show_authorized(f, self.authorized.as_ref().unwrap())?;
                 show_lockup(f, self.lockup.as_ref().unwrap())?;
