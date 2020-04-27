@@ -1,4 +1,3 @@
-use atty;
 use std::process::exit;
 
 fn press_enter() {
