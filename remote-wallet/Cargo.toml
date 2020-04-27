@@ -11,7 +11,7 @@ homepage = "https://solana.com/"
 [dependencies]
 base32 = "0.4.0"
 console = "0.10.1"
-dialoguer = "0.5.0"
+dialoguer = "0.5.1"
 hidapi = { version = "1.2.1", default-features = false }
 log = "0.4.8"
 parking_lot = "0.10"
