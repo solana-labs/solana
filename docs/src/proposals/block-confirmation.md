@@ -4,7 +4,7 @@ A validator votes on a PoH hash for two purposes. First, the vote indicates it
 believes the ledger is valid up until that point in time. Second, since many
 valid forks may exist at a given height, the vote also indicates exclusive
 support for the fork. This document describes only the former. The latter is
-described in [Tower BFT](tower-bft.md).
+described in [Tower BFT](../implemented-proposals/tower-bft.md).
 
 ## Current Design
 
@@ -50,7 +50,7 @@ log the time since the NewBlock transaction was submitted.
 
 ### Finality and Payouts
 
-[Tower BFT](tower-bft.md) is the proposed fork selection algorithm.  It proposes
+[Tower BFT](../implemented-proposals/tower-bft.md) is the proposed fork selection algorithm.  It proposes
 that payment to miners be postponed until the *stack* of validator votes reaches
 a certain depth, at which point rollback is not economically feasible. The vote
 program may therefore implement Tower BFT. Vote instructions would need to
