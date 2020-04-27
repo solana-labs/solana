@@ -7,9 +7,9 @@ expected amount are sent. The command-line tool here automates that process.
 
 ## Distribute tokens
 
-Send tokens to the recipients in `<ALLOCATIONS_CSV>`.
+Send tokens to the recipients in `<BIDS_CSV>`.
 
-Example allocations.csv:
+Example bids.csv:
 
 ```text
 primary_address,bid_amount_dollars
@@ -17,7 +17,7 @@ primary_address,bid_amount_dollars
 ```
 
 ```bash
-solana-tokens distribute --from <KEYPAIR> --dollars-per-sol <NUMBER> <ALLOCATIONS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
+solana-tokens distribute --from <KEYPAIR> --dollars-per-sol <NUMBER> --bids-csv <BIDS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
 ```
 
 Example transaction log before:
@@ -27,11 +27,11 @@ recipient,amount,signature
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv,30,1111111111111111111111111111111111111111111111111111111111111111
 ```
 
-Send tokens to the recipients in `<ALLOCATIONS_CSV>` if the distribution is
+Send tokens to the recipients in `<BIDS_CSV>` if the distribution is
 not already recordered in the transaction log.
 
 ```bash
-solana-tokens distribute --from <KEYPAIR> --dollars-per-sol <NUMBER> <ALLOCATIONS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
+solana-tokens distribute --from <KEYPAIR> --dollars-per-sol <NUMBER> --bids-csv <BIDS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
 ```
 
 Example output:
@@ -60,10 +60,10 @@ List the differences between a list of expected distributions and the record of 
 transactions have already been sent.
 
 ```bash
-solana-tokens distribute --dollars-per-sol <NUMBER> --dry-run <ALLOCATIONS_CSV> <TRANSACTION_LOG>
+solana-tokens distribute --dollars-per-sol <NUMBER> --dry-run --bids-csv <BIDS_CSV> <TRANSACTION_LOG>
 ```
 
-Example allocations.csv:
+Example bids.csv:
 
 ```text
 primary_address,bid_amount_dollars
