@@ -373,6 +373,7 @@ impl Bank {
 
         bank.rc.accounts = Arc::new(Accounts::new(paths));
         bank.process_genesis_config(genesis_config);
+        bank.finish_init();
 
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut bank.rc.accounts)
@@ -898,28 +899,6 @@ impl Bank {
             &self.epoch_schedule,
             self.slots_per_year,
             &genesis_config.rent,
-        );
-
-        // Add default static programs
-        self.add_static_program(
-            "system_program",
-            solana_sdk::system_program::id(),
-            system_instruction_processor::process_instruction,
-        );
-        self.add_static_program(
-            "config_program",
-            solana_config_program::id(),
-            solana_config_program::config_processor::process_instruction,
-        );
-        self.add_static_program(
-            "stake_program",
-            solana_stake_program::id(),
-            solana_stake_program::stake_instruction::process_instruction,
-        );
-        self.add_static_program(
-            "vote_program",
-            solana_vote_program::id(),
-            solana_vote_program::vote_instruction::process_instruction,
         );
 
         // Add additional native programs specified in the genesis config
@@ -1785,6 +1764,29 @@ impl Bank {
         self.src = status_cache_rc;
     }
 
+    pub fn finish_init(&mut self) {
+        self.add_static_program(
+            "system_program",
+            solana_sdk::system_program::id(),
+            system_instruction_processor::process_instruction,
+        );
+        self.add_static_program(
+            "config_program",
+            solana_config_program::id(),
+            solana_config_program::config_processor::process_instruction,
+        );
+        self.add_static_program(
+            "stake_program",
+            solana_stake_program::id(),
+            solana_stake_program::stake_instruction::process_instruction,
+        );
+        self.add_static_program(
+            "vote_program",
+            solana_vote_program::id(),
+            solana_vote_program::vote_instruction::process_instruction,
+        );
+    }
+
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
         self.rc.parent = RwLock::new(Some(parent.clone()));
     }
@@ -2174,17 +2176,20 @@ impl Bank {
         program_id: Pubkey,
         process_instruction: ProcessInstruction,
     ) {
-        assert!(
-            self.get_account(&program_id).is_none(),
-            format!(
-                "Static program {} with program id {:?} already added to the bank",
-                name, program_id
-            )
-        );
-
-        // Register a bogus executable account, which will be loaded and ignored.
-        let account = native_loader::create_loadable_account(name);
-        self.store_account(&program_id, &account);
+        match self.get_account(&program_id) {
+            Some(account) => {
+                assert_eq!(
+                    account.owner,
+                    native_loader::id(),
+                    "Cannot overwrite non-native loader account"
+                );
+            }
+            None => {
+                // Add a bogus executable native account, which will be loaded and ignored.
+                let account = native_loader::create_loadable_account(name);
+                self.store_account(&program_id, &account);
+            }
+        }
         self.message_processor
             .add_instruction_processor(program_id, process_instruction);
         debug!("Added static program {} under {:?}", name, program_id);
@@ -5099,10 +5104,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_add_duplicate_static_program() {
-        let GenesisConfigInfo { genesis_config, .. } =
-            create_genesis_config_with_leader(500, &Pubkey::new_rand(), 0);
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &Pubkey::new_rand(), 0);
         let mut bank = Bank::new(&genesis_config);
 
         fn mock_vote_processor(
@@ -5113,14 +5120,59 @@ mod tests {
             Err(InstructionError::Custom(42))
         }
 
-        let _ = bank.get_account(&solana_vote_program::id()).unwrap();
+        let mock_account = Keypair::new();
+        let mock_validator_identity = Keypair::new();
+        let instructions = vote_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &mock_account.pubkey(),
+            &VoteInit {
+                node_pubkey: mock_validator_identity.pubkey(),
+                ..VoteInit::default()
+            },
+            1,
+        );
+
+        let transaction = Transaction::new_signed_instructions(
+            &[&mint_keypair, &mock_account, &mock_validator_identity],
+            &instructions,
+            bank.last_blockhash(),
+        );
+
+        let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
         bank.add_static_program(
             "solana_vote_program",
             solana_vote_program::id(),
             mock_vote_processor,
         );
+        let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
+        // Vote loader account should not be updated since it was included in the genesis config.
+        assert_eq!(vote_loader_account.data, new_vote_loader_account.data);
+        assert_eq!(
+            bank.process_transaction(&transaction),
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::Custom(42)
+            ))
+        );
     }
 
+    #[test]
+    #[should_panic]
+    fn test_add_instruction_processor_for_invalid_account() {
+        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let mut bank = Bank::new(&genesis_config);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &[KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Err(InstructionError::Custom(42))
+        }
+
+        // Non-native loader accounts can not be used for instruction processing
+        bank.add_static_program("mock_program", mint_keypair.pubkey(), mock_ix_processor);
+    }
     #[test]
     fn test_recent_blockhashes_sysvar() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);

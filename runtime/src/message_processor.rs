@@ -181,8 +181,16 @@ impl MessageProcessor {
         program_id: Pubkey,
         process_instruction: ProcessInstruction,
     ) {
-        self.instruction_processors
-            .push((program_id, process_instruction));
+        match self
+            .instruction_processors
+            .iter_mut()
+            .find(|(key, _)| program_id == *key)
+        {
+            Some((_, processor)) => *processor = process_instruction,
+            None => self
+                .instruction_processors
+                .push((program_id, process_instruction)),
+        }
     }
 
     /// Process an instruction

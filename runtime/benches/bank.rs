@@ -123,7 +123,7 @@ fn do_bench_transactions(
     genesis_config.ticks_per_slot = 100;
     let mut bank = Bank::new(&genesis_config);
     bank.add_static_program(
-        "builting_program",
+        "builtin_program",
         Pubkey::new(&BUILTIN_PROGRAM_ID),
         process_instruction,
     );
