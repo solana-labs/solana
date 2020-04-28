@@ -663,6 +663,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use rayon::prelude::*;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         hash::Hasher,
@@ -690,7 +691,11 @@ mod tests {
             &[bank.clone()],
             vec![0],
         )));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore),
+        ));
         let (_slot_sender, slot_receiver) = channel();
         let storage_state = StorageState::new(
             &bank.last_blockhash(),

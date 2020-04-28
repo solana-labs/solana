@@ -11,7 +11,7 @@ use serde::Serialize;
 use solana_client::rpc_response::{
     Response, RpcAccount, RpcKeyedAccount, RpcResponseContext, RpcSignatureResult,
 };
-use solana_ledger::bank_forks::BankForks;
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
     account::Account, clock::Slot, pubkey::Pubkey, signature::Signature, transaction,
@@ -246,15 +246,6 @@ pub struct RpcSubscriptions {
     exit: Arc<AtomicBool>,
 }
 
-impl Default for RpcSubscriptions {
-    fn default() -> Self {
-        Self::new(
-            &Arc::new(AtomicBool::new(false)),
-            Arc::new(RwLock::new(BlockCommitmentCache::default())),
-        )
-    }
-}
-
 impl Drop for RpcSubscriptions {
     fn drop(&mut self) {
         self.shutdown().unwrap_or_else(|err| {
@@ -322,6 +313,15 @@ impl RpcSubscriptions {
             t_cleanup: Some(t_cleanup),
             exit: exit.clone(),
         }
+    }
+
+    pub fn default_with_blockstore(blockstore: Arc<Blockstore>) -> Self {
+        Self::new(
+            &Arc::new(AtomicBool::new(false)),
+            Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
+                blockstore,
+            ))),
+        )
     }
 
     fn check_account(
@@ -624,6 +624,7 @@ pub(crate) mod tests {
     use jsonrpc_pubsub::typed::Subscriber;
     use serial_test_derive::serial;
     use solana_budget_program;
+    use solana_ledger::get_tmp_ledger_path;
     use solana_sdk::{
         signature::{Keypair, Signer},
         system_transaction,
@@ -664,6 +665,8 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -690,7 +693,9 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            Arc::new(RwLock::new(
+                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+            )),
         );
         subscriptions.add_account_subscription(alice.pubkey(), None, sub_id.clone(), subscriber);
 
@@ -737,6 +742,8 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -763,7 +770,9 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            Arc::new(RwLock::new(
+                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+            )),
         );
         subscriptions.add_program_subscription(
             solana_budget_program::id(),
@@ -818,6 +827,8 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let mut bank_forks = BankForks::new(0, bank);
@@ -856,7 +867,8 @@ pub(crate) mod tests {
         let mut block_commitment = HashMap::new();
         block_commitment.entry(0).or_insert(cache0.clone());
         block_commitment.entry(1).or_insert(cache1.clone());
-        let block_commitment_cache = BlockCommitmentCache::new(block_commitment, 10, bank1, 0);
+        let block_commitment_cache =
+            BlockCommitmentCache::new(block_commitment, 0, 10, bank1, blockstore, 0);
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions =
@@ -959,9 +971,13 @@ pub(crate) mod tests {
             Subscriber::new_test("slotNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let exit = Arc::new(AtomicBool::new(false));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let subscriptions = RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            Arc::new(RwLock::new(
+                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+            )),
         );
         subscriptions.add_slot_subscription(sub_id.clone(), subscriber);
 
@@ -1001,9 +1017,13 @@ pub(crate) mod tests {
             Subscriber::new_test("rootNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let exit = Arc::new(AtomicBool::new(false));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let subscriptions = RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            Arc::new(RwLock::new(
+                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+            )),
         );
         subscriptions.add_root_subscription(sub_id.clone(), subscriber);
 

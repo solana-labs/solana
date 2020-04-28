@@ -67,7 +67,6 @@ impl Drop for Finalizer {
     }
 }
 
-#[derive(Default)]
 pub struct ReplayStageConfig {
     pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
@@ -257,13 +256,15 @@ impl ReplayStage {
                     );
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
+                    let forks_root = bank_forks.read().unwrap().root();
                     let start = allocated.get();
                     let mut frozen_banks: Vec<_> = bank_forks
                         .read()
                         .unwrap()
                         .frozen_banks()
-                        .values()
-                        .cloned()
+                        .into_iter()
+                        .filter(|(slot, _)| *slot >= forks_root)
+                        .map(|(_, bank)| bank)
                         .collect();
                     let newly_computed_slot_stats = Self::compute_bank_stats(
                         &my_pubkey,
@@ -344,6 +345,7 @@ impl ReplayStage {
                             &accounts_hash_sender,
                             &latest_root_senders,
                             &subscriptions,
+                            &block_commitment_cache,
                         )?;
                     }
                     datapoint_debug!(
@@ -618,6 +620,7 @@ impl ReplayStage {
         accounts_hash_sender: &Option<SnapshotPackageSender>,
         latest_root_senders: &[Sender<Slot>],
         subscriptions: &Arc<RpcSubscriptions>,
+        block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -643,7 +646,20 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
-            Self::handle_new_root(new_root, &bank_forks, progress, accounts_hash_sender);
+            let largest_confirmed_root = Some(
+                block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .largest_confirmed_root(),
+            );
+
+            Self::handle_new_root(
+                new_root,
+                &bank_forks,
+                progress,
+                accounts_hash_sender,
+                largest_confirmed_root,
+            );
             subscriptions.notify_roots(rooted_slots);
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
@@ -979,15 +995,17 @@ impl ReplayStage {
     }
 
     pub(crate) fn handle_new_root(
-        new_root: u64,
+        new_root: Slot,
         bank_forks: &RwLock<BankForks>,
         progress: &mut HashMap<u64, ForkProgress>,
         accounts_hash_sender: &Option<SnapshotPackageSender>,
+        largest_confirmed_root: Option<Slot>,
     ) {
-        bank_forks
-            .write()
-            .unwrap()
-            .set_root(new_root, accounts_hash_sender);
+        bank_forks.write().unwrap().set_root(
+            new_root,
+            accounts_hash_sender,
+            largest_confirmed_root,
+        );
         let r_bank_forks = bank_forks.read().unwrap();
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());
     }
@@ -1016,7 +1034,11 @@ impl ReplayStage {
         // Find the next slot that chains to the old slot
         let forks = forks_lock.read().unwrap();
         let frozen_banks = forks.frozen_banks();
-        let frozen_bank_slots: Vec<u64> = frozen_banks.keys().cloned().collect();
+        let frozen_bank_slots: Vec<u64> = frozen_banks
+            .keys()
+            .cloned()
+            .filter(|s| *s >= forks.root())
+            .collect();
         let next_slots = blockstore
             .get_slots_since(&frozen_bank_slots)
             .expect("Db error");
@@ -1419,7 +1441,9 @@ pub(crate) mod tests {
             let exit = Arc::new(AtomicBool::new(false));
             let subscriptions = Arc::new(RpcSubscriptions::new(
                 &exit,
-                Arc::new(RwLock::new(BlockCommitmentCache::default())),
+                Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
+                    blockstore.clone(),
+                ))),
             ));
             let bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
@@ -1472,10 +1496,56 @@ pub(crate) mod tests {
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default()));
         }
-        ReplayStage::handle_new_root(root, &bank_forks, &mut progress, &None);
+        ReplayStage::handle_new_root(root, &bank_forks, &mut progress, &None, None);
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
         assert!(progress.get(&root).is_some());
+    }
+
+    #[test]
+    fn test_handle_new_root_ahead_of_largest_confirmed_root() {
+        let genesis_config = create_genesis_config(10_000).genesis_config;
+        let bank0 = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+        let confirmed_root = 1;
+        let fork = 2;
+        let bank1 = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(0).unwrap(),
+            &Pubkey::default(),
+            confirmed_root,
+        );
+        bank_forks.write().unwrap().insert(bank1);
+        let bank2 = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
+            &Pubkey::default(),
+            fork,
+        );
+        bank_forks.write().unwrap().insert(bank2);
+        let root = 3;
+        let root_bank = Bank::new_from_parent(
+            bank_forks.read().unwrap().get(confirmed_root).unwrap(),
+            &Pubkey::default(),
+            root,
+        );
+        bank_forks.write().unwrap().insert(root_bank);
+        let mut progress = HashMap::new();
+        for i in 0..=root {
+            progress.insert(i, ForkProgress::new(Hash::default()));
+        }
+        ReplayStage::handle_new_root(
+            root,
+            &bank_forks,
+            &mut progress,
+            &None,
+            Some(confirmed_root),
+        );
+        assert_eq!(bank_forks.read().unwrap().root(), root);
+        assert!(bank_forks.read().unwrap().get(confirmed_root).is_some());
+        assert!(bank_forks.read().unwrap().get(fork).is_none());
+        assert_eq!(progress.len(), 2);
+        assert!(progress.get(&root).is_some());
+        assert!(progress.get(&confirmed_root).is_some());
+        assert!(progress.get(&fork).is_none());
     }
 
     #[test]
@@ -1745,7 +1815,11 @@ pub(crate) mod tests {
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let (lockouts_sender, _) = AggregateCommitmentService::new(
             &Arc::new(AtomicBool::new(false)),
             block_commitment_cache.clone(),

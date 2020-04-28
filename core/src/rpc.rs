@@ -9,7 +9,7 @@ use crate::{
     validator::ValidatorExit,
 };
 use bincode::serialize;
-use jsonrpc_core::{Error, Metadata, Result};
+use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::*;
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -40,6 +40,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+const JSON_RPC_SERVER_ERROR_0: i64 = -32000;
 const MAX_QUERY_ITEMS: usize = 256;
 const MAX_SLOT_RANGE: u64 = 10_000;
 
@@ -79,17 +80,32 @@ pub struct JsonRpcRequestProcessor {
 }
 
 impl JsonRpcRequestProcessor {
-    fn bank(&self, commitment: Option<CommitmentConfig>) -> Arc<Bank> {
+    fn bank(&self, commitment: Option<CommitmentConfig>) -> Result<Arc<Bank>> {
         debug!("RPC commitment_config: {:?}", commitment);
         let r_bank_forks = self.bank_forks.read().unwrap();
         if commitment.is_some() && commitment.unwrap().commitment == CommitmentLevel::Recent {
             let bank = r_bank_forks.working_bank();
             debug!("RPC using working_bank: {:?}", bank.slot());
-            bank
+            Ok(bank)
         } else {
-            let slot = r_bank_forks.root();
-            debug!("RPC using block: {:?}", slot);
-            r_bank_forks.get(slot).cloned().unwrap()
+            let cluster_root = self
+                .block_commitment_cache
+                .read()
+                .unwrap()
+                .largest_confirmed_root();
+            debug!("RPC using block: {:?}", cluster_root);
+            r_bank_forks
+                .get(cluster_root)
+                .cloned()
+                .ok_or_else(|| Error {
+                    code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_0),
+                    message: format!(
+                        "Cluster largest_confirmed_root {} does not exist on node. Node root: {}",
+                        cluster_root,
+                        r_bank_forks.root(),
+                    ),
+                    data: None,
+                })
         }
     }
 
@@ -116,7 +132,7 @@ impl JsonRpcRequestProcessor {
         pubkey: Result<Pubkey>,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcAccount>> {
-        let bank = &*self.bank(commitment);
+        let bank = &*self.bank(commitment)?;
         pubkey.and_then(|key| new_response(bank, bank.get_account(&key).map(RpcAccount::encode)))
     }
 
@@ -126,7 +142,7 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64> {
         Ok(self
-            .bank(commitment)
+            .bank(commitment)?
             .get_minimum_balance_for_rent_exemption(data_len))
     }
 
@@ -136,7 +152,7 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<RpcKeyedAccount>> {
         Ok(self
-            .bank(commitment)
+            .bank(commitment)?
             .get_program_accounts(Some(&program_id))
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
@@ -147,13 +163,13 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn get_inflation(&self, commitment: Option<CommitmentConfig>) -> Result<Inflation> {
-        Ok(self.bank(commitment).inflation())
+        Ok(self.bank(commitment)?.inflation())
     }
 
     pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
         // Since epoch schedule data comes from the genesis config, any commitment level should be
         // fine
-        Ok(*self.bank(None).epoch_schedule())
+        Ok(*self.bank(None)?.epoch_schedule())
     }
 
     pub fn get_balance(
@@ -161,7 +177,7 @@ impl JsonRpcRequestProcessor {
         pubkey: Result<Pubkey>,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<u64> {
-        let bank = &*self.bank(commitment);
+        let bank = &*self.bank(commitment)?;
         pubkey.and_then(|key| new_response(bank, bank.get_balance(&key)))
     }
 
@@ -169,7 +185,7 @@ impl JsonRpcRequestProcessor {
         &self,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator> {
-        let bank = &*self.bank(commitment);
+        let bank = &*self.bank(commitment)?;
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
         new_response(
             bank,
@@ -184,7 +200,7 @@ impl JsonRpcRequestProcessor {
         &self,
         blockhash: &Hash,
     ) -> RpcResponse<Option<RpcFeeCalculator>> {
-        let bank = &*self.bank(None);
+        let bank = &*self.bank(None)?;
         let fee_calculator = bank.get_fee_calculator(blockhash);
         new_response(
             bank,
@@ -193,7 +209,7 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_fee_rate_governor(&self) -> RpcResponse<RpcFeeRateGovernor> {
-        let bank = &*self.bank(None);
+        let bank = &*self.bank(None)?;
         let fee_rate_governor = bank.get_fee_rate_governor();
         new_response(
             bank,
@@ -208,7 +224,7 @@ impl JsonRpcRequestProcessor {
         signature: Result<Signature>,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<bool> {
-        let bank = &*self.bank(commitment);
+        let bank = &*self.bank(commitment)?;
         match signature {
             Err(e) => Err(e),
             Ok(sig) => {
@@ -232,11 +248,11 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
-        Ok(self.bank(commitment).slot())
+        Ok(self.bank(commitment)?.slot())
     }
 
     fn get_slot_leader(&self, commitment: Option<CommitmentConfig>) -> Result<String> {
-        Ok(self.bank(commitment).collector_id().to_string())
+        Ok(self.bank(commitment)?.collector_id().to_string())
     }
 
     fn minimum_ledger_slot(&self) -> Result<Slot> {
@@ -253,18 +269,18 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_transaction_count(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
-        Ok(self.bank(commitment).transaction_count() as u64)
+        Ok(self.bank(commitment)?.transaction_count() as u64)
     }
 
     fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
-        Ok(self.bank(commitment).capitalization())
+        Ok(self.bank(commitment)?.capitalization())
     }
 
     fn get_vote_accounts(
         &self,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcVoteAccountStatus> {
-        let bank = self.bank(commitment);
+        let bank = self.bank(commitment)?;
         let vote_accounts = bank.vote_accounts();
         let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
@@ -326,7 +342,7 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_slots_per_segment(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
-        Ok(self.bank(commitment).slots_per_segment())
+        Ok(self.bank(commitment)?.slots_per_segment())
     }
 
     fn get_storage_pubkeys_for_slot(&self, slot: Slot) -> Result<Vec<String>> {
@@ -376,7 +392,11 @@ impl JsonRpcRequestProcessor {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>> {
-        let end_slot = end_slot.unwrap_or_else(|| self.bank(None).slot());
+        let end_slot = if let Some(end_slot) = end_slot {
+            end_slot
+        } else {
+            self.bank(None)?.slot()
+        };
         if end_slot < start_slot {
             return Ok(vec![]);
         }
@@ -394,7 +414,7 @@ impl JsonRpcRequestProcessor {
         // queried). If these values will be variable in the future, those timing parameters will
         // need to be stored persistently, and the slot_duration calculation will likely need to be
         // moved upstream into blockstore. Also, an explicit commitment level will need to be set.
-        let bank = self.bank(None);
+        let bank = self.bank(None)?;
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
         let epoch = bank.epoch_schedule().get_epoch(slot);
         let stakes = HashMap::new();
@@ -412,7 +432,7 @@ impl JsonRpcRequestProcessor {
         signature: Signature,
         commitment: Option<CommitmentConfig>,
     ) -> Option<RpcSignatureConfirmation> {
-        self.get_transaction_status(signature, &self.bank(commitment))
+        self.get_transaction_status(signature, &self.bank(commitment).ok()?)
             .map(
                 |TransactionStatus {
                      status,
@@ -430,7 +450,7 @@ impl JsonRpcRequestProcessor {
         signature: Signature,
         commitment: Option<CommitmentConfig>,
     ) -> Option<transaction::Result<()>> {
-        self.bank(commitment).get_signature_status(&signature)
+        self.bank(commitment).ok()?.get_signature_status(&signature)
     }
 
     pub fn get_signature_statuses(
@@ -449,7 +469,7 @@ impl JsonRpcRequestProcessor {
         let search_transaction_history = config
             .and_then(|x| x.search_transaction_history)
             .unwrap_or(false);
-        let bank = self.bank(commitment);
+        let bank = self.bank(commitment)?;
 
         for signature in signatures {
             let status = if let Some(status) = self.get_transaction_status(signature, &bank) {
@@ -944,7 +964,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcEpochInfo> {
-        let bank = meta.request_processor.read().unwrap().bank(commitment);
+        let bank = meta.request_processor.read().unwrap().bank(commitment)?;
         let epoch_schedule = bank.epoch_schedule();
 
         let slot = bank.slot();
@@ -980,7 +1000,7 @@ impl RpcSol for RpcSolImpl {
         slot: Option<Slot>,
         commitment: Option<CommitmentConfig>,
     ) -> Result<Option<RpcLeaderSchedule>> {
-        let bank = meta.request_processor.read().unwrap().bank(commitment);
+        let bank = meta.request_processor.read().unwrap().bank(commitment)?;
         let slot = slot.unwrap_or_else(|| bank.slot());
         let epoch = bank.epoch_schedule().get_epoch(slot);
 
@@ -1144,7 +1164,7 @@ impl RpcSol for RpcSolImpl {
             .request_processor
             .read()
             .unwrap()
-            .bank(commitment.clone())
+            .bank(commitment.clone())?
             .confirmed_last_blockhash()
             .0;
         let transaction = request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash)
@@ -1491,8 +1511,10 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
+            0,
             10,
             bank.clone(),
+            blockstore.clone(),
             0,
         )));
 
@@ -1524,15 +1546,13 @@ pub mod tests {
 
         let mut roots = blockstore_roots.clone();
         if !roots.is_empty() {
-            roots.retain(|&x| x > 1);
+            roots.retain(|&x| x > 0);
             let mut parent_bank = bank;
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
                 parent_bank = bank_forks.write().unwrap().insert(new_bank);
-                parent_bank.squash();
-                bank_forks.write().unwrap().set_root(*root, &None);
-                let parent = if i > 0 { roots[i - 1] } else { 1 };
+                let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(&blockstore, 5, *root, parent, Hash::default());
             }
             blockstore.set_roots(&roots).unwrap();
@@ -1542,6 +1562,10 @@ pub mod tests {
                 roots.iter().max().unwrap() + 1,
             );
             bank_forks.write().unwrap().insert(new_bank);
+
+            for root in roots.iter() {
+                bank_forks.write().unwrap().set_root(*root, &None, Some(0));
+            }
         }
 
         let bank = bank_forks.read().unwrap().working_bank();
@@ -1610,14 +1634,16 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
         let (bank_forks, alice, _) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let request_processor = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             bank_forks,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );
@@ -2089,7 +2115,7 @@ pub mod tests {
                 .expect("actual response deserialization");
         let result = result.as_ref().unwrap();
         assert_eq!(expected_res, result.status);
-        assert_eq!(Some(2), result.confirmations);
+        assert_eq!(None, result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
@@ -2253,9 +2279,11 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -2266,7 +2294,7 @@ pub mod tests {
                     JsonRpcConfig::default(),
                     new_bank_forks().0,
                     block_commitment_cache,
-                    Arc::new(blockstore),
+                    blockstore,
                     StorageState::default(),
                     validator_exit,
                 );
@@ -2356,14 +2384,16 @@ pub mod tests {
     fn test_rpc_request_processor_config_default_trait_validator_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let request_processor = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             new_bank_forks().0,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );
@@ -2375,16 +2405,18 @@ pub mod tests {
     fn test_rpc_request_processor_allow_validator_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
         let request_processor = JsonRpcRequestProcessor::new(
             config,
             new_bank_forks().0,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );
@@ -2439,6 +2471,8 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
         let bank_forks = new_bank_forks().0;
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let commitment_slot0 = BlockCommitment::new([8; MAX_LOCKOUT_HISTORY + 1]);
         let commitment_slot1 = BlockCommitment::new([9; MAX_LOCKOUT_HISTORY + 1]);
@@ -2451,12 +2485,12 @@ pub mod tests {
             .or_insert(commitment_slot1.clone());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
+            0,
             42,
             bank_forks.read().unwrap().working_bank(),
+            blockstore.clone(),
             0,
         )));
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
 
         let mut config = JsonRpcConfig::default();
         config.enable_validator_exit = true;
@@ -2464,7 +2498,7 @@ pub mod tests {
             config,
             bank_forks,
             block_commitment_cache,
-            Arc::new(blockstore),
+            blockstore,
             StorageState::default(),
             validator_exit,
         );
@@ -2648,8 +2682,16 @@ pub mod tests {
     fn test_get_confirmed_blocks() {
         let bob_pubkey = Pubkey::new_rand();
         let roots = vec![0, 1, 3, 4, 8];
-        let RpcHandler { io, meta, .. } =
-            start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots.clone(), 0);
+        let RpcHandler {
+            io,
+            meta,
+            block_commitment_cache,
+            ..
+        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots.clone(), 0);
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_get_largest_confirmed_root(8);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}}"#);

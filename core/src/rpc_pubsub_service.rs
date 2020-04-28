@@ -73,6 +73,7 @@ impl PubSubService {
 mod tests {
     use super::*;
     use crate::commitment::BlockCommitmentCache;
+    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
     use std::{
         net::{IpAddr, Ipv4Addr},
         sync::RwLock,
@@ -82,9 +83,13 @@ mod tests {
     fn test_pubsub_new() {
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            Arc::new(RwLock::new(
+                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+            )),
         ));
         let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
         let thread = pubsub_service.thread_hdl.thread();
