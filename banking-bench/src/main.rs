@@ -253,7 +253,7 @@ fn main() {
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());
                 if bank.slot() > 32 {
-                    bank_forks.set_root(root, &None);
+                    bank_forks.set_root(root, &None, None);
                     root += 1;
                 }
                 debug!(

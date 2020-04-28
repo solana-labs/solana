@@ -60,7 +60,9 @@ mod tests {
             &[bank.clone()],
             vec![0],
         )));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (bank_sender, bank_receiver) = channel();
@@ -181,7 +183,9 @@ mod tests {
             &[bank.clone()],
             vec![0],
         )));
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
+        ));
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let (bank_sender, bank_receiver) = channel();

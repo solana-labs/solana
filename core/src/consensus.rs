@@ -637,6 +637,7 @@ pub mod test {
                     &mut self.progress,
                     &None,
                     &mut HashSet::new(),
+                    None,
                 );
             }
 
