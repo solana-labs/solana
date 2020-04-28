@@ -1827,16 +1827,16 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-invoke"
-version = "1.0.0"
+version = "1.2.0"
 dependencies = [
- "solana-bpf-rust-invoked 1.0.0",
+ "solana-bpf-rust-invoked 1.2.0",
  "solana-sdk 1.2.0",
  "solana-sdk-bpf-test 1.2.0",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoked"
-version = "1.0.0"
+version = "1.2.0"
 dependencies = [
  "solana-sdk 1.2.0",
  "solana-sdk-bpf-test 1.2.0",

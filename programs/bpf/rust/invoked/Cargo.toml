@@ -3,7 +3,7 @@
 
 [package]
 name = "solana-bpf-rust-invoked"
-version = "1.0.0"
+version = "1.2.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,10 +12,8 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk = { path = "../../../../sdk/", version = "1.0.0", default-features = false }
-
-[dev_dependencies]
-solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/test", version = "1.0.0" }
+solana-sdk = { path = "../../../../sdk/", version = "1.2.0", default-features = false }
+solana-sdk-bpf-test = { path = "../../../../sdk/bpf/rust/test", version = "1.2.0" }
 
 [features]
 program = ["solana-sdk/program"]
@@ -24,3 +22,6 @@ default = ["program"]
 [lib]
 name = "solana_bpf_rust_invoked"
 crate-type = ["lib", "cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
