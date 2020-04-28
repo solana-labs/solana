@@ -49,7 +49,7 @@ else
   # ~/.cargo
   ARGS+=(--volume "$PWD:/home")
 fi
-ARGS+=(--env "CARGO_HOME=/home/.cargo")
+ARGS+=(--env "HOME=/home" --env "CARGO_HOME=/home/.cargo")
 
 # kcov tries to set the personality of the binary which docker
 # doesn't allow by default.
