@@ -1,6 +1,4 @@
-use clap;
 use clap::{App, Arg};
-use reqwest;
 use serde_derive::Deserialize;
 
 // pub type blockHash = [u8; 32];

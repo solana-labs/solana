@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate serde_derive;
 
-use bincode;
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,

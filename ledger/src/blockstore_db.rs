@@ -1,7 +1,6 @@
 use crate::blockstore_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
-use fs_extra;
 use log::*;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{

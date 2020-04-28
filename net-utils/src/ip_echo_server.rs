@@ -1,14 +1,8 @@
 use bytes::Bytes;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use std::io;
-use std::net::SocketAddr;
-use std::time::Duration;
-use tokio;
-use tokio::net::TcpListener;
-use tokio::prelude::*;
-use tokio::reactor::Handle;
-use tokio::runtime::Runtime;
+use std::{io, net::SocketAddr, time::Duration};
+use tokio::{net::TcpListener, prelude::*, reactor::Handle, runtime::Runtime};
 use tokio_codec::{BytesCodec, Decoder};
 
 pub type IpEchoServer = Runtime;

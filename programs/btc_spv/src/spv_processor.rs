@@ -4,7 +4,6 @@ use crate::spv_instruction::*;
 use crate::spv_state::*;
 #[allow(unused_imports)]
 use crate::utils::*;
-use hex;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
