@@ -2,16 +2,11 @@ pub mod config_instruction;
 pub mod config_processor;
 pub mod date_instruction;
 
-use crate::config_processor::process_instruction;
 use bincode::{deserialize, serialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{account::Account, pubkey::Pubkey, short_vec};
 
-solana_sdk::declare_program!(
-    "Config1111111111111111111111111111111111111",
-    solana_config_program,
-    process_instruction
-);
+solana_sdk::declare_id!("Config1111111111111111111111111111111111111");
 
 pub trait ConfigState: serde::Serialize + Default {
     /// Maximum space that the serialized representation will require

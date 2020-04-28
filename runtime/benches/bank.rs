@@ -122,11 +122,12 @@ fn do_bench_transactions(
     let (mut genesis_config, mint_keypair) = create_genesis_config(100_000_000);
     genesis_config.ticks_per_slot = 100;
     let mut bank = Bank::new(&genesis_config);
-    bank.add_instruction_processor(Pubkey::new(&BUILTIN_PROGRAM_ID), process_instruction);
-    bank.register_native_instruction_processor(
-        "solana_noop_program",
-        &Pubkey::new(&NOOP_PROGRAM_ID),
+    bank.add_static_program(
+        "builtin_program",
+        Pubkey::new(&BUILTIN_PROGRAM_ID),
+        process_instruction,
     );
+    bank.add_native_program("solana_noop_program", &Pubkey::new(&NOOP_PROGRAM_ID));
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
     let transactions = create_transactions(&bank_client, &mint_keypair);

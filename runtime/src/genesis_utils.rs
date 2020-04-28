@@ -5,7 +5,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::Rent,
     signature::{Keypair, Signer},
-    system_program::{self, solana_system_program},
+    system_program,
 };
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state;
@@ -133,6 +133,7 @@ pub fn create_genesis_config_with_leader_ex(
     .cloned()
     .collect();
 
+<<<<<<< HEAD
     // Bare minimum program set
     let native_instruction_processors = vec![
         solana_system_program(),
@@ -141,10 +142,11 @@ pub fn create_genesis_config_with_leader_ex(
         solana_stake_program!(),
     ];
 
+=======
+>>>>>>> efad19318... Make default programs static (#9717)
     let fee_rate_governor = FeeRateGovernor::new(0, 0); // most tests can't handle transaction fees
     let mut genesis_config = GenesisConfig {
         accounts,
-        native_instruction_processors,
         fee_rate_governor,
         rent,
         ..GenesisConfig::default()

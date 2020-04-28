@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 use crate::{native_loader, rent_collector::RentCollector, system_instruction_processor};
+=======
+use crate::{native_loader::NativeLoader, rent_collector::RentCollector};
+>>>>>>> efad19318... Make default programs static (#9717)
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
@@ -161,13 +165,14 @@ impl PreAccount {
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<entrypoint_native::Entrypoint>>>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct MessageProcessor {
     #[serde(skip)]
     instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
     #[serde(skip)]
     symbol_cache: SymbolCache,
 }
+<<<<<<< HEAD
 impl Default for MessageProcessor {
     fn default() -> Self {
         let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![(
@@ -178,6 +183,13 @@ impl Default for MessageProcessor {
         Self {
             instruction_processors,
             symbol_cache: RwLock::new(HashMap::new()),
+=======
+impl Clone for MessageProcessor {
+    fn clone(&self) -> Self {
+        MessageProcessor {
+            instruction_processors: self.instruction_processors.clone(),
+            native_loader: NativeLoader::default(),
+>>>>>>> efad19318... Make default programs static (#9717)
         }
     }
 }
@@ -188,8 +200,16 @@ impl MessageProcessor {
         program_id: Pubkey,
         process_instruction: ProcessInstruction,
     ) {
-        self.instruction_processors
-            .push((program_id, process_instruction));
+        match self
+            .instruction_processors
+            .iter_mut()
+            .find(|(key, _)| program_id == *key)
+        {
+            Some((_, processor)) => *processor = process_instruction,
+            None => self
+                .instruction_processors
+                .push((program_id, process_instruction)),
+        }
     }
 
     /// Process an instruction

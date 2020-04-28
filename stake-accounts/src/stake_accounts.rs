@@ -216,11 +216,7 @@ mod tests {
 
     fn create_bank(lamports: u64) -> (Bank, Keypair, u64) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
-        let mut bank = Bank::new(&genesis_config);
-        bank.add_instruction_processor(
-            solana_stake_program::id(),
-            solana_stake_program::stake_instruction::process_instruction,
-        );
+        let bank = Bank::new(&genesis_config);
         let rent = bank.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>());
         (bank, mint_keypair, rent)
     }
