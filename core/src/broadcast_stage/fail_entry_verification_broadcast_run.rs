@@ -11,6 +11,8 @@ pub(super) struct FailEntryVerificationBroadcastRun {
     shred_version: u16,
     keypair: Arc<Keypair>,
     good_shreds: Vec<Shred>,
+    current_slot: Slot,
+    next_shred_index: u32,
 }
 
 impl FailEntryVerificationBroadcastRun {
@@ -19,6 +21,8 @@ impl FailEntryVerificationBroadcastRun {
             shred_version,
             keypair,
             good_shreds: vec![],
+            current_slot: 0,
+            next_shred_index: 0,
         }
     }
 }
@@ -26,7 +30,7 @@ impl FailEntryVerificationBroadcastRun {
 impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
-        blockstore: &Arc<Blockstore>,
+        _blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -35,6 +39,11 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
+
+        if bank.slot() != self.current_slot {
+            self.next_shred_index = 0;
+            self.current_slot = bank.slot();
+        }
 
         // 2) If we're past SLOT_TO_RESOLVE, insert the correct shreds so validators can repair
         // and make progress
@@ -58,12 +67,6 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             }
         };
 
-        let next_shred_index = blockstore
-            .meta(bank.slot())
-            .expect("Database error")
-            .map(|meta| meta.consumed)
-            .unwrap_or(0) as u32;
-
         let shredder = Shredder::new(
             bank.slot(),
             bank.parent().unwrap().slot(),
@@ -75,21 +78,17 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         .expect("Expected to create a new shredder");
 
         let (data_shreds, _, _) =
-            shredder.entries_to_shreds(&receive_results.entries, false, next_shred_index);
+            shredder.entries_to_shreds(&receive_results.entries, false, self.next_shred_index);
 
+        self.next_shred_index += data_shreds.len() as u32;
         let last_shreds = last_entries.map(|(good_last_entry, bad_last_entry)| {
-            let (good_last_data_shred, _, _) = shredder.entries_to_shreds(
-                &vec![good_last_entry],
-                true,
-                next_shred_index + data_shreds.len() as u32,
-            );
+            let (good_last_data_shred, _, _) =
+                shredder.entries_to_shreds(&vec![good_last_entry], true, self.next_shred_index);
 
-            let (bad_last_data_shred, _, _) = shredder.entries_to_shreds(
-                &vec![bad_last_entry],
-                true,
-                next_shred_index + data_shreds.len() as u32,
-            );
+            let (bad_last_data_shred, _, _) =
+                shredder.entries_to_shreds(&vec![bad_last_entry], true, self.next_shred_index);
 
+            self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)
         });
 
