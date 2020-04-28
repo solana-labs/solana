@@ -246,15 +246,6 @@ pub struct RpcSubscriptions {
     exit: Arc<AtomicBool>,
 }
 
-// impl Default for RpcSubscriptions {
-//     fn default() -> Self {
-//         Self::new(
-//             &Arc::new(AtomicBool::new(false)),
-//             Arc::new(RwLock::new(BlockCommitmentCache::default())),
-//         )
-//     }
-// }
-
 impl Drop for RpcSubscriptions {
     fn drop(&mut self) {
         self.shutdown().unwrap_or_else(|err| {
