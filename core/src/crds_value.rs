@@ -87,7 +87,12 @@ impl Sanitize for CrdsData {
                 }
                 val.sanitize()
             }
-            CrdsData::LowestSlot(_, val) => val.sanitize(),
+            CrdsData::LowestSlot(ix, val) => {
+                if *ix as usize >= 1 {
+                    return Err(SanitizeError::ValueOutOfRange);
+                }
+                val.sanitize()
+            }
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
@@ -156,10 +161,19 @@ impl LowestSlot {
 impl Sanitize for LowestSlot {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfRange);
         }
         if self.lowest >= MAX_SLOT {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfRange);
+        }
+        if self.root != 0 {
+            return Err(SanitizeError::InvalidValue);
+        }
+        if !self.slots.is_empty() {
+            return Err(SanitizeError::InvalidValue);
+        }
+        if !self.stash.is_empty() {
+            return Err(SanitizeError::InvalidValue);
         }
         self.from.sanitize()
     }
@@ -419,6 +433,32 @@ mod test {
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().lowest_slot().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::LowestSlot(key));
+    }
+
+    #[test]
+    fn test_lowest_slot_sanitize() {
+        let ls = LowestSlot::new(Pubkey::default(), 0, 0);
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, ls.clone()));
+        assert_eq!(v.sanitize(), Ok(()));
+
+        let mut o = ls.clone();
+        o.root = 1;
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
+
+        let o = ls.clone();
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(1, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::ValueOutOfRange));
+
+        let mut o = ls.clone();
+        o.slots.insert(1);
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
+
+        let mut o = ls.clone();
+        o.stash.push(deprecated::EpochIncompleteSlots::default());
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
     }
 
     #[test]

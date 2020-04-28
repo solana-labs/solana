@@ -3,6 +3,7 @@ pub enum SanitizeError {
     Failed,
     IndexOutOfBounds,
     ValueOutOfRange,
+    InvalidValue,
 }
 
 pub trait Sanitize {
