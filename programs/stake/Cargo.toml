@@ -15,12 +15,14 @@ num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.106"
 serde_derive = "1.0.103"
-solana-logger = { path = "../../logger", version = "1.2.0" }
 solana-metrics = { path = "../../metrics", version = "1.2.0" }
 solana-sdk = { path = "../../sdk", version = "1.2.0" }
 solana-vote-program = { path = "../vote", version = "1.2.0" }
 solana-config-program = { path = "../config", version = "1.2.0" }
 thiserror = "1.0"
+
+[dev-dependencies]
+solana-logger = { path = "../../logger", version = "1.2.0" }
 
 [lib]
 crate-type = ["lib"]

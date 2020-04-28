@@ -2352,7 +2352,6 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.2.0",
  "solana-sdk 1.2.0",
 ]
 
@@ -2550,7 +2549,6 @@ dependencies = [
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-config-program 1.2.0",
- "solana-logger 1.2.0",
  "solana-metrics 1.2.0",
  "solana-sdk 1.2.0",
  "solana-vote-program 1.2.0",
@@ -2582,7 +2580,6 @@ dependencies = [
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.2.0",
  "solana-metrics 1.2.0",
  "solana-sdk 1.2.0",
  "thiserror 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
