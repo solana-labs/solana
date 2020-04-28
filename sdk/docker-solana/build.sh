@@ -21,7 +21,7 @@ fi
 cd "$(dirname "$0")"
 rm -rf usr/
 ../../ci/docker-run.sh "$rust_stable_docker_image" \
-  scripts/cargo-install-all.sh --use-move sdk/docker-solana/usr
+  scripts/cargo-install-all.sh sdk/docker-solana/usr
 
 cp -f ../../run.sh usr/bin/solana-run.sh
 
