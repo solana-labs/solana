@@ -3,10 +3,12 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
+    entrypoint_native::InvokeContext,
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     native_loader,
     pubkey::Pubkey,
+    rent::Rent,
     system_program,
     transaction::TransactionError,
 };
@@ -14,56 +16,35 @@ use std::{cell::RefCell, rc::Rc};
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
-#[derive(Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PreAccount {
-    pub is_writable: bool,
-    pub lamports: u64,
-    pub data_len: usize,
-    pub data: Option<Vec<u8>>,
-    pub owner: Pubkey,
-    pub is_executable: bool,
-    pub rent_epoch: Epoch,
+    key: Pubkey,
+    is_signer: bool,
+    is_writable: bool,
+    is_executable: bool,
+    lamports: u64,
+    data: Vec<u8>,
+    owner: Pubkey,
+    rent_epoch: Epoch,
 }
 impl PreAccount {
-    pub fn new(account: &Account, program_id: &Pubkey, is_writable: bool) -> Self {
+    pub fn new(key: &Pubkey, account: &Account, is_signer: bool, is_writable: bool) -> Self {
         Self {
+            key: *key,
+            is_signer,
             is_writable,
             lamports: account.lamports,
-            data_len: account.data.len(),
-            data: if Self::should_verify_data(
-                &account.owner,
-                program_id,
-                is_writable,
-                account.executable,
-            ) {
-                Some(account.data.clone())
-            } else {
-                None
-            },
+            data: account.data.clone(),
             owner: account.owner,
             is_executable: account.executable,
             rent_epoch: account.rent_epoch,
         }
     }
 
-    fn should_verify_data(
-        owner: &Pubkey,
-        program_id: &Pubkey,
-        is_writable: bool,
-        is_executable: bool,
-    ) -> bool {
-        // For accounts not assigned to the program, the data may not change.
-        program_id != owner
-        // Read-only account data may not change.
-        || !is_writable
-        // Executable account data may not change.
-        || is_executable
-    }
-
     pub fn verify(
         &self,
         program_id: &Pubkey,
-        rent_collector: &RentCollector,
+        rent: &Rent,
         post: &Account,
     ) -> Result<(), InstructionError> {
         // Only the owner of the account may change owner and
@@ -71,7 +52,7 @@ impl PreAccount {
         //   only if the data is zero-initialized or empty
         if self.owner != post.owner
             && (!self.is_writable // line coverage used to get branch coverage
-            || *program_id != self.owner // line coverage used to get branch coverage
+                || *program_id != self.owner
             || !Self::is_zeroed(&post.data))
         {
             return Err(InstructionError::ModifiedProgramId);
@@ -96,43 +77,37 @@ impl PreAccount {
 
         // Only the system program can change the size of the data
         //  and only if the system program owns the account
-        if self.data_len != post.data.len()
+        if self.data.len() != post.data.len()
             && (!system_program::check_id(program_id) // line coverage used to get branch coverage
-            || !system_program::check_id(&self.owner))
+                || !system_program::check_id(&self.owner))
         {
             return Err(InstructionError::AccountDataSizeChanged);
         }
 
-        if Self::should_verify_data(
-            &self.owner,
-            program_id,
-            self.is_writable,
-            self.is_executable,
-        ) {
-            match &self.data {
-                Some(data) if *data == post.data => (),
-                _ => {
-                    if self.is_executable {
-                        return Err(InstructionError::ExecutableDataModified);
-                    } else if self.is_writable {
-                        return Err(InstructionError::ExternalAccountDataModified);
-                    } else {
-                        return Err(InstructionError::ReadonlyDataModified);
-                    }
-                }
+        // Only the owner may change account data
+        //   and if the account is writable
+        //   and if the account is not executable
+        if !(*program_id == self.owner
+            && self.is_writable  // line coverage used to get branch coverage
+            && !self.is_executable)
+            && self.data != post.data
+        {
+            if self.is_executable {
+                return Err(InstructionError::ExecutableDataModified);
+            } else if self.is_writable {
+                return Err(InstructionError::ExternalAccountDataModified);
+            } else {
+                return Err(InstructionError::ReadonlyDataModified);
             }
         }
 
         // executable is one-way (false->true) and only the account owner may set it.
         if self.is_executable != post.executable {
-            if !rent_collector
-                .rent
-                .is_exempt(post.lamports, post.data.len())
-            {
+            if !rent.is_exempt(post.lamports, post.data.len()) {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
             if !self.is_writable // line coverage used to get branch coverage
-                || self.is_executable // line coverage used to get branch coverage
+                || self.is_executable
                 || *program_id != self.owner
             {
                 return Err(InstructionError::ExecutableModified);
@@ -147,6 +122,50 @@ impl PreAccount {
         Ok(())
     }
 
+    pub fn verify_cross_program(
+        &self,
+        is_writable: bool,
+        is_signer: bool,
+        signers: &[Pubkey],
+        program_id: &Pubkey,
+        rent: &Rent,
+        post: &Account,
+    ) -> Result<(), InstructionError> {
+        // Readonly account cannot become writable
+        if is_writable && !self.is_writable {
+            return Err(InstructionError::WritableModified);
+        }
+
+        if is_signer && // If message indicates account is signed
+        !( // one of the following needs to be true:
+            self.is_signer // Signed in the original transaction
+            || signers.contains(&self.key) // Signed by the program
+        ) {
+            return Err(InstructionError::SignerModified);
+        }
+
+        self.verify(program_id, rent, post)
+    }
+
+    pub fn update(&mut self, account: &Account) {
+        self.lamports = account.lamports;
+        if self.data.len() != account.data.len() {
+            // Only system account can change data size, copy with alloc
+            self.data = account.data.clone();
+        } else {
+            // Copy without allocate
+            self.data.clone_from_slice(&account.data);
+        }
+    }
+
+    pub fn key(&self) -> Pubkey {
+        self.key
+    }
+
+    pub fn lamports(&self) -> u64 {
+        self.lamports
+    }
+
     pub fn is_zeroed(buf: &[u8]) -> bool {
         const ZEROS_LEN: usize = 1024;
         static ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
@@ -157,7 +176,64 @@ impl PreAccount {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct ThisInvokeContext {
+    pub program_ids: Vec<Pubkey>,
+    pub rent: Rent,
+    pub pre_accounts: Vec<PreAccount>,
+}
+impl ThisInvokeContext {
+    const MAX_INVOCATION_DEPTH: usize = 5;
+    pub fn new(program_id: &Pubkey, rent: Rent, pre_accounts: Vec<PreAccount>) -> Self {
+        let mut program_ids = Vec::with_capacity(Self::MAX_INVOCATION_DEPTH);
+        program_ids.push(*program_id);
+        Self {
+            program_ids,
+            rent,
+            pre_accounts,
+        }
+    }
+}
+impl InvokeContext for ThisInvokeContext {
+    fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
+        if self.program_ids.len() >= Self::MAX_INVOCATION_DEPTH {
+            return Err(InstructionError::CallDepth);
+        }
+        if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
+            // Reentrancy not allowed unless caller is calling itself
+            return Err(InstructionError::ReentrancyNotAllowed);
+        }
+        self.program_ids.push(*key);
+        Ok(())
+    }
+    fn pop(&mut self) {
+        self.program_ids.pop();
+    }
+    fn verify_and_update(
+        &mut self,
+        message: &Message,
+        instruction: &CompiledInstruction,
+        signers: &[Pubkey],
+        accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        match self.program_ids.last() {
+            Some(key) => MessageProcessor::verify_and_update(
+                message,
+                instruction,
+                &mut self.pre_accounts,
+                key,
+                &self.rent,
+                signers,
+                accounts,
+            ),
+            None => Err(InstructionError::GenericError), // Should never happen
+        }
+    }
+}
+
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+pub type ProcessInstructionWithContext =
+    fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 #[derive(Default, Deserialize, Serialize)]
 pub struct MessageProcessor {
@@ -193,16 +269,14 @@ impl MessageProcessor {
         }
     }
 
-    /// Process an instruction
-    /// This method calls the instruction's program entrypoint method
-    fn process_instruction(
-        &self,
-        message: &Message,
-        instruction: &CompiledInstruction,
-        executable_accounts: &[(Pubkey, RefCell<Account>)],
-        accounts: &[Rc<RefCell<Account>>],
-    ) -> Result<(), InstructionError> {
-        let mut keyed_accounts = create_keyed_readonly_accounts(executable_accounts);
+    /// Create the KeyedAccounts that will be passed to the program
+    fn create_keyed_accounts<'a>(
+        message: &'a Message,
+        instruction: &'a CompiledInstruction,
+        executable_accounts: &'a [(Pubkey, RefCell<Account>)],
+        accounts: &'a [Rc<RefCell<Account>>],
+    ) -> Result<Vec<KeyedAccount<'a>>, InstructionError> {
+        let mut keyed_accounts = create_keyed_readonly_accounts(&executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
             .iter()
@@ -220,6 +294,21 @@ impl MessageProcessor {
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
         assert!(keyed_accounts[0].executable()?, "account not executable");
+        Ok(keyed_accounts)
+    }
+
+    /// Process an instruction
+    /// This method calls the instruction's program entrypoint method
+    fn process_instruction(
+        &self,
+        message: &Message,
+        instruction: &CompiledInstruction,
+        invoke_context: &mut dyn InvokeContext,
+        executable_accounts: &[(Pubkey, RefCell<Account>)],
+        accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        let keyed_accounts =
+            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
 
         for (id, process_instruction) in &self.instruction_processors {
             let root_program_id = keyed_accounts[0].unsigned_key();
@@ -237,10 +326,47 @@ impl MessageProcessor {
                 &native_loader::id(),
                 &keyed_accounts,
                 &instruction.data,
+                invoke_context,
             )
         } else {
             Err(InstructionError::UnsupportedProgramId)
         }
+    }
+
+    /// Process a cross-program instruction
+    /// This method calls the instruction's program entrypoint method
+    pub fn process_cross_program_instruction(
+        message: &Message,
+        executable_accounts: &[(Pubkey, RefCell<Account>)],
+        accounts: &[Rc<RefCell<Account>>],
+        signers: &[Pubkey],
+        process_instruction: ProcessInstructionWithContext,
+        invoke_context: &mut dyn InvokeContext,
+    ) -> Result<(), InstructionError> {
+        let instruction = &message.instructions[0];
+
+        // Verify the calling program hasn't misbehaved
+        invoke_context.verify_and_update(message, instruction, signers, accounts)?;
+
+        // Construct keyed accounts
+        let keyed_accounts =
+            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
+
+        // Invoke callee
+        invoke_context.push(instruction.program_id(&message.account_keys))?;
+        let mut result = process_instruction(
+            &keyed_accounts[0].owner()?,
+            &keyed_accounts,
+            &instruction.data,
+            invoke_context,
+        );
+        if result.is_ok() {
+            // Verify the called program has not misbehaved
+            result = invoke_context.verify_and_update(message, instruction, signers, accounts);
+        }
+        invoke_context.pop();
+
+        result
     }
 
     /// Record the initial state of the accounts so that they can be compared
@@ -252,11 +378,12 @@ impl MessageProcessor {
     ) -> Vec<PreAccount> {
         let mut pre_accounts = Vec::with_capacity(accounts.len());
         {
-            let program_id = instruction.program_id(&message.account_keys);
             let mut work = |_unique_index: usize, account_index: usize| {
+                let key = &message.account_keys[account_index];
+                let is_signer = account_index < message.header.num_required_signatures as usize;
                 let is_writable = message.is_writable(account_index);
                 let account = accounts[account_index].borrow();
-                pre_accounts.push(PreAccount::new(&account, program_id, is_writable));
+                pre_accounts.push(PreAccount::new(key, &account, is_signer, is_writable));
                 Ok(())
             };
             let _ = instruction.visit_each_account(&mut work);
@@ -266,15 +393,9 @@ impl MessageProcessor {
 
     /// Verify there are no outstanding borrows
     pub fn verify_account_references(
-        executable_accounts: &[(Pubkey, RefCell<Account>)],
-        accounts: &[Rc<RefCell<Account>>],
+        accounts: &[(Pubkey, RefCell<Account>)],
     ) -> Result<(), InstructionError> {
-        for account in accounts.iter() {
-            account
-                .try_borrow_mut()
-                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-        }
-        for (_, account) in executable_accounts.iter() {
+        for (_, account) in accounts.iter() {
             account
                 .try_borrow_mut()
                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
@@ -291,22 +412,75 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
     ) -> Result<(), InstructionError> {
-        // Verify all accounts have zero outstanding refs
-        Self::verify_account_references(executable_accounts, accounts)?;
+        // Verify all executable accounts have zero outstanding refs
+        Self::verify_account_references(executable_accounts)?;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         {
             let program_id = instruction.program_id(&message.account_keys);
             let mut work = |unique_index: usize, account_index: usize| {
-                let account = accounts[account_index].borrow();
-                pre_accounts[unique_index].verify(&program_id, rent_collector, &account)?;
-                pre_sum += u128::from(pre_accounts[unique_index].lamports);
+                // Verify account has no outstanding references and take one
+                let account = accounts[account_index]
+                    .try_borrow_mut()
+                    .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+                pre_accounts[unique_index].verify(&program_id, &rent_collector.rent, &account)?;
+                pre_sum += u128::from(pre_accounts[unique_index].lamports());
                 post_sum += u128::from(account.lamports);
                 Ok(())
             };
             instruction.visit_each_account(&mut work)?;
         }
+
+        // Verify that the total sum of all the lamports did not change
+        if pre_sum != post_sum {
+            return Err(InstructionError::UnbalancedInstruction);
+        }
+        Ok(())
+    }
+
+    /// Verify the results of a cross-program instruction
+    fn verify_and_update(
+        message: &Message,
+        instruction: &CompiledInstruction,
+        pre_accounts: &mut [PreAccount],
+        program_id: &Pubkey,
+        rent: &Rent,
+        signers: &[Pubkey],
+        accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        // Verify the per-account instruction results
+        let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
+        let mut work = |_unique_index: usize, account_index: usize| {
+            let key = &message.account_keys[account_index];
+            let account = &accounts[account_index];
+            // Find the matching PreAccount
+            for pre_account in pre_accounts.iter_mut() {
+                if *key == pre_account.key() {
+                    // Verify account has no outstanding references and take one
+                    let account = account
+                        .try_borrow_mut()
+                        .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+
+                    pre_account.verify_cross_program(
+                        message.is_writable(account_index),
+                        message.is_signer(account_index),
+                        signers,
+                        &program_id,
+                        &rent,
+                        &account,
+                    )?;
+                    pre_sum += u128::from(pre_account.lamports());
+                    post_sum += u128::from(account.lamports);
+
+                    pre_account.update(&account);
+
+                    return Ok(());
+                }
+            }
+            Err(InstructionError::MissingAccount)
+        };
+        instruction.visit_each_account(&mut work)?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
@@ -328,11 +502,22 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
     ) -> Result<(), InstructionError> {
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
-        self.process_instruction(message, instruction, executable_accounts, accounts)?;
+        let mut invoke_context = ThisInvokeContext::new(
+            instruction.program_id(&message.account_keys),
+            rent_collector.rent,
+            pre_accounts,
+        );
+        self.process_instruction(
+            message,
+            instruction,
+            &mut invoke_context,
+            executable_accounts,
+            accounts,
+        )?;
         Self::verify(
             message,
             instruction,
-            &pre_accounts,
+            &invoke_context.pre_accounts,
             executable_accounts,
             accounts,
             rent_collector,
@@ -379,6 +564,86 @@ mod tests {
     };
 
     #[test]
+    fn test_invoke_context() {
+        const MAX_DEPTH: usize = 10;
+        let mut program_ids = vec![];
+        let mut keys = vec![];
+        let mut pre_accounts = vec![];
+        let mut accounts = vec![];
+        for i in 0..MAX_DEPTH {
+            program_ids.push(Pubkey::new_rand());
+            keys.push(Pubkey::new_rand());
+            accounts.push(Rc::new(RefCell::new(Account::new(
+                i as u64,
+                1,
+                &program_ids[i],
+            ))));
+            pre_accounts.push(PreAccount::new(
+                &keys[i],
+                &accounts[i].borrow(),
+                false,
+                true,
+            ))
+        }
+        let mut invoke_context =
+            ThisInvokeContext::new(&program_ids[0], Rent::default(), pre_accounts);
+
+        // Check call depth increases and has a limit
+        let mut depth_reached = 1;
+        for i in 1..MAX_DEPTH {
+            if Err(InstructionError::CallDepth) == invoke_context.push(&program_ids[i]) {
+                break;
+            }
+            depth_reached += 1;
+        }
+        assert_ne!(depth_reached, 0);
+        assert!(depth_reached < MAX_DEPTH);
+
+        // Mock each invocation
+        for owned_index in (1..depth_reached).rev() {
+            let not_owned_index = owned_index - 1;
+            let metas = vec![
+                AccountMeta::new(keys[not_owned_index], false),
+                AccountMeta::new(keys[owned_index], false),
+            ];
+            let message =
+                Message::new(&[Instruction::new(program_ids[owned_index], &[0_u8], metas)]);
+
+            // modify account owned by the program
+            accounts[owned_index].borrow_mut().data[0] = (MAX_DEPTH + owned_index) as u8;
+            invoke_context
+                .verify_and_update(
+                    &message,
+                    &message.instructions[0],
+                    &[],
+                    &accounts[not_owned_index..owned_index + 1],
+                )
+                .unwrap();
+            assert_eq!(
+                invoke_context.pre_accounts[owned_index].data[0],
+                (MAX_DEPTH + owned_index) as u8
+            );
+
+            // modify account not owned by the program
+            let data = accounts[not_owned_index].borrow_mut().data[0];
+            accounts[not_owned_index].borrow_mut().data[0] = (MAX_DEPTH + not_owned_index) as u8;
+            assert_eq!(
+                invoke_context.verify_and_update(
+                    &message,
+                    &message.instructions[0],
+                    &[],
+                    &accounts[not_owned_index..owned_index + 1],
+                ),
+                Err(InstructionError::ExternalAccountDataModified)
+            );
+            assert_eq!(invoke_context.pre_accounts[not_owned_index].data[0], data);
+            accounts[not_owned_index].borrow_mut().data[0] = data;
+
+            invoke_context.pop();
+        }
+    }
+
+    #[test]
     fn test_is_zeroed() {
         const ZEROS_LEN: usize = 1024;
         let mut buf = [0; ZEROS_LEN];
@@ -402,51 +667,44 @@ mod tests {
 
     #[test]
     fn test_verify_account_references() {
-        let executable_accounts = vec![(Pubkey::new_rand(), RefCell::new(Account::default()))];
-        let program_accounts = vec![Rc::new(RefCell::new(Account::default()))];
+        let accounts = vec![(Pubkey::new_rand(), RefCell::new(Account::default()))];
 
-        assert!(MessageProcessor::verify_account_references(
-            &executable_accounts,
-            &program_accounts,
-        )
-        .is_ok());
+        assert!(MessageProcessor::verify_account_references(&accounts).is_ok());
 
-        let cloned = program_accounts[0].clone();
-        let _borrowed = cloned.borrow();
+        let mut _borrowed = accounts[0].1.borrow();
         assert_eq!(
-            MessageProcessor::verify_account_references(&executable_accounts, &program_accounts,),
-            Err(InstructionError::AccountBorrowOutstanding)
-        );
-
-        let cloned = executable_accounts[0].1.clone();
-        let _borrowed = cloned.borrow();
-        assert_eq!(
-            MessageProcessor::verify_account_references(&executable_accounts, &program_accounts,),
+            MessageProcessor::verify_account_references(&accounts),
             Err(InstructionError::AccountBorrowOutstanding)
         );
     }
 
-    struct Change {
-        // key: Pubkey,
+    struct Change<'a> {
         program_id: Pubkey,
-        rent_collector: RentCollector,
+        message_is_writable: bool,
+        message_is_signer: bool,
+        signers: &'a [Pubkey],
+        rent: Rent,
         pre: PreAccount,
         post: Account,
     }
-    impl Change {
+    impl<'a> Change<'a> {
         pub fn new(owner: &Pubkey, program_id: &Pubkey) -> Self {
             Self {
                 // key: Pubkey::new_rand(),
                 program_id: *program_id,
-                rent_collector: RentCollector::default(),
+                message_is_writable: false,
+                message_is_signer: false,
+                signers: &[],
+                rent: Rent::default(),
                 pre: PreAccount::new(
+                    &Pubkey::new_rand(),
                     &Account {
                         owner: *owner,
                         lamports: std::u64::MAX,
                         data: vec![],
                         ..Account::default()
                     },
-                    &Pubkey::new_rand(),
+                    false,
                     true,
                 ),
                 post: Account {
@@ -456,8 +714,24 @@ mod tests {
                 },
             }
         }
+        pub fn new_cross_program(owner: &Pubkey, program_id: &Pubkey, key: &Pubkey) -> Self {
+            let mut change = Change::new(owner, program_id);
+            change.pre.key = key.clone();
+            change
+        }
         pub fn read_only(mut self) -> Self {
             self.pre.is_writable = false;
+            self
+        }
+        pub fn writable(mut self, pre: bool, message_is_writable: bool) -> Self {
+            self.pre.is_writable = pre;
+            self.message_is_writable = message_is_writable;
+            self
+        }
+        pub fn signer(mut self, pre: bool, message_is_signer: bool, signers: &'a [Pubkey]) -> Self {
+            self.pre.is_signer = pre;
+            self.message_is_signer = message_is_signer;
+            self.signers = signers;
             self
         }
         pub fn executable(mut self, pre: bool, post: bool) -> Self {
@@ -475,8 +749,7 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.data_len = pre.len();
-            self.pre.data = Some(pre);
+            self.pre.data = pre;
             self.post.data = post;
             self
         }
@@ -486,8 +759,17 @@ mod tests {
             self
         }
         pub fn verify(&self) -> Result<(), InstructionError> {
-            self.pre
-                .verify(&self.program_id, &self.rent_collector, &self.post)
+            self.pre.verify(&self.program_id, &self.rent, &self.post)
+        }
+        pub fn verify_cross_program(&self) -> Result<(), InstructionError> {
+            self.pre.verify_cross_program(
+                self.message_is_writable,
+                self.message_is_signer,
+                self.signers,
+                &self.program_id,
+                &self.rent,
+                &self.post,
+            )
         }
     }
 
@@ -631,7 +913,7 @@ mod tests {
             "owner should not be able to subtract lamports once marked executable"
         );
         let data = vec![1; 100];
-        let min_lamports = RentCollector::default().rent.minimum_balance(data.len());
+        let min_lamports = Rent::default().minimum_balance(data.len());
         assert_eq!(
             Change::new(&owner, &owner)
                 .executable(false, true)
@@ -652,6 +934,59 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_account_changes_writable() {
+        let owner = Pubkey::new_rand();
+        let system_program_id = system_program::id();
+
+        assert_eq!(
+            Change::new(&owner, &system_program_id)
+                .writable(true, false)
+                .verify_cross_program(),
+            Ok(()),
+            "account can we changed to readonly"
+        );
+
+        assert_eq!(
+            Change::new(&owner, &system_program_id)
+                .writable(false, true)
+                .verify_cross_program(),
+            Err(InstructionError::WritableModified),
+            "account cannot be changed to writable"
+        );
+    }
+
+    #[test]
+    fn test_verify_account_changes_signer() {
+        let owner = Pubkey::new_rand();
+        let system_program_id = system_program::id();
+        let key = Pubkey::new_rand();
+
+        assert_eq!(
+            Change::new_cross_program(&owner, &system_program_id, &key)
+                .signer(false, true, &[key.clone()])
+                .verify_cross_program(),
+            Ok(()),
+            "account signed by a signer"
+        );
+
+        assert_eq!(
+            Change::new_cross_program(&owner, &system_program_id, &key)
+                .signer(false, true, &[])
+                .verify_cross_program(),
+            Err(InstructionError::SignerModified),
+            "account cannot be changed to signed if no signer"
+        );
+
+        assert_eq!(
+            Change::new_cross_program(&owner, &system_program_id, &key)
+                .signer(false, true, &[Pubkey::new_rand(), Pubkey::new_rand()])
+                .verify_cross_program(),
+            Err(InstructionError::SignerModified),
+            "account cannot be changed to signed if no signer exists"
+        );
+    }
+
+    #[test]
     fn test_verify_account_changes_data_len() {
         let alice_program_id = Pubkey::new_rand();
 
@@ -666,8 +1001,8 @@ mod tests {
             Change::new(&alice_program_id, &system_program::id())
             .data(vec![0], vec![0,0])
             .verify(),
-            Err(InstructionError::AccountDataSizeChanged),
-            "system program should not be able to change the data length of accounts it does not own"
+        Err(InstructionError::AccountDataSizeChanged),
+        "system program should not be able to change the data length of accounts it does not own"
         );
     }
 
@@ -730,9 +1065,9 @@ mod tests {
             .lamports(42, 1)
             .data(vec![42], vec![0])
             .verify(),
-            Ok(()),
-            "alice should be able to deduct lamports and give the account to bob if the data is zeroed",
-        );
+        Ok(()),
+        "alice should be able to deduct lamports and give the account to bob if the data is zeroed",
+    );
     }
 
     #[test]
@@ -1022,5 +1357,126 @@ mod tests {
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
         assert_eq!(accounts[0].borrow().data, vec![42]);
+    }
+
+    #[test]
+    fn test_process_cross_program() {
+        #[derive(Serialize, Deserialize)]
+        enum MockInstruction {
+            NoopSuccess,
+            NoopFail,
+            ModifyOwned,
+            ModifyNotOwned,
+        }
+
+        fn mock_process_instruction(
+            program_id: &Pubkey,
+            keyed_accounts: &[KeyedAccount],
+            data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
+        ) -> Result<(), InstructionError> {
+            assert_eq!(*program_id, keyed_accounts[0].owner()?);
+            assert_eq!(
+                keyed_accounts[1].owner()?,
+                *keyed_accounts[0].unsigned_key()
+            );
+            assert_ne!(
+                keyed_accounts[2].owner()?,
+                *keyed_accounts[0].unsigned_key()
+            );
+
+            if let Ok(instruction) = bincode::deserialize(data) {
+                match instruction {
+                    MockInstruction::NoopSuccess => (),
+                    MockInstruction::NoopFail => return Err(InstructionError::GenericError),
+                    MockInstruction::ModifyOwned => {
+                        keyed_accounts[1].try_account_ref_mut()?.data[0] = 1
+                    }
+                    MockInstruction::ModifyNotOwned => {
+                        keyed_accounts[2].try_account_ref_mut()?.data[0] = 1
+                    }
+                }
+            } else {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            Ok(())
+        }
+
+        let caller_program_id = Pubkey::new_rand();
+        let callee_program_id = Pubkey::new_rand();
+        let mut program_account = Account::new(1, 0, &Pubkey::new_rand());
+        program_account.executable = true;
+        let executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
+
+        let owned_key = Pubkey::new_rand();
+        let owned_account = Account::new(42, 1, &callee_program_id);
+        let owned_preaccount = PreAccount::new(&owned_key, &owned_account, false, true);
+
+        let not_owned_key = Pubkey::new_rand();
+        let not_owned_account = Account::new(84, 1, &Pubkey::new_rand());
+        let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account, false, true);
+
+        let mut accounts = vec![
+            Rc::new(RefCell::new(owned_account)),
+            Rc::new(RefCell::new(not_owned_account)),
+        ];
+        let mut invoke_context = ThisInvokeContext::new(
+            &caller_program_id,
+            Rent::default(),
+            vec![owned_preaccount, not_owned_preaccount],
+        );
+        let metas = vec![
+            AccountMeta::new(owned_key, false),
+            AccountMeta::new(not_owned_key, false),
+        ];
+
+        // not owned account modified by the caller (before the invoke)
+        accounts[0].borrow_mut().data[0] = 1;
+        let message = Message::new(&[Instruction::new(
+            callee_program_id,
+            &MockInstruction::NoopSuccess,
+            metas.clone(),
+        )]);
+        assert_eq!(
+            MessageProcessor::process_cross_program_instruction(
+                &message,
+                &executable_accounts,
+                &accounts,
+                &[],
+                mock_process_instruction,
+                &mut invoke_context,
+            ),
+            Err(InstructionError::ExternalAccountDataModified)
+        );
+        accounts[0].borrow_mut().data[0] = 0;
+
+        let cases = vec![
+            (MockInstruction::NoopSuccess, Ok(())),
+            (
+                MockInstruction::NoopFail,
+                Err(InstructionError::GenericError),
+            ),
+            (MockInstruction::ModifyOwned, Ok(())),
+            (
+                MockInstruction::ModifyNotOwned,
+                Err(InstructionError::ExternalAccountDataModified),
+            ),
+        ];
+
+        for case in cases {
+            let message =
+                Message::new(&[Instruction::new(callee_program_id, &case.0, metas.clone())]);
+            assert_eq!(
+                MessageProcessor::process_cross_program_instruction(
+                    &message,
+                    &executable_accounts,
+                    &accounts,
+                    &[],
+                    mock_process_instruction,
+                    &mut invoke_context,
+                ),
+                case.1
+            );
+        }
     }
 }

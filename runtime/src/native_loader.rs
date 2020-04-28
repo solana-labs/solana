@@ -7,7 +7,7 @@ use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
     account::KeyedAccount,
-    entrypoint_native::{LoaderEntrypoint, ProgramEntrypoint},
+    entrypoint_native::{InvokeContext, LoaderEntrypoint, ProgramEntrypoint},
     instruction::InstructionError,
     program_utils::{next_keyed_account, DecodeError},
     pubkey::Pubkey,
@@ -126,6 +126,7 @@ impl NativeLoader {
         _program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
+        invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
@@ -142,7 +143,14 @@ impl NativeLoader {
         if name.ends_with("loader_program") {
             let entrypoint =
                 Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
-            unsafe { entrypoint(program.unsigned_key(), params, instruction_data) }
+            unsafe {
+                entrypoint(
+                    program.unsigned_key(),
+                    params,
+                    instruction_data,
+                    invoke_context,
+                )
+            }
         } else {
             let entrypoint =
                 Self::get_entrypoint::<ProgramEntrypoint>(name, &self.program_symbol_cache)?;

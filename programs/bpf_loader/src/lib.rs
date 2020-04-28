@@ -16,6 +16,7 @@ use solana_sdk::{
     account::KeyedAccount,
     bpf_loader,
     entrypoint::SUCCESS,
+    entrypoint_native::InvokeContext,
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
     program_utils::DecodeError,
@@ -54,13 +55,16 @@ pub enum BPFError {
 }
 impl UserDefinedError for BPFError {}
 
-pub fn create_vm(prog: &[u8]) -> Result<(EbpfVm<BPFError>, MemoryRegion), EbpfError<BPFError>> {
+pub fn create_vm<'a>(
+    prog: &'a [u8],
+    invoke_context: &'a mut dyn InvokeContext,
+) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
     let mut vm = EbpfVm::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_max_instruction_count(100_000)?;
     vm.set_elf(&prog)?;
 
-    let heap_region = helpers::register_helpers(&mut vm)?;
+    let heap_region = helpers::register_helpers(&mut vm, invoke_context)?;
 
     Ok((vm, heap_region))
 }
@@ -155,6 +159,7 @@ pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     solana_logger::setup_with_default("solana=info");
 
@@ -177,7 +182,7 @@ pub fn process_instruction(
         )?;
         {
             let program_account = program.try_account_ref_mut()?;
-            let (mut vm, heap_region) = match create_vm(&program_account.data) {
+            let (mut vm, heap_region) = match create_vm(&program_account.data, invoke_context) {
                 Ok(info) => info,
                 Err(e) => {
                     warn!("Failed to create BPF VM: {}", e);
@@ -250,8 +255,28 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{account::Account, rent::Rent};
-    use std::{fs::File, io::Read};
+    use solana_sdk::{
+        account::Account, instruction::CompiledInstruction, message::Message, rent::Rent,
+    };
+    use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
+
+    #[derive(Debug, Default)]
+    pub struct MockInvokeContext {}
+    impl InvokeContext for MockInvokeContext {
+        fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+            Ok(())
+        }
+        fn pop(&mut self) {}
+        fn verify_and_update(
+            &mut self,
+            _message: &Message,
+            _instruction: &CompiledInstruction,
+            _signers: &[Pubkey],
+            _accounts: &[Rc<RefCell<Account>>],
+        ) -> Result<(), InstructionError> {
+            Ok(())
+        }
+    }
 
     #[test]
     #[should_panic(expected = "ExceededMaxInstructions(10)")]
@@ -286,13 +311,23 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&bpf_loader::id(), &vec![], &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &vec![],
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
 
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
 
         // Case: Write bytes to an offset
@@ -300,7 +335,12 @@ mod tests {
         keyed_accounts[0].account.borrow_mut().data = vec![0; 6];
         assert_eq!(
             Ok(()),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
         assert_eq!(
             vec![0, 0, 0, 1, 2, 3],
@@ -312,7 +352,12 @@ mod tests {
         keyed_accounts[0].account.borrow_mut().data = vec![0; 5];
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
     }
 
@@ -332,20 +377,35 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&bpf_loader::id(), &vec![], &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &vec![],
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
 
         // Case: Not signed
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
 
         // Case: Finalize
         let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         assert_eq!(
             Ok(()),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
         assert!(keyed_accounts[0].account.borrow().executable);
 
@@ -356,7 +416,12 @@ mod tests {
         let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &instruction_data)
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &instruction_data,
+                &mut MockInvokeContext::default()
+            )
         );
     }
 
@@ -380,20 +445,35 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&bpf_loader::id(), &vec![], &vec![])
+            process_instruction(
+                &bpf_loader::id(),
+                &vec![],
+                &vec![],
+                &mut MockInvokeContext::default()
+            )
         );
 
         // Case: Only a program account
         assert_eq!(
             Ok(()),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &vec![],
+                &mut MockInvokeContext::default()
+            )
         );
 
         // Case: Account not executable
         keyed_accounts[0].account.borrow_mut().executable = false;
         assert_eq!(
             Err(InstructionError::InvalidInstructionData),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &vec![],
+                &mut MockInvokeContext::default()
+            )
         );
         keyed_accounts[0].account.borrow_mut().executable = true;
 
@@ -402,7 +482,12 @@ mod tests {
         keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &vec![],
+                &mut MockInvokeContext::default()
+            )
         );
 
         // Case: With duplicate accounts
@@ -413,7 +498,12 @@ mod tests {
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &vec![])
+            process_instruction(
+                &bpf_loader::id(),
+                &keyed_accounts,
+                &vec![],
+                &mut MockInvokeContext::default()
+            )
         );
     }
 }

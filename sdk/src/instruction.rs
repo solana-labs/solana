@@ -87,7 +87,7 @@ pub enum InstructionError {
     RentEpochModified,
 
     /// The instruction expected additional account keys
-    #[error("insufficient account key count for instruction")]
+    #[error("insufficient account keys for instruction")]
     NotEnoughAccountKeys,
 
     /// A non-system program changed the size of the account data
@@ -138,6 +138,26 @@ pub enum InstructionError {
     /// Unsupported program id
     #[error("Unsupported program id")]
     UnsupportedProgramId,
+
+    /// Writable bit on account info changed, but shouldn't have
+    #[error("Writable bit on account info changed, but shouldn't have")]
+    WritableModified,
+
+    /// Signer bit on account info changed, but shouldn't have
+    #[error("Signer bit on account info changed, but shouldn't have")]
+    SignerModified,
+
+    /// Cross-program invocation call depth too deep
+    #[error("Cross-program invocation call depth too deep")]
+    CallDepth,
+
+    /// An account required by the instruction is missing
+    #[error("An account required by the instruction is missing")]
+    MissingAccount,
+
+    /// Cross-program invocation reentrancy not allowed for this instruction
+    #[error("Cross-program invocation reentrancy not allowed for this instruction")]
+    ReentrancyNotAllowed,
 }
 
 impl InstructionError {

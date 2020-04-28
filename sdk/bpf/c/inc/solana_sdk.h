@@ -253,7 +253,7 @@ if (!(expr)) {          \
  */
 typedef struct {
   SolAccountInfo* ka; /** Pointer to an array of SolAccountInfo, must already
-                           point to an array of SolAccountInfos */
+                          point to an array of SolAccountInfos */
   uint64_t ka_num; /** Number of SolAccountInfo entries in `ka` */
   const uint8_t *data; /** pointer to the instruction data */
   uint64_t data_len; /** Length in bytes of the instruction data */
@@ -363,6 +363,99 @@ SOL_FN_PREFIX bool sol_deserialize(
 
   return true;
 }
+
+/**
+ * Account Meta
+ */
+typedef struct {
+  SolPubkey *pubkey; /** An account's public key */
+  bool is_writable; /** True if the `pubkey` can be loaded as a read-write account */
+  bool is_signer; /** True if an Instruction requires a Transaction signature matching `pubkey` */
+} SolAccountMeta;
+
+/**
+ * Instruction
+ */
+typedef struct {
+  SolPubkey *program_id; /** Pubkey of the instruction processor that executes this instruction */
+  SolAccountMeta *accounts; /** Metadata for what accounts should be passed to the instruction processor */
+  uint64_t account_len; /** Number of SolAccountMetas */
+  uint8_t *data; /** Opaque data passed to the instruction processor */
+  uint64_t data_len; /** Length of the data in bytes */
+} SolInstruction;
+
+/**
+ * Seed used to create a program address
+ */
+typedef struct {
+  const char *addr; /** Seed string */
+  uint64_t len; /** Length of the seed string */
+} SolSignerSeed;
+
+/**
+ * Seeds used by a signer to create a program address
+ */
+typedef struct {
+  const SolSignerSeed *addr; /** An arry of a signer's seeds */
+  uint64_t len; /** Number of seeds */
+} SolSignerSeeds;
+
+/**
+ * Cross-program invocation
+ *  * @{
+ */
+
+/*
+ * @param instruction Instruction to process
+ * @param account_infos Accounts used by instruction
+ * @param account_infos_len Length of account_infos array
+ * @param seeds Seed strings used to sign program accounts
+ * @param seeds_len Length of the seeds array
+ */
+SOL_FN_PREFIX uint64_t sol_invoke_signed(
+    const SolInstruction *instruction,
+    const SolAccountInfo *account_infos,
+    int account_infos_len,
+    const SolSignerSeeds *signers_seeds,
+    int signers_seeds_len
+) {
+  uint64_t sol_invoke_signed_c(
+    const SolInstruction *instruction,
+    const SolAccountInfo *account_infos,
+    int account_infos_len,
+    const SolSignerSeeds *signers_seeds,
+    int signers_seeds_len
+  );
+
+  return sol_invoke_signed_c(
+    instruction,
+    account_infos,
+    account_infos_len,
+    signers_seeds,
+    signers_seeds_len
+  );
+}
+/*
+* @param instruction Instruction to process
+* @param account_infos Accounts used by instruction
+* @param account_infos_len Length of account_infos array
+*/
+SOL_FN_PREFIX uint64_t sol_invoke(
+    const SolInstruction *instruction,
+    const SolAccountInfo *account_infos,
+    int account_infos_len
+) {
+  const SolSignerSeeds signers_seeds[] = {{}};
+  return sol_invoke_signed(
+    instruction,
+    account_infos,
+    account_infos_len,
+    signers_seeds,
+    0
+  );
+}
+
+/**@}*/
 
 /**
  * Debugging utilities

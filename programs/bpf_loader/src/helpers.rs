@@ -6,10 +6,25 @@ use solana_rbpf::{
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
-use solana_sdk::instruction::InstructionError;
+use solana_runtime::message_processor::MessageProcessor;
+use solana_sdk::{
+    account::Account,
+    account_info::AccountInfo,
+    bpf_loader,
+    entrypoint::SUCCESS,
+    entrypoint_native::InvokeContext,
+    hash::Hash,
+    instruction::{AccountMeta, Instruction, InstructionError},
+    message::Message,
+    program_error::ProgramError,
+    pubkey::{Pubkey, PubkeyError},
+};
 use std::{
     alloc::Layout,
+    cell::{RefCell, RefMut},
+    convert::TryFrom,
     mem::{align_of, size_of},
+    rc::Rc,
     slice::from_raw_parts_mut,
     str::{from_utf8, Utf8Error},
 };
@@ -24,6 +39,14 @@ pub enum HelperError {
     Abort,
     #[error("BPF program Panicked at {0}, {1}:{2}")]
     Panic(String, u64, u64),
+    #[error("cannot borrow invoke context")]
+    InvokeContextBorrowFailed,
+    #[error("malformed signer seed: {0}: {1:?}")]
+    MalformedSignerSeed(Utf8Error, Vec<u8>),
+    #[error("Could not create program address with signer seeds: {0}")]
+    BadSeeds(PubkeyError),
+    #[error("Program id is not supported by cross-program invocations")]
+    ProgramNotSupported,
     #[error("{0}")]
     InstructionError(InstructionError),
 }
@@ -47,6 +70,7 @@ const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
 pub fn register_helpers<'a>(
     vm: &mut EbpfVm<'a, BPFError>,
+    invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     vm.register_helper_ex("abort", helper_abort)?;
     vm.register_helper_ex("sol_panic", helper_sol_panic)?;
@@ -55,6 +79,20 @@ pub fn register_helpers<'a>(
     vm.register_helper_ex("sol_log_", helper_sol_log)?;
     vm.register_helper_ex("sol_log_64", helper_sol_log_u64)?;
     vm.register_helper_ex("sol_log_64_", helper_sol_log_u64)?;
+
+    let invoke_context = Rc::new(RefCell::new(invoke_context));
+    vm.register_helper_with_context_ex(
+        "sol_invoke_signed_rust",
+        Box::new(HelperProcessInstructionRust {
+            invoke_context: invoke_context.clone(),
+        }),
+    )?;
+    vm.register_helper_with_context_ex(
+        "sol_invoke_signed_c",
+        Box::new(HelperProcessSolInstructionC {
+            invoke_context: invoke_context.clone(),
+        }),
+    )?;
 
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
@@ -255,13 +293,460 @@ impl HelperObject<BPFError> for HelperSolAllocFree {
     }
 }
 
+// Cross-program invocation helpers
+
+pub type TranslatedAccounts<'a> = (Vec<Rc<RefCell<Account>>>, Vec<(&'a mut u64, &'a mut [u8])>);
+
+/// Implemented by language specific data structure translators
+trait HelperProcessInstruction<'a> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>>;
+    fn translate_instruction(
+        &self,
+        addr: u64,
+        ro_regions: &[MemoryRegion],
+    ) -> Result<Instruction, EbpfError<BPFError>>;
+    fn translate_accounts(
+        &self,
+        message: &Message,
+        account_infos_addr: u64,
+        account_infos_len: usize,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<TranslatedAccounts<'a>, EbpfError<BPFError>>;
+    fn translate_signers(
+        &self,
+        program_id: &Pubkey,
+        signers_seeds_addr: u64,
+        signers_seeds_len: usize,
+        ro_regions: &[MemoryRegion],
+    ) -> Result<Vec<Pubkey>, EbpfError<BPFError>>;
+}
+
+/// Cross-program invocation called from Rust
+pub struct HelperProcessInstructionRust<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+}
+impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
+        self.invoke_context
+            .try_borrow_mut()
+            .map_err(|_| HelperError::InvokeContextBorrowFailed.into())
+    }
+    fn translate_instruction(
+        &self,
+        addr: u64,
+        ro_regions: &[MemoryRegion],
+    ) -> Result<Instruction, EbpfError<BPFError>> {
+        let ix = translate_type!(Instruction, addr, ro_regions)?;
+        let accounts = translate_slice!(
+            AccountMeta,
+            ix.accounts.as_ptr(),
+            ix.accounts.len(),
+            ro_regions
+        )?
+        .to_vec();
+        let data = translate_slice!(u8, ix.data.as_ptr(), ix.data.len(), ro_regions)?.to_vec();
+        Ok(Instruction {
+            program_id: ix.program_id,
+            accounts,
+            data,
+        })
+    }
+
+    fn translate_accounts(
+        &self,
+        message: &Message,
+        account_infos_addr: u64,
+        account_infos_len: usize,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<TranslatedAccounts<'a>, EbpfError<BPFError>> {
+        let account_infos = if account_infos_len > 0 {
+            translate_slice!(
+                AccountInfo,
+                account_infos_addr,
+                account_infos_len,
+                ro_regions
+            )?
+        } else {
+            &[]
+        };
+
+        let mut accounts = Vec::with_capacity(message.account_keys.len());
+        let mut refs = Vec::with_capacity(message.account_keys.len());
+        'root: for account_key in message.account_keys.iter() {
+            for account_info in account_infos.iter() {
+                let key = translate_type!(Pubkey, account_info.key as *const _, ro_regions)?;
+                if account_key == key {
+                    let lamports_ref = {
+                        // Double translate lamports out of RefCell
+                        let ptr = translate_type!(u64, account_info.lamports.as_ptr(), ro_regions)?;
+                        translate_type_mut!(u64, *(ptr as *const u64), rw_regions)?
+                    };
+                    let data = {
+                        // Double translate data out of RefCell
+                        let data = *translate_type!(&[u8], account_info.data.as_ptr(), ro_regions)?;
+                        translate_slice_mut!(u8, data.as_ptr(), data.len(), rw_regions)?
+                    };
+                    let owner =
+                        translate_type!(Pubkey, account_info.owner as *const _, ro_regions)?;
+
+                    accounts.push(Rc::new(RefCell::new(Account {
+                        lamports: *lamports_ref,
+                        data: data.to_vec(),
+                        executable: account_info.executable,
+                        owner: *owner,
+                        rent_epoch: account_info.rent_epoch,
+                        hash: Hash::default(),
+                    })));
+                    refs.push((lamports_ref, data));
+                    continue 'root;
+                }
+            }
+            return Err(HelperError::InstructionError(InstructionError::MissingAccount).into());
+        }
+
+        Ok((accounts, refs))
+    }
+
+    fn translate_signers(
+        &self,
+        program_id: &Pubkey,
+        signers_seeds_addr: u64,
+        signers_seeds_len: usize,
+        ro_regions: &[MemoryRegion],
+    ) -> Result<Vec<Pubkey>, EbpfError<BPFError>> {
+        let mut signers = Vec::new();
+        if signers_seeds_len > 0 {
+            let signers_seeds =
+                translate_slice!(&[&str], signers_seeds_addr, signers_seeds_len, ro_regions)?;
+            for signer_seeds in signers_seeds.iter() {
+                let untranslated_seeds =
+                    translate_slice!(&str, signer_seeds.as_ptr(), signer_seeds.len(), ro_regions)?;
+                let seeds = untranslated_seeds
+                    .iter()
+                    .map(|untranslated_seed| {
+                        let seed_bytes = translate_slice!(
+                            u8,
+                            untranslated_seed.as_ptr(),
+                            untranslated_seed.len(),
+                            ro_regions
+                        )?;
+                        from_utf8(seed_bytes).map_err(|err| {
+                            HelperError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
+                        })
+                    })
+                    .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
+                let signer = Pubkey::create_program_address(&seeds, program_id)
+                    .map_err(HelperError::BadSeeds)?;
+                signers.push(signer);
+            }
+            Ok(signers)
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+impl<'a> HelperObject<BPFError> for HelperProcessInstructionRust<'a> {
+    fn call(
+        &mut self,
+        instruction_addr: u64,
+        account_infos_addr: u64,
+        account_infos_len: u64,
+        signers_seeds_addr: u64,
+        signers_seeds_len: u64,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        call(
+            self,
+            instruction_addr,
+            account_infos_addr,
+            account_infos_len,
+            signers_seeds_addr,
+            signers_seeds_len,
+            ro_regions,
+            rw_regions,
+        )
+    }
+}
+
+/// Rust representation of C's SolInstruction
+#[derive(Debug)]
+struct SolInstruction {
+    program_id_addr: u64,
+    accounts_addr: u64,
+    accounts_len: usize,
+    data_addr: u64,
+    data_len: usize,
+}
+
+/// Rust representation of C's SolAccountMeta
+#[derive(Debug)]
+struct SolAccountMeta {
+    pubkey_addr: u64,
+    is_writable: bool,
+    is_signer: bool,
+}
+
+/// Rust representation of C's SolAccountInfo
+#[derive(Debug)]
+struct SolAccountInfo {
+    key_addr: u64,
+    lamports_addr: u64,
+    data_len: usize,
+    data_addr: u64,
+    owner_addr: u64,
+    rent_epoch: u64,
+    is_signer: bool,
+    is_writable: bool,
+    executable: bool,
+}
+
+/// Rust representation of C's SolSignerSeed
+#[derive(Debug)]
+struct SolSignerSeedC {
+    addr: u64,
+    len: u64,
+}
+
+/// Rust representation of C's SolSignerSeeds
+#[derive(Debug)]
+struct SolSignerSeedsC {
+    addr: u64,
+    len: u64,
+}
+
+/// Cross-program invocation called from C
+pub struct HelperProcessSolInstructionC<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+}
+impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstructionC<'a> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
+        self.invoke_context
+            .try_borrow_mut()
+            .map_err(|_| HelperError::InvokeContextBorrowFailed.into())
+    }
+
+    fn translate_instruction(
+        &self,
+        addr: u64,
+        ro_regions: &[MemoryRegion],
+    ) -> Result<Instruction, EbpfError<BPFError>> {
+        let ix_c = translate_type!(SolInstruction, addr, ro_regions)?;
+        let program_id = translate_type!(Pubkey, ix_c.program_id_addr, ro_regions)?;
+        let meta_cs = translate_slice!(
+            SolAccountMeta,
+            ix_c.accounts_addr,
+            ix_c.accounts_len,
+            ro_regions
+        )?;
+        let data = translate_slice!(u8, ix_c.data_addr, ix_c.data_len, ro_regions)?.to_vec();
+        let accounts = meta_cs
+            .iter()
+            .map(|meta_c| {
+                let pubkey = translate_type!(Pubkey, meta_c.pubkey_addr, ro_regions)?;
+                Ok(AccountMeta {
+                    pubkey: *pubkey,
+                    is_signer: meta_c.is_signer,
+                    is_writable: meta_c.is_writable,
+                })
+            })
+            .collect::<Result<Vec<AccountMeta>, EbpfError<BPFError>>>()?;
+
+        Ok(Instruction {
+            program_id: *program_id,
+            accounts,
+            data,
+        })
+    }
+
+    fn translate_accounts(
+        &self,
+        message: &Message,
+        account_infos_addr: u64,
+        account_infos_len: usize,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<TranslatedAccounts<'a>, EbpfError<BPFError>> {
+        let account_infos = translate_slice!(
+            SolAccountInfo,
+            account_infos_addr,
+            account_infos_len,
+            ro_regions
+        )?;
+        let mut accounts = Vec::with_capacity(message.account_keys.len());
+        let mut refs = Vec::with_capacity(message.account_keys.len());
+        'root: for account_key in message.account_keys.iter() {
+            for account_info in account_infos.iter() {
+                let key = translate_type!(Pubkey, account_info.key_addr, ro_regions)?;
+                if account_key == key {
+                    let lamports_ref =
+                        translate_type_mut!(u64, account_info.lamports_addr, rw_regions)?;
+                    let data = translate_slice_mut!(
+                        u8,
+                        account_info.data_addr,
+                        account_info.data_len,
+                        rw_regions
+                    )?;
+                    let owner = translate_type!(Pubkey, account_info.owner_addr, ro_regions)?;
+
+                    accounts.push(Rc::new(RefCell::new(Account {
+                        lamports: *lamports_ref,
+                        data: data.to_vec(),
+                        executable: account_info.executable,
+                        owner: *owner,
+                        rent_epoch: account_info.rent_epoch,
+                        hash: Hash::default(),
+                    })));
+                    refs.push((lamports_ref, data));
+                    continue 'root;
+                }
+            }
+            return Err(HelperError::InstructionError(InstructionError::MissingAccount).into());
+        }
+
+        Ok((accounts, refs))
+    }
+
+    fn translate_signers(
+        &self,
+        program_id: &Pubkey,
+        signers_seeds_addr: u64,
+        signers_seeds_len: usize,
+        ro_regions: &[MemoryRegion],
+    ) -> Result<Vec<Pubkey>, EbpfError<BPFError>> {
+        if signers_seeds_len > 0 {
+            let signers_seeds = translate_slice!(
+                SolSignerSeedC,
+                signers_seeds_addr,
+                signers_seeds_len,
+                ro_regions
+            )?;
+            Ok(signers_seeds
+                .iter()
+                .map(|signer_seeds| {
+                    let seeds = translate_slice!(
+                        SolSignerSeedC,
+                        signer_seeds.addr,
+                        signer_seeds.len,
+                        ro_regions
+                    )?;
+                    let seed_strs = seeds
+                        .iter()
+                        .map(|seed| {
+                            let seed_bytes = translate_slice!(u8, seed.addr, seed.len, ro_regions)?;
+                            std::str::from_utf8(seed_bytes).map_err(|err| {
+                                HelperError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
+                            })
+                        })
+                        .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
+                    Pubkey::create_program_address(&seed_strs, program_id)
+                        .map_err(|err| HelperError::BadSeeds(err).into())
+                })
+                .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?)
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+impl<'a> HelperObject<BPFError> for HelperProcessSolInstructionC<'a> {
+    fn call(
+        &mut self,
+        instruction_addr: u64,
+        account_infos_addr: u64,
+        account_infos_len: u64,
+        signers_seeds_addr: u64,
+        signers_seeds_len: u64,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        call(
+            self,
+            instruction_addr,
+            account_infos_addr,
+            account_infos_len,
+            signers_seeds_addr,
+            signers_seeds_len,
+            ro_regions,
+            rw_regions,
+        )
+    }
+}
+
+/// Call process instruction, common to both Rust and C
+fn call<'a>(
+    helper: &mut dyn HelperProcessInstruction<'a>,
+    instruction_addr: u64,
+    account_infos_addr: u64,
+    account_infos_len: u64,
+    signers_seeds_addr: u64,
+    signers_seeds_len: u64,
+    ro_regions: &[MemoryRegion],
+    rw_regions: &[MemoryRegion],
+) -> Result<u64, EbpfError<BPFError>> {
+    let mut invoke_context = helper.get_context_mut()?;
+
+    // Translate data passed from the VM
+
+    let instruction = helper.translate_instruction(instruction_addr, ro_regions)?;
+    let message = Message::new(&[instruction]);
+    let program_id_index = message.instructions[0].program_id_index as usize;
+    let program_id = message.account_keys[program_id_index];
+    let (accounts, refs) = helper.translate_accounts(
+        &message,
+        account_infos_addr,
+        account_infos_len as usize,
+        ro_regions,
+        rw_regions,
+    )?;
+    let signers = helper.translate_signers(
+        &program_id,
+        signers_seeds_addr,
+        signers_seeds_len as usize,
+        ro_regions,
+    )?;
+
+    // Process instruction
+
+    let program_account = (*accounts[program_id_index]).clone();
+    if program_account.borrow().owner != bpf_loader::id() {
+        // Only BPF programs supported for now
+        return Err(HelperError::ProgramNotSupported.into());
+    }
+    let executable_accounts = vec![(program_id, program_account)];
+
+    #[allow(clippy::deref_addrof)]
+    match MessageProcessor::process_cross_program_instruction(
+        &message,
+        &executable_accounts,
+        &accounts,
+        &signers,
+        crate::process_instruction,
+        *(&mut *invoke_context),
+    ) {
+        Ok(()) => (),
+        Err(err) => match ProgramError::try_from(err) {
+            Ok(err) => return Ok(err.into()),
+            Err(err) => return Err(HelperError::InstructionError(err).into()),
+        },
+    }
+
+    // Copy results back into caller's AccountInfos
+    for (i, (account, (lamport_ref, data))) in accounts.iter().zip(refs).enumerate() {
+        let account = account.borrow();
+        if message.is_writable(i) && !account.executable {
+            *lamport_ref = account.lamports;
+            data.clone_from_slice(&account.data);
+        }
+    }
+
+    Ok(SUCCESS)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{
-        instruction::{AccountMeta, Instruction},
-        pubkey::Pubkey,
-    };
 
     #[test]
     fn test_translate() {

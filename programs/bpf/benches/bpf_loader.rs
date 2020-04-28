@@ -4,6 +4,14 @@ extern crate test;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::EbpfVm;
+use solana_sdk::{
+    account::Account,
+    entrypoint_native::InvokeContext,
+    instruction::{CompiledInstruction, InstructionError},
+    message::Message,
+    pubkey::Pubkey,
+};
+use std::{cell::RefCell, rc::Rc};
 use std::{env, fs::File, io::Read, mem, path::PathBuf};
 use test::Bencher;
 
@@ -69,9 +77,10 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .write_u64::<LittleEndian>(ARMSTRONG_LIMIT)
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
+    let mut invoke_context = MockInvokeContext::default();
 
     let elf = load_elf().unwrap();
-    let (mut vm, _) = solana_bpf_loader_program::create_vm(&elf).unwrap();
+    let (mut vm, _) = solana_bpf_loader_program::create_vm(&elf, &mut invoke_context).unwrap();
 
     println!("Interpreted:");
     assert_eq!(
@@ -121,4 +130,22 @@ fn bench_program_alu(bencher: &mut Bencher) {
     // let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
     // println!("  {:?} MIPS", mips);
     // println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
+}
+
+#[derive(Debug, Default)]
+pub struct MockInvokeContext {}
+impl InvokeContext for MockInvokeContext {
+    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn pop(&mut self) {}
+    fn verify_and_update(
+        &mut self,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _signers: &[Pubkey],
+        _accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        Ok(())
+    }
 }

@@ -13,6 +13,7 @@ mod bpf {
         client::SyncClient,
         clock::DEFAULT_SLOTS_PER_EPOCH,
         instruction::{AccountMeta, Instruction, InstructionError},
+        message::Message,
         pubkey::Pubkey,
         signature::Keypair,
         signature::Signer,
@@ -301,6 +302,73 @@ mod bpf {
                 result.unwrap_err().unwrap(),
                 TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
             );
+        }
+    }
+
+    #[test]
+    fn test_program_bpf_invoke() {
+        solana_logger::setup();
+
+        let mut programs = Vec::new();
+        #[cfg(feature = "bpf_c")]
+        {
+            programs.extend_from_slice(&[("invoke", "invoked")]);
+        }
+        #[cfg(feature = "bpf_rust")]
+        {
+            programs.extend_from_slice(&[("solana_bpf_rust_invoke", "solana_bpf_rust_invoked")]);
+        }
+
+        for program in programs.iter() {
+            println!("Test program: {:?}", program);
+
+            let GenesisConfigInfo {
+                mut genesis_config,
+                mint_keypair,
+                ..
+            } = create_genesis_config(50);
+            genesis_config
+                .native_instruction_processors
+                .push(solana_bpf_loader_program!());
+            let bank = Arc::new(Bank::new(&genesis_config));
+            let bank_client = BankClient::new_shared(&bank);
+
+            let program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
+            let invoked_program_id = load_bpf_program(&bank_client, &mint_keypair, program.1);
+
+            let account = Account::new(42, 100, &program_id);
+            let argument_keypair = Keypair::new();
+            bank.store_account(&argument_keypair.pubkey(), &account);
+
+            let account = Account::new(10, 10, &invoked_program_id);
+            let invoked_argument_keypair = Keypair::new();
+            bank.store_account(&invoked_argument_keypair.pubkey(), &account);
+
+            let derived_key =
+                Pubkey::create_program_address(&["Lil'", "Bits"], &invoked_program_id).unwrap();
+            let derived_key2 =
+                Pubkey::create_program_address(&["Gar Ma Nar Nar"], &invoked_program_id).unwrap();
+
+            let account_metas = vec![
+                AccountMeta::new(mint_keypair.pubkey(), true),
+                AccountMeta::new(argument_keypair.pubkey(), true),
+                AccountMeta::new_readonly(invoked_program_id, false),
+                AccountMeta::new(invoked_argument_keypair.pubkey(), true),
+                AccountMeta::new_readonly(invoked_program_id, false),
+                AccountMeta::new(argument_keypair.pubkey(), true),
+                AccountMeta::new(derived_key, false),
+                AccountMeta::new_readonly(derived_key2, false),
+            ];
+
+            let instruction = Instruction::new(program_id, &1u8, account_metas);
+            let message = Message::new(&[instruction]);
+
+            assert!(bank_client
+                .send_message(
+                    &[&mint_keypair, &argument_keypair, &invoked_argument_keypair],
+                    message,
+                )
+                .is_ok());
         }
     }
 }

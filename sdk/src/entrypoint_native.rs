@@ -1,6 +1,10 @@
 //! @brief Solana Native program entry point
 
-use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
+use crate::{
+    account::Account, account::KeyedAccount, instruction::CompiledInstruction,
+    instruction::InstructionError, message::Message, pubkey::Pubkey,
+};
+use std::{cell::RefCell, rc::Rc};
 
 // Prototype of a native program entry point
 ///
@@ -23,6 +27,7 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError>;
 
 /// Convenience macro to declare a native program
@@ -134,8 +139,22 @@ macro_rules! declare_loader(
             program_id: &$crate::pubkey::Pubkey,
             keyed_accounts: &[$crate::account::KeyedAccount],
             instruction_data: &[u8],
+            invoke_context: &mut dyn $crate::entrypoint_native::InvokeContext,
         ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, instruction_data)
+            $entrypoint(program_id, keyed_accounts, instruction_data, invoke_context)
         }
     )
 );
+
+/// Cross-program invocation context passed to loaders
+pub trait InvokeContext {
+    fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError>;
+    fn pop(&mut self);
+    fn verify_and_update(
+        &mut self,
+        message: &Message,
+        instruction: &CompiledInstruction,
+        signers: &[Pubkey],
+        accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError>;
+}
