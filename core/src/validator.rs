@@ -388,7 +388,7 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
-        let vote_tracker = Arc::new({ VoteTracker::new(bank_forks.read().unwrap().root_bank()) });
+        let vote_tracker = Arc::new(VoteTracker::new(bank_forks.read().unwrap().root_bank()));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let tvu = Tvu::new(
