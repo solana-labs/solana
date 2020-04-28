@@ -10,9 +10,11 @@ fi
 
 download() {
   declare url=$1
-  declare filename=$2
-  declare progress=$3
-  declare cache_filename=~/.cache/${filename//:\//_}
+  declare version=$2
+  declare filename=$3
+  declare progress=$4
+  declare cache_directory=~/.cache/"$version"
+  declare cache_filename=$cache_directory/${filename//:\//_}
 
   if [[ -r $cache_filename ]]; then
     ln -s "$cache_filename" "$filename"
@@ -26,7 +28,7 @@ download() {
     "--read-timeout=30"
   )
   if wget "${args[@]}"; then
-    mkdir -p ~/.cache
+    mkdir -p "$cache_directory"
     cp "$filename" "$cache_filename"
     return 0
   fi
@@ -61,7 +63,7 @@ if [[ ! -r criterion-$machine-$version.md ]]; then
     cd criterion
 
     base=https://github.com/Snaipe/Criterion/releases
-    download $base/download/$version/$filename $filename mega
+    download $base/download/$version/$filename $version $filename mega
     tar --strip-components 1 -jxf $filename
     rm -rf $filename
 
@@ -87,7 +89,7 @@ if [[ ! -f llvm-native-$machine-$version.md ]]; then
     cd llvm-native
 
     base=https://github.com/solana-labs/llvm-builder/releases
-    download $base/download/$version/$filename $filename giga
+    download $base/download/$version/$filename $version $filename giga
     tar -jxf $filename
     rm -rf $filename
 
@@ -114,7 +116,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
     pushd rust-bpf
 
     base=https://github.com/solana-labs/rust-bpf-builder/releases
-    download $base/download/$version/$filename $filename giga
+    download $base/download/$version/$filename $version $filename giga
     tar -jxf $filename
     rm -rf $filename
     popd
