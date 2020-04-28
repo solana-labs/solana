@@ -368,8 +368,6 @@ pub fn process_instruction(
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
 ) -> Result<(), InstructionError> {
-    solana_logger::setup();
-
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
