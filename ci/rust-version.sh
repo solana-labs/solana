@@ -1,16 +1,18 @@
 #
 # This file maintains the rust versions for use by CI.
 #
-# Build with stable rust, updating the stable toolchain if necessary:
-#   $ source ci/rust-version.sh stable
-#   $ cargo +"$rust_stable" build
-#
-# Build with nightly rust, updating the nightly toolchain if necessary:
-#   $ source ci/rust-version.sh nightly
-#   $ cargo +"$rust_nightly" build
-#
 # Obtain the environment variables without any automatic toolchain updating:
 #   $ source ci/rust-version.sh
+#
+# Obtain the environment variables updating both stable and nightly, only stable, or
+# only nightly:
+#   $ source ci/rust-version.sh all
+#   $ source ci/rust-version.sh stable
+#   $ source ci/rust-version.sh nightly
+
+# Then to build with either stable or nightly:
+#   $ cargo +"$rust_stable" build
+#   $ cargo +"$rust_nightly" build
 #
 
 if [[ -n $RUST_STABLE_VERSION ]]; then
@@ -49,6 +51,10 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
      rustup_install "$rust_stable"
      ;;
   nightly)
+     rustup_install "$rust_nightly"
+    ;;
+  all)
+     rustup_install "$rust_stable"
      rustup_install "$rust_nightly"
     ;;
   *)
