@@ -137,7 +137,7 @@ mod tests {
             // and to allow snapshotting of bank and the purging logic on status_cache to
             // kick in
             if slot % set_root_interval == 0 || slot == last_slot - 1 {
-                bank_forks.set_root(bank.slot(), &sender);
+                bank_forks.set_root(bank.slot(), &sender, None);
             }
         }
         // Generate a snapshot package for last bank
@@ -377,9 +377,11 @@ mod tests {
                     snapshot_test_config.bank_forks.insert(new_bank);
                     current_bank = snapshot_test_config.bank_forks[new_slot].clone();
                 }
-                snapshot_test_config
-                    .bank_forks
-                    .set_root(current_bank.slot(), &snapshot_sender);
+                snapshot_test_config.bank_forks.set_root(
+                    current_bank.slot(),
+                    &snapshot_sender,
+                    None,
+                );
             }
 
             let num_old_slots = num_set_roots * *add_root_interval - MAX_CACHE_ENTRIES + 1;
