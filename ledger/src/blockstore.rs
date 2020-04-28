@@ -46,6 +46,7 @@ use std::{
     cmp,
     collections::HashMap,
     fs,
+    io::{Error as IOError, ErrorKind},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
@@ -2663,7 +2664,6 @@ pub fn create_new_ledger(
         .output()
         .unwrap();
     if !output.status.success() {
-        use std::io::{Error as IOError, ErrorKind};
         use std::str::from_utf8;
         error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
         error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
@@ -2687,26 +2687,41 @@ pub fn create_new_ledger(
             &temp_dir.into_path(),
             max_genesis_archive_unpacked_size,
         );
-        if unpack_check.is_err() {
+        if let Err(unpack_err) = unpack_check {
             // stash problematic original archived genesis related files to
             // examine them later and to prevent validator and ledger-tool from
             // naively consuming them
+            let mut error_messages = String::new();
+
             fs::rename(
                 &ledger_path.join("genesis.tar.bz2"),
                 ledger_path.join("genesis.tar.bz2.failed"),
             )
-            .unwrap_or_else(|e| eprintln!("failed to stash problematic genesis.tar.bz2: {}", e));
+            .unwrap_or_else(|e| {
+                error_messages += &format!("/failed to stash problematic genesis.tar.bz2: {}", e)
+            });
             fs::rename(
                 &ledger_path.join("genesis.bin"),
                 ledger_path.join("genesis.bin.failed"),
             )
-            .unwrap_or_else(|e| eprintln!("failed to stash problematic genesis.bin: {}", e));
+            .unwrap_or_else(|e| {
+                error_messages += &format!("/failed to stash problematic genesis.bin: {}", e)
+            });
             fs::rename(
                 &ledger_path.join("rocksdb"),
                 ledger_path.join("rocksdb.failed"),
             )
-            .unwrap_or_else(|e| eprintln!("failed to stash problematic rocks/: {}", e));
-            unpack_check?
+            .unwrap_or_else(|e| {
+                error_messages += &format!("/failed to stash problematic rocks/: {}", e)
+            });
+
+            return Err(BlockstoreError::IO(IOError::new(
+                ErrorKind::Other,
+                format!(
+                    "Error checking to unpack genesis archive: {}{}",
+                    unpack_err, error_messages
+                ),
+            )));
         }
     }
 
