@@ -12,16 +12,16 @@ edition = "2018"
 backtrace = { version = "0.3.33", features = ["serialize-serde"] }
 bytes = { version = "0.4.12", features = ["either"] }
 cc = { version = "1.0.45", features = ["jobserver", "num_cpus", "parallel"]}
-curve25519-dalek = { version = "1.1.3" }
+curve25519-dalek = { version = "2" }
 either= { version = "1.5.2" }
 failure = { version = "0.1.5" }
 lazy_static = { version = "1.4.0", features = ["spin", "spin_no_std"] }
 libc = { version = "0.2.62", features = ["extra_traits"] }
-rand_chacha = { version = "0.1.1" }
+rand_chacha = { version = "0.2.2" }
 regex-syntax = { version = "0.6.12" }
 reqwest = { version = "0.10.1", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = { version = "1.0.100", features = ["rc"] }
-ed25519-dalek = { version = "=1.0.0-pre.1", features = ["serde"] }
+ed25519-dalek = { version = "=1.0.0-pre.3", features = ["serde"] }
 syn_0_15 = { package = "syn", version = "0.15.42", features = ["extra-traits", "fold", "full"] }
 syn_1_0 = { package = "syn", version = "1.0.3", features = ["extra-traits", "fold", "full"] }
 tokio = { version = "0.1.22",features=["bytes", "codec", "default", "fs", "io", "mio", "num_cpus", "reactor", "rt-full", "sync", "tcp", "timer", "tokio-codec", "tokio-current-thread", "tokio-executor", "tokio-io", "tokio-io", "tokio-reactor", "tokio-tcp", "tokio-tcp", "tokio-threadpool", "tokio-timer", "tokio-udp", "tokio-uds", "udp", "uds"] }

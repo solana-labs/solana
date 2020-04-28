@@ -1,6 +1,5 @@
 use rand::distributions::{Distribution, WeightedIndex};
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
+use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use solana_sdk::pubkey::Pubkey;
 use std::ops::Index;
 use std::sync::Arc;
