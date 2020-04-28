@@ -4,6 +4,8 @@ extern crate self as solana_sdk;
 pub mod account;
 pub mod account_utils;
 pub mod bpf_loader;
+pub mod burn_instruction;
+pub mod burn_program;
 pub mod clock;
 pub mod commitment_config;
 pub mod entrypoint_native;
