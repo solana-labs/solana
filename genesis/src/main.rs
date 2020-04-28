@@ -538,6 +538,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
 
+    solana_logger::setup();
     create_new_ledger(
         &ledger_path,
         &genesis_config,

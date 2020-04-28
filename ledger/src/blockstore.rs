@@ -2676,26 +2676,36 @@ pub fn create_new_ledger(
             ),
         )));
     }
+
+    // ensure the genesis archive can be unpacked and it is under
+    // max_genesis_archive_unpacked_size, immedately after creating it above.
     {
         let temp_dir = tempfile::TempDir::new().unwrap();
+        // unpack into a temp dir, while completely discarding the unpacked files
         let unpack_check = unpack_genesis_archive(
             &archive_path,
             &temp_dir.into_path(),
             max_genesis_archive_unpacked_size,
         );
         if unpack_check.is_err() {
+            // stash problematic original archived genesis related files to
+            // examine them later and to prevent validator and ledger-tool from
+            // naively consuming them
             fs::rename(
                 &ledger_path.join("genesis.tar.bz2"),
                 ledger_path.join("genesis.tar.bz2.failed"),
-            )?;
+            )
+            .unwrap_or_else(|e| eprintln!("failed to stash problematic genesis.tar.bz2: {}", e));
             fs::rename(
                 &ledger_path.join("genesis.bin"),
                 ledger_path.join("genesis.bin.failed"),
-            )?;
+            )
+            .unwrap_or_else(|e| eprintln!("failed to stash problematic genesis.bin: {}", e));
             fs::rename(
                 &ledger_path.join("rocksdb"),
                 ledger_path.join("rocksdb.failed"),
-            )?;
+            )
+            .unwrap_or_else(|e| eprintln!("failed to stash problematic rocks/: {}", e));
             unpack_check?
         }
     }
