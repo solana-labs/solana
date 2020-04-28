@@ -14,7 +14,12 @@ use solana_client::{
 };
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
-use std::{error, str::FromStr, thread::sleep, time::Duration};
+use std::{
+    error,
+    str::FromStr,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 struct Config {
     interval: Duration,
@@ -153,6 +158,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut last_transaction_count = 0;
     let mut last_recent_blockhash = Hash::default();
     let mut last_notification_msg = "".into();
+    let mut last_success = Instant::now();
 
     loop {
         let failure = match get_cluster_info(&rpc_client) {
@@ -286,10 +292,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             last_notification_msg = notification_msg;
         } else {
             if !last_notification_msg.is_empty() {
-                info!("All clear");
-                notifier.send("solana-watchtower: All clear");
+                let alarm_duration = Instant::now().duration_since(last_success);
+                let alarm_duration = Duration::from_secs(alarm_duration.as_secs()); // Drop milliseconds in message
+
+                let all_clear_msg = format!(
+                    "All clear after {}",
+                    humantime::format_duration(alarm_duration)
+                );
+                info!("{}", all_clear_msg);
+                notifier.send(&format!("solana-watchtower: {}", all_clear_msg));
             }
             last_notification_msg = "".into();
+            last_success = Instant::now();
         }
         sleep(config.interval);
     }
