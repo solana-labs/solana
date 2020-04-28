@@ -1266,6 +1266,43 @@ impl AccountsDB {
         }
     }
 
+    pub fn remove_unrooted_slot(&self, remove_slot: Slot) {
+        if self.accounts_index.read().unwrap().is_root(remove_slot) {
+            panic!("Trying to remove accounts for rooted slot {}", remove_slot);
+        }
+
+        // Remove old bank hash
+        self.bank_hashes.write().unwrap().remove(&remove_slot);
+
+        let pubkey_sets: Vec<HashSet<Pubkey>> = self.scan_account_storage(
+            remove_slot,
+            |stored_account: &StoredAccount, _, accum: &mut HashSet<Pubkey>| {
+                accum.insert(stored_account.meta.pubkey);
+            },
+        );
+
+        // Purge this slot from the accounts index
+        {
+            let accounts_index = self.accounts_index.read().unwrap();
+            for pubkey_set in pubkey_sets {
+                for pubkey in pubkey_set {
+                    accounts_index
+                        .account_maps
+                        .get(&pubkey)
+                        .expect("account in appendvec must have entry in accounts index")
+                        .1
+                        .write()
+                        .unwrap()
+                        .retain(|(pubkey_slot, _)| *pubkey_slot != remove_slot)
+                }
+            }
+        }
+
+        // Purge this slot's storage entries from the storage index
+        let mut storage = self.storage.write().unwrap();
+        storage.0.remove(&remove_slot);
+    }
+
     pub fn hash_stored_account(slot: Slot, account: &StoredAccount) -> Hash {
         Self::hash_account_data(
             slot,

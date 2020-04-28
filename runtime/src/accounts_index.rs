@@ -15,7 +15,6 @@ type AccountMapEntry<T> = (AtomicU64, RwLock<SlotList<T>>);
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
     pub account_maps: HashMap<Pubkey, AccountMapEntry<T>>,
-
     pub roots: HashSet<Slot>,
     pub uncleaned_roots: HashSet<Slot>,
 }

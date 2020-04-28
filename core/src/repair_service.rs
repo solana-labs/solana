@@ -400,6 +400,9 @@ impl RepairService {
             // Clear the slot signatures from status cache for this slot
             root_bank.clear_slot_signatures(*slot);
 
+            // Clear the accounts for this slot
+            root_bank.remove_unrooted_slot(*slot);
+
             // Clear the slot-related data in blockstore. This will:
             // 1) Clear old shreds allowing new ones to be inserted
             // 2) Clear the "dead" flag allowing ReplayStage to start replaying
