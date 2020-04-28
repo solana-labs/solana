@@ -1543,15 +1543,13 @@ pub mod tests {
 
         let mut roots = blockstore_roots.clone();
         if !roots.is_empty() {
-            roots.retain(|&x| x > 1);
+            roots.retain(|&x| x > 0);
             let mut parent_bank = bank;
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(&parent_bank, parent_bank.collector_id(), *root);
                 parent_bank = bank_forks.write().unwrap().insert(new_bank);
-                parent_bank.squash();
-                bank_forks.write().unwrap().set_root(*root, &None, None);
-                let parent = if i > 0 { roots[i - 1] } else { 1 };
+                let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(&blockstore, 5, *root, parent, Hash::default());
             }
             blockstore.set_roots(&roots).unwrap();
@@ -1561,6 +1559,10 @@ pub mod tests {
                 roots.iter().max().unwrap() + 1,
             );
             bank_forks.write().unwrap().insert(new_bank);
+
+            for root in roots.iter() {
+                bank_forks.write().unwrap().set_root(*root, &None, Some(0));
+            }
         }
 
         let bank = bank_forks.read().unwrap().working_bank();
@@ -2670,8 +2672,16 @@ pub mod tests {
     fn test_get_confirmed_blocks() {
         let bob_pubkey = Pubkey::new_rand();
         let roots = vec![0, 1, 3, 4, 8];
-        let RpcHandler { io, meta, .. } =
-            start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots.clone(), 0);
+        let RpcHandler {
+            io,
+            meta,
+            block_commitment_cache,
+            ..
+        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots.clone(), 0);
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_get_largest_confirmed_root(8);
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}}"#);
