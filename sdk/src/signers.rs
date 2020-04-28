@@ -11,33 +11,33 @@ pub trait Signers {
 }
 
 macro_rules! default_keypairs_impl {
-    () => (
-            fn pubkeys(&self) -> Vec<Pubkey> {
-                self.iter().map(|keypair| keypair.pubkey()).collect()
-            }
+    () => {
+        fn pubkeys(&self) -> Vec<Pubkey> {
+            self.iter().map(|keypair| keypair.pubkey()).collect()
+        }
 
-            fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError> {
-                let mut pubkeys = Vec::new();
-                for keypair in self.iter() {
-                    pubkeys.push(keypair.try_pubkey()?);
-                }
-                Ok(pubkeys)
+        fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError> {
+            let mut pubkeys = Vec::new();
+            for keypair in self.iter() {
+                pubkeys.push(keypair.try_pubkey()?);
             }
+            Ok(pubkeys)
+        }
 
-            fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
-                self.iter()
-                    .map(|keypair| keypair.sign_message(message))
-                    .collect()
-            }
+        fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
+            self.iter()
+                .map(|keypair| keypair.sign_message(message))
+                .collect()
+        }
 
-            fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError> {
-                let mut signatures = Vec::new();
-                for keypair in self.iter() {
-                    signatures.push(keypair.try_sign_message(message)?);
-                }
-                Ok(signatures)
+        fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError> {
+            let mut signatures = Vec::new();
+            for keypair in self.iter() {
+                signatures.push(keypair.try_sign_message(message)?);
             }
-    );
+            Ok(signatures)
+        }
+    };
 }
 
 impl<T: Signer> Signers for [&T] {
