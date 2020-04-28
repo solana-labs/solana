@@ -6,13 +6,18 @@ use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[error(transparent)]
 pub enum ClientErrorKind {
+    #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+    #[error(transparent)]
     RpcError(#[from] rpc_request::RpcError),
+    #[error(transparent)]
     SerdeJson(#[from] serde_json::error::Error),
+    #[error(transparent)]
     SigningError(#[from] SignerError),
+    #[error(transparent)]
     TransactionError(#[from] TransactionError),
     #[error("Custom: {0}")]
     Custom(String),
