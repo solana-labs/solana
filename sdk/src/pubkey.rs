@@ -6,6 +6,8 @@ pub use bs58;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey([u8; 32]);
 
+impl crate::sanitize::Sanitize for Pubkey {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
     WrongSize,

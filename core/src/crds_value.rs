@@ -1,5 +1,6 @@
 use crate::contact_info::ContactInfo;
 use bincode::{serialize, serialized_size};
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{
     clock::Slot,
@@ -14,16 +15,27 @@ use std::{
     fmt,
 };
 
+pub const MAX_WALLCLOCK: u64 = 1_000_000_000_000_000;
+pub const MAX_SLOT: u64 = 1_000_000_000_000_000;
+
 pub type VoteIndex = u8;
 pub const MAX_VOTES: VoteIndex = 32;
 
 pub type EpochSlotIndex = u8;
+pub const MAX_EPOCH_SLOTS: EpochSlotIndex = 1;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CrdsValue {
     pub signature: Signature,
     pub data: CrdsData,
+}
+
+impl Sanitize for CrdsValue {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        self.signature.sanitize()?;
+        self.data.sanitize()
+    }
 }
 
 impl Signable for CrdsValue {
@@ -44,14 +56,8 @@ impl Signable for CrdsValue {
     }
 
     fn verify(&self) -> bool {
-        let sig_check = self
-            .get_signature()
-            .verify(&self.pubkey().as_ref(), self.signable_data().borrow());
-        let data_check = match &self.data {
-            CrdsData::Vote(ix, _) => *ix < MAX_VOTES,
-            _ => true,
-        };
-        sig_check && data_check
+        self.get_signature()
+            .verify(&self.pubkey().as_ref(), self.signable_data().borrow())
     }
 }
 
@@ -87,11 +93,58 @@ pub struct EpochIncompleteSlots {
     pub compressed_list: Vec<u8>,
 }
 
+impl Sanitize for EpochIncompleteSlots {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.first >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        //rest of the data doesn't matter since we no longer decompress
+        //these values
+        Ok(())
+    }
+}
+
+impl Sanitize for CrdsData {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        match self {
+            CrdsData::ContactInfo(val) => val.sanitize(),
+            CrdsData::Vote(ix, val) => {
+                if *ix >= MAX_VOTES {
+                    return Err(SanitizeError::Failed);
+                }
+                val.sanitize()
+            }
+            CrdsData::SnapshotHashes(val) => val.sanitize(),
+            CrdsData::AccountsHashes(val) => val.sanitize(),
+            CrdsData::EpochSlots(ix, val) => {
+                if *ix as usize >= MAX_EPOCH_SLOTS as usize {
+                    return Err(SanitizeError::Failed);
+                }
+                val.sanitize()
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SnapshotHash {
     pub from: Pubkey,
     pub hashes: Vec<(Slot, Hash)>,
     pub wallclock: u64,
+}
+
+impl Sanitize for SnapshotHash {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        for (slot, _) in &self.hashes {
+            if *slot >= MAX_SLOT {
+                return Err(SanitizeError::Failed);
+            }
+        }
+        self.from.sanitize()
+    }
 }
 
 impl SnapshotHash {
@@ -107,30 +160,44 @@ impl SnapshotHash {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EpochSlots {
     pub from: Pubkey,
-    pub root: Slot,
+    root: Slot,
     pub lowest: Slot,
-    pub slots: BTreeSet<Slot>,
-    pub stash: Vec<EpochIncompleteSlots>,
+    slots: BTreeSet<Slot>,
+    stash: Vec<EpochIncompleteSlots>,
     pub wallclock: u64,
 }
 
 impl EpochSlots {
-    pub fn new(
-        from: Pubkey,
-        root: Slot,
-        lowest: Slot,
-        slots: BTreeSet<Slot>,
-        stash: Vec<EpochIncompleteSlots>,
-        wallclock: u64,
-    ) -> Self {
+    pub fn new(from: Pubkey, lowest: Slot, wallclock: u64) -> Self {
         Self {
             from,
-            root,
+            root: 0,
             lowest,
-            slots,
-            stash,
+            slots: BTreeSet::new(),
+            stash: vec![],
             wallclock,
         }
+    }
+}
+
+impl Sanitize for EpochSlots {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        if self.lowest >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        if self.root >= MAX_SLOT {
+            return Err(SanitizeError::Failed);
+        }
+        for slot in &self.slots {
+            if *slot >= MAX_SLOT {
+                return Err(SanitizeError::Failed);
+            }
+        }
+        self.stash.sanitize()?;
+        self.from.sanitize()
     }
 }
 
@@ -139,6 +206,16 @@ pub struct Vote {
     pub from: Pubkey,
     pub transaction: Transaction,
     pub wallclock: u64,
+}
+
+impl Sanitize for Vote {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::Failed);
+        }
+        self.from.sanitize()?;
+        self.transaction.sanitize()
+    }
 }
 
 impl Vote {
@@ -356,7 +433,7 @@ mod test {
 
         let v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
-            EpochSlots::new(Pubkey::default(), 0, 0, BTreeSet::new(), vec![], 0),
+            EpochSlots::new(Pubkey::default(), 0, 0),
         ));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
@@ -377,10 +454,9 @@ mod test {
             Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        let btreeset: BTreeSet<Slot> = vec![1, 2, 3, 6, 8].into_iter().collect();
         v = CrdsValue::new_unsigned(CrdsData::EpochSlots(
             0,
-            EpochSlots::new(keypair.pubkey(), 0, 0, btreeset, vec![], timestamp()),
+            EpochSlots::new(keypair.pubkey(), 0, timestamp()),
         ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
@@ -395,9 +471,21 @@ mod test {
             ),
             &keypair,
         );
-        assert!(!vote.verify());
+        assert!(vote.sanitize().is_err());
     }
 
+    #[test]
+    fn test_max_epoch_slots_index() {
+        let keypair = Keypair::new();
+        let item = CrdsValue::new_signed(
+            CrdsData::Vote(
+                MAX_VOTES,
+                Vote::new(&keypair.pubkey(), test_tx(), timestamp()),
+            ),
+            &keypair,
+        );
+        assert!(item.sanitize().is_err());
+    }
     #[test]
     fn test_compute_vote_index_empty() {
         for i in 0..MAX_VOTES {
