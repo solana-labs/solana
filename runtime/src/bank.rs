@@ -18,7 +18,7 @@ use crate::{
     status_cache::{SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
-    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
+    system_instruction_processor::{self, get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
@@ -375,6 +375,7 @@ impl Bank {
 
         bank.rc.accounts = Arc::new(Accounts::new(paths));
         bank.process_genesis_config(genesis_config);
+        bank.finish_init();
 
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut bank.rc.accounts)
@@ -457,7 +458,7 @@ impl Bank {
             is_delta: AtomicBool::new(false),
             tick_height: AtomicU64::new(parent.tick_height.load(Ordering::Relaxed)),
             signature_count: AtomicU64::new(0),
-            message_processor: MessageProcessor::default(),
+            message_processor: parent.message_processor.clone(),
             entered_epoch_callback: parent.entered_epoch_callback.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
@@ -904,14 +905,14 @@ impl Bank {
 
         // Add additional native programs specified in the genesis config
         for (name, program_id) in &genesis_config.native_instruction_processors {
-            self.register_native_instruction_processor(name, program_id);
+            self.add_native_program(name, program_id);
         }
     }
 
-    pub fn register_native_instruction_processor(&self, name: &str, program_id: &Pubkey) {
-        debug!("Adding native program {} under {:?}", name, program_id);
+    pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
         let account = native_loader::create_loadable_account(name);
         self.store_account(program_id, &account);
+        debug!("Added native program {} under {:?}", name, program_id);
     }
 
     /// Return the last block hash registered.
@@ -1765,6 +1766,29 @@ impl Bank {
         self.src = status_cache_rc;
     }
 
+    pub fn finish_init(&mut self) {
+        self.add_static_program(
+            "system_program",
+            solana_sdk::system_program::id(),
+            system_instruction_processor::process_instruction,
+        );
+        self.add_static_program(
+            "config_program",
+            solana_config_program::id(),
+            solana_config_program::config_processor::process_instruction,
+        );
+        self.add_static_program(
+            "stake_program",
+            solana_stake_program::id(),
+            solana_stake_program::stake_instruction::process_instruction,
+        );
+        self.add_static_program(
+            "vote_program",
+            solana_vote_program::id(),
+            solana_vote_program::vote_instruction::process_instruction,
+        );
+    }
+
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
         self.rc.parent = RwLock::new(Some(parent.clone()));
     }
@@ -2148,21 +2172,29 @@ impl Bank {
     }
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
-    pub fn add_instruction_processor(
+    pub fn add_static_program(
         &mut self,
+        name: &str,
         program_id: Pubkey,
         process_instruction: ProcessInstruction,
     ) {
+        match self.get_account(&program_id) {
+            Some(account) => {
+                assert_eq!(
+                    account.owner,
+                    native_loader::id(),
+                    "Cannot overwrite non-native loader account"
+                );
+            }
+            None => {
+                // Add a bogus executable native account, which will be loaded and ignored.
+                let account = native_loader::create_loadable_account(name);
+                self.store_account(&program_id, &account);
+            }
+        }
         self.message_processor
             .add_instruction_processor(program_id, process_instruction);
-
-        if let Some(program_account) = self.get_account(&program_id) {
-            // It is not valid to intercept instructions for a non-native loader account
-            assert_eq!(program_account.owner, solana_sdk::native_loader::id());
-        } else {
-            // Register a bogus executable account, which will be loaded and ignored.
-            self.register_native_instruction_processor("", &program_id);
-        }
+        debug!("Added static program {} under {:?}", name, program_id);
     }
 
     pub fn compare_bank(&self, dbank: &Bank) {
@@ -2274,8 +2306,7 @@ mod tests {
         poh_config::PohConfig,
         rent::Rent,
         signature::{Keypair, Signer},
-        system_instruction,
-        system_program::{self, solana_system_program},
+        system_instruction, system_program,
         sysvar::{fees::Fees, rewards::Rewards},
         timing::duration_as_s,
     };
@@ -2532,7 +2563,7 @@ mod tests {
         bank_with_success_txs.store_account(&keypair6.pubkey(), &account6);
 
         // Make native instruction loader rent exempt
-        let system_program_id = solana_system_program().1;
+        let system_program_id = system_program::id();
         let mut system_program_account = bank.get_account(&system_program_id).unwrap();
         system_program_account.lamports =
             bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
@@ -2730,7 +2761,7 @@ mod tests {
             ) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
-        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+        bank.add_static_program("mock_program", mock_program_id, mock_process_instruction);
 
         bank
     }
@@ -5020,28 +5051,35 @@ mod tests {
     }
 
     #[test]
-    fn test_add_instruction_processor() {
+    fn test_add_static_program() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
+        fn mock_vote_program_id() -> Pubkey {
+            Pubkey::new(&[42u8; 32])
+        }
         fn mock_vote_processor(
             program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
         ) -> std::result::Result<(), InstructionError> {
-            if !solana_vote_program::check_id(program_id) {
+            if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }
             Err(InstructionError::Custom(42))
         }
 
-        assert!(bank.get_account(&solana_vote_program::id()).is_none());
-        bank.add_instruction_processor(solana_vote_program::id(), mock_vote_processor);
-        assert!(bank.get_account(&solana_vote_program::id()).is_some());
+        assert!(bank.get_account(&mock_vote_program_id()).is_none());
+        bank.add_static_program(
+            "mock_vote_program",
+            mock_vote_program_id(),
+            mock_vote_processor,
+        );
+        assert!(bank.get_account(&mock_vote_program_id()).is_some());
 
         let mock_account = Keypair::new();
         let mock_validator_identity = Keypair::new();
-        let instructions = vote_instruction::create_account(
+        let mut instructions = vote_instruction::create_account(
             &mint_keypair.pubkey(),
             &mock_account.pubkey(),
             &VoteInit {
@@ -5050,6 +5088,7 @@ mod tests {
             },
             1,
         );
+        instructions[1].program_id = mock_vote_program_id();
 
         let transaction = Transaction::new_signed_instructions(
             &[&mint_keypair, &mock_account, &mock_validator_identity],
@@ -5067,13 +5106,12 @@ mod tests {
     }
 
     #[test]
-    fn test_add_instruction_processor_for_existing_program() {
+    fn test_add_duplicate_static_program() {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(500, &Pubkey::new_rand(), 0);
-
         let mut bank = Bank::new(&genesis_config);
 
         fn mock_vote_processor(
@@ -5103,7 +5141,11 @@ mod tests {
         );
 
         let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
-        bank.add_instruction_processor(solana_vote_program::id(), mock_vote_processor);
+        bank.add_static_program(
+            "solana_vote_program",
+            solana_vote_program::id(),
+            mock_vote_processor,
+        );
         let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
         // Vote loader account should not be updated since it was included in the genesis config.
         assert_eq!(vote_loader_account.data, new_vote_loader_account.data);
@@ -5131,7 +5173,7 @@ mod tests {
         }
 
         // Non-native loader accounts can not be used for instruction processing
-        bank.add_instruction_processor(mint_keypair.pubkey(), mock_ix_processor);
+        bank.add_static_program("mock_program", mint_keypair.pubkey(), mock_ix_processor);
     }
     #[test]
     fn test_recent_blockhashes_sysvar() {
@@ -5150,6 +5192,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
     }
+
     #[test]
     fn test_bank_inherit_last_vote_sync() {
         let (genesis_config, _) = create_genesis_config(500);
@@ -5690,7 +5733,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+        bank.add_static_program("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();
@@ -5733,7 +5776,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_instruction_processor(mock_program_id, mock_process_instruction);
+        bank.add_static_program("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = Pubkey::new_rand();
         let to_pubkey = Pubkey::new_rand();

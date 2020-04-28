@@ -652,8 +652,8 @@ where
                 stream.by_ref(),
                 &append_vecs_path,
             )?;
-
             bank.set_bank_rc(rc, bank::StatusCacheRc::default());
+            bank.finish_init();
             Ok(bank)
         },
     )?;

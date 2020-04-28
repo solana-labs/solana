@@ -18,7 +18,7 @@ solana-logger = { path = "../../logger", version = "1.2.0" }
 solana-sdk = { path = "../../sdk", version = "1.2.0" }
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib"]
 name = "solana_config_program"
 
 [package.metadata.docs.rs]

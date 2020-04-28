@@ -23,7 +23,7 @@ solana-config-program = { path = "../config", version = "1.2.0" }
 thiserror = "1.0"
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib"]
 name = "solana_stake_program"
 
 [package.metadata.docs.rs]

@@ -4134,14 +4134,11 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-bpf-loader-program 1.2.0",
  "solana-budget-program 1.2.0",
- "solana-config-program 1.2.0",
  "solana-exchange-program 1.2.0",
  "solana-runtime 1.2.0",
  "solana-sdk 1.2.0",
- "solana-stake-program 1.2.0",
  "solana-storage-program 1.2.0",
  "solana-vest-program 1.2.0",
- "solana-vote-program 1.2.0",
 ]
 
 [[package]]
@@ -4543,6 +4540,7 @@ dependencies = [
  "rayon 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-config-program 1.2.0",
  "solana-logger 1.2.0",
  "solana-measure 1.2.0",
  "solana-metrics 1.2.0",

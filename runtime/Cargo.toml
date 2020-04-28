@@ -27,6 +27,7 @@ rand = "0.6.5"
 rayon = "1.3.0"
 serde = { version = "1.0.106", features = ["rc"] }
 serde_derive = "1.0.103"
+solana-config-program = { path = "../programs/config", version = "1.2.0" }
 solana-logger = { path = "../logger", version = "1.2.0" }
 solana-measure = { path = "../measure", version = "1.2.0" }
 solana-metrics = { path = "../metrics", version = "1.2.0" }
@@ -37,7 +38,6 @@ solana-storage-program = { path = "../programs/storage", version = "1.2.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 tempfile = "3.1.0"
 thiserror = "1.0"
-
 
 [lib]
 crate-type = ["lib"]

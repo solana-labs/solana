@@ -156,10 +156,7 @@ mod tests {
         let (mut genesis_config, mint) = create_genesis_config(lamports);
         genesis_config.rent.lamports_per_byte_year = 0;
         let bank = Bank::new(&genesis_config);
-        bank.register_native_instruction_processor(
-            "solana_move_loader_program",
-            &solana_sdk::move_loader::id(),
-        );
+        bank.add_native_program("solana_move_loader_program", &solana_sdk::move_loader::id());
         let shared_bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&shared_bank);
         let genesis_pubkey = create_genesis(&mint, &bank_client, 1_000_000);
