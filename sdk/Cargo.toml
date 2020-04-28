@@ -16,6 +16,7 @@ default = [
     "assert_matches",
     "byteorder",
     "chrono",
+    "generic-array",
     "memmap",
     "rand",
     "rand_chacha",
@@ -32,7 +33,7 @@ bs58 = "0.3.1"
 bv = { version = "0.11.1", features = ["serde"] }
 byteorder = { version = "1.3.4", optional = true }
 chrono = { version = "0.4", optional = true }
-generic-array = { version = "0.13.2", default-features = false, features = ["serde", "more_lengths"] }
+generic-array = { version = "0.14.1", default-features = false, features = ["serde", "more_lengths"], optional = true }
 hex = "0.4.2"
 hmac = "0.7.0"
 itertools = { version = "0.9.0" }
