@@ -30,7 +30,7 @@ use solana_faucet::faucet::request_airdrop_transaction;
 use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    bpf_loader,
+    bpf_loader, burn_instruction, burn_program,
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
@@ -421,6 +421,14 @@ pub enum CliCommand {
         from: SignerIndex,
         sign_only: bool,
         no_wait: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
+        fee_payer: SignerIndex,
+    },
+    Burn {
+        from: SignerIndex,
+        sign_only: bool,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
@@ -963,6 +971,40 @@ pub fn parse_command(
                     to,
                     sign_only,
                     no_wait,
+                    blockhash_query,
+                    nonce_account,
+                    nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+                    fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+                    from: signer_info.index_of(from_pubkey).unwrap(),
+                },
+                signers: signer_info.signers,
+            })
+        }
+        ("burn", Some(matches)) => {
+            let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+            let blockhash_query = BlockhashQuery::new_from_matches(matches);
+            let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
+            let (nonce_authority, nonce_authority_pubkey) =
+                signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
+            let (fee_payer, fee_payer_pubkey) =
+                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+            let (from, from_pubkey) = signer_of(matches, "from", wallet_manager)?;
+
+            let mut bulk_signers = vec![fee_payer, from];
+            if nonce_account.is_some() {
+                bulk_signers.push(nonce_authority);
+            }
+
+            let signer_info = generate_unique_signers(
+                bulk_signers,
+                matches,
+                default_signer_path,
+                wallet_manager,
+            )?;
+
+            Ok(CliCommandInfo {
+                command: CliCommand::Burn {
+                    sign_only,
                     blockhash_query,
                     nonce_account,
                     nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -1621,6 +1663,60 @@ fn process_transfer(
     }
 }
 
+fn process_burn(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    from: SignerIndex,
+    sign_only: bool,
+    blockhash_query: &BlockhashQuery,
+    nonce_account: Option<&Pubkey>,
+    nonce_authority: SignerIndex,
+    fee_payer: SignerIndex,
+) -> ProcessResult {
+    let from = config.signers[from];
+
+    let (recent_blockhash, fee_calculator) =
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+    let ixs = vec![
+        system_instruction::assign(&from.pubkey(), &burn_program::id()),
+        burn_instruction::burn(&from.pubkey()),
+    ];
+
+    let nonce_authority = config.signers[nonce_authority];
+    let fee_payer = config.signers[fee_payer];
+
+    let message = if let Some(nonce_account) = &nonce_account {
+        Message::new_with_nonce(
+            ixs,
+            Some(&fee_payer.pubkey()),
+            nonce_account,
+            &nonce_authority.pubkey(),
+        )
+    } else {
+        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
+    };
+    let mut tx = Transaction::new_unsigned(message);
+
+    if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
+        return_signers(&tx)
+    } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = rpc_client.get_account(nonce_account)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+        check_account_for_fee(
+            rpc_client,
+            &tx.message.account_keys[0],
+            &fee_calculator,
+            &tx.message,
+        )?;
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
+        log_instruction_custom_error::<SystemError>(result)
+    }
+}
+
 fn process_witness(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -2205,6 +2301,23 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             *fee_payer,
         ),
+        CliCommand::Burn {
+            from,
+            sign_only,
+            ref blockhash_query,
+            ref nonce_account,
+            nonce_authority,
+            fee_payer,
+        } => process_burn(
+            &rpc_client,
+            config,
+            *from,
+            *sign_only,
+            blockhash_query,
+            nonce_account.as_ref(),
+            *nonce_authority,
+            *fee_payer,
+        ),
         // Apply witness signature to contract
         CliCommand::Witness(to, pubkey) => process_witness(&rpc_client, config, &to, &pubkey),
     }
@@ -2388,7 +2501,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .subcommand(
             SubCommand::with_name("cancel")
-                .about("Cancel a transfer")
+                .about("Cancel a pay transfer")
                 .arg(
                     Arg::with_name("process_id")
                         .index(1)
@@ -2607,6 +2720,20 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("no-wait")
                         .takes_value(false)
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                )
+                .offline_args()
+                .arg(nonce_arg())
+                .arg(nonce_authority_arg())
+                .arg(fee_payer_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("burn")
+                .about("Burn an account")
+                .arg(
+                    pubkey!(Arg::with_name("from")
+                        .long("from")
+                        .value_name("BURN_ADDRESS"),
+                        "Account to burn (if different from client local account). "),
                 )
                 .offline_args()
                 .arg(nonce_arg())
@@ -3777,6 +3904,130 @@ mod tests {
                     from: 0,
                     sign_only: false,
                     no_wait: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_address),
+                        blockhash
+                    ),
+                    nonce_account: Some(nonce_address.into()),
+                    nonce_authority: 1,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&nonce_authority_file).unwrap().into()
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_burn_subcommand() {
+        let test_commands = app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let default_keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
+
+        //Test Burn Subcommand, SOL
+        let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+        let from_pubkey = from_keypair.pubkey();
+        let from_string = from_pubkey.to_string();
+        let test_transfer = test_commands.clone().get_matches_from(vec!["test", "burn"]);
+        assert_eq!(
+            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Burn {
+                    from: 0,
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        //Test Burn Subcommand, offline sign
+        let blockhash = Hash::new(&[1u8; 32]);
+        let blockhash_string = blockhash.to_string();
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "burn",
+            "--blockhash",
+            &blockhash_string,
+            "--sign-only",
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Burn {
+                    from: 0,
+                    sign_only: true,
+                    blockhash_query: BlockhashQuery::None(blockhash),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        //Test Burn Subcommand, submit offline `from`
+        let from_sig = from_keypair.sign_message(&[0u8]);
+        let from_signer = format!("{}={}", from_pubkey, from_sig);
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "burn",
+            "--from",
+            &from_string,
+            "--fee-payer",
+            &from_string,
+            "--signer",
+            &from_signer,
+            "--blockhash",
+            &blockhash_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Burn {
+                    from: 0,
+                    sign_only: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![Presigner::new(&from_pubkey, &from_sig).into()],
+            }
+        );
+
+        //Test Burn Subcommand, with nonce
+        let nonce_address = Pubkey::new(&[1u8; 32]);
+        let nonce_address_string = nonce_address.to_string();
+        let nonce_authority = keypair_from_seed(&[2u8; 32]).unwrap();
+        let nonce_authority_file = make_tmp_path("nonce_authority_file");
+        write_keypair_file(&nonce_authority, &nonce_authority_file).unwrap();
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "burn",
+            "--blockhash",
+            &blockhash_string,
+            "--nonce",
+            &nonce_address_string,
+            "--nonce-authority",
+            &nonce_authority_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Burn {
+                    from: 0,
+                    sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_address),
                         blockhash
