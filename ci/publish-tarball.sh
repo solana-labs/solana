@@ -71,7 +71,7 @@ echo --- Creating release tarball
   export CHANNEL
 
   source ci/rust-version.sh stable
-  scripts/cargo-install-all.sh +"$rust_stable" --use-move solana-release
+  scripts/cargo-install-all.sh +"$rust_stable" solana-release
 
   tar cvf solana-release-$TARGET.tar solana-release
   bzip2 solana-release-$TARGET.tar
