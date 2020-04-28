@@ -643,14 +643,14 @@ pub fn main() {
                 .help("Comma separated persistent accounts location"),
         )
         .arg(
-            clap::Arg::with_name("gossip_port")
+            Arg::with_name("gossip_port")
                 .long("gossip-port")
                 .value_name("PORT")
                 .takes_value(true)
                 .help("Gossip port number for the node"),
         )
         .arg(
-            clap::Arg::with_name("gossip_host")
+            Arg::with_name("gossip_host")
                 .long("gossip-host")
                 .value_name("HOST")
                 .takes_value(true)
@@ -659,7 +659,7 @@ pub fn main() {
                 .help("IP address for the node to advertise in gossip when --entrypoint is not provided [default: 127.0.0.1]"),
         )
         .arg(
-            clap::Arg::with_name("dynamic_port_range")
+            Arg::with_name("dynamic_port_range")
                 .long("dynamic-port-range")
                 .value_name("MIN_PORT-MAX_PORT")
                 .takes_value(true)
@@ -668,7 +668,7 @@ pub fn main() {
                 .help("Range to use for dynamically assigned ports"),
         )
         .arg(
-            clap::Arg::with_name("snapshot_interval_slots")
+            Arg::with_name("snapshot_interval_slots")
                 .long("snapshot-interval-slots")
                 .value_name("SNAPSHOT_INTERVAL_SLOTS")
                 .takes_value(true)
@@ -676,7 +676,7 @@ pub fn main() {
                 .help("Number of slots between generating snapshots, 0 to disable snapshots"),
         )
         .arg(
-            clap::Arg::with_name("accounts_hash_interval_slots")
+            Arg::with_name("accounts_hash_interval_slots")
                 .long("accounts-hash-slots")
                 .value_name("ACCOUNTS_HASH_INTERVAL_SLOTS")
                 .takes_value(true)
@@ -684,7 +684,7 @@ pub fn main() {
                 .help("Number of slots between generating accounts hash."),
         )
         .arg(
-            clap::Arg::with_name("limit_ledger_size")
+            Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .value_name("SHRED_COUNT")
                 .takes_value(true)
@@ -694,13 +694,13 @@ pub fn main() {
                 .help("Keep this amount of shreds in root slots."),
         )
         .arg(
-            clap::Arg::with_name("skip_poh_verify")
+            Arg::with_name("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
                 .help("Skip ledger verification at node bootup"),
         )
         .arg(
-            clap::Arg::with_name("cuda")
+            Arg::with_name("cuda")
                 .long("cuda")
                 .takes_value(false)
                 .help("Use CUDA"),
@@ -769,7 +769,7 @@ pub fn main() {
                 .help("Disable manual compaction of the ledger database. May increase storage requirements.")
         )
         .arg(
-            clap::Arg::with_name("bind_address")
+            Arg::with_name("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -778,7 +778,7 @@ pub fn main() {
                 .help("IP address to bind the validator ports"),
         )
         .arg(
-            clap::Arg::with_name("rpc_bind_address")
+            Arg::with_name("rpc_bind_address")
                 .long("rpc-bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -786,14 +786,14 @@ pub fn main() {
                 .help("IP address to bind the RPC port [default: use --bind-address]"),
         )
         .arg(
-            clap::Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
+            Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
                 .long("halt-on-trusted-validators-accounts-hash-mismatch")
                 .requires("trusted_validators")
                 .takes_value(false)
                 .help("Abort the validator if a bank hash mismatch is detected within trusted validator set"),
         )
         .arg(
-            clap::Arg::with_name("frozen_accounts")
+            Arg::with_name("frozen_accounts")
                 .long("frozen-account")
                 .validator(is_pubkey)
                 .value_name("PUBKEY")
@@ -804,7 +804,7 @@ pub fn main() {
                        other than increasing the account balance"),
         )
         .arg(
-            clap::Arg::with_name("snapshot_compression")
+            Arg::with_name("snapshot_compression")
                 .long("snapshot-compression")
                 .possible_values(&["bz2", "gzip", "zstd", "none"])
                 .value_name("COMPRESSION_TYPE")
@@ -812,7 +812,7 @@ pub fn main() {
                 .help("Type of snapshot compression to use."),
         )
         .arg(
-            clap::Arg::with_name("max_genesis_archive_unpacked_size")
+            Arg::with_name("max_genesis_archive_unpacked_size")
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
                 .takes_value(true)
