@@ -118,6 +118,14 @@ pub fn println_transaction(
                 println!("{}  {:?}", prefix, system_instruction);
                 raw = false;
             }
+        } else if program_pubkey == solana_sdk::burn_program::id() {
+            if let Ok(burn_instruction) = limited_deserialize::<
+                solana_sdk::burn_instruction::BurnInstruction,
+            >(&instruction.data)
+            {
+                println!("{}  {:?}", prefix, burn_instruction);
+                raw = false;
+            }
         }
 
         if raw {
