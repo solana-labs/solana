@@ -408,24 +408,12 @@ impl AccountStorageEntry {
         }
     }
 
-    pub fn status(&self) -> AccountStorageStatus {
-        self.status.load(Ordering::Acquire)
-    }
-
-    pub fn count(&self) -> usize {
+    fn count(&self) -> usize {
         self.count.load(Ordering::Acquire)
     }
 
-    pub fn has_accounts(&self) -> bool {
+    fn has_accounts(&self) -> bool {
         self.count() > 0
-    }
-
-    pub fn slot(&self) -> Slot {
-        self.slot
-    }
-
-    pub fn append_vec_id(&self) -> AppendVecId {
-        self.id
     }
 
     pub fn flush(&self) -> Result<(), IOError> {
@@ -433,7 +421,6 @@ impl AccountStorageEntry {
     }
 
     fn remove_account(&self, /*&info: AccountInfo*/) -> bool {
-	let status = self.status.load(Ordering::Acquire);
 	let count = self.count.fetch_sub(1, Ordering::AcqRel);
 
         // Some code path is removing accounts too many; this may result in an
@@ -445,28 +432,13 @@ impl AccountStorageEntry {
             self.id
         );
 
-        // this case arises when we remove the last account from the
-        //  storage, but we've learned from previous write attempts that
-        //  the storage is full
-        //
-        // the only time it's safe to call reset() on an append_vec is when
-        //  every account has been removed
-        //          **and**
-        //  the append_vec has previously been completely full
-        //
-        // otherwise, the storage may be in flight with a store()
-        //   call
-	if status == AccountStorageStatus::Full && count == 1
-	{
-	    self.accounts.reset();
-	    self.status.store(AccountStorageStatus::Available,
-			      Ordering::Release);
+	if count == 1 {
+	    // iff page was full, mark it as available
+	    self.status.compare_and_swap(AccountStorageStatus::Full,
+					 AccountStorageStatus::Available,
+					 Ordering::AcqRel);
 	}
-
-	// for available or full pages, return true if this decrement
-	// brought the count to zero. candidate pages are handled
-	// by store_accounts_to()
-	status != AccountStorageStatus::Candidate && count == 1
+	count == 1
     }
 
     pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> IOResult<()> {
@@ -717,7 +689,7 @@ impl AccountsDB {
     }
 
     pub fn accounts_from_stream<R: Read, P: AsRef<Path>>(
-        &self,
+        &mut self,
         mut stream: &mut BufReader<R>,
         stream_append_vecs_path: P,
     ) -> Result<(), IOError> {
@@ -1357,10 +1329,11 @@ impl AccountsDB {
                     .skip(thread_rng().gen_range(0, slot_stores.len()))
                     .take(slot_stores.len())
 		{
-		    if store.status.compare_and_swap(AccountStorageStatus::Available,
-						     AccountStorageStatus::Candidate,
-						     Ordering::AcqRel) == AccountStorageStatus::Available
-		    {
+		    // iff page was available, mark it as candidate and return
+		    if AccountStorageStatus::Available ==
+			store.status.compare_and_swap(AccountStorageStatus::Available,
+						      AccountStorageStatus::Candidate,
+						      Ordering::AcqRel) {
 			candidate = Some(store.clone());
 			break
 		    }
@@ -1560,6 +1533,10 @@ impl AccountsDB {
 		None       => storage_finder(slot),
             };
 
+	    // invariant: storage page is marked as candidate
+	    debug_assert_eq!(AccountStorageStatus::Candidate,
+			     storage.status.load(Ordering::Acquire));
+
             let offsets = storage
                 .accounts
                 .append_accounts(&with_meta[infos.len()..],
@@ -1571,7 +1548,7 @@ impl AccountsDB {
 
 		if storage.count.load(Ordering::Acquire) == 0
 		    && !storage.accounts.is_empty()
- {
+		{
 		    storage.accounts.reset();
 
 		    // for first try normal size request, retry if page was reset
@@ -1582,21 +1559,19 @@ impl AccountsDB {
 		}
 
 		// either second try, need huge or couldn't reset - mark candidate page full
-		storage.status.store(AccountStorageStatus::Full,
-				     Ordering::Release);
-
-		// check for race if page became empty while still a candidate
-		if storage.count.load(Ordering::Acquire) == 0 {
-		    if !storage.accounts.is_empty() {
-			storage.accounts.reset();
-		    }
-		    storage.status.store(AccountStorageStatus::Available,
-					 Ordering::Release);
+		if cfg!(debug_assertions) {
+		    assert_eq!(AccountStorageStatus::Candidate,
+			       storage.status.compare_and_swap(
+				   AccountStorageStatus::Candidate,
+				   AccountStorageStatus::Full,
+				   Ordering::Release))
+		} else {
+		    storage.status.store(AccountStorageStatus::Full,
+					 Ordering::Release)
 		}
 
+                // create huge page if account overflows the default append vec size
 		if need_huge {
-                    // See if an account overflows the default append vec size.
-		    // need huge page; release current candidate
 		    storage_hint = Some(
 			self.create_and_insert_store(slot,
 						     required_data_len * 2,
@@ -1621,8 +1596,16 @@ impl AccountsDB {
 		    }));
 
 	    // mark candidate page as available
-	    storage.status.store(AccountStorageStatus::Available,
-				 Ordering::Release);
+	    if cfg!(debug_assertions) {
+		assert_eq!(AccountStorageStatus::Candidate,
+			   storage.status.compare_and_swap(
+			       AccountStorageStatus::Candidate,
+			       AccountStorageStatus::Available,
+			       Ordering::Release))
+	    } else {
+		storage.status.store(AccountStorageStatus::Available,
+				     Ordering::Release)
+	    }
         }
         infos
     }
