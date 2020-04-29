@@ -3,7 +3,8 @@ import {
   TransactionSignature,
   Connection,
   SystemProgram,
-  Account
+  Account,
+  SignatureResult
 } from "@solana/web3.js";
 import { findGetParameter, findPathSegment } from "../../utils/url";
 import { useCluster, ClusterStatus } from "../cluster";
@@ -20,12 +21,10 @@ import {
   ActionType as AccountsActionType
 } from "../accounts";
 
-export enum Status {
-  Checking,
-  CheckFailed,
-  Success,
-  Failure,
-  Missing
+export enum FetchStatus {
+  Fetching,
+  FetchFailed,
+  Fetched
 }
 
 enum Source {
@@ -35,24 +34,24 @@ enum Source {
 
 export type Confirmations = number | "max";
 
-export interface Transaction {
-  id: number;
-  status: Status;
-  source: Source;
-  slot?: number;
-  confirmations?: Confirmations;
-  signature: TransactionSignature;
-}
-
-export interface Selected {
+export interface TransactionStatus {
   slot: number;
-  signature: TransactionSignature;
+  result: SignatureResult;
+  confirmations: Confirmations;
 }
 
-type Transactions = { [signature: string]: Transaction };
+export interface TransactionState {
+  id: number;
+  source: Source;
+  fetchStatus: FetchStatus;
+  signature: TransactionSignature;
+  transactionStatus?: TransactionStatus;
+}
+
+type Transactions = { [signature: string]: TransactionState };
 interface State {
   idCounter: number;
-  selected?: Selected;
+  selected?: TransactionSignature;
   transactions: Transactions;
 }
 
@@ -75,9 +74,8 @@ interface DeselectTransaction {
 interface UpdateStatus {
   type: ActionType.UpdateStatus;
   signature: TransactionSignature;
-  status: Status;
-  slot?: number;
-  confirmations?: Confirmations;
+  fetchStatus: FetchStatus;
+  transactionStatus?: TransactionStatus;
 }
 
 interface InputSignature {
@@ -90,6 +88,7 @@ type Action =
   | InputSignature
   | SelectTransaction
   | DeselectTransaction;
+
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
@@ -99,37 +98,33 @@ function reducer(state: State, action: Action): State {
     }
     case ActionType.Select: {
       const tx = state.transactions[action.signature];
-      if (!tx.slot) return state;
-      const selected = {
-        slot: tx.slot,
-        signature: tx.signature
-      };
-      return { ...state, selected };
+      return { ...state, selected: tx.signature };
     }
     case ActionType.InputSignature: {
       if (!!state.transactions[action.signature]) return state;
 
-      const idCounter = state.idCounter + 1;
+      const nextId = state.idCounter + 1;
       const transactions = {
         ...state.transactions,
         [action.signature]: {
-          id: idCounter,
-          status: Status.Checking,
+          id: nextId,
           source: Source.Input,
-          signature: action.signature
+          signature: action.signature,
+          fetchStatus: FetchStatus.Fetching
         }
       };
-      return { ...state, transactions, idCounter };
+      return { ...state, transactions, idCounter: nextId };
     }
     case ActionType.UpdateStatus: {
       let transaction = state.transactions[action.signature];
       if (transaction) {
         transaction = {
           ...transaction,
-          status: action.status,
-          slot: action.slot,
-          confirmations: action.confirmations
+          fetchStatus: action.fetchStatus
         };
+        if (action.transactionStatus) {
+          transaction.transactionStatus = action.transactionStatus;
+        }
         const transactions = {
           ...state.transactions,
           [action.signature]: transaction
@@ -171,13 +166,14 @@ function initState(): State {
   const transactions = signatures.reduce(
     (transactions: Transactions, signature) => {
       if (!!transactions[signature]) return transactions;
-      idCounter++;
+      const nextId = idCounter + 1;
       transactions[signature] = {
-        id: idCounter,
+        id: nextId,
+        source: Source.Url,
         signature,
-        status: Status.Checking,
-        source: Source.Url
+        fetchStatus: FetchStatus.Fetching
       };
+      idCounter++;
       return transactions;
     },
     {}
@@ -269,44 +265,41 @@ export async function checkTransactionStatus(
 ) {
   dispatch({
     type: ActionType.UpdateStatus,
-    status: Status.Checking,
-    signature
+    signature,
+    fetchStatus: FetchStatus.Fetching
   });
 
-  let status;
-  let slot;
-  let confirmations: Confirmations | undefined;
+  let fetchStatus;
+  let transactionStatus: TransactionStatus | undefined;
   try {
     const { value } = await new Connection(url).getSignatureStatus(signature, {
       searchTransactionHistory: true
     });
 
-    if (value === null) {
-      status = Status.Missing;
-    } else {
-      slot = value.slot;
+    if (value !== null) {
+      let confirmations: Confirmations;
       if (typeof value.confirmations === "number") {
         confirmations = value.confirmations;
       } else {
         confirmations = "max";
       }
 
-      if (value.err) {
-        status = Status.Failure;
-      } else {
-        status = Status.Success;
-      }
+      transactionStatus = {
+        slot: value.slot,
+        confirmations,
+        result: { err: value.err }
+      };
     }
+    fetchStatus = FetchStatus.Fetched;
   } catch (error) {
-    console.error("Failed to check transaction status", error);
-    status = Status.CheckFailed;
+    console.error("Failed to fetch transaction status", error);
+    fetchStatus = FetchStatus.FetchFailed;
   }
   dispatch({
     type: ActionType.UpdateStatus,
-    status,
-    slot,
-    confirmations,
-    signature
+    signature,
+    fetchStatus,
+    transactionStatus
   });
 }
 

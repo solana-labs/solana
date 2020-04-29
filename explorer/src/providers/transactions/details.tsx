@@ -97,9 +97,9 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
     if (status !== ClusterStatus.Connected) return;
 
     const fetchSignatures = new Set<string>();
-    transactions.forEach(tx => {
-      if (tx.slot && tx.confirmations === "max" && !state[tx.signature])
-        fetchSignatures.add(tx.signature);
+    transactions.forEach(({ signature, transactionStatus }) => {
+      if (transactionStatus?.confirmations === "max" && !state[signature])
+        fetchSignatures.add(signature);
     });
 
     const fetchList: string[] = [];

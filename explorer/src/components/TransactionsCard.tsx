@@ -4,8 +4,8 @@ import {
   useTransactionsDispatch,
   checkTransactionStatus,
   ActionType,
-  Transaction,
-  Status
+  TransactionState,
+  FetchStatus
 } from "../providers/transactions";
 import bs58 from "bs58";
 import { assertUnreachable } from "../utils";
@@ -115,50 +115,50 @@ const renderHeader = () => {
 };
 
 const renderTransactionRow = (
-  transaction: Transaction,
+  transaction: TransactionState,
   dispatch: any,
   url: string
 ) => {
+  const { fetchStatus, transactionStatus } = transaction;
+
   let statusText;
   let statusClass;
-  switch (transaction.status) {
-    case Status.CheckFailed:
+  switch (fetchStatus) {
+    case FetchStatus.FetchFailed:
       statusClass = "dark";
       statusText = "Cluster Error";
       break;
-    case Status.Checking:
+    case FetchStatus.Fetching:
       statusClass = "info";
-      statusText = "Checking";
+      statusText = "Fetching";
       break;
-    case Status.Success:
-      statusClass = "success";
-      statusText = "Success";
+    case FetchStatus.Fetched: {
+      if (!transactionStatus) {
+        statusClass = "warning";
+        statusText = "Not Found";
+      } else if (transactionStatus.result.err) {
+        statusClass = "danger";
+        statusText = "Failed";
+      } else {
+        statusClass = "success";
+        statusText = "Success";
+      }
       break;
-    case Status.Failure:
-      statusClass = "danger";
-      statusText = "Failed";
-      break;
-    case Status.Missing:
-      statusClass = "warning";
-      statusText = "Not Found";
-      break;
+    }
     default:
-      return assertUnreachable(transaction.status);
+      return assertUnreachable(fetchStatus);
   }
 
   let slotText = "-";
-  if (transaction.slot !== undefined) {
-    slotText = `${transaction.slot}`;
-  }
-
   let confirmationsText = "-";
-  if (transaction.confirmations !== undefined) {
-    confirmationsText = `${transaction.confirmations}`;
+  if (transactionStatus) {
+    slotText = `${transactionStatus.slot}`;
+    confirmationsText = `${transactionStatus.confirmations}`;
   }
 
   const renderDetails = () => {
     let onClick, icon;
-    if (transaction.confirmations === "max") {
+    if (transactionStatus?.confirmations === "max") {
       icon = "more-horizontal";
       onClick = () =>
         dispatch({
