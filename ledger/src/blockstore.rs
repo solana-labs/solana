@@ -836,7 +836,7 @@ impl Blockstore {
         Ok(())
     }
 
-    pub fn clear_slot_shreds(&self, slot: Slot) {
+    pub fn clear_unconfirmed_slot(&self, slot: Slot) {
         let slot_confirmation_status = self
             .slot_confirmation_status_cf
             .get(slot)

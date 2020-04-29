@@ -464,6 +464,41 @@ impl ReplayStage {
         );
     }
 
+    fn purge_unconfirmed_duplicate_slot(
+        duplicate_slot: Slot,
+        descendants: &HashMap<Slot, HashSet<Slot>>,
+        progress: &mut ProgressMap,
+        bank_forks: &RwLock<BankForks>,
+    ) {
+        error!("purging slot {}", duplicate_slot);
+        let empty = HashSet::new();
+        let slot_descendants = descendants.get(&duplicate_slot).unwrap_or(&empty);
+
+        for d in slot_descendants
+            .iter()
+            .chain(std::iter::once(&duplicate_slot))
+        {
+            // Clear the progress map of these forks
+            let _ = progress.remove(d);
+
+            // Clear the duplicate banks from BankForks
+            {
+                let mut w_bank_forks = bank_forks.write().unwrap();
+                // Purging should have already been taken care of by logic
+                // in repair_service, so make sure drop implementation doesn't
+                // run
+                w_bank_forks
+                    .get(*d)
+                    .expect("Bank in descendants map must exist in BankForks")
+                    .skip_drop
+                    .store(true, Ordering::Relaxed);
+                w_bank_forks
+                    .remove(*d)
+                    .expect("Bank in descendants map must exist in BankForks");
+            }
+        }
+    }
+
     fn log_leader_change(
         my_pubkey: &Pubkey,
         bank_slot: Slot,

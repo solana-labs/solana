@@ -355,6 +355,9 @@ pub struct Bank {
     /// Rewards that were paid out immediately after this bank was created
     #[serde(skip)]
     pub rewards: Option<Vec<(Pubkey, i64)>>,
+
+    #[serde(skip)]
+    pub skip_drop: AtomicBool,
 }
 
 impl Default for BlockhashQueue {
@@ -466,6 +469,7 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
+            skip_drop: AtomicBool::new(false),
         };
 
         datapoint_info!(
@@ -2263,7 +2267,9 @@ impl Bank {
 impl Drop for Bank {
     fn drop(&mut self) {
         // For root slots this is a noop
-        self.rc.accounts.purge_slot(self.slot());
+        if !self.skip_drop.load(Ordering::Relaxed) {
+            self.rc.accounts.purge_slot(self.slot());
+        }
     }
 }
 

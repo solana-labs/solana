@@ -4,7 +4,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 
 pub const NUM_BAD_SLOTS: u64 = 10;
-pub const SLOT_TO_RESOLVE: u64 = 64;
+pub const SLOT_TO_RESOLVE: u64 = 32;
 
 #[derive(Clone)]
 pub(super) struct FailEntryVerificationBroadcastRun {
