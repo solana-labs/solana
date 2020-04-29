@@ -54,14 +54,12 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     // Measures the performance of the squash operation.
     // This mainly consists of the freeze operation which calculates the
     // merkle hash of the account state and distribution of fees and rent
+    let mut slot = 1u64;
     bencher.iter(|| {
-        let bank2 = Arc::new(Bank::new_from_parent(
-            &bank1,
-            &Pubkey::default(),
-            1u64,
-        ));
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), slot));
         bank2.deposit(&pubkeys[0], 1);
         bank2.squash();
+        slot += 1;
     });
 }
 
