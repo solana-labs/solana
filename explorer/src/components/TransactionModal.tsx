@@ -3,15 +3,15 @@ import {
   useDetails,
   useTransactions,
   useTransactionsDispatch,
-  ActionType,
-  Selected
+  ActionType
 } from "../providers/transactions";
 import { displayAddress, decodeCreate, decodeTransfer } from "../utils/tx";
 import {
   LAMPORTS_PER_SOL,
   TransferParams,
   CreateAccountParams,
-  TransactionInstruction
+  TransactionInstruction,
+  TransactionSignature
 } from "@solana/web3.js";
 import Copyable from "./Copyable";
 import Overlay from "./Overlay";
@@ -36,7 +36,7 @@ function TransactionModal() {
               </button>
             </div>
 
-            <TransactionDetails selected={selected} />
+            <TransactionDetails signature={selected} />
           </div>
         </div>
       </div>
@@ -53,8 +53,12 @@ function TransactionModal() {
   );
 }
 
-function TransactionDetails({ selected }: { selected: Selected }) {
-  const details = useDetails(selected.signature);
+function TransactionDetails({
+  signature
+}: {
+  signature: TransactionSignature;
+}) {
+  const details = useDetails(signature);
 
   const renderError = (content: React.ReactNode) => {
     return (
