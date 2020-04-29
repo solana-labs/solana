@@ -970,6 +970,14 @@ impl Bank {
         self.src.status_cache.write().unwrap().clear_signatures();
     }
 
+    pub fn clear_slot_signatures(&self, slot: Slot) {
+        self.src
+            .status_cache
+            .write()
+            .unwrap()
+            .clear_slot_signatures(slot);
+    }
+
     pub fn can_commit(result: &Result<()>) -> bool {
         match result {
             Ok(_) => true,

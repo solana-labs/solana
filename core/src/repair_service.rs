@@ -407,7 +407,7 @@ impl RepairService {
             // 1) Clear old shreds allowing new ones to be inserted
             // 2) Clear the "dead" flag allowing ReplayStage to start replaying
             // this slot
-            blockstore.clear_slot_shreds(*slot);
+            blockstore.clear_unconfirmed_slot(*slot);
 
             // Signal ReplayStage to clear its progress map so that a different
             // version of this slot can be replayed

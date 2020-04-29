@@ -218,9 +218,18 @@ impl ReplayStage {
                     Self::report_memory(&allocated, "replay_active_banks", start);
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
-                    let descendants = HashMap::new();
+                    let descendants = bank_forks.read().unwrap().descendants();
                     let forks_root = bank_forks.read().unwrap().root();
                     let start = allocated.get();
+                    // Reset any duplicate slots that have been confirmed
+                    // by the network in anticipation of the confirmed version of
+                    // the slot
+                    Self::reset_duplicate_slots(
+                        &duplicate_slots_reset_receiver,
+                        &descendants,
+                        &mut progress,
+                        &bank_forks,
+                    );
                     let mut frozen_banks: Vec<_> = bank_forks
                         .read()
                         .unwrap()
@@ -462,6 +471,22 @@ impl ReplayStage {
             "replay_stage-memory",
             (name, (allocated.get() - start) as i64, i64),
         );
+    }
+
+    fn reset_duplicate_slots(
+        duplicate_slots_reset_receiver: &DuplicateSlotsResetReceiver,
+        descendants: &HashMap<Slot, HashSet<Slot>>,
+        progress: &mut ProgressMap,
+        bank_forks: &RwLock<BankForks>,
+    ) {
+        for duplicate_slot in duplicate_slots_reset_receiver.try_iter() {
+            Self::purge_unconfirmed_duplicate_slot(
+                duplicate_slot,
+                descendants,
+                progress,
+                bank_forks,
+            );
+        }
     }
 
     fn purge_unconfirmed_duplicate_slot(

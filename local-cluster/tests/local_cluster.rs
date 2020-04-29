@@ -1131,7 +1131,6 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
         cluster_config.stakers_slot_offset,
         true,
     );
-    let num_warmup_epochs = epoch_schedule.get_leader_schedule_epoch(0) + 1;
 
     // Check for new roots
     let alive_node_contact_infos: Vec<_> = cluster

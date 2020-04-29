@@ -143,7 +143,6 @@ impl Tvu {
         };
 
         let cluster_slots = Arc::new(ClusterSlots::default());
-        let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
@@ -159,7 +158,6 @@ impl Tvu {
             cfg,
             tvu_config.shred_version,
             cluster_slots.clone(),
-            duplicate_slots_sender,
             duplicate_slots_reset_sender,
         );
 

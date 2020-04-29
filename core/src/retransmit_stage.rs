@@ -6,7 +6,7 @@ use crate::{
     repair_service::DuplicateSlotsResetSender,
     repair_service::RepairStrategy,
     result::{Error, Result},
-    window_service::{should_retransmit_and_persist, DuplicateSlotSender, WindowService},
+    window_service::{should_retransmit_and_persist, WindowService},
 };
 use crossbeam_channel::Receiver;
 use solana_ledger::{
@@ -207,14 +207,13 @@ impl RetransmitStage {
         cluster_info: &Arc<ClusterInfo>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
+        verified_receiver: Receiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
         cluster_slots: Arc<ClusterSlots>,
-        duplicate_slots_sender: DuplicateSlotSender,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
