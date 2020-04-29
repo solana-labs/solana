@@ -1,16 +1,19 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import {
   useTransactions,
   useTransactionsDispatch,
   checkTransactionStatus,
   ActionType,
-  TransactionState,
+  TransactionStatus,
+  Source,
   FetchStatus
 } from "../providers/transactions";
 import bs58 from "bs58";
 import { assertUnreachable } from "../utils";
 import { useCluster } from "../providers/cluster";
 import Copyable from "./Copyable";
+import { useHistory, useLocation } from "react-router-dom";
 
 function TransactionsCard() {
   const { transactions, idCounter } = useTransactions();
@@ -18,6 +21,7 @@ function TransactionsCard() {
   const signatureInput = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState("");
   const { url } = useCluster();
+  const location = useLocation();
 
   const onNew = (signature: string) => {
     if (signature.length === 0) return;
@@ -35,7 +39,11 @@ function TransactionsCard() {
       return;
     }
 
-    dispatch({ type: ActionType.InputSignature, signature });
+    dispatch({
+      type: ActionType.FetchSignature,
+      signature,
+      source: Source.Input
+    });
     checkTransactionStatus(dispatch, signature, url);
 
     const inputEl = signatureInput.current;
@@ -93,7 +101,7 @@ function TransactionsCard() {
               <td></td>
             </tr>
             {transactions.map(transaction =>
-              renderTransactionRow(transaction, dispatch, url)
+              renderTransactionRow(transaction, dispatch, location, url)
             )}
           </tbody>
         </table>
@@ -115,11 +123,12 @@ const renderHeader = () => {
 };
 
 const renderTransactionRow = (
-  transaction: TransactionState,
+  transactionStatus: TransactionStatus,
   dispatch: any,
+  location: any,
   url: string
 ) => {
-  const { fetchStatus, transactionStatus } = transaction;
+  const { fetchStatus, info, signature, id } = transactionStatus;
 
   let statusText;
   let statusClass;
@@ -133,10 +142,10 @@ const renderTransactionRow = (
       statusText = "Fetching";
       break;
     case FetchStatus.Fetched: {
-      if (!transactionStatus) {
+      if (!info) {
         statusClass = "warning";
         statusText = "Not Found";
-      } else if (transactionStatus.result.err) {
+      } else if (info.result.err) {
         statusClass = "danger";
         statusText = "Failed";
       } else {
@@ -151,50 +160,46 @@ const renderTransactionRow = (
 
   let slotText = "-";
   let confirmationsText = "-";
-  if (transactionStatus) {
-    slotText = `${transactionStatus.slot}`;
-    confirmationsText = `${transactionStatus.confirmations}`;
+  if (info) {
+    slotText = `${info.slot}`;
+    confirmationsText = `${info.confirmations}`;
   }
 
   const renderDetails = () => {
-    let onClick, icon;
-    if (transactionStatus?.confirmations === "max") {
-      icon = "more-horizontal";
-      onClick = () =>
-        dispatch({
-          type: ActionType.Select,
-          signature: transaction.signature
-        });
+    if (info?.confirmations === "max") {
+      return (
+        <Link
+          to={{ ...location, pathname: "/tx/" + signature }}
+          className="btn btn-rounded-circle btn-white btn-sm"
+        >
+          <span className="fe fe-arrow-right"></span>
+        </Link>
+      );
     } else {
-      icon = "refresh-cw";
-      onClick = () => {
-        checkTransactionStatus(dispatch, transaction.signature, url);
-      };
+      return (
+        <button
+          className="btn btn-rounded-circle btn-white btn-sm"
+          onClick={() => {
+            checkTransactionStatus(dispatch, signature, url);
+          }}
+        >
+          <span className="fe fe-refresh-cw"></span>
+        </button>
+      );
     }
-
-    return (
-      <button
-        className="btn btn-rounded-circle btn-white btn-sm"
-        onClick={onClick}
-      >
-        <span className={`fe fe-${icon}`}></span>
-      </button>
-    );
   };
 
   return (
-    <tr key={transaction.signature}>
+    <tr key={signature}>
       <td>
-        <span className="badge badge-soft-dark badge-pill">
-          {transaction.id}
-        </span>
+        <span className="badge badge-soft-dark badge-pill">{id}</span>
       </td>
       <td>
         <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>
       </td>
       <td>
-        <Copyable text={transaction.signature}>
-          <code>{transaction.signature}</code>
+        <Copyable text={signature}>
+          <code>{signature}</code>
         </Copyable>
       </td>
       <td className="text-uppercase">{confirmationsText}</td>

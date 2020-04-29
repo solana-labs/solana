@@ -5,17 +5,10 @@ import {
   ConfirmedTransaction
 } from "@solana/web3.js";
 import { useCluster, ClusterStatus } from "../cluster";
-import { useTransactions } from "./index";
-
-export enum Status {
-  Checking,
-  CheckFailed,
-  NotFound,
-  Found
-}
+import { useTransactions, FetchStatus } from "./index";
 
 export interface Details {
-  status: Status;
+  fetchStatus: FetchStatus;
   transaction: ConfirmedTransaction | null;
 }
 
@@ -23,13 +16,14 @@ type State = { [signature: string]: Details };
 
 export enum ActionType {
   Update,
-  Add
+  Add,
+  Remove
 }
 
 interface Update {
   type: ActionType.Update;
   signature: string;
-  status: Status;
+  fetchStatus: FetchStatus;
   transaction: ConfirmedTransaction | null;
 }
 
@@ -38,7 +32,12 @@ interface Add {
   signatures: TransactionSignature[];
 }
 
-type Action = Update | Add;
+interface Remove {
+  type: ActionType.Remove;
+  signatures: TransactionSignature[];
+}
+
+type Action = Update | Add | Remove;
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
@@ -49,10 +48,19 @@ function reducer(state: State, action: Action): State {
       action.signatures.forEach(signature => {
         if (!details[signature]) {
           details[signature] = {
-            status: Status.Checking,
+            fetchStatus: FetchStatus.Fetching,
             transaction: null
           };
         }
+      });
+      return details;
+    }
+
+    case ActionType.Remove: {
+      if (action.signatures.length === 0) return state;
+      const details = { ...state };
+      action.signatures.forEach(signature => {
+        delete details[signature];
       });
       return details;
     }
@@ -62,16 +70,12 @@ function reducer(state: State, action: Action): State {
       if (details) {
         details = {
           ...details,
-          status: action.status
+          fetchStatus: action.fetchStatus,
+          transaction: action.transaction
         };
-        if (action.transaction !== null) {
-          details.transaction = action.transaction;
-        }
         return {
           ...state,
-          ...{
-            [action.signature]: details
-          }
+          [action.signature]: details
         };
       }
       break;
@@ -94,22 +98,28 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
 
   // Filter blocks for current transaction slots
   React.useEffect(() => {
-    if (status !== ClusterStatus.Connected) return;
-
+    const removeSignatures = new Set<string>();
     const fetchSignatures = new Set<string>();
-    transactions.forEach(({ signature, transactionStatus }) => {
-      if (transactionStatus?.confirmations === "max" && !state[signature])
+    transactions.forEach(({ signature, info }) => {
+      if (info?.confirmations === "max" && !state[signature])
         fetchSignatures.add(signature);
+      else if (info?.confirmations !== "max" && state[signature])
+        removeSignatures.add(signature);
     });
+
+    const removeList: string[] = [];
+    removeSignatures.forEach(s => removeList.push(s));
+    dispatch({ type: ActionType.Remove, signatures: removeList });
+
+    if (status !== ClusterStatus.Connected) return;
 
     const fetchList: string[] = [];
     fetchSignatures.forEach(s => fetchList.push(s));
     dispatch({ type: ActionType.Add, signatures: fetchList });
-
     fetchSignatures.forEach(signature => {
       fetchDetails(dispatch, signature, url);
     });
-  }, [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [status, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -120,30 +130,26 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
   );
 }
 
-async function fetchDetails(
+export async function fetchDetails(
   dispatch: Dispatch,
   signature: TransactionSignature,
   url: string
 ) {
   dispatch({
     type: ActionType.Update,
-    status: Status.Checking,
+    fetchStatus: FetchStatus.Fetching,
     transaction: null,
     signature
   });
 
-  let status;
+  let fetchStatus;
   let transaction = null;
   try {
     transaction = await new Connection(url).getConfirmedTransaction(signature);
-    if (transaction) {
-      status = Status.Found;
-    } else {
-      status = Status.NotFound;
-    }
+    fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     console.error("Failed to fetch confirmed transaction", error);
-    status = Status.CheckFailed;
+    fetchStatus = FetchStatus.FetchFailed;
   }
-  dispatch({ type: ActionType.Update, status, signature, transaction });
+  dispatch({ type: ActionType.Update, fetchStatus, signature, transaction });
 }
