@@ -894,22 +894,15 @@ impl RpcSol for RpcSolImpl {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Inflation> {
         debug!("get_inflation rpc request received");
-        Ok(meta
-            .request_processor
+        meta.request_processor
             .read()
             .unwrap()
             .get_inflation(commitment)
-            .unwrap())
     }
 
     fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
         debug!("get_epoch_schedule rpc request received");
-        Ok(meta
-            .request_processor
-            .read()
-            .unwrap()
-            .get_epoch_schedule()
-            .unwrap())
+        meta.request_processor.read().unwrap().get_epoch_schedule()
     }
 
     fn get_balance(
