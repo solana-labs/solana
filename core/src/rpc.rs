@@ -87,6 +87,10 @@ impl JsonRpcRequestProcessor {
             let bank = r_bank_forks.working_bank();
             debug!("RPC using working_bank: {:?}", bank.slot());
             Ok(bank)
+        } else if commitment.is_some() && commitment.unwrap().commitment == CommitmentLevel::Root {
+            let slot = r_bank_forks.root();
+            debug!("RPC using node root: {:?}", slot);
+            Ok(r_bank_forks.get(slot).cloned().unwrap())
         } else {
             let cluster_root = self
                 .block_commitment_cache
