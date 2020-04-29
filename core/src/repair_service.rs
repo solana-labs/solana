@@ -81,7 +81,7 @@ impl Default for RepairSlotRange {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DuplicateSlotRepairStatus {
     start: u64,
     repair_addr: Option<SocketAddr>,
@@ -307,6 +307,30 @@ impl RepairService {
         Ok(repairs)
     }
 
+    fn generate_duplicate_repairs_for_slot(
+        blockstore: &Blockstore,
+        slot: Slot,
+    ) -> Option<Vec<RepairType>> {
+        if let Some(slot_meta) = blockstore.meta(slot).unwrap() {
+            if slot_meta.is_full() {
+                // If the slot is full, no further need to repair this slot
+                None
+            } else {
+                Some(Self::generate_repairs_for_slot(
+                    blockstore,
+                    slot,
+                    &slot_meta,
+                    MAX_REPAIR_PER_DUPLICATE,
+                ))
+            }
+        } else {
+            error!("Slot meta for duplicate slot does not exist, cannot generate repairs");
+            // Filter out this slot from the set of duplicates to be repaired as
+            // the SlotMeta has to exist for duplicates to be generated
+            None
+        }
+    }
+
     fn generate_and_send_duplicate_repairs(
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
@@ -318,41 +342,27 @@ impl RepairService {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(*slot, status, cluster_slots, serve_repair);
             if let Some(repair_addr) = status.repair_addr {
-                let repairs = {
-                    if let Some(slot_meta) = blockstore.meta(*slot).unwrap() {
-                        if slot_meta.is_full() {
-                            // If the slot is full, no further need to repair this slot
-                            return false;
-                        }
-                        Self::generate_repairs_for_slot(
-                            blockstore,
-                            *slot,
-                            &slot_meta,
-                            MAX_REPAIR_PER_DUPLICATE,
-                        )
-                    } else {
-                        error!(
-                            "Slot meta for duplicate slot does not exist, cannot generate repairs"
-                        );
-                        // Filter out this slot from the set of duplicates to be repaired as
-                        // the SlotMeta has to exist for duplicates to be generated
-                        return false;
-                    }
-                };
-                for repair_type in repairs {
-                    if let Err(e) = Self::serialize_and_send_request(
-                        &repair_type,
-                        repair_socket,
-                        &repair_addr,
-                        serve_repair,
-                        repair_stats,
-                    ) {
-                        info!("repair req send_to({}) error {:?}", repair_addr, e);
-                    }
-                }
-            }
+                let repairs = Self::generate_duplicate_repairs_for_slot(&blockstore, *slot);
 
-            true
+                if let Some(repairs) = repairs {
+                    for repair_type in repairs {
+                        if let Err(e) = Self::serialize_and_send_request(
+                            &repair_type,
+                            repair_socket,
+                            &repair_addr,
+                            serve_repair,
+                            repair_stats,
+                        ) {
+                            info!("repair req send_to({}) error {:?}", repair_addr, e);
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
         })
     }
 
@@ -375,7 +385,9 @@ impl RepairService {
         serve_repair: &ServeRepair,
     ) {
         let now = timestamp();
-        if status.repair_addr.is_none() || now - status.start > MAX_DUPLICATE_WAIT_MS as u64 {
+        if status.repair_addr.is_none()
+            || now.saturating_sub(status.start) >= MAX_DUPLICATE_WAIT_MS as u64
+        {
             let repair_addr =
                 serve_repair.repair_request_duplicate_compute_best_peer(slot, cluster_slots);
             status.repair_addr = repair_addr.ok();
@@ -604,11 +616,15 @@ impl RepairService {
 mod test {
     use super::*;
     use crate::cluster_info::Node;
+    use crossbeam_channel::unbounded;
     use solana_ledger::blockstore::{
         make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
     };
     use solana_ledger::shred::max_ticks_per_n_shreds;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs};
+    use solana_sdk::signature::Signer;
+    use solana_vote_program::vote_transaction;
 
     #[test]
     pub fn test_repair_orphan() {
@@ -842,5 +858,278 @@ mod test {
             })
             .unwrap();
         assert_eq!(lowest.lowest, 5);
+    }
+
+    #[test]
+    pub fn test_generate_duplicate_repairs_for_slot() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let dead_slot = 9;
+
+        // SlotMeta doesn't exist, should make no repairs
+        assert!(
+            RepairService::generate_duplicate_repairs_for_slot(&blockstore, dead_slot,).is_none()
+        );
+
+        // Insert some shreds to create a SlotMeta, should make repairs
+        let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+        let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
+        blockstore
+            .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
+            .unwrap();
+        assert!(
+            RepairService::generate_duplicate_repairs_for_slot(&blockstore, dead_slot,).is_some()
+        );
+
+        // SlotMeta is full, should make no repairs
+        blockstore
+            .insert_shreds(vec![shreds.pop().unwrap()], None, false)
+            .unwrap();
+        assert!(
+            RepairService::generate_duplicate_repairs_for_slot(&blockstore, dead_slot,).is_none()
+        );
+    }
+
+    #[test]
+    pub fn test_generate_and_send_duplicate_repairs() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let cluster_slots = ClusterSlots::default();
+        let serve_repair = ServeRepair::new_with_invalid_keypair(Node::new_localhost().info);
+        let mut duplicate_slot_repair_statuses = HashMap::new();
+        let dead_slot = 9;
+        let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
+        let duplicate_status = DuplicateSlotRepairStatus {
+            start: std::u64::MAX,
+            repair_addr: Some(receive_socket.local_addr().unwrap()),
+        };
+
+        // Insert some shreds to create a SlotMeta,
+        let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+        let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
+        blockstore
+            .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
+            .unwrap();
+
+        // Slot is not yet full, should not get filtered from `duplicate_slot_repair_statuses`
+        duplicate_slot_repair_statuses.insert(dead_slot, duplicate_status.clone());
+        RepairService::generate_and_send_duplicate_repairs(
+            &mut duplicate_slot_repair_statuses,
+            &cluster_slots,
+            &blockstore,
+            &serve_repair,
+            &mut RepairStats::default(),
+            &UdpSocket::bind("0.0.0.0:0").unwrap(),
+        );
+        assert_eq!(duplicate_slot_repair_statuses.len(), 1);
+        assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
+
+        // Insert rest of shreds. Slot is full, should get filtered from
+        // `duplicate_slot_repair_statuses`
+        blockstore
+            .insert_shreds(vec![shreds.pop().unwrap()], None, false)
+            .unwrap();
+        RepairService::generate_and_send_duplicate_repairs(
+            &mut duplicate_slot_repair_statuses,
+            &cluster_slots,
+            &blockstore,
+            &serve_repair,
+            &mut RepairStats::default(),
+            &UdpSocket::bind("0.0.0.0:0").unwrap(),
+        );
+        assert!(duplicate_slot_repair_statuses.is_empty());
+    }
+
+    #[test]
+    pub fn test_update_duplicate_slot_repair_addr() {
+        let dummy_addr = Some(UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap());
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
+            Node::new_localhost().info,
+        ));
+        let serve_repair = ServeRepair::new(cluster_info.clone());
+        let valid_repair_peer = Node::new_localhost().info;
+
+        // Signal that this peer has completed the dead slot, and is thus
+        // a valid target for repair
+        let dead_slot = 9;
+        let cluster_slots = ClusterSlots::default();
+        cluster_slots.insert_node_id(dead_slot, Arc::new(valid_repair_peer.id));
+        cluster_info.insert_info(valid_repair_peer);
+
+        // Not enough time has passed, should not update the
+        // address
+        let mut duplicate_status = DuplicateSlotRepairStatus {
+            start: std::u64::MAX,
+            repair_addr: dummy_addr,
+        };
+        RepairService::update_duplicate_slot_repair_addr(
+            dead_slot,
+            &mut duplicate_status,
+            &cluster_slots,
+            &serve_repair,
+        );
+        assert_eq!(duplicate_status.repair_addr, dummy_addr);
+
+        // If the repair address is None, should try to update
+        let mut duplicate_status = DuplicateSlotRepairStatus {
+            start: std::u64::MAX,
+            repair_addr: None,
+        };
+        RepairService::update_duplicate_slot_repair_addr(
+            dead_slot,
+            &mut duplicate_status,
+            &cluster_slots,
+            &serve_repair,
+        );
+        assert!(duplicate_status.repair_addr.is_some());
+
+        // If sufficient time has passssed, should try to update
+        let mut duplicate_status = DuplicateSlotRepairStatus {
+            start: timestamp() - MAX_DUPLICATE_WAIT_MS as u64,
+            repair_addr: dummy_addr,
+        };
+        RepairService::update_duplicate_slot_repair_addr(
+            dead_slot,
+            &mut duplicate_status,
+            &cluster_slots,
+            &serve_repair,
+        );
+        assert!(duplicate_status.repair_addr.is_some());
+    }
+
+    #[test]
+    pub fn test_process_new_duplicate_slots() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let cluster_slots = ClusterSlots::default();
+        let serve_repair = ServeRepair::new_with_invalid_keypair(Node::new_localhost().info);
+        let mut duplicate_slot_repair_statuses = HashMap::new();
+        let duplicate_slot = 9;
+
+        // Fill blockstore for dead slot
+        blockstore.set_dead_slot(duplicate_slot).unwrap();
+        assert!(blockstore.is_dead(duplicate_slot));
+        let (shreds, _) = make_slot_entries(duplicate_slot, 0, 1);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        let keypairs = ValidatorVoteKeypairs::new_rand();
+        let (reset_sender, reset_receiver) = unbounded();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = genesis_utils::create_genesis_config_with_vote_accounts(
+            1_000_000_000,
+            &[&keypairs],
+            10000,
+        );
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank9 = Bank::new_from_parent(&bank0, &Pubkey::default(), duplicate_slot);
+        let old_balance = bank9.get_balance(&keypairs.node_keypair.pubkey());
+        bank9
+            .transfer(10_000, &mint_keypair, &keypairs.node_keypair.pubkey())
+            .unwrap();
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![0],
+            bank0.hash(),
+            bank0.last_blockhash(),
+            &keypairs.node_keypair,
+            &keypairs.vote_keypair,
+            &keypairs.vote_keypair,
+        );
+        bank9.process_transaction(&vote_tx).unwrap();
+        assert!(bank9.get_signature_status(&vote_tx.signatures[0]).is_some());
+
+        RepairService::process_new_duplicate_slots(
+            &[duplicate_slot],
+            &mut duplicate_slot_repair_statuses,
+            &cluster_slots,
+            &bank9,
+            &blockstore,
+            &serve_repair,
+            &reset_sender,
+        );
+
+        // Blockstore should have been cleared
+        assert!(!blockstore.is_dead(duplicate_slot));
+
+        // Should not be able to find signature for slot 9 for the tx
+        assert!(bank9.get_signature_status(&vote_tx.signatures[0]).is_none());
+
+        // Getting balance should return the old balance (acounts were cleared)
+        assert_eq!(
+            bank9.get_balance(&keypairs.node_keypair.pubkey()),
+            old_balance
+        );
+
+        // Should add the duplicate slot to the tracker
+        assert!(duplicate_slot_repair_statuses
+            .get(&duplicate_slot)
+            .is_some());
+
+        // A signal should be sent to clear ReplayStage
+        assert!(reset_receiver.try_recv().is_ok());
+    }
+
+    #[test]
+    pub fn test_find_new_duplicate_slots() {
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let cluster_slots = ClusterSlots::default();
+        let mut duplicate_slot_repair_statuses = HashMap::new();
+        let keypairs = ValidatorVoteKeypairs::new_rand();
+        let only_node_id = Arc::new(keypairs.node_keypair.pubkey());
+        let GenesisConfigInfo { genesis_config, .. } =
+            genesis_utils::create_genesis_config_with_vote_accounts(
+                1_000_000_000,
+                &[keypairs],
+                100,
+            );
+        let bank0 = Bank::new(&genesis_config);
+
+        // Empty blockstore should have no duplicates
+        assert!(RepairService::find_new_duplicate_slots(
+            &duplicate_slot_repair_statuses,
+            &blockstore,
+            &cluster_slots,
+            &bank0,
+        )
+        .is_empty());
+
+        // Insert a dead slot, but is not confirmed by network so should not
+        // be marked as duplicate
+        let dead_slot = 9;
+        blockstore.set_dead_slot(dead_slot).unwrap();
+        assert!(RepairService::find_new_duplicate_slots(
+            &duplicate_slot_repair_statuses,
+            &blockstore,
+            &cluster_slots,
+            &bank0,
+        )
+        .is_empty());
+
+        // If supermajority confirms the slot, then dead slot should be
+        // marked as a duplicate that needs to be repaired
+        cluster_slots.insert_node_id(dead_slot, only_node_id);
+        assert_eq!(
+            RepairService::find_new_duplicate_slots(
+                &duplicate_slot_repair_statuses,
+                &blockstore,
+                &cluster_slots,
+                &bank0,
+            ),
+            vec![dead_slot]
+        );
+
+        // Because the slot already exists in `duplicate_slot_repair_statuses`,
+        // should not be returned again
+        duplicate_slot_repair_statuses.insert(dead_slot, DuplicateSlotRepairStatus::default());
+        assert!(RepairService::find_new_duplicate_slots(
+            &duplicate_slot_repair_statuses,
+            &blockstore,
+            &cluster_slots,
+            &bank0,
+        )
+        .is_empty());
     }
 }

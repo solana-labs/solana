@@ -22,7 +22,7 @@ use solana_sdk::{
     client::{AsyncClient, SyncClient},
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
-    epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
     genesis_config::OperatingMode,
     hash::Hash,
     poh_config::PohConfig,
@@ -1126,11 +1126,6 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
         .find(|x| *x != cluster.entry_point_info.id)
         .unwrap();
     let _ = cluster.exit_node(&validator_id);
-    let epoch_schedule = EpochSchedule::custom(
-        cluster_config.slots_per_epoch,
-        cluster_config.stakers_slot_offset,
-        true,
-    );
 
     // Check for new roots
     let alive_node_contact_infos: Vec<_> = cluster

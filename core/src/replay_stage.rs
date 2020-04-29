@@ -109,7 +109,7 @@ pub struct ReplayStage {
 }
 
 impl ReplayStage {
-    #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,
@@ -3602,5 +3602,66 @@ pub(crate) mod tests {
             parent_slot,
             &progress_map,
         ));
+    }
+
+    #[test]
+    fn test_purge_unconfirmed_duplicate_slot() {
+        let (bank_forks, mut progress) = setup_forks();
+        let descendants = bank_forks.read().unwrap().descendants();
+
+        // Purging slot 5 should purge only slots 5 and its descendant 6
+        ReplayStage::purge_unconfirmed_duplicate_slot(5, &descendants, &mut progress, &bank_forks);
+        for i in 5..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        for i in 0..=4 {
+            assert!(bank_forks.read().unwrap().get(i).is_some());
+            assert!(progress.get(&i).is_some());
+        }
+
+        // Purging slot 4 should purge only slot 4
+        let descendants = bank_forks.read().unwrap().descendants();
+        ReplayStage::purge_unconfirmed_duplicate_slot(4, &descendants, &mut progress, &bank_forks);
+        for i in 4..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        for i in 0..=3 {
+            assert!(bank_forks.read().unwrap().get(i).is_some());
+            assert!(progress.get(&i).is_some());
+        }
+
+        // Purging slot 1 should purge both forks 2 and 3
+        let descendants = bank_forks.read().unwrap().descendants();
+        ReplayStage::purge_unconfirmed_duplicate_slot(1, &descendants, &mut progress, &bank_forks);
+        for i in 1..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        assert!(bank_forks.read().unwrap().get(0).is_some());
+        assert!(progress.get(&0).is_some());
+    }
+
+    fn setup_forks() -> (RwLock<BankForks>, ProgressMap) {
+        /*
+            Build fork structure:
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 2    |
+               |    slot 3
+            slot 4    |
+                    slot 5
+                      |
+                    slot 6
+        */
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5) / (tr(6)))));
+
+        let mut vote_simulator = VoteSimulator::new(1);
+        vote_simulator.fill_bank_forks(forks, &HashMap::new());
+
+        (vote_simulator.bank_forks, vote_simulator.progress)
     }
 }

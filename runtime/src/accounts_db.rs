@@ -2236,6 +2236,39 @@ pub mod tests {
         assert_eq!(db0.load_slow(&ancestors, &key), Some((account0, 0)));
     }
 
+    #[test]
+    fn test_remove_unrooted_slot() {
+        let unrooted_slot = 9;
+        let db = AccountsDB::new(Vec::new());
+        let key = Pubkey::default();
+        let account0 = Account::new(1, 0, &key);
+        let ancestors: HashMap<_, _> = vec![(unrooted_slot, 1)].into_iter().collect();
+        db.store(unrooted_slot, &[(&key, &account0)]);
+        db.bank_hashes
+            .write()
+            .unwrap()
+            .insert(unrooted_slot, BankHashInfo::default());
+        assert!(db
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&key, &ancestors)
+            .is_some());
+        assert!(db.load_slow(&ancestors, &key).is_some());
+
+        // Purge the slot
+        db.remove_unrooted_slot(unrooted_slot);
+        assert!(db.load_slow(&ancestors, &key).is_none());
+        assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
+        assert!(db.storage.read().unwrap().0.get(&unrooted_slot).is_none());
+        assert!(db
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&key, &ancestors)
+            .is_none());
+    }
+
     fn create_account(
         accounts: &AccountsDB,
         pubkeys: &mut Vec<Pubkey>,
