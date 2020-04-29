@@ -1,4 +1,4 @@
-use crate::args::{Args, BalancesArgs, Command, DistributeArgs, DistributeStakeArgs};
+use crate::args::{Args, BalancesArgs, Command, DistributeStakeArgs, DistributeTokensArgs};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::input_validators::{is_valid_pubkey, is_valid_signer};
 use solana_cli_config::CONFIG_FILE;
@@ -160,8 +160,8 @@ where
         .get_matches_from(args)
 }
 
-fn parse_distribute_args(matches: &ArgMatches<'_>) -> DistributeArgs<String> {
-    DistributeArgs {
+fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String> {
+    DistributeTokensArgs {
         bids_csv: value_t_or_exit!(matches, "bids_csv", String),
         transactions_csv: value_t_or_exit!(matches, "transactions_csv", String),
         dollars_per_sol: value_t_or_exit!(matches, "dollars_per_sol", f64),
@@ -200,7 +200,9 @@ where
     let url = matches.value_of("url").map(|x| x.to_string());
 
     let command = match matches.subcommand() {
-        ("distribute", Some(matches)) => Command::Distribute(parse_distribute_args(matches)),
+        ("distribute-tokens", Some(matches)) => {
+            Command::DistributeTokens(parse_distribute_tokens_args(matches))
+        }
         ("distribute-stake", Some(matches)) => {
             Command::DistributeStake(parse_distribute_stake_args(matches))
         }

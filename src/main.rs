@@ -17,8 +17,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let thin_client = ThinClient(client);
 
     match resolve_command(command_args.command)? {
-        Command::Distribute(args) => {
-            tokens::process_distribute(&thin_client, &args)?;
+        Command::DistributeTokens(args) => {
+            tokens::process_distribute_tokens(&thin_client, &args)?;
         }
         Command::DistributeStake(args) => {
             tokens::process_distribute_stake(&thin_client, &args)?;

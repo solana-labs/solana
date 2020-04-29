@@ -1,4 +1,4 @@
-use crate::args::{BalancesArgs, DistributeArgs, DistributeStakeArgs};
+use crate::args::{BalancesArgs, DistributeStakeArgs, DistributeTokensArgs};
 use crate::thin_client::{Client, ThinClient};
 use console::style;
 use csv::{ReaderBuilder, Trim};
@@ -84,7 +84,7 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
 fn distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     allocations: &[Allocation],
-    args: &DistributeArgs<Box<dyn Signer>>,
+    args: &DistributeTokensArgs<Box<dyn Signer>>,
 ) -> Result<(), csv::Error> {
     let signers = if args.dry_run {
         vec![]
@@ -243,9 +243,9 @@ fn append_transaction_info(
     Ok(())
 }
 
-pub fn process_distribute<T: Client>(
+pub fn process_distribute_tokens<T: Client>(
     client: &ThinClient<T>,
-    args: &DistributeArgs<Box<dyn Signer>>,
+    args: &DistributeTokensArgs<Box<dyn Signer>>,
 ) -> Result<(), csv::Error> {
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
@@ -431,7 +431,7 @@ pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair:
         .unwrap()
         .to_string();
 
-    let args: DistributeArgs<Box<dyn Signer>> = DistributeArgs {
+    let args: DistributeTokensArgs<Box<dyn Signer>> = DistributeTokensArgs {
         sender_keypair: Some(Box::new(sender_keypair)),
         fee_payer: Some(Box::new(fee_payer)),
         dry_run: false,
@@ -439,7 +439,7 @@ pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair:
         transactions_csv: transactions_csv.clone(),
         dollars_per_sol: 0.22,
     };
-    process_distribute(&thin_client, &args).unwrap();
+    process_distribute_tokens(&thin_client, &args).unwrap();
     let transaction_infos = read_transaction_infos(&transactions_csv);
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
@@ -452,7 +452,7 @@ pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair:
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute(&thin_client, &args).unwrap();
+    process_distribute_tokens(&thin_client, &args).unwrap();
     let transaction_infos = read_transaction_infos(&transactions_csv);
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());

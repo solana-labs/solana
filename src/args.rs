@@ -4,7 +4,7 @@ use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
 use solana_sdk::{pubkey::Pubkey, signature::Signer};
 use std::error::Error;
 
-pub struct DistributeArgs<K> {
+pub struct DistributeTokensArgs<K> {
     pub bids_csv: String,
     pub transactions_csv: String,
     pub dollars_per_sol: f64,
@@ -29,7 +29,7 @@ pub struct BalancesArgs {
 }
 
 pub enum Command<P, K> {
-    Distribute(DistributeArgs<K>),
+    DistributeTokens(DistributeTokensArgs<K>),
     DistributeStake(DistributeStakeArgs<P, K>),
     Balances(BalancesArgs),
 }
@@ -44,10 +44,10 @@ pub fn resolve_command(
     command: Command<String, String>,
 ) -> Result<Command<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
     match command {
-        Command::Distribute(args) => {
+        Command::DistributeTokens(args) => {
             let mut wallet_manager = maybe_wallet_manager()?;
             let matches = ArgMatches::default();
-            let resolved_args = DistributeArgs {
+            let resolved_args = DistributeTokensArgs {
                 bids_csv: args.bids_csv,
                 transactions_csv: args.transactions_csv,
                 dollars_per_sol: args.dollars_per_sol,
@@ -59,7 +59,7 @@ pub fn resolve_command(
                     signer_from_path(&matches, &key_url, "fee-payer", &mut wallet_manager).unwrap()
                 }),
             };
-            Ok(Command::Distribute(resolved_args))
+            Ok(Command::DistributeTokens(resolved_args))
         }
         Command::DistributeStake(args) => {
             let mut wallet_manager = maybe_wallet_manager()?;
