@@ -169,7 +169,9 @@ impl JsonRpcRequestProcessor {
     pub fn get_epoch_schedule(&self) -> Result<EpochSchedule> {
         // Since epoch schedule data comes from the genesis config, any commitment level should be
         // fine
-        Ok(*self.bank(None)?.epoch_schedule())
+        Ok(*self
+            .bank(Some(CommitmentConfig::recent()))?
+            .epoch_schedule())
     }
 
     pub fn get_balance(
