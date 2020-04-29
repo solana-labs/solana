@@ -77,8 +77,11 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, _, _) =
-            shredder.entries_to_shreds(&receive_results.entries, false, self.next_shred_index);
+        let (data_shreds, _, _) = shredder.entries_to_shreds(
+            &receive_results.entries,
+            last_tick_height == bank.max_tick_height() && last_entries.is_none(),
+            self.next_shred_index,
+        );
 
         self.next_shred_index += data_shreds.len() as u32;
         let last_shreds = last_entries.map(|(good_last_entry, bad_last_entry)| {

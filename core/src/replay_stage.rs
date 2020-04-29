@@ -783,7 +783,7 @@ impl ReplayStage {
                     trace!("latest root send failed: {:?}", e);
                 }
             });
-            trace!("new root {}", new_root);
+            info!("new root {}", new_root);
             if let Err(e) = root_bank_sender.send(rooted_banks) {
                 trace!("root_bank_sender failed: {:?}", e);
                 return Err(e.into());
