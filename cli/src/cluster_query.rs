@@ -562,25 +562,36 @@ pub fn process_catchup(
         }
 
         let slot_distance = rpc_slot as i64 - node_slot as i64;
+        let slots_per_second =
+            (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
+        let time_remaining = if slots_per_second < 0.0 {
+            "".to_string()
+        } else {
+            format!(
+                ". Time remaining: {}",
+                humantime::format_duration(Duration::from_secs_f64(
+                    (slot_distance as f64 / slots_per_second).round()
+                ))
+            )
+        };
+
         progress_bar.set_message(&format!(
-            "Validator is {} slots away (us:{} them:{}){}",
+            "{} slots behind (us:{} them:{}){}",
             slot_distance,
             node_slot,
             rpc_slot,
             if slot_distance == 0 || previous_rpc_slot == std::u64::MAX {
                 "".to_string()
             } else {
-                let slots_per_second =
-                    (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
-
                 format!(
-                    " and {} at {:.1} slots/second",
+                    ", {} at {:.1} slots/second{}",
                     if slots_per_second < 0.0 {
                         "falling behind"
                     } else {
                         "gaining"
                     },
                     slots_per_second,
+                    time_remaining
                 )
             }
         ));
