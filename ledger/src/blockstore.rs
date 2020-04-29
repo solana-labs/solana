@@ -837,14 +837,6 @@ impl Blockstore {
     }
 
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
-        let slot_confirmation_status = self
-            .slot_confirmation_status_cf
-            .get(slot)
-            .expect("Couldn't fetch from SlotConfirmationStatus column family")
-            .unwrap_or_default();
-
-        // Should not be clearing a confirmed version of a slot
-        assert!(slot_confirmation_status.confirmed_blockhash.is_none());
         let _lock = self.insert_shreds_lock.lock().unwrap();
         let mut slot_meta = self
             .meta(slot)
