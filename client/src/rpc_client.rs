@@ -12,7 +12,10 @@ use log::*;
 use serde_json::{json, Value};
 use solana_sdk::{
     account::Account,
-    clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT},
+    clock::{
+        Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
+        MAX_HASH_AGE_IN_SECONDS,
+    },
     commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -1131,6 +1134,7 @@ impl RpcClient {
                 }
             }
         };
+        let now = Instant::now();
         loop {
             // Return when default (max) commitment is reached
             // Failed transactions have already been eliminated, `is_some` check is sufficient
@@ -1146,7 +1150,14 @@ impl RpcClient {
                 signature,
             ));
             sleep(Duration::from_millis(500));
-            confirmations = self.get_num_blocks_since_signature_confirmation(&signature)?;
+            confirmations = self
+                .get_num_blocks_since_signature_confirmation(&signature)
+                .unwrap_or(confirmations);
+            if now.elapsed().as_secs() >= MAX_HASH_AGE_IN_SECONDS as u64 {
+                return Err(
+                    RpcError::ForUser("transaction not finalized. This can happen when a transaction lands in an abandoned fork. Please retry.".to_string()).into(),
+                );
+            }
         }
     }
 
