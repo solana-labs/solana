@@ -176,7 +176,7 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
-    fn new_empty_map(current_len: usize) -> Self {
+    pub fn new_empty_map(current_len: usize) -> Self {
         let map = MmapMut::map_anon(1).expect("failed to map the data file");
 
         AppendVec {
