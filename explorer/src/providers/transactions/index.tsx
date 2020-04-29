@@ -6,7 +6,7 @@ import {
   Account,
   SignatureResult
 } from "@solana/web3.js";
-import { findGetParameter, findPathSegment } from "../../utils/url";
+import { findGetParameter } from "../../utils/url";
 import { useCluster, ClusterStatus } from "../cluster";
 import {
   DetailsProvider,
@@ -20,6 +20,7 @@ import {
   Dispatch as AccountsDispatch,
   ActionType as AccountsActionType
 } from "../accounts";
+import { useLocation } from "react-router-dom";
 
 export enum FetchStatus {
   Fetching,
@@ -27,28 +28,29 @@ export enum FetchStatus {
   Fetched
 }
 
-enum Source {
+export enum Source {
   Url,
-  Input
+  Input,
+  Test
 }
 
 export type Confirmations = number | "max";
 
-export interface TransactionStatus {
+export interface TransactionStatusInfo {
   slot: number;
   result: SignatureResult;
   confirmations: Confirmations;
 }
 
-export interface TransactionState {
+export interface TransactionStatus {
   id: number;
   source: Source;
   fetchStatus: FetchStatus;
   signature: TransactionSignature;
-  transactionStatus?: TransactionStatus;
+  info?: TransactionStatusInfo;
 }
 
-type Transactions = { [signature: string]: TransactionState };
+type Transactions = { [signature: string]: TransactionStatus };
 interface State {
   idCounter: number;
   selected?: TransactionSignature;
@@ -57,50 +59,29 @@ interface State {
 
 export enum ActionType {
   UpdateStatus,
-  InputSignature,
-  Select,
-  Deselect
-}
-
-interface SelectTransaction {
-  type: ActionType.Select;
-  signature: TransactionSignature;
-}
-
-interface DeselectTransaction {
-  type: ActionType.Deselect;
+  FetchSignature
 }
 
 interface UpdateStatus {
   type: ActionType.UpdateStatus;
   signature: TransactionSignature;
   fetchStatus: FetchStatus;
-  transactionStatus?: TransactionStatus;
+  info?: TransactionStatusInfo;
 }
 
-interface InputSignature {
-  type: ActionType.InputSignature;
+interface FetchSignature {
+  type: ActionType.FetchSignature;
   signature: TransactionSignature;
+  source: Source;
 }
 
-type Action =
-  | UpdateStatus
-  | InputSignature
-  | SelectTransaction
-  | DeselectTransaction;
+type Action = UpdateStatus | FetchSignature;
 
 type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case ActionType.Deselect: {
-      return { ...state, selected: undefined };
-    }
-    case ActionType.Select: {
-      const tx = state.transactions[action.signature];
-      return { ...state, selected: tx.signature };
-    }
-    case ActionType.InputSignature: {
+    case ActionType.FetchSignature: {
       if (!!state.transactions[action.signature]) return state;
 
       const nextId = state.idCounter + 1;
@@ -108,7 +89,7 @@ function reducer(state: State, action: Action): State {
         ...state.transactions,
         [action.signature]: {
           id: nextId,
-          source: Source.Input,
+          source: action.source,
           signature: action.signature,
           fetchStatus: FetchStatus.Fetching
         }
@@ -120,11 +101,9 @@ function reducer(state: State, action: Action): State {
       if (transaction) {
         transaction = {
           ...transaction,
-          fetchStatus: action.fetchStatus
+          fetchStatus: action.fetchStatus,
+          info: action.info
         };
-        if (action.transactionStatus) {
-          transaction.transactionStatus = action.transactionStatus;
-        }
         const transactions = {
           ...state.transactions,
           [action.signature]: transaction
@@ -137,73 +116,59 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
-export const TX_PATHS = [
-  "/tx",
-  "/txs",
-  "/txn",
-  "/txns",
-  "/transaction",
-  "/transactions"
-];
-
-function urlSignatures(): Array<string> {
-  const signatures: Array<string> = [];
-
-  TX_PATHS.forEach(path => {
-    const name = path.slice(1);
-    const params = findGetParameter(name)?.split(",") || [];
-    const segments = findPathSegment(name)?.split(",") || [];
-    signatures.push(...params);
-    signatures.push(...segments);
-  });
-
-  return signatures.filter(s => s.length > 0);
-}
-
-function initState(): State {
-  let idCounter = 0;
-  const signatures = urlSignatures();
-  const transactions = signatures.reduce(
-    (transactions: Transactions, signature) => {
-      if (!!transactions[signature]) return transactions;
-      const nextId = idCounter + 1;
-      transactions[signature] = {
-        id: nextId,
-        source: Source.Url,
-        signature,
-        fetchStatus: FetchStatus.Fetching
-      };
-      idCounter++;
-      return transactions;
-    },
-    {}
-  );
-  return { idCounter, transactions };
-}
+export const TX_ALIASES = ["tx", "txn", "transaction"];
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type TransactionsProviderProps = { children: React.ReactNode };
 export function TransactionsProvider({ children }: TransactionsProviderProps) {
-  const [state, dispatch] = React.useReducer(reducer, undefined, initState);
+  const [state, dispatch] = React.useReducer(reducer, {
+    idCounter: 0,
+    transactions: {}
+  });
 
   const { status, url } = useCluster();
   const accountsDispatch = useAccountsDispatch();
+  const search = useLocation().search;
 
-  // Check transaction statuses on startup and whenever cluster updates
+  // Check transaction statuses whenever cluster updates
   React.useEffect(() => {
     if (status !== ClusterStatus.Connected) return;
+
+    Object.keys(state.transactions).forEach(signature => {
+      dispatch({
+        type: ActionType.FetchSignature,
+        signature,
+        source: Source.Url
+      });
+      checkTransactionStatus(dispatch, signature, url);
+    });
 
     // Create a test transaction
     if (findGetParameter("test") !== null) {
       createTestTransaction(dispatch, accountsDispatch, url);
     }
-
-    Object.keys(state.transactions).forEach(signature => {
-      checkTransactionStatus(dispatch, signature, url);
-    });
   }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Check for transactions in the url params
+  React.useEffect(() => {
+    TX_ALIASES.flatMap(key =>
+      (findGetParameter(key)?.split(",") || []).concat(
+        findGetParameter(key + "s")?.split(",") || []
+      )
+    )
+      .flatMap(paramValue => paramValue?.split(",") || [])
+      .filter(signature => !state.transactions[signature])
+      .forEach(signature => {
+        dispatch({
+          type: ActionType.FetchSignature,
+          signature,
+          source: Source.Url
+        });
+        checkTransactionStatus(dispatch, signature, url);
+      });
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -232,7 +197,11 @@ async function createTestTransaction(
       100000,
       "recent"
     );
-    dispatch({ type: ActionType.InputSignature, signature });
+    dispatch({
+      type: ActionType.FetchSignature,
+      signature,
+      source: Source.Test
+    });
     checkTransactionStatus(dispatch, signature, url);
     accountsDispatch({
       type: AccountsActionType.Input,
@@ -251,7 +220,11 @@ async function createTestTransaction(
       lamports: 1
     });
     const signature = await connection.sendTransaction(tx, testAccount);
-    dispatch({ type: ActionType.InputSignature, signature });
+    dispatch({
+      type: ActionType.FetchSignature,
+      signature,
+      source: Source.Test
+    });
     checkTransactionStatus(dispatch, signature, url);
   } catch (error) {
     console.error("Failed to create test failure transaction", error);
@@ -270,7 +243,7 @@ export async function checkTransactionStatus(
   });
 
   let fetchStatus;
-  let transactionStatus: TransactionStatus | undefined;
+  let info: TransactionStatusInfo | undefined;
   try {
     const { value } = await new Connection(url).getSignatureStatus(signature, {
       searchTransactionHistory: true
@@ -284,7 +257,7 @@ export async function checkTransactionStatus(
         confirmations = "max";
       }
 
-      transactionStatus = {
+      info = {
         slot: value.slot,
         confirmations,
         result: { err: value.err }
@@ -295,11 +268,12 @@ export async function checkTransactionStatus(
     console.error("Failed to fetch transaction status", error);
     fetchStatus = FetchStatus.FetchFailed;
   }
+
   dispatch({
     type: ActionType.UpdateStatus,
     signature,
     fetchStatus,
-    transactionStatus
+    info
   });
 }
 
@@ -312,11 +286,34 @@ export function useTransactions() {
   }
   return {
     idCounter: context.idCounter,
-    selected: context.selected,
     transactions: Object.values(context.transactions).sort((a, b) =>
       a.id <= b.id ? 1 : -1
     )
   };
+}
+
+export function useTransactionStatus(signature: TransactionSignature) {
+  const context = React.useContext(StateContext);
+
+  if (!context) {
+    throw new Error(
+      `useTransactionStatus must be used within a TransactionsProvider`
+    );
+  }
+
+  return context.transactions[signature];
+}
+
+export function useTransactionDetails(signature: TransactionSignature) {
+  const context = React.useContext(DetailsStateContext);
+
+  if (!context) {
+    throw new Error(
+      `useTransactionDetails must be used within a TransactionsProvider`
+    );
+  }
+
+  return context[signature];
 }
 
 export function useTransactionsDispatch() {
@@ -337,12 +334,4 @@ export function useDetailsDispatch() {
     );
   }
   return context;
-}
-
-export function useDetails(signature: TransactionSignature) {
-  const context = React.useContext(DetailsStateContext);
-  if (!context) {
-    throw new Error(`useDetails must be used within a TransactionsProvider`);
-  }
-  return context[signature];
 }

@@ -11,8 +11,9 @@ import {
 import { assertUnreachable } from "../utils";
 import { displayAddress } from "../utils/tx";
 import { useCluster } from "../providers/cluster";
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import Copyable from "./Copyable";
+import { lamportsToSolString } from "utils";
 
 function AccountsCard() {
   const { accounts, idCounter } = useAccounts();
@@ -154,7 +155,7 @@ const renderAccountRow = (
 
   let balance = "-";
   if (account.lamports !== undefined) {
-    balance = `◎${(1.0 * account.lamports) / LAMPORTS_PER_SOL}`;
+    balance = lamportsToSolString(account.lamports);
   }
 
   const renderDetails = () => {

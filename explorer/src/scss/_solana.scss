@@ -1,4 +1,4 @@
-// 
+//
 // solana.scss
 // Use this to write your custom SCSS
 //
@@ -12,6 +12,7 @@ code {
 
 .copyable {
   position: relative;
+  width: fit-content;
 
   & > div:hover {
     cursor: pointer;
@@ -20,7 +21,6 @@ code {
   .popover.bs-popover-top {
     background-color: $dark;
     top: -4rem;
-    left: 40%;
 
     .popover-body {
       color: white;
@@ -60,12 +60,14 @@ code {
   }
 }
 
-.text-signature, .text-address {
+.text-signature,
+.text-address {
   font-size: 85%;
 }
 
-input.text-signature, input.text-address {
-  padding: 0 0.75rem
+input.text-signature,
+input.text-address {
+  padding: 0 0.75rem;
 }
 
 h4.ix-pill {
@@ -87,19 +89,22 @@ h4.slot-pill {
 }
 
 .list-group-item:last-child {
-  &.ix-item, &.slot-item {
+  &.ix-item,
+  &.slot-item {
     border-bottom-width: 0px;
   }
 }
 
 .list-group:last-child .list-group-item:last-child {
-  &.ix-item, &.slot-item {
+  &.ix-item,
+  &.slot-item {
     border-bottom-width: 1px;
   }
 }
 
 .list-group-item:first-child {
-  &.ix-item, &.slot-item {
+  &.ix-item,
+  &.slot-item {
     border-top-width: 1px;
   }
 }

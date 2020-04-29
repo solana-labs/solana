@@ -125,6 +125,10 @@ function initState(): State {
   };
 }
 
+type SetShowModal = React.Dispatch<React.SetStateAction<boolean>>;
+const ModalContext = React.createContext<[boolean, SetShowModal] | undefined>(
+  undefined
+);
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
@@ -135,6 +139,7 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
     undefined,
     initState
   );
+  const [showModal, setShowModal] = React.useState(false);
 
   React.useEffect(() => {
     // Connect to cluster immediately
@@ -144,7 +149,9 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
   return (
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
-        {children}
+        <ModalContext.Provider value={[showModal, setShowModal]}>
+          {children}
+        </ModalContext.Provider>
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
@@ -200,6 +207,14 @@ export function useClusterDispatch() {
   const context = React.useContext(DispatchContext);
   if (!context) {
     throw new Error(`useClusterDispatch must be used within a ClusterProvider`);
+  }
+  return context;
+}
+
+export function useClusterModal() {
+  const context = React.useContext(ModalContext);
+  if (!context) {
+    throw new Error(`useClusterModal must be used within a ClusterProvider`);
   }
   return context;
 }

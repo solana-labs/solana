@@ -7,17 +7,15 @@ import {
   clusterUrl,
   clusterName,
   CLUSTERS,
-  Cluster
+  Cluster,
+  useClusterModal
 } from "../providers/cluster";
 import { assertUnreachable } from "../utils";
 import Overlay from "./Overlay";
 
-type Props = {
-  show: boolean;
-  onClose: () => void;
-};
-
-function ClusterModal({ show, onClose }: Props) {
+function ClusterModal() {
+  const [show, setShow] = useClusterModal();
+  const onClose = () => setShow(false);
   return (
     <>
       <div
