@@ -72,28 +72,30 @@ pub fn register_syscalls<'a>(
     vm: &mut EbpfVm<'a, BPFError>,
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
+    // Syscall function common across languages
     vm.register_syscall_ex("abort", syscall_abort)?;
-    vm.register_syscall_ex("sol_panic", syscall_sol_panic)?;
     vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
-    vm.register_syscall_ex("sol_log", syscall_sol_log)?;
     vm.register_syscall_ex("sol_log_", syscall_sol_log)?;
-    vm.register_syscall_ex("sol_log_64", syscall_sol_log_u64)?;
     vm.register_syscall_ex("sol_log_64_", syscall_sol_log_u64)?;
 
-    let invoke_context = Rc::new(RefCell::new(invoke_context));
-    vm.register_syscall_with_context_ex(
-        "sol_invoke_signed_rust",
-        Box::new(SyscallProcessInstructionRust {
-            invoke_context: invoke_context.clone(),
-        }),
-    )?;
-    vm.register_syscall_with_context_ex(
-        "sol_invoke_signed_c",
-        Box::new(SyscallProcessSolInstructionC {
-            invoke_context: invoke_context.clone(),
-        }),
-    )?;
+    // Cross-program invocation syscalls
+    {
+        let invoke_context = Rc::new(RefCell::new(invoke_context));
+        vm.register_syscall_with_context_ex(
+            "sol_invoke_signed_c",
+            Box::new(SyscallProcessSolInstructionC {
+                invoke_context: invoke_context.clone(),
+            }),
+        )?;
+        vm.register_syscall_with_context_ex(
+            "sol_invoke_signed_rust",
+            Box::new(SyscallProcessInstructionRust {
+                invoke_context: invoke_context.clone(),
+            }),
+        )?;
+    }
 
+    // Memory allocator
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
     vm.register_syscall_with_context_ex(
@@ -191,8 +193,9 @@ fn translate_string_and_do(
 }
 
 /// Abort syscall functions, called when the BPF program calls `abort()`
-/// The verify function returns an error which will cause the BPF program
-/// to be halted immediately
+/// LLVM will insert calls to `abort()` if it detects an untenable situation,
+/// `abort()` is not intended to be called explicitly by the program.
+/// Causes the BPF program to be halted immediately
 pub fn syscall_abort(
     _arg1: u64,
     _arg2: u64,
@@ -205,9 +208,8 @@ pub fn syscall_abort(
     Err(SyscallError::Abort.into())
 }
 
-/// Panic syscall functions, called when the BPF program calls 'sol_panic_()`
-/// The verify function returns an error which will cause the BPF program
-/// to be halted immediately
+/// Panic syscall function, called when the BPF program calls 'sol_panic_()`
+/// Causes the BPF program to be halted immediately
 pub fn syscall_sol_panic(
     file: u64,
     len: u64,
@@ -241,7 +243,7 @@ pub fn syscall_sol_log(
     Ok(0)
 }
 
-/// Log 5 u64 values
+/// Log 5 64-bit values
 pub fn syscall_sol_log_u64(
     arg1: u64,
     arg2: u64,
