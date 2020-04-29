@@ -86,10 +86,10 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         self.next_shred_index += data_shreds.len() as u32;
         let last_shreds = last_entries.map(|(good_last_entry, bad_last_entry)| {
             let (good_last_data_shred, _, _) =
-                shredder.entries_to_shreds(&vec![good_last_entry], true, self.next_shred_index);
+                shredder.entries_to_shreds(&[good_last_entry], true, self.next_shred_index);
 
             let (bad_last_data_shred, _, _) =
-                shredder.entries_to_shreds(&vec![bad_last_entry], true, self.next_shred_index);
+                shredder.entries_to_shreds(&[bad_last_entry], true, self.next_shred_index);
 
             self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)
@@ -105,11 +105,11 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         if let Some((good_last_data_shred, bad_last_data_shred)) = last_shreds {
             let bad_last_data_shred = Arc::new(bad_last_data_shred);
             // Store the bad shred so we serve bad repairs to validators catching up
-            blockstore_sender.send((bad_last_data_shred.clone(), None))?;
+            blockstore_sender.send((bad_last_data_shred, None))?;
             // Stash away the good shred so we can rewrite them later
             self.good_shreds.extend(good_last_data_shred.clone());
             // Send good shreds to rest of network
-            socket_sender.send(((stakes.clone(), Arc::new(good_last_data_shred)), None))?;
+            socket_sender.send(((stakes, Arc::new(good_last_data_shred)), None))?;
         }
         Ok(())
     }

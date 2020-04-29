@@ -36,7 +36,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
     thread::sleep,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tempfile::TempDir;
 
@@ -345,26 +345,7 @@ fn run_cluster_partition(
     .unwrap();
     info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
     info!("PARTITION_TEST looking for new roots on all nodes");
-    let mut roots = vec![HashSet::new(); alive_node_contact_infos.len()];
-    let mut done = false;
-    let mut last_print = Instant::now();
-    while !done {
-        for (i, ingress_node) in alive_node_contact_infos.iter().enumerate() {
-            let client = create_client(
-                ingress_node.client_facing_addr(),
-                solana_core::cluster_info::VALIDATOR_PORT_RANGE,
-            );
-            let slot = client.get_slot().unwrap_or(0);
-            roots[i].insert(slot);
-            let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
-            if last_print.elapsed().as_secs() > 3 {
-                info!("PARTITION_TEST min observed roots {}/16", min_node);
-                last_print = Instant::now();
-            }
-            done = min_node >= 16;
-        }
-        sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
-    }
+    cluster_tests::check_for_new_roots(16, &alive_node_contact_infos);
     info!("PARTITION_TEST done waiting for roots");
 }
 
@@ -1124,7 +1105,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     let mut validator_configs = vec![validator_config; num_nodes - 1];
     // Push a faulty_bootstrap = vec![error_validator_config];
     validator_configs.insert(0, error_validator_config);
-    let node_stakes = vec![401, 100, 100];
+    let node_stakes = vec![300, 100, 100];
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -1137,13 +1118,14 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 
     let mut cluster = LocalCluster::new(&cluster_config);
 
-    // Shut down one of the nonbootstrap nodes
+    // Shut down one of the nonbootstrap nodes so that the other
+    // is forced to perform repair
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
         .into_iter()
         .find(|x| *x != cluster.entry_point_info.id)
         .unwrap();
-    let validator_info = cluster.exit_node(&validator_id);
+    let _ = cluster.exit_node(&validator_id);
     let epoch_schedule = EpochSchedule::custom(
         cluster_config.slots_per_epoch,
         cluster_config.stakers_slot_offset,
@@ -1151,33 +1133,13 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     );
     let num_warmup_epochs = epoch_schedule.get_leader_schedule_epoch(0) + 1;
 
-    // Wait for warmup epochs expire
-    /*cluster_tests::sleep_n_epochs(
-        (num_warmup_epochs + 1) as f64,
-        &cluster.genesis_config.poh_config,
-        cluster_config.ticks_per_slot,
-        cluster_config.slots_per_epoch,
-    );
-
-    cluster.restart_node(&validator_id, validator_info);
-
-    let corrupt_node = cluster
+    // Check for new roots
+    let alive_node_contact_infos: Vec<_> = cluster
         .validators
-        .iter()
-        .find(|(_, v)| v.config.broadcast_stage_type == faulty_node_type)
-        .unwrap()
-        .0;
-    let mut ignore = HashSet::new();
-    ignore.insert(*corrupt_node);*/
-
-    sleep(Duration::from_secs(30));
-    // Verify that we can still spend and verify even in the presence of corrupt nodes
-    /*cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
-        &cluster.funding_keypair,
-        num_nodes,
-        ignore,
-    );*/
+        .values()
+        .map(|v| v.info.contact_info.clone())
+        .collect();
+    cluster_tests::check_for_new_roots(16, &alive_node_contact_infos);
 }
 
 #[test]
