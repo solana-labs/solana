@@ -564,7 +564,7 @@ pub fn process_catchup(
         let slot_distance = rpc_slot as i64 - node_slot as i64;
         let slots_per_second =
             (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
-        let time_remaining = if slots_per_second < 0.0 {
+        let time_remaining = if slots_per_second <= 0.0 {
             "".to_string()
         } else {
             format!(
