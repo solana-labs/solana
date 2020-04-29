@@ -5868,4 +5868,6 @@ mod tests {
         info!("account: {:?}", account);
         assert!(account.executable);
     }
+
+    // TODO: Add burn program capitalization tests
 }
