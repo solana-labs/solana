@@ -240,7 +240,9 @@ impl Serialize for AccountStorageEntry {
 	state.serialize_field("id",               &self.id)?;
 	state.serialize_field("accounts",         &self.accounts)?;
 	// Serialize count_and_status with value of zero for backward compatibility
+	//TO_BE_REMOVED (vvvv)
 	state.serialize_field("count_and_status", &(0usize, AccountStorageStatus::Available))?;
+	//TO_BE_REMOVED (^^^^)
 	state.end()
     }
 }
@@ -252,7 +254,7 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
     {
 	use serde::de::Error;
 
-        enum Field { Id, Accounts, CountAndStatus, Ignore, }
+        enum Field { Id, Accounts, /*TO_BE_REMOVED: CountAndStatus, */Ignore, }
         struct FieldVisitor;
 
         impl Visitor<'_> for FieldVisitor {
@@ -266,9 +268,10 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
                 match value {
                     0u64 => Ok(Field::Id),
                     1u64 => Ok(Field::Accounts),
-                    2u64 => Ok(Field::CountAndStatus),
+		    2u64 => Ok(Field::Ignore), //TO_BE_REMOVED: Ok(Field::CountAndStatus),
                     _ => Err(Error::invalid_value(Unexpected::Unsigned(value),
 						  &"field index 0 <= i < 3")),
+		                                  //TO_BE_UPDATED: (^^^^) replace 3 with 2
                 }
             }
 
@@ -276,7 +279,7 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
                 match value {
                     "id"               => Ok(Field::Id),
                     "accounts"         => Ok(Field::Accounts),
-                    "count_and_status" => Ok(Field::CountAndStatus),
+//TO_BE_REMOVED:    "count_and_status" => Ok(Field::CountAndStatus),
                     _                  => Ok(Field::Ignore),
                 }
             }
@@ -285,7 +288,7 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
                 match value {
                     b"id"               => Ok(Field::Id),
                     b"accounts"         => Ok(Field::Accounts),
-                    b"count_and_status" => Ok(Field::CountAndStatus),
+//TO_BE_REMOVED:    b"count_and_status" => Ok(Field::CountAndStatus),
                     _                   => Ok(Field::Ignore),
                 }
             }
@@ -317,8 +320,11 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'a> {
                 let id                = SeqAccess::next_element::<AppendVecId>(&mut seq)?.ok_or_else
 		                        (|| A::Error::invalid_length(0usize, &"struct AccountStorageEntry with 3 elements"))?;
+		                                                               //TO_BE_UPDATED: (^^^^) replace 3 with 2
                 let accounts          = SeqAccess::next_element::<AppendVec>(&mut seq)?.ok_or_else
 		                        (|| A::Error::invalid_length(1usize, &"struct AccountStorageEntry with 3 elements"))?;
+		                                                               //TO_BE_UPDATED: (^^^^) replace 3 with 2
+/*TO_BE_REMOVED:*/
                 let _count_and_status = SeqAccess::next_element::<RwLock<(usize, AccountStorageStatus)>>(&mut seq)?.ok_or_else
                                         (|| A::Error::invalid_length(2usize, &"struct AccountStorageEntry with 3 elements"))?;
                 Ok(AccountStorageEntry{
@@ -332,7 +338,7 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'a> {
                 let mut id:               Option<AppendVecId>                           = None;
                 let mut accounts:         Option<AppendVec>                             = None;
-                let mut count_and_status: Option<(usize, AccountStorageStatus)>         = None;
+//TO_BE_REMOVED:let mut count_and_status: Option<(usize, AccountStorageStatus)>         = None;
                 while let Some(key) = map.next_key::<Field>()? {
                     match key {
                         Field::Id => id = Some(
@@ -345,17 +351,17 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
 				| | Ok(map.next_value::<AppendVec>()),
 				|_| Err(A::Error::duplicate_field("accounts"))
 			    )??),
-                        Field::CountAndStatus => count_and_status = Some(
+/*TO_BE_REMOVED:        Field::CountAndStatus => count_and_status = Some(
 			    count_and_status.map_or_else(
 				| | Ok(map.next_value::<(usize, AccountStorageStatus)>()),
 				|_| Err(A::Error::duplicate_field("count_and_status")),
-			    )??),
+			    )??),*/
                         _ => { let _ = map.next_value::<IgnoredAny>()?; },
                     }
 		}
-                let id                = id              .ok_or_else(|| A::Error::missing_field("id"))?;
-                let accounts          = accounts        .ok_or_else(|| A::Error::missing_field("accounts"))?;
-                let _count_and_status = count_and_status.ok_or_else(|| A::Error::missing_field("count_and_status"))?;
+                let id               = id              .ok_or_else(|| A::Error::missing_field("id"))?;
+                let accounts         = accounts        .ok_or_else(|| A::Error::missing_field("accounts"))?;
+//TO_BE_REMOVED:let count_and_status = count_and_status.ok_or_else(|| A::Error::missing_field("count_and_status"))?;
                 Ok(AccountStorageEntry{
 		    id,
                     accounts,
@@ -364,7 +370,7 @@ impl<'a> Deserialize<'a> for AccountStorageEntry {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["id", "accounts", "count_and_status"];
+        const FIELDS: &'static [&'static str] = &["id", "accounts"/*TO_BE_REMOVED:>>>*/, "count_and_status"/*<<<*/];
 
         deserializer.deserialize_struct(
 	    "AccountStorageEntry",
@@ -1564,8 +1570,9 @@ impl AccountsDB {
 		let need_huge = required_data_len > self.file_size;
 
 		if storage.count.load(Ordering::Acquire) == 0
-		    && !storage.accounts.is_empty() {
-			storage.accounts.reset();
+		    && !storage.accounts.is_empty()
+ {
+		    storage.accounts.reset();
 
 		    // for first try normal size request, retry if page was reset
 		    if !need_huge && !hinted {
@@ -2193,18 +2200,25 @@ impl AccountsDB {
         }
         for slot_stores in storage.0.values() {
             for (id, store) in slot_stores {
-                if let Some(count) = counts.get(&id) {
+		let get_count = counts.get(&id);
+		let was_count = get_count.is_some();
+		let new_count = get_count.unwrap_or(&0);
+		let pre_count = store.count.swap(*new_count, Ordering::Relaxed);
+
+		if was_count {
                     trace!(
                         "id: {} setting count: {} cur: {}",
                         id,
-                        count,
-                        store.count()
+                        new_count,
+                        pre_count,
                     );
-		    store.count.store(*count, Ordering::Relaxed);
                 } else {
-                    trace!("id: {} clearing count", id);
-		    store.count.store(0, Ordering::Relaxed);
-                }
+                    trace!(
+			"id: {} clearing count; cur: {}",
+			id,
+			pre_count,
+                    );
+		}
             }
         }
     }
