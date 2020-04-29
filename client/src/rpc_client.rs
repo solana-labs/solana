@@ -1131,6 +1131,7 @@ impl RpcClient {
                 }
             }
         };
+        let now = Instant::now();
         loop {
             // Return when default (max) commitment is reached
             // Failed transactions have already been eliminated, `is_some` check is sufficient
@@ -1146,7 +1147,14 @@ impl RpcClient {
                 signature,
             ));
             sleep(Duration::from_millis(500));
-            confirmations = self.get_num_blocks_since_signature_confirmation(&signature)?;
+            confirmations = self
+                .get_num_blocks_since_signature_confirmation(&signature)
+                .unwrap_or(confirmations);
+            if now.elapsed().as_secs() >= 120 {
+                return Err(
+                    RpcError::ForUser("transaction not finalized. This can happen when a transaction lands in a minor fork. Please retry.".to_string()).into(),
+                );
+            }
         }
     }
 
