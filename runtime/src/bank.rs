@@ -7,6 +7,7 @@ use crate::{
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
+    burn_instruction_processor,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     message_processor::{MessageProcessor, ProcessInstruction},
     nonce_utils,
@@ -352,6 +353,10 @@ pub struct Bank {
     /// Rewards that were paid out immediately after this bank was created
     #[serde(skip)]
     pub rewards: Option<Vec<(Pubkey, i64)>>,
+
+    /// Lamports to be burned by this bank
+    #[serde(skip)]
+    burned_lamports: AtomicU64,
 }
 
 impl Default for BlockhashQueue {
@@ -463,6 +468,7 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
+            burned_lamports: AtomicU64::new(0),
         };
 
         datapoint_info!(
@@ -787,12 +793,21 @@ impl Bank {
         }
     }
 
+    fn burn_lamports(&self) {
+        let burned_lamports = self.burned_lamports.load(Ordering::Relaxed) as u64;
+        if burned_lamports != 0 {
+            self.capitalization
+                .fetch_sub(burned_lamports, Ordering::Relaxed);
+        }
+    }
+
     pub fn freeze(&self) {
         let mut hash = self.hash.write().unwrap();
 
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
             self.collect_fees();
+            self.burn_lamports();
             self.distribute_rent();
             self.update_slot_history();
 
@@ -1388,8 +1403,13 @@ impl Bank {
 
                     if let Err(TransactionError::InstructionError(_, _)) = &process_result {
                         error_counters.instruction_error += 1;
+                    } else if let Ok(burned_lamports) = &process_result {
+                        if *burned_lamports > 0 {
+                            self.burned_lamports
+                                .fetch_add(*burned_lamports, Ordering::Relaxed);
+                        }
                     }
-                    (process_result, hash_age_kind.clone())
+                    (process_result.map(|_| ()), hash_age_kind.clone())
                 }
             })
             .collect();
@@ -1771,6 +1791,11 @@ impl Bank {
             "system_program",
             solana_sdk::system_program::id(),
             system_instruction_processor::process_instruction,
+        );
+        self.add_static_program(
+            "burn_program",
+            solana_sdk::burn_program::id(),
+            burn_instruction_processor::process_instruction,
         );
         self.add_static_program(
             "config_program",

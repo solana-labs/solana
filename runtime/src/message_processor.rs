@@ -2,6 +2,7 @@ use crate::{native_loader::NativeLoader, rent_collector::RentCollector};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
+    burn_program,
     clock::Epoch,
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
@@ -10,7 +11,7 @@ use solana_sdk::{
     system_program,
     transaction::TransactionError,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, convert::TryInto, rc::Rc};
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes
@@ -290,16 +291,18 @@ impl MessageProcessor {
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<u64, InstructionError> {
         // Verify all accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts, accounts)?;
+
+        let program_id = instruction.program_id(&message.account_keys);
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         {
-            let program_id = instruction.program_id(&message.account_keys);
             let mut work = |unique_index: usize, account_index: usize| {
                 let account = accounts[account_index].borrow();
+
                 pre_accounts[unique_index].verify(&program_id, rent_collector, &account)?;
                 pre_sum += u128::from(pre_accounts[unique_index].lamports);
                 post_sum += u128::from(account.lamports);
@@ -308,11 +311,21 @@ impl MessageProcessor {
             instruction.visit_each_account(&mut work)?;
         }
 
-        // Verify that the total sum of all the lamports did not change
-        if pre_sum != post_sum {
+        // It's never ok for lamports to increase as a result of an instruction
+        if post_sum > pre_sum {
             return Err(InstructionError::UnbalancedInstruction);
         }
-        Ok(())
+
+        let burned_lamports = (pre_sum - post_sum)
+            .try_into()
+            .map_err(|_| InstructionError::UnbalancedInstruction)?;
+
+        // Only the Burn program may decrease lamports
+        if burned_lamports > 0 && *program_id != burn_program::id() {
+            Err(InstructionError::UnbalancedInstruction)
+        } else {
+            Ok(burned_lamports)
+        }
     }
 
     /// Execute an instruction
@@ -326,10 +339,10 @@ impl MessageProcessor {
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
-    ) -> Result<(), InstructionError> {
+    ) -> Result<u64, InstructionError> {
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         self.process_instruction(message, instruction, executable_accounts, accounts)?;
-        Self::verify(
+        let burned_lamports = Self::verify(
             message,
             instruction,
             &pre_accounts,
@@ -337,7 +350,7 @@ impl MessageProcessor {
             accounts,
             rent_collector,
         )?;
-        Ok(())
+        Ok(burned_lamports)
     }
 
     /// Process a message.
@@ -349,30 +362,34 @@ impl MessageProcessor {
         loaders: &[Vec<(Pubkey, RefCell<Account>)>],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<u64, TransactionError> {
+        let mut burned_lamports = 0;
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
                 .program_position(instruction.program_id_index as usize)
                 .ok_or(TransactionError::InvalidAccountIndex)?;
             let executable_accounts = &loaders[executable_index];
 
-            self.execute_instruction(
-                message,
-                instruction,
-                executable_accounts,
-                accounts,
-                rent_collector,
-            )
-            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            burned_lamports += self
+                .execute_instruction(
+                    message,
+                    instruction,
+                    executable_accounts,
+                    accounts,
+                    rent_collector,
+                )
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
-        Ok(())
+        Ok(burned_lamports)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::burn_instruction_processor;
     use solana_sdk::{
+        burn_instruction::BurnInstruction,
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         native_loader::create_loadable_account,
@@ -863,7 +880,7 @@ mod tests {
 
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Ok(0));
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
 
@@ -1005,7 +1022,7 @@ mod tests {
         )]);
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Ok(0));
 
         // Do work on the same account but at different location in keyed_accounts[]
         let message = Message::new(&[Instruction::new(
@@ -1018,9 +1035,60 @@ mod tests {
         )]);
         let result =
             message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Ok(0));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
         assert_eq!(accounts[0].borrow().data, vec![42]);
+    }
+
+    #[test]
+    fn test_process_message_burn() {
+        let rent_collector = RentCollector::default();
+        let mut message_processor = MessageProcessor::default();
+        message_processor.add_instruction_processor(
+            burn_program::id(),
+            burn_instruction_processor::process_instruction,
+        );
+        let loaders = vec![vec![(
+            burn_program::id(),
+            RefCell::new(create_loadable_account("burn_program")),
+        )]];
+
+        // Normal burn
+        let accounts = vec![Account::new_ref(100, 1, &burn_program::id())];
+        let message = Message::new(&[Instruction::new(
+            burn_program::id(),
+            &BurnInstruction::Burn,
+            vec![AccountMeta::new(Pubkey::new_rand(), true)],
+        )]);
+
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+        assert_eq!(result, Ok(100));
+        assert_eq!(accounts[0].borrow().lamports, 0);
+
+        // Cannot burn a non-signer
+        let accounts = vec![Account::new_ref(100, 1, &burn_program::id())];
+        let message = Message::new(&[Instruction::new(
+            burn_program::id(),
+            &BurnInstruction::Burn,
+            vec![AccountMeta::new(Pubkey::new_rand(), false)],
+        )]);
+
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+        assert_eq!(result, Err(TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)));
+
+        // Cannot burn accounts owned by another program
+        let accounts = vec![Account::new_ref(100, 1, &system_program::id())];
+        let message = Message::new(&[Instruction::new(
+            burn_program::id(),
+            &BurnInstruction::Burn,
+            vec![AccountMeta::new(Pubkey::new_rand(), true)],
+        )]);
+
+        let result =
+            message_processor.process_message(&message, &loaders, &accounts, &rent_collector);
+        assert_eq!(result, Err(TransactionError::InstructionError(0, InstructionError::ExternalAccountLamportSpend)));
     }
 }
