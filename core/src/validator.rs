@@ -389,6 +389,12 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
+<<<<<<< HEAD
+=======
+        let vote_tracker = Arc::new(VoteTracker::new(bank_forks.read().unwrap().root_bank()));
+
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+>>>>>>> 230df0ec0... Upgrade to Rust 1.43.0 (#9754)
         let tvu = Tvu::new(
             vote_account,
             if config.voting_disabled {
