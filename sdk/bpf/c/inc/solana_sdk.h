@@ -135,7 +135,9 @@ void sol_log_(const char *, uint64_t);
  * Helper function that prints a 64 bit values represented in hexadecimal
  * to stdout
  */
-void sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+void sol_log_64_(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+#define sol_log_64 sol_log_64_
+
 
 /**
  * Size of Public key in bytes
