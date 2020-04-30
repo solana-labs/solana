@@ -96,7 +96,7 @@ pub struct EpochIncompleteSlots {
 impl Sanitize for EpochIncompleteSlots {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.first >= MAX_SLOT {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::InvalidValue);
         }
         //rest of the data doesn't matter since we no longer decompress
         //these values
@@ -110,7 +110,7 @@ impl Sanitize for CrdsData {
             CrdsData::ContactInfo(val) => val.sanitize(),
             CrdsData::Vote(ix, val) => {
                 if *ix >= MAX_VOTES {
-                    return Err(SanitizeError::Failed);
+                    return Err(SanitizeError::ValueOutOfBounds);
                 }
                 val.sanitize()
             }
@@ -118,7 +118,7 @@ impl Sanitize for CrdsData {
             CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
                 if *ix as usize >= MAX_EPOCH_SLOTS as usize {
-                    return Err(SanitizeError::Failed);
+                    return Err(SanitizeError::ValueOutOfBounds);
                 }
                 val.sanitize()
             }
@@ -136,11 +136,11 @@ pub struct SnapshotHash {
 impl Sanitize for SnapshotHash {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         for (slot, _) in &self.hashes {
             if *slot >= MAX_SLOT {
-                return Err(SanitizeError::Failed);
+                return Err(SanitizeError::ValueOutOfBounds);
             }
         }
         self.from.sanitize()
@@ -183,17 +183,17 @@ impl EpochSlots {
 impl Sanitize for EpochSlots {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         if self.lowest >= MAX_SLOT {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         if self.root >= MAX_SLOT {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         for slot in &self.slots {
             if *slot >= MAX_SLOT {
-                return Err(SanitizeError::Failed);
+                return Err(SanitizeError::ValueOutOfBounds);
             }
         }
         self.stash.sanitize()?;
@@ -211,7 +211,7 @@ pub struct Vote {
 impl Sanitize for Vote {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         self.from.sanitize()?;
         self.transaction.sanitize()
@@ -484,7 +484,7 @@ mod test {
             ),
             &keypair,
         );
-        assert!(item.sanitize().is_err());
+        assert_eq!(item.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
     #[test]
     fn test_compute_vote_index_empty() {
