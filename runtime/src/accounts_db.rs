@@ -32,8 +32,8 @@ use log::*;
 use rand::{thread_rng, Rng};
 use rayon::{prelude::*, ThreadPool};
 use serde::{
-    de::{Deserializer, IgnoredAny, MapAccess, SeqAccess, Unexpected, Visitor},
-    ser::{SerializeMap, SerializeStruct, Serializer},
+    de::{Deserializer, MapAccess, Visitor},
+    ser::{SerializeMap, Serializer},
     Deserialize, Serialize,
 };
 use solana_measure::measure::Measure;
@@ -48,7 +48,6 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::{Formatter, Result as FormatResult},
     io::{BufReader, Cursor, Error as IOError, ErrorKind, Read, Result as IOResult},
-    marker::PhantomData,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex, RwLock},
@@ -66,7 +65,7 @@ lazy_static! {
     pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ErrorCounters {
     pub total: usize,
     pub account_in_use: usize,
@@ -83,7 +82,7 @@ pub struct ErrorCounters {
     pub invalid_program_for_execution: usize,
 }
 
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
@@ -119,11 +118,11 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
     {
         let mut map = HashMap::new();
         while let Some((slot, storage_entries)) = access.next_entry()? {
-            let storage_entries: Vec<AccountStorageEntry> = storage_entries;
+            let storage_entries: Vec<Format0000AccountStorageEntry> = storage_entries;
             let storage_slot_map = map.entry(slot).or_insert_with(HashMap::new);
             for mut storage in storage_entries {
                 storage.slot = slot;
-                storage_slot_map.insert(storage.id, Arc::new(storage));
+                storage_slot_map.insert(storage.id, Arc::new(storage.into()));
             }
         }
 
@@ -160,7 +159,12 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
         for storage_entries in self.account_storage_entries {
-            map.serialize_entry(&storage_entries.first().unwrap().slot, storage_entries)?;
+	    let storage_entries = storage_entries
+		.iter()
+		.map(|e| Format0000AccountStorageEntry::from(e.as_ref()))
+		.collect::<Vec<_>>();
+	    let slot = storage_entries.first().unwrap().slot;
+            map.serialize_entry(&slot, &storage_entries)?;
             count += storage_entries.len();
         }
         serialize_account_storage_timer.stop();
@@ -173,7 +177,7 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AccountStorage(pub HashMap<Slot, SlotStores>);
 impl<'de> Deserialize<'de> for AccountStorage {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -185,14 +189,14 @@ impl<'de> Deserialize<'de> for AccountStorage {
 }
 
 #[atomic_enum]
-#[derive(PartialEq, Deserialize, Serialize)]
+#[derive(Eq, PartialEq, Deserialize, Serialize)]
 pub enum AccountStorageStatus {
     Available = 0,
     Full = 1,
     Candidate = 2,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BankHashVerificationError {
     MismatchedAccountHash,
     MismatchedBankHash,
@@ -218,6 +222,94 @@ pub struct AccountStorageEntry {
     status: AtomicAccountStorageStatus,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Format0000AccountStorageEntry {
+    id: AppendVecId,
+    slot: Slot,
+    accounts: Format0000AppendVec,
+}
+
+impl From<&AccountStorageEntry> for Format0000AccountStorageEntry {
+    fn from(rhs: &AccountStorageEntry) -> Format0000AccountStorageEntry {
+	Format0000AccountStorageEntry {
+	    id: rhs.id,
+	    slot: rhs.slot,
+	    accounts: Format0000AppendVec::from(&rhs.accounts),
+	}
+    }
+}
+
+impl Into<AccountStorageEntry> for Format0000AccountStorageEntry {
+    fn into(self) -> AccountStorageEntry {
+	AccountStorageEntry {
+	    id: self.id,
+	    slot: self.slot,
+	    accounts: AppendVec::new_empty_map(self.accounts.current_len),
+	    ..AccountStorageEntry::default()
+	}
+    }
+}
+
+impl From<&AppendVec> for Format0000AppendVec {
+    fn from(rhs: &AppendVec) -> Format0000AppendVec {
+	Format0000AppendVec {
+	    current_len: rhs.len(),
+	}
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Format0000AppendVec {
+    current_len: usize,
+}
+
+impl Serialize for Format0000AppendVec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::Error;
+
+        let len = std::mem::size_of::<usize>();
+        let mut buf = vec![0u8; len];
+        let mut wr = Cursor::new(&mut buf[..]);
+        serialize_into(&mut wr, &(self.current_len as u64))
+            .map_err(Error::custom)?;
+        let len = wr.position() as usize;
+        serializer.serialize_bytes(&wr.into_inner()[..len])
+    }
+}
+
+impl<'de> Deserialize<'de> for Format0000AppendVec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+	use serde::de::Error;
+
+	struct Format0000AppendVecVisitor;
+
+	impl<'a> Visitor<'a> for Format0000AppendVecVisitor {
+	    type Value = Format0000AppendVec;
+
+	    fn expecting(&self, formatter: &mut Formatter) -> FormatResult {
+		formatter.write_str("Expecting Format0000AppendVec")
+	    }
+
+	    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
+	    where
+		E: Error,
+	    {
+		let mut rd = Cursor::new(&data[..]);
+		let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
+		Ok(Format0000AppendVec { current_len })
+	    }
+	}
+
+        deserializer.deserialize_bytes(Format0000AppendVecVisitor)
+    }
+}
+
 impl Default for AccountStorageEntry {
     fn default() -> Self {
 	Self {
@@ -227,159 +319,6 @@ impl Default for AccountStorageEntry {
 	    count: AtomicUsize::new(0),
 	    status: AtomicAccountStorageStatus::new(AccountStorageStatus::Available),
 	}
-    }
-}
-
-impl Serialize for AccountStorageEntry {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer
-    {
-        let mut state = serializer.serialize_struct("AccountStorageEntry",
-						    false as usize + 1 + 1 + 1)?;
-	state.serialize_field("id",               &self.id)?;
-	state.serialize_field("accounts",         &self.accounts)?;
-	// Serialize count_and_status with value of zero for backward compatibility
-	//TO_BE_REMOVED (vvvv)
-	state.serialize_field("count_and_status", &(0usize, AccountStorageStatus::Available))?;
-	//TO_BE_REMOVED (^^^^)
-	state.end()
-    }
-}
-
-impl<'a> Deserialize<'a> for AccountStorageEntry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'a>
-    {
-	use serde::de::Error;
-
-        enum Field { Id, Accounts, /*TO_BE_REMOVED: CountAndStatus, */Ignore, }
-        struct FieldVisitor;
-
-        impl Visitor<'_> for FieldVisitor {
-            type Value = Field;
-
-            fn expecting(&self, formatter: &mut Formatter) -> FormatResult {
-                formatter.write_str("field identifier")
-            }
-
-            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> where E: Error {
-                match value {
-                    0u64 => Ok(Field::Id),
-                    1u64 => Ok(Field::Accounts),
-		    2u64 => Ok(Field::Ignore), //TO_BE_REMOVED: Ok(Field::CountAndStatus),
-                    _ => Err(Error::invalid_value(Unexpected::Unsigned(value),
-						  &"field index 0 <= i < 3")),
-		                                  //TO_BE_UPDATED: (^^^^) replace 3 with 2
-                }
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: Error {
-                match value {
-                    "id"               => Ok(Field::Id),
-                    "accounts"         => Ok(Field::Accounts),
-//TO_BE_REMOVED:    "count_and_status" => Ok(Field::CountAndStatus),
-                    _                  => Ok(Field::Ignore),
-                }
-            }
-
-            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E> where E: Error {
-                match value {
-                    b"id"               => Ok(Field::Id),
-                    b"accounts"         => Ok(Field::Accounts),
-//TO_BE_REMOVED:    b"count_and_status" => Ok(Field::CountAndStatus),
-                    _                   => Ok(Field::Ignore),
-                }
-            }
-        }
-
-        impl<'a> Deserialize<'a> for Field {
-            #[inline]
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	    where
-                D: Deserializer<'a>
-	    {
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct MapVisitor<'a> {
-            marker: PhantomData<AccountStorageEntry>,
-            lifetime: PhantomData<&'a ()>,
-        }
-
-        impl<'a> Visitor<'a> for MapVisitor<'a> {
-            type Value = AccountStorageEntry;
-
-            fn expecting(&self, formatter: &mut Formatter) -> FormatResult {
-                formatter.write_str("struct AccountStorageEntry")
-            }
-
-            #[inline]
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'a> {
-                let id                = SeqAccess::next_element::<AppendVecId>(&mut seq)?.ok_or_else
-		                        (|| A::Error::invalid_length(0usize, &"struct AccountStorageEntry with 3 elements"))?;
-		                                                               //TO_BE_UPDATED: (^^^^) replace 3 with 2
-                let accounts          = SeqAccess::next_element::<AppendVec>(&mut seq)?.ok_or_else
-		                        (|| A::Error::invalid_length(1usize, &"struct AccountStorageEntry with 3 elements"))?;
-		                                                               //TO_BE_UPDATED: (^^^^) replace 3 with 2
-/*TO_BE_REMOVED:*/
-                let _count_and_status = SeqAccess::next_element::<RwLock<(usize, AccountStorageStatus)>>(&mut seq)?.ok_or_else
-                                        (|| A::Error::invalid_length(2usize, &"struct AccountStorageEntry with 3 elements"))?;
-                Ok(AccountStorageEntry{
-		    id,
-		    accounts,
-		    ..Default::default()
-		})
-            }
-
-            #[inline]
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'a> {
-                let mut id:               Option<AppendVecId>                           = None;
-                let mut accounts:         Option<AppendVec>                             = None;
-//TO_BE_REMOVED:let mut count_and_status: Option<(usize, AccountStorageStatus)>         = None;
-                while let Some(key) = map.next_key::<Field>()? {
-                    match key {
-                        Field::Id => id = Some(
-			    id.map_or_else(
-				| | Ok(map.next_value::<AppendVecId>()),
-				|_| Err(A::Error::duplicate_field("id"))
-			    )??),
-                        Field::Accounts => accounts = Some(
-			    accounts.map_or_else(
-				| | Ok(map.next_value::<AppendVec>()),
-				|_| Err(A::Error::duplicate_field("accounts"))
-			    )??),
-/*TO_BE_REMOVED:        Field::CountAndStatus => count_and_status = Some(
-			    count_and_status.map_or_else(
-				| | Ok(map.next_value::<(usize, AccountStorageStatus)>()),
-				|_| Err(A::Error::duplicate_field("count_and_status")),
-			    )??),*/
-                        _ => { let _ = map.next_value::<IgnoredAny>()?; },
-                    }
-		}
-                let id               = id              .ok_or_else(|| A::Error::missing_field("id"))?;
-                let accounts         = accounts        .ok_or_else(|| A::Error::missing_field("accounts"))?;
-//TO_BE_REMOVED:let count_and_status = count_and_status.ok_or_else(|| A::Error::missing_field("count_and_status"))?;
-                Ok(AccountStorageEntry{
-		    id,
-                    accounts,
-		    ..Default::default()
-		})
-            }
-        }
-
-        const FIELDS: &'static [&'static str] = &["id", "accounts"/*TO_BE_REMOVED:>>>*/, "count_and_status"/*<<<*/];
-
-        deserializer.deserialize_struct(
-	    "AccountStorageEntry",
-	    FIELDS,
-	    MapVisitor{
-		marker: PhantomData::<AccountStorageEntry>,
-		lifetime: PhantomData
-	    },
-	)
     }
 }
 
@@ -410,6 +349,11 @@ impl AccountStorageEntry {
 
     fn count(&self) -> usize {
         self.count.load(Ordering::Acquire)
+    }
+
+    #[cfg(test)]
+    fn status(&self) -> AccountStorageStatus {
+        self.status.load(Ordering::Acquire)
     }
 
     fn has_accounts(&self) -> bool {
@@ -461,6 +405,7 @@ pub fn get_temp_accounts_paths(count: u32) -> IOResult<(Vec<TempDir>, Vec<PathBu
     Ok((temp_dirs, paths))
 }
 
+#[derive(Clone, Debug)]
 pub struct AccountsDBSerialize<'a, 'b> {
     accounts_db: &'a AccountsDB,
     slot: Slot,
@@ -510,7 +455,7 @@ impl<'a, 'b> Serialize for AccountsDBSerialize<'a, 'b> {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BankHashStats {
     pub num_removed_accounts: u64,
     pub num_added_accounts: u64,
@@ -551,7 +496,7 @@ pub struct BankHashInfo {
     pub stats: BankHashStats,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FrozenAccountInfo {
     pub hash: Hash,    // Hash generated by hash_frozen_account_data()
     pub lamports: u64, // Account balance cannot be lower than this amount
@@ -3016,7 +2961,7 @@ pub mod tests {
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
-        let daccounts = AccountsDB::new(Vec::new());
+        let mut daccounts = AccountsDB::new(Vec::new());
         let copied_accounts = TempDir::new().unwrap();
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
