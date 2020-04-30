@@ -11,8 +11,8 @@ use std::{collections::HashSet, str::FromStr, sync::Arc};
 #[derive(Default, PartialEq)]
 pub struct NonCirculatingSupply {
     pub epoch: Epoch,
-    pub non_circulating_supply: u64,
-    pub non_circulating_accounts: Vec<Pubkey>,
+    pub balance: u64,
+    pub accounts: Vec<Pubkey>,
 }
 
 impl NonCirculatingSupply {
@@ -55,13 +55,13 @@ impl NonCirculatingSupply {
                 }
             }
 
-            let non_circulating_supply = non_circulating_accounts
+            let balance = non_circulating_accounts
                 .iter()
                 .fold(0, |acc, pubkey| acc + bank.get_balance(&pubkey));
 
             self.epoch = bank.epoch();
-            self.non_circulating_supply = non_circulating_supply;
-            self.non_circulating_accounts = non_circulating_accounts.into_iter().collect();
+            self.balance = balance;
+            self.accounts = non_circulating_accounts.into_iter().collect();
         }
     }
 }
@@ -140,18 +140,12 @@ mod tests {
             epoch_schedule: EpochSchedule::new(slots_per_epoch),
             ..GenesisConfig::default()
         }));
-        assert_eq!(bank.capitalization(), (10 + 14 + 3) * balance);
+        assert_eq!(bank.capitalization(), (10 + 12 + 3) * balance);
 
         let mut non_circulating_supply = NonCirculatingSupply::default();
-        assert_eq!(
-            non_circulating_supply.update(bank.clone()),
-            (14 + 3) * balance
-        );
+        non_circulating_supply.update(bank.clone());
         assert_eq!(non_circulating_supply.epoch, 0);
-        assert_eq!(
-            non_circulating_supply.non_circulating_supply,
-            (14 + 3) * balance
-        );
+        assert_eq!(non_circulating_supply.balance, (12 + 3) * balance);
 
         bank = Arc::new(new_from_parent(&bank));
         let new_balance = 11;
@@ -162,37 +156,26 @@ mod tests {
             );
         }
         // Update should only operate once per epoch, so non_circulating_supply should not change
-        assert_eq!(
-            non_circulating_supply.update(bank.clone()),
-            (14 + 3) * balance
-        );
+        non_circulating_supply.update(bank.clone());
+        assert_eq!(non_circulating_supply.balance, (12 + 3) * balance);
 
         // Advance bank one epoch
         for _ in 0..slots_per_epoch {
             bank = Arc::new(new_from_parent(&bank));
         }
-        assert_eq!(
-            non_circulating_supply.update(bank.clone()),
-            (14 * new_balance) + (3 * balance)
-        );
+        non_circulating_supply.update(bank.clone());
         assert_eq!(non_circulating_supply.epoch, 1);
         assert_eq!(
-            non_circulating_supply.non_circulating_supply,
-            (14 * new_balance) + (3 * balance)
+            non_circulating_supply.balance,
+            (12 * new_balance) + (3 * balance)
         );
 
         // Advance bank another epoch, which should unlock stakes
         for _ in 0..slots_per_epoch {
             bank = Arc::new(new_from_parent(&bank));
         }
-        assert_eq!(
-            non_circulating_supply.update(bank.clone()),
-            14 * new_balance
-        );
+        non_circulating_supply.update(bank.clone());
         assert_eq!(non_circulating_supply.epoch, 2);
-        assert_eq!(
-            non_circulating_supply.non_circulating_supply,
-            14 * new_balance
-        );
+        assert_eq!(non_circulating_supply.balance, 12 * new_balance);
     }
 }
