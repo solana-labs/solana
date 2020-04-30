@@ -13,7 +13,7 @@ use crate::{
     rent::Rent,
     shred_version::compute_shred_version,
     signature::{Keypair, Signer},
-    system_program::{self, solana_system_program},
+    system_program,
 };
 use bincode::{deserialize, serialize};
 use chrono::{TimeZone, Utc};
@@ -72,7 +72,7 @@ pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
                 faucet_keypair.pubkey(),
                 Account::new(lamports, 0, &system_program::id()),
             )],
-            &[solana_system_program()],
+            &[],
         ),
         faucet_keypair,
     )

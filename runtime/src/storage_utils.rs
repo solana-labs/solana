@@ -103,7 +103,8 @@ pub(crate) mod tests {
         let validator_keypair = Keypair::new();
         let validator_pubkey = validator_keypair.pubkey();
         let mut bank = Bank::new(&genesis_config);
-        bank.add_instruction_processor(
+        bank.add_static_program(
+            "storage_program",
             solana_storage_program::id(),
             storage_processor::process_instruction,
         );

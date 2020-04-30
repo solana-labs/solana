@@ -1970,6 +1970,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-bpf-loader-program",
+ "solana-config-program",
  "solana-logger",
  "solana-measure",
  "solana-metrics",

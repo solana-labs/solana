@@ -3411,6 +3411,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "serial_test_derive",
+ "solana-bpf-loader-program",
  "solana-budget-program",
  "solana-chacha-cuda",
  "solana-clap-utils",
@@ -3566,14 +3567,11 @@ dependencies = [
  "log 0.4.8",
  "solana-bpf-loader-program",
  "solana-budget-program",
- "solana-config-program",
  "solana-exchange-program",
  "solana-runtime",
  "solana-sdk",
- "solana-stake-program",
  "solana-storage-program",
  "solana-vest-program",
- "solana-vote-program",
 ]
 
 [[package]]
@@ -3922,6 +3920,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-bpf-loader-program",
+ "solana-config-program",
  "solana-logger",
  "solana-measure",
  "solana-metrics",

@@ -45,7 +45,7 @@ fn test_account_owner() {
     } = create_genesis_config(1000);
     let mut bank = Bank::new(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
-    bank.add_instruction_processor(id(), process_instruction);
+    bank.add_static_program("storage_program", id(), process_instruction);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 

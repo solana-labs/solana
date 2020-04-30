@@ -161,11 +161,7 @@ mod tests {
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
         let mut bank = Bank::new(&genesis_config);
-        bank.add_instruction_processor(
-            solana_config_program::id(),
-            solana_config_program::config_processor::process_instruction,
-        );
-        bank.add_instruction_processor(id(), process_instruction);
+        bank.add_static_program("vest_program", id(), process_instruction);
         (bank, mint_keypair)
     }
 
@@ -472,7 +468,7 @@ mod tests {
         )
         .unwrap_err();
 
-        // Ensure bob can update which account he wants vested funds transfered to.
+        // Ensure bob can update which account he wants vested funds transferred to.
         bank_client
             .transfer(1, &alice_keypair, &bob_pubkey)
             .unwrap();

@@ -161,11 +161,16 @@ mod tests {
     fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, Keypair, Pubkey, Pubkey) {
         let (mut genesis_config, mint) = create_genesis_config(lamports);
         genesis_config.rent.lamports_per_byte_year = 0;
+<<<<<<< HEAD
         let mut bank = Bank::new(&genesis_config);
         bank.add_instruction_processor(
             solana_sdk::move_loader::id(),
             MoveProcessor::process_instruction,
         );
+=======
+        let bank = Bank::new(&genesis_config);
+        bank.add_native_program("solana_move_loader_program", &solana_sdk::move_loader::id());
+>>>>>>> efad19318... Make default programs static (#9717)
         let shared_bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&shared_bank);
         let genesis_pubkey = create_genesis(&mint, &bank_client, 1_000_000);
