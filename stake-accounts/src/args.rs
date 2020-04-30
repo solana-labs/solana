@@ -188,7 +188,7 @@ fn resolve_set_lockup_args(
         base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
         custodian: resolve_custodian(wallet_manager, &args.custodian)?,
         lockup_epoch: args.lockup_epoch,
-        lockup_date: args.lockup_date.clone(),
+        lockup_date: args.lockup_date,
         new_custodian: resolve_new_custodian(wallet_manager, &args.new_custodian)?,
         num_accounts: args.num_accounts,
     };
