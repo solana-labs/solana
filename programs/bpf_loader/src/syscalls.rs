@@ -2,7 +2,7 @@ use crate::{alloc, BPFError};
 use alloc::Alloc;
 use log::*;
 use solana_rbpf::{
-    ebpf::{EbpfError, HelperObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
+    ebpf::{EbpfError, SyscallObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
@@ -17,7 +17,7 @@ use thiserror::Error as ThisError;
 
 /// Error definitions
 #[derive(Debug, ThisError)]
-pub enum HelperError {
+pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),
     #[error("BPF program called abort()!")]
@@ -27,8 +27,8 @@ pub enum HelperError {
     #[error("{0}")]
     InstructionError(InstructionError),
 }
-impl From<HelperError> for EbpfError<BPFError> {
-    fn from(error: HelperError) -> Self {
+impl From<SyscallError> for EbpfError<BPFError> {
+    fn from(error: SyscallError) -> Self {
         EbpfError::UserError(error.into())
     }
 }
@@ -45,21 +45,21 @@ use crate::allocator_bump::BPFAllocator;
 /// are expected to enforce this
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
-pub fn register_helpers<'a>(
+pub fn register_syscalls<'a>(
     vm: &mut EbpfVm<'a, BPFError>,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     // Helper function common across languages
-    vm.register_helper_ex("abort", helper_abort)?;
-    vm.register_helper_ex("sol_panic_", helper_sol_panic)?;
-    vm.register_helper_ex("sol_log_", helper_sol_log)?;
-    vm.register_helper_ex("sol_log_64_", helper_sol_log_u64)?;
+    vm.register_syscall_ex("abort", syscall_abort)?;
+    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
+    vm.register_syscall_ex("sol_log_", syscall_sol_log)?;
+    vm.register_syscall_ex("sol_log_64_", syscall_sol_log_u64)?;
 
     // Memory allocator
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
-    vm.register_helper_with_context_ex(
+    vm.register_syscall_with_context_ex(
         "sol_alloc_free_",
-        Box::new(HelperSolAllocFree {
+        Box::new(SyscallSolAllocFree {
             allocator: BPFAllocator::new(heap, MM_HEAP_START),
         }),
     )?;
@@ -136,15 +136,14 @@ fn translate_string_and_do(
     };
     match from_utf8(&buf[..i]) {
         Ok(message) => work(message),
-        Err(err) => Err(HelperError::InvalidString(err, buf[..i].to_vec()).into()),
+        Err(err) => Err(SyscallError::InvalidString(err, buf[..i].to_vec()).into()),
     }
 }
 
-/// Abort helper functions, called when the BPF program calls `abort()`
-/// LLVM will insert calls to `abort()` if it detects an untenable situation,
-/// `abort()` is not intended to be called explicitly by the program.
-/// Causes the BPF program to be halted immediately
-pub fn helper_abort(
+/// Abort syscall functions, called when the BPF program calls `abort()`
+/// The verify function returns an error which will cause the BPF program
+/// to be halted immediately
+pub fn syscall_abort(
     _arg1: u64,
     _arg2: u64,
     _arg3: u64,
@@ -153,12 +152,13 @@ pub fn helper_abort(
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
-    Err(HelperError::Abort.into())
+    Err(SyscallError::Abort.into())
 }
 
-/// Panic helper function, called when the BPF program calls 'sol_panic_()`
-/// Causes the BPF program to be halted immediately
-pub fn helper_sol_panic(
+/// Panic syscall functions, called when the BPF program calls 'sol_panic_()`
+/// The verify function returns an error which will cause the BPF program
+/// to be halted immediately
+pub fn syscall_sol_panic(
     file: u64,
     len: u64,
     line: u64,
@@ -168,12 +168,12 @@ pub fn helper_sol_panic(
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
     translate_string_and_do(file, len, ro_regions, &|string: &str| {
-        Err(HelperError::Panic(string.to_string(), line, column).into())
+        Err(SyscallError::Panic(string.to_string(), line, column).into())
     })
 }
 
 /// Log a user's info message
-pub fn helper_sol_log(
+pub fn syscall_sol_log(
     addr: u64,
     len: u64,
     _arg3: u64,
@@ -191,8 +191,8 @@ pub fn helper_sol_log(
     Ok(0)
 }
 
-/// Log 5 64-bit values
-pub fn helper_sol_log_u64(
+/// Log 5 u64 values
+pub fn syscall_sol_log_u64(
     arg1: u64,
     arg2: u64,
     arg3: u64,
@@ -210,16 +210,16 @@ pub fn helper_sol_log_u64(
     Ok(0)
 }
 
-/// Dynamic memory allocation helper called when the BPF program calls
+/// Dynamic memory allocation syscall called when the BPF program calls
 /// `sol_alloc_free_()`.  The allocator is expected to allocate/free
 /// from/to a given chunk of memory and enforce size restrictions.  The
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
-pub struct HelperSolAllocFree {
+pub struct SyscallSolAllocFree {
     allocator: BPFAllocator,
 }
-impl HelperObject<BPFError> for HelperSolAllocFree {
+impl SyscallObject<BPFError> for SyscallSolAllocFree {
     fn call(
         &mut self,
         size: u64,
