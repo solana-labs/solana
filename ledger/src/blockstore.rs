@@ -2712,7 +2712,7 @@ pub fn create_new_ledger(
                 ledger_path.join("rocksdb.failed"),
             )
             .unwrap_or_else(|e| {
-                error_messages += &format!("/failed to stash problematic rocks/: {}", e)
+                error_messages += &format!("/failed to stash problematic rocksdb: {}", e)
             });
 
             return Err(BlockstoreError::IO(IOError::new(
