@@ -30,7 +30,7 @@ use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::{self, BankForksInfo},
     create_new_tmp_ledger,
-    hardened_unpack::open_genesis_config,
+    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
 };
@@ -82,6 +82,7 @@ pub struct ValidatorConfig {
     pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
     pub accounts_hash_interval_slots: u64,
+    pub max_genesis_archive_unpacked_size: u64,
 }
 
 impl Default for ValidatorConfig {
@@ -109,6 +110,7 @@ impl Default for ValidatorConfig {
             frozen_accounts: vec![],
             no_rocksdb_compaction: false,
             accounts_hash_interval_slots: std::u64::MAX,
+            max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         }
     }
 }
@@ -569,7 +571,8 @@ fn new_banks_from_blockstore(
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
 ) {
-    let genesis_config = open_genesis_config(blockstore_path);
+    let genesis_config =
+        open_genesis_config(blockstore_path, config.max_genesis_archive_unpacked_size);
 
     // This needs to be limited otherwise the state in the VoteAccount data
     // grows too large

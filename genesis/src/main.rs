@@ -6,7 +6,10 @@ use solana_clap_utils::{
     input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
-use solana_ledger::{blockstore::create_new_ledger, poh::compute_hashes_per_tick};
+use solana_ledger::{
+    blockstore::create_new_ledger, hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    poh::compute_hashes_per_tick,
+};
 use solana_sdk::{
     account::Account,
     clock,
@@ -121,6 +124,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         timing::duration_as_us(&PohConfig::default().target_tick_duration);
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
     let default_operating_mode = "stable";
+    let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -327,6 +331,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     "Selects the features that will be enabled for the cluster"
                 ),
         )
+        .arg(
+            Arg::with_name("max_genesis_archive_unpacked_size")
+                .long("max-genesis-archive-unpacked-size")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(&default_genesis_archive_unpacked_size)
+                .help(
+                    "maximum total uncompressed file size of created genesis archive",
+                ),
+        )
         .get_matches();
 
     let faucet_lamports = value_t!(matches, "faucet_lamports", u64).unwrap_or(0);
@@ -513,6 +527,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
+    let max_genesis_archive_unpacked_size =
+        value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
+
     let issued_lamports = genesis_config
         .accounts
         .iter()
@@ -521,7 +538,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
 
-    create_new_ledger(&ledger_path, &genesis_config)?;
+    solana_logger::setup();
+    create_new_ledger(
+        &ledger_path,
+        &genesis_config,
+        max_genesis_archive_unpacked_size,
+    )?;
 
     println!("{}", genesis_config);
     Ok(())

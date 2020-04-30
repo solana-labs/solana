@@ -10,6 +10,7 @@ use crate::{
     blockstore_meta::*,
     entry::{create_ticks, Entry},
     erasure::ErasureConfig,
+    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule_cache::LeaderScheduleCache,
     next_slots_iterator::NextSlotsIterator,
     shred::{Result as ShredResult, Shred, Shredder},
@@ -45,6 +46,7 @@ use std::{
     cmp,
     collections::HashMap,
     fs,
+    io::{Error as IOError, ErrorKind},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
@@ -2622,7 +2624,11 @@ fn calculate_stake_weighted_timestamp(
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
 // Returns the blockhash that can be used to append entries with.
-pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> Result<Hash> {
+pub fn create_new_ledger(
+    ledger_path: &Path,
+    genesis_config: &GenesisConfig,
+    max_genesis_archive_unpacked_size: u64,
+) -> Result<Hash> {
     Blockstore::destroy(ledger_path)?;
     genesis_config.write(&ledger_path)?;
 
@@ -2658,7 +2664,6 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
         .output()
         .unwrap();
     if !output.status.success() {
-        use std::io::{Error as IOError, ErrorKind};
         use std::str::from_utf8;
         error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
         error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
@@ -2670,6 +2675,54 @@ pub fn create_new_ledger(ledger_path: &Path, genesis_config: &GenesisConfig) -> 
                 output.status
             ),
         )));
+    }
+
+    // ensure the genesis archive can be unpacked and it is under
+    // max_genesis_archive_unpacked_size, immedately after creating it above.
+    {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        // unpack into a temp dir, while completely discarding the unpacked files
+        let unpack_check = unpack_genesis_archive(
+            &archive_path,
+            &temp_dir.into_path(),
+            max_genesis_archive_unpacked_size,
+        );
+        if let Err(unpack_err) = unpack_check {
+            // stash problematic original archived genesis related files to
+            // examine them later and to prevent validator and ledger-tool from
+            // naively consuming them
+            let mut error_messages = String::new();
+
+            fs::rename(
+                &ledger_path.join("genesis.tar.bz2"),
+                ledger_path.join("genesis.tar.bz2.failed"),
+            )
+            .unwrap_or_else(|e| {
+                error_messages += &format!("/failed to stash problematic genesis.tar.bz2: {}", e)
+            });
+            fs::rename(
+                &ledger_path.join("genesis.bin"),
+                ledger_path.join("genesis.bin.failed"),
+            )
+            .unwrap_or_else(|e| {
+                error_messages += &format!("/failed to stash problematic genesis.bin: {}", e)
+            });
+            fs::rename(
+                &ledger_path.join("rocksdb"),
+                ledger_path.join("rocksdb.failed"),
+            )
+            .unwrap_or_else(|e| {
+                error_messages += &format!("/failed to stash problematic rocksdb: {}", e)
+            });
+
+            return Err(BlockstoreError::IO(IOError::new(
+                ErrorKind::Other,
+                format!(
+                    "Error checking to unpack genesis archive: {}{}",
+                    unpack_err, error_messages
+                ),
+            )));
+        }
     }
 
     Ok(last_hash)
@@ -2739,7 +2792,12 @@ pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: Slot) -> boo
 // ticks)
 pub fn create_new_ledger_from_name(name: &str, genesis_config: &GenesisConfig) -> (PathBuf, Hash) {
     let ledger_path = get_ledger_path_from_name(name);
-    let blockhash = create_new_ledger(&ledger_path, genesis_config).unwrap();
+    let blockhash = create_new_ledger(
+        &ledger_path,
+        genesis_config,
+        MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    )
+    .unwrap();
     (ledger_path, blockhash)
 }
 
