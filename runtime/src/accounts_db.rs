@@ -61,7 +61,7 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
     // as |cargo test| cannot observe panics in other threads
-    pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = { Arc::new(AtomicBool::new(false)) };
+    pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
 #[derive(Debug, Default)]
@@ -3795,7 +3795,7 @@ pub mod tests {
         assert_eq!(
             vec![None, None, None],
             (0..3)
-                .map({ |_| accounts.next_shrink_slot() })
+                .map(|_| accounts.next_shrink_slot())
                 .collect::<Vec<_>>()
         );
 
@@ -3804,7 +3804,7 @@ pub mod tests {
         assert_eq!(
             vec![Some(7), Some(7), Some(7)],
             (0..3)
-                .map({ |_| accounts.next_shrink_slot() })
+                .map(|_| accounts.next_shrink_slot())
                 .collect::<Vec<_>>()
         );
 
@@ -3812,7 +3812,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         let slots = (0..6)
-            .map({ |_| accounts.next_shrink_slot() })
+            .map(|_| accounts.next_shrink_slot())
             .collect::<Vec<_>>();
 
         // Because the origin of this data is HashMap (not BTreeMap), key order is arbitrary per cycle.
