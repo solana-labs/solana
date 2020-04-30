@@ -161,7 +161,7 @@ pub struct PruneData {
 impl Sanitize for PruneData {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         Ok(())
     }
@@ -2822,7 +2822,7 @@ mod tests {
         let mut pd = PruneData::default();
         pd.wallclock = MAX_WALLCLOCK;
         let msg = Protocol::PruneMessage(Pubkey::default(), pd);
-        assert_eq!(msg.sanitize(), Err(SanitizeError::ValueOutOfRange));
+        assert_eq!(msg.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 
     // computes the maximum size for pull request blooms
