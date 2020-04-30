@@ -56,8 +56,8 @@ time you open the app. Once the app is available on Ledger Live, you can
 reinstall the app from there, and the message will no longer be displayed.
 
 **WARNING:** Installing an unsigned Ledger app reduces the security of your Ledger device.
-If your client is compromised, an attacker will be able to trick you into signing arbitrary 
-transactions with arbitrary derivation paths. Only use this installation method if you understand 
+If your client is compromised, an attacker will be able to trick you into signing arbitrary
+transactions with arbitrary derivation paths. Only use this installation method if you understand
 the security implications. We strongly recommend that you use a separate
 Ledger device, with no other wallets/apps sharing the same seed phrase.
 
