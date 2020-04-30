@@ -8,7 +8,12 @@ use crate::{
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
-use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_from_path};
+use solana_clap_utils::{
+    commitment::{commitment_arg, COMMITMENT_ARG},
+    input_parsers::*,
+    input_validators::*,
+    keypair::signer_from_path,
+};
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
     rpc_client::RpcClient,
@@ -91,14 +96,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("epoch-info")
             .about("Get information about the current epoch")
             .alias("get-epoch-info")
-            .arg(
-                Arg::with_name("confirmed")
-                    .long("confirmed")
-                    .takes_value(false)
-                    .help(
-                        "Return information at maximum-lockout commitment level",
-                    ),
-            ),
+            .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
@@ -108,37 +106,16 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("slot").about("Get current slot")
             .alias("get-slot")
-            .arg(
-                Arg::with_name("confirmed")
-                    .long("confirmed")
-                    .takes_value(false)
-                    .help(
-                        "Return slot at maximum-lockout commitment level",
-                    ),
-            ),
+            .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("epoch").about("Get current epoch")
-            .arg(
-                Arg::with_name("confirmed")
-                    .long("confirmed")
-                    .takes_value(false)
-                    .help(
-                        "Return epoch at maximum-lockout commitment level",
-                    ),
-            ),
+            .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("transaction-count").about("Get current transaction count")
             .alias("get-transaction-count")
-            .arg(
-                Arg::with_name("confirmed")
-                    .long("confirmed")
-                    .takes_value(false)
-                    .help(
-                        "Return count at maximum-lockout commitment level",
-                    ),
-            ),
+            .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("ping")
@@ -179,12 +156,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
                 .arg(
-                    Arg::with_name("confirmed")
-                        .long("confirmed")
-                        .takes_value(false)
-                        .help(
-                            "Wait until the transaction is confirmed at maximum-lockout commitment level",
-                        ),
+                    Arg::with_name(COMMITMENT_ARG.name)
+                        .long(COMMITMENT_ARG.long)
+                        .takes_value(true)
+                        .possible_values(&["default", "max", "recent", "root"])
+                        .value_name("COMMITMENT_LEVEL")
+                        .help("Wait until the transaction is confirmed at selected commitment level"),
                 ),
         )
         .subcommand(
@@ -237,19 +214,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .about("Show summary information about the current validators")
                 .alias("show-validators")
                 .arg(
-                    Arg::with_name("confirmed")
-                        .long("confirmed")
-                        .takes_value(false)
-                        .help(
-                            "Return information at maximum-lockout commitment level",
-                        ),
-                )
-                .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
-                ),
+                )
+                .arg(commitment_arg()),
         )
     }
 }
@@ -282,11 +252,8 @@ pub fn parse_cluster_ping(
         None
     };
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
-    let commitment_config = if matches.is_present("confirmed") {
-        CommitmentConfig::default()
-    } else {
-        CommitmentConfig::recent()
-    };
+    let commitment_config =
+        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             lamports,
@@ -313,11 +280,8 @@ pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, 
 }
 
 pub fn parse_get_epoch_info(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = if matches.is_present("confirmed") {
-        CommitmentConfig::default()
-    } else {
-        CommitmentConfig::recent()
-    };
+    let commitment_config =
+        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
     Ok(CliCommandInfo {
         command: CliCommand::GetEpochInfo { commitment_config },
         signers: vec![],
@@ -325,11 +289,8 @@ pub fn parse_get_epoch_info(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, 
 }
 
 pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = if matches.is_present("confirmed") {
-        CommitmentConfig::default()
-    } else {
-        CommitmentConfig::recent()
-    };
+    let commitment_config =
+        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
     Ok(CliCommandInfo {
         command: CliCommand::GetSlot { commitment_config },
         signers: vec![],
@@ -337,11 +298,8 @@ pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliErr
 }
 
 pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = if matches.is_present("confirmed") {
-        CommitmentConfig::default()
-    } else {
-        CommitmentConfig::recent()
-    };
+    let commitment_config =
+        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
     Ok(CliCommandInfo {
         command: CliCommand::GetEpoch { commitment_config },
         signers: vec![],
@@ -349,11 +307,8 @@ pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
 }
 
 pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = if matches.is_present("confirmed") {
-        CommitmentConfig::default()
-    } else {
-        CommitmentConfig::recent()
-    };
+    let commitment_config =
+        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
     Ok(CliCommandInfo {
         command: CliCommand::GetTransactionCount { commitment_config },
         signers: vec![],
@@ -379,11 +334,8 @@ pub fn parse_show_stakes(
 
 pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
-    let commitment_config = if matches.is_present("confirmed") {
-        CommitmentConfig::default()
-    } else {
-        CommitmentConfig::recent()
-    };
+    let commitment_config =
+        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
 
     Ok(CliCommandInfo {
         command: CliCommand::ShowValidators {
@@ -1357,7 +1309,8 @@ mod tests {
             "2",
             "-t",
             "3",
-            "--confirmed",
+            "--commitment",
+            "max",
         ]);
         assert_eq!(
             parse_command(&test_ping, &default_keypair_file, None).unwrap(),
@@ -1367,7 +1320,7 @@ mod tests {
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),
-                    commitment_config: CommitmentConfig::default(),
+                    commitment_config: CommitmentConfig::max(),
                 },
                 signers: vec![default_keypair.into()],
             }
