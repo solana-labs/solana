@@ -3414,6 +3414,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-genesis-programs",
  "solana-ledger",
+ "solana-logger",
  "solana-sdk",
  "solana-stake-program",
  "solana-storage-program",

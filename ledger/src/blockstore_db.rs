@@ -1,4 +1,4 @@
-use crate::blockstore_meta;
+use crate::{blockstore_meta, hardened_unpack::UnpackError};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
 use log::*;
@@ -56,6 +56,7 @@ pub enum BlockstoreError {
     FsExtraError(#[from] fs_extra::error::Error),
     SlotCleanedUp,
     UnableToSetOpenFileDescriptorLimit,
+    UnpackError(#[from] UnpackError),
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 

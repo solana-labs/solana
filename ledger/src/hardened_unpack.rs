@@ -19,9 +19,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum UnpackError {
-    #[error("IO error")]
+    #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
-    #[error("Archive error")]
+    #[error("Archive error: {0}")]
     Archive(String),
 }
 
@@ -29,15 +29,15 @@ pub type Result<T> = std::result::Result<T, UnpackError>;
 
 const MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE: u64 = 500 * 1024 * 1024 * 1024; // 500 GiB
 const MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT: u64 = 500_000;
-const MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 1024 * 1024 * 1024; // 1024 MiB
+pub const MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 10 * 1024 * 1024; // 10 MiB
 const MAX_GENESIS_ARCHIVE_UNPACKED_COUNT: u64 = 100;
 
 fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> Result<u64> {
     let total_size = total_size.saturating_add(entry_size);
     if total_size > limit_size {
         return Err(UnpackError::Archive(format!(
-            "too large snapshot: {:?}",
-            total_size
+            "too large archive: {} than limit: {}",
+            total_size, limit_size,
         )));
     }
     Ok(total_size)
@@ -151,10 +151,18 @@ fn is_valid_snapshot_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool
     }
 }
 
-pub fn open_genesis_config(ledger_path: &Path) -> GenesisConfig {
+pub fn open_genesis_config(
+    ledger_path: &Path,
+    max_genesis_archive_unpacked_size: u64,
+) -> GenesisConfig {
     GenesisConfig::load(&ledger_path).unwrap_or_else(|load_err| {
         let genesis_package = ledger_path.join("genesis.tar.bz2");
-        unpack_genesis_archive(&genesis_package, ledger_path).unwrap_or_else(|unpack_err| {
+        unpack_genesis_archive(
+            &genesis_package,
+            ledger_path,
+            max_genesis_archive_unpacked_size,
+        )
+        .unwrap_or_else(|unpack_err| {
             warn!(
                 "Failed to open ledger genesis_config at {:?}: {}, {}",
                 ledger_path, load_err, unpack_err,
@@ -170,17 +178,20 @@ pub fn open_genesis_config(ledger_path: &Path) -> GenesisConfig {
 pub fn unpack_genesis_archive(
     archive_filename: &Path,
     destination_dir: &Path,
-) -> std::result::Result<(), String> {
+    max_genesis_archive_unpacked_size: u64,
+) -> std::result::Result<(), UnpackError> {
     info!("Extracting {:?}...", archive_filename);
     let extract_start = Instant::now();
 
-    fs::create_dir_all(destination_dir).map_err(|err| err.to_string())?;
-    let tar_bz2 = File::open(&archive_filename)
-        .map_err(|err| format!("Unable to open {:?}: {:?}", archive_filename, err))?;
+    fs::create_dir_all(destination_dir)?;
+    let tar_bz2 = File::open(&archive_filename)?;
     let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut archive = Archive::new(tar);
-    unpack_genesis(&mut archive, destination_dir)
-        .map_err(|err| format!("Unable to unpack {:?}: {:?}", archive_filename, err))?;
+    unpack_genesis(
+        &mut archive,
+        destination_dir,
+        max_genesis_archive_unpacked_size,
+    )?;
     info!(
         "Extracted {:?} in {:?}",
         archive_filename,
@@ -189,11 +200,15 @@ pub fn unpack_genesis_archive(
     Ok(())
 }
 
-fn unpack_genesis<A: Read, P: AsRef<Path>>(archive: &mut Archive<A>, unpack_dir: P) -> Result<()> {
+fn unpack_genesis<A: Read, P: AsRef<Path>>(
+    archive: &mut Archive<A>,
+    unpack_dir: P,
+    max_genesis_archive_unpacked_size: u64,
+) -> Result<()> {
     unpack_archive(
         archive,
         unpack_dir,
-        MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        max_genesis_archive_unpacked_size,
         MAX_GENESIS_ARCHIVE_UNPACKED_COUNT,
         is_valid_genesis_archive_entry,
     )
@@ -311,7 +326,9 @@ mod tests {
     }
 
     fn finalize_and_unpack_genesis(archive: tar::Builder<Vec<u8>>) -> Result<()> {
-        with_finalize_and_unpack(archive, |a, b| unpack_genesis(a, b))
+        with_finalize_and_unpack(archive, |a, b| {
+            unpack_genesis(a, b, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE)
+        })
     }
 
     #[test]
@@ -440,7 +457,7 @@ mod tests {
         let mut archive = Builder::new(Vec::new());
         archive.append(&header, data).unwrap();
         let result = finalize_and_unpack_snapshot(archive);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == *"too large snapshot: 1125899906842624");
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == format!("too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
     }
 
     #[test]
@@ -456,7 +473,7 @@ mod tests {
 
         let result =
             checked_total_size_sum(u64::max_value() - 2, 2, MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == *"too large snapshot: 18446744073709551615");
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message.to_string() == format!("too large archive: 18446744073709551615 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
     }
 
     #[test]

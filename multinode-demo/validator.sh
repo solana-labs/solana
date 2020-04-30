@@ -6,7 +6,9 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-args=()
+args=(
+  --max-genesis-archive-unpacked-size 1073741824
+)
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
 label=
@@ -147,6 +149,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --halt-on-trusted-validators-accounts-hash-mismatch ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --max-genesis-archive-unpacked-size ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = -h ]]; then
       usage "$@"
     else

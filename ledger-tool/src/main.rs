@@ -10,7 +10,7 @@ use solana_ledger::{
     blockstore::Blockstore,
     blockstore_db::{self, Column, Database},
     blockstore_processor::{BankForksInfo, ProcessOptions},
-    hardened_unpack::open_genesis_config,
+    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
 };
@@ -553,6 +553,12 @@ fn load_bank_forks(
     )
 }
 
+fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
+    let max_genesis_archive_unpacked_size =
+        value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
+    open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     const DEFAULT_ROOT_COUNT: &str = "1";
@@ -586,6 +592,13 @@ fn main() {
         .multiple(true)
         .takes_value(true)
         .help("Add a hard fork at this slot");
+    let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
+    let max_genesis_archive_unpacked_size_arg = Arg::with_name("max_genesis_archive_unpacked_size")
+        .long("max-genesis-archive-unpacked-size")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .default_value(&default_genesis_archive_unpacked_size)
+        .help("maximum total uncompressed size of unpacked genesis archive");
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -635,15 +648,18 @@ fn main() {
         .subcommand(
             SubCommand::with_name("genesis")
             .about("Prints the ledger's genesis config")
+            .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
             .about("Prints the ledger's genesis hash")
+            .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
             SubCommand::with_name("shred-version")
             .about("Prints the ledger's shred hash")
             .arg(&hard_forks_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -667,6 +683,7 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -680,6 +697,7 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
                 Arg::with_name("include_all_votes")
                     .long("include-all-votes")
@@ -698,6 +716,7 @@ fn main() {
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&hard_forks_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -726,6 +745,7 @@ fn main() {
                     .takes_value(false)
                     .help("Include sysvars too"),
             )
+            .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("capitalization")
             .about("Print capitalization (aka, total suppy)")
@@ -804,11 +824,14 @@ fn main() {
                 LedgerOutputMethod::Print,
             );
         }
-        ("genesis", Some(_arg_matches)) => {
-            println!("{}", open_genesis_config(&ledger_path));
+        ("genesis", Some(arg_matches)) => {
+            println!("{}", open_genesis_config_by(&ledger_path, arg_matches));
         }
-        ("genesis-hash", Some(_arg_matches)) => {
-            println!("{}", open_genesis_config(&ledger_path).hash());
+        ("genesis-hash", Some(arg_matches)) => {
+            println!(
+                "{}",
+                open_genesis_config_by(&ledger_path, arg_matches).hash()
+            );
         }
         ("shred-version", Some(arg_matches)) => {
             let process_options = ProcessOptions {
@@ -817,7 +840,7 @@ fn main() {
                 poh_verify: false,
                 ..ProcessOptions::default()
             };
-            let genesis_config = open_genesis_config(&ledger_path);
+            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank_info = &bank_forks_info[0];
@@ -872,12 +895,15 @@ fn main() {
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 ..ProcessOptions::default()
             };
-            println!("{}", open_genesis_config(&ledger_path).hash());
+            println!(
+                "genesis hash: {}",
+                open_genesis_config_by(&ledger_path, arg_matches).hash()
+            );
 
             load_bank_forks(
                 arg_matches,
                 &ledger_path,
-                &open_genesis_config(&ledger_path),
+                &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
             )
             .unwrap_or_else(|err| {
@@ -899,7 +925,7 @@ fn main() {
             match load_bank_forks(
                 arg_matches,
                 &ledger_path,
-                &open_genesis_config(&ledger_path),
+                &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
             ) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
@@ -940,7 +966,7 @@ fn main() {
                 poh_verify: false,
                 ..ProcessOptions::default()
             };
-            let genesis_config = open_genesis_config(&ledger_path);
+            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
                 Ok((bank_forks, _bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
@@ -1003,7 +1029,7 @@ fn main() {
                 poh_verify: false,
                 ..ProcessOptions::default()
             };
-            let genesis_config = open_genesis_config(&ledger_path);
+            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1053,7 +1079,7 @@ fn main() {
                 poh_verify: false,
                 ..ProcessOptions::default()
             };
-            let genesis_config = open_genesis_config(&ledger_path);
+            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
                 Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = dev_halt_at_slot.unwrap_or_else(|| {
