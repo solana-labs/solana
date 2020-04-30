@@ -126,14 +126,13 @@ static_assert(sizeof(uint64_t) == 8);
 #define SOL_FN_PREFIX __attribute__((always_inline)) static
 
 /**
- * Helper function that prints a string to stdout
+ * Prints a string to stdout
  */
 void sol_log_(const char *, uint64_t);
 #define sol_log(message) sol_log_(message, sol_strlen(message))
 
 /**
- * Helper function that prints a 64 bit values represented in hexadecimal
- * to stdout
+ * Prints a 64 bit values represented in hexadecimal to stdout
  */
 void sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 
