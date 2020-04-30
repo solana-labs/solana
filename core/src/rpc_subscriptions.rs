@@ -207,7 +207,10 @@ fn filter_account_result(
 ) -> (Box<dyn Iterator<Item = RpcAccount>>, Slot) {
     if let Some((account, fork)) = result {
         if fork != last_notified_slot {
-            return (Box::new(iter::once(RpcAccount::encode(account))), fork);
+            return (
+                Box::new(iter::once(RpcAccount::encode_with_base58(account))),
+                fork,
+            );
         }
     }
     (Box::new(iter::empty()), last_notified_slot)
@@ -237,7 +240,7 @@ fn filter_program_results(
                 .into_iter()
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
-                    account: RpcAccount::encode(account),
+                    account: RpcAccount::encode_with_base58(account),
                 }),
         ),
         last_notified_slot,

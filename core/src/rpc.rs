@@ -139,7 +139,12 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcAccount>> {
         let bank = &*self.bank(commitment)?;
-        pubkey.and_then(|key| new_response(bank, bank.get_account(&key).map(RpcAccount::encode)))
+        pubkey.and_then(|key| {
+            new_response(
+                bank,
+                bank.get_account(&key).map(RpcAccount::encode_with_base58),
+            )
+        })
     }
 
     pub fn get_minimum_balance_for_rent_exemption(
@@ -163,7 +168,7 @@ impl JsonRpcRequestProcessor {
             .into_iter()
             .map(|(pubkey, account)| RpcKeyedAccount {
                 pubkey: pubkey.to_string(),
-                account: RpcAccount::encode(account),
+                account: RpcAccount::encode_with_base58(account),
             })
             .collect())
     }

@@ -24,6 +24,7 @@ pub enum OutputFormat {
     Display,
     Json,
     JsonCompact,
+    Yaml,
 }
 
 impl OutputFormat {
@@ -35,8 +36,16 @@ impl OutputFormat {
             OutputFormat::Display => format!("{}", item),
             OutputFormat::Json => serde_json::to_string_pretty(item).unwrap(),
             OutputFormat::JsonCompact => serde_json::to_value(item).unwrap().to_string(),
+            OutputFormat::Yaml => serde_yaml::to_string(item).unwrap(),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AccountDataOutputFormat {
+    Base58,
+    Base64,
+    Hex,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -71,6 +80,31 @@ impl fmt::Display for CliAccount {
             "Rent Epoch:",
             &self.keyed_account.account.rent_epoch.to_string(),
         )?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+pub struct CliAccounts {
+    #[serde(flatten)]
+    pub accounts: std::collections::BTreeMap<String, solana_client::rpc_response::RpcAccount>,
+
+    #[serde(skip_serializing)]
+    pub use_lamports_unit: bool,
+}
+
+impl fmt::Display for CliAccounts {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (pubkey, account) in self.accounts.iter() {
+            let cli_account = CliAccount {
+                keyed_account: RpcKeyedAccount {
+                    pubkey: pubkey.clone(),
+                    account: account.clone(),
+                },
+                use_lamports_unit: self.use_lamports_unit,
+            };
+            write!(f, "{}", cli_account)?;
+        }
         Ok(())
     }
 }

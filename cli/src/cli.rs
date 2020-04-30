@@ -1,5 +1,5 @@
 use crate::{
-    cli_output::{CliAccount, CliSignOnlyData, CliSignature, OutputFormat},
+    cli_output::{AccountDataOutputFormat, CliSignOnlyData, CliSignature, OutputFormat},
     cluster_query::*,
     display::println_name_value,
     nonce::{self, *},
@@ -22,7 +22,6 @@ use solana_clap_utils::{
 use solana_client::{
     client_error::{ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
-    rpc_response::{RpcAccount, RpcKeyedAccount},
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -419,6 +418,7 @@ pub enum CliCommand {
         pubkey: Pubkey,
         output_file: Option<String>,
         use_lamports_unit: bool,
+        account_data_output: AccountDataOutputFormat,
     },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Transfer {
@@ -893,11 +893,21 @@ pub fn parse_command(
                 pubkey_of_signer(matches, "account_pubkey", wallet_manager)?.unwrap();
             let output_file = matches.value_of("output_file");
             let use_lamports_unit = matches.is_present("lamports");
+            let account_data_output = matches
+                .value_of("account_data_output")
+                .map(|value| match value {
+                    "base58" => AccountDataOutputFormat::Base58,
+                    "base64" => AccountDataOutputFormat::Base64,
+                    "hex" => AccountDataOutputFormat::Hex,
+                    _ => unreachable!(),
+                })
+                .unwrap_or(AccountDataOutputFormat::Base58);
             Ok(CliCommandInfo {
                 command: CliCommand::ShowAccount {
                     pubkey: account_pubkey,
                     output_file: output_file.map(ToString::to_string),
                     use_lamports_unit,
+                    account_data_output,
                 },
                 signers: vec![],
             })
@@ -1259,18 +1269,24 @@ fn process_show_account(
     account_pubkey: &Pubkey,
     output_file: &Option<String>,
     use_lamports_unit: bool,
+    account_data_output: AccountDataOutputFormat,
 ) -> ProcessResult {
     let account = rpc_client.get_account(account_pubkey)?;
     let data = account.data.clone();
-    let cli_account = CliAccount {
-        keyed_account: RpcKeyedAccount {
-            pubkey: account_pubkey.to_string(),
-            account: RpcAccount::encode(account),
-        },
+    if config.output_format != OutputFormat::Display
+        && account_data_output == AccountDataOutputFormat::Hex
+    {
+        return Err(Box::new(CliError::BadParameter(
+            "--account-data-format=hex can only be used with Display output format".to_owned(),
+        )));
+    }
+    let mut account_string = crate::display::output_account(
+        &config.output_format,
+        &account_pubkey,
+        &account,
         use_lamports_unit,
-    };
-
-    let mut account_string = config.output_format.formatted_string(&cli_account);
+        account_data_output.clone(),
+    );
 
     if config.output_format == OutputFormat::Display {
         if let Some(output_file) = output_file {
@@ -1279,8 +1295,26 @@ fn process_show_account(
             writeln!(&mut account_string)?;
             writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
         } else if !data.is_empty() {
-            use pretty_hex::*;
-            writeln!(&mut account_string, "{:?}", data.hex_dump())?;
+            match account_data_output {
+                AccountDataOutputFormat::Base58 => {
+                    writeln!(
+                        &mut account_string,
+                        "Data (base58): {}",
+                        &bs58::encode(data.clone()).into_string()
+                    )?;
+                }
+                AccountDataOutputFormat::Base64 => {
+                    writeln!(
+                        &mut account_string,
+                        "Data (base64): {}",
+                        &base64::encode(data.clone()).to_string()
+                    )?;
+                }
+                AccountDataOutputFormat::Hex => {
+                    use pretty_hex::*;
+                    writeln!(&mut account_string, "Data (hex):\n{:?}", data.hex_dump())?;
+                }
+            }
         }
     }
 
@@ -2178,12 +2212,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             pubkey,
             output_file,
             use_lamports_unit,
+            account_data_output,
         } => process_show_account(
             &rpc_client,
             config,
             &pubkey,
             &output_file,
             *use_lamports_unit,
+            account_data_output.clone(),
         ),
         // Apply time elapsed to contract
         CliCommand::TimeElapsed(to, pubkey, dt) => {
@@ -2647,6 +2683,13 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Write the account data to this file"),
+                )
+                .arg(
+                    Arg::with_name("account_data_output")
+                        .long("account-data-output")
+                        .takes_value(true)
+                        .possible_values(&["base58", "base64", "hex"])
+                        .help("Return account.data in specified output format"),
                 )
                 .arg(
                     Arg::with_name("lamports")

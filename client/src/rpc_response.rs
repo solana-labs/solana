@@ -72,17 +72,25 @@ pub struct RpcAccount {
 }
 
 impl RpcAccount {
-    pub fn encode(account: Account) -> Self {
+    fn do_encode(account: &Account, data: String) -> Self {
         RpcAccount {
             lamports: account.lamports,
-            data: bs58::encode(account.data.clone()).into_string(),
+            data,
             owner: account.owner.to_string(),
             executable: account.executable,
             rent_epoch: account.rent_epoch,
         }
     }
 
-    pub fn decode(&self) -> std::result::Result<Account, RpcError> {
+    pub fn encode_with_base58(account: Account) -> Self {
+        Self::do_encode(&account, bs58::encode(account.data.clone()).into_string())
+    }
+
+    pub fn encode_with_base64(account: Account) -> Self {
+        Self::do_encode(&account, base64::encode(account.data.clone()))
+    }
+
+    pub fn decode_with_base58(&self) -> std::result::Result<Account, RpcError> {
         Ok(Account {
             lamports: self.lamports,
             data: bs58::decode(self.data.clone()).into_vec().map_err(|_| {

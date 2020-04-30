@@ -538,7 +538,8 @@ impl RpcClient {
                     value: rpc_account,
                 } = serde_json::from_value::<Response<Option<RpcAccount>>>(result_json)?;
                 trace!("Response account {:?} {:?}", pubkey, rpc_account);
-                let account = rpc_account.and_then(|rpc_account| rpc_account.decode().ok());
+                let account =
+                    rpc_account.and_then(|rpc_account| rpc_account.decode_with_base58().ok());
                 Ok(Response {
                     context,
                     value: account,
@@ -606,7 +607,7 @@ impl RpcClient {
                     RpcRequest::GetProgramAccounts,
                 )
             })?;
-            pubkey_accounts.push((pubkey, account.decode().unwrap()));
+            pubkey_accounts.push((pubkey, account.decode_with_base58().unwrap()));
         }
         Ok(pubkey_accounts)
     }

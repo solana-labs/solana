@@ -1,8 +1,11 @@
 use crate::cli::SettingType;
+use crate::cli_output::OutputFormat;
+use crate::cli_output::{AccountDataOutputFormat, CliAccount, CliAccounts};
 use console::style;
+use solana_client::rpc_response::{RpcAccount, RpcKeyedAccount};
 use solana_sdk::{
-    hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
-    transaction::Transaction,
+    account::Account, hash::Hash, native_token::lamports_to_sol,
+    program_utils::limited_deserialize, pubkey::Pubkey, transaction::Transaction,
 };
 use solana_transaction_status::RpcTransactionStatusMeta;
 use std::{fmt, io};
@@ -199,4 +202,49 @@ pub fn println_transaction(
             print!("{}", s);
         }
     }
+}
+
+pub fn output_account(
+    output_format: &OutputFormat,
+    pubkey: &Pubkey,
+    account: &Account,
+    use_lamports_unit: bool,
+    account_data_output: AccountDataOutputFormat,
+) -> String {
+    let rpc_account = match account_data_output {
+        AccountDataOutputFormat::Base58 => RpcAccount::encode_with_base58(account.clone()),
+        AccountDataOutputFormat::Hex => RpcAccount::encode_with_base58(account.clone()),
+        AccountDataOutputFormat::Base64 => RpcAccount::encode_with_base64(account.clone()),
+    };
+
+    let cli_account = CliAccount {
+        keyed_account: RpcKeyedAccount {
+            pubkey: pubkey.to_string(),
+            account: rpc_account,
+        },
+        use_lamports_unit,
+    };
+
+    output_format.formatted_string(&cli_account)
+}
+
+pub fn output_accounts(
+    output_format: &OutputFormat,
+    accounts: &[(Pubkey, Account)],
+    use_lamports_unit: bool,
+    account_data_output: AccountDataOutputFormat,
+) -> String {
+    let mut cli_accounts = std::collections::BTreeMap::new();
+    for (pubkey, account) in accounts {
+        let rpc_account = match account_data_output {
+            AccountDataOutputFormat::Base58 => RpcAccount::encode_with_base58(account.clone()),
+            AccountDataOutputFormat::Hex => RpcAccount::encode_with_base58(account.clone()),
+            AccountDataOutputFormat::Base64 => RpcAccount::encode_with_base64(account.clone()),
+        };
+        cli_accounts.insert(pubkey.to_string(), rpc_account);
+    }
+    output_format.formatted_string(&CliAccounts {
+        accounts: cli_accounts,
+        use_lamports_unit,
+    })
 }

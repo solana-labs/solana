@@ -4,6 +4,7 @@ use clap::{
 };
 use serde_json::json;
 use solana_clap_utils::input_validators::is_slot;
+use solana_cli::cli_output::AccountDataOutputFormat;
 use solana_ledger::bank_forks::CompressionType;
 use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
@@ -17,8 +18,8 @@ use solana_ledger::{
 };
 use solana_runtime::{append_vec::AppendVec, bank::Bank};
 use solana_sdk::{
-    account::Account, clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol,
-    pubkey::Pubkey, shred_version::compute_shred_version,
+    clock::Slot, genesis_config::GenesisConfig, native_token::lamports_to_sol, pubkey::Pubkey,
+    shred_version::compute_shred_version,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
@@ -585,18 +586,7 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
 }
 
-fn print_account(pubkey: &Pubkey, account: &Account) {
-    let data_len = account.data.len();
-    println!("{}:", pubkey);
-    println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
-    println!("  - owner: '{}'", account.owner);
-    println!("  - executable: {}", account.executable);
-    println!("  - rent_epoch: {}", account.rent_epoch);
-    println!("  - data: '{}'", base64::encode(&account.data));
-    println!("  - data_len: {}", data_len);
-}
-
-fn print_append_vec_accounts(paths: &[String]) {
+fn print_append_vec_accounts(paths: &[String], account_data_output: AccountDataOutputFormat) {
     let append_vecs: Vec<_> = paths
         .iter()
         .map(|path| {
@@ -607,7 +597,7 @@ fn print_append_vec_accounts(paths: &[String]) {
             append_vec
         })
         .collect();
-    let accounts: BTreeMap<_, _> = append_vecs
+    let accounts: Vec<_> = append_vecs
         .iter()
         .map(|append_vec| {
             append_vec
@@ -618,23 +608,37 @@ fn print_append_vec_accounts(paths: &[String]) {
         .flatten()
         .collect();
 
-    println!("---");
-    for (pubkey, account) in accounts.into_iter() {
-        print_account(&pubkey, &account);
-    }
+    println!(
+        "{}",
+        solana_cli::display::output_accounts(
+            &solana_cli::cli_output::OutputFormat::Yaml,
+            &accounts,
+            false,
+            account_data_output
+        )
+    );
 }
 
-fn print_bank_accounts(bank: &Bank, include_sysvars: bool) {
-    let accounts: BTreeMap<_, _> = bank
+fn print_bank_accounts(
+    bank: &Bank,
+    include_sysvars: bool,
+    account_data_output: AccountDataOutputFormat,
+) {
+    let accounts: Vec<_> = bank
         .get_program_accounts(None)
         .into_iter()
         .filter(|(pubkey, _account)| include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey))
         .collect();
 
-    println!("---");
-    for (pubkey, account) in accounts.into_iter() {
-        print_account(&pubkey, &account);
-    }
+    println!(
+        "{}",
+        solana_cli::display::output_accounts(
+            &solana_cli::cli_output::OutputFormat::Yaml,
+            &accounts,
+            false,
+            account_data_output
+        )
+    );
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -831,6 +835,13 @@ fn main() {
                     .help("Include sysvars too"),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(
+                Arg::with_name("account_data_output")
+                    .long("account-data-output")
+                    .takes_value(true)
+                    .possible_values(&["base58", "base64"])
+                    .help("Return account.data in specified output format"),
+            )
         ).subcommand(
             SubCommand::with_name("capitalization")
             .about("Print capitalization (aka, total suppy)")
@@ -913,14 +924,31 @@ fn main() {
                     .multiple(true)
                     .required(true)
             )
+            .arg(
+                Arg::with_name("account_data_output")
+                    .long("account-data-output")
+                    .takes_value(true)
+                    .possible_values(&["base58", "base64"])
+                    .help("Return account.data in specified output format"),
+            )
         )
         .get_matches();
 
     // somewhat specially-treated subcommand which don't require a ledger
     if let ("append-vec", Some(arg_matches)) = matches.subcommand() {
         let paths = values_t_or_exit!(arg_matches, "paths", String);
-        print_append_vec_accounts(&paths);
-        exit(0);
+
+        let account_data_output = arg_matches
+            .value_of("account_data_output")
+            .map(|value| match value {
+                "base58" => AccountDataOutputFormat::Base58,
+                "base64" => AccountDataOutputFormat::Base64,
+                _ => unreachable!(),
+            })
+            .unwrap_or(AccountDataOutputFormat::Base58);
+
+        print_append_vec_accounts(&paths, account_data_output);
+        return;
     }
 
     let ledger_path = PathBuf::from(value_t!(matches, "ledger_path", String).unwrap_or_else(
@@ -1166,7 +1194,16 @@ fn main() {
                         eprintln!("Error: Slot {} is not available", slot);
                         exit(1);
                     });
-                    print_bank_accounts(bank, include_sysvars);
+                    let account_data_output = arg_matches
+                        .value_of("account_data_output")
+                        .map(|value| match value {
+                            "base58" => AccountDataOutputFormat::Base58,
+                            "base64" => AccountDataOutputFormat::Base64,
+                            _ => unreachable!(),
+                        })
+                        .unwrap_or(AccountDataOutputFormat::Base58);
+
+                    print_bank_accounts(bank, include_sysvars, account_data_output);
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);

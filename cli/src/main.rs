@@ -132,6 +132,7 @@ pub fn parse_args<'a>(
         .map(|value| match value {
             "json" => OutputFormat::Json,
             "json-compact" => OutputFormat::JsonCompact,
+            "yaml" => OutputFormat::Yaml,
             _ => unreachable!(),
         })
         .unwrap_or(OutputFormat::Display);
@@ -213,7 +214,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .value_name("FORMAT")
             .global(true)
             .takes_value(true)
-            .possible_values(&["json", "json-compact"])
+            .possible_values(&["json", "json-compact", "yaml"])
             .help("Return information in specified output format"),
     )
     .arg(
