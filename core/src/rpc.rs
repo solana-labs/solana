@@ -2076,7 +2076,7 @@ pub mod tests {
         );
         let res = io.handle_request_sync(&req, meta);
         let expected_res: Option<transaction::Result<()>> = Some(Err(
-            TransactionError::InstructionError(0, InstructionError::CustomError(1)),
+            TransactionError::InstructionError(0, InstructionError::Custom(1)),
         ));
         let expected = json!({
             "jsonrpc": "2.0",
@@ -2614,7 +2614,7 @@ pub mod tests {
                         meta.err,
                         Some(TransactionError::InstructionError(
                             0,
-                            InstructionError::CustomError(1)
+                            InstructionError::Custom(1)
                         ))
                     );
                     assert_eq!(
@@ -2658,7 +2658,7 @@ pub mod tests {
                         meta.err,
                         Some(TransactionError::InstructionError(
                             0,
-                            InstructionError::CustomError(1)
+                            InstructionError::Custom(1)
                         ))
                     );
                     assert_eq!(
