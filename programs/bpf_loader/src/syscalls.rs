@@ -2,7 +2,7 @@ use crate::{alloc, BPFError};
 use alloc::Alloc;
 use log::*;
 use solana_rbpf::{
-    ebpf::{EbpfError, HelperObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
+    ebpf::{EbpfError, SyscallObject, ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
     memory_region::{translate_addr, MemoryRegion},
     EbpfVm,
 };
@@ -32,7 +32,7 @@ use thiserror::Error as ThisError;
 
 /// Error definitions
 #[derive(Debug, ThisError)]
-pub enum HelperError {
+pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),
     #[error("BPF program called abort()!")]
@@ -50,8 +50,8 @@ pub enum HelperError {
     #[error("{0}")]
     InstructionError(InstructionError),
 }
-impl From<HelperError> for EbpfError<BPFError> {
-    fn from(error: HelperError) -> Self {
+impl From<SyscallError> for EbpfError<BPFError> {
+    fn from(error: SyscallError) -> Self {
         EbpfError::UserError(error.into())
     }
 }
@@ -68,37 +68,37 @@ use crate::allocator_bump::BPFAllocator;
 /// are expected to enforce this
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
-pub fn register_helpers<'a>(
+pub fn register_syscalls<'a>(
     vm: &mut EbpfVm<'a, BPFError>,
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
-    vm.register_helper_ex("abort", helper_abort)?;
-    vm.register_helper_ex("sol_panic", helper_sol_panic)?;
-    vm.register_helper_ex("sol_panic_", helper_sol_panic)?;
-    vm.register_helper_ex("sol_log", helper_sol_log)?;
-    vm.register_helper_ex("sol_log_", helper_sol_log)?;
-    vm.register_helper_ex("sol_log_64", helper_sol_log_u64)?;
-    vm.register_helper_ex("sol_log_64_", helper_sol_log_u64)?;
+    vm.register_syscall_ex("abort", syscall_abort)?;
+    vm.register_syscall_ex("sol_panic", syscall_sol_panic)?;
+    vm.register_syscall_ex("sol_panic_", syscall_sol_panic)?;
+    vm.register_syscall_ex("sol_log", syscall_sol_log)?;
+    vm.register_syscall_ex("sol_log_", syscall_sol_log)?;
+    vm.register_syscall_ex("sol_log_64", syscall_sol_log_u64)?;
+    vm.register_syscall_ex("sol_log_64_", syscall_sol_log_u64)?;
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
-    vm.register_helper_with_context_ex(
+    vm.register_syscall_with_context_ex(
         "sol_invoke_signed_rust",
-        Box::new(HelperProcessInstructionRust {
+        Box::new(SyscallProcessInstructionRust {
             invoke_context: invoke_context.clone(),
         }),
     )?;
-    vm.register_helper_with_context_ex(
+    vm.register_syscall_with_context_ex(
         "sol_invoke_signed_c",
-        Box::new(HelperProcessSolInstructionC {
+        Box::new(SyscallProcessSolInstructionC {
             invoke_context: invoke_context.clone(),
         }),
     )?;
 
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
-    vm.register_helper_with_context_ex(
+    vm.register_syscall_with_context_ex(
         "sol_alloc_free_",
-        Box::new(HelperSolAllocFree {
+        Box::new(SyscallSolAllocFree {
             allocator: BPFAllocator::new(heap, MM_HEAP_START),
         }),
     )?;
@@ -186,14 +186,14 @@ fn translate_string_and_do(
     };
     match from_utf8(&buf[..i]) {
         Ok(message) => work(message),
-        Err(err) => Err(HelperError::InvalidString(err, buf[..i].to_vec()).into()),
+        Err(err) => Err(SyscallError::InvalidString(err, buf[..i].to_vec()).into()),
     }
 }
 
-/// Abort helper functions, called when the BPF program calls `abort()`
+/// Abort syscall functions, called when the BPF program calls `abort()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
-pub fn helper_abort(
+pub fn syscall_abort(
     _arg1: u64,
     _arg2: u64,
     _arg3: u64,
@@ -202,13 +202,13 @@ pub fn helper_abort(
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
-    Err(HelperError::Abort.into())
+    Err(SyscallError::Abort.into())
 }
 
-/// Panic helper functions, called when the BPF program calls 'sol_panic_()`
+/// Panic syscall functions, called when the BPF program calls 'sol_panic_()`
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
-pub fn helper_sol_panic(
+pub fn syscall_sol_panic(
     file: u64,
     len: u64,
     line: u64,
@@ -218,12 +218,12 @@ pub fn helper_sol_panic(
     _rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
     translate_string_and_do(file, len, ro_regions, &|string: &str| {
-        Err(HelperError::Panic(string.to_string(), line, column).into())
+        Err(SyscallError::Panic(string.to_string(), line, column).into())
     })
 }
 
 /// Log a user's info message
-pub fn helper_sol_log(
+pub fn syscall_sol_log(
     addr: u64,
     len: u64,
     _arg3: u64,
@@ -242,7 +242,7 @@ pub fn helper_sol_log(
 }
 
 /// Log 5 u64 values
-pub fn helper_sol_log_u64(
+pub fn syscall_sol_log_u64(
     arg1: u64,
     arg2: u64,
     arg3: u64,
@@ -260,16 +260,16 @@ pub fn helper_sol_log_u64(
     Ok(0)
 }
 
-/// Dynamic memory allocation helper called when the BPF program calls
+/// Dynamic memory allocation syscall called when the BPF program calls
 /// `sol_alloc_free_()`.  The allocator is expected to allocate/free
 /// from/to a given chunk of memory and enforce size restrictions.  The
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
-pub struct HelperSolAllocFree {
+pub struct SyscallSolAllocFree {
     allocator: BPFAllocator,
 }
-impl HelperObject<BPFError> for HelperSolAllocFree {
+impl SyscallObject<BPFError> for SyscallSolAllocFree {
     fn call(
         &mut self,
         size: u64,
@@ -293,12 +293,12 @@ impl HelperObject<BPFError> for HelperSolAllocFree {
     }
 }
 
-// Cross-program invocation helpers
+// Cross-program invocation syscalls
 
 pub type TranslatedAccounts<'a> = (Vec<Rc<RefCell<Account>>>, Vec<(&'a mut u64, &'a mut [u8])>);
 
 /// Implemented by language specific data structure translators
-trait HelperProcessInstruction<'a> {
+trait SyscallProcessInstruction<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>>;
     fn translate_instruction(
         &self,
@@ -323,14 +323,14 @@ trait HelperProcessInstruction<'a> {
 }
 
 /// Cross-program invocation called from Rust
-pub struct HelperProcessInstructionRust<'a> {
+pub struct SyscallProcessInstructionRust<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
 }
-impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
+impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
         self.invoke_context
             .try_borrow_mut()
-            .map_err(|_| HelperError::InvokeContextBorrowFailed.into())
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
     }
     fn translate_instruction(
         &self,
@@ -403,7 +403,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
                     continue 'root;
                 }
             }
-            return Err(HelperError::InstructionError(InstructionError::MissingAccount).into());
+            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
         }
 
         Ok((accounts, refs))
@@ -433,12 +433,12 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
                             ro_regions
                         )?;
                         from_utf8(seed_bytes).map_err(|err| {
-                            HelperError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
+                            SyscallError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
                         })
                     })
                     .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
                 let signer = Pubkey::create_program_address(&seeds, program_id)
-                    .map_err(HelperError::BadSeeds)?;
+                    .map_err(SyscallError::BadSeeds)?;
                 signers.push(signer);
             }
             Ok(signers)
@@ -447,7 +447,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessInstructionRust<'a> {
         }
     }
 }
-impl<'a> HelperObject<BPFError> for HelperProcessInstructionRust<'a> {
+impl<'a> SyscallObject<BPFError> for SyscallProcessInstructionRust<'a> {
     fn call(
         &mut self,
         instruction_addr: u64,
@@ -518,14 +518,14 @@ struct SolSignerSeedsC {
 }
 
 /// Cross-program invocation called from C
-pub struct HelperProcessSolInstructionC<'a> {
+pub struct SyscallProcessSolInstructionC<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
 }
-impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstructionC<'a> {
+impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
         self.invoke_context
             .try_borrow_mut()
-            .map_err(|_| HelperError::InvokeContextBorrowFailed.into())
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
     }
 
     fn translate_instruction(
@@ -603,7 +603,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstructionC<'a> {
                     continue 'root;
                 }
             }
-            return Err(HelperError::InstructionError(InstructionError::MissingAccount).into());
+            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
         }
 
         Ok((accounts, refs))
@@ -637,12 +637,12 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstructionC<'a> {
                         .map(|seed| {
                             let seed_bytes = translate_slice!(u8, seed.addr, seed.len, ro_regions)?;
                             std::str::from_utf8(seed_bytes).map_err(|err| {
-                                HelperError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
+                                SyscallError::MalformedSignerSeed(err, seed_bytes.to_vec()).into()
                             })
                         })
                         .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
                     Pubkey::create_program_address(&seed_strs, program_id)
-                        .map_err(|err| HelperError::BadSeeds(err).into())
+                        .map_err(|err| SyscallError::BadSeeds(err).into())
                 })
                 .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?)
         } else {
@@ -650,7 +650,7 @@ impl<'a> HelperProcessInstruction<'a> for HelperProcessSolInstructionC<'a> {
         }
     }
 }
-impl<'a> HelperObject<BPFError> for HelperProcessSolInstructionC<'a> {
+impl<'a> SyscallObject<BPFError> for SyscallProcessSolInstructionC<'a> {
     fn call(
         &mut self,
         instruction_addr: u64,
@@ -676,7 +676,7 @@ impl<'a> HelperObject<BPFError> for HelperProcessSolInstructionC<'a> {
 
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
-    helper: &mut dyn HelperProcessInstruction<'a>,
+    syscall: &mut dyn SyscallProcessInstruction<'a>,
     instruction_addr: u64,
     account_infos_addr: u64,
     account_infos_len: u64,
@@ -685,22 +685,22 @@ fn call<'a>(
     ro_regions: &[MemoryRegion],
     rw_regions: &[MemoryRegion],
 ) -> Result<u64, EbpfError<BPFError>> {
-    let mut invoke_context = helper.get_context_mut()?;
+    let mut invoke_context = syscall.get_context_mut()?;
 
     // Translate data passed from the VM
 
-    let instruction = helper.translate_instruction(instruction_addr, ro_regions)?;
+    let instruction = syscall.translate_instruction(instruction_addr, ro_regions)?;
     let message = Message::new(&[instruction]);
     let program_id_index = message.instructions[0].program_id_index as usize;
     let program_id = message.account_keys[program_id_index];
-    let (accounts, refs) = helper.translate_accounts(
+    let (accounts, refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
         account_infos_len as usize,
         ro_regions,
         rw_regions,
     )?;
-    let signers = helper.translate_signers(
+    let signers = syscall.translate_signers(
         &program_id,
         signers_seeds_addr,
         signers_seeds_len as usize,
@@ -712,7 +712,7 @@ fn call<'a>(
     let program_account = (*accounts[program_id_index]).clone();
     if program_account.borrow().owner != bpf_loader::id() {
         // Only BPF programs supported for now
-        return Err(HelperError::ProgramNotSupported.into());
+        return Err(SyscallError::ProgramNotSupported.into());
     }
     let executable_accounts = vec![(program_id, program_account)];
 
@@ -728,7 +728,7 @@ fn call<'a>(
         Ok(()) => (),
         Err(err) => match ProgramError::try_from(err) {
             Ok(err) => return Ok(err.into()),
-            Err(err) => return Err(HelperError::InstructionError(err).into()),
+            Err(err) => return Err(SyscallError::InstructionError(err).into()),
         },
     }
 
@@ -858,16 +858,16 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "UserError(HelperError(Abort))")]
-    fn test_helper_abort() {
+    #[should_panic(expected = "UserError(SyscallError(Abort))")]
+    fn test_syscall_abort() {
         let ro_region = MemoryRegion::default();
         let rw_region = MemoryRegion::default();
-        helper_abort(0, 0, 0, 0, 0, &[ro_region], &[rw_region]).unwrap();
+        syscall_abort(0, 0, 0, 0, 0, &[ro_region], &[rw_region]).unwrap();
     }
 
     #[test]
-    #[should_panic(expected = "UserError(HelperError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
-    fn test_helper_sol_panic() {
+    #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
+    fn test_syscall_sol_panic() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
         let ro_region = MemoryRegion {
@@ -876,7 +876,7 @@ mod tests {
             len: string.len() as u64,
         };
         let rw_region = MemoryRegion::default();
-        helper_sol_panic(
+        syscall_sol_panic(
             100,
             string.len() as u64,
             42,
@@ -892,7 +892,7 @@ mod tests {
     // this results in the bad string length being ignored and not returning an error
     #[test]
     #[ignore]
-    fn test_helper_sol_log() {
+    fn test_syscall_sol_log() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
         let ro_regions = &[MemoryRegion {
@@ -902,9 +902,9 @@ mod tests {
         }];
         let rw_regions = &[MemoryRegion::default()];
         solana_logger::setup_with_default("solana=info");
-        helper_sol_log(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions).unwrap();
+        syscall_sol_log(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions).unwrap();
         solana_logger::setup_with_default("solana=info");
-        helper_sol_log(
+        syscall_sol_log(
             100,
             string.len() as u64 * 2,
             0,
@@ -920,32 +920,32 @@ mod tests {
     // this results in the bad string length being ignored and not returning an error
     #[test]
     #[ignore]
-    fn test_helper_sol_log_u64() {
+    fn test_syscall_sol_log_u64() {
         solana_logger::setup_with_default("solana=info");
 
         let ro_regions = &[MemoryRegion::default()];
         let rw_regions = &[MemoryRegion::default()];
-        helper_sol_log_u64(1, 2, 3, 4, 5, ro_regions, rw_regions).unwrap();
+        syscall_sol_log_u64(1, 2, 3, 4, 5, ro_regions, rw_regions).unwrap();
     }
 
     #[test]
-    fn test_helper_sol_alloc_free() {
+    fn test_syscall_sol_alloc_free() {
         // large alloc
         {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
-            let mut helper = HelperSolAllocFree {
+            let mut syscall = SyscallSolAllocFree {
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             assert_ne!(
-                helper
+                syscall
                     .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
                     .unwrap(),
                 0
             );
             assert_eq!(
-                helper
+                syscall
                     .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
                     .unwrap(),
                 0
@@ -956,17 +956,17 @@ mod tests {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
-            let mut helper = HelperSolAllocFree {
+            let mut syscall = SyscallSolAllocFree {
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
             for _ in 0..100 {
                 assert_ne!(
-                    helper.call(1, 0, 0, 0, 0, ro_regions, rw_regions).unwrap(),
+                    syscall.call(1, 0, 0, 0, 0, ro_regions, rw_regions).unwrap(),
                     0
                 );
             }
             assert_eq!(
-                helper
+                syscall
                     .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
                     .unwrap(),
                 0

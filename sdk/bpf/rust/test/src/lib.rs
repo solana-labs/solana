@@ -1,4 +1,4 @@
-//! @brief Solana Rust-based BPF program utility functions and types
+//! @brief Stubs for syscalls when building tests for x86
 
 #[no_mangle]
 /// # Safety

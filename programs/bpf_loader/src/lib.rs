@@ -1,9 +1,9 @@
 pub mod alloc;
 pub mod allocator_bump;
 pub mod bpf_verifier;
-pub mod helpers;
+pub mod syscalls;
 
-use crate::{bpf_verifier::VerifierError, helpers::HelperError};
+use crate::{bpf_verifier::VerifierError, syscalls::SyscallError};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -51,7 +51,7 @@ pub enum BPFError {
     #[error("{0}")]
     VerifierError(#[from] VerifierError),
     #[error("{0}")]
-    HelperError(#[from] HelperError),
+    SyscallError(#[from] SyscallError),
 }
 impl UserDefinedError for BPFError {}
 
@@ -64,7 +64,7 @@ pub fn create_vm<'a>(
     vm.set_max_instruction_count(100_000)?;
     vm.set_elf(&prog)?;
 
-    let heap_region = helpers::register_helpers(&mut vm, invoke_context)?;
+    let heap_region = syscalls::register_syscalls(&mut vm, invoke_context)?;
 
     Ok((vm, heap_region))
 }
@@ -202,8 +202,8 @@ pub fn process_instruction(
                 Err(error) => {
                     warn!("BPF program {} failed: {}", program.unsigned_key(), error);
                     return match error {
-                        EbpfError::UserError(BPFError::HelperError(
-                            HelperError::InstructionError(error),
+                        EbpfError::UserError(BPFError::SyscallError(
+                            SyscallError::InstructionError(error),
                         )) => Err(error),
                         _ => Err(BPFLoaderError::VirtualMachineFailedToRunProgram.into()),
                     };
