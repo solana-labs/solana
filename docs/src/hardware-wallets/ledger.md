@@ -64,7 +64,7 @@ Ledger device, with no other wallets/apps sharing the same seed phrase.
 1. Connect your Ledger device via USB and enter your pin to unlock it
 2. Download and run the Solana Ledger app installer:
    ```text
-   curl -sSLf https://github.com/solana-labs/ledger-app-solana/releases/download/v0.2.0/install.sh | sh
+   curl -sSLf https://github.com/solana-labs/ledger-app-solana/releases/download/v0.2.1/install.sh | sh
    ```
 3. When prompted, approve the "unsafe" manager on your device
 4. When prompted, approve the installation on your device
