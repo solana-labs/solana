@@ -285,22 +285,31 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank(commitment)?.capitalization())
     }
 
-    fn get_circulating_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
+    fn get_circulating_supply(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcCirculatingSupply> {
         let bank = self.bank(commitment)?;
         let epoch = bank.epoch();
         let total_supply = bank.capitalization();
 
         let r_non_circulating_supply = self.non_circulating_supply.read().unwrap();
         // Update non_circulating_supply on the first request in an epoch
-        let non_circulating_supply = if *r_non_circulating_supply == NonCirculatingSupply::default()
+        if *r_non_circulating_supply == NonCirculatingSupply::default()
             || epoch > r_non_circulating_supply.epoch
         {
             drop(r_non_circulating_supply);
             self.non_circulating_supply.write().unwrap().update(bank)
-        } else {
-            r_non_circulating_supply.non_circulating_supply
-        };
-        Ok(total_supply - non_circulating_supply)
+        }
+        let r_non_circulating_supply = self.non_circulating_supply.read().unwrap();
+        Ok(RpcCirculatingSupply {
+            circulating_supply: total_supply - r_non_circulating_supply.balance,
+            non_circulating_accounts: r_non_circulating_supply
+                .accounts
+                .iter()
+                .map(|pubkey| pubkey.to_string())
+                .collect(),
+        })
     }
 
     fn get_largest_accounts(
@@ -820,7 +829,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<u64>;
+    ) -> Result<RpcCirculatingSupply>;
 
     #[rpc(meta, name = "getLargestAccounts")]
     fn get_largest_accounts(
@@ -1234,7 +1243,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<u64> {
+    ) -> Result<RpcCirculatingSupply> {
         debug!("get_circulating_supply rpc request received");
         meta.request_processor
             .read()

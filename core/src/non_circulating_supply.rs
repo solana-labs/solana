@@ -12,14 +12,15 @@ use std::{collections::HashSet, str::FromStr, sync::Arc};
 pub struct NonCirculatingSupply {
     pub epoch: Epoch,
     pub non_circulating_supply: u64,
+    pub non_circulating_accounts: Vec<Pubkey>,
 }
 
 impl NonCirculatingSupply {
-    pub fn update(&mut self, bank: Arc<Bank>) -> u64 {
+    pub fn update(&mut self, bank: Arc<Bank>) {
         let epoch = bank.epoch();
         // Add duplicate check to ensure only one thread may update per epoch
         if self == &NonCirculatingSupply::default() || epoch > self.epoch {
-            error!("Updating non_circulating_supply, epoch: {}", epoch);
+            debug!("Updating non_circulating_supply, epoch: {}", epoch);
             let mut non_circulating_accounts: HashSet<Pubkey> = HashSet::new();
 
             for key in NON_CIRCULATING_ACCOUNTS.iter() {
@@ -54,16 +55,13 @@ impl NonCirculatingSupply {
                 }
             }
 
-            let mut non_circulating_supply = 0;
-            for pubkey in non_circulating_accounts {
-                non_circulating_supply += bank.get_balance(&pubkey);
-            }
+            let non_circulating_supply = non_circulating_accounts
+                .iter()
+                .fold(0, |acc, pubkey| acc + bank.get_balance(&pubkey));
 
             self.epoch = bank.epoch();
             self.non_circulating_supply = non_circulating_supply;
-            non_circulating_supply
-        } else {
-            self.non_circulating_supply
+            self.non_circulating_accounts = non_circulating_accounts.into_iter().collect();
         }
     }
 }
