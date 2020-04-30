@@ -10,26 +10,13 @@ edition = "2018"
 
 [dependencies]
 log = { version = "0.4.8" }
-<<<<<<< HEAD
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.1.8" }
 solana-budget-program = { path = "../programs/budget", version = "1.1.8" }
-solana-config-program = { path = "../programs/config", version = "1.1.8" }
 solana-exchange-program = { path = "../programs/exchange", version = "1.1.8" }
 solana-runtime = { path = "../runtime", version = "1.1.8" }
 solana-sdk = { path = "../sdk", version = "1.1.8" }
-solana-stake-program = { path = "../programs/stake", version = "1.1.8" }
 solana-storage-program = { path = "../programs/storage", version = "1.1.8" }
 solana-vest-program = { path = "../programs/vest", version = "1.1.8" }
-solana-vote-program = { path = "../programs/vote", version = "1.1.8" }
-=======
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.2.0" }
-solana-budget-program = { path = "../programs/budget", version = "1.2.0" }
-solana-exchange-program = { path = "../programs/exchange", version = "1.2.0" }
-solana-runtime = { path = "../runtime", version = "1.2.0" }
-solana-sdk = { path = "../sdk", version = "1.2.0" }
-solana-storage-program = { path = "../programs/storage", version = "1.2.0" }
-solana-vest-program = { path = "../programs/vest", version = "1.2.0" }
->>>>>>> efad19318... Make default programs static (#9717)
 
 [lib]
 crate-type = ["lib"]

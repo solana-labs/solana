@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-use crate::{native_loader, rent_collector::RentCollector, system_instruction_processor};
-=======
-use crate::{native_loader::NativeLoader, rent_collector::RentCollector};
->>>>>>> efad19318... Make default programs static (#9717)
+use crate::{native_loader, rent_collector::RentCollector};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
@@ -172,24 +168,11 @@ pub struct MessageProcessor {
     #[serde(skip)]
     symbol_cache: SymbolCache,
 }
-<<<<<<< HEAD
-impl Default for MessageProcessor {
-    fn default() -> Self {
-        let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![(
-            system_program::id(),
-            system_instruction_processor::process_instruction,
-        )];
-
-        Self {
-            instruction_processors,
-            symbol_cache: RwLock::new(HashMap::new()),
-=======
 impl Clone for MessageProcessor {
     fn clone(&self) -> Self {
         MessageProcessor {
             instruction_processors: self.instruction_processors.clone(),
-            native_loader: NativeLoader::default(),
->>>>>>> efad19318... Make default programs static (#9717)
+            symbol_cache: RwLock::new(HashMap::new()),
         }
     }
 }

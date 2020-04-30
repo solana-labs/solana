@@ -5835,7 +5835,7 @@ mod tests {
             Ok(())
         }
 
-        bank.add_instruction_processor(solana_vote_program::id(), mock_vote_processor);
+        bank.add_static_program("solana_vote_program", solana_vote_program::id(), mock_vote_processor);
         let result = bank.process_transaction(&tx);
         assert_eq!(result, Ok(()));
         let account = bank.get_account(&solana_vote_program::id()).unwrap();
