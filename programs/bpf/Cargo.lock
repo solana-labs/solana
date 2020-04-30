@@ -1881,7 +1881,6 @@ dependencies = [
  "log",
  "serde",
  "serde_derive",
- "solana-logger",
  "solana-sdk",
 ]
 
@@ -2041,7 +2040,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-logger",
  "solana-metrics",
  "solana-sdk",
  "solana-vote-program",
@@ -2073,7 +2071,6 @@ dependencies = [
  "num-traits 0.2.11",
  "serde",
  "serde_derive",
- "solana-logger",
  "solana-metrics",
  "solana-sdk",
  "thiserror",

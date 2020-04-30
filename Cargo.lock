@@ -4176,7 +4176,6 @@ dependencies = [
  "num-traits 0.2.11",
  "serde",
  "serde_derive",
- "solana-logger",
  "solana-metrics",
  "solana-sdk",
  "thiserror",
