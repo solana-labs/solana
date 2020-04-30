@@ -1,6 +1,6 @@
 use solana_sdk::{instruction::Instruction, message::Message, pubkey::Pubkey};
 use solana_stake_program::{
-    stake_instruction,
+    stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 
@@ -25,6 +25,7 @@ pub(crate) fn new_stake_account(
     lamports: u64,
     stake_authority_pubkey: &Pubkey,
     withdraw_authority_pubkey: &Pubkey,
+    custodian_pubkey: &Pubkey,
     index: usize,
 ) -> Message {
     let stake_account_address = derive_stake_account_address(base_pubkey, index);
@@ -32,13 +33,17 @@ pub(crate) fn new_stake_account(
         staker: *stake_authority_pubkey,
         withdrawer: *withdraw_authority_pubkey,
     };
+    let lockup = Lockup {
+        custodian: *custodian_pubkey,
+        ..Lockup::default()
+    };
     let instructions = stake_instruction::create_account_with_seed(
         funding_pubkey,
         &stake_account_address,
         &base_pubkey,
         &index.to_string(),
         &authorized,
-        &Lockup::default(),
+        &lockup,
         lamports,
     );
     Message::new_with_payer(&instructions, Some(fee_payer_pubkey))
@@ -150,6 +155,23 @@ pub(crate) fn authorize_stake_accounts(
             Message::new_with_payer(&instructions, Some(&fee_payer_pubkey))
         })
         .collect::<Vec<_>>()
+}
+
+pub(crate) fn lockup_stake_accounts(
+    fee_payer_pubkey: &Pubkey,
+    base_pubkey: &Pubkey,
+    custodian_pubkey: &Pubkey,
+    lockup: &LockupArgs,
+    num_accounts: usize,
+) -> Vec<Message> {
+    let stake_account_addresses = derive_stake_account_addresses(base_pubkey, num_accounts);
+    stake_account_addresses
+        .iter()
+        .map(|address| {
+            let instruction = stake_instruction::set_lockup(address, &lockup, custodian_pubkey);
+            Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey))
+        })
+        .collect()
 }
 
 pub(crate) fn rebase_stake_accounts(
@@ -273,6 +295,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            &Pubkey::default(),
             0,
         );
 
@@ -310,6 +333,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            &Pubkey::default(),
             0,
         );
 
@@ -341,6 +365,57 @@ mod tests {
         let authorized = StakeState::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, new_stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, new_withdraw_authority_pubkey);
+    }
+
+    #[test]
+    fn test_lockup_stake_accounts() {
+        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let funding_pubkey = funding_keypair.pubkey();
+        let bank_client = BankClient::new(bank);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
+        let fee_payer_pubkey = fee_payer_keypair.pubkey();
+
+        let base_keypair = Keypair::new();
+        let base_pubkey = base_keypair.pubkey();
+        let lamports = rent + 1;
+
+        let custodian_keypair = Keypair::new();
+        let custodian_pubkey = custodian_keypair.pubkey();
+
+        let message = new_stake_account(
+            &fee_payer_pubkey,
+            &funding_pubkey,
+            &base_pubkey,
+            lamports,
+            &Pubkey::default(),
+            &Pubkey::default(),
+            &custodian_pubkey,
+            0,
+        );
+
+        let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
+        bank_client.send_message(&signers, message).unwrap();
+
+        let messages = lockup_stake_accounts(
+            &fee_payer_pubkey,
+            &base_pubkey,
+            &custodian_pubkey,
+            &LockupArgs {
+                unix_timestamp: Some(1),
+                ..LockupArgs::default()
+            },
+            1,
+        );
+
+        let signers = [&fee_payer_keypair, &custodian_keypair];
+        for message in messages {
+            bank_client.send_message(&signers, message).unwrap();
+        }
+
+        let account = get_account_at(&bank_client, &base_pubkey, 0);
+        let lockup = StakeState::lockup_from(&account).unwrap();
+        assert_eq!(lockup.unix_timestamp, 1);
+        assert_eq!(lockup.epoch, 0);
     }
 
     #[test]
@@ -384,6 +459,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            &Pubkey::default(),
             0,
         );
 
@@ -442,6 +518,7 @@ mod tests {
             lamports,
             &stake_authority_pubkey,
             &withdraw_authority_pubkey,
+            &Pubkey::default(),
             0,
         );
 

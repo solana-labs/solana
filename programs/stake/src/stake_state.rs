@@ -77,6 +77,18 @@ impl StakeState {
             _ => None,
         }
     }
+
+    pub fn lockup_from(account: &Account) -> Option<Lockup> {
+        Self::from(account).and_then(|state: Self| state.lockup())
+    }
+
+    pub fn lockup(&self) -> Option<Lockup> {
+        match self {
+            StakeState::Stake(meta, _stake) => Some(meta.lockup),
+            StakeState::Initialized(meta) => Some(meta.lockup),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]

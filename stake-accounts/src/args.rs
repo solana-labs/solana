@@ -1,7 +1,11 @@
 use clap::ArgMatches;
 use solana_clap_utils::keypair::{pubkey_from_path, signer_from_path};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{pubkey::Pubkey, signature::Signer};
+use solana_sdk::{
+    clock::{Epoch, UnixTimestamp},
+    pubkey::Pubkey,
+    signature::Signer,
+};
 use std::error::Error;
 use std::sync::Arc;
 
@@ -34,6 +38,16 @@ pub(crate) struct AuthorizeArgs<P, K> {
     pub num_accounts: usize,
 }
 
+pub(crate) struct SetLockupArgs<P, K> {
+    pub fee_payer: K,
+    pub base_pubkey: P,
+    pub custodian: K,
+    pub lockup_epoch: Option<Epoch>,
+    pub lockup_date: Option<UnixTimestamp>,
+    pub new_custodian: Option<P>,
+    pub num_accounts: usize,
+}
+
 pub(crate) struct RebaseArgs<P, K> {
     pub fee_payer: K,
     pub base_pubkey: P,
@@ -53,6 +67,7 @@ pub(crate) enum Command<P, K> {
     Addresses(QueryArgs<P>),
     Balance(QueryArgs<P>),
     Authorize(AuthorizeArgs<P, K>),
+    SetLockup(SetLockupArgs<P, K>),
     Rebase(RebaseArgs<P, K>),
     Move(Box<MoveArgs<P, K>>),
 }
@@ -103,6 +118,29 @@ fn resolve_fee_payer(
     signer_from_path(&matches, key_url, "fee-payer", wallet_manager)
 }
 
+fn resolve_custodian(
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    key_url: &str,
+) -> Result<Box<dyn Signer>, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    signer_from_path(&matches, key_url, "custodian", wallet_manager)
+}
+
+fn resolve_new_custodian(
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    key_url: &Option<String>,
+) -> Result<Option<Pubkey>, Box<dyn Error>> {
+    let matches = ArgMatches::default();
+    let pubkey = match key_url {
+        None => None,
+        Some(key_url) => {
+            let pubkey = pubkey_from_path(&matches, key_url, "new custodian", wallet_manager)?;
+            Some(pubkey)
+        }
+    };
+    Ok(pubkey)
+}
+
 fn resolve_base_pubkey(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     key_url: &str,
@@ -136,6 +174,22 @@ fn resolve_authorize_args(
             wallet_manager,
             &args.new_withdraw_authority,
         )?,
+        num_accounts: args.num_accounts,
+    };
+    Ok(resolved_args)
+}
+
+fn resolve_set_lockup_args(
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    args: &SetLockupArgs<String, String>,
+) -> Result<SetLockupArgs<Pubkey, Box<dyn Signer>>, Box<dyn Error>> {
+    let resolved_args = SetLockupArgs {
+        fee_payer: resolve_fee_payer(wallet_manager, &args.fee_payer)?,
+        base_pubkey: resolve_base_pubkey(wallet_manager, &args.base_pubkey)?,
+        custodian: resolve_custodian(wallet_manager, &args.custodian)?,
+        lockup_epoch: args.lockup_epoch,
+        lockup_date: args.lockup_date,
+        new_custodian: resolve_new_custodian(wallet_manager, &args.new_custodian)?,
         num_accounts: args.num_accounts,
     };
     Ok(resolved_args)
@@ -216,6 +270,10 @@ pub(crate) fn resolve_command(
         Command::Authorize(args) => {
             let resolved_args = resolve_authorize_args(&mut wallet_manager, &args)?;
             Ok(Command::Authorize(resolved_args))
+        }
+        Command::SetLockup(args) => {
+            let resolved_args = resolve_set_lockup_args(&mut wallet_manager, &args)?;
+            Ok(Command::SetLockup(resolved_args))
         }
         Command::Rebase(args) => {
             let resolved_args = resolve_rebase_args(&mut wallet_manager, &args)?;

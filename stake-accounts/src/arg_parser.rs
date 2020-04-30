@@ -1,8 +1,12 @@
 use crate::args::{
     Args, AuthorizeArgs, Command, CountArgs, MoveArgs, NewArgs, QueryArgs, RebaseArgs,
+    SetLockupArgs,
 };
-use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::input_validators::{is_amount, is_valid_pubkey, is_valid_signer};
+use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
+use solana_clap_utils::{
+    input_parsers::unix_timestamp_from_rfc3339_datetime,
+    input_validators::{is_amount, is_rfc3339_datetime, is_valid_pubkey, is_valid_signer},
+};
 use solana_cli_config::CONFIG_FILE;
 use solana_sdk::native_token::sol_to_lamports;
 use std::ffi::OsString;
@@ -34,6 +38,23 @@ fn base_pubkey_arg<'a, 'b>() -> Arg<'a, 'b> {
         .value_name("BASE_PUBKEY")
         .validator(is_valid_pubkey)
         .help("Public key which stake account addresses are derived from")
+}
+
+fn custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("custodian")
+        .required(true)
+        .takes_value(true)
+        .value_name("KEYPAIR")
+        .validator(is_valid_signer)
+        .help("Authority to modify lockups")
+}
+
+fn new_custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("new_custodian")
+        .takes_value(true)
+        .value_name("PUBKEY")
+        .validator(is_valid_pubkey)
+        .help("New authority to modify lockups")
 }
 
 fn new_base_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -83,6 +104,23 @@ fn new_withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .value_name("PUBKEY")
         .validator(is_valid_pubkey)
         .help("New withdraw authority")
+}
+
+fn lockup_epoch_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("lockup_epoch")
+        .long("lockup-epoch")
+        .takes_value(true)
+        .value_name("NUMBER")
+        .help("The epoch height at which each account will be available for withdrawl")
+}
+
+fn lockup_date_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("lockup_date")
+        .long("lockup-date")
+        .value_name("RFC3339 DATETIME")
+        .validator(is_rfc3339_datetime)
+        .takes_value(true)
+        .help("The date and time at which each account will be available for withdrawl")
 }
 
 fn num_accounts_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -198,6 +236,17 @@ where
                 .arg(num_accounts_arg()),
         )
         .subcommand(
+            SubCommand::with_name("set-lockup")
+                .about("Set new lockups in all derived stake accounts")
+                .arg(fee_payer_arg())
+                .arg(base_pubkey_arg().index(1))
+                .arg(custodian_arg())
+                .arg(lockup_epoch_arg())
+                .arg(lockup_date_arg())
+                .arg(new_custodian_arg())
+                .arg(num_accounts_arg()),
+        )
+        .subcommand(
             SubCommand::with_name("rebase")
                 .about("Relocate derived stake accounts")
                 .arg(fee_payer_arg())
@@ -258,6 +307,18 @@ fn parse_authorize_args(matches: &ArgMatches<'_>) -> AuthorizeArgs<String, Strin
     }
 }
 
+fn parse_set_lockup_args(matches: &ArgMatches<'_>) -> SetLockupArgs<String, String> {
+    SetLockupArgs {
+        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
+        base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
+        custodian: value_t_or_exit!(matches, "custodian", String),
+        lockup_epoch: value_t!(matches, "lockup_epoch", u64).ok(),
+        lockup_date: unix_timestamp_from_rfc3339_datetime(matches, "lockup_date"),
+        new_custodian: value_t!(matches, "new_custodian", String).ok(),
+        num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
+    }
+}
+
 fn parse_rebase_args(matches: &ArgMatches<'_>) -> RebaseArgs<String, String> {
     RebaseArgs {
         fee_payer: value_t_or_exit!(matches, "fee_payer", String),
@@ -290,6 +351,7 @@ where
         ("addresses", Some(matches)) => Command::Addresses(parse_query_args(matches)),
         ("balance", Some(matches)) => Command::Balance(parse_query_args(matches)),
         ("authorize", Some(matches)) => Command::Authorize(parse_authorize_args(matches)),
+        ("set-lockup", Some(matches)) => Command::SetLockup(parse_set_lockup_args(matches)),
         ("rebase", Some(matches)) => Command::Rebase(parse_rebase_args(matches)),
         ("move", Some(matches)) => Command::Move(Box::new(parse_move_args(matches))),
         _ => {
