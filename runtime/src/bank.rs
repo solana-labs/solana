@@ -1638,7 +1638,7 @@ impl Bank {
         }
 
         self.collected_rent
-            .fetch_add(collected_rent, Ordering::Relaxed);
+            .fetch_add(dbg!(collected_rent), Ordering::Relaxed);
     }
 
     fn run_incinerator(&self) {
@@ -1761,8 +1761,10 @@ impl Bank {
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
-        self.collected_rent
-            .fetch_add(self.rent_collector.update(&mut account), Ordering::Relaxed);
+        self.collected_rent.fetch_add(
+            self.rent_collector.update(pubkey, &mut account),
+            Ordering::Relaxed,
+        );
         account.lamports += lamports;
         self.store_account(pubkey, &account);
     }
@@ -5856,16 +5858,29 @@ mod tests {
 
     #[test]
     fn test_incinerator() {
-        let (genesis_config, mint_keypair) = create_genesis_config(2_000);
-        let bank = Bank::new(&genesis_config);
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Move to the first normal slot so normal rent behaviour applies
+        let bank = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+        let pre_capitalization = bank.capitalization();
+
+        // Burn a non-rent exempt amount
+        let burn_amount = bank.get_minimum_balance_for_rent_exemption(0) - 1;
 
         assert_eq!(bank.get_balance(&incinerator::id()), 0);
-        bank.transfer(1_000, &mint_keypair, &incinerator::id())
+        bank.transfer(burn_amount, &mint_keypair, &incinerator::id())
             .unwrap();
-        assert_eq!(bank.get_balance(&incinerator::id()), 1_000);
-        assert_eq!(bank.capitalization(), 2_000);
+        assert_eq!(bank.get_balance(&incinerator::id()), burn_amount);
         bank.freeze();
         assert_eq!(bank.get_balance(&incinerator::id()), 0);
-        assert_eq!(bank.capitalization(), 1_000);
+
+        // Ensure that no rent was collected, and the entire burn amount was removed from bank
+        // capitalization
+        assert_eq!(bank.capitalization(), pre_capitalization - burn_amount);
     }
 }
