@@ -10,6 +10,7 @@ use crate::{
     cluster_slots::ClusterSlots,
     commitment::BlockCommitmentCache,
     ledger_cleanup_service::LedgerCleanupService,
+    outstanding_requests::OutstandingRequests,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
@@ -117,6 +118,9 @@ impl Tvu {
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
         let forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
+
+        let outstanding_requests: Arc<RwLock<OutstandingRequests>> =
+            Arc::new(RwLock::new(OutstandingRequests::default()));
         let fetch_stage = ShredFetchStage::new(
             fetch_sockets,
             forward_sockets,
@@ -124,6 +128,7 @@ impl Tvu {
             &fetch_sender,
             Some(bank_forks.clone()),
             &exit,
+            outstanding_requests.clone(),
         );
 
         let (verified_sender, verified_receiver) = unbounded();

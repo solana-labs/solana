@@ -169,7 +169,10 @@ where
                     .iter_mut()
                     .filter_map(|packet| {
                         if packet.meta.discard {
-                            inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
+                            inc_new_counter_debug!(
+                                "streamer-recv_window-invalid_or_unnecessary_packet",
+                                1
+                            );
                             None
                         } else if let Ok(shred) =
                             Shred::new_from_serialized_shred(packet.data.to_vec())

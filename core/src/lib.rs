@@ -31,6 +31,7 @@ pub mod gossip_service;
 pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
 pub mod non_circulating_supply;
+pub mod outstanding_requests;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod progress_map;

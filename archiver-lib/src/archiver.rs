@@ -13,6 +13,7 @@ use solana_core::{
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     gossip_service::GossipService,
+    outstanding_requests::OutstandingRequests,
     repair_service,
     repair_service::{RepairService, RepairSlotRange, RepairStats, RepairStrategy},
     serve_repair::ServeRepair,
@@ -53,7 +54,7 @@ use std::{
     result,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, Sender},
-    sync::Arc,
+    sync::{Arc, RwLock},
     thread::{sleep, spawn, JoinHandle},
     time::Duration,
 };
@@ -231,6 +232,8 @@ impl Archiver {
             .map(Arc::new)
             .collect();
         let (shred_fetch_sender, shred_fetch_receiver) = channel();
+        let outstanding_requests: Arc<RwLock<OutstandingRequests>> =
+            Arc::new(RwLock::new(OutstandingRequests::default()));
         let fetch_stage = ShredFetchStage::new(
             shred_sockets,
             shred_forward_sockets,
@@ -238,6 +241,7 @@ impl Archiver {
             &shred_fetch_sender,
             None,
             &exit,
+            outstanding_requests,
         );
         let (slot_sender, slot_receiver) = channel();
         let request_processor =
