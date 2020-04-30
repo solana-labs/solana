@@ -25,6 +25,12 @@ impl CommitmentConfig {
         }
     }
 
+    pub fn root() -> Self {
+        Self {
+            commitment: CommitmentLevel::Root,
+        }
+    }
+
     pub fn ok(self) -> Option<Self> {
         if self == Self::default() {
             None
@@ -39,4 +45,5 @@ impl CommitmentConfig {
 pub enum CommitmentLevel {
     Max,
     Recent,
+    Root,
 }

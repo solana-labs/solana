@@ -7,6 +7,7 @@ use clap::ArgMatches;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     clock::UnixTimestamp,
+    commitment_config::CommitmentConfig,
     native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signature, Signer},
@@ -175,6 +176,15 @@ pub fn resolve_signer(
 
 pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
+}
+
+pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentConfig> {
+    matches.value_of(name).map(|value| match value {
+        "max" => CommitmentConfig::max(),
+        "recent" => CommitmentConfig::recent(),
+        "root" => CommitmentConfig::root(),
+        _ => CommitmentConfig::default(),
+    })
 }
 
 #[cfg(test)]
