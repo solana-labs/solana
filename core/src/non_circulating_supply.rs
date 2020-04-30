@@ -101,12 +101,14 @@ mod tests {
     fn test_update() {
         let mut accounts: BTreeMap<Pubkey, Account> = BTreeMap::new();
         let balance = 10;
-        for _ in 0..10 {
+        let num_genesis_accounts = 10;
+        for _ in 0..num_genesis_accounts {
             accounts.insert(
                 Pubkey::new_rand(),
                 Account::new(balance, 0, &Pubkey::default()),
             );
         }
+        let num_non_circulating_accounts = NON_CIRCULATING_ACCOUNTS.len() as u64;
         for key in NON_CIRCULATING_ACCOUNTS.iter() {
             accounts.insert(
                 Pubkey::from_str(key).unwrap(),
@@ -114,7 +116,8 @@ mod tests {
             );
         }
 
-        for _ in 0..3 {
+        let num_stake_accounts = 3;
+        for _ in 0..num_stake_accounts {
             let pubkey = Pubkey::new_rand();
             let meta = Meta {
                 authorized: Authorized::auto(&pubkey),
@@ -140,12 +143,22 @@ mod tests {
             epoch_schedule: EpochSchedule::new(slots_per_epoch),
             ..GenesisConfig::default()
         }));
-        assert_eq!(bank.capitalization(), (10 + 12 + 3) * balance);
+        assert_eq!(
+            bank.capitalization(),
+            (num_genesis_accounts + num_non_circulating_accounts + num_stake_accounts) * balance
+        );
 
         let mut non_circulating_supply = NonCirculatingSupply::default();
         non_circulating_supply.update(bank.clone());
         assert_eq!(non_circulating_supply.epoch, 0);
-        assert_eq!(non_circulating_supply.balance, (12 + 3) * balance);
+        assert_eq!(
+            non_circulating_supply.balance,
+            (num_non_circulating_accounts + num_stake_accounts) * balance
+        );
+        assert_eq!(
+            non_circulating_supply.accounts.len(),
+            NON_CIRCULATING_ACCOUNTS.len() + num_stake_accounts as usize
+        );
 
         bank = Arc::new(new_from_parent(&bank));
         let new_balance = 11;
@@ -156,8 +169,16 @@ mod tests {
             );
         }
         // Update should only operate once per epoch, so non_circulating_supply should not change
+        // even though account balances have changed
         non_circulating_supply.update(bank.clone());
-        assert_eq!(non_circulating_supply.balance, (12 + 3) * balance);
+        assert_eq!(
+            non_circulating_supply.balance,
+            (num_non_circulating_accounts + num_stake_accounts) * balance
+        );
+        assert_eq!(
+            non_circulating_supply.accounts.len(),
+            NON_CIRCULATING_ACCOUNTS.len() + num_stake_accounts as usize
+        );
 
         // Advance bank one epoch
         for _ in 0..slots_per_epoch {
@@ -167,7 +188,11 @@ mod tests {
         assert_eq!(non_circulating_supply.epoch, 1);
         assert_eq!(
             non_circulating_supply.balance,
-            (12 * new_balance) + (3 * balance)
+            (num_non_circulating_accounts * new_balance) + (num_stake_accounts * balance)
+        );
+        assert_eq!(
+            non_circulating_supply.accounts.len(),
+            NON_CIRCULATING_ACCOUNTS.len() + num_stake_accounts as usize
         );
 
         // Advance bank another epoch, which should unlock stakes
@@ -176,6 +201,13 @@ mod tests {
         }
         non_circulating_supply.update(bank.clone());
         assert_eq!(non_circulating_supply.epoch, 2);
-        assert_eq!(non_circulating_supply.balance, 12 * new_balance);
+        assert_eq!(
+            non_circulating_supply.balance,
+            num_non_circulating_accounts * new_balance
+        );
+        assert_eq!(
+            non_circulating_supply.accounts.len(),
+            NON_CIRCULATING_ACCOUNTS.len()
+        );
     }
 }
