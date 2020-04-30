@@ -42,6 +42,7 @@ impl std::fmt::Debug for DisplayError {
     }
 }
 
+pub mod commitment;
 pub mod input_parsers;
 pub mod input_validators;
 pub mod keypair;

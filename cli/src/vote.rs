@@ -7,7 +7,11 @@ use crate::{
     cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount},
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{input_parsers::*, input_validators::*};
+use solana_clap_utils::{
+    commitment::{commitment_arg, COMMITMENT_ARG},
+    input_parsers::*,
+    input_validators::*,
+};
 use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -161,14 +165,6 @@ impl VoteSubCommands for App<'_, '_> {
                 .about("Show the contents of a vote account")
                 .alias("show-vote-account")
                 .arg(
-                    Arg::with_name("confirmed")
-                        .long("confirmed")
-                        .takes_value(false)
-                        .help(
-                            "Return information at maximum-lockout commitment level",
-                        ),
-                )
-                .arg(
                     pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_ADDRESS")
@@ -180,7 +176,8 @@ impl VoteSubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
-                ),
+                )
+                .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("withdraw-from-vote-account")
@@ -318,11 +315,8 @@ pub fn parse_vote_get_account_command(
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
-    let commitment_config = if matches.is_present("confirmed") {
-        CommitmentConfig::default()
-    } else {
-        CommitmentConfig::recent()
-    };
+    let commitment_config =
+        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
     Ok(CliCommandInfo {
         command: CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,

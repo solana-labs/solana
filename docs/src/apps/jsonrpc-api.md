@@ -95,7 +95,8 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 
 Solana nodes choose which bank state to query based on a commitment requirement
 set by the client. Clients may specify either:
-* `{"commitment":"max"}` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations
+* `{"commitment":"max"}` - the node will query the most recent bank confirmed by the cluster as having reached `MAX_LOCKOUT_HISTORY` confirmations
+* `{"commitment":"root"}` - the node will query the most recent bank having reached `MAX_LOCKOUT_HISTORY` confirmations on this node
 * `{"commitment":"recent"}` - the node will query its most recent bank state
 
 The commitment parameter should be included as the last element in the `params` array:
@@ -196,7 +197,7 @@ The result field will be a JSON object containing:
 
 * `commitment` - commitment, comprising either:
   * `<null>` - Unknown block
-  * `<array>` - commitment, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY`
+  * `<array>` - commitment, array of u64 integers logging the amount of cluster stake in lamports that has voted on the block at each depth from 0 to `MAX_LOCKOUT_HISTORY` + 1
 * `totalStake` - total active stake, in lamports, of the current epoch
 
 #### Example:
@@ -206,7 +207,7 @@ The result field will be a JSON object containing:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],"totalStake": 42},"id":1}
+{"jsonrpc":"2.0","result":{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],"totalStake": 42},"id":1}
 ```
 
 ### getBlockTime
