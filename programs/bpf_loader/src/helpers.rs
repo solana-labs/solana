@@ -48,14 +48,13 @@ const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 pub fn register_helpers<'a>(
     vm: &mut EbpfVm<'a, BPFError>,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
+    // Helper function common across languages
     vm.register_helper_ex("abort", helper_abort)?;
-    vm.register_helper_ex("sol_panic", helper_sol_panic)?;
     vm.register_helper_ex("sol_panic_", helper_sol_panic)?;
-    vm.register_helper_ex("sol_log", helper_sol_log)?;
     vm.register_helper_ex("sol_log_", helper_sol_log)?;
-    vm.register_helper_ex("sol_log_64", helper_sol_log_u64)?;
     vm.register_helper_ex("sol_log_64_", helper_sol_log_u64)?;
 
+    // Memory allocator
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
     vm.register_helper_with_context_ex(
@@ -142,8 +141,9 @@ fn translate_string_and_do(
 }
 
 /// Abort helper functions, called when the BPF program calls `abort()`
-/// The verify function returns an error which will cause the BPF program
-/// to be halted immediately
+/// LLVM will insert calls to `abort()` if it detects an untenable situation,
+/// `abort()` is not intended to be called explicitly by the program.
+/// Causes the BPF program to be halted immediately
 pub fn helper_abort(
     _arg1: u64,
     _arg2: u64,
@@ -156,9 +156,8 @@ pub fn helper_abort(
     Err(HelperError::Abort.into())
 }
 
-/// Panic helper functions, called when the BPF program calls 'sol_panic_()`
-/// The verify function returns an error which will cause the BPF program
-/// to be halted immediately
+/// Panic helper function, called when the BPF program calls 'sol_panic_()`
+/// Causes the BPF program to be halted immediately
 pub fn helper_sol_panic(
     file: u64,
     len: u64,
@@ -192,7 +191,7 @@ pub fn helper_sol_log(
     Ok(0)
 }
 
-/// Log 5 u64 values
+/// Log 5 64-bit values
 pub fn helper_sol_log_u64(
     arg1: u64,
     arg2: u64,
