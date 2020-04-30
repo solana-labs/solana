@@ -478,7 +478,7 @@ pub struct AccountsDB {
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
-    pub dead_slots: RwLock<HashSet<Slot>>,
+    dead_slots: RwLock<HashSet<Slot>>,
 
     stats: AccountsStats,
 }
@@ -1271,9 +1271,6 @@ impl AccountsDB {
             panic!("Trying to remove accounts for rooted slot {}", remove_slot);
         }
 
-        // Remove old bank hash
-        self.bank_hashes.write().unwrap().remove(&remove_slot);
-
         let pubkey_sets: Vec<HashSet<Pubkey>> = self.scan_account_storage(
             remove_slot,
             |stored_account: &StoredAccount, _, accum: &mut HashSet<Pubkey>| {
@@ -1298,9 +1295,10 @@ impl AccountsDB {
             }
         }
 
-        // Purge this slot's storage entries from the storage index
-        let mut storage = self.storage.write().unwrap();
-        storage.0.remove(&remove_slot);
+        // 1) Remove old bank hash from self.bank_hashes
+        // 2) Purge this slot's storage entries from self.storage
+        self.dead_slots.write().unwrap().insert(remove_slot);
+        self.process_dead_slots();
     }
 
     pub fn hash_stored_account(slot: Slot, account: &StoredAccount) -> Hash {
@@ -2267,6 +2265,11 @@ pub mod tests {
             .unwrap()
             .get(&key, &ancestors)
             .is_none());
+
+        // Test we can store for the same slot again and get the right information
+        let account0 = Account::new(2, 0, &key);
+        db.store(unrooted_slot, &[(&key, &account0)]);
+        assert_eq!(db.load_slow(&ancestors, &key).unwrap().0.lamports, 2);
     }
 
     fn create_account(
