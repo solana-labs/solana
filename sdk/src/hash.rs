@@ -1,5 +1,6 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
+use crate::sanitize::Sanitize;
 use sha2::{Digest, Sha256};
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
@@ -29,6 +30,8 @@ impl Hasher {
         Hash(<[u8; HASH_BYTES]>::try_from(self.hasher.result().as_slice()).unwrap())
     }
 }
+
+impl Sanitize for Hash {}
 
 impl AsRef<[u8]> for Hash {
     fn as_ref(&self) -> &[u8] {

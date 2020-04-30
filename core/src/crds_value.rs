@@ -110,15 +110,24 @@ impl Sanitize for CrdsData {
             CrdsData::ContactInfo(val) => val.sanitize(),
             CrdsData::Vote(ix, val) => {
                 if *ix >= MAX_VOTES {
-                    return Err(SanitizeError::Failed);
+                    return Err(SanitizeError::ValueOutOfBounds);
                 }
                 val.sanitize()
             }
+<<<<<<< HEAD
+=======
+            CrdsData::LowestSlot(ix, val) => {
+                if *ix as usize >= 1 {
+                    return Err(SanitizeError::ValueOutOfBounds);
+                }
+                val.sanitize()
+            }
+>>>>>>> a0514eb2a... thiserror, docs, remove general Failure case (#9741)
             CrdsData::SnapshotHashes(val) => val.sanitize(),
             CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
                 if *ix as usize >= MAX_EPOCH_SLOTS as usize {
-                    return Err(SanitizeError::Failed);
+                    return Err(SanitizeError::ValueOutOfBounds);
                 }
                 val.sanitize()
             }
@@ -136,11 +145,11 @@ pub struct SnapshotHash {
 impl Sanitize for SnapshotHash {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         for (slot, _) in &self.hashes {
             if *slot >= MAX_SLOT {
-                return Err(SanitizeError::Failed);
+                return Err(SanitizeError::ValueOutOfBounds);
             }
         }
         self.from.sanitize()
@@ -183,10 +192,20 @@ impl EpochSlots {
 impl Sanitize for EpochSlots {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
+<<<<<<< HEAD
             return Err(SanitizeError::Failed);
         }
         if self.lowest >= MAX_SLOT {
             return Err(SanitizeError::Failed);
+=======
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        if self.lowest >= MAX_SLOT {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        if self.root != 0 {
+            return Err(SanitizeError::InvalidValue);
+>>>>>>> a0514eb2a... thiserror, docs, remove general Failure case (#9741)
         }
         if self.root >= MAX_SLOT {
             return Err(SanitizeError::Failed);
@@ -211,7 +230,7 @@ pub struct Vote {
 impl Sanitize for Vote {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         self.from.sanitize()?;
         self.transaction.sanitize()
@@ -436,8 +455,39 @@ mod test {
             EpochSlots::new(Pubkey::default(), 0, 0),
         ));
         assert_eq!(v.wallclock(), 0);
+<<<<<<< HEAD
         let key = v.clone().epoch_slots().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::EpochSlots(key));
+=======
+        let key = v.clone().lowest_slot().unwrap().from;
+        assert_eq!(v.label(), CrdsValueLabel::LowestSlot(key));
+    }
+
+    #[test]
+    fn test_lowest_slot_sanitize() {
+        let ls = LowestSlot::new(Pubkey::default(), 0, 0);
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, ls.clone()));
+        assert_eq!(v.sanitize(), Ok(()));
+
+        let mut o = ls.clone();
+        o.root = 1;
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
+
+        let o = ls.clone();
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(1, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::ValueOutOfBounds));
+
+        let mut o = ls.clone();
+        o.slots.insert(1);
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
+
+        let mut o = ls.clone();
+        o.stash.push(deprecated::EpochIncompleteSlots::default());
+        let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(0, o.clone()));
+        assert_eq!(v.sanitize(), Err(SanitizeError::InvalidValue));
+>>>>>>> a0514eb2a... thiserror, docs, remove general Failure case (#9741)
     }
 
     #[test]
@@ -484,7 +534,7 @@ mod test {
             ),
             &keypair,
         );
-        assert!(item.sanitize().is_err());
+        assert_eq!(item.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
     #[test]
     fn test_compute_vote_index_empty() {
