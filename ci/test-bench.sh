@@ -25,7 +25,7 @@ source ci/_
 source ci/upload-ci-artifact.sh
 
 eval "$(ci/channel-info.sh)"
-source ci/rust-version.sh nightly
+source ci/rust-version.sh all
 
 set -o pipefail
 export RUST_BACKTRACE=1

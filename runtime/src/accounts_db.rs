@@ -60,7 +60,7 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
     // as |cargo test| cannot observe panics in other threads
-    pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = { Arc::new(AtomicBool::new(false)) };
+    pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
 #[derive(Debug, Default)]
