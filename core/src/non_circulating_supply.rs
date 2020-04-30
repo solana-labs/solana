@@ -68,7 +68,7 @@ impl NonCirculatingSupply {
     }
 }
 
-const NON_CIRCULATING_ACCOUNTS: [&str; 14] = [
+const NON_CIRCULATING_ACCOUNTS: [&str; 12] = [
     "9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA",
     "GK2zqSsXLA2rwVZk347RYhh6jJpRsCA69FjLW93ZGi3B",
     "HCV5dGFJXRrJ3jhDYA4DCeb9TEDTwGGYXtT3wHksu2Zr",
@@ -76,8 +76,6 @@ const NON_CIRCULATING_ACCOUNTS: [&str; 14] = [
     "14FUT96s9swbmH7ZjpDvfEDywnAYy9zaNhv4xvezySGu",
     "HbZ5FfmKWNHC7uwk6TF1hVi6TCs7dtYfdjEcuPGgzFAg",
     "C7C8odR8oashR5Feyrq2tJKaXL18id1dSj2zbkDGL2C2",
-    "8HVqyX9jebh31Q9Hp8t5sMVJs665979ZeEr3eCfzitUe",
-    "13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD",
     "APnSR52EC1eH676m7qTBHUJ1nrGpHYpV7XKPxgRDD8gX",
     "9ibqedFVnu5k4wo1mJRbH6KJ5HLBCyjpA9omPYkDeeT5",
     "FopBKzQkG9pkyQqjdMFBLMQ995pSkjy83ziR4aism4c6",
