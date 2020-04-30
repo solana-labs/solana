@@ -42,7 +42,7 @@ pub struct ContactInfo {
 impl Sanitize for ContactInfo {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         Ok(())
     }
@@ -324,5 +324,13 @@ mod tests {
         assert_eq!(ci.valid_client_facing_addr(), None);
         ci.rpc = socketaddr!("127.0.0.1:234");
         assert!(ci.valid_client_facing_addr().is_some());
+    }
+
+    #[test]
+    fn test_sanitize() {
+        let mut ci = ContactInfo::default();
+        assert_eq!(ci.sanitize(), Ok(()));
+        ci.wallclock = MAX_WALLCLOCK;
+        assert_eq!(ci.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 }

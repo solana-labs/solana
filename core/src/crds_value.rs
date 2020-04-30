@@ -83,13 +83,13 @@ impl Sanitize for CrdsData {
             CrdsData::ContactInfo(val) => val.sanitize(),
             CrdsData::Vote(ix, val) => {
                 if *ix >= MAX_VOTES {
-                    return Err(SanitizeError::Failed);
+                    return Err(SanitizeError::ValueOutOfBounds);
                 }
                 val.sanitize()
             }
             CrdsData::LowestSlot(ix, val) => {
                 if *ix as usize >= 1 {
-                    return Err(SanitizeError::ValueOutOfRange);
+                    return Err(SanitizeError::ValueOutOfBounds);
                 }
                 val.sanitize()
             }
@@ -97,7 +97,7 @@ impl Sanitize for CrdsData {
             CrdsData::AccountsHashes(val) => val.sanitize(),
             CrdsData::EpochSlots(ix, val) => {
                 if *ix as usize >= MAX_EPOCH_SLOTS as usize {
-                    return Err(SanitizeError::Failed);
+                    return Err(SanitizeError::ValueOutOfBounds);
                 }
                 val.sanitize()
             }
@@ -115,11 +115,11 @@ pub struct SnapshotHash {
 impl Sanitize for SnapshotHash {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         for (slot, _) in &self.hashes {
             if *slot >= MAX_SLOT {
-                return Err(SanitizeError::Failed);
+                return Err(SanitizeError::ValueOutOfBounds);
             }
         }
         self.from.sanitize()
@@ -161,10 +161,10 @@ impl LowestSlot {
 impl Sanitize for LowestSlot {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         if self.lowest >= MAX_SLOT {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         if self.root != 0 {
             return Err(SanitizeError::InvalidValue);
@@ -189,7 +189,7 @@ pub struct Vote {
 impl Sanitize for Vote {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::Failed);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         self.from.sanitize()?;
         self.transaction.sanitize()
@@ -448,7 +448,7 @@ mod test {
 
         let o = ls.clone();
         let v = CrdsValue::new_unsigned(CrdsData::LowestSlot(1, o.clone()));
-        assert_eq!(v.sanitize(), Err(SanitizeError::ValueOutOfRange));
+        assert_eq!(v.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let mut o = ls.clone();
         o.slots.insert(1);
@@ -505,7 +505,7 @@ mod test {
             ),
             &keypair,
         );
-        assert!(item.sanitize().is_err());
+        assert_eq!(item.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
     #[test]
     fn test_compute_vote_index_empty() {

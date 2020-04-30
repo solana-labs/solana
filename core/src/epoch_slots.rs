@@ -19,10 +19,10 @@ pub struct Uncompressed {
 impl Sanitize for Uncompressed {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.first_slot >= MAX_SLOT {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         if self.num >= MAX_SLOTS_PER_ENTRY {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         Ok(())
     }
@@ -38,10 +38,10 @@ pub struct Flate2 {
 impl Sanitize for Flate2 {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.first_slot >= MAX_SLOT {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         if self.num >= MAX_SLOTS_PER_ENTRY {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         Ok(())
     }
@@ -221,7 +221,7 @@ pub struct EpochSlots {
 impl Sanitize for EpochSlots {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfRange);
+            return Err(SanitizeError::ValueOutOfBounds);
         }
         self.from.sanitize()?;
         self.slots.sanitize()
@@ -387,22 +387,22 @@ mod tests {
 
         let mut o = slots.clone();
         o.first_slot = MAX_SLOT;
-        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let mut o = slots.clone();
         o.num = MAX_SLOTS_PER_ENTRY;
-        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let compressed = Flate2::deflate(slots).unwrap();
         assert!(compressed.sanitize().is_ok());
 
         let mut o = compressed.clone();
         o.first_slot = MAX_SLOT;
-        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let mut o = compressed.clone();
         o.num = MAX_SLOTS_PER_ENTRY;
-        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
 
         let mut slots = EpochSlots::default();
         let range: Vec<Slot> = (0..5000).into_iter().collect();
@@ -412,7 +412,7 @@ mod tests {
 
         let mut o = slots.clone();
         o.wallclock = MAX_WALLCLOCK;
-        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfRange));
+        assert_eq!(o.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }
 
     #[test]
