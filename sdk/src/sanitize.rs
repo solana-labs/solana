@@ -4,14 +4,10 @@ use thiserror::Error;
 pub enum SanitizeError {
     #[error("index out of bounds")]
     IndexOutOfBounds,
-<<<<<<< HEAD
-    ValueOutOfRange,
-=======
     #[error("value out of bounds")]
     ValueOutOfBounds,
     #[error("invalid value")]
     InvalidValue,
->>>>>>> a0514eb2a... thiserror, docs, remove general Failure case (#9741)
 }
 
 /// Trait for sanitizing values and members of over the wire messages.
