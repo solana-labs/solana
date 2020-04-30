@@ -1638,7 +1638,7 @@ impl Bank {
         }
 
         self.collected_rent
-            .fetch_add(dbg!(collected_rent), Ordering::Relaxed);
+            .fetch_add(collected_rent, Ordering::Relaxed);
     }
 
     fn run_incinerator(&self) {
