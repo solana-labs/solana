@@ -3,7 +3,9 @@ mod args;
 mod stake_accounts;
 
 use crate::arg_parser::parse_args;
-use crate::args::{resolve_command, AuthorizeArgs, Command, MoveArgs, NewArgs, RebaseArgs};
+use crate::args::{
+    resolve_command, AuthorizeArgs, Command, MoveArgs, NewArgs, RebaseArgs, SetLockupArgs,
+};
 use solana_cli_config::Config;
 use solana_client::client_error::ClientError;
 use solana_client::rpc_client::RpcClient;
@@ -15,6 +17,7 @@ use solana_sdk::{
     signers::Signers,
     transaction::Transaction,
 };
+use solana_stake_program::stake_instruction::LockupArgs;
 use std::env;
 use std::error::Error;
 
@@ -53,6 +56,7 @@ fn process_new_stake_account(
         args.lamports,
         &args.stake_authority,
         &args.withdraw_authority,
+        &Pubkey::default(),
         args.index,
     );
     let signers = vec![
@@ -82,6 +86,30 @@ fn process_authorize_stake_accounts(
         &*args.stake_authority,
         &*args.withdraw_authority,
     ];
+    for message in messages {
+        let signature = send_message(client, message, &signers)?;
+        println!("{}", signature);
+    }
+    Ok(())
+}
+
+fn process_lockup_stake_accounts(
+    client: &RpcClient,
+    args: &SetLockupArgs<Pubkey, Box<dyn Signer>>,
+) -> Result<(), ClientError> {
+    let lockup = LockupArgs {
+        epoch: args.lockup_epoch,
+        unix_timestamp: args.lockup_date,
+        custodian: args.new_custodian,
+    };
+    let messages = stake_accounts::lockup_stake_accounts(
+        &args.fee_payer.pubkey(),
+        &args.base_pubkey,
+        &args.custodian.pubkey(),
+        &lockup,
+        args.num_accounts,
+    );
+    let signers = vec![&*args.fee_payer, &*args.custodian];
     for message in messages {
         let signature = send_message(client, message, &signers)?;
         println!("{}", signature);
@@ -200,6 +228,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Command::Authorize(args) => {
             process_authorize_stake_accounts(&client, &args)?;
+        }
+        Command::SetLockup(args) => {
+            process_lockup_stake_accounts(&client, &args)?;
         }
         Command::Rebase(args) => {
             process_rebase_stake_accounts(&client, &args)?;
