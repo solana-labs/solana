@@ -11,7 +11,6 @@ use crate::{
 pub mod clock;
 pub mod epoch_schedule;
 pub mod fees;
-pub mod incinerator;
 pub mod recent_blockhashes;
 pub mod rent;
 pub mod rewards;
@@ -23,7 +22,6 @@ pub fn is_sysvar_id(id: &Pubkey) -> bool {
     clock::check_id(id)
         || epoch_schedule::check_id(id)
         || fees::check_id(id)
-        || incinerator::check_id(id)
         || recent_blockhashes::check_id(id)
         || rent::check_id(id)
         || rewards::check_id(id)

@@ -42,6 +42,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
+    incinerator,
     inflation::Inflation,
     native_loader, nonce,
     pubkey::Pubkey,
@@ -1641,12 +1642,10 @@ impl Bank {
     }
 
     fn run_incinerator(&self) {
-        if let Some((account, _)) =
-            self.get_account_modified_since_parent(&sysvar::incinerator::id())
-        {
+        if let Some((account, _)) = self.get_account_modified_since_parent(&incinerator::id()) {
             self.capitalization
                 .fetch_sub(account.lamports, Ordering::Relaxed);
-            self.store_account(&sysvar::incinerator::id(), &Account::default());
+            self.store_account(&incinerator::id(), &Account::default());
         }
     }
 
@@ -5860,13 +5859,13 @@ mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(2_000);
         let bank = Bank::new(&genesis_config);
 
-        assert_eq!(bank.get_balance(&sysvar::incinerator::id()), 0);
-        bank.transfer(1_000, &mint_keypair, &sysvar::incinerator::id())
+        assert_eq!(bank.get_balance(&incinerator::id()), 0);
+        bank.transfer(1_000, &mint_keypair, &incinerator::id())
             .unwrap();
-        assert_eq!(bank.get_balance(&sysvar::incinerator::id()), 1_000);
+        assert_eq!(bank.get_balance(&incinerator::id()), 1_000);
         assert_eq!(bank.capitalization(), 2_000);
         bank.freeze();
-        assert_eq!(bank.get_balance(&sysvar::incinerator::id()), 0);
+        assert_eq!(bank.get_balance(&incinerator::id()), 0);
         assert_eq!(bank.capitalization(), 1_000);
     }
 }
