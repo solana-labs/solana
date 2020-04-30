@@ -118,14 +118,21 @@ impl<'de> Visitor<'de> for AccountStorageVisitor {
     {
         let mut map = HashMap::new();
         while let Some((slot, storage_entries)) = access.next_entry()? {
-            let storage_entries: Vec<Format0000AccountStorageEntry> = storage_entries;
+            let storage_entries: Vec<Arc<Format0000AccountStorageEntry>> = storage_entries; // Arc yuck
             let storage_slot_map = map.entry(slot).or_insert_with(HashMap::new);
-            for mut storage in storage_entries {
+            for storage in storage_entries {
+		let storage = Arc::try_unwrap(storage)
+		    .map_err(|_| serde::de::Error::custom("serialization error"))?;
+		let mut storage: AccountStorageEntry = storage.into();
                 storage.slot = slot;
-                storage_slot_map.insert(storage.id, Arc::new(storage.into()));
-            }
+		storage_slot_map.insert(
+		    storage.id,
+		    Arc::new(
+			storage.into()
+		    )
+		);
+	    }
         }
-
         Ok(AccountStorage(map))
     }
 }
@@ -146,6 +153,7 @@ impl Versioned for (u64, AccountInfo) {
     }
 }
 
+#[derive(Debug)]
 struct AccountStorageSerialize<'a> {
     account_storage_entries: &'a [SnapshotStorage],
 }
@@ -159,11 +167,11 @@ impl<'a> Serialize for AccountStorageSerialize<'a> {
         let mut count = 0;
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
         for storage_entries in self.account_storage_entries {
+	    let slot = storage_entries.first().unwrap().slot;
 	    let storage_entries = storage_entries
 		.iter()
-		.map(|e| Format0000AccountStorageEntry::from(e.as_ref()))
+		.map(|e| Arc::new(Format0000AccountStorageEntry::from(e.as_ref()))) // Arc yuck
 		.collect::<Vec<_>>();
-	    let slot = storage_entries.first().unwrap().slot;
             map.serialize_entry(&slot, &storage_entries)?;
             count += storage_entries.len();
         }
@@ -196,6 +204,10 @@ pub enum AccountStorageStatus {
     Candidate = 2,
 }
 
+impl Default for AccountStorageStatus {
+    fn default() -> Self { Self::Available }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BankHashVerificationError {
     MismatchedAccountHash,
@@ -225,16 +237,16 @@ pub struct AccountStorageEntry {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Format0000AccountStorageEntry {
     id: AppendVecId,
-    slot: Slot,
     accounts: Format0000AppendVec,
+    count_and_status: (usize, AccountStorageStatus),
 }
 
 impl From<&AccountStorageEntry> for Format0000AccountStorageEntry {
     fn from(rhs: &AccountStorageEntry) -> Format0000AccountStorageEntry {
 	Format0000AccountStorageEntry {
 	    id: rhs.id,
-	    slot: rhs.slot,
 	    accounts: Format0000AppendVec::from(&rhs.accounts),
+	    ..Format0000AccountStorageEntry::default()
 	}
     }
 }
@@ -243,8 +255,7 @@ impl Into<AccountStorageEntry> for Format0000AccountStorageEntry {
     fn into(self) -> AccountStorageEntry {
 	AccountStorageEntry {
 	    id: self.id,
-	    slot: self.slot,
-	    accounts: AppendVec::new_empty_map(self.accounts.current_len),
+	    accounts: self.accounts.into(),
 	    ..AccountStorageEntry::default()
 	}
     }
@@ -255,6 +266,12 @@ impl From<&AppendVec> for Format0000AppendVec {
 	Format0000AppendVec {
 	    current_len: rhs.len(),
 	}
+    }
+}
+
+impl Into<AppendVec> for Format0000AppendVec {
+    fn into(self) -> AppendVec {
+	AppendVec::new_empty_map(self.current_len)
     }
 }
 
@@ -269,7 +286,6 @@ impl Serialize for Format0000AppendVec {
         S: Serializer,
     {
         use serde::ser::Error;
-
         let len = std::mem::size_of::<usize>();
         let mut buf = vec![0u8; len];
         let mut wr = Cursor::new(&mut buf[..]);
