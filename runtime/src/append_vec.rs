@@ -124,18 +124,18 @@ impl Drop for AppendVec {
 impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
-        let map = Self::new_mmap(path, create, size);
+        let map = Self::new_mmap(file, create, size);
         AppendVec {
             path: file.to_path_buf(),
             map,
             // This mutex forces append to be single threaded, but concurrent with reads
             // See UNSAFE usage in `append_ptr`
-            append_offset: Mutex::new(initial_len),
-            current_len: AtomicUsize::new(initial_len),
+            append_offset: Mutex::new(0),
+            current_len: AtomicUsize::new(0),
             file_size: size as u64,
         }
     }
-    pub new_mmap(file: &Path, create: bool, size: usize) -> MmapMut {
+    pub fn new_mmap(file: &Path, create: bool, size: usize) -> MmapMut {
         let initial_len = 0;
         AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
 
@@ -303,6 +303,7 @@ impl AppendVec {
         let (next, overflow) = offset.overflowing_add(size);
         if overflow || next > max_len {
             return None;
+        }
         
         let data = &map[offset..next];
         let next = u64_align!(next);
