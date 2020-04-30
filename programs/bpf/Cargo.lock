@@ -1876,22 +1876,12 @@ dependencies = [
 name = "solana-config-program"
 version = "1.1.8"
 dependencies = [
-<<<<<<< HEAD
  "bincode",
  "chrono",
  "log",
  "serde",
  "serde_derive",
- "solana-logger",
  "solana-sdk",
-=======
- "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 1.2.0",
->>>>>>> a4fe11fad... Remove old logging enabler artifacts (#9777)
 ]
 
 [[package]]
@@ -2043,7 +2033,6 @@ dependencies = [
 name = "solana-stake-program"
 version = "1.1.8"
 dependencies = [
-<<<<<<< HEAD
  "bincode",
  "log",
  "num-derive 0.3.0",
@@ -2051,24 +2040,10 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-logger",
  "solana-metrics",
  "solana-sdk",
  "solana-vote-program",
  "thiserror",
-=======
- "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-config-program 1.2.0",
- "solana-metrics 1.2.0",
- "solana-sdk 1.2.0",
- "solana-vote-program 1.2.0",
- "thiserror 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
->>>>>>> a4fe11fad... Remove old logging enabler artifacts (#9777)
 ]
 
 [[package]]
@@ -2090,28 +2065,15 @@ dependencies = [
 name = "solana-vote-program"
 version = "1.1.8"
 dependencies = [
-<<<<<<< HEAD
  "bincode",
  "log",
  "num-derive 0.3.0",
  "num-traits 0.2.11",
  "serde",
  "serde_derive",
- "solana-logger",
  "solana-metrics",
  "solana-sdk",
  "thiserror",
-=======
- "bincode 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-metrics 1.2.0",
- "solana-sdk 1.2.0",
- "thiserror 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
->>>>>>> a4fe11fad... Remove old logging enabler artifacts (#9777)
 ]
 
 [[package]]
