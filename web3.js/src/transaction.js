@@ -1,11 +1,11 @@
 // @flow
 
 import invariant from 'assert';
-import * as BufferLayout from 'buffer-layout';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
-import * as Layout from './layout';
+import type {CompiledInstruction} from './message';
+import {Message} from './message';
 import {PublicKey} from './publickey';
 import {Account} from './account';
 import * as shortvec from './util/shortvec-encoding';
@@ -36,6 +36,20 @@ const PUBKEY_LENGTH = 32;
 const SIGNATURE_LENGTH = 64;
 
 /**
+ * Account metadata used to define instructions
+ *
+ * @typedef {Object} AccountMeta
+ * @property {PublicKey} pubkey An account's public key
+ * @property {boolean} isSigner True if an instruction requires a transaction signature matching `pubkey`
+ * @property {boolean} isWritable True if the `pubkey` can be loaded as a read-write account.
+ */
+export type AccountMeta = {
+  pubkey: PublicKey,
+  isSigner: boolean,
+  isWritable: boolean,
+};
+
+/**
  * List of TransactionInstruction object fields that may be initialized at construction
  *
  * @typedef {Object} TransactionInstructionCtorFields
@@ -44,7 +58,7 @@ const SIGNATURE_LENGTH = 64;
  * @property {?Buffer} data
  */
 export type TransactionInstructionCtorFields = {|
-  keys?: Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>,
+  keys?: Array<AccountMeta>,
   programId?: PublicKey,
   data?: Buffer,
 |};
@@ -57,11 +71,7 @@ export class TransactionInstruction {
    * Public keys to include in this transaction
    * Boolean represents whether this pubkey needs to sign the transaction
    */
-  keys: Array<{
-    pubkey: PublicKey,
-    isSigner: boolean,
-    isWritable: boolean,
-  }> = [];
+  keys: Array<AccountMeta> = [];
 
   /**
    * Program Id to execute
@@ -90,8 +100,8 @@ type SignaturePubkeyPair = {|
  * List of Transaction object fields that may be initialized at construction
  *
  * @typedef {Object} TransactionCtorFields
- * @property (?recentBlockhash} A recent block hash
- * @property (?signatures} One or more signatures
+ * @property {?Blockhash} recentBlockhash A recent blockhash
+ * @property {?Array<SignaturePubkeyPair>} signatures One or more signatures
  *
  */
 type TransactionCtorFields = {|
@@ -104,8 +114,8 @@ type TransactionCtorFields = {|
  * NonceInformation to be used to build a Transaction.
  *
  * @typedef {Object} NonceInformation
- * @property {nonce} The current Nonce blockhash
- * @property {nonceInstruction} The AdvanceNonceAccount Instruction
+ * @property {Blockhash} nonce The current Nonce blockhash
+ * @property {TransactionInstruction} nonceInstruction AdvanceNonceAccount Instruction
  */
 type NonceInformation = {|
   nonce: Blockhash,
@@ -180,9 +190,9 @@ export class Transaction {
   }
 
   /**
-   * Get a buffer of the Transaction data that need to be covered by signatures
+   * Compile transaction data
    */
-  serializeMessage(): Buffer {
+  compileMessage(): Message {
     const {nonceInfo} = this;
     if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
       this.recentBlockhash = nonceInfo.nonce;
@@ -197,16 +207,15 @@ export class Transaction {
       throw new Error('No instructions provided');
     }
 
-    const keys = this.signatures.map(({publicKey}) => publicKey.toString());
     let numReadonlySignedAccounts = 0;
     let numReadonlyUnsignedAccounts = 0;
 
-    const programIds = [];
-
-    const allKeys = [];
+    const keys = this.signatures.map(({publicKey}) => publicKey.toString());
+    const programIds: string[] = [];
+    const accountMetas: AccountMeta[] = [];
     this.instructions.forEach(instruction => {
-      instruction.keys.forEach(keySignerPair => {
-        allKeys.push(keySignerPair);
+      instruction.keys.forEach(accountMeta => {
+        accountMetas.push(accountMeta);
       });
 
       const programId = instruction.programId.toString();
@@ -215,30 +224,28 @@ export class Transaction {
       }
     });
 
-    allKeys.sort(function (x, y) {
+    accountMetas.sort(function (x, y) {
       const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
       const checkWritable =
         x.isWritable === y.isWritable ? 0 : x.isWritable ? -1 : 1;
       return checkSigner || checkWritable;
     });
 
-    allKeys.forEach(keySignerPair => {
-      const keyStr = keySignerPair.pubkey.toString();
+    accountMetas.forEach(({pubkey, isSigner, isWritable}) => {
+      const keyStr = pubkey.toString();
       if (!keys.includes(keyStr)) {
-        if (keySignerPair.isSigner) {
+        keys.push(keyStr);
+        if (isSigner) {
           this.signatures.push({
             signature: null,
-            publicKey: keySignerPair.pubkey,
+            publicKey: pubkey,
           });
-          if (!keySignerPair.isWritable) {
+          if (!isWritable) {
             numReadonlySignedAccounts += 1;
           }
-        } else {
-          if (!keySignerPair.isWritable) {
-            numReadonlyUnsignedAccounts += 1;
-          }
+        } else if (!isWritable) {
+          numReadonlyUnsignedAccounts += 1;
         }
-        keys.push(keyStr);
       }
     });
 
@@ -249,92 +256,41 @@ export class Transaction {
       }
     });
 
-    let keyCount = [];
-    shortvec.encodeLength(keyCount, keys.length);
-
-    const instructions = this.instructions.map(instruction => {
-      const {data, programId} = instruction;
-      let keyIndicesCount = [];
-      shortvec.encodeLength(keyIndicesCount, instruction.keys.length);
-      let dataCount = [];
-      shortvec.encodeLength(dataCount, instruction.data.length);
-      return {
-        programIdIndex: keys.indexOf(programId.toString()),
-        keyIndicesCount: Buffer.from(keyIndicesCount),
-        keyIndices: Buffer.from(
-          instruction.keys.map(keyObj =>
+    const instructions: CompiledInstruction[] = this.instructions.map(
+      instruction => {
+        const {data, programId} = instruction;
+        return {
+          programIdIndex: keys.indexOf(programId.toString()),
+          accounts: instruction.keys.map(keyObj =>
             keys.indexOf(keyObj.pubkey.toString()),
           ),
-        ),
-        dataLength: Buffer.from(dataCount),
-        data,
-      };
-    });
+          data: bs58.encode(data),
+        };
+      },
+    );
 
     instructions.forEach(instruction => {
       invariant(instruction.programIdIndex >= 0);
-      instruction.keyIndices.forEach(keyIndex => invariant(keyIndex >= 0));
+      instruction.accounts.forEach(keyIndex => invariant(keyIndex >= 0));
     });
 
-    let instructionCount = [];
-    shortvec.encodeLength(instructionCount, instructions.length);
-    let instructionBuffer = Buffer.alloc(PACKET_DATA_SIZE);
-    Buffer.from(instructionCount).copy(instructionBuffer);
-    let instructionBufferLength = instructionCount.length;
-
-    instructions.forEach(instruction => {
-      const instructionLayout = BufferLayout.struct([
-        BufferLayout.u8('programIdIndex'),
-
-        BufferLayout.blob(
-          instruction.keyIndicesCount.length,
-          'keyIndicesCount',
-        ),
-        BufferLayout.seq(
-          BufferLayout.u8('keyIndex'),
-          instruction.keyIndices.length,
-          'keyIndices',
-        ),
-        BufferLayout.blob(instruction.dataLength.length, 'dataLength'),
-        BufferLayout.seq(
-          BufferLayout.u8('userdatum'),
-          instruction.data.length,
-          'data',
-        ),
-      ]);
-      const length = instructionLayout.encode(
-        instruction,
-        instructionBuffer,
-        instructionBufferLength,
-      );
-      instructionBufferLength += length;
+    return new Message({
+      header: {
+        numRequiredSignatures: this.signatures.length,
+        numReadonlySignedAccounts,
+        numReadonlyUnsignedAccounts,
+      },
+      accountKeys: keys.map(k => new PublicKey(k)),
+      recentBlockhash,
+      instructions,
     });
-    instructionBuffer = instructionBuffer.slice(0, instructionBufferLength);
+  }
 
-    const signDataLayout = BufferLayout.struct([
-      BufferLayout.blob(1, 'numRequiredSignatures'),
-      BufferLayout.blob(1, 'numReadonlySignedAccounts'),
-      BufferLayout.blob(1, 'numReadonlyUnsignedAccounts'),
-      BufferLayout.blob(keyCount.length, 'keyCount'),
-      BufferLayout.seq(Layout.publicKey('key'), keys.length, 'keys'),
-      Layout.publicKey('recentBlockhash'),
-    ]);
-
-    const transaction = {
-      numRequiredSignatures: Buffer.from([this.signatures.length]),
-      numReadonlySignedAccounts: Buffer.from([numReadonlySignedAccounts]),
-      numReadonlyUnsignedAccounts: Buffer.from([numReadonlyUnsignedAccounts]),
-      keyCount: Buffer.from(keyCount),
-      keys: keys.map(key => new PublicKey(key).toBuffer()),
-      recentBlockhash: Buffer.from(bs58.decode(recentBlockhash)),
-    };
-
-    let signData = Buffer.alloc(2048);
-    const length = signDataLayout.encode(transaction, signData);
-    instructionBuffer.copy(signData, length);
-    signData = signData.slice(0, length + instructionBuffer.length);
-
-    return signData;
+  /**
+   * Get a buffer of the Transaction data that need to be covered by signatures
+   */
+  serializeMessage(): Buffer {
+    return this.compileMessage().serialize();
   }
 
   /**
@@ -517,11 +473,8 @@ export class Transaction {
     }
 
     const numRequiredSignatures = byteArray.shift();
-    // byteArray = byteArray.slice(1); // Skip numRequiredSignatures byte
     const numReadonlySignedAccounts = byteArray.shift();
-    // byteArray = byteArray.slice(1); // Skip numReadonlySignedAccounts byte
     const numReadonlyUnsignedAccounts = byteArray.shift();
-    // byteArray = byteArray.slice(1); // Skip numReadonlyUnsignedAccounts byte
 
     const accountCount = shortvec.decodeLength(byteArray);
     let accounts = [];
@@ -549,15 +502,18 @@ export class Transaction {
       instructions.push(instruction);
     }
 
-    return Transaction._populate(
-      signatures,
-      accounts,
+    const message = {
+      header: {
+        numRequiredSignatures,
+        numReadonlySignedAccounts,
+        numReadonlyUnsignedAccounts,
+      },
+      recentBlockhash: bs58.encode(Buffer.from(recentBlockhash)),
+      accountKeys: accounts.map(account => new PublicKey(account)),
       instructions,
-      recentBlockhash,
-      numRequiredSignatures,
-      numReadonlySignedAccounts,
-      numReadonlyUnsignedAccounts,
-    );
+    };
+
+    return Transaction._populate(signatures, new Message(message));
   }
 
   /**
@@ -574,82 +530,60 @@ export class Transaction {
       rpcResult.message.header.numReadonlySignedAccounts;
     const numReadonlyUnsignedAccounts =
       rpcResult.message.header.numReadonlyUnsignedAccounts;
-    return Transaction._populate(
-      signatures,
-      accounts,
+
+    const message = {
+      header: {
+        numRequiredSignatures,
+        numReadonlySignedAccounts,
+        numReadonlyUnsignedAccounts,
+      },
+      recentBlockhash: bs58.encode(Buffer.from(recentBlockhash)),
+      accountKeys: accounts.map(account => new PublicKey(account)),
       instructions,
-      recentBlockhash,
-      numRequiredSignatures,
-      numReadonlySignedAccounts,
-      numReadonlyUnsignedAccounts,
-    );
+    };
+
+    return Transaction._populate(signatures, new Message(message));
   }
 
   /**
    * Populate Transaction object
    * @private
    */
-  static _populate(
-    signatures: Array<string>,
-    accounts: Array<string>,
-    instructions: Array<any>,
-    recentBlockhash: Array<number>,
-    numRequiredSignatures: number,
-    numReadonlySignedAccounts: number,
-    numReadonlyUnsignedAccounts: number,
-  ): Transaction {
-    function isWritable(
-      i: number,
-      numRequiredSignatures: number,
-      numReadonlySignedAccounts: number,
-      numReadonlyUnsignedAccounts: number,
-      numKeys: number,
-    ): boolean {
-      return (
-        i < numRequiredSignatures - numReadonlySignedAccounts ||
-        (i >= numRequiredSignatures &&
-          i < numKeys - numReadonlyUnsignedAccounts)
-      );
-    }
-
+  static _populate(signatures: Array<string>, message: Message): Transaction {
     const transaction = new Transaction();
-    transaction.recentBlockhash = new PublicKey(recentBlockhash).toBase58();
-    for (let i = 0; i < signatures.length; i++) {
+    transaction.recentBlockhash = message.recentBlockhash;
+    signatures.forEach((signature, index) => {
       const sigPubkeyPair = {
         signature:
-          signatures[i] == bs58.encode(DEFAULT_SIGNATURE)
+          signature == bs58.encode(DEFAULT_SIGNATURE)
             ? null
-            : bs58.decode(signatures[i]),
-        publicKey: new PublicKey(accounts[i]),
+            : bs58.decode(signature),
+        publicKey: message.accountKeys[index],
       };
       transaction.signatures.push(sigPubkeyPair);
-    }
-    for (let i = 0; i < instructions.length; i++) {
-      let instructionData = {
-        keys: [],
-        programId: new PublicKey(accounts[instructions[i].programIdIndex]),
-        data: bs58.decode(instructions[i].data),
-      };
-      for (let j = 0; j < instructions[i].accounts.length; j++) {
-        const pubkey = new PublicKey(accounts[instructions[i].accounts[j]]);
+    });
 
-        instructionData.keys.push({
+    message.instructions.forEach(instruction => {
+      const keys = instruction.accounts.map(account => {
+        const pubkey = message.accountKeys[account];
+        return {
           pubkey,
           isSigner: transaction.signatures.some(
             keyObj => keyObj.publicKey.toString() === pubkey.toString(),
           ),
-          isWritable: isWritable(
-            j,
-            numRequiredSignatures,
-            numReadonlySignedAccounts,
-            numReadonlyUnsignedAccounts,
-            accounts.length,
-          ),
-        });
-      }
-      let instruction = new TransactionInstruction(instructionData);
-      transaction.instructions.push(instruction);
-    }
+          isWritable: message.isAccountWritable(account),
+        };
+      });
+
+      transaction.instructions.push(
+        new TransactionInstruction({
+          keys,
+          programId: message.accountKeys[instruction.programIdIndex],
+          data: bs58.decode(instruction.data),
+        }),
+      );
+    });
+
     return transaction;
   }
 }

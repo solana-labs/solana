@@ -362,17 +362,54 @@ declare module '@solana/web3.js' {
 
   declare export function encodeData(type: InstructionType, fields: {}): Buffer;
 
+  // === src/message.js ===
+  declare export type MessageHeader = {
+    numRequiredSignatures: number,
+    numReadonlySignedAccounts: number,
+    numReadonlyUnsignedAccounts: number,
+  };
+
+  declare export type CompiledInstruction = {
+    programIdIndex: number,
+    accounts: number[],
+    data: string,
+  };
+
+  declare export type MessageArgs = {
+    header: MessageHeader,
+    accountKeys: PublicKey[],
+    recentBlockhash: Blockhash,
+    instructions: CompiledInstruction[],
+  };
+
+  declare export class Message {
+    header: MessageHeader;
+    accountKeys: PublicKey[];
+    recentBlockhash: Blockhash;
+    instructions: CompiledInstruction[];
+
+    constructor(args: MessageArgs): Message;
+    isAccountWritable(account: PublicKey): boolean;
+    serialize(): Buffer;
+  }
+
   // === src/transaction.js ===
   declare export type TransactionSignature = string;
 
+  declare export type AccountMeta = {
+    pubkey: PublicKey,
+    isSigner: boolean,
+    isWritable: boolean,
+  };
+
   declare type TransactionInstructionCtorFields = {|
-    keys: ?Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>,
+    keys: ?Array<AccountMeta>,
     programId?: PublicKey,
     data?: Buffer,
   |};
 
   declare export class TransactionInstruction {
-    keys: Array<{pubkey: PublicKey, isSigner: boolean, isWritable: boolean}>;
+    keys: Array<AccountMeta>;
     programId: PublicKey;
     data: Buffer;
 
@@ -411,6 +448,7 @@ declare module '@solana/web3.js' {
         Transaction | TransactionInstruction | TransactionInstructionCtorFields,
       >
     ): Transaction;
+    compileMessage(): Message;
     serializeMessage(): Buffer;
     sign(...signers: Array<Account>): void;
     signPartial(...partialSigners: Array<PublicKey | Account>): void;
