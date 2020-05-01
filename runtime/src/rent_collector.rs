@@ -37,10 +37,11 @@ impl RentCollector {
     //  the account rent collected, if any
     //
     pub fn update(&self, address: &Pubkey, account: &mut Account) -> u64 {
-        if account.executable
-            || account.rent_epoch > self.epoch
-            || sysvar::check_id(&account.owner)
-            || *address == incinerator::id()
+        if *address == incinerator::id() && self.epoch >= incinerator::ACTIVATION_EPOCH {
+            return 0;
+        }
+
+        if account.executable || account.rent_epoch > self.epoch || sysvar::check_id(&account.owner)
         {
             0
         } else {

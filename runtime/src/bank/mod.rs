@@ -793,7 +793,9 @@ impl Bank {
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
-            self.run_incinerator();
+            if self.epoch >= incinerator::ACTIVATION_EPOCH {
+                self.run_incinerator();
+            }
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -5786,7 +5788,7 @@ mod tests {
     }
 
     #[test]
-    fn test_incinerator() {
+    fn test_incinerator_inactive() {
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
@@ -5795,6 +5797,34 @@ mod tests {
             &bank0,
             &Pubkey::default(),
             genesis_config.epoch_schedule.first_normal_slot,
+        );
+        let pre_capitalization = bank.capitalization();
+
+        let burn_amount = bank.get_minimum_balance_for_rent_exemption(0);
+
+        assert_eq!(bank.get_balance(&incinerator::id()), 0);
+        bank.transfer(burn_amount, &mint_keypair, &incinerator::id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&incinerator::id()), burn_amount);
+        bank.freeze();
+
+        // No effect!
+        assert_eq!(bank.get_balance(&incinerator::id()), burn_amount);
+        assert_eq!(bank.capitalization(), pre_capitalization);
+    }
+
+    #[test]
+    fn test_incinerator_active() {
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Move to the incinerator activation epoch
+        let bank = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config
+                .epoch_schedule
+                .get_first_slot_in_epoch(incinerator::ACTIVATION_EPOCH),
         );
         let pre_capitalization = bank.capitalization();
 

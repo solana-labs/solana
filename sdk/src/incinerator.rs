@@ -2,3 +2,5 @@
 //! the current block.
 
 crate::declare_id!("1nc1nerator11111111111111111111111111111111");
+
+pub const ACTIVATION_EPOCH: u64 = 30; // Incinerator activates on mainnet-beta at this epoch
