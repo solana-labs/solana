@@ -132,6 +132,7 @@ fn process_lockup_stake_accounts(
         &args.custodian.pubkey(),
         &lockup,
         &existing_lockups,
+        args.unlock_years,
     );
     if messages.is_empty() {
         eprintln!("No work to do");

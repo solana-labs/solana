@@ -47,6 +47,7 @@ pub(crate) struct SetLockupArgs<P, K> {
     pub new_custodian: Option<P>,
     pub num_accounts: usize,
     pub no_wait: bool,
+    pub unlock_years: Option<f64>,
 }
 
 pub(crate) struct RebaseArgs<P, K> {
@@ -193,6 +194,7 @@ fn resolve_set_lockup_args(
         new_custodian: resolve_new_custodian(wallet_manager, &args.new_custodian)?,
         num_accounts: args.num_accounts,
         no_wait: args.no_wait,
+        unlock_years: args.unlock_years,
     };
     Ok(resolved_args)
 }
