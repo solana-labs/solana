@@ -4313,7 +4313,7 @@ version = "1.2.0"
 dependencies = [
  "bincode",
  "byteorder",
- "bytes 0.4.12",
+ "bytes 0.5.4",
  "clap",
  "log 0.4.8",
  "serde",
@@ -4637,7 +4637,7 @@ name = "solana-net-utils"
 version = "1.2.0"
 dependencies = [
  "bincode",
- "bytes 0.4.12",
+ "bytes 0.5.4",
  "clap",
  "log 0.4.8",
  "nix",

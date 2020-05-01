@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.1"
-bytes = "0.4"
+bytes = "0.5"
 clap = "2.33.0"
 log = "0.4.8"
 nix = "0.17.0"
