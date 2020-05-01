@@ -16,10 +16,13 @@ reqwest = { version = "0.10.4", default-features = false, features = ["blocking"
 serde_json = "1.0"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-cli-config = { path = "../cli-config", version = "1.2.0" }
+solana-cli = { path = "../cli", version = "1.2.0" }
 solana-client = { path = "../client", version = "1.2.0" }
 solana-logger = { path = "../logger", version = "1.2.0" }
 solana-metrics = { path = "../metrics", version = "1.2.0" }
 solana-sdk = { path = "../sdk", version = "1.2.0" }
+solana-transaction-status = { path = "../transaction-status", version = "1.2.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 
 [[bin]]
 name = "solana-watchtower"
