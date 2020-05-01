@@ -42,6 +42,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
+    incinerator,
     inflation::Inflation,
     native_loader, nonce,
     pubkey::Pubkey,
@@ -795,6 +796,7 @@ impl Bank {
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
+            self.run_incinerator();
 
             // freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
@@ -1639,6 +1641,14 @@ impl Bank {
             .fetch_add(collected_rent, Ordering::Relaxed);
     }
 
+    fn run_incinerator(&self) {
+        if let Some((account, _)) = self.get_account_modified_since_parent(&incinerator::id()) {
+            self.capitalization
+                .fetch_sub(account.lamports, Ordering::Relaxed);
+            self.store_account(&incinerator::id(), &Account::default());
+        }
+    }
+
     /// Process a batch of transactions.
     #[must_use]
     pub fn load_execute_and_commit_transactions(
@@ -1751,8 +1761,10 @@ impl Bank {
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
-        self.collected_rent
-            .fetch_add(self.rent_collector.update(&mut account), Ordering::Relaxed);
+        self.collected_rent.fetch_add(
+            self.rent_collector.update(pubkey, &mut account),
+            Ordering::Relaxed,
+        );
         account.lamports += lamports;
         self.store_account(pubkey, &account);
     }
@@ -5842,5 +5854,33 @@ mod tests {
         let account = bank.get_account(&solana_vote_program::id()).unwrap();
         info!("account: {:?}", account);
         assert!(account.executable);
+    }
+
+    #[test]
+    fn test_incinerator() {
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Move to the first normal slot so normal rent behaviour applies
+        let bank = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+        let pre_capitalization = bank.capitalization();
+
+        // Burn a non-rent exempt amount
+        let burn_amount = bank.get_minimum_balance_for_rent_exemption(0) - 1;
+
+        assert_eq!(bank.get_balance(&incinerator::id()), 0);
+        bank.transfer(burn_amount, &mint_keypair, &incinerator::id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&incinerator::id()), burn_amount);
+        bank.freeze();
+        assert_eq!(bank.get_balance(&incinerator::id()), 0);
+
+        // Ensure that no rent was collected, and the entire burn amount was removed from bank
+        // capitalization
+        assert_eq!(bank.capitalization(), pre_capitalization - burn_amount);
     }
 }

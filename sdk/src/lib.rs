@@ -10,6 +10,7 @@ pub mod entrypoint_native;
 pub mod epoch_schedule;
 pub mod fee_calculator;
 pub mod hash;
+pub mod incinerator;
 pub mod inflation;
 pub mod instruction;
 pub mod loader_instruction;
