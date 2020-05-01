@@ -30,7 +30,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
     timing::slot_duration_from_slots_per_year,
-    transaction::{self, Transaction},
+    transaction::Transaction,
 };
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
@@ -447,11 +447,20 @@ impl JsonRpcRequestProcessor {
         &self,
         signature: Signature,
         commitment: Option<CommitmentConfig>,
-    ) -> Option<transaction::Result<()>> {
-        self.bank(commitment)
-            .ok()?
+    ) -> Result<bool> {
+        self.bank(commitment)?
             .get_signature_status_slot(&signature)
-            .map(|(_, status)| status)
+            .map(|(_, status)| {
+                if status.is_err() {
+                    Err(RpcCustomError::TransactionError(
+                        serde_json::to_value(status.unwrap_err()).unwrap(),
+                    )
+                    .into())
+                } else {
+                    Ok(true)
+                }
+            })
+            .unwrap_or_else(|| Err(RpcCustomError::TransactionNotFound.into()))
     }
 
     pub fn get_signature_statuses(
@@ -594,14 +603,14 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<bool>;
 
-    // DEPRECATED
+    // used by Trust Wallet
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
         &self,
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<transaction::Result<()>>>;
+    ) -> Result<bool>;
 
     // DEPRECATED (used by Trust Wallet)
     #[rpc(meta, name = "getSignatureConfirmation")]
@@ -1066,13 +1075,12 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         signature_str: String,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Option<transaction::Result<()>>> {
+    ) -> Result<bool> {
         let signature = verify_signature(&signature_str)?;
-        Ok(meta
-            .request_processor
+        meta.request_processor
             .read()
             .unwrap()
-            .get_signature_status(signature, commitment))
+            .get_signature_status(signature, commitment)
     }
 
     fn get_signature_statuses(

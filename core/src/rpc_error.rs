@@ -3,10 +3,12 @@ use solana_sdk::clock::Slot;
 
 const JSON_RPC_SERVER_ERROR_0: i64 = -32000;
 const JSON_RPC_SERVER_ERROR_1: i64 = -32001;
+const JSON_RPC_SERVER_ERROR_2: i64 = -32002;
 
 pub enum RpcCustomError {
     NonexistentClusterRoot { cluster_root: Slot, node_root: Slot },
     TransactionError(Value),
+    TransactionNotFound,
 }
 
 impl From<RpcCustomError> for Error {
@@ -27,6 +29,11 @@ impl From<RpcCustomError> for Error {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_1),
                 message: "on-chain transaction error".to_string(),
                 data: Some(data),
+            },
+            RpcCustomError::TransactionNotFound => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_2),
+                message: "transaction not found".to_string(),
+                data: None,
             },
         }
     }
