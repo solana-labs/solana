@@ -1844,6 +1844,17 @@ impl Bank {
         None
     }
 
+    pub fn get_largest_accounts(
+        &self,
+        num: usize,
+        pubkeys: &[Pubkey],
+        exclude: bool,
+    ) -> Vec<(Pubkey, u64)> {
+        self.rc
+            .accounts
+            .load_largest_accounts(&self.ancestors, num, pubkeys, exclude)
+    }
+
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count.load(Ordering::Relaxed)
     }

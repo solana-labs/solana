@@ -407,6 +407,34 @@ impl Accounts {
         })
     }
 
+    pub fn load_largest_accounts(
+        &self,
+        ancestors: &Ancestors,
+        num: usize,
+        pubkeys: &[Pubkey],
+        exclude: bool,
+    ) -> Vec<(Pubkey, u64)> {
+        let mut accounts_balances = self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, u64)>, option| {
+                if let Some(data) = option
+                    .filter(|(pubkey, account, _)| {
+                        (!exclude && pubkeys.contains(&pubkey)
+                            || exclude && !pubkeys.contains(&pubkey))
+                            && account.lamports != 0
+                    })
+                    .map(|(pubkey, account, _slot)| (*pubkey, account.lamports))
+                {
+                    collector.push(data)
+                }
+            },
+        );
+
+        accounts_balances.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+        accounts_balances.truncate(num);
+        accounts_balances
+    }
+
     #[must_use]
     pub fn verify_bank_hash(&self, slot: Slot, ancestors: &Ancestors) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash(slot, ancestors) {
