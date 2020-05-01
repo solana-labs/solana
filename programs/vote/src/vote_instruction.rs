@@ -370,7 +370,7 @@ mod tests {
         where
             T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
         {
-            if let InstructionError::CustomError(code) = err {
+            if let InstructionError::Custom(code) = err {
                 let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
                 format!(
                     "{:?}: {}::{:?} - {}",
@@ -384,7 +384,7 @@ mod tests {
             }
         }
         assert_eq!(
-            "CustomError(0): VoteError::VoteTooOld - vote already recorded or not in slot hashes history",
+            "Custom(0): VoteError::VoteTooOld - vote already recorded or not in slot hashes history",
             pretty_err::<VoteError>(VoteError::VoteTooOld.into())
         )
     }

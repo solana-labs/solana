@@ -641,7 +641,7 @@ mod tests {
                 "main".to_string(),
                 vec![],
             ),
-            Err(InstructionError::CustomError(4002))
+            Err(InstructionError::Custom(4002))
         );
     }
 

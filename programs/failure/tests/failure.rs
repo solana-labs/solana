@@ -23,6 +23,6 @@ fn test_program_native_failure() {
             .send_instruction(&alice_keypair, instruction)
             .unwrap_err()
             .unwrap(),
-        TransactionError::InstructionError(0, InstructionError::CustomError(0))
+        TransactionError::InstructionError(0, InstructionError::Custom(0))
     );
 }

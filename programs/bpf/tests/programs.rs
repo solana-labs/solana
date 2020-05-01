@@ -189,7 +189,7 @@ mod bpf {
             let result = bank_client.send_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
-                TransactionError::InstructionError(0, InstructionError::CustomError(42))
+                TransactionError::InstructionError(0, InstructionError::Custom(42))
             );
 
             let instruction = Instruction::new(program_id, &4u8, account_metas.clone());
@@ -398,14 +398,14 @@ mod bpf {
             let result = bank_client.send_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
-                TransactionError::InstructionError(0, InstructionError::CustomError(0))
+                TransactionError::InstructionError(0, InstructionError::Custom(0))
             );
 
             let instruction = Instruction::new(program_id, &4u8, account_metas.clone());
             let result = bank_client.send_instruction(&mint_keypair, instruction);
             assert_eq!(
                 result.unwrap_err().unwrap(),
-                TransactionError::InstructionError(0, InstructionError::CustomError(42))
+                TransactionError::InstructionError(0, InstructionError::Custom(42))
             );
 
             let instruction = Instruction::new(program_id, &6u8, account_metas.clone());
