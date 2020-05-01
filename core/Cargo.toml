@@ -66,7 +66,7 @@ solana-vote-signer = { path = "../vote-signer", version = "1.2.0" }
 solana-sys-tuner = { path = "../sys-tuner", version = "1.2.0" }
 tempfile = "3.1.0"
 thiserror = "1.0"
-tokio = "0.1"
+tokio = "0.2"
 tokio-codec = "0.1"
 tokio-fs = "0.1"
 tokio-io = "0.1"

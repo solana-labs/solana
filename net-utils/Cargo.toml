@@ -20,7 +20,7 @@ serde_derive = "1.0.103"
 socket2 = "0.3.12"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-logger = { path = "../logger", version = "1.2.0" }
-tokio = "0.1"
+tokio = "0.2"
 tokio-codec = "0.1"
 
 [lib]
