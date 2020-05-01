@@ -157,19 +157,43 @@ pub(crate) fn authorize_stake_accounts(
         .collect::<Vec<_>>()
 }
 
+fn apply_lockup_changes(lockup: &LockupArgs, existing_lockup: &Lockup) -> LockupArgs {
+    let custodian = match lockup.custodian {
+        Some(x) if x == existing_lockup.custodian => None,
+        x => x,
+    };
+    let epoch = match lockup.epoch {
+        Some(x) if x == existing_lockup.epoch => None,
+        x => x,
+    };
+    let unix_timestamp = match lockup.unix_timestamp {
+        Some(x) if x == existing_lockup.unix_timestamp => None,
+        x => x,
+    };
+    LockupArgs {
+        custodian,
+        epoch,
+        unix_timestamp,
+    }
+}
+
 pub(crate) fn lockup_stake_accounts(
     fee_payer_pubkey: &Pubkey,
-    base_pubkey: &Pubkey,
     custodian_pubkey: &Pubkey,
     lockup: &LockupArgs,
-    num_accounts: usize,
+    existing_lockups: &[(Pubkey, Lockup)],
 ) -> Vec<Message> {
-    let stake_account_addresses = derive_stake_account_addresses(base_pubkey, num_accounts);
-    stake_account_addresses
+    let default_lockup = LockupArgs::default();
+    existing_lockups
         .iter()
-        .map(|address| {
+        .filter_map(|(address, existing_lockup)| {
+            let lockup = apply_lockup_changes(lockup, existing_lockup);
+            if lockup == default_lockup {
+                return None;
+            }
             let instruction = stake_instruction::set_lockup(address, &lockup, custodian_pubkey);
-            Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey))
+            let message = Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey));
+            Some(message)
         })
         .collect()
 }
@@ -270,6 +294,21 @@ mod tests {
             .map(|i| {
                 let address = derive_stake_account_address(&base_pubkey, i);
                 (address, client.get_balance(&address).unwrap())
+            })
+            .collect()
+    }
+
+    fn get_lockups<C: SyncClient>(
+        client: &C,
+        base_pubkey: &Pubkey,
+        num_accounts: usize,
+    ) -> Vec<(Pubkey, Lockup)> {
+        (0..num_accounts)
+            .into_iter()
+            .map(|i| {
+                let address = derive_stake_account_address(&base_pubkey, i);
+                let account = client.get_account(&address).unwrap().unwrap();
+                (address, StakeState::lockup_from(&account).unwrap())
             })
             .collect()
     }
@@ -396,15 +435,15 @@ mod tests {
         let signers = [&funding_keypair, &fee_payer_keypair, &base_keypair];
         bank_client.send_message(&signers, message).unwrap();
 
+        let lockups = get_lockups(&bank_client, &base_pubkey, 1);
         let messages = lockup_stake_accounts(
             &fee_payer_pubkey,
-            &base_pubkey,
             &custodian_pubkey,
             &LockupArgs {
                 unix_timestamp: Some(1),
                 ..LockupArgs::default()
             },
-            1,
+            &lockups,
         );
 
         let signers = [&fee_payer_keypair, &custodian_keypair];
@@ -416,6 +455,19 @@ mod tests {
         let lockup = StakeState::lockup_from(&account).unwrap();
         assert_eq!(lockup.unix_timestamp, 1);
         assert_eq!(lockup.epoch, 0);
+
+        // Assert no work left to do
+        let lockups = get_lockups(&bank_client, &base_pubkey, 1);
+        let messages = lockup_stake_accounts(
+            &fee_payer_pubkey,
+            &custodian_pubkey,
+            &LockupArgs {
+                unix_timestamp: Some(1),
+                ..LockupArgs::default()
+            },
+            &lockups,
+        );
+        assert_eq!(messages.len(), 0);
     }
 
     #[test]

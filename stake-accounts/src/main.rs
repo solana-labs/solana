@@ -18,7 +18,10 @@ use solana_sdk::{
     signers::Signers,
     transaction::Transaction,
 };
-use solana_stake_program::stake_instruction::LockupArgs;
+use solana_stake_program::{
+    stake_instruction::LockupArgs,
+    stake_state::{Lockup, StakeState},
+};
 use std::env;
 use std::error::Error;
 
@@ -43,6 +46,22 @@ fn get_balances(
     addresses
         .into_iter()
         .map(|pubkey| client.get_balance(&pubkey).map(|bal| (pubkey, bal)))
+        .collect()
+}
+
+fn get_lockup(client: &RpcClient, address: &Pubkey) -> Result<Lockup, ClientError> {
+    client
+        .get_account(address)
+        .map(|account| StakeState::lockup_from(&account).unwrap())
+}
+
+fn get_lockups(
+    client: &RpcClient,
+    addresses: Vec<Pubkey>,
+) -> Result<Vec<(Pubkey, Lockup)>, ClientError> {
+    addresses
+        .into_iter()
+        .map(|pubkey| get_lockup(client, &pubkey).map(|bal| (pubkey, bal)))
         .collect()
 }
 
@@ -99,6 +118,10 @@ fn process_lockup_stake_accounts(
     client: &RpcClient,
     args: &SetLockupArgs<Pubkey, Box<dyn Signer>>,
 ) -> Result<(), ClientError> {
+    let addresses =
+        stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
+    let existing_lockups = get_lockups(&client, addresses)?;
+
     let lockup = LockupArgs {
         epoch: args.lockup_epoch,
         unix_timestamp: args.lockup_date,
@@ -106,11 +129,14 @@ fn process_lockup_stake_accounts(
     };
     let messages = stake_accounts::lockup_stake_accounts(
         &args.fee_payer.pubkey(),
-        &args.base_pubkey,
         &args.custodian.pubkey(),
         &lockup,
-        args.num_accounts,
+        &existing_lockups,
     );
+    if messages.is_empty() {
+        eprintln!("No work to do");
+        return Ok(());
+    }
     let signers = unique_signers(vec![&*args.fee_payer, &*args.custodian]);
     send_messages(client, messages, &signers, args.no_wait)?;
     Ok(())
