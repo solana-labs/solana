@@ -335,6 +335,7 @@ impl StakeSubCommands for App<'_, '_> {
                 )
                 .group(ArgGroup::with_name("lockup_details")
                     .args(&["lockup_epoch", "lockup_date", "new_custodian"])
+                    .multiple(true)
                     .required(true))
                 .arg(
                     Arg::with_name("custodian")
