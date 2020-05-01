@@ -2163,7 +2163,10 @@ impl Blockstore {
         Ok(orphans_iter.map(|(slot, _)| slot))
     }
 
-    pub fn dead_slots_iterator<'a>(&'a self, slot: Slot) -> Result<impl Iterator<Item = u64> + 'a> {
+    pub fn dead_slots_iterator<'a>(
+        &'a self,
+        slot: Slot,
+    ) -> Result<impl Iterator<Item = Slot> + 'a> {
         let dead_slots_iterator = self
             .db
             .iter::<cf::DeadSlots>(IteratorMode::From(slot, IteratorDirection::Forward))?;
