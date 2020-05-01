@@ -86,10 +86,7 @@ fn process_authorize_stake_accounts(
         &*args.stake_authority,
         &*args.withdraw_authority,
     ];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
-    }
+    send_messages(client, messages, &signers)?;
     Ok(())
 }
 
@@ -110,10 +107,7 @@ fn process_lockup_stake_accounts(
         args.num_accounts,
     );
     let signers = vec![&*args.fee_payer, &*args.custodian];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
-    }
+    send_messages(client, messages, &signers)?;
     Ok(())
 }
 
@@ -140,10 +134,7 @@ fn process_rebase_stake_accounts(
         &*args.new_base_keypair,
         &*args.stake_authority,
     ];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
-    }
+    send_messages(client, messages, &signers)?;
     Ok(())
 }
 
@@ -176,10 +167,7 @@ fn process_move_stake_accounts(
         &*args.stake_authority,
         &*authorize_args.withdraw_authority,
     ];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
-    }
+    send_messages(client, messages, &signers)?;
     Ok(())
 }
 
@@ -191,6 +179,20 @@ fn send_message<S: Signers>(
     let mut transaction = Transaction::new_unsigned(message);
     client.resign_transaction(&mut transaction, signers)?;
     client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
+}
+
+fn send_messages<S: Signers>(
+    client: &RpcClient,
+    messages: Vec<Message>,
+    signers: &S,
+) -> Result<Vec<Signature>, ClientError> {
+    let mut signatures = vec![];
+    for message in messages {
+        let signature = send_message(client, message, signers)?;
+        signatures.push(signature);
+        println!("{}", signature);
+    }
+    Ok(signatures)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
