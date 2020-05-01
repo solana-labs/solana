@@ -319,6 +319,7 @@ pub fn process_slots(rpc_client: &RpcClient, accounts_info: &mut AccountsInfo, b
                         String
                     )
                 );
+                sleep(Duration::from_secs(1));
             }
         }
     }
