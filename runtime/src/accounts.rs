@@ -151,28 +151,35 @@ impl Accounts {
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut accounts: TransactionAccounts = Vec::with_capacity(message.account_keys.len());
             let mut tx_rent: TransactionRent = 0;
-            for (i, key) in message
+            let mut accounts: TransactionAccounts = message
                 .account_keys
                 .iter()
                 .enumerate()
-                .filter(|(i, key)| Self::is_non_loader_key(message, key, *i))
-            {
-                let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
-                    .and_then(|(mut account, _)| {
-                        if message.is_writable(i) && !account.executable {
-                            let rent_due = rent_collector.update(&mut account);
-                            Some((account, rent_due))
-                        } else {
-                            Some((account, 0))
-                        }
-                    })
-                    .unwrap_or_default();
+                .map(|(i, key)| {
+                    if Self::is_non_loader_key(message, key, i) {
+                        let (account, rent) =
+                            AccountsDB::load(storage, ancestors, accounts_index, key)
+                                .and_then(|(mut account, _)| {
+                                    if message.is_writable(i) && !account.executable {
+                                        let rent_due = rent_collector.update(&mut account);
+                                        Some((account, rent_due))
+                                    } else {
+                                        Some((account, 0))
+                                    }
+                                })
+                                .unwrap_or_default();
 
-                accounts.push(account);
-                tx_rent += rent;
-            }
+                        tx_rent += rent;
+                        account
+                    } else {
+                        // To make the indexes into the accounts list work also in
+                        // the loaded accounts set, insert default accounts for the
+                        // program accounts
+                        Account::default()
+                    }
+                })
+                .collect();
 
             if accounts.is_empty() || accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
@@ -651,22 +658,23 @@ impl Accounts {
                 .account_keys
                 .iter()
                 .enumerate()
-                .filter(|(i, key)| Self::is_non_loader_key(message, key, *i))
                 .zip(acc.0.iter_mut())
             {
-                nonce_utils::prepare_if_nonce_account(
-                    account,
-                    key,
-                    res,
-                    maybe_nonce,
-                    last_blockhash,
-                );
-                if message.is_writable(i) {
-                    if account.rent_epoch == 0 {
-                        account.rent_epoch = rent_collector.epoch;
-                        acc.2 += rent_collector.update(account);
+                if Self::is_non_loader_key(message, key, i) {
+                    nonce_utils::prepare_if_nonce_account(
+                        account,
+                        key,
+                        res,
+                        maybe_nonce,
+                        last_blockhash,
+                    );
+                    if message.is_writable(i) {
+                        if account.rent_epoch == 0 {
+                            account.rent_epoch = rent_collector.epoch;
+                            acc.2 += rent_collector.update(account);
+                        }
+                        accounts.push((key, &*account));
                     }
-                    accounts.push((key, &*account));
                 }
             }
         }
@@ -1050,7 +1058,7 @@ mod tests {
                 Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
                 _hash_age_kind,
             ) => {
-                assert_eq!(transaction_accounts.len(), 2);
+                assert_eq!(transaction_accounts.len(), 3);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
                 assert_eq!(transaction_loaders.len(), 1);
                 assert_eq!(transaction_loaders[0].len(), 0);
@@ -1288,7 +1296,7 @@ mod tests {
                 Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
                 _hash_age_kind,
             ) => {
-                assert_eq!(transaction_accounts.len(), 1);
+                assert_eq!(transaction_accounts.len(), 3);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
                 assert_eq!(transaction_loaders.len(), 2);
                 assert_eq!(transaction_loaders[0].len(), 1);
