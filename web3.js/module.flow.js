@@ -389,7 +389,7 @@ declare module '@solana/web3.js' {
     instructions: CompiledInstruction[];
 
     constructor(args: MessageArgs): Message;
-    isAccountWritable(account: PublicKey): boolean;
+    isAccountWritable(index: number): boolean;
     serialize(): Buffer;
   }
 
