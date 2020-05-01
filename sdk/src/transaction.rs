@@ -510,6 +510,21 @@ mod tests {
         tx = o.clone();
         tx.message.instructions[0].accounts[0] = 3;
         assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.instructions[0].program_id_index = 0;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 2;
+        tx.message.header.num_readonly_unsigned_accounts = 3;
+        tx.message.account_keys.resize(4, Pubkey::default());
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
+
+        tx = o.clone();
+        tx.message.header.num_readonly_signed_accounts = 2;
+        tx.message.header.num_required_signatures = 1;
+        assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
     }
 
     fn create_sample_transaction() -> Transaction {
