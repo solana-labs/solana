@@ -1340,17 +1340,22 @@ fn process_deploy(
     trace!("Creating program account");
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut create_account_tx, &signers);
-    log_instruction_custom_error::<SystemError>(result)
-        .map_err(|_| CliError::DynamicProgramError("Program allocate space failed".to_string()))?;
+    log_instruction_custom_error::<SystemError>(result).map_err(|_| {
+        CliError::DynamicProgramError("Program account allocation failed".to_string())
+    })?;
 
     trace!("Writing program data");
-    rpc_client.send_and_confirm_transactions(write_transactions, &signers)?;
+    rpc_client
+        .send_and_confirm_transactions_with_spinner(write_transactions, &signers)
+        .map_err(|_| {
+            CliError::DynamicProgramError("Data writes to program account failed".to_string())
+        })?;
 
     trace!("Finalizing program account");
     rpc_client
         .send_and_confirm_transaction_with_spinner(&mut finalize_tx, &signers)
         .map_err(|e| {
-            CliError::DynamicProgramError(format!("Program finalize transaction failed: {}", e))
+            CliError::DynamicProgramError(format!("Finalizing program account failed: {}", e))
         })?;
 
     Ok(json!({

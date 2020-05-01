@@ -498,11 +498,13 @@ impl RpcClient {
         }
     }
 
-    pub fn send_and_confirm_transactions<T: Signers>(
+    pub fn send_and_confirm_transactions_with_spinner<T: Signers>(
         &self,
         mut transactions: Vec<Transaction>,
         signer_keys: &T,
     ) -> Result<(), Box<dyn error::Error>> {
+        let progress_bar = new_spinner_progress_bar();
+        let initial_transactions = transactions.len();
         let mut send_retries = 5;
         loop {
             let mut status_retries = 15;
@@ -525,6 +527,12 @@ impl RpcClient {
             while status_retries > 0 {
                 status_retries -= 1;
 
+                progress_bar.set_message(&format!(
+                    "[{}/{}] Transactions confirmed",
+                    initial_transactions - transactions_signatures.len(),
+                    initial_transactions
+                ));
+
                 if cfg!(not(test)) {
                     // Retry twice a second
                     sleep(Duration::from_millis(500));
@@ -535,10 +543,18 @@ impl RpcClient {
                     .filter(|(_transaction, signature)| {
                         if let Some(signature) = signature {
                             if let Ok(status) = self.get_signature_status(&signature) {
-                                if status.is_none() {
+                                if self
+                                    .get_num_blocks_since_signature_confirmation(&signature)
+                                    .unwrap_or(0)
+                                    > 1
+                                {
                                     return false;
+                                } else {
+                                    return match status {
+                                        None => true,
+                                        Some(result) => result.is_err(),
+                                    };
                                 }
-                                return status.unwrap().is_err();
                             }
                         }
                         true
@@ -546,6 +562,7 @@ impl RpcClient {
                     .collect();
 
                 if transactions_signatures.is_empty() {
+                    progress_bar.set_message("[0/0] Transactions confirmed");
                     return Ok(());
                 }
             }
