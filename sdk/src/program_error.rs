@@ -1,5 +1,6 @@
 use crate::{instruction::InstructionError, program_utils::DecodeError};
 use num_traits::{FromPrimitive, ToPrimitive};
+use std::convert::TryFrom;
 use thiserror::Error;
 
 #[cfg(feature = "program")]
@@ -14,7 +15,7 @@ pub enum ProgramError {
     /// by the Solana runtime. A program-specific error may be any type that is represented as
     /// or serialized to a u32 integer.
     #[error("Custom program error: {0}")]
-    CustomError(u32),
+    Custom(u32),
     #[error("The arguments provided to a program instruction where invalid")]
     InvalidArgument,
     #[error("An instruction's data contents was invalid")]
@@ -51,24 +52,24 @@ impl PrintProgramError for ProgramError {
         E: 'static + std::error::Error + DecodeError<E> + PrintProgramError + FromPrimitive,
     {
         match self {
-            ProgramError::CustomError(error) => {
+            ProgramError::Custom(error) => {
                 if let Some(custom_error) = E::decode_custom_error_to_enum(*error) {
                     custom_error.print::<E>();
                 } else {
                     info!("Error: Unknown");
                 }
             }
-            ProgramError::InvalidArgument => info!("Error: InvalidArgument"),
-            ProgramError::InvalidInstructionData => info!("Error: InvalidInstructionData"),
-            ProgramError::InvalidAccountData => info!("Error: InvalidAccountData"),
-            ProgramError::AccountDataTooSmall => info!("Error: AccountDataTooSmall"),
-            ProgramError::InsufficientFunds => info!("Error: InsufficientFunds"),
-            ProgramError::IncorrectProgramId => info!("Error: IncorrectProgramId"),
-            ProgramError::MissingRequiredSignature => info!("Error: MissingRequiredSignature"),
-            ProgramError::AccountAlreadyInitialized => info!("Error: AccountAlreadyInitialized"),
-            ProgramError::UninitializedAccount => info!("Error: UninitializedAccount"),
-            ProgramError::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
-            ProgramError::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
+            Self::InvalidArgument => info!("Error: InvalidArgument"),
+            Self::InvalidInstructionData => info!("Error: InvalidInstructionData"),
+            Self::InvalidAccountData => info!("Error: InvalidAccountData"),
+            Self::AccountDataTooSmall => info!("Error: AccountDataTooSmall"),
+            Self::InsufficientFunds => info!("Error: InsufficientFunds"),
+            Self::IncorrectProgramId => info!("Error: IncorrectProgramId"),
+            Self::MissingRequiredSignature => info!("Error: MissingRequiredSignature"),
+            Self::AccountAlreadyInitialized => info!("Error: AccountAlreadyInitialized"),
+            Self::UninitializedAccount => info!("Error: UninitializedAccount"),
+            Self::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
+            Self::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
         }
     }
 }
@@ -108,13 +109,55 @@ impl From<ProgramError> for u64 {
             ProgramError::UninitializedAccount => UNINITIALIZED_ACCOUNT,
             ProgramError::NotEnoughAccountKeys => NOT_ENOUGH_ACCOUNT_KEYS,
             ProgramError::AccountBorrowFailed => ACCOUNT_BORROW_FAILED,
-            ProgramError::CustomError(error) => {
+            ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
                 } else {
                     error as u64
                 }
             }
+        }
+    }
+}
+
+impl From<u64> for ProgramError {
+    fn from(error: u64) -> Self {
+        match error {
+            INVALID_ARGUMENT => ProgramError::InvalidArgument,
+            INVALID_INSTRUCTION_DATA => ProgramError::InvalidInstructionData,
+            INVALID_ACCOUNT_DATA => ProgramError::InvalidAccountData,
+            ACCOUNT_DATA_TOO_SMALL => ProgramError::AccountDataTooSmall,
+            INSUFFICIENT_FUNDS => ProgramError::InsufficientFunds,
+            INCORRECT_PROGRAM_ID => ProgramError::IncorrectProgramId,
+            MISSING_REQUIRED_SIGNATURES => ProgramError::MissingRequiredSignature,
+            ACCOUNT_ALREADY_INITIALIZED => ProgramError::AccountAlreadyInitialized,
+            UNINITIALIZED_ACCOUNT => ProgramError::UninitializedAccount,
+            NOT_ENOUGH_ACCOUNT_KEYS => ProgramError::NotEnoughAccountKeys,
+            ACCOUNT_BORROW_FAILED => ProgramError::AccountBorrowFailed,
+            CUSTOM_ZERO => ProgramError::Custom(0),
+            _ => ProgramError::Custom(error as u32),
+        }
+    }
+}
+
+impl TryFrom<InstructionError> for ProgramError {
+    type Error = InstructionError;
+
+    fn try_from(error: InstructionError) -> Result<Self, Self::Error> {
+        match error {
+            Self::Error::Custom(err) => Ok(Self::Custom(err)),
+            Self::Error::InvalidArgument => Ok(Self::InvalidArgument),
+            Self::Error::InvalidInstructionData => Ok(Self::InvalidInstructionData),
+            Self::Error::InvalidAccountData => Ok(Self::InvalidAccountData),
+            Self::Error::AccountDataTooSmall => Ok(Self::AccountDataTooSmall),
+            Self::Error::InsufficientFunds => Ok(Self::InsufficientFunds),
+            Self::Error::IncorrectProgramId => Ok(Self::IncorrectProgramId),
+            Self::Error::MissingRequiredSignature => Ok(Self::MissingRequiredSignature),
+            Self::Error::AccountAlreadyInitialized => Ok(Self::AccountAlreadyInitialized),
+            Self::Error::UninitializedAccount => Ok(Self::UninitializedAccount),
+            Self::Error::NotEnoughAccountKeys => Ok(Self::NotEnoughAccountKeys),
+            Self::Error::AccountBorrowFailed => Ok(Self::AccountBorrowFailed),
+            _ => Err(error),
         }
     }
 }
@@ -126,7 +169,7 @@ where
     fn from(error: T) -> Self {
         let error = error.to_u64().unwrap_or(0xbad_c0de);
         match error {
-            CUSTOM_ZERO => InstructionError::CustomError(0),
+            CUSTOM_ZERO => InstructionError::Custom(0),
             INVALID_ARGUMENT => InstructionError::InvalidArgument,
             INVALID_INSTRUCTION_DATA => InstructionError::InvalidInstructionData,
             INVALID_ACCOUNT_DATA => InstructionError::InvalidAccountData,
@@ -141,7 +184,7 @@ where
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
-                    InstructionError::CustomError(error as u32)
+                    InstructionError::Custom(error as u32)
                 } else {
                     InstructionError::InvalidError
                 }

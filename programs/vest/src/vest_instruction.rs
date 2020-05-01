@@ -22,7 +22,7 @@ pub enum VestError {
 
 impl From<VestError> for InstructionError {
     fn from(e: VestError) -> Self {
-        InstructionError::CustomError(e as u32)
+        InstructionError::Custom(e as u32)
     }
 }
 

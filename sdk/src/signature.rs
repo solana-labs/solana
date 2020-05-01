@@ -204,7 +204,7 @@ pub enum SignerError {
     TransactionError(#[from] TransactionError),
 
     #[error("custom error: {0}")]
-    CustomError(String),
+    Custom(String),
 
     // Presigner-specific Errors
     #[error("presigner error")]
@@ -212,7 +212,7 @@ pub enum SignerError {
 
     // Remote Keypair-specific Errors
     #[error("connection error: {0}")]
-    ConnectionError(String),
+    Connection(String),
 
     #[error("invalid input: {0}")]
     InvalidInput(String),

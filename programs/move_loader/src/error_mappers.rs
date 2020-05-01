@@ -38,10 +38,10 @@ pub fn map_failure_error(err: failure::Error) -> InstructionError {
 }
 
 pub fn map_err_vm_status(status: VMStatus) -> InstructionError {
-    // Attempt to map the StatusCode (repr(u64)) to a u32 for CustomError.
+    // Attempt to map the StatusCode (repr(u64)) to a u32 for Custom.
     // The only defined StatusCode that fails is StatusCode::UNKNOWN_ERROR
     match <StatusCode as Into<u64>>::into(status.major_status).try_into() {
-        Ok(u) => InstructionError::CustomError(u),
+        Ok(u) => InstructionError::Custom(u),
         Err(_) => InstructionError::InvalidError,
     }
 }

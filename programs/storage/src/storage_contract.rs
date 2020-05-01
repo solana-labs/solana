@@ -194,7 +194,7 @@ impl<'a> StorageAccount<'a> {
 
             if segment_index >= current_segment {
                 // attempt to submit proof for unconfirmed segment
-                return Err(InstructionError::CustomError(
+                return Err(InstructionError::Custom(
                     StorageError::InvalidSegment as u32,
                 ));
             }
@@ -207,7 +207,7 @@ impl<'a> StorageAccount<'a> {
             // TODO check that this blockhash is valid and recent
             //            if !is_valid(&blockhash) {
             //                // proof isn't using a recent blockhash
-            //                return Err(InstructionError::CustomError(InvalidBlockhash as u32));
+            //                return Err(InstructionError::Custom(InvalidBlockhash as u32));
             //            }
 
             let proof = Proof {
@@ -220,13 +220,13 @@ impl<'a> StorageAccount<'a> {
             let segment_proofs = proofs.entry(current_segment).or_default();
             if segment_proofs.contains(&proof) {
                 // do not accept duplicate proofs
-                return Err(InstructionError::CustomError(
+                return Err(InstructionError::Custom(
                     StorageError::DuplicateProof as u32,
                 ));
             }
             if segment_proofs.len() >= MAX_PROOFS_PER_SEGMENT {
                 // do not accept more than MAX_PROOFS_PER_SEGMENT
-                return Err(InstructionError::CustomError(
+                return Err(InstructionError::Custom(
                     StorageError::ProofLimitReached as u32,
                 ));
             }
@@ -255,7 +255,7 @@ impl<'a> StorageAccount<'a> {
         {
             debug!("advertise new segment: {} orig: {}", segment, clock.segment);
             if segment < *state_segment || segment > clock.segment {
-                return Err(InstructionError::CustomError(
+                return Err(InstructionError::Custom(
                     StorageError::InvalidSegment as u32,
                 ));
             }
@@ -290,7 +290,7 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if segment_index > *state_segment {
-                return Err(InstructionError::CustomError(
+                return Err(InstructionError::Custom(
                     StorageError::InvalidSegment as u32,
                 ));
             }
@@ -329,7 +329,7 @@ impl<'a> StorageAccount<'a> {
 
             if accounts.len() != proofs_per_account.len() {
                 // don't have all the accounts to validate the proofs_per_account against
-                return Err(InstructionError::CustomError(
+                return Err(InstructionError::Custom(
                     StorageError::InvalidProofMask as u32,
                 ));
             }
@@ -380,9 +380,7 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if owner.id != *account_owner {
-                return Err(InstructionError::CustomError(
-                    StorageError::InvalidOwner as u32,
-                ));
+                return Err(InstructionError::Custom(StorageError::InvalidOwner as u32));
             }
 
             credits.update_epoch(clock.epoch);
@@ -397,9 +395,7 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             if owner.id != *account_owner {
-                return Err(InstructionError::CustomError(
-                    StorageError::InvalidOwner as u32,
-                ));
+                return Err(InstructionError::Custom(StorageError::InvalidOwner as u32));
             }
             credits.update_epoch(clock.epoch);
             let (num_validations, _total_proofs) = count_valid_proofs(&validations);
@@ -422,7 +418,7 @@ fn check_redeemable(
 ) -> Result<(), InstructionError> {
     let rewards = (credits.redeemable as f64 * storage_point_value) as u64;
     if rewards_pool.lamports()? < rewards {
-        Err(InstructionError::CustomError(
+        Err(InstructionError::Custom(
             StorageError::RewardPoolDepleted as u32,
         ))
     } else {
@@ -629,7 +625,7 @@ mod tests {
         keyed_pool_account.account.borrow_mut().lamports = 0;
         assert_eq!(
             check_redeemable(&mut credits, 1.0, &keyed_pool_account, &mut owner),
-            Err(InstructionError::CustomError(
+            Err(InstructionError::Custom(
                 StorageError::RewardPoolDepleted as u32,
             ))
         );
