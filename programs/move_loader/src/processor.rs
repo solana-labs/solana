@@ -511,9 +511,7 @@ mod tests {
         let code = "main() { return; }";
         let sender_address = AccountAddress::default();
         let script = LibraAccount::create_script(&sender_address, code, vec![]);
-        let keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &script.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&script.key, true, &script.account)];
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
         let _ = MoveProcessor::deserialize_verified_script(&script.account.borrow().data).unwrap();
     }
@@ -551,9 +549,7 @@ mod tests {
         let script = LibraAccount::create_script(&sender_address, code, vec![]);
         let genesis = LibraAccount::create_genesis(1_000_000_000);
 
-        let keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &script.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&script.key, true, &script.account)];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
@@ -578,9 +574,7 @@ mod tests {
             }
         ";
         let module = LibraAccount::create_module(code, vec![]);
-        let keyed_accounts = vec![
-            KeyedAccount::new(&module.key, true, &module.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&module.key, true, &module.account)];
         keyed_accounts[0]
             .account
             .borrow_mut()
@@ -604,9 +598,7 @@ mod tests {
         let script = LibraAccount::create_script(&sender_address, code, vec![]);
         let genesis = LibraAccount::create_genesis(1_000_000_000);
 
-        let keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &script.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&script.key, true, &script.account)];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
@@ -622,7 +614,7 @@ mod tests {
                 "main".to_string(),
                 vec![],
             ),
-            Err(InstructionError::CustomError(4002))
+            Err(InstructionError::Custom(4002))
         );
     }
 
@@ -676,9 +668,7 @@ mod tests {
         let script = LibraAccount::create_script(&genesis.address, code, vec![]);
         let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
-        let keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &script.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&script.key, true, &script.account)];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
@@ -731,9 +721,7 @@ mod tests {
         );
         let module = LibraAccount::create_module(&code, vec![]);
 
-        let keyed_accounts = vec![
-            KeyedAccount::new(&module.key, true, &module.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&module.key, true, &module.account)];
         keyed_accounts[0]
             .account
             .borrow_mut()
@@ -774,9 +762,7 @@ mod tests {
         );
         let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
-        let keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &script.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&script.key, true, &script.account)];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 
@@ -821,9 +807,7 @@ mod tests {
         let script = LibraAccount::create_script(&genesis.address.clone(), code, vec![]);
         let payee = LibraAccount::create_unallocated(BIG_ENOUGH);
 
-        let keyed_accounts = vec![
-            KeyedAccount::new(&script.key, true, &script.account),
-        ];
+        let keyed_accounts = vec![KeyedAccount::new(&script.key, true, &script.account)];
 
         MoveProcessor::do_finalize(&keyed_accounts).unwrap();
 

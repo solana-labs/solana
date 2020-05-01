@@ -2649,14 +2649,14 @@ pub(crate) mod tests {
                             meta.err,
                             Some(TransactionError::InstructionError(
                                 0,
-                                InstructionError::CustomError(1)
+                                InstructionError::Custom(1)
                             ))
                         );
                         assert_eq!(
                             meta.status,
                             Err(TransactionError::InstructionError(
                                 0,
-                                InstructionError::CustomError(1)
+                                InstructionError::Custom(1)
                             ))
                         );
                     } else {

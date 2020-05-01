@@ -554,7 +554,7 @@ impl CliConfig<'_> {
         if !self.signers.is_empty() {
             self.signers[0].try_pubkey()
         } else {
-            Err(SignerError::CustomError(
+            Err(SignerError::Custom(
                 "Default keypair must be set if pubkey arg not provided".to_string(),
             ))
         }
@@ -2282,7 +2282,7 @@ where
         Err(err) => {
             if let ClientErrorKind::TransactionError(TransactionError::InstructionError(
                 _,
-                InstructionError::CustomError(code),
+                InstructionError::Custom(code),
             )) = err.kind()
             {
                 if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {

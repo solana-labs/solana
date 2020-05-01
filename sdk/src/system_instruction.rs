@@ -434,7 +434,7 @@ mod tests {
         where
             T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
         {
-            if let InstructionError::CustomError(code) = err {
+            if let InstructionError::Custom(code) = err {
                 let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
                 format!(
                     "{:?}: {}::{:?} - {}",
@@ -448,19 +448,19 @@ mod tests {
             }
         }
         assert_eq!(
-            "CustomError(0): NonceError::NoRecentBlockhashes - recent blockhash list is empty",
+            "Custom(0): NonceError::NoRecentBlockhashes - recent blockhash list is empty",
             pretty_err::<NonceError>(NonceError::NoRecentBlockhashes.into())
         );
         assert_eq!(
-            "CustomError(1): NonceError::NotExpired - stored nonce is still in recent_blockhashes",
+            "Custom(1): NonceError::NotExpired - stored nonce is still in recent_blockhashes",
             pretty_err::<NonceError>(NonceError::NotExpired.into())
         );
         assert_eq!(
-            "CustomError(2): NonceError::UnexpectedValue - specified nonce does not match stored nonce",
+            "Custom(2): NonceError::UnexpectedValue - specified nonce does not match stored nonce",
             pretty_err::<NonceError>(NonceError::UnexpectedValue.into())
         );
         assert_eq!(
-            "CustomError(3): NonceError::BadAccountState - cannot handle request in current account state",
+            "Custom(3): NonceError::BadAccountState - cannot handle request in current account state",
             pretty_err::<NonceError>(NonceError::BadAccountState.into())
         );
     }
