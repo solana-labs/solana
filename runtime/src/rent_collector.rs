@@ -1,6 +1,7 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, rent::Rent, sysvar,
+    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, incinerator, pubkey::Pubkey,
+    rent::Rent, sysvar,
 };
 
 #[derive(Default, Serialize, Deserialize, Clone)]
@@ -35,7 +36,11 @@ impl RentCollector {
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     //
-    pub fn update(&self, account: &mut Account) -> u64 {
+    pub fn update(&self, address: &Pubkey, account: &mut Account) -> u64 {
+        if *address == incinerator::id() && self.epoch >= incinerator::ACTIVATION_EPOCH {
+            return 0;
+        }
+
         if account.executable || account.rent_epoch > self.epoch || sysvar::check_id(&account.owner)
         {
             0

@@ -21,8 +21,12 @@ impl Parse for Id {
             let id_vec = bs58::decode(id_literal.value())
                 .into_vec()
                 .map_err(|_| syn::Error::new_spanned(&id_literal, "failed to decode base58 id"))?;
-            let id_array = <[u8; 32]>::try_from(<&[u8]>::clone(&&id_vec[..]))
-                .map_err(|_| syn::Error::new_spanned(&id_literal, "id is not 32 bytes long"))?;
+            let id_array = <[u8; 32]>::try_from(<&[u8]>::clone(&&id_vec[..])).map_err(|_| {
+                syn::Error::new_spanned(
+                    &id_literal,
+                    format!("id is not 32 bytes long: len={}", id_vec.len()),
+                )
+            })?;
             let bytes = id_array.iter().map(|b| LitByte::new(*b, Span::call_site()));
             quote! {
                 ::solana_sdk::pubkey::Pubkey::new_from_array(
