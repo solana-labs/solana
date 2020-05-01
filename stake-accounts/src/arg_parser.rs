@@ -244,7 +244,12 @@ where
                 .arg(lockup_epoch_arg())
                 .arg(lockup_date_arg())
                 .arg(new_custodian_arg())
-                .arg(num_accounts_arg()),
+                .arg(num_accounts_arg())
+                .arg(
+                    Arg::with_name("no_wait")
+                        .long("no-wait")
+                        .help("Send transactions without waiting for confirmation"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("rebase")
@@ -316,6 +321,7 @@ fn parse_set_lockup_args(matches: &ArgMatches<'_>) -> SetLockupArgs<String, Stri
         lockup_date: unix_timestamp_from_rfc3339_datetime(matches, "lockup_date"),
         new_custodian: value_t!(matches, "new_custodian", String).ok(),
         num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
+        no_wait: matches.is_present("no_wait"),
     }
 }
 
