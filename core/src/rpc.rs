@@ -5,11 +5,12 @@ use crate::{
     commitment::{BlockCommitmentArray, BlockCommitmentCache},
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
+    rpc_error::RpcCustomError,
     storage_stage::StorageState,
     validator::ValidatorExit,
 };
 use bincode::serialize;
-use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
+use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::{
     rpc_request::{
@@ -46,7 +47,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-const JSON_RPC_SERVER_ERROR_0: i64 = -32000;
 const NUM_LARGEST_ACCOUNTS: usize = 20;
 
 type RpcResponse<T> = Result<Response<T>>;
@@ -100,18 +100,13 @@ impl JsonRpcRequestProcessor {
                 .unwrap()
                 .largest_confirmed_root();
             debug!("RPC using block: {:?}", cluster_root);
-            r_bank_forks
-                .get(cluster_root)
-                .cloned()
-                .ok_or_else(|| Error {
-                    code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_0),
-                    message: format!(
-                        "Cluster largest_confirmed_root {} does not exist on node. Node root: {}",
-                        cluster_root,
-                        r_bank_forks.root(),
-                    ),
-                    data: None,
-                })
+            r_bank_forks.get(cluster_root).cloned().ok_or_else(|| {
+                RpcCustomError::NonexistentClusterRoot {
+                    cluster_root,
+                    node_root: r_bank_forks.root(),
+                }
+                .into()
+            })
         }
     }
 
