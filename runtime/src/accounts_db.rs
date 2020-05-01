@@ -1279,19 +1279,35 @@ impl AccountsDB {
         );
 
         // Purge this slot from the accounts index
-        {
+        let keys_to_remove: Vec<Pubkey> = {
             let accounts_index = self.accounts_index.read().unwrap();
-            for pubkey_set in pubkey_sets {
-                for pubkey in pubkey_set {
-                    accounts_index
-                        .account_maps
-                        .get(&pubkey)
-                        .expect("account in appendvec must have entry in accounts index")
-                        .1
-                        .write()
-                        .unwrap()
-                        .retain(|(pubkey_slot, _)| *pubkey_slot != remove_slot)
-                }
+            pubkey_sets
+                .iter()
+                .flat_map(|pubkey_set| {
+                    pubkey_set.iter().filter_map(|pubkey| {
+                        let mut w_pubkey_index = accounts_index
+                            .account_maps
+                            .get(&pubkey)
+                            .expect("account in appendvec must have entry in accounts index")
+                            .1
+                            .write()
+                            .unwrap();
+
+                        w_pubkey_index.retain(|(pubkey_slot, _)| *pubkey_slot != remove_slot);
+                        if w_pubkey_index.is_empty() {
+                            Some(*pubkey)
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .collect()
+        };
+
+        if !keys_to_remove.is_empty() {
+            let mut accounts_index = self.accounts_index.write().unwrap();
+            for key in keys_to_remove {
+                accounts_index.account_maps.remove(&key);
             }
         }
 
@@ -2259,6 +2275,7 @@ pub mod tests {
         assert!(db.load_slow(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.storage.read().unwrap().0.get(&unrooted_slot).is_none());
+        assert!(db.accounts_index.read().unwrap().account_maps.is_empty());
         assert!(db
             .accounts_index
             .read()
