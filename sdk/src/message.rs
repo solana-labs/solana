@@ -165,17 +165,25 @@ pub struct Message {
 
 impl Sanitize for Message {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
-        if self.header.num_required_signatures as usize > self.account_keys.len() {
-            return Err(SanitizeError::IndexOutOfBounds);
-        }
-        if self.header.num_readonly_unsigned_accounts as usize
-            + self.header.num_readonly_signed_accounts as usize
+        // signing area and read-only non-signing area should not overlap
+        if self.header.num_required_signatures as usize
+            + self.header.num_readonly_unsigned_accounts as usize
             > self.account_keys.len()
         {
             return Err(SanitizeError::IndexOutOfBounds);
         }
+
+        // there should be at least 1 RW fee-payer account.
+        if self.header.num_readonly_signed_accounts >= self.header.num_required_signatures {
+            return Err(SanitizeError::IndexOutOfBounds);
+        }
+
         for ci in &self.instructions {
             if ci.program_id_index as usize >= self.account_keys.len() {
+                return Err(SanitizeError::IndexOutOfBounds);
+            }
+            // A program cannot be a payer.
+            if ci.program_id_index == 0 {
                 return Err(SanitizeError::IndexOutOfBounds);
             }
             for ai in &ci.accounts {
