@@ -61,6 +61,14 @@ pub enum TransactionError {
 
     /// Transaction did not pass signature verification
     SignatureFailure,
+
+    /// This program may not be used for executing instructions
+    InvalidProgramForExecution,
+
+    /// Transaction failed to sanitize accounts offsets correctly
+    /// implies that account locks are not taken for this TX, and should
+    /// not be unlocked.
+    SanitizeFailure,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
