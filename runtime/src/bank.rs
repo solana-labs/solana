@@ -46,7 +46,6 @@ use solana_sdk::{
     inflation::Inflation,
     native_loader, nonce,
     pubkey::Pubkey,
-    sanitize::Sanitize,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
@@ -1071,25 +1070,6 @@ impl Bank {
             &self.rent_collector,
         )
     }
-    fn check_refs(
-        &self,
-        txs: &[Transaction],
-        iteration_order: Option<&[usize]>,
-        lock_results: &[Result<()>],
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
-        OrderedIterator::new(txs, iteration_order)
-            .zip(lock_results)
-            .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && tx.sanitize().is_err() {
-                    error_counters.invalid_account_index += 1;
-                    Err(TransactionError::InvalidAccountIndex)
-                } else {
-                    lock_res.clone()
-                }
-            })
-            .collect()
-    }
     fn check_age(
         &self,
         txs: &[Transaction],
@@ -1185,11 +1165,10 @@ impl Bank {
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionProcessResult> {
-        let refs_results = self.check_refs(txs, iteration_order, lock_results, &mut error_counters);
         let age_results = self.check_age(
             txs,
             iteration_order,
-            refs_results,
+            lock_results.to_vec(),
             max_age,
             &mut error_counters,
         );
@@ -3502,6 +3481,7 @@ mod tests {
 
     #[test]
     fn test_account_not_found() {
+        solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(0);
         let bank = Bank::new(&genesis_config);
         let keypair = Keypair::new();
@@ -4007,14 +3987,14 @@ mod tests {
         tx_invalid_program_index.message.instructions[0].program_id_index = 42;
         assert_eq!(
             bank.process_transaction(&tx_invalid_program_index),
-            Err(TransactionError::InvalidAccountIndex)
+            Err(TransactionError::SanitizeFailure)
         );
 
         let mut tx_invalid_account_index = tx.clone();
         tx_invalid_account_index.message.instructions[0].accounts[0] = 42;
         assert_eq!(
             bank.process_transaction(&tx_invalid_account_index),
-            Err(TransactionError::InvalidAccountIndex)
+            Err(TransactionError::SanitizeFailure)
         );
     }
 
@@ -4605,7 +4585,7 @@ mod tests {
 
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(TransactionError::InvalidAccountIndex)
+            Err(TransactionError::SanitizeFailure)
         );
         assert_eq!(bank.get_balance(&key.pubkey()), 0);
     }
@@ -5884,6 +5864,39 @@ mod tests {
     }
 
     #[test]
+    fn test_duplicate_account_key() {
+        solana_logger::setup();
+        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let mut bank = Bank::new(&genesis_config);
+
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
+
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey, false),
+            AccountMeta::new(to_pubkey, false),
+        ];
+
+        bank.add_static_program(
+            "mock_vote",
+            solana_vote_program::id(),
+            mock_ok_vote_processor,
+        );
+
+        let instruction = Instruction::new(solana_vote_program::id(), &10, account_metas);
+        let mut tx = Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+        tx.message.account_keys.push(from_pubkey);
+
+        let result = bank.process_transaction(&tx);
+        assert_eq!(result, Err(TransactionError::AccountLoadedTwice));
+    }
+
+    #[test]
     fn test_program_id_as_payer() {
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(500);
@@ -5928,7 +5941,7 @@ mod tests {
         tx.message.instructions[0].accounts.push(3);
 
         let result = bank.process_transaction(&tx);
-        assert_eq!(result, Err(TransactionError::InvalidAccountIndex));
+        assert_eq!(result, Err(TransactionError::SanitizeFailure));
     }
 
     fn mock_ok_vote_processor(
@@ -5973,5 +5986,167 @@ mod tests {
 
         let result = bank.process_transaction(&tx);
         assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_fuzz_instructions() {
+        solana_logger::setup();
+        use rand::{thread_rng, Rng};
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+        let mut bank = Bank::new(&genesis_config);
+
+        let max_programs = 5;
+        let program_keys: Vec<_> = (0..max_programs)
+            .into_iter()
+            .enumerate()
+            .map(|i| {
+                let key = Pubkey::new_rand();
+                let name = format!("program{:?}", i);
+                bank.add_static_program(&name, key, mock_ok_vote_processor);
+                (key, name.as_bytes().to_vec())
+            })
+            .collect();
+        let max_keys = 100;
+        let keys: Vec<_> = (0..max_keys)
+            .into_iter()
+            .enumerate()
+            .map(|_| {
+                let key = Pubkey::new_rand();
+                let balance = if thread_rng().gen_ratio(9, 10) {
+                    let lamports = if thread_rng().gen_ratio(1, 5) {
+                        thread_rng().gen_range(0, 10)
+                    } else {
+                        thread_rng().gen_range(20, 100)
+                    };
+                    let space = thread_rng().gen_range(0, 10);
+                    let owner = Pubkey::default();
+                    let account = Account::new(lamports, space, &owner);
+                    bank.store_account(&key, &account);
+                    lamports
+                } else {
+                    0
+                };
+                (key, balance)
+            })
+            .collect();
+        let mut results = HashMap::new();
+        for _ in 0..2_000 {
+            let num_keys = if thread_rng().gen_ratio(1, 5) {
+                thread_rng().gen_range(0, max_keys)
+            } else {
+                thread_rng().gen_range(1, 4)
+            };
+            let num_instructions = thread_rng().gen_range(0, max_keys - num_keys);
+
+            let mut account_keys: Vec<_> = if thread_rng().gen_ratio(1, 5) {
+                (0..num_keys)
+                    .into_iter()
+                    .map(|_| {
+                        let idx = thread_rng().gen_range(0, keys.len());
+                        keys[idx].0
+                    })
+                    .collect()
+            } else {
+                use std::collections::HashSet;
+                let mut inserted = HashSet::new();
+                (0..num_keys)
+                    .into_iter()
+                    .map(|_| {
+                        let mut idx;
+                        loop {
+                            idx = thread_rng().gen_range(0, keys.len());
+                            if !inserted.contains(&idx) {
+                                break;
+                            }
+                        }
+                        inserted.insert(idx);
+                        keys[idx].0
+                    })
+                    .collect()
+            };
+
+            let instructions: Vec<_> = if num_keys > 0 {
+                (0..num_instructions)
+                    .into_iter()
+                    .map(|_| {
+                        let num_accounts_to_pass = thread_rng().gen_range(0, num_keys);
+                        let account_indexes = (0..num_accounts_to_pass)
+                            .into_iter()
+                            .map(|_| thread_rng().gen_range(0, num_keys))
+                            .collect();
+                        let program_index: u8 = thread_rng().gen_range(0, num_keys) as u8;
+                        if thread_rng().gen_ratio(4, 5) {
+                            let programs_index = thread_rng().gen_range(0, program_keys.len());
+                            account_keys[program_index as usize] = program_keys[programs_index].0;
+                        }
+                        CompiledInstruction::new(program_index, &10, account_indexes)
+                    })
+                    .collect()
+            } else {
+                vec![]
+            };
+
+            let account_keys_len = std::cmp::max(account_keys.len(), 2);
+            let num_signatures = if thread_rng().gen_ratio(1, 5) {
+                thread_rng().gen_range(0, account_keys_len + 10)
+            } else {
+                thread_rng().gen_range(1, account_keys_len)
+            };
+
+            let num_required_signatures = if thread_rng().gen_ratio(1, 5) {
+                thread_rng().gen_range(0, account_keys_len + 10) as u8
+            } else {
+                thread_rng().gen_range(1, std::cmp::max(2, num_signatures)) as u8
+            };
+            let num_readonly_signed_accounts = if thread_rng().gen_ratio(1, 5) {
+                thread_rng().gen_range(0, account_keys_len) as u8
+            } else {
+                let max = if num_required_signatures > 1 {
+                    num_required_signatures - 1
+                } else {
+                    1
+                };
+                thread_rng().gen_range(0, max) as u8
+            };
+
+            let num_readonly_unsigned_accounts = if thread_rng().gen_ratio(1, 5)
+                || (num_required_signatures as usize) >= account_keys_len
+            {
+                thread_rng().gen_range(0, account_keys_len) as u8
+            } else {
+                thread_rng().gen_range(0, account_keys_len - num_required_signatures as usize) as u8
+            };
+
+            let header = MessageHeader {
+                num_required_signatures,
+                num_readonly_signed_accounts,
+                num_readonly_unsigned_accounts,
+            };
+            let message = Message {
+                header,
+                account_keys,
+                recent_blockhash: bank.last_blockhash(),
+                instructions,
+            };
+
+            let tx = Transaction {
+                signatures: vec![Signature::default(); num_signatures],
+                message,
+            };
+
+            let result = bank.process_transaction(&tx);
+            for (key, balance) in &keys {
+                assert_eq!(bank.get_balance(key), *balance);
+            }
+            for (key, name) in &program_keys {
+                let account = bank.get_account(key).unwrap();
+                assert!(account.executable);
+                assert_eq!(account.data, *name);
+            }
+            info!("result: {:?}", result);
+            let result_key = format!("{:?}", result);
+            *results.entry(result_key).or_insert(0) += 1;
+        }
+        info!("results: {:?}", results);
     }
 }
