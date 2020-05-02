@@ -143,12 +143,6 @@ impl Accounts {
         if tx.signatures.is_empty() && fee != 0 {
             Err(TransactionError::MissingSignatureForFee)
         } else {
-            // Check for unique account keys
-            if Self::has_duplicates(&message.account_keys) {
-                error_counters.account_loaded_twice += 1;
-                return Err(TransactionError::AccountLoadedTwice);
-            }
-
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut payer_index = None;
@@ -535,10 +529,12 @@ impl Accounts {
     }
 
     fn unlock_account(&self, tx: &Transaction, result: &Result<()>, locks: &mut HashSet<Pubkey>) {
-        let (writable_keys, readonly_keys) = &tx.message().get_account_keys_by_lock_type();
         match result {
             Err(TransactionError::AccountInUse) => (),
+            Err(TransactionError::SanitizeFailure) => (),
+            Err(TransactionError::AccountLoadedTwice) => (),
             _ => {
+                let (writable_keys, readonly_keys) = &tx.message().get_account_keys_by_lock_type();
                 for k in writable_keys {
                     locks.remove(k);
                 }
@@ -572,13 +568,26 @@ impl Accounts {
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
     ) -> Vec<Result<()>> {
-        let keys: Vec<_> = OrderedIterator::new(txs, txs_iteration_order)
-            .map(|tx| tx.message().get_account_keys_by_lock_type())
+        use solana_sdk::sanitize::Sanitize;
+        let keys: Vec<Result<_>> = OrderedIterator::new(txs, txs_iteration_order)
+            .map(|tx| {
+                tx.sanitize()
+                    .map_err(|_| TransactionError::SanitizeFailure)?;
+
+                if Self::has_duplicates(&tx.message.account_keys) {
+                    return Err(TransactionError::AccountLoadedTwice);
+                }
+
+                Ok(tx.message().get_account_keys_by_lock_type())
+            })
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
-            .map(|(writable_keys, readonly_keys)| {
-                self.lock_account(&mut account_locks, writable_keys, readonly_keys)
+            .map(|result| match result {
+                Ok((writable_keys, readonly_keys)) => {
+                    self.lock_account(&mut account_locks, writable_keys, readonly_keys)
+                }
+                Err(e) => Err(e),
             })
             .collect()
     }
@@ -1344,12 +1353,11 @@ mod tests {
         );
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.account_loaded_twice, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
             (
-                Err(TransactionError::AccountLoadedTwice),
+                Err(TransactionError::InvalidAccountForFee),
                 Some(HashAgeKind::Extant)
             )
         );
