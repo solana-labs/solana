@@ -1,6 +1,6 @@
 [package]
 name = "solana-archiver-utils"
-version = "1.0.21"
+version = "1.0.22"
 description = "Solana Archiver Utils"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -11,12 +11,12 @@ edition = "2018"
 [dependencies]
 log = "0.4.8"
 rand = "0.7.0"
-solana-chacha = { path = "../chacha", version = "1.0.21" }
-solana-chacha-sys = { path = "../chacha-sys", version = "1.0.21" }
-solana-ledger = { path = "../ledger", version = "1.0.21" }
-solana-logger = { path = "../logger", version = "1.0.21" }
-solana-perf = { path = "../perf", version = "1.0.21" }
-solana-sdk = { path = "../sdk", version = "1.0.21" }
+solana-chacha = { path = "../chacha", version = "1.0.22" }
+solana-chacha-sys = { path = "../chacha-sys", version = "1.0.22" }
+solana-ledger = { path = "../ledger", version = "1.0.22" }
+solana-logger = { path = "../logger", version = "1.0.22" }
+solana-perf = { path = "../perf", version = "1.0.22" }
+solana-sdk = { path = "../sdk", version = "1.0.22" }
 
 [dev-dependencies]
 hex = "0.4.0"

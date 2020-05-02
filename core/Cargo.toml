@@ -1,7 +1,7 @@
 [package]
 name = "solana-core"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.0.21"
+version = "1.0.22"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
 readme = "../README.md"
@@ -43,34 +43,34 @@ regex = "1.3.4"
 serde = "1.0.104"
 serde_derive = "1.0.103"
 serde_json = "1.0.46"
-solana-budget-program = { path = "../programs/budget", version = "1.0.21" }
-solana-clap-utils = { path = "../clap-utils", version = "1.0.21" }
-solana-client = { path = "../client", version = "1.0.21" }
-solana-transaction-status = { path = "../transaction-status", version = "1.0.21" }
-solana-faucet = { path = "../faucet", version = "1.0.21" }
+solana-budget-program = { path = "../programs/budget", version = "1.0.22" }
+solana-clap-utils = { path = "../clap-utils", version = "1.0.22" }
+solana-client = { path = "../client", version = "1.0.22" }
+solana-transaction-status = { path = "../transaction-status", version = "1.0.22" }
+solana-faucet = { path = "../faucet", version = "1.0.22" }
 ed25519-dalek = "=1.0.0-pre.3"
-solana-ledger = { path = "../ledger", version = "1.0.21" }
-solana-logger = { path = "../logger", version = "1.0.21" }
-solana-merkle-tree = { path = "../merkle-tree", version = "1.0.21" }
-solana-metrics = { path = "../metrics", version = "1.0.21" }
-solana-measure = { path = "../measure", version = "1.0.21" }
-solana-net-utils = { path = "../net-utils", version = "1.0.21" }
-solana-chacha-cuda = { path = "../chacha-cuda", version = "1.0.21" }
-solana-perf = { path = "../perf", version = "1.0.21" }
-solana-runtime = { path = "../runtime", version = "1.0.21" }
-solana-sdk = { path = "../sdk", version = "1.0.21" }
-solana-stake-program = { path = "../programs/stake", version = "1.0.21" }
-solana-storage-program = { path = "../programs/storage", version = "1.0.21" }
-solana-vote-program = { path = "../programs/vote", version = "1.0.21" }
-solana-vote-signer = { path = "../vote-signer", version = "1.0.21" }
-solana-sys-tuner = { path = "../sys-tuner", version = "1.0.21" }
+solana-ledger = { path = "../ledger", version = "1.0.22" }
+solana-logger = { path = "../logger", version = "1.0.22" }
+solana-merkle-tree = { path = "../merkle-tree", version = "1.0.22" }
+solana-metrics = { path = "../metrics", version = "1.0.22" }
+solana-measure = { path = "../measure", version = "1.0.22" }
+solana-net-utils = { path = "../net-utils", version = "1.0.22" }
+solana-chacha-cuda = { path = "../chacha-cuda", version = "1.0.22" }
+solana-perf = { path = "../perf", version = "1.0.22" }
+solana-runtime = { path = "../runtime", version = "1.0.22" }
+solana-sdk = { path = "../sdk", version = "1.0.22" }
+solana-stake-program = { path = "../programs/stake", version = "1.0.22" }
+solana-storage-program = { path = "../programs/storage", version = "1.0.22" }
+solana-vote-program = { path = "../programs/vote", version = "1.0.22" }
+solana-vote-signer = { path = "../vote-signer", version = "1.0.22" }
+solana-sys-tuner = { path = "../sys-tuner", version = "1.0.22" }
 tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = "0.1"
 tokio-codec = "0.1"
 tokio-fs = "0.1"
 tokio-io = "0.1"
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.0.21" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.0.22" }
 trees = "0.2.1"
 
 [dev-dependencies]
