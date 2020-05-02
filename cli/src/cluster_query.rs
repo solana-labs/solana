@@ -223,11 +223,6 @@ pub fn parse_catchup(
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?.unwrap();
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
-<<<<<<< HEAD
-=======
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
-    let follow = matches.is_present("follow");
->>>>>>> ffbbdd46e... Add clap.rs default for --commitment (#9859)
     Ok(CliCommandInfo {
         command: CliCommand::Catchup {
             node_pubkey,
@@ -300,17 +295,6 @@ pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
     })
 }
 
-<<<<<<< HEAD
-=======
-pub fn parse_total_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
-    Ok(CliCommandInfo {
-        command: CliCommand::TotalSupply { commitment_config },
-        signers: vec![],
-    })
-}
-
->>>>>>> ffbbdd46e... Add clap.rs default for --commitment (#9859)
 pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
