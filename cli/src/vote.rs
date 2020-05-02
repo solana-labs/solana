@@ -315,8 +315,7 @@ pub fn parse_vote_get_account_command(
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
-    let commitment_config =
-        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
