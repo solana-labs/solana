@@ -130,6 +130,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
   const { cluster, url } = useCluster();
   const accountsDispatch = useAccountsDispatch();
   const query = useQuery();
+  const testFlag = query.get("test");
 
   // Check transaction statuses whenever cluster updates
   React.useEffect(() => {
@@ -143,14 +144,18 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
     });
 
     // Create a test transaction
-    if (cluster === Cluster.Devnet && query.get("test") !== null) {
+    if (cluster === Cluster.Devnet && testFlag !== null) {
       createTestTransaction(dispatch, accountsDispatch, url);
     }
-  }, [query, cluster, url]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [testFlag, cluster, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check for transactions in the url params
+  const values = TX_ALIASES.flatMap(key => [
+    query.get(key),
+    query.get(key + "s")
+  ]);
   React.useEffect(() => {
-    TX_ALIASES.flatMap(key => [query.get(key), query.get(key + "s")])
+    values
       .filter((value): value is string => value !== null)
       .flatMap(value => value.split(","))
       // Remove duplicates
@@ -164,7 +169,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
         });
         checkTransactionStatus(dispatch, signature, url);
       });
-  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [values.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
