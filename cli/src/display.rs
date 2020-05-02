@@ -5,7 +5,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::RpcTransactionStatusMeta;
-use std::fmt;
+use std::{fmt, io};
 
 // Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
@@ -64,33 +64,44 @@ pub fn println_signers(
     println!();
 }
 
-pub fn println_transaction(
+pub fn write_transaction<W: io::Write>(
+    w: &mut W,
     transaction: &Transaction,
     transaction_status: &Option<RpcTransactionStatusMeta>,
     prefix: &str,
-) {
+) -> io::Result<()> {
     let message = &transaction.message;
-    println!("{}Recent Blockhash: {:?}", prefix, message.recent_blockhash);
+    writeln!(
+        w,
+        "{}Recent Blockhash: {:?}",
+        prefix, message.recent_blockhash
+    )?;
     for (signature_index, signature) in transaction.signatures.iter().enumerate() {
-        println!("{}Signature {}: {:?}", prefix, signature_index, signature);
+        writeln!(
+            w,
+            "{}Signature {}: {:?}",
+            prefix, signature_index, signature
+        )?;
     }
-    println!("{}{:?}", prefix, message.header);
+    writeln!(w, "{}{:?}", prefix, message.header)?;
     for (account_index, account) in message.account_keys.iter().enumerate() {
-        println!("{}Account {}: {:?}", prefix, account_index, account);
+        writeln!(w, "{}Account {}: {:?}", prefix, account_index, account)?;
     }
     for (instruction_index, instruction) in message.instructions.iter().enumerate() {
         let program_pubkey = message.account_keys[instruction.program_id_index as usize];
-        println!("{}Instruction {}", prefix, instruction_index);
-        println!(
+        writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
+        writeln!(
+            w,
             "{}  Program: {} ({})",
             prefix, program_pubkey, instruction.program_id_index
-        );
+        )?;
         for (account_index, account) in instruction.accounts.iter().enumerate() {
             let account_pubkey = message.account_keys[*account as usize];
-            println!(
+            writeln!(
+                w,
                 "{}  Account {}: {} ({})",
                 prefix, account_index, account_pubkey, account
-            );
+            )?;
         }
 
         let mut raw = true;
@@ -99,7 +110,7 @@ pub fn println_transaction(
                 solana_vote_program::vote_instruction::VoteInstruction,
             >(&instruction.data)
             {
-                println!("{}  {:?}", prefix, vote_instruction);
+                writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
                 raw = false;
             }
         } else if program_pubkey == solana_stake_program::id() {
@@ -107,7 +118,7 @@ pub fn println_transaction(
                 solana_stake_program::stake_instruction::StakeInstruction,
             >(&instruction.data)
             {
-                println!("{}  {:?}", prefix, stake_instruction);
+                writeln!(w, "{}  {:?}", prefix, stake_instruction)?;
                 raw = false;
             }
         } else if program_pubkey == solana_sdk::system_program::id() {
@@ -115,26 +126,27 @@ pub fn println_transaction(
                 solana_sdk::system_instruction::SystemInstruction,
             >(&instruction.data)
             {
-                println!("{}  {:?}", prefix, system_instruction);
+                writeln!(w, "{}  {:?}", prefix, system_instruction)?;
                 raw = false;
             }
         }
 
         if raw {
-            println!("{}  Data: {:?}", prefix, instruction.data);
+            writeln!(w, "{}  Data: {:?}", prefix, instruction.data)?;
         }
     }
 
     if let Some(transaction_status) = transaction_status {
-        println!(
+        writeln!(
+            w,
             "{}Status: {}",
             prefix,
             match &transaction_status.status {
                 Ok(_) => "Ok".into(),
                 Err(err) => err.to_string(),
             }
-        );
-        println!("{}  Fee: {}", prefix, transaction_status.fee);
+        )?;
+        writeln!(w, "{}  Fee: {}", prefix, transaction_status.fee)?;
         assert_eq!(
             transaction_status.pre_balances.len(),
             transaction_status.post_balances.len()
@@ -146,23 +158,40 @@ pub fn println_transaction(
             .enumerate()
         {
             if pre == post {
-                println!(
+                writeln!(
+                    w,
                     "{}  Account {} balance: {} SOL",
                     prefix,
                     i,
                     lamports_to_sol(*pre)
-                );
+                )?;
             } else {
-                println!(
+                writeln!(
+                    w,
                     "{}  Account {} balance: {} SOL -> {} SOL",
                     prefix,
                     i,
                     lamports_to_sol(*pre),
                     lamports_to_sol(*post)
-                );
+                )?;
             }
         }
     } else {
-        println!("{}Status: Unavailable", prefix);
+        writeln!(w, "{}Status: Unavailable", prefix)?;
+    }
+
+    Ok(())
+}
+
+pub fn println_transaction(
+    transaction: &Transaction,
+    transaction_status: &Option<RpcTransactionStatusMeta>,
+    prefix: &str,
+) {
+    let mut w = Vec::new();
+    if write_transaction(&mut w, transaction, transaction_status, prefix).is_ok() {
+        if let Ok(s) = String::from_utf8(w) {
+            print!("{}", s);
+        }
     }
 }

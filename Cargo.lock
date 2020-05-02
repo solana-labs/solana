@@ -5045,11 +5045,14 @@ dependencies = [
  "reqwest",
  "serde_json",
  "solana-clap-utils",
+ "solana-cli",
  "solana-cli-config",
  "solana-client",
  "solana-logger",
  "solana-metrics",
  "solana-sdk",
+ "solana-transaction-status",
+ "solana-vote-program",
 ]
 
 [[package]]

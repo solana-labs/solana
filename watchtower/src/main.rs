@@ -13,7 +13,12 @@ use solana_client::{
     client_error::Result as ClientResult, rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus,
 };
 use solana_metrics::{datapoint_error, datapoint_info};
-use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
+use solana_sdk::{
+    clock::Slot, hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
+    pubkey::Pubkey,
+};
+use solana_transaction_status::{ConfirmedBlock, TransactionEncoding};
+use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     error,
     str::FromStr,
@@ -27,6 +32,7 @@ struct Config {
     validator_identity_pubkeys: Vec<String>,
     no_duplicate_notifications: bool,
     monitor_active_stake: bool,
+    notify_on_transactions: bool,
 }
 
 fn get_config() -> Config {
@@ -101,6 +107,14 @@ fn get_config() -> Config {
                 .takes_value(false)
                 .help("Alert when the current stake for the cluster drops below 80%"),
         )
+        .arg(
+            Arg::with_name("notify_on_transactions")
+                .long("notify-on-transactions")
+                .takes_value(false)
+                .help("Send a notification on all non-vote transactions.  This can be very verbose!\
+                    Note that the notification environment variables used by this feature all require a \
+                    TRANSACTION_NOTIFIER_ prefix.  For example: TRANSACTION_NOTIFIER_SLACK_WEBHOOK"),
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -120,6 +134,7 @@ fn get_config() -> Config {
 
     let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
     let monitor_active_stake = matches.is_present("monitor_active_stake");
+    let notify_on_transactions = matches.is_present("notify_on_transactions");
 
     let config = Config {
         interval,
@@ -127,6 +142,7 @@ fn get_config() -> Config {
         validator_identity_pubkeys,
         no_duplicate_notifications,
         monitor_active_stake,
+        notify_on_transactions,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -137,6 +153,133 @@ fn get_config() -> Config {
         );
     }
     config
+}
+
+fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: ConfirmedBlock) {
+    let mut vote_transactions = 0;
+
+    for rpc_transaction in &confirmed_block.transactions {
+        if let Some(transaction) = rpc_transaction.transaction.decode() {
+            if transaction.verify().is_ok() {
+                let mut notify = true;
+
+                // Ignore simple Vote transactions since they are too prevalent
+                if transaction.message.instructions.len() == 1 {
+                    let instruction = &transaction.message.instructions[0];
+                    let program_pubkey =
+                        transaction.message.account_keys[instruction.program_id_index as usize];
+                    if program_pubkey == solana_vote_program::id() {
+                        if let Ok(VoteInstruction::Vote(_)) =
+                            limited_deserialize::<VoteInstruction>(&instruction.data)
+                        {
+                            vote_transactions += 1;
+                            notify = false;
+                        }
+                    }
+                }
+
+                if notify {
+                    let mut w = Vec::new();
+                    if solana_cli::display::write_transaction(
+                        &mut w,
+                        &transaction,
+                        &rpc_transaction.meta,
+                        "",
+                    )
+                    .is_ok()
+                    {
+                        if let Ok(s) = String::from_utf8(w) {
+                            notifier.send(&format!("```Slot: {}\n{}```", slot, s));
+                        }
+                    }
+                }
+            } else {
+                datapoint_error!(
+                    "watchtower-sanity-failure",
+                    ("slot", slot, i64),
+                    ("err", "Transaction signature verification failed", String)
+                );
+            }
+        }
+    }
+    info!(
+        "Process slot {} with {} regular transactions (and {} votes)",
+        slot,
+        confirmed_block.transactions.len() - vote_transactions,
+        vote_transactions
+    );
+}
+
+fn load_blocks(
+    rpc_client: &RpcClient,
+    start_slot: Slot,
+    end_slot: Slot,
+) -> ClientResult<Vec<(Slot, ConfirmedBlock)>> {
+    info!(
+        "Loading confirmed blocks between slots: {} - {}",
+        start_slot, end_slot
+    );
+
+    let slots = rpc_client.get_confirmed_blocks(start_slot, Some(end_slot))?;
+
+    let mut blocks = vec![];
+    for slot in slots.into_iter() {
+        let block =
+            rpc_client.get_confirmed_block_with_encoding(slot, TransactionEncoding::Binary)?;
+        blocks.push((slot, block));
+    }
+    Ok(blocks)
+}
+
+fn transaction_monitor(rpc_client: RpcClient) {
+    let notifier = Notifier::new_with_env_prefix("TRANSACTION_NOTIFIER_");
+    let mut start_slot = loop {
+        match rpc_client.get_slot() {
+            Ok(slot) => break slot,
+            Err(err) => {
+                warn!("Failed to get current slot: {}", err);
+            }
+        }
+        sleep(Duration::from_secs(1));
+    };
+
+    loop {
+        let end_slot = start_slot + 50;
+        info!("start_slot:{} - end_slot:{}", start_slot, end_slot);
+
+        let latest_available_slot = rpc_client.get_slot().unwrap_or_else(|err| {
+            info!("get_slot() failed: {}", err);
+            0
+        });
+
+        if latest_available_slot <= start_slot {
+            info!("Waiting for a slot greater than {}...", start_slot);
+            sleep(Duration::from_secs(5));
+            continue;
+        }
+
+        match load_blocks(&rpc_client, start_slot + 1, end_slot) {
+            Ok(blocks) => {
+                info!("Loaded {} blocks", blocks.len());
+
+                if blocks.is_empty() && end_slot < latest_available_slot {
+                    start_slot = end_slot;
+                } else {
+                    for (slot, block) in blocks.into_iter() {
+                        process_confirmed_block(&notifier, slot, block);
+                        start_slot = slot;
+                    }
+                }
+            }
+            Err(err) => {
+                info!(
+                    "failed to get blocks in range ({},{}): {}",
+                    start_slot, end_slot, err
+                );
+                sleep(Duration::from_secs(1));
+            }
+        }
+    }
 }
 
 fn get_cluster_info(rpc_client: &RpcClient) -> ClientResult<(u64, Hash, RpcVoteAccountStatus)> {
@@ -152,8 +295,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
 
-    let rpc_client = RpcClient::new(config.json_rpc_url);
+    let _notify_thread = if config.notify_on_transactions {
+        let rpc_client = RpcClient::new(config.json_rpc_url.clone());
+        Some(std::thread::spawn(move || transaction_monitor(rpc_client)))
+    } else {
+        None
+    };
 
+    let rpc_client = RpcClient::new(config.json_rpc_url.clone());
     let notifier = Notifier::new();
     let mut last_transaction_count = 0;
     let mut last_recent_blockhash = Hash::default();
