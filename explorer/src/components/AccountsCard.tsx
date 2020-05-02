@@ -125,8 +125,8 @@ const renderAccountRow = (
       break;
     case Status.CheckFailed:
     case Status.HistoryFailed:
-      statusClass = "danger";
-      statusText = "Error";
+      statusClass = "dark";
+      statusText = "Cluster Error";
       break;
     case Status.Checking:
     case Status.FetchingHistory:

@@ -13,7 +13,6 @@ import bs58 from "bs58";
 import { assertUnreachable } from "../utils";
 import { useCluster } from "../providers/cluster";
 import Copyable from "./Copyable";
-import { useHistory, useLocation } from "react-router-dom";
 
 function TransactionsCard() {
   const { transactions, idCounter } = useTransactions();
@@ -21,7 +20,6 @@ function TransactionsCard() {
   const signatureInput = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState("");
   const { url } = useCluster();
-  const location = useLocation();
 
   const onNew = (signature: string) => {
     if (signature.length === 0) return;
@@ -101,7 +99,7 @@ function TransactionsCard() {
               <td></td>
             </tr>
             {transactions.map(transaction =>
-              renderTransactionRow(transaction, dispatch, location, url)
+              renderTransactionRow(transaction, dispatch, url)
             )}
           </tbody>
         </table>
@@ -125,7 +123,6 @@ const renderHeader = () => {
 const renderTransactionRow = (
   transactionStatus: TransactionStatus,
   dispatch: any,
-  location: any,
   url: string
 ) => {
   const { fetchStatus, info, signature, id } = transactionStatus;
@@ -169,7 +166,7 @@ const renderTransactionRow = (
     if (info?.confirmations === "max") {
       return (
         <Link
-          to={{ ...location, pathname: "/tx/" + signature }}
+          to={location => ({ ...location, pathname: "/tx/" + signature })}
           className="btn btn-rounded-circle btn-white btn-sm"
         >
           <span className="fe fe-arrow-right"></span>

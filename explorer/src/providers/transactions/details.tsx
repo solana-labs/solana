@@ -4,7 +4,7 @@ import {
   TransactionSignature,
   ConfirmedTransaction
 } from "@solana/web3.js";
-import { useCluster, ClusterStatus } from "../cluster";
+import { useCluster } from "../cluster";
 import { useTransactions, FetchStatus } from "./index";
 
 export interface Details {
@@ -94,7 +94,7 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
   const [state, dispatch] = React.useReducer(reducer, {});
 
   const { transactions } = useTransactions();
-  const { status, url } = useCluster();
+  const { url } = useCluster();
 
   // Filter blocks for current transaction slots
   React.useEffect(() => {
@@ -111,15 +111,13 @@ export function DetailsProvider({ children }: DetailsProviderProps) {
     removeSignatures.forEach(s => removeList.push(s));
     dispatch({ type: ActionType.Remove, signatures: removeList });
 
-    if (status !== ClusterStatus.Connected) return;
-
     const fetchList: string[] = [];
     fetchSignatures.forEach(s => fetchList.push(s));
     dispatch({ type: ActionType.Add, signatures: fetchList });
     fetchSignatures.forEach(signature => {
       fetchDetails(dispatch, signature, url);
     });
-  }, [status, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>

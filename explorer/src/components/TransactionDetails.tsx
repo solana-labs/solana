@@ -1,4 +1,5 @@
 import React from "react";
+import bs58 from "bs58";
 import {
   Source,
   useTransactionStatus,
@@ -16,7 +17,8 @@ import {
   TransactionInstruction,
   TransferParams,
   CreateAccountParams,
-  SystemProgram
+  SystemProgram,
+  SignatureResult
 } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
 import { lamportsToSolString } from "utils";
@@ -123,73 +125,51 @@ function TransactionStatusCard({ signature }: Props) {
     let statusClass = "success";
     let statusText = "Success";
     if (info.result.err) {
-      statusClass = "danger";
+      statusClass = "warning";
       statusText = "Error";
     }
 
     return (
-      <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>
+      <h3 className="mb-0">
+        <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>
+      </h3>
     );
   };
 
   const fee = details?.transaction?.meta?.fee;
   return (
     <div className="card">
-      <div className="card-header">
-        <div className="row align-items-center">
-          <div className="col">
-            <div className="card-header-title">Status</div>
-          </div>
-          <div className="col-auto">
-            <button className="btn btn-white btn-sm" onClick={refreshStatus}>
-              <span className="fe fe-refresh-cw mr-2"></span>
-              Refresh
-            </button>
-          </div>
-        </div>
+      <div className="card-header align-items-center">
+        <h3 className="card-header-title">Transaction Status</h3>
+        <button className="btn btn-white btn-sm" onClick={refreshStatus}>
+          <span className="fe fe-refresh-cw mr-2"></span>
+          Refresh
+        </button>
       </div>
-      <div className="card-body">
-        <div className="list-group list-group-flush my-n3">
-          <div className="list-group-item">
-            <div className="row align-items-center">
-              <div className="col">
-                <h5 className="mb-0">Result</h5>
-              </div>
-              <div className="col-auto">{renderResult()}</div>
-            </div>
-          </div>
 
-          <div className="list-group-item">
-            <div className="row align-items-center">
-              <div className="col">
-                <h5 className="mb-0">Block</h5>
-              </div>
-              <div className="col-auto">{info.slot}</div>
-            </div>
-          </div>
+      <TableCardBody>
+        <tr>
+          <td>Result</td>
+          <td className="text-right">{renderResult()}</td>
+        </tr>
 
-          <div className="list-group-item">
-            <div className="row align-items-center">
-              <div className="col">
-                <h5 className="mb-0">Confirmations</h5>
-              </div>
-              <div className="col-auto text-uppercase">
-                {info.confirmations}
-              </div>
-            </div>
-          </div>
-          {fee && (
-            <div className="list-group-item">
-              <div className="row align-items-center">
-                <div className="col">
-                  <h5 className="mb-0">Fee (SOL)</h5>
-                </div>
-                <div className="col-auto">{lamportsToSolString(fee)}</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+        <tr>
+          <td>Block</td>
+          <td className="text-right">{info.slot}</td>
+        </tr>
+
+        <tr>
+          <td>Confirmations</td>
+          <td className="text-right text-uppercase">{info.confirmations}</td>
+        </tr>
+
+        {fee && (
+          <tr>
+            <td>Fee (SOL)</td>
+            <td className="text-right">{lamportsToSolString(fee)}</td>
+          </tr>
+        )}
+      </TableCardBody>
     </div>
   );
 }
@@ -265,7 +245,7 @@ function TransactionAccountsCard({ signature }: Props) {
   return (
     <div className="card">
       <div className="card-header">
-        <h4 className="card-header-title">Accounts</h4>
+        <h3 className="card-header-title">Transaction Accounts</h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
@@ -284,34 +264,108 @@ function TransactionAccountsCard({ signature }: Props) {
   );
 }
 
+function ixResult(result: SignatureResult, index: number) {
+  if (result.err) {
+    const err = result.err as any;
+    const ixError = err["InstructionError"];
+    if (ixError && Array.isArray(ixError)) {
+      const [errorIndex, error] = ixError;
+      if (Number.isInteger(errorIndex) && errorIndex === index) {
+        return ["warning", `"${JSON.stringify(error)}"`];
+      }
+    }
+    return ["dark"];
+  }
+  return ["success"];
+}
+
+type InstructionProps = {
+  title: string;
+  children: React.ReactNode;
+  result: SignatureResult;
+  index: number;
+};
+
+function InstructionCard({ title, children, result, index }: InstructionProps) {
+  const [resultClass, errorString] = ixResult(result, index);
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h3 className="card-header-title mb-0 d-flex align-items-center">
+          <span className={`badge badge-soft-${resultClass} mr-2`}>
+            #{index + 1}
+          </span>
+          {title} Instruction
+        </h3>
+        <h3 className="mb-0">
+          <span className="badge badge-soft-warning text-monospace">
+            {errorString}
+          </span>
+        </h3>
+      </div>
+      <TableCardBody>{children}</TableCardBody>
+    </div>
+  );
+}
+
 function TransactionInstructionsCard({ signature }: Props) {
+  const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
   const dispatch = useDetailsDispatch();
   const { url } = useCluster();
   const refreshDetails = () => fetchDetails(dispatch, signature, url);
 
-  if (!details || !details.transaction) return null;
+  if (!status || !status.info || !details || !details.transaction) return null;
 
   const { transaction } = details.transaction;
   if (transaction.instructions.length === 0) {
     return <RetryCard retry={refreshDetails} text="No instructions found" />;
   }
 
+  const result = status.info.result;
   const instructionDetails = transaction.instructions.map((ix, index) => {
     const transfer = decodeTransfer(ix);
-    if (transfer)
-      return <TransferDetails key={index} transfer={transfer} index={index} />;
+    if (transfer) {
+      return (
+        <InstructionCard
+          key={index}
+          title="Transfer"
+          result={result}
+          index={index}
+        >
+          <TransferDetails ix={ix} transfer={transfer} />
+        </InstructionCard>
+      );
+    }
+
     const create = decodeCreate(ix);
-    if (create)
-      return <CreateDetails key={index} create={create} index={index} />;
-    return <InstructionDetails key={index} ix={ix} index={index} />;
+    if (create) {
+      return (
+        <InstructionCard
+          key={index}
+          title="Create Account"
+          result={result}
+          index={index}
+        >
+          <CreateDetails ix={ix} create={create} />
+        </InstructionCard>
+      );
+    }
+
+    return (
+      <InstructionCard key={index} title="Raw" result={result} index={index}>
+        <InstructionDetails ix={ix} />
+      </InstructionCard>
+    );
   });
 
   return (
     <>
       <div className="container">
         <div className="header">
-          <div className="header-body">Transaction Instruction(s)</div>
+          <div className="header-body">
+            <h3 className="mb-0">Transaction Instruction(s)</h3>
+          </div>
         </div>
       </div>
       {instructionDetails}
@@ -320,140 +374,186 @@ function TransactionInstructionsCard({ signature }: Props) {
 }
 
 function TransferDetails({
-  transfer,
-  index
+  ix,
+  transfer
 }: {
+  ix: TransactionInstruction;
   transfer: TransferParams;
-  index: number;
 }) {
   const from = transfer.fromPubkey.toBase58();
   const to = transfer.toPubkey.toBase58();
+  const [fromMeta, toMeta] = ix.keys;
   return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          <span className="badge badge-soft-dark mr-2">#{index + 1}</span>
-          Transfer
-        </h3>
-      </div>
-      <div className="card-body">
-        <div className="list-group list-group-flush my-n3">
-          <ListGroupItem label="Program">
+    <>
+      <tr>
+        <td>Program</td>
+        <td className="text-right">
+          <Copyable bottom text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId)}</code>
-          </ListGroupItem>
-          <ListGroupItem label="From">
-            <Copyable text={from}>
-              <code>{from}</code>
-            </Copyable>
-          </ListGroupItem>
-          <ListGroupItem label="To">
-            <Copyable text={to}>
-              <code>{to}</code>
-            </Copyable>
-          </ListGroupItem>
-          <ListGroupItem label="Amount (SOL)">
-            {lamportsToSolString(transfer.lamports)}
-          </ListGroupItem>
-        </div>
-      </div>
-    </div>
+          </Copyable>
+        </td>
+      </tr>
+
+      <tr>
+        <td>
+          <div className="mr-2 d-md-inline">From Account</div>
+          {!fromMeta.isWritable && (
+            <span className="badge badge-soft-dark mr-1">Readonly</span>
+          )}
+          {fromMeta.isSigner && (
+            <span className="badge badge-soft-dark mr-1">Signer</span>
+          )}
+        </td>
+        <td className="text-right">
+          <Copyable text={from}>
+            <code>{from}</code>
+          </Copyable>
+        </td>
+      </tr>
+
+      <tr>
+        <td>
+          <div className="mr-2 d-md-inline">To Account</div>
+          {!toMeta.isWritable && (
+            <span className="badge badge-soft-dark mr-1">Readonly</span>
+          )}
+          {toMeta.isSigner && (
+            <span className="badge badge-soft-dark mr-1">Signer</span>
+          )}
+        </td>
+        <td className="text-right">
+          <Copyable text={to}>
+            <code>{to}</code>
+          </Copyable>
+        </td>
+      </tr>
+
+      <tr>
+        <td>Transfer Amount (SOL)</td>
+        <td className="text-right">{lamportsToSolString(transfer.lamports)}</td>
+      </tr>
+    </>
   );
 }
 
 function CreateDetails({
-  create,
-  index
+  ix,
+  create
 }: {
+  ix: TransactionInstruction;
   create: CreateAccountParams;
-  index: number;
 }) {
   const from = create.fromPubkey.toBase58();
   const newKey = create.newAccountPubkey.toBase58();
+  const [fromMeta, newMeta] = ix.keys;
+
   return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          <span className="badge badge-soft-dark mr-2">#{index + 1}</span>
-          Create Account
-        </h3>
-      </div>
-      <div className="card-body">
-        <div className="list-group list-group-flush my-n3">
-          <ListGroupItem label="Program">
+    <>
+      <tr>
+        <td>Program</td>
+        <td className="text-right">
+          <Copyable bottom text={SystemProgram.programId.toBase58()}>
             <code>{displayAddress(SystemProgram.programId)}</code>
-          </ListGroupItem>
-          <ListGroupItem label="From">
-            <Copyable text={from}>
-              <code>{from}</code>
-            </Copyable>
-          </ListGroupItem>
-          <ListGroupItem label="New Account">
-            <Copyable text={newKey}>
-              <code>{newKey}</code>
-            </Copyable>
-          </ListGroupItem>
-          <ListGroupItem label="Amount (SOL)">
-            {lamportsToSolString(create.lamports)}
-          </ListGroupItem>
-          <ListGroupItem label="Data (Bytes)">{create.space}</ListGroupItem>
-          <ListGroupItem label="Owner">
+          </Copyable>
+        </td>
+      </tr>
+
+      <tr>
+        <td>
+          <div className="mr-2 d-md-inline">From Account</div>
+          {!fromMeta.isWritable && (
+            <span className="badge badge-soft-dark mr-1">Readonly</span>
+          )}
+          {fromMeta.isSigner && (
+            <span className="badge badge-soft-dark mr-1">Signer</span>
+          )}
+        </td>
+        <td className="text-right">
+          <Copyable text={from}>
+            <code>{from}</code>
+          </Copyable>
+        </td>
+      </tr>
+
+      <tr>
+        <td>
+          <div className="mr-2 d-md-inline">New Account</div>
+          {!newMeta.isWritable && (
+            <span className="badge badge-soft-dark mr-1">Readonly</span>
+          )}
+          {newMeta.isSigner && (
+            <span className="badge badge-soft-dark mr-1">Signer</span>
+          )}
+        </td>
+        <td className="text-right">
+          <Copyable text={newKey}>
+            <code>{newKey}</code>
+          </Copyable>
+        </td>
+      </tr>
+
+      <tr>
+        <td>Transfer Amount (SOL)</td>
+        <td className="text-right">{lamportsToSolString(create.lamports)}</td>
+      </tr>
+
+      <tr>
+        <td>Allocated Space (Bytes)</td>
+        <td className="text-right">{create.space}</td>
+      </tr>
+
+      <tr>
+        <td>Assigned Owner</td>
+        <td className="text-right">
+          <Copyable text={create.programId.toBase58()}>
             <code>{displayAddress(create.programId)}</code>
-          </ListGroupItem>
-        </div>
-      </div>
-    </div>
+          </Copyable>
+        </td>
+      </tr>
+    </>
   );
 }
 
-function InstructionDetails({
-  ix,
-  index
-}: {
-  ix: TransactionInstruction;
-  index: number;
-}) {
+function InstructionDetails({ ix }: { ix: TransactionInstruction }) {
   return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          <span className="badge badge-soft-dark mr-2">#{index + 1}</span>
-        </h3>
-      </div>
-      <div className="card-body">
-        <div className="list-group list-group-flush my-n3">
-          <ListGroupItem label="Program">
+    <>
+      <tr>
+        <td>Program</td>
+        <td className="text-right">
+          <Copyable bottom text={ix.programId.toBase58()}>
             <code>{displayAddress(ix.programId)}</code>
-          </ListGroupItem>
-          {ix.keys.map(({ pubkey }, keyIndex) => (
-            <ListGroupItem key={keyIndex} label={`Address #${keyIndex + 1}`}>
-              <Copyable text={pubkey.toBase58()}>
-                <code>{pubkey.toBase58()}</code>
-              </Copyable>
-            </ListGroupItem>
-          ))}
-          <ListGroupItem label="Data (Bytes)">{ix.data.length}</ListGroupItem>
-        </div>
-      </div>
-    </div>
-  );
-}
+          </Copyable>
+        </td>
+      </tr>
 
-function ListGroupItem({
-  label,
-  children
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="list-group-item">
-      <div className="row align-items-center">
-        <div className="col">
-          <h5 className="mb-0">{label}</h5>
-        </div>
-        <div className="col-auto">{children}</div>
-      </div>
-    </div>
+      {ix.keys.map(({ pubkey, isSigner, isWritable }, keyIndex) => (
+        <tr key={keyIndex}>
+          <td>
+            <div className="mr-2 d-md-inline">Account #{keyIndex + 1}</div>
+            {!isWritable && (
+              <span className="badge badge-soft-dark mr-1">Readonly</span>
+            )}
+            {isSigner && (
+              <span className="badge badge-soft-dark mr-1">Signer</span>
+            )}
+          </td>
+          <td className="text-right">
+            <Copyable text={pubkey.toBase58()}>
+              <code>{pubkey.toBase58()}</code>
+            </Copyable>
+          </td>
+        </tr>
+      ))}
+
+      <tr>
+        <td>Raw Data (Base58)</td>
+        <td className="text-right">
+          <Copyable text={bs58.encode(ix.data)}>
+            <code>{bs58.encode(ix.data)}</code>
+          </Copyable>
+        </td>
+      </tr>
+    </>
   );
 }
 
@@ -477,6 +577,16 @@ function RetryCard({ retry, text }: { retry: () => void; text: string }) {
           Try Again
         </span>
       </div>
+    </div>
+  );
+}
+
+function TableCardBody({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="table-responsive mb-0">
+      <table className="table table-sm table-nowrap card-table">
+        <tbody className="list">{children}</tbody>
+      </table>
     </div>
   );
 }

@@ -6,8 +6,8 @@ import {
   Account,
   SignatureResult
 } from "@solana/web3.js";
-import { findGetParameter } from "../../utils/url";
-import { useCluster, ClusterStatus } from "../cluster";
+import { useQuery } from "../../utils/url";
+import { useCluster, Cluster } from "../cluster";
 import {
   DetailsProvider,
   StateContext as DetailsStateContext,
@@ -20,7 +20,6 @@ import {
   Dispatch as AccountsDispatch,
   ActionType as AccountsActionType
 } from "../accounts";
-import { useLocation } from "react-router-dom";
 
 export enum FetchStatus {
   Fetching,
@@ -128,14 +127,12 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
     transactions: {}
   });
 
-  const { status, url } = useCluster();
+  const { cluster, url } = useCluster();
   const accountsDispatch = useAccountsDispatch();
-  const search = useLocation().search;
+  const query = useQuery();
 
   // Check transaction statuses whenever cluster updates
   React.useEffect(() => {
-    if (status !== ClusterStatus.Connected) return;
-
     Object.keys(state.transactions).forEach(signature => {
       dispatch({
         type: ActionType.FetchSignature,
@@ -146,19 +143,18 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
     });
 
     // Create a test transaction
-    if (findGetParameter("test") !== null) {
+    if (cluster === Cluster.Devnet && query.get("test") !== null) {
       createTestTransaction(dispatch, accountsDispatch, url);
     }
-  }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, cluster, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check for transactions in the url params
   React.useEffect(() => {
-    TX_ALIASES.flatMap(key =>
-      (findGetParameter(key)?.split(",") || []).concat(
-        findGetParameter(key + "s")?.split(",") || []
-      )
-    )
-      .flatMap(paramValue => paramValue?.split(",") || [])
+    TX_ALIASES.flatMap(key => [query.get(key), query.get(key + "s")])
+      .filter((value): value is string => value !== null)
+      .flatMap(value => value.split(","))
+      // Remove duplicates
+      .filter((item, pos, self) => self.indexOf(item) === pos)
       .filter(signature => !state.transactions[signature])
       .forEach(signature => {
         dispatch({
@@ -168,7 +164,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
         });
         checkTransactionStatus(dispatch, signature, url);
       });
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>

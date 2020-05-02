@@ -1,11 +1,12 @@
 import React from "react";
+import { Link, useLocation, useHistory } from "react-router-dom";
+import { Location } from "history";
 import {
   useCluster,
-  useClusterDispatch,
-  updateCluster,
   ClusterStatus,
   clusterUrl,
   clusterName,
+  clusterSlug,
   CLUSTERS,
   Cluster,
   useClusterModal
@@ -45,19 +46,35 @@ function ClusterModal() {
 type InputProps = { activeSuffix: string; active: boolean };
 function CustomClusterInput({ activeSuffix, active }: InputProps) {
   const { customUrl } = useCluster();
-  const dispatch = useClusterDispatch();
   const [editing, setEditing] = React.useState(false);
+  const history = useHistory();
+  const location = useLocation();
 
   const customClass = (prefix: string) =>
     active ? `${prefix}-${activeSuffix}` : "";
 
+  const clusterLocation = (location: Location, url: string) => {
+    const params = new URLSearchParams(location.search);
+    params.set("clusterUrl", url);
+    params.delete("cluster");
+    return {
+      ...location,
+      search: params.toString()
+    };
+  };
+
+  const updateCustomUrl = React.useCallback(
+    (url: string) => {
+      history.push(clusterLocation(location, url));
+    },
+    [history, location]
+  );
+
   const inputTextClass = editing ? "" : "text-muted";
   return (
-    <div
+    <Link
+      to={location => clusterLocation(location, customUrl)}
       className="btn input-group input-group-merge p-0"
-      onClick={() =>
-        !active && updateCluster(dispatch, Cluster.Custom, customUrl)
-      }
     >
       <input
         type="text"
@@ -67,22 +84,19 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
         )}`}
         onFocus={() => setEditing(true)}
         onBlur={() => setEditing(false)}
-        onInput={e =>
-          updateCluster(dispatch, Cluster.Custom, e.currentTarget.value)
-        }
+        onInput={e => updateCustomUrl(e.currentTarget.value)}
       />
       <div className="input-group-prepend">
         <div className={`input-group-text pr-0 ${customClass("border")}`}>
           <span className={customClass("text") || "text-dark"}>Custom:</span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
 function ClusterToggle() {
   const { status, cluster, customUrl } = useCluster();
-  const dispatch = useClusterDispatch();
 
   let activeSuffix = "";
   switch (status) {
@@ -116,21 +130,35 @@ function ClusterToggle() {
           ? `border-${activeSuffix} text-${activeSuffix}`
           : "btn-white text-dark";
 
+        const clusterLocation = (location: Location) => {
+          const params = new URLSearchParams(location.search);
+          const slug = clusterSlug(net);
+          if (slug && slug !== "mainnet-beta") {
+            params.set("cluster", slug);
+            params.delete("clusterUrl");
+          } else {
+            params.delete("cluster");
+            if (slug === "mainnet-beta") {
+              params.delete("clusterUrl");
+            }
+          }
+          return {
+            ...location,
+            search: params.toString()
+          };
+        };
+
         return (
-          <label
+          <Link
             key={index}
             className={`btn text-left col-12 mb-3 ${btnClass}`}
+            to={clusterLocation}
           >
-            <input
-              type="radio"
-              checked={active}
-              onChange={() => updateCluster(dispatch, net, customUrl)}
-            />
             {`${clusterName(net)}: `}
             <span className="text-muted d-inline-block">
               {clusterUrl(net, customUrl)}
             </span>
-          </label>
+          </Link>
         );
       })}
     </div>

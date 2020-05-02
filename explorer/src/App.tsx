@@ -21,7 +21,7 @@ function App() {
           <div className="container">
             <div className="row align-items-end">
               <div className="col">
-                <Link to="/">
+                <Link to={location => ({ ...location, pathname: "/" })}>
                   <img src={Logo} width="250" alt="Solana Explorer" />
                 </Link>
               </div>

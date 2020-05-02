@@ -12,15 +12,19 @@ code {
 
 .copyable {
   position: relative;
-  width: fit-content;
+  display: inline;
+  cursor: pointer;
 
-  & > div:hover {
-    cursor: pointer;
-  }
+  .popover {
+    &.bs-popover-top {
+      background-color: $dark;
+      top: -4rem;
+    }
 
-  .popover.bs-popover-top {
-    background-color: $dark;
-    top: -4rem;
+    &.bs-popover-bottom {
+      background-color: $dark;
+      top: 1.5rem;
+    }
 
     .popover-body {
       color: white;
@@ -28,6 +32,7 @@ code {
 
     .arrow::after {
       border-top-color: $dark;
+      border-bottom-color: $dark;
     }
   }
 }
