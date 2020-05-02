@@ -155,14 +155,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
-                .arg(
-                    Arg::with_name(COMMITMENT_ARG.name)
-                        .long(COMMITMENT_ARG.long)
-                        .takes_value(true)
-                        .possible_values(&["default", "max", "recent", "root"])
-                        .value_name("COMMITMENT_LEVEL")
-                        .help("Wait until the transaction is confirmed at selected commitment level"),
-                ),
+                .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("live-slots")
@@ -230,6 +223,11 @@ pub fn parse_catchup(
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?.unwrap();
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
+<<<<<<< HEAD
+=======
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+    let follow = matches.is_present("follow");
+>>>>>>> ffbbdd46e... Add clap.rs default for --commitment (#9859)
     Ok(CliCommandInfo {
         command: CliCommand::Catchup {
             node_pubkey,
@@ -252,8 +250,7 @@ pub fn parse_cluster_ping(
         None
     };
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
-    let commitment_config =
-        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             lamports,
@@ -280,8 +277,7 @@ pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, 
 }
 
 pub fn parse_get_epoch_info(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config =
-        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::GetEpochInfo { commitment_config },
         signers: vec![],
@@ -289,8 +285,7 @@ pub fn parse_get_epoch_info(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, 
 }
 
 pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config =
-        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::GetSlot { commitment_config },
         signers: vec![],
@@ -298,17 +293,26 @@ pub fn parse_get_slot(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliErr
 }
 
 pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config =
-        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::GetEpoch { commitment_config },
         signers: vec![],
     })
 }
 
+<<<<<<< HEAD
+=======
+pub fn parse_total_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+    Ok(CliCommandInfo {
+        command: CliCommand::TotalSupply { commitment_config },
+        signers: vec![],
+    })
+}
+
+>>>>>>> ffbbdd46e... Add clap.rs default for --commitment (#9859)
 pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let commitment_config =
-        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::GetTransactionCount { commitment_config },
         signers: vec![],
@@ -334,8 +338,7 @@ pub fn parse_show_stakes(
 
 pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
-    let commitment_config =
-        commitment_of(matches, COMMITMENT_ARG.long).unwrap_or_else(CommitmentConfig::recent);
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
 
     Ok(CliCommandInfo {
         command: CliCommand::ShowValidators {

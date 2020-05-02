@@ -11,7 +11,8 @@ pub fn commitment_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(COMMITMENT_ARG.name)
         .long(COMMITMENT_ARG.long)
         .takes_value(true)
-        .possible_values(&["default", "max", "recent", "root"])
+        .possible_values(&["recent", "root", "max"])
+        .default_value("recent")
         .value_name("COMMITMENT_LEVEL")
         .help(COMMITMENT_ARG.help)
 }
