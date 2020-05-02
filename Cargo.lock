@@ -4205,6 +4205,7 @@ dependencies = [
  "reqwest",
  "serde_json",
  "solana-clap-utils",
+ "solana-cli",
  "solana-cli-config",
  "solana-client",
  "solana-logger",
