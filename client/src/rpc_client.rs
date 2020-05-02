@@ -504,13 +504,13 @@ impl RpcClient {
         signer_keys: &T,
     ) -> Result<(), Box<dyn error::Error>> {
         let progress_bar = new_spinner_progress_bar();
-        let initial_transactions = transactions.len();
         let mut send_retries = 5;
         loop {
             let mut status_retries = 15;
 
             // Send all transactions
             let mut transactions_signatures = vec![];
+            let num_transactions = transactions.len();
             for transaction in transactions {
                 if cfg!(not(test)) {
                     // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
@@ -520,7 +520,13 @@ impl RpcClient {
                 }
 
                 let signature = self.send_transaction(&transaction).ok();
-                transactions_signatures.push((transaction, signature))
+                transactions_signatures.push((transaction, signature));
+
+                progress_bar.set_message(&format!(
+                    "[{}/{}] Transactions sent",
+                    transactions_signatures.len(),
+                    num_transactions
+                ));
             }
 
             // Collect statuses for all the transactions, drop those that are confirmed
@@ -529,8 +535,8 @@ impl RpcClient {
 
                 progress_bar.set_message(&format!(
                     "[{}/{}] Transactions confirmed",
-                    initial_transactions - transactions_signatures.len(),
-                    initial_transactions
+                    num_transactions - transactions_signatures.len(),
+                    num_transactions
                 ));
 
                 if cfg!(not(test)) {
@@ -562,7 +568,6 @@ impl RpcClient {
                     .collect();
 
                 if transactions_signatures.is_empty() {
-                    progress_bar.set_message("[0/0] Transactions confirmed");
                     return Ok(());
                 }
             }
