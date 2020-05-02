@@ -66,19 +66,27 @@ pub struct Notifier {
 
 impl Notifier {
     pub fn new() -> Self {
-        let discord_webhook = env::var("DISCORD_WEBHOOK")
+        Self::new_with_env_prefix("")
+    }
+
+    pub fn new_with_env_prefix(env_prefix: &str) -> Self {
+        info!("Initializing {}Notifier", env_prefix);
+
+        let discord_webhook = env::var(format!("{}DISCORD_WEBHOOK", env_prefix))
             .map_err(|_| {
                 info!("Discord notifications disabled");
             })
             .ok();
-        let slack_webhook = env::var("SLACK_WEBHOOK")
+        let slack_webhook = env::var(format!("{}SLACK_WEBHOOK", env_prefix))
             .map_err(|_| {
                 info!("Slack notifications disabled");
             })
             .ok();
-        let telegram_webhook = if let (Ok(bot_token), Ok(chat_id)) =
-            (env::var("TELEGRAM_BOT_TOKEN"), env::var("TELEGRAM_CHAT_ID"))
-        {
+
+        let telegram_webhook = if let (Ok(bot_token), Ok(chat_id)) = (
+            env::var(format!("{}TELEGRAM_BOT_TOKEN", env_prefix)),
+            env::var(format!("{}TELEGRAM_CHAT_ID", env_prefix)),
+        ) {
             Some(TelegramWebHook { bot_token, chat_id })
         } else {
             info!("Telegram notifications disabled");
