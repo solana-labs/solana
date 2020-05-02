@@ -13,9 +13,7 @@ use solana_core::{
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     gossip_service::GossipService,
-    outstanding_requests::OutstandingRequests,
-    repair_service,
-    repair_service::{RepairService, RepairSlotRange, RepairStats, RepairStrategy},
+    repair_service::{self, RepairService, RepairSlotRange, RepairStats, RepairStrategy},
     serve_repair::ServeRepair,
     shred_fetch_stage::ShredFetchStage,
     sigverify_stage::{DisabledSigVerifier, SigVerifyStage},
@@ -54,7 +52,7 @@ use std::{
     result,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, Sender},
-    sync::{Arc, RwLock},
+    sync::Arc,
     thread::{sleep, spawn, JoinHandle},
     time::Duration,
 };
@@ -232,8 +230,6 @@ impl Archiver {
             .map(Arc::new)
             .collect();
         let (shred_fetch_sender, shred_fetch_receiver) = channel();
-        let outstanding_requests: Arc<RwLock<OutstandingRequests>> =
-            Arc::new(RwLock::new(OutstandingRequests::default()));
         let fetch_stage = ShredFetchStage::new(
             shred_sockets,
             shred_forward_sockets,
@@ -241,7 +237,6 @@ impl Archiver {
             &shred_fetch_sender,
             None,
             &exit,
-            outstanding_requests.clone(),
         );
         let (slot_sender, slot_receiver) = channel();
         let request_processor =
@@ -268,7 +263,6 @@ impl Archiver {
                     shred_fetch_receiver,
                     slot_sender,
                     cluster_slots,
-                    outstanding_requests,
                 ) {
                     Ok(window_service) => window_service,
                     Err(e) => {
@@ -419,7 +413,6 @@ impl Archiver {
         shred_fetch_receiver: PacketReceiver,
         slot_sender: Sender<u64>,
         cluster_slots: Arc<ClusterSlots>,
-        outstanding_requests: Arc<RwLock<OutstandingRequests>>,
     ) -> Result<WindowService> {
         let slots_per_segment =
             match Self::get_segment_config(&cluster_info, meta.client_commitment) {
@@ -478,7 +471,6 @@ impl Archiver {
             &Arc::new(LeaderScheduleCache::default()),
             |_, _, _, _| true,
             cluster_slots,
-            outstanding_requests,
         );
         info!("waiting for ledger download");
         Self::wait_for_segment_download(

@@ -38,6 +38,7 @@ pub mod progress_map;
 pub mod pubkey_references;
 pub mod repair_service;
 pub mod replay_stage;
+pub mod request_response;
 mod result;
 pub mod retransmit_stage;
 pub mod rewards_recorder_service;

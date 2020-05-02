@@ -1,8 +1,8 @@
+use crate::request_response::RequestResponse;
 use solana_sdk::{clock::Slot, timing::timestamp};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
-    ops::Range,
 };
 
 pub const DEFAULT_REQUEST_EXPIRATION_MS: u64 = 10_000;
@@ -10,37 +10,45 @@ pub const NONCE_BYTES: usize = 4;
 
 pub type Nonce = u32;
 
-#[derive(Default)]
-pub struct NodeOutstandingRequests {
-    requests: HashMap<Nonce, RequestStatus>,
+pub struct NodeOutstandingRequests<T, S>
+where
+    T: RequestResponse<Response = S>,
+{
+    requests: HashMap<Nonce, RequestStatus<T>>,
     nonce: Nonce,
 }
 
-impl NodeOutstandingRequests {
+impl<T, S> NodeOutstandingRequests<T, S>
+where
+    T: RequestResponse<Response = S>,
+{
     // Returns boolean indicating whether sufficient time has passed for a request with
     // the given timestamp to be made
-    fn add_request(&mut self, num_expected_responses: usize) -> Nonce {
+    fn add_request(&mut self, request: T) -> Nonce {
+        let num_expected_responses = request.num_expected_responses();
         let nonce = self.nonce;
         self.requests.insert(
             nonce,
             RequestStatus {
                 expire_timestamp: timestamp() + DEFAULT_REQUEST_EXPIRATION_MS,
                 num_expected_responses,
-                slot_range: 0..0,
-                index_range: 0..0,
+                request,
             },
         );
         self.nonce = (self.nonce + 1) % std::u32::MAX;
         nonce
     }
 
-    fn register_response(&mut self, nonce: u32) -> bool {
+    fn register_response(&mut self, nonce: u32, response: &S) -> bool {
         let (is_valid, should_delete) = self
             .requests
             .get_mut(&nonce)
             .map(|status| {
                 let now = timestamp();
-                if status.num_expected_responses > 0 && now < status.expire_timestamp {
+                if status.num_expected_responses > 0
+                    && now < status.expire_timestamp
+                    && status.request.verify_response(response)
+                {
                     status.num_expected_responses -= 1;
                     (true, false)
                 } else {
@@ -59,32 +67,62 @@ impl NodeOutstandingRequests {
     }
 }
 
-pub struct RequestStatus {
+impl<T, S> Default for NodeOutstandingRequests<T, S>
+where
+    T: RequestResponse<Response = S>,
+{
+    fn default() -> Self {
+        Self {
+            requests: HashMap::new(),
+            nonce: 0,
+        }
+    }
+}
+
+pub struct RequestStatus<T> {
     expire_timestamp: u64,
-    num_expected_responses: usize,
-    slot_range: Range<Slot>,
-    index_range: Range<Slot>,
+    num_expected_responses: u32,
+    request: T,
 }
 
-#[derive(Default)]
-pub struct OutstandingRequests {
-    requests: HashMap<IpAddr, NodeOutstandingRequests>,
+pub struct OutstandingRequests<T, S>
+where
+    T: RequestResponse<Response = S>,
+{
+    requests: HashMap<IpAddr, NodeOutstandingRequests<T, S>>,
 }
 
-impl OutstandingRequests {
-    pub fn add_request(
-        &mut self,
-        socket_addr: &SocketAddr,
-        num_expected_responses: usize,
-    ) -> Nonce {
+impl<T, S> OutstandingRequests<T, S>
+where
+    T: RequestResponse<Response = S>,
+{
+    pub fn add_request(&mut self, socket_addr: &SocketAddr, request: T) -> Nonce {
         let node_outstanding_requests = self.requests.entry(socket_addr.ip()).or_default();
-        node_outstanding_requests.add_request(num_expected_responses)
+        node_outstanding_requests.add_request(request)
     }
 
-    pub fn register_response(&mut self, socket_addr: &SocketAddr, nonce: u32) -> bool {
+    pub fn register_response(
+        &mut self,
+        socket_addr: &SocketAddr,
+        nonce: u32,
+        response: &S,
+    ) -> bool {
         self.requests
             .get_mut(&socket_addr.ip())
-            .map(|node_outstanding_requests| node_outstanding_requests.register_response(nonce))
+            .map(|node_outstanding_requests| {
+                node_outstanding_requests.register_response(nonce, response)
+            })
             .unwrap_or(false)
+    }
+}
+
+impl<T, S> Default for OutstandingRequests<T, S>
+where
+    T: RequestResponse<Response = S>,
+{
+    fn default() -> Self {
+        Self {
+            requests: HashMap::new(),
+        }
     }
 }

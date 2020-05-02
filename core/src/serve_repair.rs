@@ -3,11 +3,12 @@ use crate::{
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     repair_service::RepairStats,
+    request_response::RequestResponse,
     result::{Error, Result},
     weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
-use solana_ledger::blockstore::Blockstore;
+use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug};
@@ -44,6 +45,28 @@ impl RepairType {
             RepairType::Orphan(slot) => *slot,
             RepairType::HighestShred(slot, _) => *slot,
             RepairType::Shred(slot, _) => *slot,
+        }
+    }
+}
+
+impl RequestResponse for RepairType {
+    type Response = Shred;
+    fn num_expected_responses(&self) -> u32 {
+        match self {
+            RepairType::Orphan(_) => MAX_ORPHAN_REPAIR_RESPONSES as u32,
+            RepairType::HighestShred(_, _) => 1,
+            RepairType::Shred(_, _) => 1,
+        }
+    }
+    fn verify_response(&self, response_shred: &Shred) -> bool {
+        match self {
+            RepairType::Orphan(slot) => response_shred.slot() < *slot,
+            RepairType::HighestShred(slot, index) => {
+                response_shred.slot() as u64 == *slot && response_shred.index() as u64 > *index
+            }
+            RepairType::Shred(slot, index) => {
+                response_shred.slot() as u64 == *slot && response_shred.index() as u64 == *index
+            }
         }
     }
 }

@@ -12,6 +12,7 @@ use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
+    shred::Shred,
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
@@ -100,7 +101,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: Arc<ClusterSlots>,
-        outstanding_requests: Arc<RwLock<OutstandingRequests>>,
+        outstanding_requests: Arc<RwLock<OutstandingRequests<RepairType, Shred>>>,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -127,7 +128,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: &ClusterSlots,
-        outstanding_requests: &RwLock<OutstandingRequests>,
+        outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
@@ -216,7 +217,10 @@ impl RepairService {
                         &mut cache,
                         &mut repair_stats,
                     ) {
-                        let nonce = outstanding_requests.write().unwrap().add_request(&to, 0);
+                        let nonce = outstanding_requests
+                            .write()
+                            .unwrap()
+                            .add_request(&to, repair_request);
                         repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                             info!("{} repair req send_to({}) error {:?}", id, to, e);
                             0
@@ -336,7 +340,7 @@ impl RepairService {
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
         repair_socket: &UdpSocket,
-        outstanding_requests: &RwLock<OutstandingRequests>,
+        outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(*slot, status, cluster_slots, serve_repair);
@@ -348,7 +352,7 @@ impl RepairService {
                         let nonce = outstanding_requests
                             .write()
                             .unwrap()
-                            .add_request(&repair_addr, 0);
+                            .add_request(&repair_addr, repair_type.clone());
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
