@@ -137,14 +137,17 @@ fn test_stake_create_and_split_single_signature() {
         Pubkey::create_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
             .unwrap();
     // Test split
-    let message = Message::new(&stake_instruction::split_with_seed(
-        &stake_address, // original
-        &staker_pubkey, // authorized
-        lamports / 2,
-        &split_stake_address, // new address
-        &staker_pubkey,       // base
-        "split_stake",        // seed
-    ));
+    let message = Message::new_with_payer(
+        &stake_instruction::split_with_seed(
+            &stake_address, // original
+            &staker_pubkey, // authorized
+            lamports / 2,
+            &split_stake_address, // new address
+            &staker_pubkey,       // base
+            "split_stake",        // seed
+        ),
+        Some(&staker_keypair.pubkey()),
+    );
 
     assert!(bank_client
         .send_message(&[&staker_keypair], message)

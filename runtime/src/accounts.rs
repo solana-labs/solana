@@ -151,50 +151,68 @@ impl Accounts {
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut accounts: TransactionAccounts = Vec::with_capacity(message.account_keys.len());
+            let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
-            for (i, key) in message
+            let mut accounts: Vec<_> = message
                 .account_keys
                 .iter()
                 .enumerate()
-                .filter(|(i, key)| Self::is_non_loader_key(message, key, *i))
-            {
-                let (account, rent) = AccountsDB::load(storage, ancestors, accounts_index, key)
-                    .and_then(|(mut account, _)| {
-                        if message.is_writable(i) && !account.executable {
-                            let rent_due = rent_collector.update(&key, &mut account);
-                            Some((account, rent_due))
-                        } else {
-                            Some((account, 0))
+                .map(|(i, key)| {
+                    if Self::is_non_loader_key(message, key, i) {
+                        if payer_index.is_none() {
+                            payer_index = Some(i);
                         }
-                    })
-                    .unwrap_or_default();
+                        let (account, rent) =
+                            AccountsDB::load(storage, ancestors, accounts_index, key)
+                                .and_then(|(mut account, _)| {
+                                    if message.is_writable(i) && !account.executable {
+                                        let rent_due = rent_collector.update(&key, &mut account);
+                                        Some((account, rent_due))
+                                    } else {
+                                        Some((account, 0))
+                                    }
+                                })
+                                .unwrap_or_default();
 
-                accounts.push(account);
-                tx_rent += rent;
-            }
+                        tx_rent += rent;
+                        account
+                    } else {
+                        // Fill in an empty account for the program slots.
+                        Account::default()
+                    }
+                })
+                .collect();
 
-            if accounts.is_empty() || accounts[0].lamports == 0 {
+            if let Some(payer_index) = payer_index {
+                if payer_index != 0 {
+                    warn!("Payer index should be 0! {:?}", tx);
+                }
+                if accounts[payer_index].lamports == 0 {
+                    error_counters.account_not_found += 1;
+                    Err(TransactionError::AccountNotFound)
+                } else {
+                    let min_balance = match get_system_account_kind(&accounts[payer_index])
+                        .ok_or_else(|| {
+                            error_counters.invalid_account_for_fee += 1;
+                            TransactionError::InvalidAccountForFee
+                        })? {
+                        SystemAccountKind::System => 0,
+                        SystemAccountKind::Nonce => {
+                            rent_collector.rent.minimum_balance(nonce::State::size())
+                        }
+                    };
+
+                    if accounts[payer_index].lamports < fee + min_balance {
+                        error_counters.insufficient_funds += 1;
+                        Err(TransactionError::InsufficientFundsForFee)
+                    } else {
+                        accounts[payer_index].lamports -= fee;
+                        Ok((accounts, tx_rent))
+                    }
+                }
+            } else {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
-            } else {
-                let min_balance = match get_system_account_kind(&accounts[0]).ok_or_else(|| {
-                    error_counters.invalid_account_for_fee += 1;
-                    TransactionError::InvalidAccountForFee
-                })? {
-                    SystemAccountKind::System => 0,
-                    SystemAccountKind::Nonce => {
-                        rent_collector.rent.minimum_balance(nonce::State::size())
-                    }
-                };
-
-                if accounts[0].lamports < fee + min_balance {
-                    error_counters.insufficient_funds += 1;
-                    Err(TransactionError::InsufficientFundsForFee)
-                } else {
-                    accounts[0].lamports -= fee;
-                    Ok((accounts, tx_rent))
-                }
             }
         }
     }
@@ -651,8 +669,8 @@ impl Accounts {
                 .account_keys
                 .iter()
                 .enumerate()
-                .filter(|(i, key)| Self::is_non_loader_key(message, key, *i))
                 .zip(acc.0.iter_mut())
+                .filter(|((i, key), _account)| Self::is_non_loader_key(message, key, *i))
             {
                 nonce_utils::prepare_if_nonce_account(
                     account,
@@ -1050,7 +1068,7 @@ mod tests {
                 Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
                 _hash_age_kind,
             ) => {
-                assert_eq!(transaction_accounts.len(), 2);
+                assert_eq!(transaction_accounts.len(), 3);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
                 assert_eq!(transaction_loaders.len(), 1);
                 assert_eq!(transaction_loaders[0].len(), 0);
@@ -1288,7 +1306,7 @@ mod tests {
                 Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
                 _hash_age_kind,
             ) => {
-                assert_eq!(transaction_accounts.len(), 1);
+                assert_eq!(transaction_accounts.len(), 3);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
                 assert_eq!(transaction_loaders.len(), 2);
                 assert_eq!(transaction_loaders[0].len(), 1);
