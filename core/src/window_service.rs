@@ -4,6 +4,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
+    outstanding_requests::OutstandingRequests,
     repair_service::{RepairService, RepairStrategy},
     result::{Error, Result},
 };
@@ -261,6 +262,7 @@ impl WindowService {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         shred_filter: F,
         cluster_slots: Arc<ClusterSlots>,
+        outstanding_requests: Arc<RwLock<OutstandingRequests>>,
     ) -> WindowService
     where
         F: 'static
@@ -280,6 +282,7 @@ impl WindowService {
             cluster_info.clone(),
             repair_strategy,
             cluster_slots,
+            outstanding_requests,
         );
 
         let (insert_sender, insert_receiver) = unbounded();

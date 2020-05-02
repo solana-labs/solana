@@ -4,6 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
     consensus::VOTE_THRESHOLD_SIZE,
+    outstanding_requests::{Nonce, OutstandingRequests},
     result::Result,
     serve_repair::{RepairType, ServeRepair},
 };
@@ -99,6 +100,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: Arc<ClusterSlots>,
+        outstanding_requests: Arc<RwLock<OutstandingRequests>>,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -107,9 +109,10 @@ impl RepairService {
                     &blockstore,
                     &exit,
                     &repair_socket,
-                    &cluster_info,
+                    cluster_info,
                     repair_strategy,
                     &cluster_slots,
+                    &outstanding_requests,
                 )
             })
             .unwrap();
@@ -121,14 +124,15 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
-        cluster_info: &Arc<ClusterInfo>,
+        cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
-        cluster_slots: &Arc<ClusterSlots>,
+        cluster_slots: &ClusterSlots,
+        outstanding_requests: &RwLock<OutstandingRequests>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
         if let RepairStrategy::RepairAll { .. } = repair_strategy {
-            Self::initialize_lowest_slot(id, blockstore, cluster_info);
+            Self::initialize_lowest_slot(id, blockstore, &cluster_info);
         }
         let mut repair_stats = RepairStats::default();
         let mut last_stats = Instant::now();
@@ -139,7 +143,7 @@ impl RepairService {
             ..
         } = repair_strategy
         {
-            Self::initialize_epoch_slots(blockstore, cluster_info, completed_slots_receiver);
+            Self::initialize_epoch_slots(blockstore, &cluster_info, completed_slots_receiver);
         }
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -168,7 +172,7 @@ impl RepairService {
                         let lowest_slot = blockstore.lowest_slot();
                         Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
                         Self::update_completed_slots(completed_slots_receiver, &cluster_info);
-                        cluster_slots.update(new_root, cluster_info, bank_forks);
+                        cluster_slots.update(new_root, &cluster_info, bank_forks);
                         let new_duplicate_slots = Self::find_new_duplicate_slots(
                             &duplicate_slot_repair_statuses,
                             blockstore,
@@ -191,6 +195,7 @@ impl RepairService {
                             &serve_repair,
                             &mut repair_stats,
                             &repair_socket,
+                            &outstanding_requests,
                         );
                         Self::generate_repairs(
                             blockstore,
@@ -204,27 +209,20 @@ impl RepairService {
 
             if let Ok(repairs) = repairs {
                 let mut cache = HashMap::new();
-                let reqs: Vec<((SocketAddr, Vec<u8>), RepairType)> = repairs
-                    .into_iter()
-                    .filter_map(|repair_request| {
-                        serve_repair
-                            .repair_request(
-                                &cluster_slots,
-                                &repair_request,
-                                &mut cache,
-                                &mut repair_stats,
-                            )
-                            .map(|result| (result, repair_request))
-                            .ok()
-                    })
-                    .collect();
-
-                for ((to, req), _) in reqs {
-                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                        info!("{} repair req send_to({}) error {:?}", id, to, e);
-                        0
-                    });
-                }
+                repairs.into_iter().for_each(|repair_request| {
+                    if let Ok((to, req)) = serve_repair.repair_request(
+                        &cluster_slots,
+                        &repair_request,
+                        &mut cache,
+                        &mut repair_stats,
+                    ) {
+                        let nonce = outstanding_requests.write().unwrap().add_request(&to, 0);
+                        repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                            info!("{} repair req send_to({}) error {:?}", id, to, e);
+                            0
+                        });
+                    }
+                });
             }
 
             if last_stats.elapsed().as_secs() > 1 {
@@ -338,6 +336,7 @@ impl RepairService {
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
         repair_socket: &UdpSocket,
+        outstanding_requests: &RwLock<OutstandingRequests>,
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(*slot, status, cluster_slots, serve_repair);
@@ -346,12 +345,17 @@ impl RepairService {
 
                 if let Some(repairs) = repairs {
                     for repair_type in repairs {
+                        let nonce = outstanding_requests
+                            .write()
+                            .unwrap()
+                            .add_request(&repair_addr, 0);
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
                             &repair_addr,
                             serve_repair,
                             repair_stats,
+                            nonce,
                         ) {
                             info!("repair req send_to({}) error {:?}", repair_addr, e);
                         }
@@ -372,6 +376,7 @@ impl RepairService {
         to: &SocketAddr,
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
+        nonce: Nonce,
     ) -> Result<()> {
         let req = serve_repair.map_repair_request(&repair_type, repair_stats)?;
         repair_socket.send_to(&req, to)?;
