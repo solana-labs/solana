@@ -1294,6 +1294,9 @@ impl AccountsDB {
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
         self.process_dead_slots();
+
+        // Sanity check storage entries are removed from the index
+        assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
     pub fn hash_stored_account(slot: Slot, account: &StoredAccount) -> Hash {
