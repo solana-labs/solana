@@ -4210,6 +4210,8 @@ dependencies = [
  "solana-logger",
  "solana-metrics",
  "solana-sdk",
+ "solana-transaction-status",
+ "solana-vote-program",
 ]
 
 [[package]]
