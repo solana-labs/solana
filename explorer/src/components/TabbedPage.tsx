@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useClusterModal } from "providers/cluster";
 import ClusterStatusButton from "components/ClusterStatusButton";
 
@@ -54,14 +54,16 @@ function NavLink({
   tab: Tab;
   current: Tab;
 }) {
-  const location = useLocation();
   let classes = "nav-link";
   if (tab === current) {
     classes += " active";
   }
 
   return (
-    <Link to={{ ...location, pathname: href }} className={classes}>
+    <Link
+      to={location => ({ ...location, pathname: href })}
+      className={classes}
+    >
       {tab}
     </Link>
   );

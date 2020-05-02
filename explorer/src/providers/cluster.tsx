@@ -1,6 +1,6 @@
 import React from "react";
 import { clusterApiUrl, Connection } from "@solana/web3.js";
-import { findGetParameter } from "../utils/url";
+import { useQuery } from "../utils/url";
 
 export enum ClusterStatus {
   Connected,
@@ -21,6 +21,19 @@ export const CLUSTERS = [
   Cluster.Devnet,
   Cluster.Custom
 ];
+
+export function clusterSlug(cluster: Cluster): string | undefined {
+  switch (cluster) {
+    case Cluster.MainnetBeta:
+      return "mainnet-beta";
+    case Cluster.Testnet:
+      return "testnet";
+    case Cluster.Devnet:
+      return "devnet";
+    case Cluster.Custom:
+      return undefined;
+  }
+}
 
 export function clusterName(cluster: Cluster): string {
   switch (cluster) {
@@ -77,11 +90,11 @@ function clusterReducer(state: State, action: Action): State {
   }
 }
 
-function initState(): State {
-  const clusterParam =
-    findGetParameter("cluster") || findGetParameter("network");
-  const clusterUrlParam =
-    findGetParameter("clusterUrl") || findGetParameter("networkUrl");
+function parseQuery(
+  query: URLSearchParams
+): { cluster: Cluster; customUrl: string } {
+  const clusterParam = query.get("cluster");
+  const clusterUrlParam = query.get("clusterUrl");
 
   let cluster;
   let customUrl = DEFAULT_CUSTOM_URL;
@@ -120,8 +133,7 @@ function initState(): State {
 
   return {
     cluster,
-    customUrl,
-    status: ClusterStatus.Connecting
+    customUrl
   };
 }
 
@@ -134,17 +146,18 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type ClusterProviderProps = { children: React.ReactNode };
 export function ClusterProvider({ children }: ClusterProviderProps) {
-  const [state, dispatch] = React.useReducer(
-    clusterReducer,
-    undefined,
-    initState
-  );
+  const [state, dispatch] = React.useReducer(clusterReducer, {
+    cluster: DEFAULT_CLUSTER,
+    customUrl: DEFAULT_CUSTOM_URL,
+    status: ClusterStatus.Connecting
+  });
   const [showModal, setShowModal] = React.useState(false);
+  const { cluster, customUrl } = parseQuery(useQuery());
 
+  // Reconnect to cluster when it changes
   React.useEffect(() => {
-    // Connect to cluster immediately
-    updateCluster(dispatch, state.cluster, state.customUrl);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    updateCluster(dispatch, cluster, customUrl);
+  }, [cluster, customUrl]);
 
   return (
     <StateContext.Provider value={state}>
@@ -170,7 +183,7 @@ export function clusterUrl(cluster: Cluster, customUrl: string): string {
   }
 }
 
-export async function updateCluster(
+async function updateCluster(
   dispatch: Dispatch,
   cluster: Cluster,
   customUrl: string
@@ -201,14 +214,6 @@ export function useCluster() {
     url: clusterUrl(context.cluster, context.customUrl),
     name: clusterName(context.cluster)
   };
-}
-
-export function useClusterDispatch() {
-  const context = React.useContext(DispatchContext);
-  if (!context) {
-    throw new Error(`useClusterDispatch must be used within a ClusterProvider`);
-  }
-  return context;
 }
 
 export function useClusterModal() {

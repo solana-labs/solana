@@ -1,3 +1,9 @@
+import { useLocation } from "react-router-dom";
+
+export function useQuery() {
+  return new URLSearchParams(useLocation().search);
+}
+
 export function findGetParameter(parameterName: string): string | null {
   let result = null,
     tmp = [];
