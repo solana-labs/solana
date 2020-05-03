@@ -95,14 +95,14 @@ export default function TransactionDetails({ signature }: Props) {
         </div>
       </div>
 
-      <TransactionStatusCard signature={signature} />
-      <TransactionAccountsCard signature={signature} />
-      <TransactionInstructionsCard signature={signature} />
+      <StatusCard signature={signature} />
+      <AccountsCard signature={signature} />
+      <InstructionsSection signature={signature} />
     </div>
   );
 }
 
-function TransactionStatusCard({ signature }: Props) {
+function StatusCard({ signature }: Props) {
   const status = useTransactionStatus(signature);
   const dispatch = useTransactionsDispatch();
   const details = useTransactionDetails(signature);
@@ -140,7 +140,7 @@ function TransactionStatusCard({ signature }: Props) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Transaction Status</h3>
+        <h3 className="card-header-title">Status</h3>
         <button className="btn btn-white btn-sm" onClick={refreshStatus}>
           <span className="fe fe-refresh-cw mr-2"></span>
           Refresh
@@ -174,7 +174,7 @@ function TransactionStatusCard({ signature }: Props) {
   );
 }
 
-function TransactionAccountsCard({ signature }: Props) {
+function AccountsCard({ signature }: Props) {
   const details = useTransactionDetails(signature);
   const dispatch = useDetailsDispatch();
   const { url } = useCluster();
@@ -245,7 +245,7 @@ function TransactionAccountsCard({ signature }: Props) {
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title">Transaction Accounts</h3>
+        <h3 className="card-header-title">Accounts</h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
@@ -271,7 +271,7 @@ function ixResult(result: SignatureResult, index: number) {
     if (ixError && Array.isArray(ixError)) {
       const [errorIndex, error] = ixError;
       if (Number.isInteger(errorIndex) && errorIndex === index) {
-        return ["warning", `"${JSON.stringify(error)}"`];
+        return ["warning", `Error: ${JSON.stringify(error)}`];
       }
     }
     return ["dark"];
@@ -295,7 +295,7 @@ function InstructionCard({ title, children, result, index }: InstructionProps) {
           <span className={`badge badge-soft-${resultClass} mr-2`}>
             #{index + 1}
           </span>
-          {title} Instruction
+          {title}
         </h3>
         <h3 className="mb-0">
           <span className="badge badge-soft-warning text-monospace">
@@ -308,7 +308,7 @@ function InstructionCard({ title, children, result, index }: InstructionProps) {
   );
 }
 
-function TransactionInstructionsCard({ signature }: Props) {
+function InstructionsSection({ signature }: Props) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
   const dispatch = useDetailsDispatch();
@@ -354,7 +354,7 @@ function TransactionInstructionsCard({ signature }: Props) {
 
     return (
       <InstructionCard key={index} title="Raw" result={result} index={index}>
-        <InstructionDetails ix={ix} />
+        <RawDetails ix={ix} />
       </InstructionCard>
     );
   });
@@ -364,7 +364,7 @@ function TransactionInstructionsCard({ signature }: Props) {
       <div className="container">
         <div className="header">
           <div className="header-body">
-            <h3 className="mb-0">Transaction Instruction(s)</h3>
+            <h3 className="mb-0">Instruction(s)</h3>
           </div>
         </div>
       </div>
@@ -396,7 +396,7 @@ function TransferDetails({
 
       <tr>
         <td>
-          <div className="mr-2 d-md-inline">From Account</div>
+          <div className="mr-2 d-md-inline">From Address</div>
           {!fromMeta.isWritable && (
             <span className="badge badge-soft-dark mr-1">Readonly</span>
           )}
@@ -413,7 +413,7 @@ function TransferDetails({
 
       <tr>
         <td>
-          <div className="mr-2 d-md-inline">To Account</div>
+          <div className="mr-2 d-md-inline">To Address</div>
           {!toMeta.isWritable && (
             <span className="badge badge-soft-dark mr-1">Readonly</span>
           )}
@@ -460,7 +460,7 @@ function CreateDetails({
 
       <tr>
         <td>
-          <div className="mr-2 d-md-inline">From Account</div>
+          <div className="mr-2 d-md-inline">From Address</div>
           {!fromMeta.isWritable && (
             <span className="badge badge-soft-dark mr-1">Readonly</span>
           )}
@@ -477,7 +477,7 @@ function CreateDetails({
 
       <tr>
         <td>
-          <div className="mr-2 d-md-inline">New Account</div>
+          <div className="mr-2 d-md-inline">New Address</div>
           {!newMeta.isWritable && (
             <span className="badge badge-soft-dark mr-1">Readonly</span>
           )}
@@ -514,7 +514,7 @@ function CreateDetails({
   );
 }
 
-function InstructionDetails({ ix }: { ix: TransactionInstruction }) {
+function RawDetails({ ix }: { ix: TransactionInstruction }) {
   return (
     <>
       <tr>
