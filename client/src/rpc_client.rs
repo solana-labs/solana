@@ -498,17 +498,19 @@ impl RpcClient {
         }
     }
 
-    pub fn send_and_confirm_transactions<T: Signers>(
+    pub fn send_and_confirm_transactions_with_spinner<T: Signers>(
         &self,
         mut transactions: Vec<Transaction>,
         signer_keys: &T,
     ) -> Result<(), Box<dyn error::Error>> {
+        let progress_bar = new_spinner_progress_bar();
         let mut send_retries = 5;
         loop {
             let mut status_retries = 15;
 
             // Send all transactions
             let mut transactions_signatures = vec![];
+            let num_transactions = transactions.len();
             for transaction in transactions {
                 if cfg!(not(test)) {
                     // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
@@ -518,12 +520,24 @@ impl RpcClient {
                 }
 
                 let signature = self.send_transaction(&transaction).ok();
-                transactions_signatures.push((transaction, signature))
+                transactions_signatures.push((transaction, signature));
+
+                progress_bar.set_message(&format!(
+                    "[{}/{}] Transactions sent",
+                    transactions_signatures.len(),
+                    num_transactions
+                ));
             }
 
             // Collect statuses for all the transactions, drop those that are confirmed
             while status_retries > 0 {
                 status_retries -= 1;
+
+                progress_bar.set_message(&format!(
+                    "[{}/{}] Transactions confirmed",
+                    num_transactions - transactions_signatures.len(),
+                    num_transactions
+                ));
 
                 if cfg!(not(test)) {
                     // Retry twice a second
@@ -535,10 +549,18 @@ impl RpcClient {
                     .filter(|(_transaction, signature)| {
                         if let Some(signature) = signature {
                             if let Ok(status) = self.get_signature_status(&signature) {
-                                if status.is_none() {
+                                if self
+                                    .get_num_blocks_since_signature_confirmation(&signature)
+                                    .unwrap_or(0)
+                                    > 1
+                                {
                                     return false;
+                                } else {
+                                    return match status {
+                                        None => true,
+                                        Some(result) => result.is_err(),
+                                    };
                                 }
-                                return status.unwrap().is_err();
                             }
                         }
                         true
