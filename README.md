@@ -54,7 +54,7 @@ recipient,amount,signature
 UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k,43,1111111111111111111111111111111111111111111111111111111111111111
 ```
 
-## Calculate what tokens should be sent
+### Calculate what tokens should be sent
 
 List the differences between a list of expected distributions and the record of what
 transactions have already been sent.
@@ -82,3 +82,21 @@ Recipient                                     Amount
 UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
 ```
 
+## Distribute stake accounts
+
+Distributing tokens via stake accounts works similarly to how tokens are distributed. The
+big difference is that new stake accounts are split from existing ones. By splitting,
+the new accounts inherit any lockup or custodian settings of the original.
+
+```bash
+solana-tokens distribute-stake --stake-account-address <ACCOUNT_ADDRESS> \
+    --allocations-csv <ALLOCATIONS_CSV> \
+    <TRANSACTION_LOG> \
+    --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> --fee-payer <KEYPAIR>
+```
+
+Currently, this will subtract 1 SOL from each allocation and store it the
+recipient address. That SOL can be used to pay transaction fees on staking
+operations such as delegating stake. The rest of the allocation is put in
+a stake account. The new stake account address is output in the transaction
+log.

@@ -184,6 +184,7 @@ fn distribute_stake<T: Client>(
             ));
 
             let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
+            println!("Creating stake account {}", new_stake_account_address);
             client.send_message(message, &signers)
         };
         match result {
