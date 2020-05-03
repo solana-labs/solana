@@ -32,7 +32,9 @@ function App() {
         <Switch>
           <Route
             exact
-            path={TX_ALIASES.map(tx => `/${tx}/:signature`)}
+            path={TX_ALIASES.flatMap(tx => [tx, tx + "s"]).map(
+              tx => `/${tx}/:signature`
+            )}
             render={({ match }) => (
               <TransactionDetails signature={match.params.signature} />
             )}
