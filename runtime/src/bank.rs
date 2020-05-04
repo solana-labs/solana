@@ -3,7 +3,10 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::{
-    accounts::{Accounts, TransactionAccounts, TransactionLoadResult, TransactionLoaders},
+    accounts::{
+        AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
+        TransactionLoaders,
+    },
     accounts_db::{AccountsDBSerialize, ErrorCounters, SnapshotStorage, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
@@ -58,7 +61,7 @@ use solana_stake_program::stake_state::{self, Delegation};
 use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{BufReader, Cursor, Error as IOError, Read},
     path::{Path, PathBuf},
     rc::Rc,
@@ -1842,6 +1845,17 @@ impl Bank {
             }
         }
         None
+    }
+
+    pub fn get_largest_accounts(
+        &self,
+        num: usize,
+        filter_by_address: &HashSet<Pubkey>,
+        filter: AccountAddressFilter,
+    ) -> Vec<(Pubkey, u64)> {
+        self.rc
+            .accounts
+            .load_largest_accounts(&self.ancestors, num, filter_by_address, filter)
     }
 
     pub fn transaction_count(&self) -> u64 {

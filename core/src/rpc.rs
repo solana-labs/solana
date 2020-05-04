@@ -19,7 +19,7 @@ use solana_client::{
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_perf::packet::PACKET_DATA_SIZE;
-use solana_runtime::bank::Bank;
+use solana_runtime::{accounts::AccountAddressFilter, bank::Bank};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -37,7 +37,7 @@ use solana_transaction_status::{
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     cmp::max,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::{SocketAddr, UdpSocket},
     str::FromStr,
     sync::{Arc, RwLock},
@@ -46,6 +46,7 @@ use std::{
 };
 
 const JSON_RPC_SERVER_ERROR_0: i64 = -32000;
+const NUM_LARGEST_ACCOUNTS: usize = 20;
 
 type RpcResponse<T> = Result<Response<T>>;
 
@@ -278,6 +279,27 @@ impl JsonRpcRequestProcessor {
 
     fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
         Ok(self.bank(commitment)?.capitalization())
+    }
+
+    fn get_largest_accounts(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Vec<RpcAccountBalance>> {
+        let bank = self.bank(commitment)?;
+        new_response(
+            &bank,
+            bank.get_largest_accounts(
+                NUM_LARGEST_ACCOUNTS,
+                &HashSet::new(),
+                AccountAddressFilter::Exclude,
+            )
+            .into_iter()
+            .map(|(address, lamports)| RpcAccountBalance {
+                address: address.to_string(),
+                lamports,
+            })
+            .collect(),
+        )
     }
 
     fn get_vote_accounts(
@@ -730,6 +752,13 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64>;
 
+    #[rpc(meta, name = "getLargestAccounts")]
+    fn get_largest_accounts(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Vec<RpcAccountBalance>>;
+
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(
         &self,
@@ -1129,6 +1158,18 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_total_supply(commitment)
+    }
+
+    fn get_largest_accounts(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<Vec<RpcAccountBalance>> {
+        debug!("get_largest_accounts rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_largest_accounts(commitment)
     }
 
     fn request_airdrop(
@@ -1769,6 +1810,49 @@ pub mod tests {
             panic!("Expected single response");
         };
         assert!(supply >= TEST_MINT_LAMPORTS);
+    }
+
+    #[test]
+    fn test_get_largest_accounts() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io, meta, alice, ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts"}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let largest_accounts: Vec<RpcAccountBalance> =
+            serde_json::from_value(json["result"]["value"].clone())
+                .expect("actual response deserialization");
+        assert_eq!(largest_accounts.len(), 18);
+
+        // Get Alice balance
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
+            alice.pubkey()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let alice_balance: u64 = serde_json::from_value(json["result"]["value"].clone())
+            .expect("actual response deserialization");
+        assert!(largest_accounts.contains(&RpcAccountBalance {
+            address: alice.pubkey().to_string(),
+            lamports: alice_balance,
+        }));
+
+        // Get Bob balance
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
+            bob_pubkey
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let bob_balance: u64 = serde_json::from_value(json["result"]["value"].clone())
+            .expect("actual response deserialization");
+        assert!(largest_accounts.contains(&RpcAccountBalance {
+            address: bob_pubkey.to_string(),
+            lamports: bob_balance,
+        }));
     }
 
     #[test]

@@ -31,6 +31,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getGenesisHash](jsonrpc-api.md#getgenesishash)
 * [getIdentity](jsonrpc-api.md#getidentity)
 * [getInflation](jsonrpc-api.md#getinflation)
+* [getLargestAccounts](jsonrpc-api.md#getlargestaccounts)
 * [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 * [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 * [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
@@ -632,6 +633,32 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"foundation":0.05,"foundationTerm":7.0,"initial":0.15,"storage":0.1,"taper":0.15,"terminal":0.015},"id":1}
+```
+
+### getLargestAccounts
+
+Returns the 20 largest accounts, by lamport balance
+
+#### Parameters:
+
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to an array of:
+
+* `<object>` - otherwise, a JSON object containing:
+  * `address: <string>`, base-58 encoded address of the account
+  * `lamports: <u64>`, number of lamports in the account, as a u64
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getInflation"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":54},"value":[{"lamports":999974,"address":"99P8ZgtJYe1buSK8JXkvpLh8xPsCFuLYhz9hQFNw93WJ"},{"lamports":42,"address":"uPwWLo16MVehpyWqsLkK3Ka8nLowWvAHbBChqv2FZeL"},{"lamports":42,"address":"aYJCgU7REfu3XF8b3QhkqgqQvLizx8zxuLBHA25PzDS"},{"lamports":42,"address":"CTvHVtQ4gd4gUcw3bdVgZJJqApXE9nCbbbP4VTS5wE1D"},{"lamports":20,"address":"4fq3xJ6kfrh9RkJQsmVd5gNMvJbuSHfErywvEjNQDPxu"},{"lamports":4,"address":"AXJADheGVp9cruP8WYu46oNkRbeASngN5fPCMVGQqNHa"},{"lamports":2,"address":"8NT8yS6LiwNprgW4yM1jPPow7CwRUotddBVkrkWgYp24"},{"lamports":1,"address":"SysvarEpochSchedu1e111111111111111111111111"},{"lamports":1,"address":"11111111111111111111111111111111"},{"lamports":1,"address":"Stake11111111111111111111111111111111111111"},{"lamports":1,"address":"SysvarC1ock11111111111111111111111111111111"},{"lamports":1,"address":"StakeConfig11111111111111111111111111111111"},{"lamports":1,"address":"SysvarRent111111111111111111111111111111111"},{"lamports":1,"address":"Config1111111111111111111111111111111111111"},{"lamports":1,"address":"SysvarStakeHistory1111111111111111111111111"},{"lamports":1,"address":"SysvarRecentB1ockHashes11111111111111111111"},{"lamports":1,"address":"SysvarFees111111111111111111111111111111111"},{"lamports":1,"address":"Vote111111111111111111111111111111111111111"}]},"id":1}
 ```
 
 ### getLeaderSchedule

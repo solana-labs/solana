@@ -59,6 +59,11 @@ pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
 pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, TransactionRent);
 
+pub enum AccountAddressFilter {
+    Exclude, // exclude all addresses matching the fiter
+    Include, // only include addresses matching the filter
+}
+
 impl Accounts {
     pub fn new(paths: Vec<PathBuf>) -> Self {
         Self::new_with_frozen_accounts(paths, &HashMap::default(), &[])
@@ -405,6 +410,39 @@ impl Accounts {
                 None
             }
         })
+    }
+
+    pub fn load_largest_accounts(
+        &self,
+        ancestors: &Ancestors,
+        num: usize,
+        filter_by_address: &HashSet<Pubkey>,
+        filter: AccountAddressFilter,
+    ) -> Vec<(Pubkey, u64)> {
+        let mut accounts_balances = self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, u64)>, option| {
+                if let Some(data) = option
+                    .filter(|(pubkey, account, _)| {
+                        let should_include_pubkey = match filter {
+                            AccountAddressFilter::Exclude => !filter_by_address.contains(&pubkey),
+                            AccountAddressFilter::Include => filter_by_address.contains(&pubkey),
+                        };
+                        should_include_pubkey
+                            && account.lamports != 0
+                            && !(account.lamports == std::u64::MAX
+                                && account.owner == solana_storage_program::id())
+                    })
+                    .map(|(pubkey, account, _slot)| (*pubkey, account.lamports))
+                {
+                    collector.push(data)
+                }
+            },
+        );
+
+        accounts_balances.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+        accounts_balances.truncate(num);
+        accounts_balances
     }
 
     #[must_use]
