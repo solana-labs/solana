@@ -1098,14 +1098,14 @@ fn test_fake_shreds_broadcast_leader() {
 
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup();
-    let num_nodes = 3;
+    let num_nodes = 2;
     let validator_config = ValidatorConfig::default();
     let mut error_validator_config = ValidatorConfig::default();
     error_validator_config.broadcast_stage_type = faulty_node_type.clone();
     let mut validator_configs = vec![validator_config; num_nodes - 1];
     // Push a faulty_bootstrap = vec![error_validator_config];
     validator_configs.insert(0, error_validator_config);
-    let node_stakes = vec![300, 100, 100];
+    let node_stakes = vec![300, 100];
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -1116,16 +1116,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
         ..ClusterConfig::default()
     };
 
-    let mut cluster = LocalCluster::new(&cluster_config);
-
-    // Shut down one of the nonbootstrap nodes so that the other
-    // is forced to perform repair
-    let all_pubkeys = cluster.get_node_pubkeys();
-    let validator_id = all_pubkeys
-        .into_iter()
-        .find(|x| *x != cluster.entry_point_info.id)
-        .unwrap();
-    let _ = cluster.exit_node(&validator_id);
+    let cluster = LocalCluster::new(&cluster_config);
 
     // Check for new roots
     let alive_node_contact_infos: Vec<_> = cluster
