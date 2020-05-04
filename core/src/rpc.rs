@@ -2851,11 +2851,21 @@ pub mod tests {
     fn test_get_block_time() {
         let bob_pubkey = Pubkey::new_rand();
         let base_timestamp = 1576183541;
-        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx_and_blockstore(
+        let RpcHandler {
+            io,
+            meta,
+            bank,
+            block_commitment_cache,
+            ..
+        } = start_rpc_handler_with_tx_and_blockstore(
             &bob_pubkey,
             vec![1, 2, 3, 4, 5, 6, 7],
             base_timestamp,
         );
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_get_largest_confirmed_root(7);
 
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 
