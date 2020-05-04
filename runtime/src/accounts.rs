@@ -422,6 +422,8 @@ impl Accounts {
                         (!exclude && pubkeys.contains(&pubkey)
                             || exclude && !pubkeys.contains(&pubkey))
                             && account.lamports != 0
+                            && !(account.lamports == std::u64::MAX
+                                && account.owner == solana_storage_program::id())
                     })
                     .map(|(pubkey, account, _slot)| (*pubkey, account.lamports))
                 {

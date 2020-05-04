@@ -193,7 +193,7 @@ pub struct RpcStorageTurn {
     pub slot: Slot,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcAccountBalance {
     pub pubkey: String,

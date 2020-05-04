@@ -1807,6 +1807,56 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_largest_accounts() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler {
+            io, meta, alice, ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts"}}"#);
+        let rep = io.handle_request_sync(&req, meta.clone());
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+        let largest_accounts: Vec<RpcAccountBalance> = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success for {}", req);
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert_eq!(largest_accounts.len(), 18);
+
+        // Get Alice balance
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
+            alice.pubkey()
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let alice_balance: u64 = serde_json::from_value(json["result"]["value"].clone())
+            .expect("actual response deserialization");
+        assert!(largest_accounts.contains(&RpcAccountBalance {
+            pubkey: alice.pubkey().to_string(),
+            lamports: alice_balance,
+        }));
+
+        // Get Bob balance
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
+            bob_pubkey
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let bob_balance: u64 = serde_json::from_value(json["result"]["value"].clone())
+            .expect("actual response deserialization");
+        assert!(largest_accounts.contains(&RpcAccountBalance {
+            pubkey: bob_pubkey.to_string(),
+            lamports: bob_balance,
+        }));
+    }
+
+    #[test]
     fn test_rpc_get_minimum_balance_for_rent_exemption() {
         let bob_pubkey = Pubkey::new_rand();
         let data_len = 50;
