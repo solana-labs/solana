@@ -59,6 +59,11 @@ pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
 pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, TransactionRent);
 
+pub enum AccountAddressFilter {
+    Exclude, // exclude all addresses matching the fiter
+    Include, // only include addresses matching the filter
+}
+
 impl Accounts {
     pub fn new(paths: Vec<PathBuf>) -> Self {
         Self::new_with_frozen_accounts(paths, &HashMap::default(), &[])
@@ -411,16 +416,19 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         num: usize,
-        pubkeys: &[Pubkey],
-        exclude: bool,
+        filter_by_address: &HashSet<Pubkey>,
+        filter: AccountAddressFilter,
     ) -> Vec<(Pubkey, u64)> {
         let mut accounts_balances = self.accounts_db.scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, u64)>, option| {
                 if let Some(data) = option
                     .filter(|(pubkey, account, _)| {
-                        (!exclude && pubkeys.contains(&pubkey)
-                            || exclude && !pubkeys.contains(&pubkey))
+                        let should_include_pubkey = match filter {
+                            AccountAddressFilter::Exclude => !filter_by_address.contains(&pubkey),
+                            AccountAddressFilter::Include => filter_by_address.contains(&pubkey),
+                        };
+                        should_include_pubkey
                             && account.lamports != 0
                             && !(account.lamports == std::u64::MAX
                                 && account.owner == solana_storage_program::id())

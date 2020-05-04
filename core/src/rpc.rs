@@ -19,7 +19,7 @@ use solana_client::{
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_perf::packet::PACKET_DATA_SIZE;
-use solana_runtime::bank::Bank;
+use solana_runtime::{accounts::AccountAddressFilter, bank::Bank};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -37,7 +37,7 @@ use solana_transaction_status::{
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
     cmp::max,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::{SocketAddr, UdpSocket},
     str::FromStr,
     sync::{Arc, RwLock},
@@ -287,7 +287,11 @@ impl JsonRpcRequestProcessor {
     ) -> Result<Vec<RpcAccountBalance>> {
         Ok(self
             .bank(commitment)?
-            .get_largest_accounts(NUM_LARGEST_ACCOUNTS, &[], true)
+            .get_largest_accounts(
+                NUM_LARGEST_ACCOUNTS,
+                &HashSet::new(),
+                AccountAddressFilter::Exclude,
+            )
             .into_iter()
             .map(|(pubkey, lamports)| RpcAccountBalance {
                 pubkey: pubkey.to_string(),
