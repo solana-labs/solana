@@ -188,7 +188,7 @@ pub enum CliCommand {
     },
     Fees,
     GetBlockTime {
-        slot: Slot,
+        slot: Option<Slot>,
     },
     GetEpochInfo {
         commitment_config: CommitmentConfig,
@@ -1698,7 +1698,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             program_id,
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
         CliCommand::Fees => process_fees(&rpc_client),
-        CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, *slot),
+        CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, config, *slot),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetEpochInfo { commitment_config } => {
             process_get_epoch_info(&rpc_client, config, *commitment_config)

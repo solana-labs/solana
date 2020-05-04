@@ -3,7 +3,6 @@ use crate::{
     cli_output::*,
     display::println_name_value,
 };
-use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -96,7 +95,6 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .index(1)
                     .takes_value(true)
                     .value_name("SLOT")
-                    .required(true)
                     .help("Slot number of the block to query")
             )
         )
@@ -312,7 +310,7 @@ pub fn parse_cluster_ping(
 }
 
 pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let slot = value_t_or_exit!(matches, "slot", u64);
+    let slot = value_of(matches, "slot");
     Ok(CliCommandInfo {
         command: CliCommand::GetBlockTime { slot },
         signers: vec![],
@@ -587,15 +585,20 @@ pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
     Ok("".to_string())
 }
 
-pub fn process_get_block_time(rpc_client: &RpcClient, slot: Slot) -> ProcessResult {
+pub fn process_get_block_time(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    slot: Option<Slot>,
+) -> ProcessResult {
+    let slot = if let Some(slot) = slot {
+        slot
+    } else {
+        rpc_client.get_slot()?
+    };
     let timestamp = rpc_client.get_block_time(slot)?;
-    let result = format!(
-        "{} (UnixTimestamp: {})",
-        DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc)
-            .to_rfc3339_opts(SecondsFormat::Secs, true),
-        timestamp
-    );
-    Ok(result)
+    let block_time = CliBlockTime { slot, timestamp };
+    config.output_format.formatted_print(&block_time);
+    Ok("".to_string())
 }
 
 pub fn process_get_epoch_info(
@@ -1255,7 +1258,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_get_block_time, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetBlockTime { slot },
+                command: CliCommand::GetBlockTime { slot: Some(slot) },
                 signers: vec![],
             }
         );
