@@ -284,10 +284,11 @@ impl JsonRpcRequestProcessor {
     fn get_largest_accounts(
         &self,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<RpcAccountBalance>> {
-        Ok(self
-            .bank(commitment)?
-            .get_largest_accounts(
+    ) -> RpcResponse<Vec<RpcAccountBalance>> {
+        let bank = self.bank(commitment)?;
+        new_response(
+            &bank,
+            bank.get_largest_accounts(
                 NUM_LARGEST_ACCOUNTS,
                 &HashSet::new(),
                 AccountAddressFilter::Exclude,
@@ -297,7 +298,8 @@ impl JsonRpcRequestProcessor {
                 pubkey: pubkey.to_string(),
                 lamports,
             })
-            .collect())
+            .collect(),
+        )
     }
 
     fn get_vote_accounts(
@@ -755,7 +757,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<RpcAccountBalance>>;
+    ) -> RpcResponse<Vec<RpcAccountBalance>>;
 
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(
@@ -1162,7 +1164,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<Vec<RpcAccountBalance>> {
+    ) -> RpcResponse<Vec<RpcAccountBalance>> {
         debug!("get_largest_accounts rpc request received");
         meta.request_processor
             .read()
@@ -1817,18 +1819,11 @@ pub mod tests {
             io, meta, alice, ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts"}}"#);
-        let rep = io.handle_request_sync(&req, meta.clone());
-        let res: Response = serde_json::from_str(&rep.expect("actual response"))
-            .expect("actual response deserialization");
-        let largest_accounts: Vec<RpcAccountBalance> = if let Response::Single(res) = res {
-            if let Output::Success(res) = res {
-                serde_json::from_value(res.result).unwrap()
-            } else {
-                panic!("Expected success for {}", req);
-            }
-        } else {
-            panic!("Expected single response");
-        };
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let largest_accounts: Vec<RpcAccountBalance> =
+            serde_json::from_value(json["result"]["value"].clone())
+                .expect("actual response deserialization");
         assert_eq!(largest_accounts.len(), 18);
 
         // Get Alice balance
