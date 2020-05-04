@@ -6,6 +6,7 @@ use crate::arg_parser::parse_args;
 use crate::args::{
     resolve_command, AuthorizeArgs, Command, MoveArgs, NewArgs, RebaseArgs, SetLockupArgs,
 };
+use itertools::Itertools;
 use solana_cli_config::Config;
 use solana_client::client_error::ClientError;
 use solana_client::rpc_client::RpcClient;
@@ -17,7 +18,10 @@ use solana_sdk::{
     signers::Signers,
     transaction::Transaction,
 };
-use solana_stake_program::stake_instruction::LockupArgs;
+use solana_stake_program::{
+    stake_instruction::LockupArgs,
+    stake_state::{Lockup, StakeState},
+};
 use std::env;
 use std::error::Error;
 
@@ -45,6 +49,26 @@ fn get_balances(
         .collect()
 }
 
+fn get_lockup(client: &RpcClient, address: &Pubkey) -> Result<Lockup, ClientError> {
+    client
+        .get_account(address)
+        .map(|account| StakeState::lockup_from(&account).unwrap())
+}
+
+fn get_lockups(
+    client: &RpcClient,
+    addresses: Vec<Pubkey>,
+) -> Result<Vec<(Pubkey, Lockup)>, ClientError> {
+    addresses
+        .into_iter()
+        .map(|pubkey| get_lockup(client, &pubkey).map(|bal| (pubkey, bal)))
+        .collect()
+}
+
+fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
+    signers.into_iter().unique_by(|s| s.pubkey()).collect_vec()
+}
+
 fn process_new_stake_account(
     client: &RpcClient,
     args: &NewArgs<Pubkey, Box<dyn Signer>>,
@@ -59,12 +83,12 @@ fn process_new_stake_account(
         &Pubkey::default(),
         args.index,
     );
-    let signers = vec![
+    let signers = unique_signers(vec![
         &*args.fee_payer,
         &*args.funding_keypair,
         &*args.base_keypair,
-    ];
-    let signature = send_message(client, message, &signers)?;
+    ]);
+    let signature = send_message(client, message, &signers, false)?;
     Ok(signature)
 }
 
@@ -81,15 +105,12 @@ fn process_authorize_stake_accounts(
         &args.new_withdraw_authority,
         args.num_accounts,
     );
-    let signers = vec![
+    let signers = unique_signers(vec![
         &*args.fee_payer,
         &*args.stake_authority,
         &*args.withdraw_authority,
-    ];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
-    }
+    ]);
+    send_messages(client, messages, &signers, false)?;
     Ok(())
 }
 
@@ -97,6 +118,10 @@ fn process_lockup_stake_accounts(
     client: &RpcClient,
     args: &SetLockupArgs<Pubkey, Box<dyn Signer>>,
 ) -> Result<(), ClientError> {
+    let addresses =
+        stake_accounts::derive_stake_account_addresses(&args.base_pubkey, args.num_accounts);
+    let existing_lockups = get_lockups(&client, addresses)?;
+
     let lockup = LockupArgs {
         epoch: args.lockup_epoch,
         unix_timestamp: args.lockup_date,
@@ -104,16 +129,17 @@ fn process_lockup_stake_accounts(
     };
     let messages = stake_accounts::lockup_stake_accounts(
         &args.fee_payer.pubkey(),
-        &args.base_pubkey,
         &args.custodian.pubkey(),
         &lockup,
-        args.num_accounts,
+        &existing_lockups,
+        args.unlock_years,
     );
-    let signers = vec![&*args.fee_payer, &*args.custodian];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
+    if messages.is_empty() {
+        eprintln!("No work to do");
+        return Ok(());
     }
+    let signers = unique_signers(vec![&*args.fee_payer, &*args.custodian]);
+    send_messages(client, messages, &signers, args.no_wait)?;
     Ok(())
 }
 
@@ -135,15 +161,12 @@ fn process_rebase_stake_accounts(
         eprintln!("No accounts found");
         return Ok(());
     }
-    let signers = vec![
+    let signers = unique_signers(vec![
         &*args.fee_payer,
         &*args.new_base_keypair,
         &*args.stake_authority,
-    ];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
-    }
+    ]);
+    send_messages(client, messages, &signers, false)?;
     Ok(())
 }
 
@@ -170,16 +193,13 @@ fn process_move_stake_accounts(
         eprintln!("No accounts found");
         return Ok(());
     }
-    let signers = vec![
+    let signers = unique_signers(vec![
         &*args.fee_payer,
         &*args.new_base_keypair,
         &*args.stake_authority,
         &*authorize_args.withdraw_authority,
-    ];
-    for message in messages {
-        let signature = send_message(client, message, &signers)?;
-        println!("{}", signature);
-    }
+    ]);
+    send_messages(client, messages, &signers, false)?;
     Ok(())
 }
 
@@ -187,10 +207,30 @@ fn send_message<S: Signers>(
     client: &RpcClient,
     message: Message,
     signers: &S,
+    no_wait: bool,
 ) -> Result<Signature, ClientError> {
     let mut transaction = Transaction::new_unsigned(message);
     client.resign_transaction(&mut transaction, signers)?;
-    client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
+    if no_wait {
+        client.send_transaction(&transaction)
+    } else {
+        client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
+    }
+}
+
+fn send_messages<S: Signers>(
+    client: &RpcClient,
+    messages: Vec<Message>,
+    signers: &S,
+    no_wait: bool,
+) -> Result<Vec<Signature>, ClientError> {
+    let mut signatures = vec![];
+    for message in messages {
+        let signature = send_message(client, message, signers, no_wait)?;
+        signatures.push(signature);
+        println!("{}", signature);
+    }
+    Ok(signatures)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

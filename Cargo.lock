@@ -4845,6 +4845,7 @@ name = "solana-stake-accounts"
 version = "1.2.0"
 dependencies = [
  "clap",
+ "itertools 0.9.0",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
