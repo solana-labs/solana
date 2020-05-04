@@ -1041,7 +1041,7 @@ pub mod test {
             .bank_forks
             .write()
             .unwrap()
-            .set_root(43, &None);
+            .set_root(43, &None, None);
         assert!(!tower.check_switch_threshold(
             110,
             &vote_simulator.bank_forks.read().unwrap().ancestors(),

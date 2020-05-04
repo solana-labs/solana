@@ -9,8 +9,8 @@ use crate::{
     consensus::{StakeLockout, Tower},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ForkStats, ProgressMap, PropagatedStats},
-    repair_service::DuplicateSlotsResetReceiver,
     pubkey_references::PubkeyReferences,
+    repair_service::DuplicateSlotsResetReceiver,
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -2325,7 +2325,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut progress,
             &None,
-            &mut HashSet::new(),
+            &mut PubkeyReferences::default(),
             Some(confirmed_root),
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
