@@ -1,9 +1,6 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    cli_output::{
-        CliBlockProduction, CliBlockProductionEntry, CliEpochInfo, CliKeyedStakeState,
-        CliSlotStatus, CliStakeVec, CliValidator, CliValidators,
-    },
+    cli_output::*,
     display::println_name_value,
 };
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
@@ -24,7 +21,7 @@ use solana_client::{
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account_utils::StateMut,
-    clock::{self, Slot},
+    clock::{self, Clock, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::Epoch,
     hash::Hash,
@@ -33,6 +30,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction,
+    sysvar::{self, Sysvar},
     transaction::Transaction,
 };
 use std::{
@@ -80,6 +78,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Continue reporting progress even after the validator has caught up"),
                 )
                 .arg(commitment_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("cluster-date")
+                .about("Get current cluster date, computed from genesis creation time and network time")
         )
         .subcommand(
             SubCommand::with_name("cluster-version")
@@ -515,6 +517,24 @@ pub fn process_catchup(
         sleep(Duration::from_secs(sleep_interval as u64));
         previous_rpc_slot = rpc_slot;
         previous_slot_distance = slot_distance;
+    }
+}
+
+pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let result = rpc_client
+        .get_account_with_commitment(&sysvar::clock::id(), CommitmentConfig::default())?;
+    if let Some(clock_account) = result.value {
+        let clock: Clock = Sysvar::from_account(&clock_account).ok_or_else(|| {
+            CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
+        })?;
+        let block_time = CliBlockTime {
+            slot: result.context.slot,
+            timestamp: clock.unix_timestamp,
+        };
+        config.output_format.formatted_print(&block_time);
+        Ok("".to_string())
+    } else {
+        Err(format!("AccountNotFound: pubkey={}", sysvar::clock::id()).into())
     }
 }
 
@@ -1195,6 +1215,17 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
+
+        let test_cluster_version = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "cluster-date"]);
+        assert_eq!(
+            parse_command(&test_cluster_version, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ClusterDate,
+                signers: vec![],
+            }
+        );
 
         let test_cluster_version = test_commands
             .clone()

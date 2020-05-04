@@ -179,6 +179,7 @@ pub enum CliCommand {
         commitment_config: CommitmentConfig,
         follow: bool,
     },
+    ClusterDate,
     ClusterVersion,
     CreateAddressWithSeed {
         from_pubkey: Option<Pubkey>,
@@ -587,6 +588,10 @@ pub fn parse_command(
     let response = match matches.subcommand() {
         // Cluster Query Commands
         ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
+        ("cluster-date", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::ClusterDate,
+            signers: vec![],
+        }),
         ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ClusterVersion,
             signers: vec![],
@@ -1685,6 +1690,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *commitment_config,
             *follow,
         ),
+        CliCommand::ClusterDate => process_cluster_date(&rpc_client, config),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::CreateAddressWithSeed {
             from_pubkey,
