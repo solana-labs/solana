@@ -34,12 +34,12 @@ where
             SubCommand::with_name("distribute-tokens")
                 .about("Distribute tokens")
                 .arg(
-                    Arg::with_name("transactions_csv")
+                    Arg::with_name("transactions_db")
                         .required(true)
                         .index(1)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Transactions CSV file"),
+                        .help("Transactions database file"),
                 )
                 .arg(
                     Arg::with_name("bids_csv")
@@ -83,12 +83,12 @@ where
             SubCommand::with_name("distribute-stake")
                 .about("Distribute stake accounts")
                 .arg(
-                    Arg::with_name("transactions_csv")
+                    Arg::with_name("transactions_db")
                         .required(true)
                         .index(1)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Transactions CSV file"),
+                        .help("Transactions database file"),
                 )
                 .arg(
                     Arg::with_name("allocations_csv")
@@ -163,7 +163,7 @@ where
 fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String> {
     DistributeTokensArgs {
         bids_csv: value_t_or_exit!(matches, "bids_csv", String),
-        transactions_csv: value_t_or_exit!(matches, "transactions_csv", String),
+        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
         dollars_per_sol: value_t_or_exit!(matches, "dollars_per_sol", f64),
         dry_run: matches.is_present("dry_run"),
         sender_keypair: value_t!(matches, "sender_keypair", String).ok(),
@@ -174,7 +174,7 @@ fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArg
 fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeStakeArgs<String, String> {
     DistributeStakeArgs {
         allocations_csv: value_t_or_exit!(matches, "allocations_csv", String),
-        transactions_csv: value_t_or_exit!(matches, "transactions_csv", String),
+        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
         dry_run: matches.is_present("dry_run"),
         stake_account_address: value_t_or_exit!(matches, "stake_account_address", String),
         stake_authority: value_t!(matches, "stake_authority", String).ok(),

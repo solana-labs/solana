@@ -6,7 +6,7 @@ use std::error::Error;
 
 pub struct DistributeTokensArgs<K> {
     pub bids_csv: String,
-    pub transactions_csv: String,
+    pub transactions_db: String,
     pub dollars_per_sol: f64,
     pub dry_run: bool,
     pub sender_keypair: Option<K>,
@@ -15,7 +15,7 @@ pub struct DistributeTokensArgs<K> {
 
 pub struct DistributeStakeArgs<P, K> {
     pub allocations_csv: String,
-    pub transactions_csv: String,
+    pub transactions_db: String,
     pub dry_run: bool,
     pub stake_account_address: P,
     pub stake_authority: Option<K>,
@@ -49,7 +49,7 @@ pub fn resolve_command(
             let matches = ArgMatches::default();
             let resolved_args = DistributeTokensArgs {
                 bids_csv: args.bids_csv,
-                transactions_csv: args.transactions_csv,
+                transactions_db: args.transactions_db,
                 dollars_per_sol: args.dollars_per_sol,
                 dry_run: args.dry_run,
                 sender_keypair: args.sender_keypair.as_ref().map(|key_url| {
@@ -66,7 +66,7 @@ pub fn resolve_command(
             let matches = ArgMatches::default();
             let resolved_args = DistributeStakeArgs {
                 allocations_csv: args.allocations_csv,
-                transactions_csv: args.transactions_csv,
+                transactions_db: args.transactions_db,
                 dry_run: args.dry_run,
                 stake_account_address: pubkey_from_path(
                     &matches,

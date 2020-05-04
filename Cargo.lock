@@ -1121,6 +1121,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f36b5f248235f45773d4944f555f83ea61fe07b18b561ccf99d7483d7381e54d"
+
+[[package]]
 name = "hash32"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2055,6 +2061,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
+name = "pickledb"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9161694d67f6c5163519d42be942ae36bbdb55f439460144f105bc4f9f7d1d61"
+dependencies = [
+ "bincode",
+ "serde",
+ "serde_cbor",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "pin-project"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2642,6 +2661,16 @@ version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "325a073952621257820e7a3469f55ba4726d8b28657e7e36653d1c36dc2c84ae"
 dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_cbor"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
+dependencies = [
+ "half",
  "serde",
 ]
 
@@ -3416,6 +3445,7 @@ dependencies = [
  "console 0.10.3",
  "csv",
  "indexmap",
+ "pickledb",
  "serde",
  "solana-clap-utils",
  "solana-cli-config",
@@ -3426,6 +3456,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
