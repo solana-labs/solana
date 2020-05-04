@@ -31,7 +31,7 @@ where
                 .help("RPC entrypoint address. i.e. http://devnet.solana.com"),
         )
         .subcommand(
-            SubCommand::with_name("distribute")
+            SubCommand::with_name("distribute-tokens")
                 .about("Distribute tokens")
                 .arg(
                     Arg::with_name("transactions_csv")
