@@ -294,8 +294,8 @@ impl JsonRpcRequestProcessor {
                 AccountAddressFilter::Exclude,
             )
             .into_iter()
-            .map(|(pubkey, lamports)| RpcAccountBalance {
-                pubkey: pubkey.to_string(),
+            .map(|(address, lamports)| RpcAccountBalance {
+                address: address.to_string(),
                 lamports,
             })
             .collect(),
@@ -1836,7 +1836,7 @@ pub mod tests {
         let alice_balance: u64 = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
         assert!(largest_accounts.contains(&RpcAccountBalance {
-            pubkey: alice.pubkey().to_string(),
+            address: alice.pubkey().to_string(),
             lamports: alice_balance,
         }));
 
@@ -1850,7 +1850,7 @@ pub mod tests {
         let bob_balance: u64 = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
         assert!(largest_accounts.contains(&RpcAccountBalance {
-            pubkey: bob_pubkey.to_string(),
+            address: bob_pubkey.to_string(),
             lamports: bob_balance,
         }));
     }

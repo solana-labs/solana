@@ -648,7 +648,7 @@ Returns the 20 largest accounts, by lamport balance
 The result will be an RpcResponse JSON object with `value` equal to an array of:
 
 * `<object>` - otherwise, a JSON object containing:
-  * `pubkey: <string>`, base-58 encoded Pubkey address of the account
+  * `address: <string>`, base-58 encoded address of the account
   * `lamports: <u64>`, number of lamports in the account, as a u64
 
 #### Example:
@@ -658,7 +658,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getInflation"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"context":{"slot":54},"value":[{"lamports":999974,"pubkey":"99P8ZgtJYe1buSK8JXkvpLh8xPsCFuLYhz9hQFNw93WJ"},{"lamports":42,"pubkey":"uPwWLo16MVehpyWqsLkK3Ka8nLowWvAHbBChqv2FZeL"},{"lamports":42,"pubkey":"aYJCgU7REfu3XF8b3QhkqgqQvLizx8zxuLBHA25PzDS"},{"lamports":42,"pubkey":"CTvHVtQ4gd4gUcw3bdVgZJJqApXE9nCbbbP4VTS5wE1D"},{"lamports":20,"pubkey":"4fq3xJ6kfrh9RkJQsmVd5gNMvJbuSHfErywvEjNQDPxu"},{"lamports":4,"pubkey":"AXJADheGVp9cruP8WYu46oNkRbeASngN5fPCMVGQqNHa"},{"lamports":2,"pubkey":"8NT8yS6LiwNprgW4yM1jPPow7CwRUotddBVkrkWgYp24"},{"lamports":1,"pubkey":"SysvarEpochSchedu1e111111111111111111111111"},{"lamports":1,"pubkey":"11111111111111111111111111111111"},{"lamports":1,"pubkey":"Stake11111111111111111111111111111111111111"},{"lamports":1,"pubkey":"SysvarC1ock11111111111111111111111111111111"},{"lamports":1,"pubkey":"StakeConfig11111111111111111111111111111111"},{"lamports":1,"pubkey":"SysvarRent111111111111111111111111111111111"},{"lamports":1,"pubkey":"Config1111111111111111111111111111111111111"},{"lamports":1,"pubkey":"SysvarStakeHistory1111111111111111111111111"},{"lamports":1,"pubkey":"SysvarRecentB1ockHashes11111111111111111111"},{"lamports":1,"pubkey":"SysvarFees111111111111111111111111111111111"},{"lamports":1,"pubkey":"Vote111111111111111111111111111111111111111"}]},"id":1}
+{"jsonrpc":"2.0","result":{"context":{"slot":54},"value":[{"lamports":999974,"address":"99P8ZgtJYe1buSK8JXkvpLh8xPsCFuLYhz9hQFNw93WJ"},{"lamports":42,"address":"uPwWLo16MVehpyWqsLkK3Ka8nLowWvAHbBChqv2FZeL"},{"lamports":42,"address":"aYJCgU7REfu3XF8b3QhkqgqQvLizx8zxuLBHA25PzDS"},{"lamports":42,"address":"CTvHVtQ4gd4gUcw3bdVgZJJqApXE9nCbbbP4VTS5wE1D"},{"lamports":20,"address":"4fq3xJ6kfrh9RkJQsmVd5gNMvJbuSHfErywvEjNQDPxu"},{"lamports":4,"address":"AXJADheGVp9cruP8WYu46oNkRbeASngN5fPCMVGQqNHa"},{"lamports":2,"address":"8NT8yS6LiwNprgW4yM1jPPow7CwRUotddBVkrkWgYp24"},{"lamports":1,"address":"SysvarEpochSchedu1e111111111111111111111111"},{"lamports":1,"address":"11111111111111111111111111111111"},{"lamports":1,"address":"Stake11111111111111111111111111111111111111"},{"lamports":1,"address":"SysvarC1ock11111111111111111111111111111111"},{"lamports":1,"address":"StakeConfig11111111111111111111111111111111"},{"lamports":1,"address":"SysvarRent111111111111111111111111111111111"},{"lamports":1,"address":"Config1111111111111111111111111111111111111"},{"lamports":1,"address":"SysvarStakeHistory1111111111111111111111111"},{"lamports":1,"address":"SysvarRecentB1ockHashes11111111111111111111"},{"lamports":1,"address":"SysvarFees111111111111111111111111111111111"},{"lamports":1,"address":"Vote111111111111111111111111111111111111111"}]},"id":1}
 ```
 
 ### getLeaderSchedule

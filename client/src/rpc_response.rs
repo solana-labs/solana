@@ -196,6 +196,6 @@ pub struct RpcStorageTurn {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcAccountBalance {
-    pub pubkey: String,
+    pub address: String,
     pub lamports: u64,
 }
