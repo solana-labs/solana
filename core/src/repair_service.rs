@@ -361,7 +361,7 @@ impl RepairService {
                     false
                 }
             } else {
-                false
+                true
             }
         })
     }
@@ -901,7 +901,7 @@ mod test {
         let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
         let duplicate_status = DuplicateSlotRepairStatus {
             start: std::u64::MAX,
-            repair_addr: Some(receive_socket.local_addr().unwrap()),
+            repair_addr: None,
         };
 
         // Insert some shreds to create a SlotMeta,
@@ -911,8 +911,32 @@ mod test {
             .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
             .unwrap();
 
-        // Slot is not yet full, should not get filtered from `duplicate_slot_repair_statuses`
         duplicate_slot_repair_statuses.insert(dead_slot, duplicate_status.clone());
+
+        // There is no repair_addr, so should not get filtered because the timeout
+        // `std::u64::MAX` has not expired
+        RepairService::generate_and_send_duplicate_repairs(
+            &mut duplicate_slot_repair_statuses,
+            &cluster_slots,
+            &blockstore,
+            &serve_repair,
+            &mut RepairStats::default(),
+            &UdpSocket::bind("0.0.0.0:0").unwrap(),
+        );
+        assert!(duplicate_slot_repair_statuses
+            .get(&dead_slot)
+            .unwrap()
+            .repair_addr
+            .is_none());
+        assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
+
+        // Give the slot a repair address
+        duplicate_slot_repair_statuses
+            .get_mut(&dead_slot)
+            .unwrap()
+            .repair_addr = Some(receive_socket.local_addr().unwrap());
+
+        // Slot is not yet full, should not get filtered from `duplicate_slot_repair_statuses`
         RepairService::generate_and_send_duplicate_repairs(
             &mut duplicate_slot_repair_statuses,
             &cluster_slots,
@@ -994,7 +1018,7 @@ mod test {
             &cluster_slots,
             &serve_repair,
         );
-        assert!(duplicate_status.repair_addr.is_some());
+        assert_ne!(duplicate_status.repair_addr, dummy_addr);
     }
 
     #[test]

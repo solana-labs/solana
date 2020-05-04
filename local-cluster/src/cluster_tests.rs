@@ -300,8 +300,8 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo]) 
             }
             done = min_node >= num_new_roots;
         }
+        sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
     }
-    sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
 }
 
 fn poll_all_nodes_for_signature(
