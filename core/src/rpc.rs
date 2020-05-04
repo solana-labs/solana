@@ -46,6 +46,7 @@ use std::{
 };
 
 const JSON_RPC_SERVER_ERROR_0: i64 = -32000;
+const NUM_LARGEST_ACCOUNTS: usize = 20;
 
 type RpcResponse<T> = Result<Response<T>>;
 
@@ -278,6 +279,21 @@ impl JsonRpcRequestProcessor {
 
     fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
         Ok(self.bank(commitment)?.capitalization())
+    }
+
+    fn get_largest_accounts(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Vec<RpcAccountBalance>> {
+        Ok(self
+            .bank(commitment)?
+            .get_largest_accounts(NUM_LARGEST_ACCOUNTS, &[], true)
+            .into_iter()
+            .map(|(pubkey, lamports)| RpcAccountBalance {
+                pubkey: pubkey.to_string(),
+                lamports,
+            })
+            .collect())
     }
 
     fn get_vote_accounts(
@@ -730,6 +746,13 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64>;
 
+    #[rpc(meta, name = "getLargestAccounts")]
+    fn get_largest_accounts(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Vec<RpcAccountBalance>>;
+
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(
         &self,
@@ -1129,6 +1152,18 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_total_supply(commitment)
+    }
+
+    fn get_largest_accounts(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<Vec<RpcAccountBalance>> {
+        debug!("get_largest_accounts rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_largest_accounts(commitment)
     }
 
     fn request_airdrop(
