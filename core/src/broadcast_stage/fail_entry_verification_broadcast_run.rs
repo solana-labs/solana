@@ -2,6 +2,7 @@ use super::*;
 use solana_ledger::shred::Shredder;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
+use std::{thread::sleep, time::Duration};
 
 pub const NUM_BAD_SLOTS: u64 = 10;
 pub const SLOT_TO_RESOLVE: u64 = 32;
@@ -30,7 +31,7 @@ impl FailEntryVerificationBroadcastRun {
 impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
-        _blockstore: &Arc<Blockstore>,
+        blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -89,7 +90,9 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
                 shredder.entries_to_shreds(&[good_last_entry], true, self.next_shred_index);
 
             let (bad_last_data_shred, _, _) =
-                shredder.entries_to_shreds(&[bad_last_entry], true, self.next_shred_index);
+                // Don't mark the last shred as last so that validators won't know that
+                // they've gotten all the shreds, and will continue trying to repair
+                shredder.entries_to_shreds(&[bad_last_entry], false, self.next_shred_index);
 
             self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)
@@ -103,13 +106,24 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let stakes = stakes.map(Arc::new);
         socket_sender.send(((stakes.clone(), data_shreds), None))?;
         if let Some((good_last_data_shred, bad_last_data_shred)) = last_shreds {
-            let bad_last_data_shred = Arc::new(bad_last_data_shred);
-            // Store the bad shred so we serve bad repairs to validators catching up
-            blockstore_sender.send((bad_last_data_shred, None))?;
             // Stash away the good shred so we can rewrite them later
             self.good_shreds.extend(good_last_data_shred.clone());
-            // Send good shreds to rest of network
-            socket_sender.send(((stakes, Arc::new(good_last_data_shred)), None))?;
+            let good_last_data_shred = Arc::new(good_last_data_shred);
+            let bad_last_data_shred = Arc::new(bad_last_data_shred);
+            // Store the good shred so that blockstore will signal ClusterSlots
+            // that the slot is complete
+            blockstore_sender.send((good_last_data_shred, None))?;
+            loop {
+                // Wait for slot to be complete
+                if blockstore.is_full(bank.slot()) {
+                    break;
+                }
+                sleep(Duration::from_millis(10));
+            }
+            // Store the bad shred so we serve bad repairs to validators catching up
+            blockstore_sender.send((bad_last_data_shred.clone(), None))?;
+            // Send bad shreds to rest of network
+            socket_sender.send(((stakes, bad_last_data_shred), None))?;
         }
         Ok(())
     }

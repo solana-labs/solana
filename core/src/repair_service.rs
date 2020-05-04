@@ -449,45 +449,49 @@ impl RepairService {
             .expect("Couldn't get dead slots iterator from blockstore");
         dead_slots_iter
             .filter_map(|dead_slot| {
-                if duplicate_slot_repair_statuses.contains_key(&dead_slot) {
-                    None
-                } else {
-                    cluster_slots
-                        .lookup(dead_slot)
-                        .and_then(|completed_dead_slot_pubkeys| {
-                            let epoch = root_bank.get_epoch_and_slot_index(dead_slot).0;
-                            if let Some(epoch_stakes) = root_bank.epoch_stakes(epoch) {
-                                let total_stake = epoch_stakes.total_stake();
-                                let node_id_to_vote_accounts =
-                                    epoch_stakes.node_id_to_vote_accounts();
-                                let total_completed_slot_stake: u64 = completed_dead_slot_pubkeys
-                                    .read()
-                                    .unwrap()
-                                    .iter()
-                                    .map(|(node_key, _)| {
-                                        node_id_to_vote_accounts
-                                            .get(node_key)
-                                            .map(|v| v.total_stake)
-                                            .unwrap_or(0)
-                                    })
-                                    .sum();
-                                if total_completed_slot_stake as f64 / total_stake as f64
-                                    > VOTE_THRESHOLD_SIZE
-                                {
-                                    Some(dead_slot)
-                                } else {
-                                    None
-                                }
+                if let Some(status) = duplicate_slot_repair_statuses.get(&dead_slot) {
+                    // Newly repaired version of this slot has been marked dead again,
+                    // time to purge again
+                    warn!(
+                        "Repaired version of slot {} most recently (but maybe not entirely)
+                        from {:?} has failed again",
+                        dead_slot, status.repair_addr
+                    );
+                }
+                cluster_slots
+                    .lookup(dead_slot)
+                    .and_then(|completed_dead_slot_pubkeys| {
+                        let epoch = root_bank.get_epoch_and_slot_index(dead_slot).0;
+                        if let Some(epoch_stakes) = root_bank.epoch_stakes(epoch) {
+                            let total_stake = epoch_stakes.total_stake();
+                            let node_id_to_vote_accounts = epoch_stakes.node_id_to_vote_accounts();
+                            let total_completed_slot_stake: u64 = completed_dead_slot_pubkeys
+                                .read()
+                                .unwrap()
+                                .iter()
+                                .map(|(node_key, _)| {
+                                    node_id_to_vote_accounts
+                                        .get(node_key)
+                                        .map(|v| v.total_stake)
+                                        .unwrap_or(0)
+                                })
+                                .sum();
+                            if total_completed_slot_stake as f64 / total_stake as f64
+                                > VOTE_THRESHOLD_SIZE
+                            {
+                                Some(dead_slot)
                             } else {
-                                warn!(
-                                    "Dead slot {} is too far ahead of root bank {}",
-                                    dead_slot,
-                                    root_bank.slot()
-                                );
                                 None
                             }
-                        })
-                }
+                        } else {
+                            error!(
+                                "Dead slot {} is too far ahead of root bank {}",
+                                dead_slot,
+                                root_bank.slot()
+                            );
+                            None
+                        }
+                    })
             })
             .collect()
     }
@@ -1100,7 +1104,7 @@ mod test {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
-        let mut duplicate_slot_repair_statuses = HashMap::new();
+        let duplicate_slot_repair_statuses = HashMap::new();
         let keypairs = ValidatorVoteKeypairs::new_rand();
         let only_node_id = Arc::new(keypairs.node_keypair.pubkey());
         let GenesisConfigInfo { genesis_config, .. } =
@@ -1144,16 +1148,5 @@ mod test {
             ),
             vec![dead_slot]
         );
-
-        // Because the slot already exists in `duplicate_slot_repair_statuses`,
-        // should not be returned again
-        duplicate_slot_repair_statuses.insert(dead_slot, DuplicateSlotRepairStatus::default());
-        assert!(RepairService::find_new_duplicate_slots(
-            &duplicate_slot_repair_statuses,
-            &blockstore,
-            &cluster_slots,
-            &bank0,
-        )
-        .is_empty());
     }
 }
