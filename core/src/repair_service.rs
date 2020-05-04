@@ -935,6 +935,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &RwLock::new(OutstandingRequests::default()),
         );
         assert!(duplicate_slot_repair_statuses
             .get(&dead_slot)
@@ -957,6 +958,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &RwLock::new(OutstandingRequests::default()),
         );
         assert_eq!(duplicate_slot_repair_statuses.len(), 1);
         assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
@@ -973,6 +975,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &RwLock::new(OutstandingRequests::default()),
         );
         assert!(duplicate_slot_repair_statuses.is_empty());
     }

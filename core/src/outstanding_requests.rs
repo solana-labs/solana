@@ -39,18 +39,17 @@ where
         nonce
     }
 
-    fn register_response(&mut self, nonce: u32, response: &S) -> bool {
+    fn register_response(&mut self, nonce: u32, response: &S, now: u64) -> bool {
         let (is_valid, should_delete) = self
             .requests
             .get_mut(&nonce)
             .map(|status| {
-                let now = timestamp();
                 if status.num_expected_responses > 0
                     && now < status.expire_timestamp
                     && status.request.verify_response(response)
                 {
                     status.num_expected_responses -= 1;
-                    (true, false)
+                    (true, status.num_expected_responses == 0)
                 } else {
                     (false, true)
                 }
@@ -110,7 +109,8 @@ where
         self.requests
             .get_mut(&socket_addr.ip())
             .map(|node_outstanding_requests| {
-                node_outstanding_requests.register_response(nonce, response)
+                let now = timestamp();
+                node_outstanding_requests.register_response(nonce, response, now)
             })
             .unwrap_or(false)
     }
@@ -124,5 +124,105 @@ where
         Self {
             requests: HashMap::new(),
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::serve_repair::RepairType;
+    use solana_ledger::shred::Shred;
+
+    #[test]
+    fn test_add_request() {
+        let repair_type = RepairType::Orphan(9);
+        let mut node_outstanding_requests = NodeOutstandingRequests::default();
+        let nonce = node_outstanding_requests.nonce;
+        node_outstanding_requests.add_request(repair_type);
+        let request_status = node_outstanding_requests.requests.get(&nonce).unwrap();
+        assert_eq!(request_status.request, repair_type);
+        assert_eq!(
+            request_status.num_expected_responses,
+            repair_type.num_expected_responses()
+        );
+        assert_eq!(node_outstanding_requests.nonce, nonce + 1);
+    }
+
+    #[test]
+    fn test_register_response() {
+        let repair_type = RepairType::Orphan(9);
+        let mut node_outstanding_requests = NodeOutstandingRequests::default();
+        let mut nonce = node_outstanding_requests.nonce;
+        node_outstanding_requests.add_request(repair_type);
+
+        let shred = Shred::new_empty_data_shred();
+        let mut expire_timestamp = node_outstanding_requests
+            .requests
+            .get(&nonce)
+            .unwrap()
+            .expire_timestamp;
+        let mut num_expected_responses = node_outstanding_requests
+            .requests
+            .get(&nonce)
+            .unwrap()
+            .num_expected_responses;
+        assert!(num_expected_responses > 1);
+
+        // Response that passes all checks should decrease num_expected_responses
+        assert!(node_outstanding_requests.register_response(nonce, &shred, expire_timestamp - 1));
+        num_expected_responses -= 1;
+        assert_eq!(
+            node_outstanding_requests
+                .requests
+                .get(&nonce)
+                .unwrap()
+                .num_expected_responses,
+            num_expected_responses
+        );
+
+        // Response with incorrect nonce is ignored
+        assert!(!node_outstanding_requests.register_response(
+            nonce + 1,
+            &shred,
+            expire_timestamp - 1
+        ));
+        assert!(!node_outstanding_requests.register_response(nonce + 1, &shred, expire_timestamp));
+        assert_eq!(
+            node_outstanding_requests
+                .requests
+                .get(&nonce)
+                .unwrap()
+                .num_expected_responses,
+            num_expected_responses
+        );
+
+        // Response with timestamp over limit should remove status, preventing late
+        // responses from being accepted
+        assert!(!node_outstanding_requests.register_response(nonce, &shred, expire_timestamp));
+        assert!(node_outstanding_requests.requests.get(&nonce).is_none());
+
+        // If number of outstanding requests hits zero, should also remove the entry
+        node_outstanding_requests.add_request(repair_type);
+        nonce += 1;
+        expire_timestamp = node_outstanding_requests
+            .requests
+            .get(&nonce)
+            .unwrap()
+            .expire_timestamp;
+        num_expected_responses = node_outstanding_requests
+            .requests
+            .get(&nonce)
+            .unwrap()
+            .num_expected_responses;
+        assert!(num_expected_responses > 1);
+        for _ in 0..num_expected_responses {
+            assert!(node_outstanding_requests.requests.get(&nonce).is_some());
+            assert!(node_outstanding_requests.register_response(
+                nonce,
+                &shred,
+                expire_timestamp - 1
+            ));
+        }
+        assert!(node_outstanding_requests.requests.get(&nonce).is_none());
     }
 }
