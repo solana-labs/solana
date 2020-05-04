@@ -192,3 +192,10 @@ pub struct RpcStorageTurn {
     pub blockhash: String,
     pub slot: Slot,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcAccountBalance {
+    pub address: String,
+    pub lamports: u64,
+}
