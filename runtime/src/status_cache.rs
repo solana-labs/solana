@@ -9,7 +9,7 @@ use solana_sdk::{
     signature::Signature,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -82,6 +82,46 @@ impl<T: Serialize + Clone + PartialEq> PartialEq for StatusCache<T> {
 }
 
 impl<T: Serialize + Clone> StatusCache<T> {
+    pub fn clear_slot_signatures(&mut self, slot: Slot) {
+        let slot_deltas = self.slot_deltas.remove(&slot);
+        if let Some(slot_deltas) = slot_deltas {
+            let slot_deltas = slot_deltas.lock().unwrap();
+            for (blockhash, (_, signature_list)) in slot_deltas.iter() {
+                // Any blockhash that exists in self.slot_deltas must also exist
+                // in self.cache, because in self.purge_roots(), when an entry
+                // (b, (max_slot, _, _)) is removed from self.cache, this implies
+                // all entries in self.slot_deltas < max_slot are also removed
+                if let Entry::Occupied(mut o_blockhash_entries) = self.cache.entry(*blockhash) {
+                    let (_, _, all_sig_maps) = o_blockhash_entries.get_mut();
+
+                    for (sig_slice, _) in signature_list {
+                        if let Entry::Occupied(mut o_sig_list) = all_sig_maps.entry(*sig_slice) {
+                            let sig_list = o_sig_list.get_mut();
+                            sig_list.retain(|(updated_slot, _)| *updated_slot != slot);
+                            if sig_list.is_empty() {
+                                o_sig_list.remove_entry();
+                            }
+                        } else {
+                            panic!(
+                                "Map for signature must exist if siganture exists in self.slot_deltas, slot: {}",
+                                slot
+                            )
+                        }
+                    }
+
+                    if all_sig_maps.is_empty() {
+                        o_blockhash_entries.remove_entry();
+                    }
+                } else {
+                    panic!(
+                        "Blockhash must exist if it exists in self.slot_deltas, slot: {}",
+                        slot
+                    )
+                }
+            }
+        }
+    }
+
     /// Check if the signature from a transaction is in any of the forks in the ancestors set.
     pub fn get_signature_status(
         &self,
@@ -408,6 +448,8 @@ mod tests {
             status_cache.add_root(i as u64);
         }
         let slots: Vec<_> = (0_u64..MAX_CACHE_ENTRIES as u64 + 1).collect();
+        assert_eq!(status_cache.slot_deltas.len(), 1);
+        assert!(status_cache.slot_deltas.get(&1).is_some());
         let slot_deltas = status_cache.slot_deltas(&slots);
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
@@ -416,5 +458,52 @@ mod tests {
     #[test]
     fn test_age_sanity() {
         assert!(MAX_CACHE_ENTRIES <= MAX_RECENT_BLOCKHASHES);
+    }
+
+    #[test]
+    fn test_clear_slot_signatures() {
+        let sig = Signature::default();
+        let mut status_cache = BankStatusCache::default();
+        let blockhash = hash(Hash::default().as_ref());
+        let blockhash2 = hash(blockhash.as_ref());
+        status_cache.insert(&blockhash, &sig, 0, ());
+        status_cache.insert(&blockhash, &sig, 1, ());
+        status_cache.insert(&blockhash2, &sig, 1, ());
+
+        let mut ancestors0 = HashMap::new();
+        ancestors0.insert(0, 0);
+        let mut ancestors1 = HashMap::new();
+        ancestors1.insert(1, 0);
+
+        // Clear slot 0 related data
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash, &ancestors0)
+            .is_some());
+        status_cache.clear_slot_signatures(0);
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash, &ancestors0)
+            .is_none());
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash, &ancestors1)
+            .is_some());
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash2, &ancestors1)
+            .is_some());
+
+        // Check that the slot delta for slot 0 is gone, but slot 1 still
+        // exists
+        assert!(status_cache.slot_deltas.get(&0).is_none());
+        assert!(status_cache.slot_deltas.get(&1).is_some());
+
+        // Clear slot 1 related data
+        status_cache.clear_slot_signatures(1);
+        assert!(status_cache.slot_deltas.is_empty());
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash, &ancestors1)
+            .is_none());
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash2, &ancestors1)
+            .is_none());
+        assert!(status_cache.cache.is_empty());
     }
 }

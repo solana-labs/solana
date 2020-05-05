@@ -478,7 +478,7 @@ pub struct AccountsDB {
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
-    pub dead_slots: RwLock<HashSet<Slot>>,
+    dead_slots: RwLock<HashSet<Slot>>,
 
     stats: AccountsStats,
 }
@@ -1264,6 +1264,39 @@ impl AccountsDB {
         for slot in non_roots {
             storage.0.remove(&slot);
         }
+    }
+
+    pub fn remove_unrooted_slot(&self, remove_slot: Slot) {
+        if self.accounts_index.read().unwrap().is_root(remove_slot) {
+            panic!("Trying to remove accounts for rooted slot {}", remove_slot);
+        }
+
+        let pubkey_sets: Vec<HashSet<Pubkey>> = self.scan_account_storage(
+            remove_slot,
+            |stored_account: &StoredAccount, _, accum: &mut HashSet<Pubkey>| {
+                accum.insert(stored_account.meta.pubkey);
+            },
+        );
+
+        // Purge this slot from the accounts index
+        let mut reclaims = vec![];
+        {
+            let pubkeys = pubkey_sets.iter().flatten();
+            let accounts_index = self.accounts_index.read().unwrap();
+
+            for pubkey in pubkeys {
+                accounts_index.clean_unrooted_entries_by_slot(remove_slot, pubkey, &mut reclaims);
+            }
+        }
+
+        self.handle_reclaims(&reclaims);
+
+        // 1) Remove old bank hash from self.bank_hashes
+        // 2) Purge this slot's storage entries from self.storage
+        self.process_dead_slots();
+
+        // Sanity check storage entries are removed from the index
+        assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
     pub fn hash_stored_account(slot: Slot, account: &StoredAccount) -> Hash {
@@ -2197,6 +2230,80 @@ pub mod tests {
         assert_eq!(db0.load_slow(&ancestors, &key), Some((account1, 1)));
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(db0.load_slow(&ancestors, &key), Some((account0, 0)));
+    }
+
+    #[test]
+    fn test_remove_unrooted_slot() {
+        let unrooted_slot = 9;
+        let db = AccountsDB::new(Vec::new());
+        let key = Pubkey::default();
+        let account0 = Account::new(1, 0, &key);
+        let ancestors: HashMap<_, _> = vec![(unrooted_slot, 1)].into_iter().collect();
+        db.store(unrooted_slot, &[(&key, &account0)]);
+        db.bank_hashes
+            .write()
+            .unwrap()
+            .insert(unrooted_slot, BankHashInfo::default());
+        assert!(db
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&key, &ancestors)
+            .is_some());
+        assert_load_account(&db, unrooted_slot, key, 1);
+
+        // Purge the slot
+        db.remove_unrooted_slot(unrooted_slot);
+        assert!(db.load_slow(&ancestors, &key).is_none());
+        assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
+        assert!(db.storage.read().unwrap().0.get(&unrooted_slot).is_none());
+        assert!(db
+            .accounts_index
+            .read()
+            .unwrap()
+            .account_maps
+            .get(&key)
+            .map(|pubkey_entry| pubkey_entry.1.read().unwrap().is_empty())
+            .unwrap_or(true));
+        assert!(db
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&key, &ancestors)
+            .is_none());
+
+        // Test we can store for the same slot again and get the right information
+        let account0 = Account::new(2, 0, &key);
+        db.store(unrooted_slot, &[(&key, &account0)]);
+        assert_load_account(&db, unrooted_slot, key, 2);
+    }
+
+    #[test]
+    fn test_remove_unrooted_slot_snapshot() {
+        let unrooted_slot = 9;
+        let db = AccountsDB::new(Vec::new());
+        let key = Pubkey::new_rand();
+        let account0 = Account::new(1, 0, &key);
+        db.store(unrooted_slot, &[(&key, &account0)]);
+
+        // Purge the slot
+        db.remove_unrooted_slot(unrooted_slot);
+
+        // Add a new root
+        let key2 = Pubkey::new_rand();
+        let new_root = unrooted_slot + 1;
+        db.store(new_root, &[(&key2, &account0)]);
+        db.add_root(new_root);
+
+        // Simulate reconstruction from snapshot
+        let db = reconstruct_accounts_db_via_serialization(&db, new_root);
+
+        // Check root account exists
+        assert_load_account(&db, new_root, key2, 1);
+
+        // Check purged account stays gone
+        let unrooted_slot_ancestors: HashMap<_, _> = vec![(unrooted_slot, 1)].into_iter().collect();
+        assert!(db.load_slow(&unrooted_slot_ancestors, &key).is_none());
     }
 
     fn create_account(

@@ -172,6 +172,23 @@ impl<T: Clone> AccountsIndex<T> {
         }
     }
 
+    pub fn clean_unrooted_entries_by_slot(
+        &self,
+        purge_slot: Slot,
+        pubkey: &Pubkey,
+        reclaims: &mut SlotList<T>,
+    ) {
+        if let Some(entry) = self.account_maps.get(pubkey) {
+            let mut list = entry.1.write().unwrap();
+            list.retain(|(slot, entry)| {
+                if *slot == purge_slot {
+                    reclaims.push((*slot, entry.clone()));
+                }
+                *slot != purge_slot
+            });
+        }
+    }
+
     pub fn add_index(&mut self, slot: Slot, pubkey: &Pubkey, account_info: T) {
         let entry = self
             .account_maps

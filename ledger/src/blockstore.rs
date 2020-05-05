@@ -836,6 +836,30 @@ impl Blockstore {
         Ok(())
     }
 
+    pub fn clear_unconfirmed_slot(&self, slot: Slot) {
+        let _lock = self.insert_shreds_lock.lock().unwrap();
+        if let Some(mut slot_meta) = self
+            .meta(slot)
+            .expect("Couldn't fetch from SlotMeta column family")
+        {
+            // Clear all slot related information
+            self.run_purge(slot, slot)
+                .expect("Purge database operations failed");
+
+            // Reinsert parts of `slot_meta` that are important to retain, like the `next_slots`
+            // field.
+            slot_meta.clear_unconfirmed_slot();
+            self.meta_cf
+                .put(slot, &slot_meta)
+                .expect("Couldn't insert into SlotMeta column family");
+        } else {
+            error!(
+                "clear_unconfirmed_slot() called on slot {} with no SlotMeta",
+                slot
+            );
+        }
+    }
+
     pub fn insert_shreds(
         &self,
         shreds: Vec<Shred>,
@@ -2139,6 +2163,16 @@ impl Blockstore {
         Ok(orphans_iter.map(|(slot, _)| slot))
     }
 
+    pub fn dead_slots_iterator<'a>(
+        &'a self,
+        slot: Slot,
+    ) -> Result<impl Iterator<Item = Slot> + 'a> {
+        let dead_slots_iterator = self
+            .db
+            .iter::<cf::DeadSlots>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+        Ok(dead_slots_iterator.map(|(slot, _)| slot))
+    }
+
     /// Prune blockstore such that slots higher than `target_slot` are deleted and all references to
     /// higher slots are removed
     pub fn prune(&self, target_slot: Slot) {
@@ -2397,10 +2431,7 @@ fn find_slot_meta_in_db_else_create<'a>(
         // If this slot doesn't exist, make a orphan slot. This way we
         // remember which slots chained to this one when we eventually get a real shred
         // for this slot
-        insert_map.insert(
-            slot,
-            Rc::new(RefCell::new(SlotMeta::new(slot, std::u64::MAX))),
-        );
+        insert_map.insert(slot, Rc::new(RefCell::new(SlotMeta::new_orphan(slot))));
         Ok(insert_map.get(&slot).unwrap().clone())
     }
 }
@@ -6693,6 +6724,51 @@ pub mod tests {
             assert_eq!(duplicate_proof.shred2, duplicate_shred.payload);
         }
 
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_clear_unconfirmed_slot() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let unconfirmed_slot = 9;
+            let unconfirmed_child_slot = 10;
+            let slots = vec![2, unconfirmed_slot, unconfirmed_child_slot];
+
+            // Insert into slot 9, mark it as dead
+            let shreds: Vec<_> = make_chaining_slot_entries(&slots, 1)
+                .into_iter()
+                .flat_map(|x| x.0)
+                .collect();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            // Should only be one shred in slot 9
+            assert!(blockstore
+                .get_data_shred(unconfirmed_slot, 0)
+                .unwrap()
+                .is_some());
+            assert!(blockstore
+                .get_data_shred(unconfirmed_slot, 1)
+                .unwrap()
+                .is_none());
+            blockstore.set_dead_slot(unconfirmed_slot).unwrap();
+
+            // Purge the slot
+            blockstore.clear_unconfirmed_slot(unconfirmed_slot);
+            assert!(!blockstore.is_dead(unconfirmed_slot));
+            assert_eq!(
+                blockstore
+                    .meta(unconfirmed_slot)
+                    .unwrap()
+                    .unwrap()
+                    .next_slots,
+                vec![unconfirmed_child_slot]
+            );
+            assert!(blockstore
+                .get_data_shred(unconfirmed_slot, 0)
+                .unwrap()
+                .is_none());
+        }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }

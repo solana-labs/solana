@@ -3,11 +3,12 @@
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_slots::ClusterSlots,
+    repair_service::DuplicateSlotsResetSender,
     repair_service::RepairStrategy,
     result::{Error, Result},
     window_service::{should_retransmit_and_persist, WindowService},
 };
-use crossbeam_channel::Receiver as CrossbeamReceiver;
+use crossbeam_channel::Receiver;
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver},
@@ -206,13 +207,14 @@ impl RetransmitStage {
         cluster_info: &Arc<ClusterInfo>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
+        verified_receiver: Receiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
         cluster_slots: Arc<ClusterSlots>,
+        duplicate_slots_reset_sender: DuplicateSlotsResetSender,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -229,6 +231,7 @@ impl RetransmitStage {
             bank_forks,
             completed_slots_receiver,
             epoch_schedule,
+            duplicate_slots_reset_sender,
         };
         let leader_schedule_cache = leader_schedule_cache.clone();
         let window_service = WindowService::new(

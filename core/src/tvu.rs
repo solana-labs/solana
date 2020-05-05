@@ -143,6 +143,7 @@ impl Tvu {
         };
 
         let cluster_slots = Arc::new(ClusterSlots::default());
+        let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -157,6 +158,7 @@ impl Tvu {
             cfg,
             tvu_config.shred_version,
             cluster_slots.clone(),
+            duplicate_slots_reset_sender,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -205,6 +207,7 @@ impl Tvu {
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
+            duplicate_slots_reset_receiver,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {

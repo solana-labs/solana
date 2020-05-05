@@ -22,7 +22,7 @@ use solana_sdk::{
     client::{AsyncClient, SyncClient},
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
-    epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
     genesis_config::OperatingMode,
     hash::Hash,
     poh_config::PohConfig,
@@ -36,7 +36,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
     thread::sleep,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tempfile::TempDir;
 
@@ -345,26 +345,7 @@ fn run_cluster_partition(
     .unwrap();
     info!("PARTITION_TEST discovered {} nodes", cluster_nodes.len());
     info!("PARTITION_TEST looking for new roots on all nodes");
-    let mut roots = vec![HashSet::new(); alive_node_contact_infos.len()];
-    let mut done = false;
-    let mut last_print = Instant::now();
-    while !done {
-        for (i, ingress_node) in alive_node_contact_infos.iter().enumerate() {
-            let client = create_client(
-                ingress_node.client_facing_addr(),
-                solana_core::cluster_info::VALIDATOR_PORT_RANGE,
-            );
-            let slot = client.get_slot().unwrap_or(0);
-            roots[i].insert(slot);
-            let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
-            if last_print.elapsed().as_secs() > 3 {
-                info!("PARTITION_TEST min observed roots {}/16", min_node);
-                last_print = Instant::now();
-            }
-            done = min_node >= 16;
-        }
-        sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
-    }
+    cluster_tests::check_for_new_roots(16, &alive_node_contact_infos);
     info!("PARTITION_TEST done waiting for roots");
 }
 
@@ -1104,7 +1085,6 @@ fn test_snapshots_restart_validity() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
-#[ignore]
 fn test_fail_entry_verification_leader() {
     test_faulty_node(BroadcastStageType::FailEntryVerification);
 }
@@ -1118,14 +1098,15 @@ fn test_fake_shreds_broadcast_leader() {
 
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup();
-    let num_nodes = 4;
+    let num_nodes = 2;
     let validator_config = ValidatorConfig::default();
     let mut error_validator_config = ValidatorConfig::default();
     error_validator_config.broadcast_stage_type = faulty_node_type.clone();
     let mut validator_configs = vec![validator_config; num_nodes - 1];
-    validator_configs.push(error_validator_config);
-    let mut node_stakes = vec![100; num_nodes - 1];
-    node_stakes.push(50);
+    // Push a faulty_bootstrap = vec![error_validator_config];
+    validator_configs.insert(0, error_validator_config);
+    let node_stakes = vec![300, 100];
+    assert_eq!(node_stakes.len(), num_nodes);
     let cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes,
@@ -1136,37 +1117,14 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     };
 
     let cluster = LocalCluster::new(&cluster_config);
-    let epoch_schedule = EpochSchedule::custom(
-        cluster_config.slots_per_epoch,
-        cluster_config.stakers_slot_offset,
-        true,
-    );
-    let num_warmup_epochs = epoch_schedule.get_leader_schedule_epoch(0) + 1;
 
-    // Wait for the corrupted leader to be scheduled afer the warmup epochs expire
-    cluster_tests::sleep_n_epochs(
-        (num_warmup_epochs + 1) as f64,
-        &cluster.genesis_config.poh_config,
-        cluster_config.ticks_per_slot,
-        cluster_config.slots_per_epoch,
-    );
-
-    let corrupt_node = cluster
+    // Check for new roots
+    let alive_node_contact_infos: Vec<_> = cluster
         .validators
-        .iter()
-        .find(|(_, v)| v.config.broadcast_stage_type == faulty_node_type)
-        .unwrap()
-        .0;
-    let mut ignore = HashSet::new();
-    ignore.insert(*corrupt_node);
-
-    // Verify that we can still spend and verify even in the presence of corrupt nodes
-    cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
-        &cluster.funding_keypair,
-        num_nodes,
-        ignore,
-    );
+        .values()
+        .map(|v| v.info.contact_info.clone())
+        .collect();
+    cluster_tests::check_for_new_roots(16, &alive_node_contact_infos);
 }
 
 #[test]

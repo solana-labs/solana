@@ -373,6 +373,20 @@ impl ServeRepair {
         Ok((addr, out))
     }
 
+    pub fn repair_request_duplicate_compute_best_peer(
+        &self,
+        slot: Slot,
+        cluster_slots: &ClusterSlots,
+    ) -> Result<SocketAddr> {
+        let repair_peers: Vec<_> = self.cluster_info.repair_peers(slot);
+        if repair_peers.is_empty() {
+            return Err(ClusterInfoError::NoPeers.into());
+        }
+        let weights = cluster_slots.compute_weights_exclude_noncomplete(slot, &repair_peers);
+        let n = weighted_best(&weights, Pubkey::new_rand().to_bytes());
+        Ok(repair_peers[n].serve_repair)
+    }
+
     pub fn map_repair_request(
         &self,
         repair_request: &RepairType,
