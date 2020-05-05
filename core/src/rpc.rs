@@ -36,7 +36,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use std::{
-    cmp::max,
+    cmp::{max, min},
     collections::{HashMap, HashSet},
     net::{SocketAddr, UdpSocket},
     str::FromStr,
@@ -406,7 +406,14 @@ impl JsonRpcRequestProcessor {
         slot: Slot,
         encoding: Option<TransactionEncoding>,
     ) -> Result<Option<ConfirmedBlock>> {
-        if self.config.enable_rpc_transaction_history {
+        if self.config.enable_rpc_transaction_history
+            && slot
+                <= self
+                    .block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .largest_confirmed_root()
+        {
             Ok(self.blockstore.get_confirmed_block(slot, encoding).ok())
         } else {
             Ok(None)
@@ -418,11 +425,13 @@ impl JsonRpcRequestProcessor {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>> {
-        let end_slot = if let Some(end_slot) = end_slot {
-            end_slot
-        } else {
-            self.bank(None)?.slot()
-        };
+        let end_slot = min(
+            end_slot.unwrap_or(std::u64::MAX),
+            self.block_commitment_cache
+                .read()
+                .unwrap()
+                .largest_confirmed_root(),
+        );
         if end_slot < start_slot {
             return Ok(vec![]);
         }
@@ -435,22 +444,32 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
-        // This calculation currently assumes that bank.slots_per_year will remain unchanged after
-        // genesis (ie. that this bank's slot_per_year will be applicable to any rooted slot being
-        // queried). If these values will be variable in the future, those timing parameters will
-        // need to be stored persistently, and the slot_duration calculation will likely need to be
-        // moved upstream into blockstore. Also, an explicit commitment level will need to be set.
-        let bank = self.bank(None)?;
-        let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
-        let epoch = bank.epoch_schedule().get_epoch(slot);
-        let stakes = HashMap::new();
-        let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
+        if slot
+            <= self
+                .block_commitment_cache
+                .read()
+                .unwrap()
+                .largest_confirmed_root()
+        {
+            // This calculation currently assumes that bank.slots_per_year will remain unchanged after
+            // genesis (ie. that this bank's slot_per_year will be applicable to any rooted slot being
+            // queried). If these values will be variable in the future, those timing parameters will
+            // need to be stored persistently, and the slot_duration calculation will likely need to be
+            // moved upstream into blockstore. Also, an explicit commitment level will need to be set.
+            let bank = self.bank(None)?;
+            let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
+            let epoch = bank.epoch_schedule().get_epoch(slot);
+            let stakes = HashMap::new();
+            let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
 
-        Ok(self
-            .blockstore
-            .get_block_time(slot, slot_duration, stakes)
-            .ok()
-            .unwrap_or(None))
+            Ok(self
+                .blockstore
+                .get_block_time(slot, slot_duration, stakes)
+                .ok()
+                .unwrap_or(None))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn get_signature_confirmation_status(
@@ -501,6 +520,13 @@ impl JsonRpcRequestProcessor {
                 self.blockstore
                     .get_transaction_status(signature)
                     .map_err(|_| Error::internal_error())?
+                    .filter(|(slot, _status_meta)| {
+                        slot <= &self
+                            .block_commitment_cache
+                            .read()
+                            .unwrap()
+                            .largest_confirmed_root()
+                    })
                     .map(|(slot, status_meta)| {
                         let err = status_meta.status.clone().err();
                         TransactionStatus {
@@ -558,7 +584,15 @@ impl JsonRpcRequestProcessor {
             Ok(self
                 .blockstore
                 .get_confirmed_transaction(signature, encoding)
-                .unwrap_or(None))
+                .unwrap_or(None)
+                .filter(|confirmed_transaction| {
+                    confirmed_transaction.slot
+                        <= self
+                            .block_commitment_cache
+                            .read()
+                            .unwrap()
+                            .largest_confirmed_root()
+                }))
         } else {
             Ok(None)
         }
@@ -571,6 +605,13 @@ impl JsonRpcRequestProcessor {
         end_slot: Slot,
     ) -> Result<Vec<Signature>> {
         if self.config.enable_rpc_transaction_history {
+            let end_slot = min(
+                end_slot,
+                self.block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .largest_confirmed_root(),
+            );
             Ok(self
                 .blockstore
                 .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
@@ -2810,11 +2851,21 @@ pub mod tests {
     fn test_get_block_time() {
         let bob_pubkey = Pubkey::new_rand();
         let base_timestamp = 1576183541;
-        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx_and_blockstore(
+        let RpcHandler {
+            io,
+            meta,
+            bank,
+            block_commitment_cache,
+            ..
+        } = start_rpc_handler_with_tx_and_blockstore(
             &bob_pubkey,
             vec![1, 2, 3, 4, 5, 6, 7],
             base_timestamp,
         );
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_get_largest_confirmed_root(7);
 
         let slot_duration = slot_duration_from_slots_per_year(bank.slots_per_year());
 
