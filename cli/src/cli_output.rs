@@ -839,3 +839,26 @@ impl From<&Lockout> for CliLockout {
         }
     }
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliBlockTime {
+    pub slot: Slot,
+    pub timestamp: UnixTimestamp,
+}
+
+impl fmt::Display for CliBlockTime {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Block:", &self.slot.to_string())?;
+        writeln_name_value(
+            f,
+            "Date:",
+            &format!(
+                "{} (UnixTimestamp: {})",
+                DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(self.timestamp, 0), Utc)
+                    .to_rfc3339_opts(SecondsFormat::Secs, true),
+                self.timestamp
+            ),
+        )
+    }
+}
