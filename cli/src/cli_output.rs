@@ -849,13 +849,16 @@ pub struct CliBlockTime {
 
 impl fmt::Display for CliBlockTime {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "Block: {}", self.slot)?;
-        write!(
+        writeln_name_value(f, "Block:", &self.slot.to_string())?;
+        writeln_name_value(
             f,
-            "{} (UnixTimestamp: {})",
-            DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(self.timestamp, 0), Utc)
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-            self.timestamp
+            "Date:",
+            &format!(
+                "{} (UnixTimestamp: {})",
+                DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(self.timestamp, 0), Utc)
+                    .to_rfc3339_opts(SecondsFormat::Secs, true),
+                self.timestamp
+            ),
         )
     }
 }
