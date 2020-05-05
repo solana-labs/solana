@@ -1,12 +1,8 @@
 use crate::{
     cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    cli_output::{
-        CliBlockProduction, CliBlockProductionEntry, CliEpochInfo, CliKeyedStakeState,
-        CliSlotStatus, CliStakeVec, CliValidator, CliValidators,
-    },
+    cli_output::*,
     display::println_name_value,
 };
-use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -24,7 +20,7 @@ use solana_client::{
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account_utils::StateMut,
-    clock::{self, Slot},
+    clock::{self, Clock, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::Epoch,
     hash::Hash,
@@ -33,6 +29,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction,
+    sysvar::{self, Sysvar},
     transaction::Transaction,
 };
 use std::{
@@ -82,6 +79,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .arg(commitment_arg()),
         )
         .subcommand(
+            SubCommand::with_name("cluster-date")
+                .about("Get current cluster date, computed from genesis creation time and network time")
+        )
+        .subcommand(
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
@@ -94,7 +95,6 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .index(1)
                     .takes_value(true)
                     .value_name("SLOT")
-                    .required(true)
                     .help("Slot number of the block to query")
             )
         )
@@ -310,7 +310,7 @@ pub fn parse_cluster_ping(
 }
 
 pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let slot = value_t_or_exit!(matches, "slot", u64);
+    let slot = value_of(matches, "slot");
     Ok(CliCommandInfo {
         command: CliCommand::GetBlockTime { slot },
         signers: vec![],
@@ -518,6 +518,24 @@ pub fn process_catchup(
     }
 }
 
+pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+    let result = rpc_client
+        .get_account_with_commitment(&sysvar::clock::id(), CommitmentConfig::default())?;
+    if let Some(clock_account) = result.value {
+        let clock: Clock = Sysvar::from_account(&clock_account).ok_or_else(|| {
+            CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
+        })?;
+        let block_time = CliBlockTime {
+            slot: result.context.slot,
+            timestamp: clock.unix_timestamp,
+        };
+        config.output_format.formatted_print(&block_time);
+        Ok("".to_string())
+    } else {
+        Err(format!("AccountNotFound: pubkey={}", sysvar::clock::id()).into())
+    }
+}
+
 pub fn process_cluster_version(rpc_client: &RpcClient) -> ProcessResult {
     let remote_version = rpc_client.get_version()?;
     Ok(remote_version.solana_core)
@@ -567,15 +585,20 @@ pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
     Ok("".to_string())
 }
 
-pub fn process_get_block_time(rpc_client: &RpcClient, slot: Slot) -> ProcessResult {
+pub fn process_get_block_time(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    slot: Option<Slot>,
+) -> ProcessResult {
+    let slot = if let Some(slot) = slot {
+        slot
+    } else {
+        rpc_client.get_slot()?
+    };
     let timestamp = rpc_client.get_block_time(slot)?;
-    let result = format!(
-        "{} (UnixTimestamp: {})",
-        DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc)
-            .to_rfc3339_opts(SecondsFormat::Secs, true),
-        timestamp
-    );
-    Ok(result)
+    let block_time = CliBlockTime { slot, timestamp };
+    config.output_format.formatted_print(&block_time);
+    Ok("".to_string())
 }
 
 pub fn process_get_epoch_info(
@@ -1198,6 +1221,17 @@ mod tests {
 
         let test_cluster_version = test_commands
             .clone()
+            .get_matches_from(vec!["test", "cluster-date"]);
+        assert_eq!(
+            parse_command(&test_cluster_version, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ClusterDate,
+                signers: vec![],
+            }
+        );
+
+        let test_cluster_version = test_commands
+            .clone()
             .get_matches_from(vec!["test", "cluster-version"]);
         assert_eq!(
             parse_command(&test_cluster_version, &default_keypair_file, &mut None).unwrap(),
@@ -1224,7 +1258,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_get_block_time, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::GetBlockTime { slot },
+                command: CliCommand::GetBlockTime { slot: Some(slot) },
                 signers: vec![],
             }
         );

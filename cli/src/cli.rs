@@ -179,6 +179,7 @@ pub enum CliCommand {
         commitment_config: CommitmentConfig,
         follow: bool,
     },
+    ClusterDate,
     ClusterVersion,
     CreateAddressWithSeed {
         from_pubkey: Option<Pubkey>,
@@ -187,7 +188,7 @@ pub enum CliCommand {
     },
     Fees,
     GetBlockTime {
-        slot: Slot,
+        slot: Option<Slot>,
     },
     GetEpochInfo {
         commitment_config: CommitmentConfig,
@@ -587,6 +588,10 @@ pub fn parse_command(
     let response = match matches.subcommand() {
         // Cluster Query Commands
         ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
+        ("cluster-date", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::ClusterDate,
+            signers: vec![],
+        }),
         ("cluster-version", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ClusterVersion,
             signers: vec![],
@@ -1685,6 +1690,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *commitment_config,
             *follow,
         ),
+        CliCommand::ClusterDate => process_cluster_date(&rpc_client, config),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
         CliCommand::CreateAddressWithSeed {
             from_pubkey,
@@ -1692,7 +1698,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             program_id,
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
         CliCommand::Fees => process_fees(&rpc_client),
-        CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, *slot),
+        CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, config, *slot),
         CliCommand::GetGenesisHash => process_get_genesis_hash(&rpc_client),
         CliCommand::GetEpochInfo { commitment_config } => {
             process_get_epoch_info(&rpc_client, config, *commitment_config)
