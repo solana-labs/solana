@@ -1,4 +1,5 @@
 use crate::request_response::RequestResponse;
+use solana_ledger::shred::Nonce;
 use solana_sdk::timing::timestamp;
 use std::{
     collections::HashMap,
@@ -6,9 +7,6 @@ use std::{
 };
 
 pub const DEFAULT_REQUEST_EXPIRATION_MS: u64 = 10_000;
-pub const NONCE_BYTES: usize = 4;
-
-pub type Nonce = u32;
 
 pub struct NodeOutstandingRequests<T, S>
 where

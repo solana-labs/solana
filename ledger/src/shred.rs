@@ -24,6 +24,8 @@ use std::mem::size_of;
 use std::{sync::Arc, time::Instant};
 use thiserror::Error;
 
+pub type Nonce = u32;
+
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
@@ -34,12 +36,14 @@ pub const SIZE_OF_SIGNATURE: usize = 64;
 pub const SIZE_OF_SHRED_TYPE: usize = 1;
 pub const SIZE_OF_SHRED_SLOT: usize = 8;
 pub const SIZE_OF_SHRED_INDEX: usize = 4;
+pub const SIZE_OF_NONCE: usize = 4;
 pub const SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
     SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
 pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
-    - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+    - SIZE_OF_DATA_SHRED_IGNORED_TAIL
+    - SIZE_OF_NONCE;
 
 pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
 pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;

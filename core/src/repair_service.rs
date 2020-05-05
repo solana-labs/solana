@@ -4,7 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
     consensus::VOTE_THRESHOLD_SIZE,
-    outstanding_requests::{Nonce, OutstandingRequests},
+    outstanding_requests::OutstandingRequests,
     result::Result,
     serve_repair::{RepairType, ServeRepair},
 };
@@ -12,7 +12,7 @@ use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender
 use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{Blockstore, CompletedSlotsReceiver, SlotMeta},
-    shred::Shred,
+    shred::{Nonce, Shred},
 };
 use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
@@ -213,14 +213,11 @@ impl RepairService {
                 repairs.into_iter().for_each(|repair_request| {
                     if let Ok((to, req)) = serve_repair.repair_request(
                         &cluster_slots,
-                        &repair_request,
+                        repair_request,
                         &mut cache,
                         &mut repair_stats,
+                        outstanding_requests,
                     ) {
-                        let nonce = outstanding_requests
-                            .write()
-                            .unwrap()
-                            .add_request(&to, repair_request);
                         repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                             info!("{} repair req send_to({}) error {:?}", id, to, e);
                             0
@@ -382,7 +379,7 @@ impl RepairService {
         repair_stats: &mut RepairStats,
         nonce: Nonce,
     ) -> Result<()> {
-        let req = serve_repair.map_repair_request(&repair_type, repair_stats)?;
+        let req = serve_repair.map_repair_request(&repair_type, repair_stats, nonce)?;
         repair_socket.send_to(&req, to)?;
         Ok(())
     }

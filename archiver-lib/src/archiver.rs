@@ -829,7 +829,7 @@ impl Archiver {
                     .into_iter()
                     .filter_map(|repair_request| {
                         serve_repair
-                            .map_repair_request(&repair_request, &mut repair_stats)
+                            .map_repair_request(&repair_request, &mut repair_stats, 0)
                             .map(|result| ((archiver_info.gossip, result), repair_request))
                             .ok()
                     })

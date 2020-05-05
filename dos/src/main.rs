@@ -46,17 +46,17 @@ fn run_dos(
     match data_type.as_str() {
         "repair_highest" => {
             let slot = 100;
-            let req = RepairProtocol::WindowIndex(contact, slot, 0);
+            let req = RepairProtocol::WindowIndex(contact, slot, 0, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "repair_shred" => {
             let slot = 100;
-            let req = RepairProtocol::HighestWindowIndex(contact, slot, 0);
+            let req = RepairProtocol::HighestWindowIndex(contact, slot, 0, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "repair_orphan" => {
             let slot = 100;
-            let req = RepairProtocol::Orphan(contact, slot);
+            let req = RepairProtocol::Orphan(contact, slot, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "random" => {

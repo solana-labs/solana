@@ -4,7 +4,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
-    outstanding_requests::{Nonce, OutstandingRequests},
+    outstanding_requests::OutstandingRequests,
     repair_service::{RepairService, RepairStrategy},
     result::{Error, Result},
     serve_repair::RepairType,
@@ -15,12 +15,12 @@ use crossbeam_channel::{
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
-use solana_ledger::bank_forks::BankForks;
-use solana_ledger::blockstore::{
-    self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT,
+use solana_ledger::{
+    bank_forks::BankForks,
+    blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
+    leader_schedule_cache::LeaderScheduleCache,
+    shred::{Nonce, Shred},
 };
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shred;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;

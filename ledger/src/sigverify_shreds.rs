@@ -1,5 +1,5 @@
 #![allow(clippy::implicit_hasher)]
-use crate::shred::ShredType;
+use crate::shred::{ShredType, SIZE_OF_NONCE};
 use rayon::{
     iter::{
         IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
@@ -46,7 +46,11 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
     let slot_start = sig_end + size_of::<ShredType>();
     let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
-    let msg_end = packet.meta.size;
+    let msg_end = if packet.meta.repair {
+        packet.meta.size.saturating_sub(SIZE_OF_NONCE)
+    } else {
+        packet.meta.size
+    };
     if packet.meta.discard {
         return Some(0);
     }
@@ -445,9 +449,13 @@ pub fn sign_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::shred::SIZE_OF_DATA_SHRED_PAYLOAD;
-    use crate::shred::{Shred, Shredder};
+    use crate::{
+        repair_response::RepairResponse,
+        shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD},
+    };
     use solana_sdk::signature::{Keypair, Signer};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
     #[test]
     fn test_sigverify_shred_cpu() {
         solana_logger::setup();
@@ -470,6 +478,53 @@ pub mod tests {
         trace!("signature {}", shred.common_header.signature);
         packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         packet.meta.size = shred.payload.len();
+
+        let leader_slots = [(slot, keypair.pubkey().to_bytes())]
+            .iter()
+            .cloned()
+            .collect();
+        let rv = verify_shred_cpu(&packet, &leader_slots);
+        assert_eq!(rv, Some(1));
+
+        let wrong_keypair = Keypair::new();
+        let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
+            .iter()
+            .cloned()
+            .collect();
+        let rv = verify_shred_cpu(&packet, &leader_slots);
+        assert_eq!(rv, Some(0));
+
+        let leader_slots = HashMap::new();
+        let rv = verify_shred_cpu(&packet, &leader_slots);
+        assert_eq!(rv, None);
+    }
+
+    #[test]
+    fn test_sigverify_shred_cpu_repair() {
+        solana_logger::setup();
+        let slot = 0xdeadc0de;
+        let mut shred = Shred::new_from_data(
+            slot,
+            0xc0de,
+            0xdead,
+            Some(&[1, 2, 3, 4]),
+            true,
+            true,
+            0,
+            0,
+            0xc0de,
+        );
+        assert_eq!(shred.slot(), slot);
+        let keypair = Keypair::new();
+        Shredder::sign_shred(&keypair, &mut shred);
+        trace!("signature {}", shred.common_header.signature);
+        let nonce = 9;
+        let mut packet = RepairResponse::repair_response_packet_from_shred(
+            shred.payload,
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            nonce,
+        );
+        packet.meta.repair = true;
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
