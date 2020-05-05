@@ -14,9 +14,13 @@ use solana_client::rpc_response::{
 use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_runtime::bank::Bank;
 use solana_sdk::{
-    account::Account, clock::Slot, pubkey::Pubkey, signature::Signature, transaction,
+    account::Account,
+    clock::Slot,
+    commitment_config::{CommitmentConfig, CommitmentLevel},
+    pubkey::Pubkey,
+    signature::Signature,
+    transaction,
 };
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
@@ -24,7 +28,6 @@ use std::sync::{
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 use std::{
-    cmp::min,
     collections::{HashMap, HashSet},
     iter,
     sync::{Arc, Mutex, RwLock},
@@ -32,8 +35,6 @@ use std::{
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
-
-pub type Confirmations = usize;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct SlotInfo {
@@ -60,24 +61,25 @@ impl std::fmt::Debug for NotificationEntry {
     }
 }
 
-type RpcAccountSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcAccount>>, Confirmations)>>>;
+type RpcAccountSubscriptions = RwLock<
+    HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcAccount>>, CommitmentConfig)>>,
+>;
 type RpcProgramSubscriptions = RwLock<
-    HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcKeyedAccount>>, Confirmations)>>,
+    HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcKeyedAccount>>, CommitmentConfig)>>,
 >;
 type RpcSignatureSubscriptions = RwLock<
     HashMap<
         Signature,
-        HashMap<SubscriptionId, (Sink<Response<RpcSignatureResult>>, Confirmations)>,
+        HashMap<SubscriptionId, (Sink<Response<RpcSignatureResult>>, CommitmentConfig)>,
     >,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
 type RpcRootSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Slot>>>;
 
 fn add_subscription<K, S>(
-    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
+    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, CommitmentConfig)>>,
     hashmap_key: K,
-    confirmations: Option<Confirmations>,
+    commitment: Option<CommitmentConfig>,
     sub_id: SubscriptionId,
     subscriber: Subscriber<S>,
 ) where
@@ -85,19 +87,18 @@ fn add_subscription<K, S>(
     S: Clone,
 {
     let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-    let confirmations = confirmations.unwrap_or(0);
-    let confirmations = min(confirmations, MAX_LOCKOUT_HISTORY + 1);
+    let commitment = commitment.unwrap_or_else(CommitmentConfig::recent);
     if let Some(current_hashmap) = subscriptions.get_mut(&hashmap_key) {
-        current_hashmap.insert(sub_id, (sink, confirmations));
+        current_hashmap.insert(sub_id, (sink, commitment));
         return;
     }
     let mut hashmap = HashMap::new();
-    hashmap.insert(sub_id, (sink, confirmations));
+    hashmap.insert(sub_id, (sink, commitment));
     subscriptions.insert(hashmap_key, hashmap);
 }
 
 fn remove_subscription<K, S>(
-    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
+    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, CommitmentConfig)>>,
     sub_id: &SubscriptionId,
 ) -> bool
 where
@@ -119,8 +120,8 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-fn check_confirmations_and_notify<K, S, B, F, X>(
-    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<Response<S>>, Confirmations)>>,
+fn check_commitment_and_notify<K, S, B, F, X>(
+    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<Response<S>>, CommitmentConfig)>>,
     hashmap_key: &K,
     bank_forks: &Arc<RwLock<BankForks>>,
     block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
@@ -132,53 +133,39 @@ where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
     B: Fn(&Bank, &K) -> X,
-    F: Fn(X, u64) -> Box<dyn Iterator<Item = S>>,
-    X: Clone + Serialize,
+    F: Fn(X) -> Box<dyn Iterator<Item = S>>,
+    X: Clone + Serialize + Default,
 {
-    let mut confirmation_slots: HashMap<usize, Slot> = HashMap::new();
     let r_block_commitment_cache = block_commitment_cache.read().unwrap();
     let current_slot = r_block_commitment_cache.slot();
-    let root = r_block_commitment_cache.root();
-    let current_ancestors = bank_forks
-        .read()
-        .unwrap()
-        .get(current_slot)
-        .unwrap()
-        .ancestors
-        .clone();
-    for (slot, _) in current_ancestors.iter() {
-        if let Some(confirmations) = r_block_commitment_cache.get_confirmation_count(*slot) {
-            confirmation_slots.entry(confirmations).or_insert(*slot);
-        }
-    }
+    let node_root = r_block_commitment_cache.root();
+    let largest_confirmed_root = r_block_commitment_cache.largest_confirmed_root();
     drop(r_block_commitment_cache);
 
     let mut notified_set: HashSet<SubscriptionId> = HashSet::new();
     if let Some(hashmap) = subscriptions.get(hashmap_key) {
-        for (sub_id, (sink, confirmations)) in hashmap.iter() {
-            let desired_slot = if *confirmations == 0 {
-                Some(&current_slot)
-            } else if *confirmations == MAX_LOCKOUT_HISTORY + 1 {
-                Some(&root)
-            } else {
-                confirmation_slots.get(confirmations)
+        for (sub_id, (sink, commitment)) in hashmap.iter() {
+            let slot = match commitment.commitment {
+                CommitmentLevel::Max => largest_confirmed_root,
+                CommitmentLevel::Recent => current_slot,
+                CommitmentLevel::Root => node_root,
             };
-            if let Some(&slot) = desired_slot {
-                let results = {
-                    let bank_forks = bank_forks.read().unwrap();
-                    let desired_bank = bank_forks.get(slot).unwrap();
-                    bank_method(&desired_bank, hashmap_key)
-                };
-                for result in filter_results(results, root) {
-                    notifier.notify(
-                        Response {
-                            context: RpcResponseContext { slot },
-                            value: result,
-                        },
-                        sink,
-                    );
-                    notified_set.insert(sub_id.clone());
-                }
+            let results = {
+                let bank_forks = bank_forks.read().unwrap();
+                bank_forks
+                    .get(slot)
+                    .map(|desired_bank| bank_method(&desired_bank, hashmap_key))
+                    .unwrap_or_default()
+            };
+            for result in filter_results(results) {
+                notifier.notify(
+                    Response {
+                        context: RpcResponseContext { slot },
+                        value: result,
+                    },
+                    sink,
+                );
+                notified_set.insert(sub_id.clone());
             }
         }
     }
@@ -197,21 +184,15 @@ impl RpcNotifier {
     }
 }
 
-fn filter_account_result(
-    result: Option<(Account, Slot)>,
-    root: Slot,
-) -> Box<dyn Iterator<Item = RpcAccount>> {
-    if let Some((account, fork)) = result {
-        if fork >= root {
-            return Box::new(iter::once(RpcAccount::encode(account)));
-        }
+fn filter_account_result(result: Option<(Account, Slot)>) -> Box<dyn Iterator<Item = RpcAccount>> {
+    if let Some((account, _fork)) = result {
+        return Box::new(iter::once(RpcAccount::encode(account)));
     }
     Box::new(iter::empty())
 }
 
 fn filter_signature_result(
     result: Option<transaction::Result<()>>,
-    _root: Slot,
 ) -> Box<dyn Iterator<Item = RpcSignatureResult>> {
     Box::new(
         result
@@ -222,7 +203,6 @@ fn filter_signature_result(
 
 fn filter_program_results(
     accounts: Vec<(Pubkey, Account)>,
-    _root: Slot,
 ) -> Box<dyn Iterator<Item = RpcKeyedAccount>> {
     Box::new(
         accounts
@@ -332,7 +312,7 @@ impl RpcSubscriptions {
         notifier: &RpcNotifier,
     ) {
         let subscriptions = account_subscriptions.read().unwrap();
-        check_confirmations_and_notify(
+        check_commitment_and_notify(
             &subscriptions,
             pubkey,
             bank_forks,
@@ -351,7 +331,7 @@ impl RpcSubscriptions {
         notifier: &RpcNotifier,
     ) {
         let subscriptions = program_subscriptions.read().unwrap();
-        check_confirmations_and_notify(
+        check_commitment_and_notify(
             &subscriptions,
             program_id,
             bank_forks,
@@ -370,7 +350,7 @@ impl RpcSubscriptions {
         notifier: &RpcNotifier,
     ) {
         let mut subscriptions = signature_subscriptions.write().unwrap();
-        let notified_ids = check_confirmations_and_notify(
+        let notified_ids = check_commitment_and_notify(
             &subscriptions,
             signature,
             bank_forks,
@@ -390,18 +370,12 @@ impl RpcSubscriptions {
     pub fn add_account_subscription(
         &self,
         pubkey: Pubkey,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcAccount>>,
     ) {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
-        add_subscription(
-            &mut subscriptions,
-            pubkey,
-            confirmations,
-            sub_id,
-            subscriber,
-        );
+        add_subscription(&mut subscriptions, pubkey, commitment, sub_id, subscriber);
     }
 
     pub fn remove_account_subscription(&self, id: &SubscriptionId) -> bool {
@@ -412,7 +386,7 @@ impl RpcSubscriptions {
     pub fn add_program_subscription(
         &self,
         program_id: Pubkey,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcKeyedAccount>>,
     ) {
@@ -420,7 +394,7 @@ impl RpcSubscriptions {
         add_subscription(
             &mut subscriptions,
             program_id,
-            confirmations,
+            commitment,
             sub_id,
             subscriber,
         );
@@ -434,7 +408,7 @@ impl RpcSubscriptions {
     pub fn add_signature_subscription(
         &self,
         signature: Signature,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcSignatureResult>>,
     ) {
@@ -442,7 +416,7 @@ impl RpcSubscriptions {
         add_subscription(
             &mut subscriptions,
             signature,
-            confirmations,
+            commitment,
             sub_id,
             subscriber,
         );
@@ -884,25 +858,25 @@ pub(crate) mod tests {
 
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
-            Some(0),
+            Some(CommitmentConfig::recent()),
             SubscriptionId::Number(1 as u64),
             past_bank_sub1,
         );
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
-            Some(1),
+            Some(CommitmentConfig::root()),
             SubscriptionId::Number(2 as u64),
             past_bank_sub2,
         );
         subscriptions.add_signature_subscription(
             processed_tx.signatures[0],
-            Some(0),
+            Some(CommitmentConfig::recent()),
             SubscriptionId::Number(3 as u64),
             processed_sub,
         );
         subscriptions.add_signature_subscription(
             unprocessed_tx.signatures[0],
-            Some(0),
+            Some(CommitmentConfig::recent()),
             SubscriptionId::Number(4 as u64),
             Subscriber::new_test("signatureNotification").0,
         );
@@ -1059,7 +1033,7 @@ pub(crate) mod tests {
     #[test]
     #[serial]
     fn test_add_and_remove_subscription() {
-        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, (Sink<()>, Confirmations)>> =
+        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, (Sink<()>, CommitmentConfig)>> =
             HashMap::new();
 
         let num_keys = 5;

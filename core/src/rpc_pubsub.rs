@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
+use crate::rpc_subscriptions::{RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
@@ -9,7 +9,9 @@ use solana_client::rpc_response::{
 };
 #[cfg(test)]
 use solana_ledger::blockstore::Blockstore;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
+use solana_sdk::{
+    clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
+};
 use std::{
     str::FromStr,
     sync::{atomic, Arc},
@@ -35,7 +37,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -59,7 +61,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -83,7 +85,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     );
 
     // Unsubscribe from signature notification subscription.
@@ -158,19 +160,15 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
                 let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                self.subscriptions.add_account_subscription(
-                    pubkey,
-                    confirmations,
-                    sub_id,
-                    subscriber,
-                )
+                self.subscriptions
+                    .add_account_subscription(pubkey, commitment, sub_id, subscriber)
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -198,19 +196,15 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
                 let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                self.subscriptions.add_program_subscription(
-                    pubkey,
-                    confirmations,
-                    sub_id,
-                    subscriber,
-                )
+                self.subscriptions
+                    .add_program_subscription(pubkey, commitment, sub_id, subscriber)
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -238,7 +232,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     ) {
         info!("signature_subscribe");
         match param::<Signature>(&signature_str, "signature") {
@@ -249,12 +243,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     "signature_subscribe: signature={:?} id={:?}",
                     signature, sub_id
                 );
-                self.subscriptions.add_signature_subscription(
-                    signature,
-                    confirmations,
-                    sub_id,
-                    subscriber,
-                );
+                self.subscriptions
+                    .add_signature_subscription(signature, commitment, sub_id, subscriber);
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -630,7 +620,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_account_confirmations_not_fulfilled() {
+    fn test_account_commitment_not_fulfilled() {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair: alice,
@@ -638,7 +628,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(1, bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bob = Keypair::new();
@@ -654,13 +644,18 @@ mod tests {
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
-        rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
+        rpc.account_subscribe(
+            session,
+            subscriber,
+            bob.pubkey().to_string(),
+            Some(CommitmentConfig::root()),
+        );
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
             .write()
             .unwrap()
-            .get(0)
+            .get(1)
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
@@ -671,7 +666,7 @@ mod tests {
     }
 
     #[test]
-    fn test_account_confirmations() {
+    fn test_account_commitment() {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair: alice,
@@ -694,7 +689,12 @@ mod tests {
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
-        rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
+        rpc.account_subscribe(
+            session,
+            subscriber,
+            bob.pubkey().to_string(),
+            Some(CommitmentConfig::root()),
+        );
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
