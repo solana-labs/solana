@@ -19,6 +19,7 @@ use solana_ledger::{
     bank_forks::BankForks,
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
+    repair_response,
     shred::{Nonce, Shred},
 };
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
@@ -114,20 +115,22 @@ fn run_check_duplicate(
 fn verify_repair_addr(
     outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
     shred: &Shred,
-    addr: &Option<SocketAddr>,
-    nonce: Nonce,
+    repair_info: &Option<RepairInfo>,
 ) -> bool {
-    addr.map(|addr| {
-        outstanding_requests
-            .write()
-            .unwrap()
-            .register_response(&addr, nonce, &shred)
-    })
-    .unwrap_or(true)
+    repair_info
+        .as_ref()
+        .map(|repair_info| {
+            outstanding_requests.write().unwrap().register_response(
+                &repair_info.from_addr,
+                repair_info.nonce,
+                &shred,
+            )
+        })
+        .unwrap_or(true)
 }
 
 fn run_insert<F>(
-    shred_receiver: &CrossbeamReceiver<(Shred, Option<SocketAddr>)>,
+    shred_receiver: &CrossbeamReceiver<(Shred, Option<RepairInfo>)>,
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
@@ -139,13 +142,12 @@ where
 {
     let timer = Duration::from_millis(200);
     let mut shreds = vec![];
-    let (shred, addr) = shred_receiver.recv_timeout(timer)?;
-    let nonce = 0;
-    if verify_repair_addr(outstanding_requests, &shred, &addr, nonce) {
+    let (shred, repair_info) = shred_receiver.recv_timeout(timer)?;
+    if verify_repair_addr(outstanding_requests, &shred, &repair_info) {
         shreds.push(shred);
     }
-    while let Ok((shred, addr)) = shred_receiver.try_recv() {
-        if verify_repair_addr(outstanding_requests, &shred, &addr, nonce) {
+    while let Ok((shred, repair_info)) = shred_receiver.try_recv() {
+        if verify_repair_addr(outstanding_requests, &shred, &repair_info) {
             shreds.push(shred);
         }
     }
@@ -162,7 +164,7 @@ where
 
 fn recv_window<F>(
     blockstore: &Arc<Blockstore>,
-    insert_shred_senders: &[CrossbeamSender<(Shred, Option<SocketAddr>)>],
+    insert_shred_senders: &[CrossbeamSender<(Shred, Option<RepairInfo>)>],
     my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
     retransmit: &PacketSender,
@@ -202,17 +204,26 @@ where
                             None
                         } else {
                             // Address of validator who sent this packet
-                            let from_addr = {
+                            let (repair_info, serialized_shred) = {
                                 if packet.meta.repair {
-                                    let from_addr = packet.meta.addr();
-                                    Some(from_addr)
+                                    if let Some(nonce) = repair_response::nonce(&packet.data) {
+                                        let repair_info = RepairInfo {
+                                            from_addr: packet.meta.addr(),
+                                            nonce,
+                                        };
+                                        (
+                                            Some(repair_info),
+                                            repair_response::shred(&packet.data).to_vec(),
+                                        )
+                                    } else {
+                                        // If can't parse the nonce, dump the packet
+                                        return None;
+                                    }
                                 } else {
-                                    None
+                                    (None, packet.data.to_vec())
                                 }
                             };
-                            if let Ok(shred) =
-                                Shred::new_from_serialized_shred(packet.data.to_vec())
-                            {
+                            if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
                                 if shred_filter(&shred, last_root) {
                                     // Mark slot as dead if the current shred is on the boundary
                                     // of max shreds per slot. However, let the current shred
@@ -223,12 +234,12 @@ where
                                     }
                                     packet.meta.slot = shred.slot();
                                     packet.meta.seed = shred.seed();
-                                    if from_addr.is_some() {
+                                    if repair_info.is_some() {
                                         // If this was a repair, send it to repair inserter
-                                        Some(insert_shred_senders[0].send((shred, from_addr)))
+                                        Some(insert_shred_senders[0].send((shred, repair_info)))
                                     } else {
                                         // send others
-                                        Some(insert_shred_senders[1].send((shred, from_addr)))
+                                        Some(insert_shred_senders[1].send((shred, repair_info)))
                                     }
                                 } else {
                                     packet.meta.discard = true;
@@ -265,6 +276,11 @@ where
     );
 
     Ok(())
+}
+
+struct RepairInfo {
+    from_addr: SocketAddr,
+    nonce: Nonce,
 }
 
 // Implement a destructor for the window_service thread to signal it exited
@@ -399,7 +415,7 @@ impl WindowService {
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        insert_receivers: Vec<CrossbeamReceiver<(Shred, Option<SocketAddr>)>>,
+        insert_receivers: Vec<CrossbeamReceiver<(Shred, Option<RepairInfo>)>>,
         duplicate_sender: CrossbeamSender<Shred>,
         outstanding_requests: &Arc<RwLock<OutstandingRequests<RepairType, Shred>>>,
     ) -> Vec<JoinHandle<()>> {
@@ -459,7 +475,7 @@ impl WindowService {
         id: Pubkey,
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        insert_senders: Vec<CrossbeamSender<(Shred, Option<SocketAddr>)>>,
+        insert_senders: Vec<CrossbeamSender<(Shred, Option<RepairInfo>)>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
