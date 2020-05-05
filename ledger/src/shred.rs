@@ -84,9 +84,6 @@ pub enum ShredError {
         "invalid parent offset; parent_offset {parent_offset} must be larger than slot {slot}"
     )]
     InvalidParentOffset { slot: Slot, parent_offset: u16 },
-
-    #[error("invalid shred type")]
-    InvalidPayloadSize,
 }
 
 pub type Result<T> = std::result::Result<T, ShredError>;
@@ -139,7 +136,7 @@ impl Shred {
         T: Deserialize<'de>,
     {
         let ret = bincode::config()
-            .limit(SHRED_PAYLOAD_SIZE as u64)
+            .limit(PACKET_DATA_SIZE as u64)
             .deserialize(&buf[*index..*index + size])?;
         *index += size;
         Ok(ret)
@@ -227,9 +224,6 @@ impl Shred {
     }
 
     pub fn new_from_serialized_shred(payload: Vec<u8>) -> Result<Self> {
-        if payload.len() > SHRED_PAYLOAD_SIZE {
-            return Err(ShredError::InvalidPayloadSize);
-        }
         let mut start = 0;
         let common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
@@ -269,8 +263,10 @@ impl Shred {
         common_header: ShredCommonHeader,
         data_header: DataShredHeader,
         coding_header: CodingShredHeader,
+        payload_size: usize,
     ) -> Self {
-        let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
+        assert!(payload_size == SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
+        let mut payload = vec![0; payload_size];
         let mut start = 0;
         Self::serialize_obj_into(
             &mut start,
@@ -304,11 +300,13 @@ impl Shred {
         }
     }
 
-    pub fn new_empty_data_shred() -> Self {
+    pub fn new_empty_data_shred(payload_size: usize) -> Self {
+        assert!(payload_size == SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
         Self::new_empty_from_header(
             ShredCommonHeader::default(),
             DataShredHeader::default(),
             CodingShredHeader::default(),
+            payload_size,
         )
     }
 
@@ -657,8 +655,12 @@ impl Shredder {
                     i,
                     version,
                 );
-                let shred =
-                    Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
+                let shred = Shred::new_empty_from_header(
+                    header,
+                    DataShredHeader::default(),
+                    coding_header,
+                    SHRED_PAYLOAD_SIZE,
+                );
                 coding_shreds.push(shred.payload);
             });
 
@@ -712,7 +714,9 @@ impl Shredder {
         expected_index: usize,
         index_found: usize,
         present: &mut [bool],
+        payload_size: usize,
     ) -> Vec<Vec<u8>> {
+        assert!(payload_size == SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
         let end_index = index_found.saturating_sub(1);
         // The index of current shred must be within the range of shreds that are being
         // recovered
@@ -726,9 +730,9 @@ impl Shredder {
             .map(|missing| {
                 present[missing.saturating_sub(first_index_in_fec_set)] = false;
                 if missing < first_index_in_fec_set + num_data {
-                    Shred::new_empty_data_shred().payload
+                    Shred::new_empty_data_shred(payload_size).payload
                 } else {
-                    vec![0; SHRED_PAYLOAD_SIZE]
+                    vec![0; payload_size]
                 }
             })
             .collect();
@@ -743,6 +747,7 @@ impl Shredder {
         first_code_index: usize,
         slot: Slot,
     ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
+        let expected_payload_size = Self::verify_consistent_shred_payload_sizes(&shreds)?;
         let mut recovered_data = vec![];
         let fec_set_size = num_data + num_coding;
 
@@ -762,6 +767,7 @@ impl Shredder {
                         next_expected_index,
                         index,
                         &mut present,
+                        expected_payload_size,
                     );
                     blocks.push(shred.payload);
                     next_expected_index = index + 1;
@@ -778,6 +784,7 @@ impl Shredder {
                 next_expected_index,
                 first_index + fec_set_size,
                 &mut present,
+                expected_payload_size,
             );
 
             shred_bufs.append(&mut pending_shreds);
@@ -788,7 +795,7 @@ impl Shredder {
 
             let session = Session::new(num_data, num_coding)?;
 
-            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+            let valid_data_len = expected_payload_size - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
             let coding_block_offset = SIZE_OF_CODING_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER;
             let mut blocks: Vec<(&mut [u8], bool)> = shred_bufs
                 .iter_mut()
@@ -833,6 +840,7 @@ impl Shredder {
     /// Combines all shreds to recreate the original buffer
     pub fn deshred(shreds: &[Shred]) -> std::result::Result<Vec<u8>, reed_solomon_erasure::Error> {
         let num_data = shreds.len();
+        let expected_payload_size = Self::verify_consistent_shred_payload_sizes(shreds)?;
         let data_shred_bufs = {
             let first_index = shreds.first().unwrap().index() as usize;
             let last_shred = shreds.last().unwrap();
@@ -849,7 +857,11 @@ impl Shredder {
             shreds.iter().map(|shred| &shred.payload).collect()
         };
 
-        Ok(Self::reassemble_payload(num_data, data_shred_bufs))
+        Ok(Self::reassemble_payload(
+            num_data,
+            data_shred_bufs,
+            expected_payload_size,
+        ))
     }
 
     fn get_shred_index(
@@ -865,8 +877,12 @@ impl Shredder {
         }
     }
 
-    fn reassemble_payload(num_data: usize, data_shred_bufs: Vec<&Vec<u8>>) -> Vec<u8> {
-        let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+    fn reassemble_payload(
+        num_data: usize,
+        data_shred_bufs: Vec<&Vec<u8>>,
+        expected_payload_size: usize,
+    ) -> Vec<u8> {
+        let valid_data_len = expected_payload_size - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
         data_shred_bufs[..num_data]
             .iter()
             .flat_map(|data| {
@@ -875,6 +891,26 @@ impl Shredder {
             })
             .cloned()
             .collect()
+    }
+
+    fn verify_consistent_shred_payload_sizes(
+        shreds: &[Shred],
+    ) -> std::result::Result<usize, reed_solomon_erasure::Error> {
+        if shreds.is_empty() {
+            return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
+        }
+        let expected_payload_size = shreds[0].payload.len();
+        if expected_payload_size != PACKET_DATA_SIZE && expected_payload_size != SHRED_PAYLOAD_SIZE
+        {
+            return Err(reed_solomon_erasure::Error::IncorrectShardSize);
+        }
+        for shred in shreds {
+            if shred.payload.len() != expected_payload_size {
+                return Err(reed_solomon_erasure::Error::IncorrectShardSize);
+            }
+        }
+
+        Ok(expected_payload_size)
     }
 }
 

@@ -1801,7 +1801,8 @@ pub(crate) mod tests {
         get_tmp_ledger_path,
         shred::{
             CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
-            SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+            SHRED_PAYLOAD_SIZE, SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER,
+            SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
     use solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs};
@@ -1811,7 +1812,6 @@ pub(crate) mod tests {
         genesis_config,
         hash::{hash, Hash},
         instruction::InstructionError,
-        packet::PACKET_DATA_SIZE,
         rent::Rent,
         signature::{Keypair, Signature, Signer},
         system_transaction,
@@ -2520,13 +2520,14 @@ pub(crate) mod tests {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, _| {
             let payload_len = SIZE_OF_DATA_SHRED_PAYLOAD;
-            let gibberish = [0xa5u8; PACKET_DATA_SIZE];
+            let gibberish = [0xa5u8; SHRED_PAYLOAD_SIZE];
             let mut data_header = DataShredHeader::default();
             data_header.flags |= DATA_COMPLETE_SHRED;
             let mut shred = Shred::new_empty_from_header(
                 ShredCommonHeader::default(),
                 data_header,
                 CodingShredHeader::default(),
+                SHRED_PAYLOAD_SIZE,
             );
             bincode::serialize_into(
                 &mut shred.payload[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER..],

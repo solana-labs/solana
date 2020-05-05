@@ -579,13 +579,12 @@ mod test {
         cluster_info::ClusterInfo, contact_info::ContactInfo, repair_service::RepairSlotRange,
     };
     use rand::thread_rng;
-    use solana_ledger::shred::DataShredHeader;
     use solana_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
         entry::{create_ticks, Entry},
         genesis_utils::create_genesis_config_with_leader,
         get_tmp_ledger_path,
-        shred::Shredder,
+        shred::{DataShredHeader, Shredder, SHRED_PAYLOAD_SIZE},
     };
     use solana_perf::packet::Packet;
     use solana_sdk::{
@@ -657,8 +656,12 @@ mod test {
 
         // If it's a coding shred, test that slot >= root
         let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0, 0);
-        let mut coding_shred =
-            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
+        let mut coding_shred = Shred::new_empty_from_header(
+            common,
+            DataShredHeader::default(),
+            coding,
+            SHRED_PAYLOAD_SIZE,
+        );
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
         assert_eq!(
             should_retransmit_and_persist(&coding_shred, Some(bank.clone()), &cache, &me_id, 0, 0),

@@ -577,6 +577,7 @@ mod tests {
         blockstore_processor::fill_blockstore_slot_with_ticks,
         shred::{
             max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
+            SHRED_PAYLOAD_SIZE,
         },
     };
     use solana_sdk::{hash::Hash, pubkey::Pubkey, timing::timestamp};
@@ -689,6 +690,7 @@ mod tests {
                 common_header,
                 data_header,
                 CodingShredHeader::default(),
+                SHRED_PAYLOAD_SIZE,
             );
 
             blockstore
