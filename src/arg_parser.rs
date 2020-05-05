@@ -48,7 +48,7 @@ where
                 )
                 .arg(
                     Arg::with_name("input_csv")
-                        .long("input_csv")
+                        .long("input-csv")
                         .required(true)
                         .takes_value(true)
                         .value_name("FILE")
