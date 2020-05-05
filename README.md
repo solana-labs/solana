@@ -17,7 +17,7 @@ primary_address,bid_amount_dollars
 ```
 
 ```bash
-solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --bids-csv <BIDS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
+solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --input_csv <BIDS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
 ```
 
 Example transaction log before:
@@ -31,7 +31,7 @@ Send tokens to the recipients in `<BIDS_CSV>` if the distribution is
 not already recordered in the transaction log.
 
 ```bash
-solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --bids-csv <BIDS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
+solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --input_csv <BIDS_CSV> <TRANSACTION_LOG> --fee-payer <KEYPAIR>
 ```
 
 Example output:
@@ -60,7 +60,7 @@ List the differences between a list of expected distributions and the record of 
 transactions have already been sent.
 
 ```bash
-solana-tokens distribute-tokens --dollars-per-sol <NUMBER> --dry-run --bids-csv <BIDS_CSV> <TRANSACTION_LOG>
+solana-tokens distribute-tokens --dollars-per-sol <NUMBER> --dry-run --input_csv <BIDS_CSV> <TRANSACTION_LOG>
 ```
 
 Example bids.csv:

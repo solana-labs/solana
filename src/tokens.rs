@@ -272,26 +272,42 @@ fn set_transaction_info(
     Ok(())
 }
 
+fn read_allocations(
+    args: &DistributeTokensArgs<Box<dyn Signer>>
+) -> Vec<Allocation> {
+    let rdr = ReaderBuilder::new()
+        .trim(Trim::All)
+        .from_path(&args.input_csv);
+    if args.from_bids {
+        let bids: Vec<Bid> = rdr.unwrap().deserialize().map(|bid| bid.unwrap()).collect();
+        bids
+            .into_iter()
+            .map(|bid| create_allocation(&bid, args.dollars_per_sol.unwrap()))
+            .collect()
+    } else {
+        rdr.unwrap().deserialize().map(|entry| entry.unwrap()).collect()
+    }
+}
+
 pub fn process_distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     args: &DistributeTokensArgs<Box<dyn Signer>>,
 ) -> Result<(), Error> {
-    let mut rdr = ReaderBuilder::new()
-        .trim(Trim::All)
-        .from_path(&args.bids_csv)?;
-    let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
-    let mut allocations: Vec<Allocation> = bids
-        .into_iter()
-        .map(|bid| create_allocation(&bid, args.dollars_per_sol))
-        .collect();
+    let mut allocations: Vec<Allocation> = read_allocations(&args);
 
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
-        "{} ◎{} (${})",
+        "{} ◎{}",
         style(format!("{}", "Total in allocations_csv:")).bold(),
         starting_total_tokens,
-        starting_total_tokens * args.dollars_per_sol,
     );
+    if let Some(dollars_per_sol) = args.dollars_per_sol {
+        println!(
+            "{} ${}",
+            style(format!("{}", "Total in allocations_csv:")).bold(),
+            starting_total_tokens * dollars_per_sol,
+        );
+    }
 
     let mut db = open_db(&args.transactions_db)?;
     let transaction_infos = read_transaction_infos(&db);
@@ -335,23 +351,41 @@ pub fn process_distribute_tokens<T: Client>(
     let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
     let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
-        "{} ◎{} (${})",
+        "{} ◎{}",
         style(format!("{}", "Distributed:")).bold(),
         distributed_tokens,
-        distributed_tokens * args.dollars_per_sol,
     );
+    if let Some(dollars_per_sol) = args.dollars_per_sol {
+        println!(
+            "{} ${}",
+            style(format!("{}", "Distributed:")).bold(),
+            distributed_tokens * dollars_per_sol,
+        );
+    }
     println!(
-        "{} ◎{} (${})",
+        "{} ◎{}",
         style(format!("{}", "Undistributed:")).bold(),
         undistributed_tokens,
-        undistributed_tokens * args.dollars_per_sol,
     );
+    if let Some(dollars_per_sol) = args.dollars_per_sol {
+        println!(
+            "{} ${}",
+            style(format!("{}", "Undistributed:")).bold(),
+            undistributed_tokens * dollars_per_sol,
+        );
+    }
     println!(
-        "{} ◎{} (${})\n",
+        "{} ◎{}",
         style(format!("{}", "Total:")).bold(),
         distributed_tokens + undistributed_tokens,
-        (distributed_tokens + undistributed_tokens) * args.dollars_per_sol,
     );
+    if let Some(dollars_per_sol) = args.dollars_per_sol {
+        println!(
+            "{} ${}",
+            style(format!("{}", "Total:")).bold(),
+            (distributed_tokens + undistributed_tokens) * dollars_per_sol,
+        );
+    }
 
     distribute_tokens(client, &mut db, &allocations, args)?;
 
@@ -391,7 +425,7 @@ pub fn process_balances<T: Client>(
 ) -> Result<(), csv::Error> {
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
-        .from_path(&args.bids_csv)?;
+        .from_path(&args.input_csv)?;
     let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
     let allocations: Vec<Allocation> = bids
         .into_iter()
@@ -426,7 +460,7 @@ pub fn process_balances<T: Client>(
 
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
-pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair: Keypair) {
+pub fn test_process_distribute_bids_with_client<C: Client>(client: C, sender_keypair: Keypair) {
     let thin_client = ThinClient(client);
     let fee_payer = Keypair::new();
     thin_client
@@ -439,7 +473,7 @@ pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair:
         accepted_amount_dollars: 1000.0,
     };
     let bids_file = NamedTempFile::new().unwrap();
-    let bids_csv = bids_file.path().to_str().unwrap().to_string();
+    let input_csv = bids_file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(bids_file);
     wtr.serialize(&bid).unwrap();
     wtr.flush().unwrap();
@@ -456,15 +490,16 @@ pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair:
         sender_keypair: Some(Box::new(sender_keypair)),
         fee_payer: Some(Box::new(fee_payer)),
         dry_run: false,
-        bids_csv,
+        from_bids: true,
+        input_csv,
         transactions_db: transactions_db.clone(),
-        dollars_per_sol: 0.22,
+        dollars_per_sol: Some(0.22),
     };
     process_distribute_tokens(&thin_client, &args).unwrap();
     let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol;
+    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol.unwrap();
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
     assert_eq!(
@@ -477,7 +512,68 @@ pub fn test_process_distribute_with_client<C: Client>(client: C, sender_keypair:
     let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol;
+    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol.unwrap();
+    assert_eq!(transaction_infos[0].amount, expected_amount);
+
+    assert_eq!(
+        thin_client.get_balance(&alice_pubkey).unwrap(),
+        sol_to_lamports(expected_amount),
+    );
+}
+
+pub fn test_process_distribute_allocations_with_client<C: Client>(client: C, sender_keypair: Keypair) {
+    let thin_client = ThinClient(client);
+    let fee_payer = Keypair::new();
+    thin_client
+        .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
+        .unwrap();
+
+    let alice_pubkey = Pubkey::new_rand();
+    let allocation = Allocation {
+        recipient: alice_pubkey.to_string(),
+        amount: 1000.0,
+    };
+    let allocations_file = NamedTempFile::new().unwrap();
+    let input_csv = allocations_file.path().to_str().unwrap().to_string();
+    let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
+    wtr.serialize(&allocation).unwrap();
+    wtr.flush().unwrap();
+
+    let dir = tempdir().unwrap();
+    let transactions_db = dir
+        .path()
+        .join("transactions.csv")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let args: DistributeTokensArgs<Box<dyn Signer>> = DistributeTokensArgs {
+        sender_keypair: Some(Box::new(sender_keypair)),
+        fee_payer: Some(Box::new(fee_payer)),
+        dry_run: false,
+        input_csv,
+        from_bids: false,
+        transactions_db: transactions_db.clone(),
+        dollars_per_sol: None,
+    };
+    process_distribute_tokens(&thin_client, &args).unwrap();
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    assert_eq!(transaction_infos.len(), 1);
+    assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
+    let expected_amount = allocation.amount;
+    assert_eq!(transaction_infos[0].amount, expected_amount);
+
+    assert_eq!(
+        thin_client.get_balance(&alice_pubkey).unwrap(),
+        sol_to_lamports(expected_amount),
+    );
+
+    // Now, run it again, and check there's no double-spend.
+    process_distribute_tokens(&thin_client, &args).unwrap();
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    assert_eq!(transaction_infos.len(), 1);
+    assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
+    let expected_amount = allocation.amount;
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
     assert_eq!(
@@ -589,11 +685,19 @@ mod tests {
     use solana_sdk::genesis_config::create_genesis_config;
 
     #[test]
-    fn test_process_distribute() {
+    fn test_process_distribute_bids() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
-        test_process_distribute_with_client(bank_client, sender_keypair);
+        test_process_distribute_bids_with_client(bank_client, sender_keypair);
+    }
+
+    #[test]
+    fn test_process_distribute_allocations() {
+        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
+        let bank = Bank::new(&genesis_config);
+        let bank_client = BankClient::new(bank);
+        test_process_distribute_allocations_with_client(bank_client, sender_keypair);
     }
 
     #[test]
