@@ -195,7 +195,11 @@ fn shred_gpu_offsets(
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>();
             let msg_start = sig_end;
-            let msg_end = sig_start + packet.meta.size;
+            let msg_end = if packet.meta.repair {
+                sig_start + packet.meta.size.saturating_sub(SIZE_OF_NONCE)
+            } else {
+                sig_start + packet.meta.size
+            };
             signature_offsets.push(sig_start as u32);
             msg_start_offsets.push(msg_start as u32);
             let msg_size = if msg_end < msg_start {
@@ -450,7 +454,7 @@ pub fn sign_shreds_gpu(
 pub mod tests {
     use super::*;
     use crate::{
-        repair_response::RepairResponse,
+        repair_response,
         shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD},
     };
     use solana_sdk::signature::{Keypair, Signer};
@@ -519,7 +523,7 @@ pub mod tests {
         Shredder::sign_shred(&keypair, &mut shred);
         trace!("signature {}", shred.common_header.signature);
         let nonce = 9;
-        let mut packet = RepairResponse::repair_response_packet_from_shred(
+        let mut packet = repair_response::repair_response_packet_from_shred(
             shred.payload,
             &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             nonce,

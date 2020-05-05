@@ -47,6 +47,7 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
 
 pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
 pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
+pub const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -83,6 +84,9 @@ pub enum ShredError {
         "invalid parent offset; parent_offset {parent_offset} must be larger than slot {slot}"
     )]
     InvalidParentOffset { slot: Slot, parent_offset: u16 },
+
+    #[error("invalid shred type")]
+    InvalidPayloadSize,
 }
 
 pub type Result<T> = std::result::Result<T, ShredError>;
@@ -135,7 +139,7 @@ impl Shred {
         T: Deserialize<'de>,
     {
         let ret = bincode::config()
-            .limit(PACKET_DATA_SIZE as u64)
+            .limit(SHRED_PAYLOAD_SIZE as u64)
             .deserialize(&buf[*index..*index + size])?;
         *index += size;
         Ok(ret)
@@ -172,7 +176,7 @@ impl Shred {
         version: u16,
         fec_set_index: u32,
     ) -> Self {
-        let mut payload = vec![0; PACKET_DATA_SIZE];
+        let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
         let common_header = ShredCommonHeader {
             slot,
             index,
@@ -223,6 +227,9 @@ impl Shred {
     }
 
     pub fn new_from_serialized_shred(payload: Vec<u8>) -> Result<Self> {
+        if payload.len() > SHRED_PAYLOAD_SIZE {
+            return Err(ShredError::InvalidPayloadSize);
+        }
         let mut start = 0;
         let common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
@@ -263,7 +270,7 @@ impl Shred {
         data_header: DataShredHeader,
         coding_header: CodingShredHeader,
     ) -> Self {
-        let mut payload = vec![0; PACKET_DATA_SIZE];
+        let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
         let mut start = 0;
         Self::serialize_obj_into(
             &mut start,
@@ -632,7 +639,7 @@ impl Shredder {
             let start_index = data_shred_batch[0].common_header.index;
 
             // All information after coding shred field in a data shred is encoded
-            let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
             let data_ptrs: Vec<_> = data_shred_batch
                 .iter()
                 .map(|data| &data.payload[..valid_data_len])
@@ -721,7 +728,7 @@ impl Shredder {
                 if missing < first_index_in_fec_set + num_data {
                     Shred::new_empty_data_shred().payload
                 } else {
-                    vec![0; PACKET_DATA_SIZE]
+                    vec![0; SHRED_PAYLOAD_SIZE]
                 }
             })
             .collect();
@@ -781,7 +788,7 @@ impl Shredder {
 
             let session = Session::new(num_data, num_coding)?;
 
-            let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
             let coding_block_offset = SIZE_OF_CODING_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER;
             let mut blocks: Vec<(&mut [u8], bool)> = shred_bufs
                 .iter_mut()
@@ -859,7 +866,7 @@ impl Shredder {
     }
 
     fn reassemble_payload(num_data: usize, data_shred_bufs: Vec<&Vec<u8>>) -> Vec<u8> {
-        let valid_data_len = PACKET_DATA_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
+        let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
         data_shred_bufs[..num_data]
             .iter()
             .flat_map(|data| {
@@ -895,7 +902,7 @@ pub fn verify_test_data_shred(
     is_last_in_slot: bool,
     is_last_in_fec_set: bool,
 ) {
-    assert_eq!(shred.payload.len(), PACKET_DATA_SIZE);
+    assert_eq!(shred.payload.len(), SHRED_PAYLOAD_SIZE);
     assert!(shred.is_data());
     assert_eq!(shred.index(), index);
     assert_eq!(shred.slot(), slot);

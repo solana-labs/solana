@@ -11,7 +11,7 @@ use crate::{
 use bincode::serialize;
 use solana_ledger::{
     blockstore::Blockstore,
-    repair_response::RepairResponse,
+    repair_response,
     shred::{Nonce, Shred},
 };
 use solana_measure::measure::Measure;
@@ -468,7 +468,7 @@ impl ServeRepair {
     ) -> Option<Packets> {
         if let Some(blockstore) = blockstore {
             // Try to find the requested index in one of the slots
-            let packet = RepairResponse::repair_response_packet(
+            let packet = repair_response::repair_response_packet(
                 blockstore,
                 slot,
                 shred_index,
@@ -511,7 +511,7 @@ impl ServeRepair {
         let meta = blockstore.meta(slot).ok()??;
         if meta.received > highest_index {
             // meta.received must be at least 1 by this point
-            let packet = RepairResponse::repair_response_packet(
+            let packet = repair_response::repair_response_packet(
                 blockstore,
                 slot,
                 meta.received - 1,
@@ -543,7 +543,7 @@ impl ServeRepair {
                 if meta.received == 0 {
                     break;
                 }
-                let packet = RepairResponse::repair_response_packet(
+                let packet = repair_response::repair_response_packet(
                     blockstore,
                     slot,
                     meta.received - 1,
@@ -621,10 +621,9 @@ mod tests {
                 .packets
                 .into_iter()
                 .filter_map(|b| {
-                    let repair_response: RepairResponse =
-                        limited_deserialize(&b.data[..b.meta.size]).unwrap();
-                    assert_eq!(repair_response.nonce, nonce);
-                    Shred::new_from_serialized_shred(repair_response.shred.to_vec()).ok()
+                    assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
+                    let shred = repair_response::shred(&b.data[..]);
+                    Shred::new_from_serialized_shred(shred.to_vec()).ok()
                 })
                 .collect();
             assert!(!rv.is_empty());
@@ -712,10 +711,10 @@ mod tests {
                 .packets
                 .into_iter()
                 .filter_map(|b| {
-                    let repair_response: RepairResponse =
-                        limited_deserialize(&b.data[..b.meta.size]).unwrap();
-                    assert_eq!(repair_response.nonce, nonce);
-                    Shred::new_from_serialized_shred(b.data.to_vec()).ok()
+                    let response_nonce = repair_response::nonce(&b.data[..]).unwrap();
+                    let shred = repair_response::shred(&b.data[..]);
+                    assert_eq!(response_nonce, nonce);
+                    Shred::new_from_serialized_shred(shred.to_vec()).ok()
                 })
                 .collect();
             assert_eq!(rv[0].index(), 1);
@@ -866,7 +865,7 @@ mod tests {
                 .rev()
                 .map(|slot| {
                     let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
-                    RepairResponse::repair_response_packet(
+                    repair_response::repair_response_packet(
                         &blockstore,
                         slot,
                         index,
