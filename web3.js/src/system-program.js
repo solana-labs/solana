@@ -73,15 +73,36 @@ export type CreateAccountWithSeedParams = {|
 
 /**
  * Create nonce account system transaction params
- * @typedef {Object} AssignParams
+ * @typedef {Object} CreateNonceAccountParams
  * @property {PublicKey} fromPubkey
- * @property {PublicKey} programId
+ * @property {PublicKey} noncePubkey
+ * @property {PublicKey} authorizedPubkey
+ * @property {number} lamports
  */
 export type CreateNonceAccountParams = {|
   fromPubkey: PublicKey,
   noncePubkey: PublicKey,
   authorizedPubkey: PublicKey,
   lamports: number,
+|};
+
+/**
+ * Create nonce account with seed system transaction params
+ * @typedef {Object} CreateNonceAccountWithSeedParams
+ * @property {PublicKey} fromPubkey
+ * @property {PublicKey} noncePubkey
+ * @property {PublicKey} authorizedPubkey
+ * @property {PublicKey} basePubkey
+ * @property {string} seed
+ * @property {number} lamports
+ */
+export type CreateNonceAccountWithSeedParams = {|
+  fromPubkey: PublicKey,
+  noncePubkey: PublicKey,
+  authorizedPubkey: PublicKey,
+  lamports: number,
+  basePubkey: PublicKey,
+  seed: string,
 |};
 
 /**
@@ -517,14 +538,29 @@ export class SystemProgram {
   /**
    * Generate a Transaction that creates a new Nonce account
    */
-  static createNonceAccount(params: CreateNonceAccountParams): Transaction {
-    let transaction = SystemProgram.createAccount({
-      fromPubkey: params.fromPubkey,
-      newAccountPubkey: params.noncePubkey,
-      lamports: params.lamports,
-      space: NONCE_ACCOUNT_LENGTH,
-      programId: this.programId,
-    });
+  static createNonceAccount(
+    params: CreateNonceAccountParams | CreateNonceAccountWithSeedParams,
+  ): Transaction {
+    let transaction;
+    if (params.basePubkey && params.seed) {
+      transaction = SystemProgram.createAccountWithSeed({
+        fromPubkey: params.fromPubkey,
+        newAccountPubkey: params.noncePubkey,
+        basePubkey: params.basePubkey,
+        seed: params.seed,
+        lamports: params.lamports,
+        space: NONCE_ACCOUNT_LENGTH,
+        programId: this.programId,
+      });
+    } else {
+      transaction = SystemProgram.createAccount({
+        fromPubkey: params.fromPubkey,
+        newAccountPubkey: params.noncePubkey,
+        lamports: params.lamports,
+        space: NONCE_ACCOUNT_LENGTH,
+        programId: this.programId,
+      });
+    }
 
     const initParams = {
       noncePubkey: params.noncePubkey,
