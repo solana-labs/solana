@@ -478,21 +478,7 @@ pub struct AccountsDB {
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
-<<<<<<< HEAD
     pub dead_slots: RwLock<HashSet<Slot>>,
-=======
-    dead_slots: RwLock<HashSet<Slot>>,
-
-    stats: AccountsStats,
-}
-
-#[derive(Debug, Default)]
-struct AccountsStats {
-    delta_hash_scan_time_total_us: AtomicU64,
-    delta_hash_accumulate_time_total_us: AtomicU64,
-    delta_hash_merge_time_total_us: AtomicU64,
-    delta_hash_num: AtomicU64,
->>>>>>> 3442f36f8... Repair alternate versions of dead slots (#9805)
 }
 
 fn make_min_priority_thread_pool() -> ThreadPool {
