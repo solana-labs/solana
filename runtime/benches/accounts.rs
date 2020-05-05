@@ -42,28 +42,24 @@ fn test_accounts_create(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_squash(bencher: &mut Bencher) {
     let (genesis_config, _) = create_genesis_config(100_000);
-    let mut banks: Vec<Arc<Bank>> = Vec::with_capacity(10);
-    banks.push(Arc::new(Bank::new_with_paths(
+    let bank1 = Arc::new(Bank::new_with_paths(
         &genesis_config,
         vec![PathBuf::from("bench_a1")],
         &[],
-    )));
+    ));
     let mut pubkeys: Vec<Pubkey> = vec![];
-    deposit_many(&banks[0], &mut pubkeys, 250000);
-    banks[0].freeze();
-    // Measures the performance of the squash operation merging the accounts
-    // with the majority of the accounts present in the parent bank that is
-    // moved over to this bank.
+    deposit_many(&bank1, &mut pubkeys, 250000);
+    bank1.freeze();
+
+    // Measures the performance of the squash operation.
+    // This mainly consists of the freeze operation which calculates the
+    // merkle hash of the account state and distribution of fees and rent
+    let mut slot = 1u64;
     bencher.iter(|| {
-        banks.push(Arc::new(Bank::new_from_parent(
-            &banks[0],
-            &Pubkey::default(),
-            1u64,
-        )));
-        for accounts in 0..10000 {
-            banks[1].deposit(&pubkeys[accounts], (accounts + 1) as u64);
-        }
-        banks[1].squash();
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), slot));
+        bank2.deposit(&pubkeys[0], 1);
+        bank2.squash();
+        slot += 1;
     });
 }
 
