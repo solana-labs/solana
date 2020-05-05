@@ -158,6 +158,12 @@ impl SlotMeta {
         self.parent_slot != std::u64::MAX
     }
 
+    pub fn clear_unconfirmed_slot(&mut self) {
+        let mut new_self = SlotMeta::new_orphan(self.slot);
+        std::mem::swap(&mut new_self.next_slots, &mut self.next_slots);
+        std::mem::swap(self, &mut new_self);
+    }
+
     pub(crate) fn new(slot: Slot, parent_slot: Slot) -> Self {
         SlotMeta {
             slot,
@@ -170,6 +176,10 @@ impl SlotMeta {
             last_index: std::u64::MAX,
             completed_data_indexes: vec![],
         }
+    }
+
+    pub(crate) fn new_orphan(slot: Slot) -> Self {
+        Self::new(slot, std::u64::MAX)
     }
 }
 
@@ -288,5 +298,18 @@ mod test {
 
             assert_eq!(e_meta.status(&index), DataFull);
         }
+    }
+
+    #[test]
+    fn test_clear_unconfirmed_slot() {
+        let mut slot_meta = SlotMeta::new_orphan(5);
+        slot_meta.consumed = 5;
+        slot_meta.received = 5;
+        slot_meta.next_slots = vec![6, 7];
+        slot_meta.clear_unconfirmed_slot();
+
+        let mut expected = SlotMeta::new_orphan(5);
+        expected.next_slots = vec![6, 7];
+        assert_eq!(slot_meta, expected);
     }
 }

@@ -16,7 +16,7 @@ use solana_ledger::{
 use solana_sdk::{
     client::SyncClient,
     clock::{
-        Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
+        self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
         NUM_CONSECUTIVE_LEADER_SLOTS,
     },
     commitment_config::CommitmentConfig,
@@ -33,7 +33,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::Path,
     thread::sleep,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
@@ -281,6 +281,26 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 }
             }
         }
+    }
+}
+
+pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo]) {
+    let mut roots = vec![HashSet::new(); contact_infos.len()];
+    let mut done = false;
+    let mut last_print = Instant::now();
+    while !done {
+        for (i, ingress_node) in contact_infos.iter().enumerate() {
+            let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
+            let slot = client.get_slot().unwrap_or(0);
+            roots[i].insert(slot);
+            let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
+            if last_print.elapsed().as_secs() > 3 {
+                info!("PARTITION_TEST min observed roots {}/16", min_node);
+                last_print = Instant::now();
+            }
+            done = min_node >= num_new_roots;
+        }
+        sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
     }
 }
 

@@ -9,6 +9,7 @@ use crate::{
     consensus::{StakeLockout, Tower},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ForkStats, ProgressMap, PropagatedStats},
+    repair_service::DuplicateSlotsResetReceiver,
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
@@ -108,7 +109,7 @@ pub struct ReplayStage {
 }
 
 impl ReplayStage {
-    #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,
@@ -119,6 +120,7 @@ impl ReplayStage {
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
+        duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
     ) -> (Self, Receiver<Vec<Arc<Bank>>>) {
         let ReplayStageConfig {
             my_pubkey,
@@ -216,9 +218,18 @@ impl ReplayStage {
                     Self::report_memory(&allocated, "replay_active_banks", start);
 
                     let ancestors = Arc::new(bank_forks.read().unwrap().ancestors());
-                    let descendants = HashMap::new();
+                    let descendants = bank_forks.read().unwrap().descendants();
                     let forks_root = bank_forks.read().unwrap().root();
                     let start = allocated.get();
+                    // Reset any duplicate slots that have been confirmed
+                    // by the network in anticipation of the confirmed version of
+                    // the slot
+                    Self::reset_duplicate_slots(
+                        &duplicate_slots_reset_receiver,
+                        &descendants,
+                        &mut progress,
+                        &bank_forks,
+                    );
                     let mut frozen_banks: Vec<_> = bank_forks
                         .read()
                         .unwrap()
@@ -460,6 +471,57 @@ impl ReplayStage {
             "replay_stage-memory",
             (name, (allocated.get() - start) as i64, i64),
         );
+    }
+
+    fn reset_duplicate_slots(
+        duplicate_slots_reset_receiver: &DuplicateSlotsResetReceiver,
+        descendants: &HashMap<Slot, HashSet<Slot>>,
+        progress: &mut ProgressMap,
+        bank_forks: &RwLock<BankForks>,
+    ) {
+        for duplicate_slot in duplicate_slots_reset_receiver.try_iter() {
+            Self::purge_unconfirmed_duplicate_slot(
+                duplicate_slot,
+                descendants,
+                progress,
+                bank_forks,
+            );
+        }
+    }
+
+    fn purge_unconfirmed_duplicate_slot(
+        duplicate_slot: Slot,
+        descendants: &HashMap<Slot, HashSet<Slot>>,
+        progress: &mut ProgressMap,
+        bank_forks: &RwLock<BankForks>,
+    ) {
+        error!("purging slot {}", duplicate_slot);
+        let empty = HashSet::new();
+        let slot_descendants = descendants.get(&duplicate_slot).unwrap_or(&empty);
+
+        for d in slot_descendants
+            .iter()
+            .chain(std::iter::once(&duplicate_slot))
+        {
+            // Clear the progress map of these forks
+            let _ = progress.remove(d);
+
+            // Clear the duplicate banks from BankForks
+            {
+                let mut w_bank_forks = bank_forks.write().unwrap();
+                // Purging should have already been taken care of by logic
+                // in repair_service, so make sure drop implementation doesn't
+                // run
+                w_bank_forks
+                    .get(*d)
+                    .expect("Bank in descendants map must exist in BankForks")
+                    .skip_drop
+                    .store(true, Ordering::Relaxed);
+                w_bank_forks
+                    .remove(*d)
+                    .expect("Bank in descendants map must exist in BankForks");
+            }
+        }
     }
 
     fn log_leader_change(
@@ -746,7 +808,7 @@ impl ReplayStage {
                     trace!("latest root send failed: {:?}", e);
                 }
             });
-            trace!("new root {}", new_root);
+            info!("new root {}", new_root);
             if let Err(e) = root_bank_sender.send(rooted_banks) {
                 trace!("root_bank_sender failed: {:?}", e);
                 return Err(e.into());
@@ -3540,5 +3602,66 @@ pub(crate) mod tests {
             parent_slot,
             &progress_map,
         ));
+    }
+
+    #[test]
+    fn test_purge_unconfirmed_duplicate_slot() {
+        let (bank_forks, mut progress) = setup_forks();
+        let descendants = bank_forks.read().unwrap().descendants();
+
+        // Purging slot 5 should purge only slots 5 and its descendant 6
+        ReplayStage::purge_unconfirmed_duplicate_slot(5, &descendants, &mut progress, &bank_forks);
+        for i in 5..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        for i in 0..=4 {
+            assert!(bank_forks.read().unwrap().get(i).is_some());
+            assert!(progress.get(&i).is_some());
+        }
+
+        // Purging slot 4 should purge only slot 4
+        let descendants = bank_forks.read().unwrap().descendants();
+        ReplayStage::purge_unconfirmed_duplicate_slot(4, &descendants, &mut progress, &bank_forks);
+        for i in 4..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        for i in 0..=3 {
+            assert!(bank_forks.read().unwrap().get(i).is_some());
+            assert!(progress.get(&i).is_some());
+        }
+
+        // Purging slot 1 should purge both forks 2 and 3
+        let descendants = bank_forks.read().unwrap().descendants();
+        ReplayStage::purge_unconfirmed_duplicate_slot(1, &descendants, &mut progress, &bank_forks);
+        for i in 1..=6 {
+            assert!(bank_forks.read().unwrap().get(i).is_none());
+            assert!(progress.get(&i).is_none());
+        }
+        assert!(bank_forks.read().unwrap().get(0).is_some());
+        assert!(progress.get(&0).is_some());
+    }
+
+    fn setup_forks() -> (RwLock<BankForks>, ProgressMap) {
+        /*
+            Build fork structure:
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 2    |
+               |    slot 3
+            slot 4    |
+                    slot 5
+                      |
+                    slot 6
+        */
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5) / (tr(6)))));
+
+        let mut vote_simulator = VoteSimulator::new(1);
+        vote_simulator.fill_bank_forks(forks, &HashMap::new());
+
+        (vote_simulator.bank_forks, vote_simulator.progress)
     }
 }
