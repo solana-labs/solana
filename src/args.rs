@@ -27,7 +27,8 @@ pub struct DistributeStakeArgs<P, K> {
 
 pub struct BalancesArgs {
     pub input_csv: String,
-    pub dollars_per_sol: f64,
+    pub from_bids: bool,
+    pub dollars_per_sol: Option<f64>,
 }
 
 pub enum Command<P, K> {

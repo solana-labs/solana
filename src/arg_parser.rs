@@ -60,7 +60,7 @@ where
                         .required(true)
                         .takes_value(true)
                         .value_name("NUMBER")
-                        .help("Dollars per SOL, if input CSV contains bids")
+                        .help("Dollars per SOL, if input CSV contains bids"),
                 )
                 .arg(
                     Arg::with_name("dry_run")
@@ -155,16 +155,20 @@ where
                 .about("Balance of each account")
                 .arg(
                     Arg::with_name("input_csv")
-                        .long("input_csv")
+                        .long("input-csv")
                         .required(true)
                         .takes_value(true)
                         .value_name("FILE")
                         .help("Bids CSV file"),
                 )
                 .arg(
+                    Arg::with_name("from_bids")
+                        .long("from-bids")
+                        .help("Input CSV contains bids in dollars, not allocations in SOL"),
+                )
+                .arg(
                     Arg::with_name("dollars_per_sol")
                         .long("dollars-per-sol")
-                        .required(true)
                         .takes_value(true)
                         .value_name("NUMBER")
                         .help("Dollars per SOL"),
@@ -201,7 +205,8 @@ fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeStakeArgs<
 fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
     BalancesArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-        dollars_per_sol: value_t_or_exit!(matches, "dollars_per_sol", f64),
+        from_bids: matches.is_present("from_bids"),
+        dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
     }
 }
 

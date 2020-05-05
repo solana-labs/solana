@@ -273,19 +273,21 @@ fn set_transaction_info(
 }
 
 fn read_allocations(
-    args: &DistributeTokensArgs<Box<dyn Signer>>
+    input_csv: &str,
+    from_bids: bool,
+    dollars_per_sol: Option<f64>,
 ) -> Vec<Allocation> {
-    let rdr = ReaderBuilder::new()
-        .trim(Trim::All)
-        .from_path(&args.input_csv);
-    if args.from_bids {
+    let rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv);
+    if from_bids {
         let bids: Vec<Bid> = rdr.unwrap().deserialize().map(|bid| bid.unwrap()).collect();
-        bids
-            .into_iter()
-            .map(|bid| create_allocation(&bid, args.dollars_per_sol.unwrap()))
+        bids.into_iter()
+            .map(|bid| create_allocation(&bid, dollars_per_sol.unwrap()))
             .collect()
     } else {
-        rdr.unwrap().deserialize().map(|entry| entry.unwrap()).collect()
+        rdr.unwrap()
+            .deserialize()
+            .map(|entry| entry.unwrap())
+            .collect()
     }
 }
 
@@ -293,7 +295,8 @@ pub fn process_distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     args: &DistributeTokensArgs<Box<dyn Signer>>,
 ) -> Result<(), Error> {
-    let mut allocations: Vec<Allocation> = read_allocations(&args);
+    let mut allocations: Vec<Allocation> =
+        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
 
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
@@ -423,14 +426,8 @@ pub fn process_balances<T: Client>(
     client: &ThinClient<T>,
     args: &BalancesArgs,
 ) -> Result<(), csv::Error> {
-    let mut rdr = ReaderBuilder::new()
-        .trim(Trim::All)
-        .from_path(&args.input_csv)?;
-    let bids: Vec<Bid> = rdr.deserialize().map(|bid| bid.unwrap()).collect();
-    let allocations: Vec<Allocation> = bids
-        .into_iter()
-        .map(|bid| create_allocation(&bid, args.dollars_per_sol))
-        .collect();
+    let allocations: Vec<Allocation> =
+        read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
     let allocations = merge_allocations(&allocations);
 
     println!(
@@ -521,7 +518,10 @@ pub fn test_process_distribute_bids_with_client<C: Client>(client: C, sender_key
     );
 }
 
-pub fn test_process_distribute_allocations_with_client<C: Client>(client: C, sender_keypair: Keypair) {
+pub fn test_process_distribute_allocations_with_client<C: Client>(
+    client: C,
+    sender_keypair: Keypair,
+) {
     let thin_client = ThinClient(client);
     let fee_payer = Keypair::new();
     thin_client
