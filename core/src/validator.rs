@@ -28,8 +28,7 @@ use solana_ledger::{
     bank_forks::{BankForks, SnapshotConfig},
     bank_forks_utils,
     blockstore::{Blockstore, CompletedSlotsReceiver},
-    blockstore_processor::{self, BankForksInfo},
-    create_new_tmp_ledger,
+    blockstore_processor, create_new_tmp_ledger,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
@@ -187,7 +186,6 @@ impl Validator {
         let (
             genesis_config,
             bank_forks,
-            bank_forks_info,
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
@@ -197,8 +195,8 @@ impl Validator {
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_info = &bank_forks_info[0];
-        let bank = bank_forks[bank_info.bank_slot].clone();
+        let bank = bank_forks.working_bank();
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         info!("Starting validator from slot {}", bank.slot());
         {
@@ -207,8 +205,6 @@ impl Validator {
                 info!("Hard forks: {:?}", hard_forks);
             }
         }
-
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let mut validator_exit = ValidatorExit::default();
         let exit_ = exit.clone();
@@ -564,7 +560,6 @@ fn new_banks_from_blockstore(
 ) -> (
     GenesisConfig,
     BankForks,
-    Vec<BankForksInfo>,
     Blockstore,
     Receiver<bool>,
     CompletedSlotsReceiver,
@@ -607,18 +602,17 @@ fn new_banks_from_blockstore(
         ..blockstore_processor::ProcessOptions::default()
     };
 
-    let (mut bank_forks, bank_forks_info, mut leader_schedule_cache, snapshot_hash) =
-        bank_forks_utils::load(
-            &genesis_config,
-            &blockstore,
-            config.account_paths.clone(),
-            config.snapshot_config.as_ref(),
-            process_options,
-        )
-        .unwrap_or_else(|err| {
-            error!("Failed to load ledger: {:?}", err);
-            std::process::exit(1);
-        });
+    let (mut bank_forks, mut leader_schedule_cache, snapshot_hash) = bank_forks_utils::load(
+        &genesis_config,
+        &blockstore,
+        config.account_paths.clone(),
+        config.snapshot_config.as_ref(),
+        process_options,
+    )
+    .unwrap_or_else(|err| {
+        error!("Failed to load ledger: {:?}", err);
+        std::process::exit(1);
+    });
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
 
@@ -628,7 +622,6 @@ fn new_banks_from_blockstore(
     (
         genesis_config,
         bank_forks,
-        bank_forks_info,
         blockstore,
         ledger_signal_receiver,
         completed_slots_receiver,
