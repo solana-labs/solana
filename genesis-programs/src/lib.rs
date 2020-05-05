@@ -26,7 +26,17 @@ pub fn get_inflation(operating_mode: OperatingMode, epoch: Epoch) -> Option<Infl
                 None
             }
         }
-        OperatingMode::Stable | OperatingMode::Preview => {
+        OperatingMode::Preview => {
+            if epoch == 0 {
+                // No inflation at epoch 0
+                Some(Inflation::new_disabled())
+            } else if epoch == 44 {
+                Some(Inflation::default())
+            } else {
+                None
+            }
+        }
+        OperatingMode::Stable => {
             if epoch == 0 {
                 // No inflation at epoch 0
                 Some(Inflation::new_disabled())
