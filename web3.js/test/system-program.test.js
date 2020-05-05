@@ -112,6 +112,43 @@ test('createNonceAccount', () => {
   );
 });
 
+test('createNonceAccount with seed', () => {
+  const fromPubkey = new Account().publicKey;
+  const params = {
+    fromPubkey,
+    noncePubkey: new Account().publicKey,
+    authorizedPubkey: fromPubkey,
+    basePubkey: fromPubkey,
+    seed: 'hi there',
+    lamports: 123,
+  };
+
+  const transaction = SystemProgram.createNonceAccount(params);
+  expect(transaction.instructions).toHaveLength(2);
+  const [createInstruction, initInstruction] = transaction.instructions;
+
+  const createParams = {
+    fromPubkey: params.fromPubkey,
+    newAccountPubkey: params.noncePubkey,
+    basePubkey: fromPubkey,
+    seed: 'hi there',
+    lamports: params.lamports,
+    space: NONCE_ACCOUNT_LENGTH,
+    programId: SystemProgram.programId,
+  };
+  expect(createParams).toEqual(
+    SystemInstruction.decodeCreateWithSeed(createInstruction),
+  );
+
+  const initParams = {
+    noncePubkey: params.noncePubkey,
+    authorizedPubkey: fromPubkey,
+  };
+  expect(initParams).toEqual(
+    SystemInstruction.decodeNonceInitialize(initInstruction),
+  );
+});
+
 test('nonceAdvance', () => {
   const params = {
     noncePubkey: new Account().publicKey,

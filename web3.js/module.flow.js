@@ -621,6 +621,15 @@ declare module '@solana/web3.js' {
     lamports: number,
   |};
 
+  declare export type CreateNonceAccountWithSeedParams = {|
+    fromPubkey: PublicKey,
+    noncePubkey: PublicKey,
+    authorizedPubkey: PublicKey,
+    lamports: number,
+    basePubkey: PublicKey,
+    seed: string,
+  |};
+
   declare export type InitializeNonceParams = {|
     noncePubkey: PublicKey,
     authorizedPubkey: PublicKey,
@@ -653,7 +662,9 @@ declare module '@solana/web3.js' {
     static createAccountWithSeed(
       params: CreateAccountWithSeedParams,
     ): Transaction;
-    static createNonceAccount(params: CreateNonceAccountParams): Transaction;
+    static createNonceAccount(
+      params: CreateNonceAccountParams | CreateNonceAccountWithSeedParams,
+    ): Transaction;
     static nonceAdvance(params: AdvanceNonceParams): TransactionInstruction;
     static nonceWithdraw(params: WithdrawNonceParams): Transaction;
     static nonceAuthorize(params: AuthorizeNonceParams): Transaction;
