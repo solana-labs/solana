@@ -12,6 +12,7 @@ pub struct DistributeTokensArgs<K> {
     pub dry_run: bool,
     pub sender_keypair: Option<K>,
     pub fee_payer: Option<K>,
+    pub force: bool,
 }
 
 pub struct DistributeStakeArgs<P, K> {
@@ -62,6 +63,7 @@ pub fn resolve_command(
                 fee_payer: args.fee_payer.as_ref().map(|key_url| {
                     signer_from_path(&matches, &key_url, "fee-payer", &mut wallet_manager).unwrap()
                 }),
+                force: args.force,
             };
             Ok(Command::DistributeTokens(resolved_args))
         }

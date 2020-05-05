@@ -331,7 +331,7 @@ pub fn process_distribute_tokens<T: Client>(
     for allocation in &allocations {
         let address = allocation.recipient.parse().unwrap();
         let balance = client.get_balance(&address).unwrap();
-        if balance != 0 {
+        if !args.force && balance != 0 {
             eprintln!(
                 "Error: Non-zero balance {}, refusing to send {} to {}",
                 lamports_to_sol(balance),
@@ -491,6 +491,7 @@ pub fn test_process_distribute_bids_with_client<C: Client>(client: C, sender_key
         input_csv,
         transactions_db: transactions_db.clone(),
         dollars_per_sol: Some(0.22),
+        force: false,
     };
     process_distribute_tokens(&thin_client, &args).unwrap();
     let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
@@ -555,6 +556,7 @@ pub fn test_process_distribute_allocations_with_client<C: Client>(
         from_bids: false,
         transactions_db: transactions_db.clone(),
         dollars_per_sol: None,
+        force: false,
     };
     process_distribute_tokens(&thin_client, &args).unwrap();
     let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
