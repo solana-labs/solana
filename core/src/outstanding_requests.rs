@@ -1,5 +1,5 @@
 use crate::request_response::RequestResponse;
-use solana_sdk::{clock::Slot, timing::timestamp};
+use solana_sdk::timing::timestamp;
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},

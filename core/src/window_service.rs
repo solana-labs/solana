@@ -4,7 +4,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
-    outstanding_requests::OutstandingRequests,
+    outstanding_requests::{Nonce, OutstandingRequests},
     repair_service::{RepairService, RepairStrategy},
     result::{Error, Result},
     serve_repair::RepairType,
@@ -111,8 +111,23 @@ fn run_check_duplicate(
     Ok(())
 }
 
+fn verify_repair_addr(
+    outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
+    shred: &Shred,
+    addr: &Option<SocketAddr>,
+    nonce: Nonce,
+) -> bool {
+    addr.map(|addr| {
+        outstanding_requests
+            .write()
+            .unwrap()
+            .register_response(&addr, nonce, &shred)
+    })
+    .unwrap_or(true)
+}
+
 fn run_insert<F>(
-    shred_receiver: &CrossbeamReceiver<(Vec<Shred>, Vec<Option<SocketAddr>>)>,
+    shred_receiver: &CrossbeamReceiver<(Shred, Option<SocketAddr>)>,
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
@@ -123,29 +138,17 @@ where
     F: Fn(Shred) -> (),
 {
     let timer = Duration::from_millis(200);
-    let (mut shreds, mut addrs) = shred_receiver.recv_timeout(timer)?;
-    while let Ok((more_shreds, more_addrs)) = shred_receiver.try_recv() {
-        shreds.extend(more_shreds);
-        addrs.extend(more_addrs);
+    let mut shreds = vec![];
+    let (shred, addr) = shred_receiver.recv_timeout(timer)?;
+    let nonce = 0;
+    if verify_repair_addr(outstanding_requests, &shred, &addr, nonce) {
+        shreds.push(shred);
     }
-
-    assert_eq!(shreds.len(), addrs.len());
-    let mut i = 0;
-    shreds.retain(|shred| {
-        let nonce = 0;
-        addrs[i]
-            .map(|addr| {
-                (
-                    outstanding_requests
-                        .write()
-                        .unwrap()
-                        .register_response(&addr, nonce, &shred),
-                    i += 1,
-                )
-                    .0
-            })
-            .unwrap_or(false)
-    });
+    while let Ok((shred, addr)) = shred_receiver.try_recv() {
+        if verify_repair_addr(outstanding_requests, &shred, &addr, nonce) {
+            shreds.push(shred);
+        }
+    }
 
     blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -159,7 +162,7 @@ where
 
 fn recv_window<F>(
     blockstore: &Arc<Blockstore>,
-    insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<SocketAddr>>)>,
+    insert_shred_senders: &[CrossbeamSender<(Shred, Option<SocketAddr>)>],
     my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
     retransmit: &PacketSender,
@@ -183,58 +186,66 @@ where
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
     let last_root = blockstore.last_root();
-    let (shreds, addrs): (Vec<_>, Vec<_>) = thread_pool.install(|| {
+    let send_results: Vec<_> = thread_pool.install(|| {
         packets
             .par_iter_mut()
             .flat_map(|packets| {
                 packets
                     .packets
                     .iter_mut()
-                    .map(|packet| {
-                        if packet.meta.repair {
-                            let addr = packet.meta.addr();
-                            (packet, Some(addr))
-                        } else {
-                            (packet, None)
-                        }
-                    })
-                    .filter_map(|(packet, addr)| {
+                    .filter_map(|packet| {
                         if packet.meta.discard {
                             inc_new_counter_debug!(
                                 "streamer-recv_window-invalid_or_unnecessary_packet",
                                 1
                             );
                             None
-                        } else if let Ok(shred) =
-                            Shred::new_from_serialized_shred(packet.data.to_vec())
-                        {
-                            if shred_filter(&shred, last_root) {
-                                // Mark slot as dead if the current shred is on the boundary
-                                // of max shreds per slot. However, let the current shred
-                                // get retransmitted. It'll allow peer nodes to see this shred
-                                // and trigger them to mark the slot as dead.
-                                if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
-                                    let _ = blockstore.set_dead_slot(shred.slot());
+                        } else {
+                            // Address of validator who sent this packet
+                            let from_addr = {
+                                if packet.meta.repair {
+                                    let from_addr = packet.meta.addr();
+                                    Some(from_addr)
+                                } else {
+                                    None
                                 }
-                                packet.meta.slot = shred.slot();
-                                packet.meta.seed = shred.seed();
-                                Some((shred, addr))
+                            };
+                            if let Ok(shred) =
+                                Shred::new_from_serialized_shred(packet.data.to_vec())
+                            {
+                                if shred_filter(&shred, last_root) {
+                                    // Mark slot as dead if the current shred is on the boundary
+                                    // of max shreds per slot. However, let the current shred
+                                    // get retransmitted. It'll allow peer nodes to see this shred
+                                    // and trigger them to mark the slot as dead.
+                                    if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
+                                        let _ = blockstore.set_dead_slot(shred.slot());
+                                    }
+                                    packet.meta.slot = shred.slot();
+                                    packet.meta.seed = shred.seed();
+                                    if from_addr.is_some() {
+                                        // If this was a repair, send it to repair inserter
+                                        Some(insert_shred_senders[0].send((shred, from_addr)))
+                                    } else {
+                                        // send others
+                                        Some(insert_shred_senders[1].send((shred, from_addr)))
+                                    }
+                                } else {
+                                    packet.meta.discard = true;
+                                    None
+                                }
                             } else {
                                 packet.meta.discard = true;
                                 None
                             }
-                        } else {
-                            packet.meta.discard = true;
-                            None
                         }
                     })
                     .collect::<Vec<_>>()
             })
-            .unzip()
+            .collect()
     });
 
-    trace!("{:?} shreds from packets", shreds.len());
-
+    trace!("{:?} shreds from packets", send_results.len());
     trace!("{} num total shreds received: {}", my_pubkey, total_packets);
 
     for packets in packets.into_iter() {
@@ -244,7 +255,9 @@ where
         }
     }
 
-    insert_shred_sender.send((shreds, addrs))?;
+    for result in send_results {
+        result?;
+    }
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
@@ -274,7 +287,7 @@ impl Drop for Finalizer {
 
 pub struct WindowService {
     t_window: JoinHandle<()>,
-    t_insert: JoinHandle<()>,
+    t_inserts: Vec<JoinHandle<()>>,
     t_check_duplicate: JoinHandle<()>,
     repair_service: RepairService,
 }
@@ -318,25 +331,29 @@ impl WindowService {
         );
 
         let (insert_sender, insert_receiver) = unbounded();
+        let (repair_insert_sender, repair_insert_receiver) = unbounded();
+        let insert_senders = vec![insert_sender, repair_insert_sender];
+        let insert_receivers = vec![insert_receiver, repair_insert_receiver];
+
         let (duplicate_sender, duplicate_receiver) = unbounded();
 
         let t_check_duplicate =
             Self::start_check_duplicate_thread(exit, &blockstore, duplicate_receiver);
 
-        let t_insert = Self::start_window_insert_thread(
+        let t_inserts = Self::start_window_insert_threads(
             exit,
             &blockstore,
             leader_schedule_cache,
-            insert_receiver,
+            insert_receivers,
             duplicate_sender,
-            outstanding_requests,
+            &outstanding_requests,
         );
 
         let t_window = Self::start_recv_window_thread(
             cluster_info.id(),
             exit,
             &blockstore,
-            insert_sender,
+            insert_senders,
             verified_receiver,
             shred_filter,
             bank_forks,
@@ -345,7 +362,7 @@ impl WindowService {
 
         WindowService {
             t_window,
-            t_insert,
+            t_inserts,
             t_check_duplicate,
             repair_service,
         }
@@ -378,63 +395,71 @@ impl WindowService {
             .unwrap()
     }
 
-    fn start_window_insert_thread(
+    fn start_window_insert_threads(
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<SocketAddr>>)>,
+        insert_receivers: Vec<CrossbeamReceiver<(Shred, Option<SocketAddr>)>>,
         duplicate_sender: CrossbeamSender<Shred>,
-        outstanding_requests: Arc<RwLock<OutstandingRequests<RepairType, Shred>>>,
-    ) -> JoinHandle<()> {
-        let exit = exit.clone();
-        let blockstore = blockstore.clone();
-        let leader_schedule_cache = leader_schedule_cache.clone();
+        outstanding_requests: &Arc<RwLock<OutstandingRequests<RepairType, Shred>>>,
+    ) -> Vec<JoinHandle<()>> {
         let mut handle_timeout = || {};
         let handle_error = || {
             inc_new_counter_error!("solana-window-insert-error", 1, 1);
         };
 
-        Builder::new()
-            .name("solana-window-insert".to_string())
-            .spawn(move || {
-                let handle_duplicate = |shred| {
-                    let _ = duplicate_sender.send(shred);
-                };
-                let mut metrics = BlockstoreInsertionMetrics::default();
-                let mut last_print = Instant::now();
-                loop {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
-                    }
+        insert_receivers
+            .into_iter()
+            .map(|insert_receiver| {
+                let duplicate_sender = duplicate_sender.clone();
+                let exit = exit.clone();
+                let outstanding_requests = outstanding_requests.clone();
+                let blockstore = blockstore.clone();
+                let leader_schedule_cache = leader_schedule_cache.clone();
+                Builder::new()
+                    .name("solana-window-insert".to_string())
+                    .spawn(move || {
+                        let handle_duplicate = |shred| {
+                            let _ = duplicate_sender.send(shred);
+                        };
+                        let mut metrics = BlockstoreInsertionMetrics::default();
+                        let mut last_print = Instant::now();
+                        loop {
+                            if exit.load(Ordering::Relaxed) {
+                                break;
+                            }
 
-                    if let Err(e) = run_insert(
-                        &insert_receiver,
-                        &blockstore,
-                        &leader_schedule_cache,
-                        &handle_duplicate,
-                        &mut metrics,
-                        &outstanding_requests,
-                    ) {
-                        if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
-                            break;
+                            if let Err(e) = run_insert(
+                                &insert_receiver,
+                                &blockstore,
+                                &leader_schedule_cache,
+                                &handle_duplicate,
+                                &mut metrics,
+                                &outstanding_requests,
+                            ) {
+                                if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error)
+                                {
+                                    break;
+                                }
+                            }
+
+                            if last_print.elapsed().as_secs() > 2 {
+                                metrics.report_metrics("recv-window-insert-shreds");
+                                metrics = BlockstoreInsertionMetrics::default();
+                                last_print = Instant::now();
+                            }
                         }
-                    }
-
-                    if last_print.elapsed().as_secs() > 2 {
-                        metrics.report_metrics("recv-window-insert-shreds");
-                        metrics = BlockstoreInsertionMetrics::default();
-                        last_print = Instant::now();
-                    }
-                }
+                    })
+                    .unwrap()
             })
-            .unwrap()
+            .collect()
     }
 
     fn start_recv_window_thread<F>(
         id: Pubkey,
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        insert_sender: CrossbeamSender<(Vec<Shred>, Vec<Option<SocketAddr>>)>,
+        insert_senders: Vec<CrossbeamSender<(Shred, Option<SocketAddr>)>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
@@ -475,7 +500,7 @@ impl WindowService {
                     };
                     if let Err(e) = recv_window(
                         &blockstore,
-                        &insert_sender,
+                        &insert_senders,
                         &id,
                         &verified_receiver,
                         &retransmit,
@@ -523,7 +548,9 @@ impl WindowService {
 
     pub fn join(self) -> thread::Result<()> {
         self.t_window.join()?;
-        self.t_insert.join()?;
+        for t_insert in self.t_inserts {
+            t_insert.join()?;
+        }
         self.t_check_duplicate.join()?;
         self.repair_service.join()
     }
