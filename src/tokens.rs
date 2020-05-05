@@ -168,7 +168,7 @@ fn distribute_stake<T: Client>(
         let result = if args.dry_run {
             Ok(Signature::default())
         } else {
-            let system_sol = 1.0;
+            let system_sol = args.sol_for_fees;
             let fee_payer_pubkey = args.fee_payer.as_ref().unwrap().pubkey();
             let stake_authority = args.stake_authority.as_ref().unwrap().pubkey();
             let withdraw_authority = args.withdraw_authority.as_ref().unwrap().pubkey();
@@ -540,6 +540,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         withdraw_authority: Some(Box::new(withdraw_authority)),
         fee_payer: Some(Box::new(fee_payer)),
         dry_run: false,
+        sol_for_fees: 1.0,
         allocations_csv,
         transactions_db: transactions_db.clone(),
     };

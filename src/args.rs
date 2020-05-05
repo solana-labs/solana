@@ -17,6 +17,7 @@ pub struct DistributeStakeArgs<P, K> {
     pub allocations_csv: String,
     pub transactions_db: String,
     pub dry_run: bool,
+    pub sol_for_fees: f64,
     pub stake_account_address: P,
     pub stake_authority: Option<K>,
     pub withdraw_authority: Option<K>,
@@ -75,6 +76,7 @@ pub fn resolve_command(
                     &mut wallet_manager,
                 )
                 .unwrap(),
+                sol_for_fees: args.sol_for_fees,
                 stake_authority: args.stake_authority.as_ref().map(|key_url| {
                     signer_from_path(&matches, &key_url, "stake authority", &mut wallet_manager)
                         .unwrap()

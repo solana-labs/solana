@@ -113,6 +113,14 @@ where
                         .help("Stake Account Address"),
                 )
                 .arg(
+                    Arg::with_name("sol_for_fees")
+                        .default_value("1.0")
+                        .long("sol-for-fees")
+                        .takes_value(true)
+                        .value_name("SOL_AMOUNT")
+                        .help("Amount of SOL to put in system account to pay for fees"),
+                )
+                .arg(
                     Arg::with_name("stake_authority")
                         .long("stake-authority")
                         .takes_value(true)
@@ -177,6 +185,7 @@ fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeStakeArgs<
         transactions_db: value_t_or_exit!(matches, "transactions_db", String),
         dry_run: matches.is_present("dry_run"),
         stake_account_address: value_t_or_exit!(matches, "stake_account_address", String),
+        sol_for_fees: value_t_or_exit!(matches, "sol_for_fees", f64),
         stake_authority: value_t!(matches, "stake_authority", String).ok(),
         withdraw_authority: value_t!(matches, "withdraw_authority", String).ok(),
         fee_payer: value_t!(matches, "fee_payer", String).ok(),
