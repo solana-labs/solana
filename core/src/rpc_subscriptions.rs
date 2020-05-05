@@ -61,23 +61,23 @@ impl std::fmt::Debug for NotificationEntry {
     }
 }
 
-type RpcAccountSubscriptions = RwLock<
-    HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcAccount>>, CommitmentConfig)>>,
->;
-type RpcProgramSubscriptions = RwLock<
-    HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Response<RpcKeyedAccount>>, CommitmentConfig)>>,
->;
+struct SubscriptionData<S> {
+    sink: Sink<S>,
+    commitment: CommitmentConfig,
+    last_notified_slot: RwLock<Slot>,
+}
+type RpcAccountSubscriptions =
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, SubscriptionData<Response<RpcAccount>>>>>;
+type RpcProgramSubscriptions =
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, SubscriptionData<Response<RpcKeyedAccount>>>>>;
 type RpcSignatureSubscriptions = RwLock<
-    HashMap<
-        Signature,
-        HashMap<SubscriptionId, (Sink<Response<RpcSignatureResult>>, CommitmentConfig)>,
-    >,
+    HashMap<Signature, HashMap<SubscriptionId, SubscriptionData<Response<RpcSignatureResult>>>>,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
 type RpcRootSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Slot>>>;
 
 fn add_subscription<K, S>(
-    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, CommitmentConfig)>>,
+    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, SubscriptionData<S>>>,
     hashmap_key: K,
     commitment: Option<CommitmentConfig>,
     sub_id: SubscriptionId,
@@ -88,17 +88,22 @@ fn add_subscription<K, S>(
 {
     let sink = subscriber.assign_id(sub_id.clone()).unwrap();
     let commitment = commitment.unwrap_or_else(CommitmentConfig::recent);
+    let subscription_data = SubscriptionData {
+        sink,
+        commitment,
+        last_notified_slot: RwLock::new(0),
+    };
     if let Some(current_hashmap) = subscriptions.get_mut(&hashmap_key) {
-        current_hashmap.insert(sub_id, (sink, commitment));
+        current_hashmap.insert(sub_id, subscription_data);
         return;
     }
     let mut hashmap = HashMap::new();
-    hashmap.insert(sub_id, (sink, commitment));
+    hashmap.insert(sub_id, subscription_data);
     subscriptions.insert(hashmap_key, hashmap);
 }
 
 fn remove_subscription<K, S>(
-    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, CommitmentConfig)>>,
+    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, SubscriptionData<S>>>,
     sub_id: &SubscriptionId,
 ) -> bool
 where
@@ -121,7 +126,7 @@ where
 
 #[allow(clippy::type_complexity)]
 fn check_commitment_and_notify<K, S, B, F, X>(
-    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<Response<S>>, CommitmentConfig)>>,
+    subscriptions: &HashMap<K, HashMap<SubscriptionId, SubscriptionData<Response<S>>>>,
     hashmap_key: &K,
     bank_forks: &Arc<RwLock<BankForks>>,
     block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
@@ -133,7 +138,7 @@ where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
     B: Fn(&Bank, &K) -> X,
-    F: Fn(X) -> Box<dyn Iterator<Item = S>>,
+    F: Fn(X, Slot) -> (Box<dyn Iterator<Item = S>>, Slot),
     X: Clone + Serialize + Default,
 {
     let r_block_commitment_cache = block_commitment_cache.read().unwrap();
@@ -144,8 +149,16 @@ where
 
     let mut notified_set: HashSet<SubscriptionId> = HashSet::new();
     if let Some(hashmap) = subscriptions.get(hashmap_key) {
-        for (sub_id, (sink, commitment)) in hashmap.iter() {
-            let slot = match commitment.commitment {
+        for (
+            sub_id,
+            SubscriptionData {
+                sink,
+                commitment,
+                last_notified_slot,
+            },
+        ) in hashmap.iter()
+        {
+            let mut slot = match commitment.commitment {
                 CommitmentLevel::Max => largest_confirmed_root,
                 CommitmentLevel::Recent => current_slot,
                 CommitmentLevel::Root => node_root,
@@ -157,7 +170,12 @@ where
                     .map(|desired_bank| bank_method(&desired_bank, hashmap_key))
                     .unwrap_or_default()
             };
-            for result in filter_results(results) {
+            let mut w_last_notified_slot = last_notified_slot.write().unwrap();
+            let (filter_results, result_slot) = filter_results(results, *w_last_notified_slot);
+            if result_slot != *w_last_notified_slot {
+                slot = result_slot;
+            }
+            for result in filter_results {
                 notifier.notify(
                     Response {
                         context: RpcResponseContext { slot },
@@ -166,6 +184,7 @@ where
                     sink,
                 );
                 notified_set.insert(sub_id.clone());
+                *w_last_notified_slot = slot;
             }
         }
     }
@@ -184,33 +203,46 @@ impl RpcNotifier {
     }
 }
 
-fn filter_account_result(result: Option<(Account, Slot)>) -> Box<dyn Iterator<Item = RpcAccount>> {
-    if let Some((account, _fork)) = result {
-        return Box::new(iter::once(RpcAccount::encode(account)));
+fn filter_account_result(
+    result: Option<(Account, Slot)>,
+    last_notified_slot: Slot,
+) -> (Box<dyn Iterator<Item = RpcAccount>>, Slot) {
+    if let Some((account, fork)) = result {
+        if fork > last_notified_slot {
+            return (Box::new(iter::once(RpcAccount::encode(account))), fork);
+        }
     }
-    Box::new(iter::empty())
+    (Box::new(iter::empty()), last_notified_slot)
 }
 
 fn filter_signature_result(
     result: Option<transaction::Result<()>>,
-) -> Box<dyn Iterator<Item = RpcSignatureResult>> {
-    Box::new(
-        result
-            .into_iter()
-            .map(|result| RpcSignatureResult { err: result.err() }),
+    last_notified_slot: Slot,
+) -> (Box<dyn Iterator<Item = RpcSignatureResult>>, Slot) {
+    (
+        Box::new(
+            result
+                .into_iter()
+                .map(|result| RpcSignatureResult { err: result.err() }),
+        ),
+        last_notified_slot,
     )
 }
 
 fn filter_program_results(
     accounts: Vec<(Pubkey, Account)>,
-) -> Box<dyn Iterator<Item = RpcKeyedAccount>> {
-    Box::new(
-        accounts
-            .into_iter()
-            .map(|(pubkey, account)| RpcKeyedAccount {
-                pubkey: pubkey.to_string(),
-                account: RpcAccount::encode(account),
-            }),
+    last_notified_slot: Slot,
+) -> (Box<dyn Iterator<Item = RpcKeyedAccount>>, Slot) {
+    (
+        Box::new(
+            accounts
+                .into_iter()
+                .map(|(pubkey, account)| RpcKeyedAccount {
+                    pubkey: pubkey.to_string(),
+                    account: RpcAccount::encode(account),
+                }),
+        ),
+        last_notified_slot,
     )
 }
 
@@ -317,7 +349,7 @@ impl RpcSubscriptions {
             pubkey,
             bank_forks,
             block_commitment_cache,
-            Bank::get_account_modified_since_parent,
+            Bank::get_account_modified_slot,
             filter_account_result,
             notifier,
         );
@@ -1033,7 +1065,7 @@ pub(crate) mod tests {
     #[test]
     #[serial]
     fn test_add_and_remove_subscription() {
-        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, (Sink<()>, CommitmentConfig)>> =
+        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, SubscriptionData<()>>> =
             HashMap::new();
 
         let num_keys = 5;
