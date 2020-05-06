@@ -20,6 +20,7 @@ pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
 pub struct CrdsGossip {
     pub crds: Crds,
     pub id: Pubkey,
+    pub shred_version: u16,
     pub push: CrdsGossipPush,
     pub pull: CrdsGossipPull,
 }
@@ -29,6 +30,7 @@ impl Default for CrdsGossip {
         CrdsGossip {
             crds: Crds::default(),
             id: Pubkey::default(),
+            shred_version: 0,
             push: CrdsGossipPush::default(),
             pull: CrdsGossipPull::default(),
         }
@@ -38,6 +40,9 @@ impl Default for CrdsGossip {
 impl CrdsGossip {
     pub fn set_self(&mut self, id: &Pubkey) {
         self.id = *id;
+    }
+    pub fn set_shred_version(&mut self, shred_version: u16) {
+        self.shred_version = shred_version;
     }
 
     /// process a push message to the network
@@ -122,6 +127,7 @@ impl CrdsGossip {
             &self.crds,
             stakes,
             &self.id,
+            self.shred_version,
             self.pull.pull_request_time.len(),
             CRDS_GOSSIP_NUM_ACTIVE,
         )
@@ -134,8 +140,14 @@ impl CrdsGossip {
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
-        self.pull
-            .new_pull_request(&self.crds, &self.id, now, stakes, bloom_size)
+        self.pull.new_pull_request(
+            &self.crds,
+            &self.id,
+            self.shred_version,
+            now,
+            stakes,
+            bloom_size,
+        )
     }
 
     /// time when a request to `from` was initiated

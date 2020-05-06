@@ -144,11 +144,12 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         self_id: &Pubkey,
+        self_shred_version: u16,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
     ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
-        let options = self.pull_options(crds, &self_id, now, stakes);
+        let options = self.pull_options(crds, &self_id, self_shred_version, now, stakes);
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
@@ -165,13 +166,20 @@ impl CrdsGossipPull {
         &self,
         crds: &'a Crds,
         self_id: &Pubkey,
+        self_shred_version: u16,
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<(f32, &'a ContactInfo)> {
         crds.table
             .values()
             .filter_map(|v| v.value.contact_info())
-            .filter(|v| v.id != *self_id && ContactInfo::is_valid_address(&v.gossip))
+            .filter(|v| {
+                v.id != *self_id
+                    && ContactInfo::is_valid_address(&v.gossip)
+                    && (self_shred_version == 0
+                        || v.shred_version == 0
+                        || self_shred_version == v.shred_version)
+            })
             .map(|item| {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
                 let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
@@ -402,7 +410,7 @@ mod test {
             stakes.insert(id, i * 100);
         }
         let now = 1024;
-        let mut options = node.pull_options(&crds, &me.label().pubkey(), now, &stakes);
+        let mut options = node.pull_options(&crds, &me.label().pubkey(), 0, now, &stakes);
         assert!(!options.is_empty());
         options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
         // check that the highest stake holder is also the heaviest weighted.
@@ -410,6 +418,66 @@ mod test {
             *stakes.get(&options.get(0).unwrap().1.id).unwrap(),
             3000_u64
         );
+    }
+
+    #[test]
+    fn test_no_pulls_from_different_shred_versions() {
+        let mut crds = Crds::default();
+        let stakes = HashMap::new();
+        let node = CrdsGossipPull::default();
+
+        let gossip = socketaddr!("127.0.0.1:1234");
+
+        let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            shred_version: 123,
+            gossip: gossip.clone(),
+            ..ContactInfo::default()
+        }));
+        let spy = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            shred_version: 0,
+            gossip: gossip.clone(),
+            ..ContactInfo::default()
+        }));
+        let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            shred_version: 123,
+            gossip: gossip.clone(),
+            ..ContactInfo::default()
+        }));
+        let node_456 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
+            id: Pubkey::new_rand(),
+            shred_version: 456,
+            gossip: gossip.clone(),
+            ..ContactInfo::default()
+        }));
+
+        crds.insert(me.clone(), 0).unwrap();
+        crds.insert(spy.clone(), 0).unwrap();
+        crds.insert(node_123.clone(), 0).unwrap();
+        crds.insert(node_456.clone(), 0).unwrap();
+
+        // shred version 123 should ignore 456 nodes
+        let options = node
+            .pull_options(&crds, &me.label().pubkey(), 123, 0, &stakes)
+            .iter()
+            .map(|(_, c)| c.id)
+            .collect::<Vec<_>>();
+        assert_eq!(options.len(), 2);
+        assert!(options.contains(&spy.pubkey()));
+        assert!(options.contains(&node_123.pubkey()));
+
+        // spy nodes will see all
+        let options = node
+            .pull_options(&crds, &spy.label().pubkey(), 0, 0, &stakes)
+            .iter()
+            .map(|(_, c)| c.id)
+            .collect::<Vec<_>>();
+        assert_eq!(options.len(), 3);
+        assert!(options.contains(&me.pubkey()));
+        assert!(options.contains(&node_123.pubkey()));
+        assert!(options.contains(&node_456.pubkey()));
     }
 
     #[test]
@@ -422,13 +490,13 @@ mod test {
         let id = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         assert_eq!(
-            node.new_pull_request(&crds, &id, 0, &HashMap::new(), PACKET_DATA_SIZE),
+            node.new_pull_request(&crds, &id, 0, 0, &HashMap::new(), PACKET_DATA_SIZE),
             Err(CrdsGossipError::NoPeers)
         );
 
         crds.insert(entry.clone(), 0).unwrap();
         assert_eq!(
-            node.new_pull_request(&crds, &id, 0, &HashMap::new(), PACKET_DATA_SIZE),
+            node.new_pull_request(&crds, &id, 0, 0, &HashMap::new(), PACKET_DATA_SIZE),
             Err(CrdsGossipError::NoPeers)
         );
 
@@ -437,7 +505,7 @@ mod test {
             0,
         )));
         crds.insert(new.clone(), 0).unwrap();
-        let req = node.new_pull_request(&crds, &id, 0, &HashMap::new(), PACKET_DATA_SIZE);
+        let req = node.new_pull_request(&crds, &id, 0, 0, &HashMap::new(), PACKET_DATA_SIZE);
         let (to, _, self_info) = req.unwrap();
         assert_eq!(to, new.label().pubkey());
         assert_eq!(self_info, entry);
@@ -472,6 +540,7 @@ mod test {
             let req = node.new_pull_request(
                 &crds,
                 &node_pubkey,
+                0,
                 u64::max_value(),
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
@@ -500,6 +569,7 @@ mod test {
         let req = node.new_pull_request(
             &node_crds,
             &node_pubkey,
+            0,
             0,
             &HashMap::new(),
             PACKET_DATA_SIZE,
@@ -572,6 +642,7 @@ mod test {
             let req = node.new_pull_request(
                 &node_crds,
                 &node_pubkey,
+                0,
                 0,
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
