@@ -247,12 +247,17 @@ fn filter_program_results(
     )
 }
 
-pub struct RpcSubscriptions {
+#[derive(Clone)]
+struct Subscriptions {
     account_subscriptions: Arc<RpcAccountSubscriptions>,
     program_subscriptions: Arc<RpcProgramSubscriptions>,
     signature_subscriptions: Arc<RpcSignatureSubscriptions>,
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
     root_subscriptions: Arc<RpcRootSubscriptions>,
+}
+
+pub struct RpcSubscriptions {
+    subscriptions: Subscriptions,
     notification_sender: Arc<Mutex<Sender<NotificationEntry>>>,
     t_cleanup: Option<JoinHandle<()>>,
     notifier_runtime: Option<Runtime>,
@@ -288,11 +293,14 @@ impl RpcSubscriptions {
 
         let _bank_forks = bank_forks.clone();
         let exit_clone = exit.clone();
-        let account_subscriptions_clone = account_subscriptions.clone();
-        let program_subscriptions_clone = program_subscriptions.clone();
-        let signature_subscriptions_clone = signature_subscriptions.clone();
-        let slot_subscriptions_clone = slot_subscriptions.clone();
-        let root_subscriptions_clone = root_subscriptions.clone();
+        let subscriptions = Subscriptions {
+            account_subscriptions,
+            program_subscriptions,
+            signature_subscriptions,
+            slot_subscriptions,
+            root_subscriptions,
+        };
+        let _subscriptions = subscriptions.clone();
 
         let notifier_runtime = RuntimeBuilder::new()
             .core_threads(1)
@@ -308,27 +316,19 @@ impl RpcSubscriptions {
                     exit_clone,
                     notifier,
                     notification_receiver,
-                    account_subscriptions_clone,
-                    program_subscriptions_clone,
-                    signature_subscriptions_clone,
-                    slot_subscriptions_clone,
-                    root_subscriptions_clone,
-                    _bank_forks.clone(),
+                    _subscriptions,
+                    _bank_forks,
                     block_commitment_cache,
                 );
             })
             .unwrap();
 
         Self {
-            account_subscriptions,
-            program_subscriptions,
-            signature_subscriptions,
-            slot_subscriptions,
-            root_subscriptions,
+            subscriptions,
             notification_sender,
             notifier_runtime: Some(notifier_runtime),
             t_cleanup: Some(t_cleanup),
-            bank_forks: bank_forks,
+            bank_forks,
             exit: exit.clone(),
         }
     }
@@ -416,7 +416,7 @@ impl RpcSubscriptions {
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcAccount>>,
     ) {
-        let mut subscriptions = self.account_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.account_subscriptions.write().unwrap();
         let last_notified_slot = if let Some((_account, slot)) = self
             .bank_forks
             .read()
@@ -439,7 +439,7 @@ impl RpcSubscriptions {
     }
 
     pub fn remove_account_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.account_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.account_subscriptions.write().unwrap();
         remove_subscription(&mut subscriptions, id)
     }
 
@@ -450,7 +450,7 @@ impl RpcSubscriptions {
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcKeyedAccount>>,
     ) {
-        let mut subscriptions = self.program_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.program_subscriptions.write().unwrap();
         add_subscription(
             &mut subscriptions,
             program_id,
@@ -462,7 +462,7 @@ impl RpcSubscriptions {
     }
 
     pub fn remove_program_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.program_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.program_subscriptions.write().unwrap();
         remove_subscription(&mut subscriptions, id)
     }
 
@@ -473,7 +473,7 @@ impl RpcSubscriptions {
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcSignatureResult>>,
     ) {
-        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.signature_subscriptions.write().unwrap();
         add_subscription(
             &mut subscriptions,
             signature,
@@ -485,7 +485,7 @@ impl RpcSubscriptions {
     }
 
     pub fn remove_signature_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.signature_subscriptions.write().unwrap();
         remove_subscription(&mut subscriptions, id)
     }
 
@@ -497,12 +497,12 @@ impl RpcSubscriptions {
 
     pub fn add_slot_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<SlotInfo>) {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        let mut subscriptions = self.slot_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.slot_subscriptions.write().unwrap();
         subscriptions.insert(sub_id, sink);
     }
 
     pub fn remove_slot_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.slot_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.slot_subscriptions.write().unwrap();
         subscriptions.remove(id).is_some()
     }
 
@@ -512,12 +512,12 @@ impl RpcSubscriptions {
 
     pub fn add_root_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<Slot>) {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        let mut subscriptions = self.root_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.root_subscriptions.write().unwrap();
         subscriptions.insert(sub_id, sink);
     }
 
     pub fn remove_root_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.root_subscriptions.write().unwrap();
+        let mut subscriptions = self.subscriptions.root_subscriptions.write().unwrap();
         subscriptions.remove(id).is_some()
     }
 
@@ -549,11 +549,7 @@ impl RpcSubscriptions {
         exit: Arc<AtomicBool>,
         notifier: RpcNotifier,
         notification_receiver: Receiver<NotificationEntry>,
-        account_subscriptions: Arc<RpcAccountSubscriptions>,
-        program_subscriptions: Arc<RpcProgramSubscriptions>,
-        signature_subscriptions: Arc<RpcSignatureSubscriptions>,
-        slot_subscriptions: Arc<RpcSlotSubscriptions>,
-        root_subscriptions: Arc<RpcRootSubscriptions>,
+        subscriptions: Subscriptions,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     ) {
@@ -564,20 +560,20 @@ impl RpcSubscriptions {
             match notification_receiver.recv_timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS)) {
                 Ok(notification_entry) => match notification_entry {
                     NotificationEntry::Slot(slot_info) => {
-                        let subscriptions = slot_subscriptions.read().unwrap();
+                        let subscriptions = subscriptions.slot_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
                             notifier.notify(slot_info, sink);
                         }
                     }
                     NotificationEntry::Root(root) => {
-                        let subscriptions = root_subscriptions.read().unwrap();
+                        let subscriptions = subscriptions.root_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
                             notifier.notify(root, sink);
                         }
                     }
                     NotificationEntry::Bank(_current_slot) => {
                         let pubkeys: Vec<_> = {
-                            let subs = account_subscriptions.read().unwrap();
+                            let subs = subscriptions.account_subscriptions.read().unwrap();
                             subs.keys().cloned().collect()
                         };
                         for pubkey in &pubkeys {
@@ -585,13 +581,13 @@ impl RpcSubscriptions {
                                 pubkey,
                                 &bank_forks,
                                 &block_commitment_cache,
-                                account_subscriptions.clone(),
+                                subscriptions.account_subscriptions.clone(),
                                 &notifier,
                             );
                         }
 
                         let programs: Vec<_> = {
-                            let subs = program_subscriptions.read().unwrap();
+                            let subs = subscriptions.program_subscriptions.read().unwrap();
                             subs.keys().cloned().collect()
                         };
                         for program_id in &programs {
@@ -599,13 +595,13 @@ impl RpcSubscriptions {
                                 program_id,
                                 &bank_forks,
                                 &block_commitment_cache,
-                                program_subscriptions.clone(),
+                                subscriptions.program_subscriptions.clone(),
                                 &notifier,
                             );
                         }
 
                         let signatures: Vec<_> = {
-                            let subs = signature_subscriptions.read().unwrap();
+                            let subs = subscriptions.signature_subscriptions.read().unwrap();
                             subs.keys().cloned().collect()
                         };
                         for signature in &signatures {
@@ -613,7 +609,7 @@ impl RpcSubscriptions {
                                 signature,
                                 &bank_forks,
                                 &block_commitment_cache,
-                                signature_subscriptions.clone(),
+                                subscriptions.signature_subscriptions.clone(),
                                 &notifier,
                             );
                         }
@@ -731,6 +727,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(alice.pubkey(), None, sub_id.clone(), subscriber);
 
         assert!(subscriptions
+            .subscriptions
             .account_subscriptions
             .read()
             .unwrap()
@@ -774,6 +771,7 @@ pub(crate) mod tests {
 
         subscriptions.remove_account_subscription(&sub_id);
         assert!(!subscriptions
+            .subscriptions
             .account_subscriptions
             .read()
             .unwrap()
@@ -829,6 +827,7 @@ pub(crate) mod tests {
         );
 
         assert!(subscriptions
+            .subscriptions
             .program_subscriptions
             .read()
             .unwrap()
@@ -860,6 +859,7 @@ pub(crate) mod tests {
 
         subscriptions.remove_program_subscription(&sub_id);
         assert!(!subscriptions
+            .subscriptions
             .program_subscriptions
             .read()
             .unwrap()
@@ -957,7 +957,11 @@ pub(crate) mod tests {
         );
 
         {
-            let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
+            let sig_subs = subscriptions
+                .subscriptions
+                .signature_subscriptions
+                .read()
+                .unwrap();
             assert_eq!(sig_subs.get(&past_bank_tx.signatures[0]).unwrap().len(), 2);
             assert!(sig_subs.contains_key(&unprocessed_tx.signatures[0]));
             assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
@@ -1003,7 +1007,11 @@ pub(crate) mod tests {
         assert_eq!(expected, response);
 
         // Subscription should be automatically removed after notification
-        let sig_subs = subscriptions.signature_subscriptions.read().unwrap();
+        let sig_subs = subscriptions
+            .subscriptions
+            .signature_subscriptions
+            .read()
+            .unwrap();
         assert!(!sig_subs.contains_key(&processed_tx.signatures[0]));
         assert!(!sig_subs.contains_key(&past_bank_tx.signatures[0]));
 
@@ -1036,6 +1044,7 @@ pub(crate) mod tests {
         subscriptions.add_slot_subscription(sub_id.clone(), subscriber);
 
         assert!(subscriptions
+            .subscriptions
             .slot_subscriptions
             .read()
             .unwrap()
@@ -1058,6 +1067,7 @@ pub(crate) mod tests {
 
         subscriptions.remove_slot_subscription(&sub_id);
         assert!(!subscriptions
+            .subscriptions
             .slot_subscriptions
             .read()
             .unwrap()
@@ -1086,6 +1096,7 @@ pub(crate) mod tests {
         subscriptions.add_root_subscription(sub_id.clone(), subscriber);
 
         assert!(subscriptions
+            .subscriptions
             .root_subscriptions
             .read()
             .unwrap()
@@ -1107,6 +1118,7 @@ pub(crate) mod tests {
 
         subscriptions.remove_root_subscription(&sub_id);
         assert!(!subscriptions
+            .subscriptions
             .root_subscriptions
             .read()
             .unwrap()
