@@ -2070,9 +2070,9 @@ dependencies = [
 
 [[package]]
 name = "libloading"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c4f51b790f5bdb65acb4cc94bb81d7b2ee60348a5431ac1467d390b017600b0"
+checksum = "2cadb8e769f070c45df05c78c7520eb4cd17061d4ab262e43cfc68b4d00ac71c"
 dependencies = [
  "winapi 0.3.8",
 ]
@@ -4750,7 +4750,7 @@ dependencies = [
  "itertools 0.9.0",
  "lazy_static",
  "libc",
- "libloading 0.6.1",
+ "libloading 0.6.2",
  "log 0.4.8",
  "memmap",
  "num-derive 0.3.0",
