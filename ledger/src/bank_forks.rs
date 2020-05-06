@@ -143,7 +143,13 @@ impl BankForks {
 
     pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Self {
         let mut banks = HashMap::new();
-        let working_bank = initial_forks[0].clone();
+
+        // Set working bank to the highest available bank
+        let working_bank = initial_forks
+            .iter()
+            .max_by(|a, b| a.slot().cmp(&b.slot()))
+            .expect("working bank")
+            .clone();
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
@@ -375,7 +381,7 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
-    fn test_bank_forks() {
+    fn test_bank_forks_new() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let mut bank_forks = BankForks::new(0, bank);
@@ -384,6 +390,21 @@ mod tests {
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
+    }
+
+    #[test]
+    fn test_bank_forks_new_from_banks() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let child_bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
+
+        let bank_forks = BankForks::new_from_banks(&[bank.clone(), child_bank.clone()], 0);
+        assert_eq!(bank_forks.root(), 0);
+        assert_eq!(bank_forks.working_bank().slot(), 1);
+
+        let bank_forks = BankForks::new_from_banks(&[child_bank.clone(), bank.clone()], 0);
+        assert_eq!(bank_forks.root(), 0);
+        assert_eq!(bank_forks.working_bank().slot(), 1);
     }
 
     #[test]

@@ -39,7 +39,7 @@ use std::{
 use thiserror::Error;
 
 pub type BlockstoreProcessorResult =
-    result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlockstoreProcessorError>;
+    result::Result<(BankForks, LeaderScheduleCache), BlockstoreProcessorError>;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -235,11 +235,6 @@ fn process_entries_with_callback(
     Ok(())
 }
 
-#[derive(Debug, PartialEq)]
-pub struct BankForksInfo {
-    pub bank_slot: u64,
-}
-
 #[derive(Error, Debug)]
 pub enum BlockstoreProcessorError {
     #[error("failed to load entries")]
@@ -351,17 +346,18 @@ pub fn process_blockstore_from_root(
         }
     }
 
-    let meta = blockstore.meta(start_slot).unwrap();
-
     // Iterate and replay slots from blockstore starting from `start_slot`
-    let (bank_forks, bank_forks_info, leader_schedule_cache) = {
-        if let Some(meta) = meta {
+    let (initial_forks, leader_schedule_cache) = {
+        if let Some(meta) = blockstore
+            .meta(start_slot)
+            .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
+        {
             let epoch_schedule = bank.epoch_schedule();
             let mut leader_schedule_cache = LeaderScheduleCache::new(*epoch_schedule, &bank);
             if opts.full_leader_cache {
                 leader_schedule_cache.set_max_schedules(std::usize::MAX);
             }
-            let fork_info = process_pending_slots(
+            let initial_forks = load_frozen_forks(
                 &bank,
                 &meta,
                 blockstore,
@@ -370,35 +366,30 @@ pub fn process_blockstore_from_root(
                 opts,
                 recyclers,
             )?;
-            let (banks, bank_forks_info): (Vec<_>, Vec<_>) =
-                fork_info.into_iter().map(|(_, v)| v).unzip();
-            if banks.is_empty() {
-                return Err(BlockstoreProcessorError::NoValidForksFound);
-            }
-            let bank_forks = BankForks::new_from_banks(&banks, root);
-            (bank_forks, bank_forks_info, leader_schedule_cache)
+            (initial_forks, leader_schedule_cache)
         } else {
             // If there's no meta for the input `start_slot`, then we started from a snapshot
             // and there's no point in processing the rest of blockstore and implies blockstore
             // should be empty past this point.
-            let bfi = BankForksInfo {
-                bank_slot: start_slot,
-            };
             let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-            let bank_forks = BankForks::new_from_banks(&[bank], root);
-            (bank_forks, vec![bfi], leader_schedule_cache)
+            (vec![bank], leader_schedule_cache)
         }
     };
+    if initial_forks.is_empty() {
+        return Err(BlockstoreProcessorError::NoValidForksFound);
+    }
+    let bank_forks = BankForks::new_from_banks(&initial_forks, root);
 
     info!(
-        "ledger processed in {}ms. {} MB allocated. {} fork{} at {}, with {} frozen bank{}",
+        "ledger processed in {}ms. {} MB allocated. root={}, {} fork{} at {}, with {} frozen bank{}",
         duration_as_ms(&now.elapsed()),
         allocated.since(initial_allocation) / 1_000_000,
-        bank_forks_info.len(),
-        if bank_forks_info.len() > 1 { "s" } else { "" },
-        bank_forks_info
+        bank_forks.root(),
+        initial_forks.len(),
+        if initial_forks.len() > 1 { "s" } else { "" },
+        initial_forks
             .iter()
-            .map(|bfi| bfi.bank_slot.to_string())
+            .map(|b| b.slot().to_string())
             .join(", "),
         bank_forks.frozen_banks().len(),
         if bank_forks.frozen_banks().len() > 1 {
@@ -409,7 +400,7 @@ pub fn process_blockstore_from_root(
     );
     assert!(bank_forks.active_banks().is_empty());
 
-    Ok((bank_forks, bank_forks_info, leader_schedule_cache))
+    Ok((bank_forks, leader_schedule_cache))
 }
 
 /// Verify that a segment of entries has the correct number of ticks and hashes
@@ -645,15 +636,12 @@ fn process_next_slots(
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(SlotMeta, Arc<Bank>, Hash)>,
-    fork_info: &mut HashMap<u64, (Arc<Bank>, BankForksInfo)>,
+    initial_forks: &mut HashMap<Slot, Arc<Bank>>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     if let Some(parent) = bank.parent() {
-        fork_info.remove(&parent.slot());
+        initial_forks.remove(&parent.slot());
     }
-    let bfi = BankForksInfo {
-        bank_slot: bank.slot(),
-    };
-    fork_info.insert(bank.slot(), (bank.clone(), bfi));
+    initial_forks.insert(bank.slot(), bank.clone());
 
     if meta.next_slots.is_empty() {
         return Ok(());
@@ -698,8 +686,8 @@ fn process_next_slots(
 }
 
 // Iterate through blockstore processing slots starting from the root slot pointed to by the
-// given `meta`
-fn process_pending_slots(
+// given `meta` and return a vector of frozen bank forks
+fn load_frozen_forks(
     root_bank: &Arc<Bank>,
     root_meta: &SlotMeta,
     blockstore: &Blockstore,
@@ -707,8 +695,8 @@ fn process_pending_slots(
     root: &mut Slot,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
-) -> result::Result<HashMap<u64, (Arc<Bank>, BankForksInfo)>, BlockstoreProcessorError> {
-    let mut fork_info = HashMap::new();
+) -> result::Result<Vec<Arc<Bank>>, BlockstoreProcessorError> {
+    let mut initial_forks = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut pending_slots = vec![];
     let mut last_root_slot = root_bank.slot();
@@ -720,7 +708,7 @@ fn process_pending_slots(
         blockstore,
         leader_schedule_cache,
         &mut pending_slots,
-        &mut fork_info,
+        &mut initial_forks,
     )?;
 
     let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
@@ -756,7 +744,7 @@ fn process_pending_slots(
             leader_schedule_cache.set_root(&bank);
             bank.squash();
             pending_slots.clear();
-            fork_info.clear();
+            initial_forks.clear();
             last_root_slot = slot;
         }
         slots_elapsed += 1;
@@ -774,7 +762,7 @@ fn process_pending_slots(
             blockstore,
             leader_schedule_cache,
             &mut pending_slots,
-            &mut fork_info,
+            &mut initial_forks,
         )?;
 
         if slot >= dev_halt_at_slot {
@@ -782,7 +770,7 @@ fn process_pending_slots(
         }
     }
 
-    Ok(fork_info)
+    Ok(initial_forks.values().cloned().collect::<Vec<_>>())
 }
 
 // Processes and replays the contents of a single slot, returns Error
@@ -926,7 +914,7 @@ pub mod tests {
             Ok(_)
         );
 
-        let (_bank_forks, bank_forks_info, _) = process_blockstore(
+        let (bank_forks, _leader_schedule) = process_blockstore(
             &genesis_config,
             &blockstore,
             Vec::new(),
@@ -936,7 +924,7 @@ pub mod tests {
             },
         )
         .unwrap();
-        assert_eq!(bank_forks_info, vec![BankForksInfo { bank_slot: 0 }]);
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
     }
 
     #[test]
@@ -970,7 +958,7 @@ pub mod tests {
         );
 
         // Should return slot 0, the last slot on the fork that is valid
-        let (_bank_forks, bank_forks_info, _) = process_blockstore(
+        let (bank_forks, _leader_schedule) = process_blockstore(
             &genesis_config,
             &blockstore,
             Vec::new(),
@@ -980,13 +968,13 @@ pub mod tests {
             },
         )
         .unwrap();
-        assert_eq!(bank_forks_info, vec![BankForksInfo { bank_slot: 0 }]);
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
 
         // Write slot 2 fully
         let _last_slot2_entry_hash =
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 0, blockhash);
 
-        let (_bank_forks, bank_forks_info, _) = process_blockstore(
+        let (bank_forks, _leader_schedule) = process_blockstore(
             &genesis_config,
             &blockstore,
             Vec::new(),
@@ -998,7 +986,9 @@ pub mod tests {
         .unwrap();
 
         // One valid fork, one bad fork.  process_blockstore() should only return the valid fork
-        assert_eq!(bank_forks_info, vec![BankForksInfo { bank_slot: 2 }]);
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 2]);
+        assert_eq!(bank_forks.working_bank().slot(), 2);
+        assert_eq!(bank_forks.root(), 0);
     }
 
     #[test]
@@ -1046,9 +1036,9 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        let (_bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
-        assert_eq!(bank_forks_info, vec![BankForksInfo { bank_slot: 0 }]);
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
     }
 
     #[test]
@@ -1111,16 +1101,10 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        let (mut _bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone()).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1);
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: 0, // slot 1 isn't "full", we stop at slot zero
-            }
-        );
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0]); // slot 1 isn't "full", we stop at slot zero
 
         /* Add a complete slot such that the store looks like:
 
@@ -1136,16 +1120,11 @@ pub mod tests {
         };
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 0, blockhash);
         // Slot 0 should not show up in the ending bank_forks_info
-        let (mut _bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1);
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: 3, // slot 1 isn't "full", we stop at slot zero
-            }
-        );
+        // slot 1 isn't "full", we stop at slot zero
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 3]);
     }
 
     #[test]
@@ -1208,17 +1187,12 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1); // One fork, other one is ignored b/c not a descendant of the root
+        // One fork, other one is ignored b/c not a descendant of the root
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![4]);
 
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: 4, // Fork 2's head is slot 4
-            }
-        );
         assert!(&bank_forks[4]
             .parents()
             .iter()
@@ -1227,7 +1201,7 @@ pub mod tests {
             .is_empty());
 
         // Ensure bank_forks holds the right banks
-        verify_fork_infos(&bank_forks, &bank_forks_info);
+        verify_fork_infos(&bank_forks);
 
         assert_eq!(bank_forks.root(), 4);
     }
@@ -1292,17 +1266,13 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, mut bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
-        bank_forks_info.sort_by(|a, b| a.bank_slot.cmp(&b.bank_slot));
-        assert_eq!(bank_forks_info.len(), 2); // There are two forks
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: 3, // Fork 1's head is slot 3
-            }
-        );
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![1, 2, 3, 4]);
+        assert_eq!(bank_forks.working_bank().slot(), 4);
+        assert_eq!(bank_forks.root(), 1);
+
         assert_eq!(
             &bank_forks[3]
                 .parents()
@@ -1310,12 +1280,6 @@ pub mod tests {
                 .map(|bank| bank.slot())
                 .collect::<Vec<_>>(),
             &[2, 1]
-        );
-        assert_eq!(
-            bank_forks_info[1],
-            BankForksInfo {
-                bank_slot: 4, // Fork 2's head is slot 4
-            }
         );
         assert_eq!(
             &bank_forks[4]
@@ -1329,7 +1293,7 @@ pub mod tests {
         assert_eq!(bank_forks.root(), 1);
 
         // Ensure bank_forks holds the right banks
-        verify_fork_infos(&bank_forks, &bank_forks_info);
+        verify_fork_infos(&bank_forks);
     }
 
     #[test]
@@ -1358,7 +1322,7 @@ pub mod tests {
         blockstore.set_dead_slot(2).unwrap();
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, bank_forks_info, _) = process_blockstore(
+        let (bank_forks, _leader_schedule) = process_blockstore(
             &genesis_config,
             &blockstore,
             Vec::new(),
@@ -1366,8 +1330,8 @@ pub mod tests {
         )
         .unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1);
-        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 3 });
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 3]);
+        assert_eq!(bank_forks.working_bank().slot(), 3);
         assert_eq!(
             &bank_forks[3]
                 .parents()
@@ -1376,7 +1340,7 @@ pub mod tests {
                 .collect::<Vec<_>>(),
             &[1, 0]
         );
-        verify_fork_infos(&bank_forks, &bank_forks_info);
+        verify_fork_infos(&bank_forks);
     }
 
     #[test]
@@ -1407,7 +1371,7 @@ pub mod tests {
         blockstore.set_dead_slot(4).unwrap();
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, mut bank_forks_info, _) = process_blockstore(
+        let (bank_forks, _leader_schedule) = process_blockstore(
             &genesis_config,
             &blockstore,
             Vec::new(),
@@ -1415,12 +1379,10 @@ pub mod tests {
         )
         .unwrap();
 
-        bank_forks_info.sort_by(|a, b| a.bank_slot.cmp(&b.bank_slot));
-        assert_eq!(bank_forks_info.len(), 2);
-
         // Should see the parent of the dead child
-        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 2 },);
-        assert_eq!(bank_forks_info[1], BankForksInfo { bank_slot: 3 },);
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 2, 3]);
+        assert_eq!(bank_forks.working_bank().slot(), 3);
+
         assert_eq!(
             &bank_forks[3]
                 .parents()
@@ -1437,7 +1399,8 @@ pub mod tests {
                 .collect::<Vec<_>>(),
             &[1, 0]
         );
-        verify_fork_infos(&bank_forks, &bank_forks_info);
+        assert_eq!(bank_forks.working_bank().slot(), 3);
+        verify_fork_infos(&bank_forks);
     }
 
     #[test]
@@ -1460,7 +1423,7 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 0, blockhash);
         blockstore.set_dead_slot(1).unwrap();
         blockstore.set_dead_slot(2).unwrap();
-        let (bank_forks, bank_forks_info, _) = process_blockstore(
+        let (bank_forks, _leader_schedule) = process_blockstore(
             &genesis_config,
             &blockstore,
             Vec::new(),
@@ -1469,9 +1432,8 @@ pub mod tests {
         .unwrap();
 
         // Should see only the parent of the dead children
-        assert_eq!(bank_forks_info.len(), 1);
-        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 },);
-        verify_fork_infos(&bank_forks, &bank_forks_info);
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
+        verify_fork_infos(&bank_forks);
     }
 
     #[test]
@@ -1515,16 +1477,11 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1); // There is one fork
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: last_slot + 1, // Head is last_slot + 1
-            }
-        );
+        // There is one fork, head is last_slot + 1
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![last_slot + 1]);
 
         // The latest root should have purged all its parents
         assert!(&bank_forks[last_slot + 1]
@@ -1663,12 +1620,12 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1);
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1]);
         assert_eq!(bank_forks.root(), 0);
-        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 1 });
+        assert_eq!(bank_forks.working_bank().slot(), 1);
 
         let bank = bank_forks[1].clone();
         assert_eq!(
@@ -1692,11 +1649,10 @@ pub mod tests {
             poh_verify: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1);
-        assert_eq!(bank_forks_info[0], BankForksInfo { bank_slot: 0 });
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         let bank = bank_forks[0].clone();
         assert_eq!(bank.tick_height(), 1);
     }
@@ -1727,9 +1683,9 @@ pub mod tests {
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
-        let (_bank_forks, _bank_forks_info, cached_leader_schedule) =
+        let (_bank_forks, leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
-        assert_eq!(cached_leader_schedule.max_schedules(), std::usize::MAX);
+        assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
     }
 
     #[test]
@@ -2464,17 +2420,12 @@ pub mod tests {
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (bank_forks, bank_forks_info, _) =
+        let (bank_forks, _leader_schedule) =
             process_blockstore_from_root(&genesis_config, &blockstore, bank1, &opts, &recyclers)
                 .unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1); // One fork
-        assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
-                bank_slot: 6, // The head of the fork is slot 6
-            }
-        );
+        assert_eq!(frozen_bank_slots(&bank_forks), vec![5, 6]);
+        assert_eq!(bank_forks.working_bank().slot(), 6);
         assert_eq!(bank_forks.root(), 5);
 
         // Verify the parents of the head of the fork
@@ -2488,7 +2439,7 @@ pub mod tests {
         );
 
         // Check that bank forks has the correct banks
-        verify_fork_infos(&bank_forks, &bank_forks_info);
+        verify_fork_infos(&bank_forks);
     }
 
     #[test]
@@ -2636,12 +2587,17 @@ pub mod tests {
         bank.epoch_schedule().clone()
     }
 
+    fn frozen_bank_slots(bank_forks: &BankForks) -> Vec<Slot> {
+        let mut slots: Vec<_> = bank_forks.frozen_banks().keys().cloned().collect();
+        slots.sort();
+        slots
+    }
+
     // Check that `bank_forks` contains all the ancestors and banks for each fork identified in
     // `bank_forks_info`
-    fn verify_fork_infos(bank_forks: &BankForks, bank_forks_info: &[BankForksInfo]) {
-        for fork in bank_forks_info {
-            let head_slot = fork.bank_slot;
-            let head_bank = &bank_forks[head_slot];
+    fn verify_fork_infos(bank_forks: &BankForks) {
+        for slot in frozen_bank_slots(bank_forks) {
+            let head_bank = &bank_forks[slot];
             let mut parents = head_bank.parents();
             parents.push(head_bank.clone());
 

@@ -10,7 +10,7 @@ use solana_ledger::{
     bank_forks_utils,
     blockstore::Blockstore,
     blockstore_db::{self, Column, Database},
-    blockstore_processor::{BankForksInfo, ProcessOptions},
+    blockstore_processor::ProcessOptions,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     rooted_slot_iterator::RootedSlotIterator,
     snapshot_utils,
@@ -192,15 +192,19 @@ fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn graph_forks(
-    bank_forks: &BankForks,
-    bank_forks_info: &[BankForksInfo],
-    include_all_votes: bool,
-) -> String {
+fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
+    let frozen_banks = bank_forks.frozen_banks();
+    let mut fork_slots: HashSet<_> = frozen_banks.keys().cloned().collect();
+    for (_, bank) in frozen_banks {
+        for parent in bank.parents() {
+            fork_slots.remove(&parent.slot());
+        }
+    }
+
     // Search all forks and collect the last vote made by each validator
     let mut last_votes = HashMap::new();
-    for bfi in bank_forks_info {
-        let bank = bank_forks.banks.get(&bfi.bank_slot).unwrap();
+    for fork_slot in &fork_slots {
+        let bank = &bank_forks[*fork_slot];
 
         let total_stake = bank
             .vote_accounts()
@@ -241,9 +245,8 @@ fn graph_forks(
     dot.push("    style=invis".to_string());
     let mut styled_slots = HashSet::new();
     let mut all_votes: HashMap<Pubkey, HashMap<Slot, VoteState>> = HashMap::new();
-    for bfi in bank_forks_info {
-        let bank = bank_forks.banks.get(&bfi.bank_slot).unwrap();
-        let mut bank = bank.clone();
+    for fork_slot in &fork_slots {
+        let mut bank = bank_forks[*fork_slot].clone();
 
         let mut first = true;
         loop {
@@ -885,15 +888,12 @@ fn main() {
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
-                    let bank_info = &bank_forks_info[0];
-                    let bank = bank_forks[bank_info.bank_slot].clone();
-
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     println!(
                         "{}",
                         compute_shred_version(
                             &genesis_config.hash(),
-                            Some(&bank.hard_forks().read().unwrap())
+                            Some(&bank_forks.working_bank().hard_forks().read().unwrap())
                         )
                     );
                 }
@@ -979,12 +979,8 @@ fn main() {
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 process_options,
             ) {
-                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
-                    let dot = graph_forks(
-                        &bank_forks,
-                        &bank_forks_info,
-                        arg_matches.is_present("include_all_votes"),
-                    );
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                    let dot = graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
 
                     let extension = Path::new(&output_file).extension();
                     let result = if extension == Some(OsStr::new("pdf")) {
@@ -1019,7 +1015,7 @@ fn main() {
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, _bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let bank = bank_forks.get(snapshot_slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", snapshot_slot);
                         exit(1);
@@ -1084,15 +1080,8 @@ fn main() {
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
-                    let slot = dev_halt_at_slot.unwrap_or_else(|| {
-                        if bank_forks_info.len() > 1 {
-                            eprintln!("Error: multiple forks present");
-                            exit(1);
-                        }
-                        bank_forks_info[0].bank_slot
-                    });
-
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                    let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);
                         exit(1);

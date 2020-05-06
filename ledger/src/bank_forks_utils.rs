@@ -2,7 +2,7 @@ use crate::{
     bank_forks::{BankForks, SnapshotConfig},
     blockstore::Blockstore,
     blockstore_processor::{
-        self, BankForksInfo, BlockstoreProcessorError, BlockstoreProcessorResult, ProcessOptions,
+        self, BlockstoreProcessorError, BlockstoreProcessorResult, ProcessOptions,
     },
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
@@ -13,12 +13,7 @@ use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, process, result, sync::Arc};
 
 pub type LoadResult = result::Result<
-    (
-        BankForks,
-        Vec<BankForksInfo>,
-        LeaderScheduleCache,
-        Option<(Slot, Hash)>,
-    ),
+    (BankForks, LeaderScheduleCache, Option<(Slot, Hash)>),
     BlockstoreProcessorError,
 >;
 
@@ -26,13 +21,8 @@ fn to_loadresult(
     brp: BlockstoreProcessorResult,
     snapshot_hash: Option<(Slot, Hash)>,
 ) -> LoadResult {
-    brp.map(|(bank_forks, bank_forks_info, leader_schedule_cache)| {
-        (
-            bank_forks,
-            bank_forks_info,
-            leader_schedule_cache,
-            snapshot_hash,
-        )
+    brp.map(|(bank_forks, leader_schedule_cache)| {
+        (bank_forks, leader_schedule_cache, snapshot_hash)
     })
 }
 
