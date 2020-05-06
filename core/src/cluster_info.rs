@@ -267,7 +267,11 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(contact_info),
             id,
         };
-        me.gossip.write().unwrap().set_self(&id);
+        {
+            let mut gossip = me.gossip.write().unwrap();
+            gossip.set_self(&id);
+            gossip.set_shred_version(me.my_shred_version());
+        }
         me.insert_self();
         me.push_self(&HashMap::new());
         me
@@ -361,51 +365,59 @@ impl ClusterInfo {
         let now = timestamp();
         let mut spy_nodes = 0;
         let mut archivers = 0;
+        let mut different_shred_nodes = 0;
         let my_pubkey = self.id();
+        let my_shred_version = self.my_shred_version();
         let nodes: Vec<_> = self
             .all_peers()
             .into_iter()
-            .map(|(node, last_updated)| {
+            .filter_map(|(node, last_updated)| {
                 if Self::is_spy_node(&node) {
                     spy_nodes += 1;
                 } else if Self::is_archiver(&node) {
                     archivers += 1;
                 }
-                fn addr_to_string(default_ip: &IpAddr, addr: &SocketAddr) -> String {
-                    if ContactInfo::is_valid_address(addr) {
-                        if &addr.ip() == default_ip {
-                            addr.port().to_string()
-                        } else {
-                            addr.to_string()
-                        }
-                    } else {
-                        "none".to_string()
-                    }
-                }
 
-                let ip_addr = node.gossip.ip();
-                format!(
-                    "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
-                    if ContactInfo::is_valid_address(&node.gossip) {
-                        ip_addr.to_string()
-                    } else {
-                        "none".to_string()
-                    },
-                    if node.id == my_pubkey { "me" } else { "" }.to_string(),
-                    now.saturating_sub(last_updated),
-                    node.id.to_string(),
-                    addr_to_string(&ip_addr, &node.gossip),
-                    addr_to_string(&ip_addr, &node.tpu),
-                    addr_to_string(&ip_addr, &node.tpu_forwards),
-                    addr_to_string(&ip_addr, &node.tvu),
-                    addr_to_string(&ip_addr, &node.tvu_forwards),
-                    addr_to_string(&ip_addr, &node.repair),
-                    addr_to_string(&ip_addr, &node.serve_repair),
-                    addr_to_string(&ip_addr, &node.storage_addr),
-                    addr_to_string(&ip_addr, &node.rpc),
-                    addr_to_string(&ip_addr, &node.rpc_pubsub),
-                    node.shred_version,
-                )
+                if my_shred_version != 0 && (node.shred_version != 0 && node.shred_version != my_shred_version) {
+                    different_shred_nodes += 1;
+                    None
+                } else {
+                    fn addr_to_string(default_ip: &IpAddr, addr: &SocketAddr) -> String {
+                        if ContactInfo::is_valid_address(addr) {
+                            if &addr.ip() == default_ip {
+                                addr.port().to_string()
+                            } else {
+                                addr.to_string()
+                            }
+                        } else {
+                            "none".to_string()
+                        }
+                    }
+
+                    let ip_addr = node.gossip.ip();
+                    Some(format!(
+                        "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        if ContactInfo::is_valid_address(&node.gossip) {
+                            ip_addr.to_string()
+                        } else {
+                            "none".to_string()
+                        },
+                        if node.id == my_pubkey { "me" } else { "" }.to_string(),
+                        now.saturating_sub(last_updated),
+                        node.id.to_string(),
+                        addr_to_string(&ip_addr, &node.gossip),
+                        addr_to_string(&ip_addr, &node.tpu),
+                        addr_to_string(&ip_addr, &node.tpu_forwards),
+                        addr_to_string(&ip_addr, &node.tvu),
+                        addr_to_string(&ip_addr, &node.tvu_forwards),
+                        addr_to_string(&ip_addr, &node.repair),
+                        addr_to_string(&ip_addr, &node.serve_repair),
+                        addr_to_string(&ip_addr, &node.storage_addr),
+                        addr_to_string(&ip_addr, &node.rpc),
+                        addr_to_string(&ip_addr, &node.rpc_pubsub),
+                        node.shred_version,
+                    ))
+                }
             })
             .collect();
 
@@ -415,7 +427,7 @@ impl ClusterInfo {
              ------------------+-------+----------------------------------------------+\
              ------+------+------+------+------+------+------+------+------+------+--------\n\
              {}\
-             Nodes: {}{}{}",
+             Nodes: {}{}{}{}",
             nodes.join(""),
             nodes.len() - spy_nodes - archivers,
             if archivers > 0 {
@@ -425,6 +437,14 @@ impl ClusterInfo {
             },
             if spy_nodes > 0 {
                 format!("\nSpies: {}", spy_nodes)
+            } else {
+                "".to_string()
+            },
+            if spy_nodes > 0 {
+                format!(
+                    "\nNodes with different shred version: {}",
+                    different_shred_nodes
+                )
             } else {
                 "".to_string()
             }
@@ -1350,6 +1370,10 @@ impl ClusterInfo {
                                     );
                                     obj.my_contact_info.write().unwrap().shred_version =
                                         entrypoint.shred_version;
+                                    obj.gossip
+                                        .write()
+                                        .unwrap()
+                                        .set_shred_version(entrypoint.shred_version);
                                     obj.insert_self();
                                     adopt_shred_version = false;
                                 }
@@ -1735,7 +1759,10 @@ impl ClusterInfo {
             requests.push(more_reqs)
         }
         if num_requests >= MAX_GOSSIP_TRAFFIC {
-            warn!("Too much gossip traffic, ignoring some messages");
+            warn!(
+                "Too much gossip traffic, ignoring some messages (requests={}, max requests={})",
+                num_requests, MAX_GOSSIP_TRAFFIC
+            );
         }
         let epoch_ms;
         let stakes: HashMap<_, _> = match bank_forks {
