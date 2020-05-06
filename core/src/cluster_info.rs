@@ -2027,7 +2027,7 @@ impl Node {
 
 fn report_time_spent(label: &str, time: &Duration, extra: &str) {
     let count = duration_as_ms(time);
-    if count > 5 {
+    if count > 100 {
         info!("{} took: {} ms {}", label, count, extra);
     }
 }
