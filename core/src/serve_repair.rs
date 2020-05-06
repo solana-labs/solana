@@ -65,9 +65,9 @@ impl RequestResponse for RepairType {
     }
     fn verify_response(&self, response_shred: &Shred) -> bool {
         match self {
-            RepairType::Orphan(slot) => response_shred.slot() < *slot,
+            RepairType::Orphan(slot) => response_shred.slot() <= *slot,
             RepairType::HighestShred(slot, index) => {
-                response_shred.slot() as u64 == *slot && response_shred.index() as u64 > *index
+                response_shred.slot() as u64 == *slot && response_shred.index() as u64 >= *index
             }
             RepairType::Shred(slot, index) => {
                 response_shred.slot() as u64 == *slot && response_shred.index() as u64 == *index
@@ -575,11 +575,13 @@ mod tests {
     use solana_ledger::{
         blockstore::make_many_slot_entries,
         blockstore_processor::fill_blockstore_slot_with_ticks,
+        repair_response,
         shred::{
             max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
             SHRED_PAYLOAD_SIZE,
         },
     };
+    use solana_perf::packet::Packet;
     use solana_sdk::{hash::Hash, pubkey::Pubkey, timing::timestamp};
 
     /// test run_window_requestwindow requests respond with the right shred, and do not overrun
@@ -609,16 +611,21 @@ mod tests {
                 Hash::default(),
             );
 
+            let slot = 2;
+            let index = 1;
             let rv = ServeRepair::run_highest_window_request(
                 &recycler,
                 &socketaddr_any!(),
                 Some(&blockstore),
-                2,
-                1,
+                slot,
+                index,
                 nonce,
-            );
+            )
+            .expect("packets");
+            let request = RepairType::HighestShred(slot, index);
+            verify_responses(&request, rv.packets.iter());
+
             let rv: Vec<Shred> = rv
-                .expect("packets")
                 .packets
                 .into_iter()
                 .filter_map(|b| {
@@ -697,19 +704,22 @@ mod tests {
                 .insert_shreds(vec![shred_info], None, false)
                 .expect("Expect successful ledger write");
 
+            let slot = 2;
+            let index = 1;
             let rv = ServeRepair::run_window_request(
                 &recycler,
                 &me,
                 &socketaddr_any!(),
                 Some(&blockstore),
                 &me,
-                2,
-                1,
+                slot,
+                index,
                 nonce,
-            );
-            assert!(!rv.is_none());
+            )
+            .expect("packets");
+            let request = RepairType::Shred(slot, index);
+            verify_responses(&request, rv.packets.iter());
             let rv: Vec<Shred> = rv
-                .expect("packets")
                 .packets
                 .into_iter()
                 .filter_map(|b| {
@@ -849,11 +859,12 @@ mod tests {
 
             // For slot 3, we should return the highest shreds from slots 3, 2, 1 respectively
             // for this request
+            let slot = 3;
             let rv: Vec<_> = ServeRepair::run_orphan(
                 &recycler,
                 &socketaddr_any!(),
                 Some(&blockstore),
-                3,
+                slot,
                 5,
                 nonce,
             )
@@ -862,6 +873,10 @@ mod tests {
             .iter()
             .map(|b| b.clone())
             .collect();
+
+            // Verify responses
+            let request = RepairType::Orphan(slot);
+            verify_responses(&request, rv.iter());
 
             let expected: Vec<_> = (1..=3)
                 .rev()
@@ -878,9 +893,69 @@ mod tests {
                     .unwrap()
                 })
                 .collect();
-            assert_eq!(rv, expected)
+            assert_eq!(rv, expected);
         }
 
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_verify_response() {
+        let repair = RepairType::Orphan(9);
+        // Ensure new options are addded to this test
+        match repair {
+            RepairType::Orphan(_) => (),
+            RepairType::HighestShred(_, _) => (),
+            RepairType::Shred(_, _) => (),
+        };
+
+        let slot = 9;
+        let index = 5;
+
+        // Orphan
+        let mut shred = Shred::new_empty_data_shred(SHRED_PAYLOAD_SIZE);
+        shred.set_slot(slot);
+        let request = RepairType::Orphan(slot);
+        assert!(request.verify_response(&shred));
+        shred.set_slot(slot - 1);
+        assert!(request.verify_response(&shred));
+        shred.set_slot(slot + 1);
+        assert!(!request.verify_response(&shred));
+
+        // HighestShred
+        shred = Shred::new_empty_data_shred(SHRED_PAYLOAD_SIZE);
+        shred.set_slot(slot);
+        shred.set_index(index);
+        let request = RepairType::HighestShred(slot, index as u64);
+        assert!(request.verify_response(&shred));
+        shred.set_index(index + 1);
+        assert!(request.verify_response(&shred));
+        shred.set_index(index - 1);
+        assert!(!request.verify_response(&shred));
+        shred.set_slot(slot - 1);
+        shred.set_index(index);
+        assert!(!request.verify_response(&shred));
+        shred.set_slot(slot + 1);
+        assert!(!request.verify_response(&shred));
+
+        // Shred
+        shred = Shred::new_empty_data_shred(SHRED_PAYLOAD_SIZE);
+        shred.set_slot(slot);
+        shred.set_index(index);
+        let request = RepairType::Shred(slot, index as u64);
+        assert!(request.verify_response(&shred));
+        shred.set_index(index + 1);
+        assert!(!request.verify_response(&shred));
+        shred.set_slot(slot + 1);
+        shred.set_index(index);
+        assert!(!request.verify_response(&shred));
+    }
+
+    fn verify_responses<'a>(request: &RepairType, packets: impl Iterator<Item = &'a Packet>) {
+        for packet in packets {
+            let shred_payload = repair_response::shred(&packet.data).to_vec();
+            let shred = Shred::new_from_serialized_shred(shred_payload).unwrap();
+            request.verify_response(&shred);
+        }
     }
 }

@@ -1092,7 +1092,7 @@ mod test {
 
         // Should not be able to find signature for slot 9 for the tx
         assert!(bank9.get_signature_status(&vote_tx.signatures[0]).is_none());
-        bank9.process_transaction(&vote_tx).unwrap();
+
         // Getting balance should return the old balance (acounts were cleared)
         assert_eq!(
             bank9.get_balance(&keypairs.node_keypair.pubkey()),

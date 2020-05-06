@@ -20,14 +20,13 @@ use solana_ledger::{
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
     repair_response,
-    shred::{Nonce, Shred},
+    shred::{Nonce, Shred, SHRED_PAYLOAD_SIZE},
 };
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::duration_as_ms;
+use solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::PacketSender;
 use std::{
     net::{SocketAddr, UdpSocket},
@@ -203,7 +202,11 @@ where
                             );
                             None
                         } else {
-                            // Address of validator who sent this packet
+                            if packet.meta.size != PACKET_DATA_SIZE
+                                && packet.meta.size != SHRED_PAYLOAD_SIZE
+                            {
+                                return None;
+                            }
                             let (repair_info, serialized_shred) = {
                                 if packet.meta.repair {
                                     if let Some(nonce) = repair_response::nonce(&packet.data) {
@@ -220,7 +223,7 @@ where
                                         return None;
                                     }
                                 } else {
-                                    (None, packet.data.to_vec())
+                                    (None, packet.data[..packet.meta.size].to_vec())
                                 }
                             };
                             if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
@@ -748,7 +751,8 @@ mod test {
             .into_iter()
             .map(|mut s| {
                 let mut p = Packet::default();
-                p.data.copy_from_slice(&mut s.payload);
+                p.meta.size = s.payload.len();
+                p.data[..p.meta.size].copy_from_slice(&mut s.payload);
                 p
             })
             .collect();
