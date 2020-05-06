@@ -496,10 +496,14 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
     ) {
         error!("purging slot {}", duplicate_slot);
-        let empty = HashSet::new();
-        let slot_descendants = descendants.get(&duplicate_slot).unwrap_or(&empty);
+        let slot_descendants = descendants.get(&duplicate_slot);
+        if slot_descendants.is_none() {
+            // Root has already moved past this slot, no need to purge it
+            return;
+        }
 
         for d in slot_descendants
+            .unwrap()
             .iter()
             .chain(std::iter::once(&duplicate_slot))
         {
