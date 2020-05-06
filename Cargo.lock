@@ -4678,6 +4678,7 @@ name = "solana-perf"
 version = "1.2.0"
 dependencies = [
  "bincode",
+ "curve25519-dalek 2.0.0",
  "dlopen",
  "dlopen_derive",
  "lazy_static",

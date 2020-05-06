@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PERF_LIBS_VERSION=v0.18.0
+PERF_LIBS_VERSION=v0.18.1
 VERSION=$PERF_LIBS_VERSION-1
 
 set -e

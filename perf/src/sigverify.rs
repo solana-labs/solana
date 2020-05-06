@@ -293,6 +293,34 @@ pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut 
     }
 }
 
+// return true for success, i.e ge unpacks and !ge.is_small_order()
+pub fn check_packed_ge_small_order(ge: &[u8; 32]) -> bool {
+    if let Some(api) = perf_libs::api() {
+        unsafe {
+            // Returns 1 == fail, 0 == success
+            let res = (api.ed25519_check_packed_ge_small_order)(ge.as_ptr());
+
+            return res == 0;
+        }
+    }
+    false
+}
+
+pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
+    let mut out = [0u8; 32];
+    if let Some(api) = perf_libs::api() {
+        unsafe {
+            let res = (api.ed25519_get_checked_scalar)(out.as_mut_ptr(), scalar.as_ptr());
+            if res == 0 {
+                return Ok(out);
+            } else {
+                return Err(PacketError::InvalidLen);
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub fn ed25519_verify(
     batches: &[Packets],
     recycler: &Recycler<TxOffset>,
@@ -312,7 +340,7 @@ pub fn ed25519_verify(
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
-    if count < std::usize::MAX {
+    if count < 64 {
         return ed25519_verify_cpu(batches);
     }
 
@@ -722,7 +750,130 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_fuzz() {
+        use rand::{thread_rng, Rng};
+        solana_logger::setup();
+
+        let tx = test_multisig_tx();
+        let packet = sigverify::make_packet_from_transaction(tx);
+
+        let recycler = Recycler::default();
+        let recycler_out = Recycler::default();
+        for _ in 0..50 {
+            let n = thread_rng().gen_range(1, 30);
+            let num_batches = thread_rng().gen_range(2, 30);
+            let mut batches = generate_packet_vec(&packet, n, num_batches);
+
+            let num_modifications = thread_rng().gen_range(0, 5);
+            for _ in 0..num_modifications {
+                let batch = thread_rng().gen_range(0, batches.len());
+                let packet = thread_rng().gen_range(0, batches[batch].packets.len());
+                let offset = thread_rng().gen_range(0, batches[batch].packets[packet].meta.size);
+                let add = thread_rng().gen_range(0, 255);
+                batches[batch].packets[packet].data[offset] =
+                    batches[batch].packets[packet].data[offset].wrapping_add(add);
+            }
+
+            // verify packets
+            let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
+
+            let cpu_ref = ed25519_verify_cpu(&batches);
+
+            debug!("ans: {:?} ref: {:?}", ans, cpu_ref);
+            // check result
+            assert_eq!(ans, cpu_ref);
+        }
+    }
+
+    #[test]
     fn test_verify_fail() {
         test_verify_n(5, true);
+    }
+
+    #[test]
+    fn test_get_checked_scalar() {
+        solana_logger::setup();
+        use curve25519_dalek::scalar::Scalar;
+        use rand::{thread_rng, Rng};
+        use rayon::prelude::*;
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        if perf_libs::api().is_none() {
+            return;
+        }
+
+        let passed_g = AtomicU64::new(0);
+        let failed_g = AtomicU64::new(0);
+        (0..4).into_par_iter().for_each(|_| {
+            let mut input = [0u8; 32];
+            let mut passed = 0;
+            let mut failed = 0;
+            for _ in 0..1_000_000 {
+                thread_rng().fill(&mut input);
+                let ans = get_checked_scalar(&input);
+                let ref_ans = Scalar::from_canonical_bytes(input);
+                if let Some(ref_ans) = ref_ans {
+                    passed += 1;
+                    assert_eq!(ans.unwrap(), ref_ans.to_bytes());
+                } else {
+                    failed += 1;
+                    assert!(ans.is_err());
+                }
+            }
+            passed_g.fetch_add(passed, Ordering::Relaxed);
+            failed_g.fetch_add(failed, Ordering::Relaxed);
+        });
+        info!(
+            "passed: {} failed: {}",
+            passed_g.load(Ordering::Relaxed),
+            failed_g.load(Ordering::Relaxed)
+        );
+    }
+
+    #[test]
+    fn test_ge_small_order() {
+        solana_logger::setup();
+        use curve25519_dalek::edwards::CompressedEdwardsY;
+        use rand::{thread_rng, Rng};
+        use rayon::prelude::*;
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        if perf_libs::api().is_none() {
+            return;
+        }
+
+        let passed_g = AtomicU64::new(0);
+        let failed_g = AtomicU64::new(0);
+        (0..4).into_par_iter().for_each(|_| {
+            let mut input = [0u8; 32];
+            let mut passed = 0;
+            let mut failed = 0;
+            for _ in 0..1_000_000 {
+                thread_rng().fill(&mut input);
+                let ans = check_packed_ge_small_order(&input);
+                let ref_ge = CompressedEdwardsY::from_slice(&input);
+                if let Some(ref_element) = ref_ge.decompress() {
+                    if ref_element.is_small_order() {
+                        assert!(!ans);
+                    } else {
+                        assert!(ans);
+                    }
+                } else {
+                    assert!(!ans);
+                }
+                if ans {
+                    passed += 1;
+                } else {
+                    failed += 1;
+                }
+            }
+            passed_g.fetch_add(passed, Ordering::Relaxed);
+            failed_g.fetch_add(failed, Ordering::Relaxed);
+        });
+        info!(
+            "passed: {} failed: {}",
+            passed_g.load(Ordering::Relaxed),
+            failed_g.load(Ordering::Relaxed)
+        );
     }
 }
