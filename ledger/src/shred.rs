@@ -998,7 +998,7 @@ pub mod tests {
     }
 
     fn verify_test_code_shred(shred: &Shred, index: u32, slot: Slot, pk: &Pubkey, verify: bool) {
-        assert_eq!(shred.payload.len(), PACKET_DATA_SIZE);
+        assert_eq!(shred.payload.len(), SHRED_PAYLOAD_SIZE);
         assert!(!shred.is_data());
         assert_eq!(shred.index(), index);
         assert_eq!(shred.slot(), slot);
