@@ -1,6 +1,7 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    cli_output::OutputFormat,
     nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
@@ -320,6 +321,7 @@ fn test_create_account_with_seed() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    authority_config.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&authority_config).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
     let authority_presigner = sign_only.presigner_of(&authority_pubkey).unwrap();

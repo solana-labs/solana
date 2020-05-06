@@ -1,6 +1,7 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    cli_output::OutputFormat,
     nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
@@ -378,6 +379,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
     assert!(sign_only.has_all_signers());
@@ -699,6 +701,7 @@ fn test_stake_authorize() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
     assert!(sign_only.has_all_signers());
@@ -900,6 +903,7 @@ fn test_stake_authorize_with_fee_payer() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
     assert!(sign_only.has_all_signers());
@@ -1039,6 +1043,7 @@ fn test_stake_split() {
         lamports: 2 * minimum_stake_balance,
         fee_payer: 0,
     };
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
     assert!(sign_only.has_all_signers());
@@ -1295,6 +1300,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
     assert!(sign_only.has_all_signers());
@@ -1415,6 +1421,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         fee_payer: 0,
         from: 0,
     };
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
     assert!(sign_only.has_all_signers());

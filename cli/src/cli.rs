@@ -1076,9 +1076,7 @@ pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
         bad_sig,
     };
 
-    config.output_format.formatted_print(&cli_command);
-
-    Ok(json!(cli_command).to_string())
+    Ok(config.output_format.formatted_string(&cli_command))
 }
 
 pub fn parse_create_address_with_seed(
@@ -1347,8 +1345,9 @@ fn process_deploy(
     trace!("Creating program account");
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut create_account_tx, &signers);
-    log_instruction_custom_error::<SystemError>(result, &config)
-        .map_err(|_| CliError::DynamicProgramError("Program account allocation failed".to_string()))?;
+    log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
+        CliError::DynamicProgramError("Program account allocation failed".to_string())
+    })?;
 
     trace!("Writing program data");
     rpc_client
@@ -2309,8 +2308,7 @@ where
             let signature = CliSignature {
                 signature: sig.clone().to_string(),
             };
-            config.output_format.formatted_print(&signature);
-            Ok(sig.to_string())
+            Ok(config.output_format.formatted_string(&signature))
         }
     }
 }
@@ -3835,7 +3833,8 @@ mod tests {
             }
         }
 
-        let config = CliConfig::default();
+        let mut config = CliConfig::default();
+        config.output_format = OutputFormat::JsonCompact;
         let present: Box<dyn Signer> = Box::new(keypair_from_seed(&[2u8; 32]).unwrap());
         let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::new(&[3u8; 32])));
         let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::new(&[4u8; 32])));

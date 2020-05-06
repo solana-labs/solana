@@ -1,6 +1,7 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    cli_output::OutputFormat,
     nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
@@ -92,6 +93,7 @@ fn test_transfer() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    offline.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
     assert!(sign_only.has_all_signers());
@@ -280,6 +282,7 @@ fn test_transfer_multisession_signing() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    fee_payer_config.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&fee_payer_config).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
     assert!(!sign_only.has_all_signers());
@@ -305,6 +308,7 @@ fn test_transfer_multisession_signing() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    from_config.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&from_config).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
     assert!(sign_only.has_all_signers());

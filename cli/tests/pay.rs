@@ -3,6 +3,7 @@ use serde_json::Value;
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
+    cli_output::OutputFormat,
     nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
@@ -323,6 +324,7 @@ fn test_offline_pay_tx() {
         sign_only: true,
         ..PayCommand::default()
     });
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
 
     check_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
