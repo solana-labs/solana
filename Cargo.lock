@@ -3455,6 +3455,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
+ "solana-transaction-status",
  "tempfile",
  "thiserror",
 ]

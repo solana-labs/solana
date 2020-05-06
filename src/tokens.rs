@@ -17,6 +17,7 @@ use solana_stake_program::{
     stake_instruction,
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
+use solana_transaction_status::TransactionStatus;
 use std::path::Path;
 use std::process;
 
@@ -32,7 +33,7 @@ struct Allocation {
     amount: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 struct TransactionInfo {
     recipient: String,
     amount: f64,
@@ -123,16 +124,20 @@ fn distribute_tokens<T: Client>(
             let lamports = sol_to_lamports(allocation.amount);
             let instruction = system_instruction::transfer(&from, &to, lamports);
             let message = Message::new_with_payer(&[instruction], Some(&fee_payer_pubkey));
-            let (blockhash, _fee_caluclator) = client.get_recent_blockhash_and_fees()?;
+            let (blockhash, _fee_caluclator) = client.get_recent_blockhash()?;
             let transaction = Transaction::new(&signers, message, blockhash);
             let signature = transaction.signatures[0];
             set_transaction_info(db, &allocation, &signature, None, false)?;
-            client.send_transaction(transaction)
+            if args.no_wait {
+                client.async_send_transaction(transaction)
+            } else {
+                client.send_transaction(transaction)
+            }
         };
         match result {
             Ok(signature) => {
                 println!("Finalized transaction with signature {}", signature);
-                if !args.dry_run {
+                if !args.no_wait {
                     set_transaction_info(db, &allocation, &signature, None, true)?;
                 }
             }
@@ -205,7 +210,7 @@ fn distribute_stake<T: Client>(
             ));
 
             let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
-            let (blockhash, _fee_caluclator) = client.get_recent_blockhash_and_fees()?;
+            let (blockhash, _fee_caluclator) = client.get_recent_blockhash()?;
             let transaction = Transaction::new(&signers, message, blockhash);
             let signature = transaction.signatures[0];
             set_transaction_info(
@@ -215,12 +220,16 @@ fn distribute_stake<T: Client>(
                 Some(&new_stake_account_address),
                 false,
             )?;
-            client.send_transaction(transaction)
+            if args.no_wait {
+                client.async_send_transaction(transaction)
+            } else {
+                client.send_transaction(transaction)
+            }
         };
         match result {
             Ok(signature) => {
                 println!("Finalized transaction with signature {}", signature);
-                if !args.dry_run {
+                if !args.no_wait {
                     set_transaction_info(
                         db,
                         &allocation,
@@ -238,13 +247,28 @@ fn distribute_stake<T: Client>(
     Ok(())
 }
 
-fn open_db(path: &str) -> Result<PickleDb, pickledb::error::Error> {
-    let policy = PickleDbDumpPolicy::AutoDump;
+fn open_db(path: &str, dry_run: bool) -> Result<PickleDb, pickledb::error::Error> {
+    let policy = if dry_run {
+        PickleDbDumpPolicy::NeverDump
+    } else {
+        PickleDbDumpPolicy::AutoDump
+    };
     if Path::new(path).exists() {
         PickleDb::load_yaml(path, policy)
     } else {
         Ok(PickleDb::new_yaml(path, policy))
     }
+}
+
+fn read_transaction_data(db: &PickleDb) -> Vec<(Signature, TransactionInfo)> {
+    db.iter()
+        .map(|kv| {
+            (
+                kv.get_key().parse().unwrap(),
+                kv.get_value::<TransactionInfo>().unwrap(),
+            )
+        })
+        .collect()
 }
 
 fn read_transaction_infos(db: &PickleDb) -> Vec<TransactionInfo> {
@@ -265,7 +289,7 @@ fn set_transaction_info(
         amount: allocation.amount,
         new_stake_account_address: new_stake_account_address
             .map(|pubkey| pubkey.to_string())
-            .unwrap_or("".to_string()),
+            .unwrap_or_else(|| "".to_string()),
         finalized,
     };
     db.set(&signature.to_string(), &transaction_info)?;
@@ -301,18 +325,24 @@ pub fn process_distribute_tokens<T: Client>(
     let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
     println!(
         "{} ◎{}",
-        style(format!("{}", "Total in allocations_csv:")).bold(),
+        style("Total in allocations_csv:").bold(),
         starting_total_tokens,
     );
     if let Some(dollars_per_sol) = args.dollars_per_sol {
         println!(
             "{} ${}",
-            style(format!("{}", "Total in allocations_csv:")).bold(),
+            style("Total in allocations_csv:").bold(),
             starting_total_tokens * dollars_per_sol,
         );
     }
 
-    let mut db = open_db(&args.transactions_db)?;
+    let mut db = open_db(&args.transactions_db, args.dry_run)?;
+    let still_finalizing = update_finalized_transactions(client, &mut db)?;
+    if still_finalizing {
+        eprintln!("Still finalizing transactions. Try again in 10 seconds");
+        process::exit(1);
+    }
+
     let transaction_infos = read_transaction_infos(&db);
     apply_previous_transactions(&mut allocations, &transaction_infos);
 
@@ -353,39 +383,35 @@ pub fn process_distribute_tokens<T: Client>(
 
     let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
     let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
-    println!(
-        "{} ◎{}",
-        style(format!("{}", "Distributed:")).bold(),
-        distributed_tokens,
-    );
+    println!("{} ◎{}", style("Distributed:").bold(), distributed_tokens,);
     if let Some(dollars_per_sol) = args.dollars_per_sol {
         println!(
             "{} ${}",
-            style(format!("{}", "Distributed:")).bold(),
+            style("Distributed:").bold(),
             distributed_tokens * dollars_per_sol,
         );
     }
     println!(
         "{} ◎{}",
-        style(format!("{}", "Undistributed:")).bold(),
+        style("Undistributed:").bold(),
         undistributed_tokens,
     );
     if let Some(dollars_per_sol) = args.dollars_per_sol {
         println!(
             "{} ${}",
-            style(format!("{}", "Undistributed:")).bold(),
+            style("Undistributed:").bold(),
             undistributed_tokens * dollars_per_sol,
         );
     }
     println!(
         "{} ◎{}",
-        style(format!("{}", "Total:")).bold(),
+        style("Total:").bold(),
         distributed_tokens + undistributed_tokens,
     );
     if let Some(dollars_per_sol) = args.dollars_per_sol {
         println!(
             "{} ${}",
-            style(format!("{}", "Total:")).bold(),
+            style("Total:").bold(),
             (distributed_tokens + undistributed_tokens) * dollars_per_sol,
         );
     }
@@ -393,6 +419,77 @@ pub fn process_distribute_tokens<T: Client>(
     distribute_tokens(client, &mut db, &allocations, args)?;
 
     Ok(())
+}
+
+// Set the finalized bit in the database if the transaction is rooted.
+// Remove the TransactionInfo from the database if the transaction failed.
+// Return true if still waiting to finalize.
+fn update_finalized_transaction(
+    db: &mut PickleDb,
+    signature: &Signature,
+    opt_transaction_status: Option<TransactionStatus>,
+) -> Result<bool, pickledb::error::Error> {
+    if opt_transaction_status.is_none() {
+        eprintln!(
+            "Signature not found {}. If its blockhash is expired, remove it from the database",
+            signature
+        );
+
+        // Return true because the transaction might still be in flight and get accepted onto
+        // the ledger.
+        return Ok(true);
+    }
+    let transaction_status = opt_transaction_status.unwrap();
+
+    if transaction_status.confirmations.is_some() {
+        // The transaction was found but is not yet finalized.
+        return Ok(true);
+    }
+
+    if let Err(e) = &transaction_status.status {
+        // The transaction was finalized, but execution failed. Drop it.
+        eprintln!(
+            "Error in transaction with signature {}: {}",
+            signature,
+            e.to_string()
+        );
+        eprintln!("Discarding transaction record");
+        db.rem(&signature.to_string())?;
+        return Ok(false);
+    }
+
+    // Transaction is rooted. Set finalized in the database.
+    let mut transaction_info = db.get::<TransactionInfo>(&signature.to_string()).unwrap();
+    transaction_info.finalized = true;
+    db.set(&signature.to_string(), &transaction_info)?;
+    Ok(false)
+}
+
+// Update the finalized bit on any transactions that are now rooted
+fn update_finalized_transactions<T: Client>(
+    client: &ThinClient<T>,
+    db: &mut PickleDb,
+) -> Result<bool, Error> {
+    let transaction_data = read_transaction_data(db);
+    let unconfirmed_signatures: Vec<_> = transaction_data
+        .iter()
+        .filter_map(|(signature, info)| {
+            if info.finalized {
+                None
+            } else {
+                Some(*signature)
+            }
+        })
+        .collect();
+    let transaction_statuses = client.get_signature_statuses(&unconfirmed_signatures)?;
+    let mut still_finalizing = false;
+    for (signature, opt_transaction_status) in unconfirmed_signatures
+        .into_iter()
+        .zip(transaction_statuses.into_iter())
+    {
+        still_finalizing |= update_finalized_transaction(db, &signature, opt_transaction_status)?;
+    }
+    Ok(still_finalizing)
 }
 
 pub fn process_distribute_stake<T: Client>(
@@ -407,9 +504,15 @@ pub fn process_distribute_stake<T: Client>(
         .map(|allocation| allocation.unwrap())
         .collect();
 
-    let mut db = open_db(&args.transactions_db)?;
-    let transaction_infos = read_transaction_infos(&db);
+    let mut db = open_db(&args.transactions_db, args.dry_run)?;
+    let still_finalizing = update_finalized_transactions(client, &mut db)?;
+    if still_finalizing {
+        eprintln!("Still finalizing transactions. Try again in 10 seconds");
+        process::exit(1);
+    }
+
     let mut allocations = merge_allocations(&allocations);
+    let transaction_infos = read_transaction_infos(&db);
     apply_previous_transactions(&mut allocations, &transaction_infos);
 
     if allocations.is_empty() {
@@ -487,6 +590,7 @@ pub fn test_process_distribute_bids_with_client<C: Client>(client: C, sender_key
         sender_keypair: Some(Box::new(sender_keypair)),
         fee_payer: Some(Box::new(fee_payer)),
         dry_run: false,
+        no_wait: false,
         from_bids: true,
         input_csv,
         transactions_db: transactions_db.clone(),
@@ -494,28 +598,36 @@ pub fn test_process_distribute_bids_with_client<C: Client>(client: C, sender_key
         force: false,
     };
     process_distribute_tokens(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol.unwrap();
-    assert_eq!(transaction_infos[0].amount, expected_amount);
+    let expected_amount =
+        sol_to_lamports(bid.accepted_amount_dollars / args.dollars_per_sol.unwrap());
+    assert_eq!(
+        sol_to_lamports(transaction_infos[0].amount),
+        expected_amount
+    );
 
     assert_eq!(
         thin_client.get_balance(&alice_pubkey).unwrap(),
-        sol_to_lamports(expected_amount),
+        expected_amount,
     );
 
     // Now, run it again, and check there's no double-spend.
     process_distribute_tokens(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = bid.accepted_amount_dollars / args.dollars_per_sol.unwrap();
-    assert_eq!(transaction_infos[0].amount, expected_amount);
+    let expected_amount =
+        sol_to_lamports(bid.accepted_amount_dollars / args.dollars_per_sol.unwrap());
+    assert_eq!(
+        sol_to_lamports(transaction_infos[0].amount),
+        expected_amount
+    );
 
     assert_eq!(
         thin_client.get_balance(&alice_pubkey).unwrap(),
-        sol_to_lamports(expected_amount),
+        expected_amount,
     );
 }
 
@@ -552,6 +664,7 @@ pub fn test_process_distribute_allocations_with_client<C: Client>(
         sender_keypair: Some(Box::new(sender_keypair)),
         fee_payer: Some(Box::new(fee_payer)),
         dry_run: false,
+        no_wait: false,
         input_csv,
         from_bids: false,
         transactions_db: transactions_db.clone(),
@@ -559,28 +672,34 @@ pub fn test_process_distribute_allocations_with_client<C: Client>(
         force: false,
     };
     process_distribute_tokens(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = allocation.amount;
-    assert_eq!(transaction_infos[0].amount, expected_amount);
+    let expected_amount = sol_to_lamports(allocation.amount);
+    assert_eq!(
+        sol_to_lamports(transaction_infos[0].amount),
+        expected_amount
+    );
 
     assert_eq!(
         thin_client.get_balance(&alice_pubkey).unwrap(),
-        sol_to_lamports(expected_amount),
+        expected_amount,
     );
 
     // Now, run it again, and check there's no double-spend.
     process_distribute_tokens(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = allocation.amount;
-    assert_eq!(transaction_infos[0].amount, expected_amount);
+    let expected_amount = sol_to_lamports(allocation.amount);
+    assert_eq!(
+        sol_to_lamports(transaction_infos[0].amount),
+        expected_amount
+    );
 
     assert_eq!(
         thin_client.get_balance(&alice_pubkey).unwrap(),
-        sol_to_lamports(expected_amount),
+        expected_amount,
     );
 }
 
@@ -638,16 +757,20 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         withdraw_authority: Some(Box::new(withdraw_authority)),
         fee_payer: Some(Box::new(fee_payer)),
         dry_run: false,
+        no_wait: false,
         sol_for_fees: 1.0,
         allocations_csv,
         transactions_db: transactions_db.clone(),
     };
     process_distribute_stake(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = allocation.amount;
-    assert_eq!(transaction_infos[0].amount, expected_amount);
+    let expected_amount = sol_to_lamports(allocation.amount);
+    assert_eq!(
+        sol_to_lamports(transaction_infos[0].amount),
+        expected_amount
+    );
 
     assert_eq!(
         thin_client.get_balance(&alice_pubkey).unwrap(),
@@ -659,16 +782,19 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         .unwrap();
     assert_eq!(
         thin_client.get_balance(&new_stake_account_address).unwrap(),
-        sol_to_lamports(expected_amount - 1.0),
+        expected_amount - sol_to_lamports(1.0),
     );
 
     // Now, run it again, and check there's no double-spend.
     process_distribute_stake(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount = allocation.amount;
-    assert_eq!(transaction_infos[0].amount, expected_amount);
+    let expected_amount = sol_to_lamports(allocation.amount);
+    assert_eq!(
+        sol_to_lamports(transaction_infos[0].amount),
+        expected_amount
+    );
 
     assert_eq!(
         thin_client.get_balance(&alice_pubkey).unwrap(),
@@ -676,7 +802,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     );
     assert_eq!(
         thin_client.get_balance(&new_stake_account_address).unwrap(),
-        sol_to_lamports(expected_amount - 1.0),
+        expected_amount - sol_to_lamports(1.0),
     );
 }
 
@@ -684,7 +810,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
 mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
-    use solana_sdk::genesis_config::create_genesis_config;
+    use solana_sdk::{genesis_config::create_genesis_config, transaction::TransactionError};
 
     #[test]
     fn test_process_distribute_bids() {
@@ -734,5 +860,101 @@ mod tests {
         // Ensure that we applied the transaction to the allocation with
         // a matching recipient address (to "b", not "a").
         assert_eq!(allocations[0].recipient, "a");
+    }
+
+    #[test]
+    fn test_update_finalized_transaction_not_landed() {
+        // Keep waiting for a transaction that hasn't landed yet.
+        let mut db =
+            PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
+        let signature = Signature::default();
+        let transaction_info = TransactionInfo::default();
+        db.set(&signature.to_string(), &transaction_info).unwrap();
+        assert_eq!(
+            update_finalized_transaction(&mut db, &signature, None).unwrap(),
+            true
+        );
+
+        // Unchanged
+        assert_eq!(
+            db.get::<TransactionInfo>(&signature.to_string()).unwrap(),
+            transaction_info
+        );
+    }
+
+    #[test]
+    fn test_update_finalized_transaction_confirming() {
+        // Keep waiting for a transaction that is still being confirmed.
+        let mut db =
+            PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
+        let signature = Signature::default();
+        let transaction_info = TransactionInfo::default();
+        db.set(&signature.to_string(), &transaction_info).unwrap();
+        let transaction_status = TransactionStatus {
+            slot: 0,
+            confirmations: Some(1),
+            status: Ok(()),
+            err: None,
+        };
+        assert_eq!(
+            update_finalized_transaction(&mut db, &signature, Some(transaction_status)).unwrap(),
+            true
+        );
+
+        // Unchanged
+        assert_eq!(
+            db.get::<TransactionInfo>(&signature.to_string()).unwrap(),
+            transaction_info
+        );
+    }
+
+    #[test]
+    fn test_update_finalized_transaction_failed() {
+        // Don't wait if the transaction failed to execute.
+        let mut db =
+            PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
+        let signature = Signature::default();
+        let transaction_info = TransactionInfo::default();
+        db.set(&signature.to_string(), &transaction_info).unwrap();
+        let status = Err(TransactionError::AccountNotFound);
+        let transaction_status = TransactionStatus {
+            slot: 0,
+            confirmations: None,
+            status,
+            err: None,
+        };
+        assert_eq!(
+            update_finalized_transaction(&mut db, &signature, Some(transaction_status)).unwrap(),
+            false
+        );
+
+        // Ensure TransactionInfo has been purged.
+        assert_eq!(db.get::<TransactionInfo>(&signature.to_string()), None);
+    }
+
+    #[test]
+    fn test_update_finalized_transaction_finalized() {
+        // Don't wait once the transaction has been finalized.
+        let mut db =
+            PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
+        let signature = Signature::default();
+        let mut transaction_info = TransactionInfo::default();
+        db.set(&signature.to_string(), &transaction_info).unwrap();
+        let transaction_status = TransactionStatus {
+            slot: 0,
+            confirmations: None,
+            status: Ok(()),
+            err: None,
+        };
+        assert_eq!(
+            update_finalized_transaction(&mut db, &signature, Some(transaction_status)).unwrap(),
+            false
+        );
+
+        transaction_info.finalized = true;
+        assert_eq!(
+            db.get::<TransactionInfo>(&signature.to_string()).unwrap(),
+            transaction_info
+        );
     }
 }

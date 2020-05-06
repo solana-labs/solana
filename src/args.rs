@@ -10,6 +10,7 @@ pub struct DistributeTokensArgs<K> {
     pub transactions_db: String,
     pub dollars_per_sol: Option<f64>,
     pub dry_run: bool,
+    pub no_wait: bool,
     pub sender_keypair: Option<K>,
     pub fee_payer: Option<K>,
     pub force: bool,
@@ -19,6 +20,7 @@ pub struct DistributeStakeArgs<P, K> {
     pub allocations_csv: String,
     pub transactions_db: String,
     pub dry_run: bool,
+    pub no_wait: bool,
     pub sol_for_fees: f64,
     pub stake_account_address: P,
     pub stake_authority: Option<K>,
@@ -57,6 +59,7 @@ pub fn resolve_command(
                 transactions_db: args.transactions_db,
                 dollars_per_sol: args.dollars_per_sol,
                 dry_run: args.dry_run,
+                no_wait: args.no_wait,
                 sender_keypair: args.sender_keypair.as_ref().map(|key_url| {
                     signer_from_path(&matches, &key_url, "sender", &mut wallet_manager).unwrap()
                 }),
@@ -74,6 +77,7 @@ pub fn resolve_command(
                 allocations_csv: args.allocations_csv,
                 transactions_db: args.transactions_db,
                 dry_run: args.dry_run,
+                no_wait: args.no_wait,
                 stake_account_address: pubkey_from_path(
                     &matches,
                     &args.stake_account_address,

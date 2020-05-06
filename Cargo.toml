@@ -22,6 +22,7 @@ solana-remote-wallet = "1.1.8"
 solana-runtime = "1.1.8"
 solana-sdk = "1.1.8"
 solana-stake-program = "1.1.8"
+solana-transaction-status = "1.1.8"
 tempfile = "3.1.0"
 thiserror = "1.0"
 

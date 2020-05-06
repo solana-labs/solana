@@ -68,6 +68,11 @@ where
                         .help("Do not execute any transfers"),
                 )
                 .arg(
+                    Arg::with_name("no_wait")
+                        .long("no-wait")
+                        .help("Don't wait for transaction confirmations"),
+                )
+                .arg(
                     Arg::with_name("sender_keypair")
                         .long("from")
                         .takes_value(true)
@@ -112,6 +117,11 @@ where
                     Arg::with_name("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
+                )
+                .arg(
+                    Arg::with_name("no_wait")
+                        .long("no-wait")
+                        .help("Don't wait for transaction confirmations"),
                 )
                 .arg(
                     Arg::with_name("stake_account_address")
@@ -189,6 +199,7 @@ fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArg
         transactions_db: value_t_or_exit!(matches, "transactions_db", String),
         dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
         dry_run: matches.is_present("dry_run"),
+        no_wait: matches.is_present("no_wait"),
         sender_keypair: value_t!(matches, "sender_keypair", String).ok(),
         fee_payer: value_t!(matches, "fee_payer", String).ok(),
         force: matches.is_present("force"),
@@ -200,6 +211,7 @@ fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeStakeArgs<
         allocations_csv: value_t_or_exit!(matches, "allocations_csv", String),
         transactions_db: value_t_or_exit!(matches, "transactions_db", String),
         dry_run: matches.is_present("dry_run"),
+        no_wait: matches.is_present("no_wait"),
         stake_account_address: value_t_or_exit!(matches, "stake_account_address", String),
         sol_for_fees: value_t_or_exit!(matches, "sol_for_fees", f64),
         stake_authority: value_t!(matches, "stake_authority", String).ok(),
