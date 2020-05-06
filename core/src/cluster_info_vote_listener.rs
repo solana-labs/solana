@@ -3,6 +3,7 @@ use crate::{
     crds_value::CrdsValueLabel,
     poh_recorder::PohRecorder,
     result::{Error, Result},
+    rpc_subscriptions::RpcSubscriptions,
     sigverify,
     verified_vote_packets::VerifiedVotePackets,
 };
@@ -202,6 +203,7 @@ impl ClusterInfoVoteListener {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
+        subscriptions: Arc<RpcSubscriptions>,
     ) -> Self {
         let exit_ = exit.clone();
 
@@ -242,6 +244,7 @@ impl ClusterInfoVoteListener {
                     verified_vote_transactions_receiver,
                     vote_tracker,
                     &bank_forks,
+                    subscriptions,
                 );
             })
             .unwrap();
@@ -364,6 +367,7 @@ impl ClusterInfoVoteListener {
         vote_txs_receiver: VerifiedVoteTransactionsReceiver,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: &RwLock<BankForks>,
+        subscriptions: Arc<RpcSubscriptions>,
     ) -> Result<()> {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -373,9 +377,12 @@ impl ClusterInfoVoteListener {
             let root_bank = bank_forks.read().unwrap().root_bank().clone();
             vote_tracker.process_new_root_bank(&root_bank);
 
-            if let Err(e) =
-                Self::get_and_process_votes(&vote_txs_receiver, &vote_tracker, root_bank.slot())
-            {
+            if let Err(e) = Self::get_and_process_votes(
+                &vote_txs_receiver,
+                &vote_tracker,
+                root_bank.slot(),
+                subscriptions.clone(),
+            ) {
                 match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
                         return Ok(());
@@ -393,17 +400,23 @@ impl ClusterInfoVoteListener {
         vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
         vote_tracker: &Arc<VoteTracker>,
         last_root: Slot,
+        subscriptions: Arc<RpcSubscriptions>,
     ) -> Result<()> {
         let timer = Duration::from_millis(200);
         let mut vote_txs = vote_txs_receiver.recv_timeout(timer)?;
         while let Ok(new_txs) = vote_txs_receiver.try_recv() {
             vote_txs.extend(new_txs);
         }
-        Self::process_votes(vote_tracker, vote_txs, last_root);
+        Self::process_votes(vote_tracker, vote_txs, last_root, subscriptions);
         Ok(())
     }
 
-    fn process_votes(vote_tracker: &VoteTracker, vote_txs: Vec<Transaction>, root: Slot) {
+    fn process_votes(
+        vote_tracker: &VoteTracker,
+        vote_txs: Vec<Transaction>,
+        root: Slot,
+        subscriptions: Arc<RpcSubscriptions>,
+    ) {
         let mut diff: HashMap<Slot, HashSet<Arc<Pubkey>>> = HashMap::new();
         {
             let all_slot_trackers = &vote_tracker.slot_vote_trackers;
@@ -455,7 +468,7 @@ impl ClusterInfoVoteListener {
                         continue;
                     }
 
-                    for slot in vote.slots {
+                    for &slot in vote.slots.iter() {
                         if slot <= root {
                             continue;
                         }
@@ -480,6 +493,8 @@ impl ClusterInfoVoteListener {
                             .or_default()
                             .insert(unduplicated_pubkey.unwrap());
                     }
+
+                    subscriptions.notify_vote(&vote);
                 }
             }
         }

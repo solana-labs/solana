@@ -12,6 +12,7 @@ use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
 use solana_sdk::{
     clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
 };
+use solana_vote_program::vote_state::Vote;
 #[cfg(test)]
 use std::sync::RwLock;
 use std::{
@@ -113,6 +114,18 @@ pub trait RpcSolPubSub {
         name = "slotUnsubscribe"
     )]
     fn slot_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+
+    // Get notification when vote is encountered
+    #[pubsub(subscription = "voteNotification", subscribe, name = "voteSubscribe")]
+    fn vote_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<Vote>);
+
+    // Unsubscribe from vote notification subscription.
+    #[pubsub(
+        subscription = "voteNotification",
+        unsubscribe,
+        name = "voteUnsubscribe"
+    )]
+    fn vote_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 
     // Get notification when a new root is set
     #[pubsub(subscription = "rootNotification", subscribe, name = "rootSubscribe")]
@@ -285,6 +298,27 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn slot_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
         info!("slot_unsubscribe");
         if self.subscriptions.remove_slot_subscription(&id) {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
+
+    fn vote_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<Vote>) {
+        info!("vote_subscribe");
+        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
+        let sub_id = SubscriptionId::Number(id as u64);
+        info!("vote_subscribe: id={:?}", sub_id);
+        self.subscriptions.add_vote_subscription(sub_id, subscriber);
+    }
+
+    fn vote_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
+        info!("vote_unsubscribe");
+        if self.subscriptions.remove_vote_subscription(&id) {
             Ok(true)
         } else {
             Err(Error {
@@ -806,6 +840,74 @@ mod tests {
     #[test]
     #[serial]
     fn test_slot_unsubscribe() {
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
+        let session = create_session();
+        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
+        rpc.slot_subscribe(session, subscriber);
+        rpc.subscriptions.notify_slot(0, 0, 0);
+        let (response, _) = robust_poll_or_panic(receiver);
+        let expected_res = SlotInfo {
+            parent: 0,
+            slot: 0,
+            root: 0,
+        };
+        let expected_res_str =
+            serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
+            expected_res_str
+        );
+        assert_eq!(expected, response);
+
+        let session = create_session();
+        assert!(rpc
+            .slot_unsubscribe(Some(session), SubscriptionId::Number(42))
+            .is_err());
+
+        let session = create_session();
+        assert!(rpc
+            .slot_unsubscribe(Some(session), SubscriptionId::Number(0))
+            .is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn test_vote_subscribe() {
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
+        let session = create_session();
+        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
+        rpc.slot_subscribe(session, subscriber);
+
+        rpc.subscriptions.notify_slot(0, 0, 0);
+        // Test slot confirmation notification
+        let (response, _) = robust_poll_or_panic(receiver);
+        let expected_res = SlotInfo {
+            parent: 0,
+            slot: 0,
+            root: 0,
+        };
+        let expected_res_str =
+            serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
+            expected_res_str
+        );
+        assert_eq!(expected, response);
+    }
+
+    #[test]
+    #[serial]
+    fn test_vote_unsubscribe() {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);

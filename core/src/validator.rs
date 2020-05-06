@@ -455,6 +455,7 @@ impl Validator {
             node.sockets.tpu,
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
+            &subscriptions,
             transaction_status_sender,
             &blockstore,
             &config.broadcast_stage_type,
