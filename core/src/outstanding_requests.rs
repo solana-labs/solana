@@ -7,6 +7,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+type NodeOutstandingRequestsLock<T, S> = Arc<RwLock<NodeOutstandingRequests<T, S>>>;
+
 pub const DEFAULT_REQUEST_EXPIRATION_MS: u64 = 10_000;
 
 pub struct NodeOutstandingRequests<T, S>
@@ -87,7 +89,7 @@ pub struct OutstandingRequests<T, S>
 where
     T: RequestResponse<Response = S>,
 {
-    requests: RwLock<HashMap<IpAddr, Arc<RwLock<NodeOutstandingRequests<T, S>>>>>,
+    requests: RwLock<HashMap<IpAddr, NodeOutstandingRequestsLock<T, S>>>,
 }
 
 impl<T, S> OutstandingRequests<T, S>
