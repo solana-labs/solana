@@ -146,7 +146,12 @@ pub fn write_transaction<W: io::Write>(
                 Err(err) => err.to_string(),
             }
         )?;
-        writeln!(w, "{}  Fee: {}", prefix, transaction_status.fee)?;
+        writeln!(
+            w,
+            "{}  Fee: {} SOL",
+            prefix,
+            lamports_to_sol(transaction_status.fee)
+        )?;
         assert_eq!(
             transaction_status.pre_balances.len(),
             transaction_status.post_balances.len()
