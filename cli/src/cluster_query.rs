@@ -529,8 +529,7 @@ pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> Proce
             slot: result.context.slot,
             timestamp: clock.unix_timestamp,
         };
-        config.output_format.formatted_print(&block_time);
-        Ok("".to_string())
+        Ok(config.output_format.formatted_string(&block_time))
     } else {
         Err(format!("AccountNotFound: pubkey={}", sysvar::clock::id()).into())
     }
@@ -597,8 +596,7 @@ pub fn process_get_block_time(
     };
     let timestamp = rpc_client.get_block_time(slot)?;
     let block_time = CliBlockTime { slot, timestamp };
-    config.output_format.formatted_print(&block_time);
-    Ok("".to_string())
+    Ok(config.output_format.formatted_string(&block_time))
 }
 
 pub fn process_get_epoch_info(
@@ -609,8 +607,7 @@ pub fn process_get_epoch_info(
     let epoch_info: CliEpochInfo = rpc_client
         .get_epoch_info_with_commitment(commitment_config.clone())?
         .into();
-    config.output_format.formatted_print(&epoch_info);
-    Ok("".to_string())
+    Ok(config.output_format.formatted_string(&epoch_info))
 }
 
 pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
@@ -792,8 +789,7 @@ pub fn process_show_block_production(
         individual_slot_status,
         verbose: config.verbose,
     };
-    config.output_format.formatted_print(&block_production);
-    Ok("".to_string())
+    Ok(config.output_format.formatted_string(&block_production))
 }
 
 pub fn process_total_supply(
@@ -1122,10 +1118,9 @@ pub fn process_show_stakes(
             }
         }
     }
-    config
+    Ok(config
         .output_format
-        .formatted_print(&CliStakeVec::new(stake_accounts));
-    Ok("".to_string())
+        .formatted_string(&CliStakeVec::new(stake_accounts)))
 }
 
 pub fn process_show_validators(
@@ -1169,8 +1164,7 @@ pub fn process_show_validators(
         delinquent_validators,
         use_lamports_unit,
     };
-    config.output_format.formatted_print(&cli_validators);
-    Ok("".to_string())
+    Ok(config.output_format.formatted_string(&cli_validators))
 }
 
 pub fn process_transaction_history(

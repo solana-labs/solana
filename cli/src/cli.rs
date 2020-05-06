@@ -1265,7 +1265,7 @@ fn process_show_account(
         use_lamports_unit,
     };
 
-    config.output_format.formatted_print(&cli_account);
+    println!("{}", config.output_format.formatted_string(&cli_account));
 
     if config.output_format == OutputFormat::Display {
         if let Some(output_file) = output_file {

@@ -1316,8 +1316,7 @@ pub fn process_show_stake_account(
     match stake_account.state() {
         Ok(stake_state) => {
             let state = build_stake_state(stake_account.lamports, &stake_state, use_lamports_unit);
-            config.output_format.formatted_print(&state);
-            Ok("".to_string())
+            Ok(config.output_format.formatted_string(&state))
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
             "Account data could not be deserialized to stake state: {}",
@@ -1345,8 +1344,7 @@ pub fn process_show_stake_history(
         entries,
         use_lamports_unit,
     };
-    config.output_format.formatted_print(&stake_history_output);
-    Ok("".to_string())
+    Ok(config.output_format.formatted_string(&stake_history_output))
 }
 
 #[allow(clippy::too_many_arguments)]

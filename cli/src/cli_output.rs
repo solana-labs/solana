@@ -26,20 +26,14 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    pub fn formatted_print<T>(&self, item: &T)
+    pub fn formatted_string<T>(&self, item: &T) -> String
     where
         T: Serialize + fmt::Display,
     {
         match self {
-            OutputFormat::Display => {
-                println!("{}", item);
-            }
-            OutputFormat::Json => {
-                println!("{}", serde_json::to_string_pretty(item).unwrap());
-            }
-            OutputFormat::JsonCompact => {
-                println!("{}", serde_json::to_value(item).unwrap());
-            }
+            OutputFormat::Display => format!("{}", item),
+            OutputFormat::Json => serde_json::to_string_pretty(item).unwrap(),
+            OutputFormat::JsonCompact => serde_json::to_value(item).unwrap().to_string(),
         }
     }
 }
