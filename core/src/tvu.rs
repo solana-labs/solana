@@ -304,11 +304,12 @@ pub mod tests {
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             vec![Arc::new(vote_keypair)],
             &storage_keypair,
-            &Arc::new(RwLock::new(bank_forks)),
+            &bank_forks,
             &cref1,
             {
                 Sockets {
@@ -321,7 +322,11 @@ pub mod tests {
             blockstore,
             &StorageState::default(),
             l_receiver,
-            &Arc::new(RpcSubscriptions::new(&exit, block_commitment_cache.clone())),
+            &Arc::new(RpcSubscriptions::new(
+                &exit,
+                bank_forks.clone(),
+                block_commitment_cache.clone(),
+            )),
             &poh_recorder,
             &leader_schedule_cache,
             &exit,

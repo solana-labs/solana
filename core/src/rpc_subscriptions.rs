@@ -46,7 +46,7 @@ pub struct SlotInfo {
 enum NotificationEntry {
     Slot(SlotInfo),
     Root(Slot),
-    Bank((Slot, Arc<RwLock<BankForks>>)),
+    Bank(Slot),
 }
 
 impl std::fmt::Debug for NotificationEntry {
@@ -54,7 +54,7 @@ impl std::fmt::Debug for NotificationEntry {
         match self {
             NotificationEntry::Root(root) => write!(f, "Root({})", root),
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
-            NotificationEntry::Bank((current_slot, _)) => {
+            NotificationEntry::Bank(current_slot) => {
                 write!(f, "Bank({{current_slot: {:?}}})", current_slot)
             }
         }
@@ -269,6 +269,7 @@ impl Drop for RpcSubscriptions {
 impl RpcSubscriptions {
     pub fn new(
         exit: &Arc<AtomicBool>,
+        bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     ) -> Self {
         let (notification_sender, notification_receiver): (
@@ -309,6 +310,7 @@ impl RpcSubscriptions {
                     signature_subscriptions_clone,
                     slot_subscriptions_clone,
                     root_subscriptions_clone,
+                    bank_forks,
                     block_commitment_cache,
                 );
             })
@@ -327,9 +329,13 @@ impl RpcSubscriptions {
         }
     }
 
-    pub fn default_with_blockstore(blockstore: Arc<Blockstore>) -> Self {
+    pub fn default_with_blockstore_bank_forks(
+        blockstore: Arc<Blockstore>,
+        bank_forks: Arc<RwLock<BankForks>>,
+    ) -> Self {
         Self::new(
             &Arc::new(AtomicBool::new(false)),
+            bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
                 blockstore,
             ))),
@@ -461,8 +467,8 @@ impl RpcSubscriptions {
 
     /// Notify subscribers of changes to any accounts or new signatures since
     /// the bank's last checkpoint.
-    pub fn notify_subscribers(&self, current_slot: Slot, bank_forks: &Arc<RwLock<BankForks>>) {
-        self.enqueue_notification(NotificationEntry::Bank((current_slot, bank_forks.clone())));
+    pub fn notify_subscribers(&self, current_slot: Slot) {
+        self.enqueue_notification(NotificationEntry::Bank(current_slot));
     }
 
     pub fn add_slot_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<SlotInfo>) {
@@ -524,6 +530,7 @@ impl RpcSubscriptions {
         signature_subscriptions: Arc<RpcSignatureSubscriptions>,
         slot_subscriptions: Arc<RpcSlotSubscriptions>,
         root_subscriptions: Arc<RpcRootSubscriptions>,
+        bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     ) {
         loop {
@@ -544,7 +551,7 @@ impl RpcSubscriptions {
                             notifier.notify(root, sink);
                         }
                     }
-                    NotificationEntry::Bank((_current_slot, bank_forks)) => {
+                    NotificationEntry::Bank(_current_slot) => {
                         let pubkeys: Vec<_> = {
                             let subs = account_subscriptions.read().unwrap();
                             subs.keys().cloned().collect()
@@ -703,6 +710,7 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
+            bank_forks.clone(),
             Arc::new(RwLock::new(
                 BlockCommitmentCache::new_for_tests_with_blockstore_bank(
                     blockstore,
@@ -719,7 +727,7 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&alice.pubkey()));
 
-        subscriptions.notify_subscribers(1, &bank_forks);
+        subscriptions.notify_subscribers(1);
         let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
            "jsonrpc": "2.0",
@@ -784,6 +792,7 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
+            bank_forks,
             Arc::new(RwLock::new(
                 BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
             )),
@@ -801,7 +810,7 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&solana_budget_program::id()));
 
-        subscriptions.notify_subscribers(0, &bank_forks);
+        subscriptions.notify_subscribers(0);
         let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
            "jsonrpc": "2.0",
@@ -885,8 +894,11 @@ pub(crate) mod tests {
             BlockCommitmentCache::new(block_commitment, 0, 10, bank1, blockstore, 0);
 
         let exit = Arc::new(AtomicBool::new(false));
-        let subscriptions =
-            RpcSubscriptions::new(&exit, Arc::new(RwLock::new(block_commitment_cache)));
+        let subscriptions = RpcSubscriptions::new(
+            &exit,
+            bank_forks,
+            Arc::new(RwLock::new(block_commitment_cache)),
+        );
 
         let (past_bank_sub1, _id_receiver, past_bank_recv1) =
             Subscriber::new_test("signatureNotification");
@@ -927,7 +939,7 @@ pub(crate) mod tests {
             assert!(sig_subs.contains_key(&processed_tx.signatures[0]));
         }
 
-        subscriptions.notify_subscribers(1, &bank_forks);
+        subscriptions.notify_subscribers(1);
         let expected_res = RpcSignatureResult { err: None };
 
         struct Notification {
@@ -987,8 +999,12 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let subscriptions = RpcSubscriptions::new(
             &exit,
+            bank_forks,
             Arc::new(RwLock::new(
                 BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
             )),
@@ -1033,8 +1049,12 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let subscriptions = RpcSubscriptions::new(
             &exit,
+            bank_forks,
             Arc::new(RwLock::new(
                 BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
             )),
