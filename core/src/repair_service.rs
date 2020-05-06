@@ -4,7 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_slots::ClusterSlots,
     consensus::VOTE_THRESHOLD_SIZE,
-    outstanding_requests::OutstandingRequests,
+    outstanding_requests::{OutstandingRequests, DEFAULT_REQUEST_EXPIRATION_MS},
     result::Result,
     serve_repair::{RepairType, ServeRepair},
 };
@@ -146,9 +146,15 @@ impl RepairService {
         {
             Self::initialize_epoch_slots(blockstore, &cluster_info, completed_slots_receiver);
         }
+        let mut last_request_purge = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
+            }
+
+            if last_request_purge.elapsed().as_millis() > DEFAULT_REQUEST_EXPIRATION_MS as u128 {
+                outstanding_requests.purge_expired();
+                last_request_purge = Instant::now();
             }
 
             let repairs = {

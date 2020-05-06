@@ -113,6 +113,21 @@ where
             .unwrap_or(false)
     }
 
+    pub fn purge_expired(&self) {
+        let node_outstanding_requests: Vec<_> =
+            self.requests.write().unwrap().values().cloned().collect();
+        let now = timestamp();
+        for node_outstanding_request in node_outstanding_requests {
+            let mut w_node_outstanding_request = node_outstanding_request.write().unwrap();
+            // TODO: How to handle empty `w_node_outstanding_request.requests`? Don't want
+            // to reset nonce. Maybe purge if node is no longer in gossip or empty for
+            // some period of time.
+            w_node_outstanding_request
+                .requests
+                .retain(|_, request| request.expire_timestamp > now);
+        }
+    }
+
     fn get_node_requests(
         &self,
         socket_addr: &SocketAddr,
