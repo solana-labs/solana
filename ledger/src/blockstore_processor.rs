@@ -686,7 +686,7 @@ fn process_next_slots(
 }
 
 // Iterate through blockstore processing slots starting from the root slot pointed to by the
-// given `meta` and return a vector of frozen bank forks ordered by slot
+// given `meta` and return a vector of frozen bank forks
 fn load_frozen_forks(
     root_bank: &Arc<Bank>,
     root_meta: &SlotMeta,
