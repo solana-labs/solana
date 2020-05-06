@@ -677,6 +677,9 @@ pub(crate) mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
         let alice = Keypair::new();
         let tx = system_transaction::create_account(
             &mint_keypair,
@@ -689,7 +692,7 @@ pub(crate) mod tests {
         bank_forks
             .write()
             .unwrap()
-            .get(0)
+            .get(1)
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
@@ -701,7 +704,11 @@ pub(crate) mod tests {
         let subscriptions = RpcSubscriptions::new(
             &exit,
             Arc::new(RwLock::new(
-                BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+                BlockCommitmentCache::new_for_tests_with_blockstore_bank(
+                    blockstore,
+                    bank_forks.read().unwrap().get(1).unwrap().clone(),
+                    1,
+                ),
             )),
         );
         subscriptions.add_account_subscription(alice.pubkey(), None, sub_id.clone(), subscriber);
@@ -712,14 +719,14 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&alice.pubkey()));
 
-        subscriptions.notify_subscribers(0, &bank_forks);
+        subscriptions.notify_subscribers(1, &bank_forks);
         let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
            "params": {
                "result": {
-                   "context": { "slot": 0 },
+                   "context": { "slot": 1 },
                    "value": {
                        "data": "1111111111111111",
                        "executable": false,

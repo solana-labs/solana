@@ -344,14 +344,15 @@ mod tests {
         bank_forks: &Arc<RwLock<BankForks>>,
         tx: &Transaction,
         subscriptions: &RpcSubscriptions,
+        slot: Slot,
     ) -> transaction::Result<()> {
         bank_forks
             .write()
             .unwrap()
-            .get(0)
+            .get(slot)
             .unwrap()
             .process_transaction(tx)?;
-        subscriptions.notify_subscribers(0, &bank_forks);
+        subscriptions.notify_subscribers(slot, &bank_forks);
         Ok(())
     }
 
@@ -391,7 +392,7 @@ mod tests {
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("signatureNotification");
         rpc.signature_subscribe(session, subscriber, tx.signatures[0].to_string(), None);
 
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 0).unwrap();
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
@@ -483,6 +484,9 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
@@ -490,7 +494,11 @@ mod tests {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
                 Arc::new(RwLock::new(
-                    BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+                    BlockCommitmentCache::new_for_tests_with_blockstore_bank(
+                        blockstore,
+                        bank_forks.read().unwrap().get(1).unwrap().clone(),
+                        1,
+                    ),
                 )),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
@@ -505,7 +513,7 @@ mod tests {
         );
 
         let tx = system_transaction::transfer(&alice, &contract_funds.pubkey(), 51, blockhash);
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
 
         let ixs = budget_instruction::when_signed(
             &contract_funds.pubkey(),
@@ -520,14 +528,14 @@ mod tests {
             &ixs,
             blockhash,
         );
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification #1
         let expected_data = bank_forks
             .read()
             .unwrap()
-            .get(0)
+            .get(1)
             .unwrap()
             .get_account(&contract_state.pubkey())
             .unwrap()
@@ -537,7 +545,7 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "context": { "slot": 0 },
+                   "context": { "slot": 1 },
                    "value": {
                        "owner": budget_program_id.to_string(),
                        "lamports": 51,
@@ -554,7 +562,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         let tx = system_transaction::transfer(&alice, &witness.pubkey(), 1, blockhash);
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
         let ix = budget_instruction::apply_signature(
             &witness.pubkey(),
@@ -562,14 +570,14 @@ mod tests {
             &bob_pubkey,
         );
         let tx = Transaction::new_signed_instructions(&[&witness], &[ix], blockhash);
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 
         assert_eq!(
             bank_forks
                 .read()
                 .unwrap()
-                .get(0)
+                .get(1)
                 .unwrap()
                 .get_account(&contract_state.pubkey()),
             None
@@ -675,6 +683,9 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bob = Keypair::new();
@@ -700,44 +711,22 @@ mod tests {
         bank_forks
             .write()
             .unwrap()
-            .get(0)
+            .get(1)
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        rpc.subscriptions.notify_subscribers(0, &bank_forks);
-
-        let bank0 = bank_forks.read().unwrap()[0].clone();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        bank_forks.write().unwrap().insert(bank1);
-        let bank1 = bank_forks.read().unwrap()[1].clone();
-
-        let mut cache0 = BlockCommitment::default();
-        cache0.increase_confirmation_stake(1, 10);
-        let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
-        let mut new_block_commitment = BlockCommitmentCache::new(
-            block_commitment,
-            0,
-            10,
-            bank1.clone(),
-            blockstore.clone(),
-            0,
-        );
-        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
-        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
-        drop(w_block_commitment_cache);
-
         rpc.subscriptions.notify_subscribers(1, &bank_forks);
+
+        let bank1 = bank_forks.read().unwrap()[1].clone();
         let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
+        bank_forks.write().unwrap().set_root(1, &None, None);
         let bank2 = bank_forks.read().unwrap()[2].clone();
 
-        let mut cache0 = BlockCommitment::default();
-        cache0.increase_confirmation_stake(2, 10);
-        let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
+        let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
+        block_commitment.insert(0, BlockCommitment::default());
         let mut new_block_commitment =
-            BlockCommitmentCache::new(block_commitment, 0, 10, bank2, blockstore.clone(), 0);
+            BlockCommitmentCache::new(block_commitment, 1, 10, bank2, blockstore.clone(), 1);
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         drop(w_block_commitment_cache);
@@ -748,7 +737,7 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "context": { "slot": 0 },
+                   "context": { "slot": 1 },
                    "value": {
                        "owner": system_program::id().to_string(),
                        "lamports": 100,
