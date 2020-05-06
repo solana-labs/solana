@@ -269,18 +269,9 @@ impl ClusterInfo {
                 last_timestamp_ms: 0,
             },
         };
-<<<<<<< HEAD
-        let id = contact_info.id;
-        me.gossip.set_self(&id);
+        me.gossip.set_self(&contact_info.id);
+        me.gossip.set_shred_version(contact_info.shred_version);
         me.insert_self(contact_info);
-=======
-        {
-            let mut gossip = me.gossip.write().unwrap();
-            gossip.set_self(&id);
-            gossip.set_shred_version(me.my_shred_version());
-        }
-        me.insert_self();
->>>>>>> 16ddd001f... Gossip no longer pushes/pulls from nodes with a different shred version (#9868)
         me.push_self(&HashMap::new());
         me
     }
@@ -332,13 +323,9 @@ impl ClusterInfo {
         let now = timestamp();
         let mut spy_nodes = 0;
         let mut archivers = 0;
-<<<<<<< HEAD
-        let my_pubkey = self.my_data().id;
-=======
         let mut different_shred_nodes = 0;
-        let my_pubkey = self.id();
-        let my_shred_version = self.my_shred_version();
->>>>>>> 16ddd001f... Gossip no longer pushes/pulls from nodes with a different shred version (#9868)
+        let my_pubkey = self.my_data().id;
+        let my_shred_version = self.my_data().shred_version;
         let nodes: Vec<_> = self
             .all_peers()
             .into_iter()
@@ -1269,18 +1256,12 @@ impl ClusterInfo {
                                         "Setting shred version to {:?} from entrypoint {:?}",
                                         entrypoint.shred_version, entrypoint.id
                                     );
-<<<<<<< HEAD
                                     self_info.shred_version = entrypoint.shred_version;
-                                    obj.write().unwrap().insert_self(self_info);
-=======
-                                    obj.my_contact_info.write().unwrap().shred_version =
-                                        entrypoint.shred_version;
-                                    obj.gossip
-                                        .write()
+                                    obj.write()
                                         .unwrap()
+                                        .gossip
                                         .set_shred_version(entrypoint.shred_version);
-                                    obj.insert_self();
->>>>>>> 16ddd001f... Gossip no longer pushes/pulls from nodes with a different shred version (#9868)
+                                    obj.write().unwrap().insert_self(self_info);
                                     adopt_shred_version = false;
                                 }
                             }
