@@ -397,7 +397,7 @@ impl ServeRepair {
         repair_request: RepairType,
         cache: &mut RepairCache,
         repair_stats: &mut RepairStats,
-        outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
+        outstanding_requests: &OutstandingRequests<RepairType, Shred>,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -412,10 +412,7 @@ impl ServeRepair {
         let (repair_peers, weights) = cache.get(&repair_request.slot()).unwrap();
         let n = weighted_best(&weights, Pubkey::new_rand().to_bytes());
         let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
-        let nonce = outstanding_requests
-            .write()
-            .unwrap()
-            .add_request(&addr, repair_request);
+        let nonce = outstanding_requests.add_request(&addr, repair_request);
         let out = self.map_repair_request(&repair_request, repair_stats, nonce)?;
         Ok((addr, out))
     }
@@ -742,7 +739,7 @@ mod tests {
         let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me));
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let outstanding_requests = RwLock::new(OutstandingRequests::default());
+        let outstanding_requests = OutstandingRequests::default();
         let rv = serve_repair.repair_request(
             &cluster_slots,
             RepairType::Shred(0, 0),

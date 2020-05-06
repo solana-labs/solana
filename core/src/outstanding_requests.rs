@@ -4,6 +4,7 @@ use solana_sdk::timing::timestamp;
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
+    sync::{Arc, RwLock},
 };
 
 pub const DEFAULT_REQUEST_EXPIRATION_MS: u64 = 10_000;
@@ -86,31 +87,58 @@ pub struct OutstandingRequests<T, S>
 where
     T: RequestResponse<Response = S>,
 {
-    requests: HashMap<IpAddr, NodeOutstandingRequests<T, S>>,
+    requests: RwLock<HashMap<IpAddr, Arc<RwLock<NodeOutstandingRequests<T, S>>>>>,
 }
 
 impl<T, S> OutstandingRequests<T, S>
 where
     T: RequestResponse<Response = S>,
 {
-    pub fn add_request(&mut self, socket_addr: &SocketAddr, request: T) -> Nonce {
-        let node_outstanding_requests = self.requests.entry(socket_addr.ip()).or_default();
-        node_outstanding_requests.add_request(request)
+    pub fn add_request(&self, socket_addr: &SocketAddr, request: T) -> Nonce {
+        let node_outstanding_requests = self.get_or_insert_node_requests(socket_addr);
+        let mut w_requests = node_outstanding_requests.write().unwrap();
+        w_requests.add_request(request)
     }
 
-    pub fn register_response(
-        &mut self,
-        socket_addr: &SocketAddr,
-        nonce: u32,
-        response: &S,
-    ) -> bool {
-        self.requests
-            .get_mut(&socket_addr.ip())
+    pub fn register_response(&self, socket_addr: &SocketAddr, nonce: u32, response: &S) -> bool {
+        let node_outstanding_requests = self.get_node_requests(socket_addr);
+        node_outstanding_requests
             .map(|node_outstanding_requests| {
                 let now = timestamp();
-                node_outstanding_requests.register_response(nonce, response, now)
+                node_outstanding_requests
+                    .write()
+                    .unwrap()
+                    .register_response(nonce, response, now)
             })
             .unwrap_or(false)
+    }
+
+    fn get_node_requests(
+        &self,
+        socket_addr: &SocketAddr,
+    ) -> Option<Arc<RwLock<NodeOutstandingRequests<T, S>>>> {
+        self.requests
+            .read()
+            .unwrap()
+            .get(&socket_addr.ip())
+            .cloned()
+    }
+
+    fn get_or_insert_node_requests(
+        &self,
+        socket_addr: &SocketAddr,
+    ) -> Arc<RwLock<NodeOutstandingRequests<T, S>>> {
+        let mut node_outstanding_requests = self.get_node_requests(socket_addr);
+        if node_outstanding_requests.is_none() {
+            // Safe because only the repair thread should be inserting into this object
+            let mut w_requests = self.requests.write().unwrap();
+            w_requests.insert(
+                socket_addr.ip(),
+                Arc::new(RwLock::new(NodeOutstandingRequests::default())),
+            );
+            node_outstanding_requests = w_requests.get(&socket_addr.ip()).cloned();
+        }
+        node_outstanding_requests.unwrap()
     }
 }
 
@@ -120,7 +148,7 @@ where
 {
     fn default() -> Self {
         Self {
-            requests: HashMap::new(),
+            requests: RwLock::new(HashMap::new()),
         }
     }
 }

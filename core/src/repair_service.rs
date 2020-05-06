@@ -101,7 +101,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: Arc<ClusterSlots>,
-        outstanding_requests: Arc<RwLock<OutstandingRequests<RepairType, Shred>>>,
+        outstanding_requests: Arc<OutstandingRequests<RepairType, Shred>>,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -128,7 +128,7 @@ impl RepairService {
         cluster_info: Arc<ClusterInfo>,
         repair_strategy: RepairStrategy,
         cluster_slots: &ClusterSlots,
-        outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
+        outstanding_requests: &OutstandingRequests<RepairType, Shred>,
     ) {
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let id = cluster_info.id();
@@ -337,7 +337,7 @@ impl RepairService {
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
         repair_socket: &UdpSocket,
-        outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
+        outstanding_requests: &OutstandingRequests<RepairType, Shred>,
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(*slot, status, cluster_slots, serve_repair);
@@ -346,10 +346,8 @@ impl RepairService {
 
                 if let Some(repairs) = repairs {
                     for repair_type in repairs {
-                        let nonce = outstanding_requests
-                            .write()
-                            .unwrap()
-                            .add_request(&repair_addr, repair_type.clone());
+                        let nonce =
+                            outstanding_requests.add_request(&repair_addr, repair_type.clone());
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
@@ -932,7 +930,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
-            &RwLock::new(OutstandingRequests::default()),
+            &OutstandingRequests::default(),
         );
         assert!(duplicate_slot_repair_statuses
             .get(&dead_slot)
@@ -955,7 +953,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
-            &RwLock::new(OutstandingRequests::default()),
+            &OutstandingRequests::default(),
         );
         assert_eq!(duplicate_slot_repair_statuses.len(), 1);
         assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
@@ -972,7 +970,7 @@ mod test {
             &serve_repair,
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
-            &RwLock::new(OutstandingRequests::default()),
+            &OutstandingRequests::default(),
         );
         assert!(duplicate_slot_repair_statuses.is_empty());
     }

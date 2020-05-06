@@ -112,14 +112,14 @@ fn run_check_duplicate(
 }
 
 fn verify_repair_addr(
-    outstanding_requests: &RwLock<OutstandingRequests<RepairType, Shred>>,
+    outstanding_requests: &OutstandingRequests<RepairType, Shred>,
     shred: &Shred,
     repair_info: &Option<RepairInfo>,
 ) -> bool {
     repair_info
         .as_ref()
         .map(|repair_info| {
-            outstanding_requests.write().unwrap().register_response(
+            outstanding_requests.register_response(
                 &repair_info.from_addr,
                 repair_info.nonce,
                 &shred,
@@ -134,7 +134,7 @@ fn run_insert<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
-    outstanding_requests: &Arc<RwLock<OutstandingRequests<RepairType, Shred>>>,
+    outstanding_requests: &Arc<OutstandingRequests<RepairType, Shred>>,
 ) -> Result<()>
 where
     F: Fn(Shred) -> (),
@@ -331,8 +331,8 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-        let outstanding_requests: Arc<RwLock<OutstandingRequests<RepairType, Shred>>> =
-            Arc::new(RwLock::new(OutstandingRequests::default()));
+        let outstanding_requests: Arc<OutstandingRequests<RepairType, Shred>> =
+            Arc::new(OutstandingRequests::default());
 
         let bank_forks = match repair_strategy {
             RepairStrategy::RepairRange(_) => None,
@@ -420,7 +420,7 @@ impl WindowService {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         insert_receivers: Vec<CrossbeamReceiver<(Shred, Option<RepairInfo>)>>,
         duplicate_sender: CrossbeamSender<Shred>,
-        outstanding_requests: &Arc<RwLock<OutstandingRequests<RepairType, Shred>>>,
+        outstanding_requests: &Arc<OutstandingRequests<RepairType, Shred>>,
     ) -> Vec<JoinHandle<()>> {
         let mut handle_timeout = || {};
         let handle_error = || {
