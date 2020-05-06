@@ -9,7 +9,7 @@ use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_client::{
     rpc_client::{get_rpc_request_str, RpcClient},
-    rpc_response::{Response, RpcSignatureResult},
+    rpc_response::{Response, RpcAccount, RpcSignatureResult},
 };
 use solana_core::contact_info::ContactInfo;
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, validator::TestValidator};
@@ -164,9 +164,15 @@ fn test_rpc_subscriptions() {
         .iter()
         .map(|tx| tx.signatures[0].to_string())
         .collect();
+    let account_set: HashSet<String> = transactions
+        .iter()
+        .map(|tx| tx.message.account_keys[1].to_string())
+        .collect();
 
     // Track when subscriptions are ready
     let (ready_sender, ready_receiver) = channel::<()>();
+    // Track account notifications are received
+    let (account_sender, account_receiver) = channel::<Response<RpcAccount>>();
     // Track when status notifications are received
     let (status_sender, status_receiver) = channel::<(String, Response<RpcSignatureResult>)>();
 
@@ -209,6 +215,22 @@ fn test_rpc_subscriptions() {
                             eprintln!("slot sub err: {:#?}", err);
                         }),
                 );
+                for pubkey in account_set {
+                    let account_sender = account_sender.clone();
+                    tokio::spawn(
+                        client
+                            .account_subscribe(pubkey, None)
+                            .and_then(move |account_stream| {
+                                account_stream.for_each(move |result| {
+                                    account_sender.send(result).unwrap();
+                                    future::ok(())
+                                })
+                            })
+                            .map_err(|err| {
+                                eprintln!("acct sub err: {:#?}", err);
+                            }),
+                    );
+                }
                 future::ok(())
             })
             .map_err(|_| ())
@@ -256,6 +278,26 @@ fn test_rpc_subscriptions() {
                     false,
                     "recv_timeout, {}/{} signatures remaining",
                     signature_set.len(),
+                    transactions.len()
+                );
+            }
+        }
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut account_notifications = transactions.len();
+    while account_notifications > 0 {
+        let timeout = deadline.saturating_duration_since(Instant::now());
+        match account_receiver.recv_timeout(timeout) {
+            Ok(result) => {
+                assert_eq!(result.value.lamports, 1);
+                account_notifications -= 1;
+            }
+            Err(_err) => {
+                assert!(
+                    false,
+                    "recv_timeout, {}/{} accounts remaining",
+                    account_notifications,
                     transactions.len()
                 );
             }
