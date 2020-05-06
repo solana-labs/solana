@@ -689,10 +689,7 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
-            &[bank.clone()],
-            vec![0],
-        )));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(

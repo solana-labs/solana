@@ -56,10 +56,7 @@ mod tests {
 
         let bank = Bank::new(&genesis_config);
         let bank = Arc::new(bank);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
-            &[bank.clone()],
-            vec![0],
-        )));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
@@ -179,10 +176,7 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let slot = 1;
         let bank = Arc::new(Bank::new(&genesis_config));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
-            &[bank.clone()],
-            vec![0],
-        )));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank.clone()], 0)));
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));

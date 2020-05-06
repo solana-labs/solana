@@ -141,7 +141,7 @@ impl BankForks {
         self.banks.get(&self.root()).expect("Root bank must exist")
     }
 
-    pub fn new_from_banks(initial_forks: &[Arc<Bank>], rooted_path: Vec<Slot>) -> Self {
+    pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Self {
         let mut banks = HashMap::new();
         let working_bank = initial_forks[0].clone();
 
@@ -157,7 +157,7 @@ impl BankForks {
                 banks.insert(parent.slot(), parent.clone());
             }
         }
-        let root = *rooted_path.last().unwrap();
+
         Self {
             root,
             banks,

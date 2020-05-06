@@ -2528,7 +2528,7 @@ pub(crate) mod tests {
         let arc_bank0 = Arc::new(bank0);
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
             &[arc_bank0.clone()],
-            vec![0],
+            0,
         )));
 
         assert!(block_commitment_cache

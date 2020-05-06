@@ -318,7 +318,7 @@ pub fn process_blockstore_from_root(
     assert!(bank.parent().is_none());
     let start_slot = bank.slot();
     let now = Instant::now();
-    let mut rooted_path = vec![start_slot];
+    let mut root = start_slot;
 
     bank.set_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
         genesis_config.operating_mode,
@@ -366,7 +366,7 @@ pub fn process_blockstore_from_root(
                 &meta,
                 blockstore,
                 &mut leader_schedule_cache,
-                &mut rooted_path,
+                &mut root,
                 opts,
                 recyclers,
             )?;
@@ -375,7 +375,7 @@ pub fn process_blockstore_from_root(
             if banks.is_empty() {
                 return Err(BlockstoreProcessorError::NoValidForksFound);
             }
-            let bank_forks = BankForks::new_from_banks(&banks, rooted_path);
+            let bank_forks = BankForks::new_from_banks(&banks, root);
             (bank_forks, bank_forks_info, leader_schedule_cache)
         } else {
             // If there's no meta for the input `start_slot`, then we started from a snapshot
@@ -385,7 +385,7 @@ pub fn process_blockstore_from_root(
                 bank_slot: start_slot,
             };
             let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-            let bank_forks = BankForks::new_from_banks(&[bank], rooted_path);
+            let bank_forks = BankForks::new_from_banks(&[bank], root);
             (bank_forks, vec![bfi], leader_schedule_cache)
         }
     };
@@ -704,7 +704,7 @@ fn process_pending_slots(
     root_meta: &SlotMeta,
     blockstore: &Blockstore,
     leader_schedule_cache: &mut LeaderScheduleCache,
-    rooted_path: &mut Vec<u64>,
+    root: &mut Slot,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
 ) -> result::Result<HashMap<u64, (Arc<Bank>, BankForksInfo)>, BlockstoreProcessorError> {
@@ -752,10 +752,7 @@ fn process_pending_slots(
         txs += progress.num_txs;
 
         if blockstore.is_root(slot) {
-            let parents = bank.parents().into_iter().map(|b| b.slot()).rev().skip(1);
-            let parents: Vec<_> = parents.collect();
-            rooted_path.extend(parents);
-            rooted_path.push(slot);
+            *root = slot;
             leader_schedule_cache.set_root(&bank);
             bank.squash();
             pending_slots.clear();
