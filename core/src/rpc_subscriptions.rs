@@ -82,6 +82,7 @@ fn add_subscription<K, S>(
     commitment: Option<CommitmentConfig>,
     sub_id: SubscriptionId,
     subscriber: Subscriber<S>,
+    last_notified_slot: Slot,
 ) where
     K: Eq + Hash,
     S: Clone,
@@ -91,7 +92,7 @@ fn add_subscription<K, S>(
     let subscription_data = SubscriptionData {
         sink,
         commitment,
-        last_notified_slot: RwLock::new(0),
+        last_notified_slot: RwLock::new(last_notified_slot),
     };
     if let Some(current_hashmap) = subscriptions.get_mut(&hashmap_key) {
         current_hashmap.insert(sub_id, subscription_data);
@@ -255,6 +256,7 @@ pub struct RpcSubscriptions {
     notification_sender: Arc<Mutex<Sender<NotificationEntry>>>,
     t_cleanup: Option<JoinHandle<()>>,
     notifier_runtime: Option<Runtime>,
+    bank_forks: Arc<RwLock<BankForks>>,
     exit: Arc<AtomicBool>,
 }
 
@@ -284,6 +286,7 @@ impl RpcSubscriptions {
         let root_subscriptions = Arc::new(RpcRootSubscriptions::default());
         let notification_sender = Arc::new(Mutex::new(notification_sender));
 
+        let _bank_forks = bank_forks.clone();
         let exit_clone = exit.clone();
         let account_subscriptions_clone = account_subscriptions.clone();
         let program_subscriptions_clone = program_subscriptions.clone();
@@ -310,7 +313,7 @@ impl RpcSubscriptions {
                     signature_subscriptions_clone,
                     slot_subscriptions_clone,
                     root_subscriptions_clone,
-                    bank_forks,
+                    _bank_forks.clone(),
                     block_commitment_cache,
                 );
             })
@@ -325,6 +328,7 @@ impl RpcSubscriptions {
             notification_sender,
             notifier_runtime: Some(notifier_runtime),
             t_cleanup: Some(t_cleanup),
+            bank_forks: bank_forks,
             exit: exit.clone(),
         }
     }
@@ -413,7 +417,25 @@ impl RpcSubscriptions {
         subscriber: Subscriber<Response<RpcAccount>>,
     ) {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
-        add_subscription(&mut subscriptions, pubkey, commitment, sub_id, subscriber);
+        let last_notified_slot = if let Some((_account, slot)) = self
+            .bank_forks
+            .read()
+            .unwrap()
+            .working_bank()
+            .get_account_modified_slot(&pubkey)
+        {
+            slot
+        } else {
+            0
+        };
+        add_subscription(
+            &mut subscriptions,
+            pubkey,
+            commitment,
+            sub_id,
+            subscriber,
+            last_notified_slot,
+        );
     }
 
     pub fn remove_account_subscription(&self, id: &SubscriptionId) -> bool {
@@ -435,6 +457,7 @@ impl RpcSubscriptions {
             commitment,
             sub_id,
             subscriber,
+            0, // last_notified_slot is not utilized for program subscriptions
         );
     }
 
@@ -457,6 +480,7 @@ impl RpcSubscriptions {
             commitment,
             sub_id,
             subscriber,
+            0, // last_notified_slot is not utilized for signature subscriptions
         );
     }
 
@@ -688,21 +712,6 @@ pub(crate) mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let alice = Keypair::new();
-        let tx = system_transaction::create_account(
-            &mint_keypair,
-            &alice,
-            blockhash,
-            1,
-            16,
-            &solana_budget_program::id(),
-        );
-        bank_forks
-            .write()
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .process_transaction(&tx)
-            .unwrap();
 
         let (subscriber, _id_receiver, transport_receiver) =
             Subscriber::new_test("accountNotification");
@@ -727,6 +736,21 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&alice.pubkey()));
 
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &alice,
+            blockhash,
+            1,
+            16,
+            &solana_budget_program::id(),
+        );
+        bank_forks
+            .write()
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .process_transaction(&tx)
+            .unwrap();
         subscriptions.notify_subscribers(1);
         let (response, _) = robust_poll_or_panic(transport_receiver);
         let expected = json!({
@@ -1100,7 +1124,7 @@ pub(crate) mod tests {
             let (subscriber, _id_receiver, _transport_receiver) =
                 Subscriber::new_test("notification");
             let sub_id = SubscriptionId::Number(key);
-            add_subscription(&mut subscriptions, key, None, sub_id, subscriber);
+            add_subscription(&mut subscriptions, key, None, sub_id, subscriber, 0);
         }
 
         // Add another subscription to the "0" key
@@ -1112,6 +1136,7 @@ pub(crate) mod tests {
             None,
             extra_sub_id.clone(),
             subscriber,
+            0,
         );
 
         assert_eq!(subscriptions.len(), num_keys as usize);
