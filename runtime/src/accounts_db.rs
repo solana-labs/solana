@@ -1303,6 +1303,7 @@ impl AccountsDB {
         Self::hash_account_data(
             slot,
             account.account_meta.lamports,
+            &account.account_meta.owner,
             account.account_meta.executable,
             account.account_meta.rent_epoch,
             account.data,
@@ -1314,6 +1315,7 @@ impl AccountsDB {
         Self::hash_account_data(
             slot,
             account.lamports,
+            &account.owner,
             account.executable,
             account.rent_epoch,
             &account.data,
@@ -1339,6 +1341,7 @@ impl AccountsDB {
     pub fn hash_account_data(
         slot: Slot,
         lamports: u64,
+        owner: &Pubkey,
         executable: bool,
         rent_epoch: Epoch,
         data: &[u8],
@@ -1368,6 +1371,7 @@ impl AccountsDB {
             hasher.hash(&[0u8; 1]);
         }
 
+        hasher.hash(&owner.as_ref());
         hasher.hash(&pubkey.as_ref());
 
         hasher.result()
@@ -3469,7 +3473,7 @@ pub mod tests {
         };
         let account = stored_account.clone_account();
         let expected_account_hash =
-            Hash::from_str("GGTsxvxwnMsNfN6yYbBVQaRgvbVLfxeWnGXNyB8iXDyE").unwrap();
+            Hash::from_str("5iRNZVcAnq9JLYjSF2ibFhGEeq48r9Eq9HXxwm3BxywN").unwrap();
 
         assert_eq!(
             AccountsDB::hash_stored_account(slot, &stored_account),
