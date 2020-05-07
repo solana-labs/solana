@@ -161,10 +161,6 @@ impl BankForks {
         bank
     }
 
-    pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.remove(&slot)
-    }
-
     pub fn working_bank(&self) -> Arc<Bank> {
         self.working_bank.clone()
     }
