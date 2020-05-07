@@ -486,7 +486,7 @@ impl Accounts {
         )
     }
 
-    pub fn load_to_collect_rent_eargerly<R: RangeBounds<Pubkey>>(
+    pub fn load_to_collect_rent_eagerly<R: RangeBounds<Pubkey>>(
         &self,
         ancestors: &Ancestors,
         range: R,

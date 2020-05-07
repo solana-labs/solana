@@ -1753,7 +1753,7 @@ impl Bank {
         let accounts = self
             .rc
             .accounts
-            .load_to_collect_rent_eargerly(&self.ancestors, subrange);
+            .load_to_collect_rent_eagerly(&self.ancestors, subrange);
         let account_count = accounts.len();
 
         // parallelize?
