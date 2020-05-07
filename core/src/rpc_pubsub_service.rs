@@ -73,7 +73,13 @@ impl PubSubService {
 mod tests {
     use super::*;
     use crate::commitment::BlockCommitmentCache;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use solana_ledger::{
+        bank_forks::BankForks,
+        blockstore::Blockstore,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        get_tmp_ledger_path,
+    };
+    use solana_runtime::bank::Bank;
     use std::{
         net::{IpAddr, Ipv4Addr},
         sync::RwLock,
@@ -85,8 +91,12 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
+            bank_forks,
             Arc::new(RwLock::new(
                 BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
             )),

@@ -241,7 +241,11 @@ impl Validator {
             BlockCommitmentCache::default_with_blockstore(blockstore.clone()),
         ));
 
-        let subscriptions = Arc::new(RpcSubscriptions::new(&exit, block_commitment_cache.clone()));
+        let subscriptions = Arc::new(RpcSubscriptions::new(
+            &exit,
+            bank_forks.clone(),
+            block_commitment_cache.clone(),
+        ));
 
         let rpc_service = config.rpc_ports.map(|(rpc_port, rpc_pubsub_port)| {
             if ContactInfo::is_valid_address(&node.info.rpc) {
