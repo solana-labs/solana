@@ -1484,7 +1484,12 @@ impl AccountsDB {
             .iter()
             .map(|(pubkey, account)| {
                 stats.update(account);
-                Self::hash_account(slot_id, account, pubkey, Self::include_owner_in_hash(slot_id))
+                Self::hash_account(
+                    slot_id,
+                    account,
+                    pubkey,
+                    Self::include_owner_in_hash(slot_id),
+                )
             })
             .collect();
 
