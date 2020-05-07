@@ -3509,7 +3509,7 @@ pub mod tests {
                 let loaded_account = db.load_slow(&ancestors, key).unwrap().0;
                 assert_eq!(
                     loaded_account.hash,
-                    AccountsDB::hash_account(some_slot, &account, &key, true)
+                    AccountsDB::hash_account(some_slot, &account, &key, false)
                 );
             }
         }
