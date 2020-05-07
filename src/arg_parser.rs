@@ -1,4 +1,6 @@
-use crate::args::{Args, BalancesArgs, Command, DistributeStakeArgs, DistributeTokensArgs};
+use crate::args::{
+    Args, BalancesArgs, Command, DistributeStakeArgs, DistributeTokensArgs, PrintDbArgs,
+};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::input_validators::{is_valid_pubkey, is_valid_signer};
 use solana_cli_config::CONFIG_FILE;
@@ -189,6 +191,26 @@ where
                         .help("Dollars per SOL"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("print-database")
+                .about("Print the database to a CSV file")
+                .arg(
+                    Arg::with_name("transactions_db")
+                        .required(true)
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("FILE")
+                        .help("Transactions database file"),
+                )
+                .arg(
+                    Arg::with_name("output_path")
+                        .long("output-path")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("FILE")
+                        .help("Output file"),
+                ),
+        )
         .get_matches_from(args)
 }
 
@@ -228,6 +250,13 @@ fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
     }
 }
 
+fn parse_print_db_args(matches: &ArgMatches<'_>) -> PrintDbArgs {
+    PrintDbArgs {
+        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
+        output_path: value_t_or_exit!(matches, "output_path", String),
+    }
+}
+
 pub fn parse_args<I, T>(args: I) -> Args<String, String>
 where
     I: IntoIterator<Item = T>,
@@ -245,6 +274,7 @@ where
             Command::DistributeStake(parse_distribute_stake_args(matches))
         }
         ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)),
+        ("print-database", Some(matches)) => Command::PrintDb(parse_print_db_args(matches)),
         _ => {
             eprintln!("{}", matches.usage());
             exit(1);

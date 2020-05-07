@@ -34,10 +34,16 @@ pub struct BalancesArgs {
     pub dollars_per_sol: Option<f64>,
 }
 
+pub struct PrintDbArgs {
+    pub transactions_db: String,
+    pub output_path: String,
+}
+
 pub enum Command<P, K> {
     DistributeTokens(DistributeTokensArgs<K>),
     DistributeStake(DistributeStakeArgs<P, K>),
     Balances(BalancesArgs),
+    PrintDb(PrintDbArgs),
 }
 
 pub struct Args<P, K> {
@@ -106,5 +112,6 @@ pub fn resolve_command(
             Ok(Command::DistributeStake(resolved_args))
         }
         Command::Balances(args) => Ok(Command::Balances(args)),
+        Command::PrintDb(args) => Ok(Command::PrintDb(args)),
     }
 }

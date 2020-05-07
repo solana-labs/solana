@@ -1,4 +1,4 @@
-use crate::args::{BalancesArgs, DistributeStakeArgs, DistributeTokensArgs};
+use crate::args::{BalancesArgs, DistributeStakeArgs, DistributeTokensArgs, PrintDbArgs};
 use crate::thin_client::{Client, ThinClient};
 use console::style;
 use csv::{ReaderBuilder, Trim};
@@ -18,7 +18,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::TransactionStatus;
-use std::{cmp, path::Path, process};
+use std::{cmp, io, path::Path, process};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
@@ -40,8 +40,19 @@ struct TransactionInfo {
     finalized: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+struct SignedTransactionInfo {
+    recipient: String,
+    amount: f64,
+    new_stake_account_address: String,
+    finalized: bool,
+    signature: String,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("I/O error")]
+    IoError(#[from] io::Error),
     #[error("CSV error")]
     CsvError(#[from] csv::Error),
     #[error("PickleDb error")]
@@ -254,6 +265,21 @@ fn open_db(path: &str, dry_run: bool) -> Result<PickleDb, pickledb::error::Error
     } else {
         Ok(PickleDb::new_yaml(path, policy))
     }
+}
+
+pub fn print_db<P: AsRef<Path>>(db: &PickleDb, path: &P) -> Result<(), io::Error> {
+    let mut wtr = csv::WriterBuilder::new().from_path(path).unwrap();
+    for (signature, info) in read_transaction_data(db) {
+        let signed_info = SignedTransactionInfo {
+            recipient: info.recipient,
+            amount: info.amount,
+            new_stake_account_address: info.new_stake_account_address,
+            finalized: info.finalized,
+            signature: signature.to_string(),
+        };
+        wtr.serialize(&signed_info)?;
+    }
+    wtr.flush()
 }
 
 fn read_transaction_data(db: &PickleDb) -> Vec<(Signature, TransactionInfo)> {
@@ -554,6 +580,12 @@ pub fn process_balances<T: Client>(
         );
     }
 
+    Ok(())
+}
+
+pub fn process_print_db(args: &PrintDbArgs) -> Result<(), Error> {
+    let db = open_db(&args.transactions_db, true)?;
+    print_db(&db, &args.output_path)?;
     Ok(())
 }
 
@@ -916,5 +948,27 @@ mod tests {
             db.get::<TransactionInfo>(&signature.to_string()).unwrap(),
             transaction_info
         );
+    }
+
+    #[test]
+    fn test_print_db() {
+        let mut db =
+            PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
+        let signature = Signature::default();
+        let transaction_info = TransactionInfo::default();
+        db.set(&signature.to_string(), &transaction_info).unwrap();
+
+        let csv_file = NamedTempFile::new().unwrap();
+        print_db(&db, &csv_file).unwrap();
+
+        let mut rdr = ReaderBuilder::new().trim(Trim::All).from_reader(csv_file);
+        let signed_infos: Vec<SignedTransactionInfo> =
+            rdr.deserialize().map(|entry| entry.unwrap()).collect();
+
+        let signed_info = SignedTransactionInfo {
+            signature: Signature::default().to_string(),
+            ..SignedTransactionInfo::default()
+        };
+        assert_eq!(signed_infos, vec![signed_info]);
     }
 }
