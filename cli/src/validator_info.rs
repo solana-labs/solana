@@ -410,10 +410,9 @@ pub fn process_get_validator_info(
             info: validator_info,
         });
     }
-    config
+    Ok(config
         .output_format
-        .formatted_print(&CliValidatorInfoVec::new(validator_info_list));
-    Ok("".to_string())
+        .formatted_string(&CliValidatorInfoVec::new(validator_info_list)))
 }
 
 #[cfg(test)]
