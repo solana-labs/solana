@@ -76,18 +76,6 @@ pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
-pub const MAINNET_BETA_GENESIS_HASH: Hash = Hash::new_from_array([
-    69, 41, 105, 152, 166, 248, 226, 167, 132, 219, 93, 159, 149, 225, 143, 194, 63, 112, 68, 26,
-    16, 57, 68, 104, 1, 8, 152, 121, 176, 140, 126, 240,
-]);
-const MAINNET_BETA_EAGER_RENT_COLLECTION_START_EPOCH: Epoch = 30; // TENTATIVE!!!!
-
-pub const TESTNET_GENESIS_HASH: Hash = Hash::new_from_array([
-    58, 19, 46, 206, 16, 48, 94, 193, 131, 7, 37, 80, 47, 162, 183, 231, 235, 129, 87, 233, 18, 61,
-    76, 31, 101, 74, 113, 120, 113, 97, 220, 33,
-]);
-const TESTNET_EAGER_RENT_COLLECTION_START_EPOCH: Epoch = 40; // TENTATIVE!!!!
-
 type BankStatusCache = StatusCache<Result<()>>;
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
@@ -394,9 +382,6 @@ pub struct Bank {
     pub operating_mode: Option<OperatingMode>,
 
     #[serde(skip)]
-    pub genesis_hash: Option<Hash>,
-
-    #[serde(skip)]
     pub lazy_rent_collection: AtomicBool,
 }
 
@@ -418,7 +403,6 @@ impl Bank {
     ) -> Self {
         let mut bank = Self::default();
         bank.operating_mode = Some(genesis_config.operating_mode);
-        bank.genesis_hash = Some(genesis_config.hash());
         bank.ancestors.insert(bank.slot(), 0);
 
         bank.rc.accounts = Arc::new(Accounts::new(paths));
@@ -513,7 +497,6 @@ impl Bank {
             rewards: None,
             skip_drop: AtomicBool::new(false),
             operating_mode: parent.operating_mode,
-            genesis_hash: parent.genesis_hash,
             lazy_rent_collection: AtomicBool::new(
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
@@ -1717,14 +1700,7 @@ impl Bank {
             return false;
         }
 
-        let not_yet_for_existing_clusters = (self.operating_mode() == OperatingMode::Stable
-            && self.genesis_hash.unwrap() == MAINNET_BETA_GENESIS_HASH
-            && self.epoch() < MAINNET_BETA_EAGER_RENT_COLLECTION_START_EPOCH)
-            || (self.operating_mode() == OperatingMode::Preview
-                && self.genesis_hash.unwrap() == TESTNET_GENESIS_HASH
-                && self.epoch() < TESTNET_EAGER_RENT_COLLECTION_START_EPOCH);
-
-        !not_yet_for_existing_clusters
+        true
     }
 
     fn rent_collection_partitions(&self) -> Vec<Partition> {

@@ -647,7 +647,6 @@ where
                 }
             };
             bank.operating_mode = Some(genesis_config.operating_mode);
-            bank.genesis_hash = Some(genesis_config.hash());
             info!("Rebuilding accounts...");
             let rc = bank::BankRc::from_stream(
                 account_paths,
