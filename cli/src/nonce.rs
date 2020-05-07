@@ -590,8 +590,7 @@ pub fn process_show_nonce_account(
             nonce_account.authority = Some(data.authority.to_string());
         }
 
-        config.output_format.formatted_print(&nonce_account);
-        Ok("".to_string())
+        Ok(config.output_format.formatted_string(&nonce_account))
     };
     match state_from_account(&nonce_account)? {
         State::Uninitialized => print_account(None),

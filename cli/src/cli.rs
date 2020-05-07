@@ -55,6 +55,7 @@ use solana_transaction_status::{EncodedTransaction, TransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
     error,
+    fmt::Write as FmtWrite,
     fs::File,
     io::{Read, Write},
     net::{IpAddr, SocketAddr},
@@ -1265,21 +1266,21 @@ fn process_show_account(
         use_lamports_unit,
     };
 
-    config.output_format.formatted_print(&cli_account);
+    let mut account_string = config.output_format.formatted_string(&cli_account);
 
     if config.output_format == OutputFormat::Display {
         if let Some(output_file) = output_file {
             let mut f = File::create(output_file)?;
             f.write_all(&data)?;
-            println!();
-            println!("Wrote account data to {}", output_file);
+            writeln!(&mut account_string)?;
+            writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
         } else if !data.is_empty() {
             use pretty_hex::*;
-            println!("{:?}", data.hex_dump());
+            writeln!(&mut account_string, "{:?}", data.hex_dump())?;
         }
     }
 
-    Ok("".to_string())
+    Ok(account_string)
 }
 
 fn process_deploy(

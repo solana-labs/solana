@@ -586,8 +586,7 @@ pub fn process_show_vote_account(
         use_lamports_unit,
     };
 
-    config.output_format.formatted_print(&vote_account_data);
-    Ok("".to_string())
+    Ok(config.output_format.formatted_string(&vote_account_data))
 }
 
 pub fn process_withdraw_from_vote_account(
