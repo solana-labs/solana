@@ -1,0 +1,30 @@
+const NON_CIRCULATING_ACCOUNTS: [&str; 25] = [
+    "9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA",
+    "GK2zqSsXLA2rwVZk347RYhh6jJpRsCA69FjLW93ZGi3B",
+    "HCV5dGFJXRrJ3jhDYA4DCeb9TEDTwGGYXtT3wHksu2Zr",
+    "25odAafVXnd63L6Hq5Cx6xGmhKqkhE2y6UrLVuqUfWZj",
+    "14FUT96s9swbmH7ZjpDvfEDywnAYy9zaNhv4xvezySGu",
+    "HbZ5FfmKWNHC7uwk6TF1hVi6TCs7dtYfdjEcuPGgzFAg",
+    "C7C8odR8oashR5Feyrq2tJKaXL18id1dSj2zbkDGL2C2",
+    "APnSR52EC1eH676m7qTBHUJ1nrGpHYpV7XKPxgRDD8gX",
+    "9ibqedFVnu5k4wo1mJRbH6KJ5HLBCyjpA9omPYkDeeT5",
+    "FopBKzQkG9pkyQqjdMFBLMQ995pSkjy83ziR4aism4c6",
+    "AiUHvJhTbMCcgFE2K26Ea9qCe74y3sFwqUt38iD5sfoR",
+    "3DndE3W53QdHSfBJiSJgzDKGvKJBoQLVmRHvy5LtqYfG",
+    "Eyr9P5XsjK2NUKNCnfu39eqpGoiLFgVAv1LSQgMZCwiQ",
+    "DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ",
+    "CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S",
+    "7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2",
+    "GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ",
+    "Mc5XB47H3DKJHym5RLa9mPzWv5snERsF3KNv5AauXK8",
+    "7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri",
+    "AG3m2bAibcY8raMt4oXEGqRHwX4FWKPPJVjZxn1LySDX",
+    "5XdtyEDREHJXXW1CTtCsVjJRjBapAwK78ZquzvnNVRrV",
+    "6yKHERk8rsbmJxvMpPuwPs1ct3hRiP7xaJF2tvnGU6nK",
+    "CHmdL15akDcJgBkY6BP3hzs98Dqr6wbdDC5p8odvtSbq",
+    "FR84wZQy3Y3j2gWz6pgETUiUoJtreMEuWfbg6573UCj9",
+    "5q54XjQ7vDx4y6KphPeE97LUNiYGtP55spjvXAWPGBuf",
+];
+
+const WITHDRAW_AUTHORITY_FOR_AUTOSTAKED_ACCOUNTS: &str =
+    "8CUUMKYNGxdgYio5CLHRHyzMEhhVRMcqefgE6dLqnVRK";
