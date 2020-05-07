@@ -1816,10 +1816,12 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.rc
-            .accounts
-            .load_slow(&self.ancestors, pubkey)
+        self.get_account_modified_slot(pubkey)
             .map(|(acc, _slot)| acc)
+    }
+
+    pub fn get_account_modified_slot(&self, pubkey: &Pubkey) -> Option<(Account, Slot)> {
+        self.rc.accounts.load_slow(&self.ancestors, pubkey)
     }
 
     // Exclude self to really fetch the parent Bank's account hash and data.

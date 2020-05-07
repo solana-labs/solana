@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions, SlotInfo};
+use crate::rpc_subscriptions::{RpcSubscriptions, SlotInfo};
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
@@ -8,8 +8,12 @@ use solana_client::rpc_response::{
     Response as RpcResponse, RpcAccount, RpcKeyedAccount, RpcSignatureResult,
 };
 #[cfg(test)]
-use solana_ledger::blockstore::Blockstore;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
+use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
+use solana_sdk::{
+    clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
+};
+#[cfg(test)]
+use std::sync::RwLock;
 use std::{
     str::FromStr,
     sync::{atomic, Arc},
@@ -35,7 +39,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -59,7 +63,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -83,7 +87,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     );
 
     // Unsubscribe from signature notification subscription.
@@ -135,9 +139,14 @@ impl RpcSolPubSubImpl {
     }
 
     #[cfg(test)]
-    fn default_with_blockstore(blockstore: Arc<Blockstore>) -> Self {
+    fn default_with_blockstore_bank_forks(
+        blockstore: Arc<Blockstore>,
+        bank_forks: Arc<RwLock<BankForks>>,
+    ) -> Self {
         let uid = Arc::new(atomic::AtomicUsize::default());
-        let subscriptions = Arc::new(RpcSubscriptions::default_with_blockstore(blockstore));
+        let subscriptions = Arc::new(RpcSubscriptions::default_with_blockstore_bank_forks(
+            blockstore, bank_forks,
+        ));
         Self { uid, subscriptions }
     }
 }
@@ -158,19 +167,15 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
                 let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                self.subscriptions.add_account_subscription(
-                    pubkey,
-                    confirmations,
-                    sub_id,
-                    subscriber,
-                )
+                self.subscriptions
+                    .add_account_subscription(pubkey, commitment, sub_id, subscriber)
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -198,19 +203,15 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
                 let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                self.subscriptions.add_program_subscription(
-                    pubkey,
-                    confirmations,
-                    sub_id,
-                    subscriber,
-                )
+                self.subscriptions
+                    .add_program_subscription(pubkey, commitment, sub_id, subscriber)
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -238,7 +239,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
-        confirmations: Option<Confirmations>,
+        commitment: Option<CommitmentConfig>,
     ) {
         info!("signature_subscribe");
         match param::<Signature>(&signature_str, "signature") {
@@ -249,12 +250,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     "signature_subscribe: signature={:?} id={:?}",
                     signature, sub_id
                 );
-                self.subscriptions.add_signature_subscription(
-                    signature,
-                    confirmations,
-                    sub_id,
-                    subscriber,
-                );
+                self.subscriptions
+                    .add_signature_subscription(signature, commitment, sub_id, subscriber);
             }
             Err(e) => subscriber.reject(e).unwrap(),
         }
@@ -354,14 +351,15 @@ mod tests {
         bank_forks: &Arc<RwLock<BankForks>>,
         tx: &Transaction,
         subscriptions: &RpcSubscriptions,
+        slot: Slot,
     ) -> transaction::Result<()> {
         bank_forks
             .write()
             .unwrap()
-            .get(0)
+            .get(slot)
             .unwrap()
             .process_transaction(tx)?;
-        subscriptions.notify_subscribers(0, &bank_forks);
+        subscriptions.notify_subscribers(slot);
         Ok(())
     }
 
@@ -387,6 +385,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
+                bank_forks.clone(),
                 Arc::new(RwLock::new(
                     BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
                 )),
@@ -401,7 +400,7 @@ mod tests {
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("signatureNotification");
         rpc.signature_subscribe(session, subscriber, tx.signatures[0].to_string(), None);
 
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 0).unwrap();
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
@@ -430,15 +429,15 @@ mod tests {
         } = create_genesis_config(10_000);
         let bob_pubkey = Pubkey::new_rand();
         let bank = Bank::new(&genesis_config);
-        let arc_bank = Arc::new(bank);
-        let blockhash = arc_bank.last_blockhash();
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let session = create_session();
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
+        let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
         io.extend_with(rpc.to_delegate());
 
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
@@ -493,14 +492,22 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
 
         let rpc = RpcSolPubSubImpl {
             subscriptions: Arc::new(RpcSubscriptions::new(
                 &Arc::new(AtomicBool::new(false)),
+                bank_forks.clone(),
                 Arc::new(RwLock::new(
-                    BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
+                    BlockCommitmentCache::new_for_tests_with_blockstore_bank(
+                        blockstore,
+                        bank_forks.read().unwrap().get(1).unwrap().clone(),
+                        1,
+                    ),
                 )),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
@@ -515,7 +522,7 @@ mod tests {
         );
 
         let tx = system_transaction::transfer(&alice, &contract_funds.pubkey(), 51, blockhash);
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
 
         let ixs = budget_instruction::when_signed(
             &contract_funds.pubkey(),
@@ -530,14 +537,14 @@ mod tests {
             &ixs,
             blockhash,
         );
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification #1
         let expected_data = bank_forks
             .read()
             .unwrap()
-            .get(0)
+            .get(1)
             .unwrap()
             .get_account(&contract_state.pubkey())
             .unwrap()
@@ -547,7 +554,7 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "context": { "slot": 0 },
+                   "context": { "slot": 1 },
                    "value": {
                        "owner": budget_program_id.to_string(),
                        "lamports": 51,
@@ -564,7 +571,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
 
         let tx = system_transaction::transfer(&alice, &witness.pubkey(), 1, blockhash);
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
         let ix = budget_instruction::apply_signature(
             &witness.pubkey(),
@@ -572,14 +579,14 @@ mod tests {
             &bob_pubkey,
         );
         let tx = Transaction::new_signed_instructions(&[&witness], &[ix], blockhash);
-        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 1).unwrap();
         sleep(Duration::from_millis(200));
 
         assert_eq!(
             bank_forks
                 .read()
                 .unwrap()
-                .get(0)
+                .get(1)
                 .unwrap()
                 .get_account(&contract_state.pubkey()),
             None
@@ -593,9 +600,12 @@ mod tests {
         let session = create_session();
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, Bank::new(&genesis_config))));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
+        let rpc =
+            RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks.clone());
 
         io.extend_with(rpc.to_delegate());
 
@@ -630,7 +640,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_account_confirmations_not_fulfilled() {
+    fn test_account_commitment_not_fulfilled() {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair: alice,
@@ -638,15 +648,19 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(1, bank)));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bob = Keypair::new();
 
-        let mut rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore.clone());
+        let mut rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(
+            blockstore.clone(),
+            bank_forks.clone(),
+        );
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
+            bank_forks.clone(),
             Arc::new(RwLock::new(
                 BlockCommitmentCache::new_for_tests_with_blockstore(blockstore),
             )),
@@ -654,24 +668,29 @@ mod tests {
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
-        rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
+        rpc.account_subscribe(
+            session,
+            subscriber,
+            bob.pubkey().to_string(),
+            Some(CommitmentConfig::root()),
+        );
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
             .write()
             .unwrap()
-            .get(0)
+            .get(1)
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        rpc.subscriptions.notify_subscribers(0, &bank_forks);
+        rpc.subscriptions.notify_subscribers(0);
         // allow 200ms for notification thread to wake
         std::thread::sleep(Duration::from_millis(200));
         let _panic = robust_poll_or_panic(receiver);
     }
 
     #[test]
-    fn test_account_confirmations() {
+    fn test_account_commitment() {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair: alice,
@@ -680,75 +699,65 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let bob = Keypair::new();
 
-        let mut rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore.clone());
+        let mut rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(
+            blockstore.clone(),
+            bank_forks.clone(),
+        );
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_blockstore(blockstore.clone()),
         ));
 
-        let subscriptions = RpcSubscriptions::new(&exit, block_commitment_cache.clone());
+        let subscriptions =
+            RpcSubscriptions::new(&exit, bank_forks.clone(), block_commitment_cache.clone());
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
-        rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
+        rpc.account_subscribe(
+            session,
+            subscriber,
+            bob.pubkey().to_string(),
+            Some(CommitmentConfig::root()),
+        );
 
         let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
             .write()
             .unwrap()
-            .get(0)
+            .get(1)
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        rpc.subscriptions.notify_subscribers(0, &bank_forks);
+        rpc.subscriptions.notify_subscribers(1);
 
-        let bank0 = bank_forks.read().unwrap()[0].clone();
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        bank_forks.write().unwrap().insert(bank1);
         let bank1 = bank_forks.read().unwrap()[1].clone();
-
-        let mut cache0 = BlockCommitment::default();
-        cache0.increase_confirmation_stake(1, 10);
-        let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
-        let mut new_block_commitment = BlockCommitmentCache::new(
-            block_commitment,
-            0,
-            10,
-            bank1.clone(),
-            blockstore.clone(),
-            0,
-        );
-        let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
-        std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
-        drop(w_block_commitment_cache);
-
-        rpc.subscriptions.notify_subscribers(1, &bank_forks);
         let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
+        bank_forks.write().unwrap().set_root(1, &None, None);
         let bank2 = bank_forks.read().unwrap()[2].clone();
 
-        let mut cache0 = BlockCommitment::default();
-        cache0.increase_confirmation_stake(2, 10);
-        let mut block_commitment = HashMap::new();
-        block_commitment.entry(0).or_insert(cache0.clone());
+        let mut block_commitment: HashMap<Slot, BlockCommitment> = HashMap::new();
+        block_commitment.insert(0, BlockCommitment::default());
         let mut new_block_commitment =
-            BlockCommitmentCache::new(block_commitment, 0, 10, bank2, blockstore.clone(), 0);
+            BlockCommitmentCache::new(block_commitment, 1, 10, bank2, blockstore.clone(), 1);
         let mut w_block_commitment_cache = block_commitment_cache.write().unwrap();
         std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
         drop(w_block_commitment_cache);
 
-        rpc.subscriptions.notify_subscribers(2, &bank_forks);
+        rpc.subscriptions.notify_subscribers(2);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
            "params": {
                "result": {
-                   "context": { "slot": 0 },
+                   "context": { "slot": 1 },
                    "value": {
                        "owner": system_program::id().to_string(),
                        "lamports": 100,
@@ -769,7 +778,10 @@ mod tests {
     fn test_slot_subscribe() {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
         rpc.slot_subscribe(session, subscriber);
@@ -796,7 +808,10 @@ mod tests {
     fn test_slot_unsubscribe() {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let rpc = RpcSolPubSubImpl::default_with_blockstore(blockstore);
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let rpc = RpcSolPubSubImpl::default_with_blockstore_bank_forks(blockstore, bank_forks);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("slotNotification");
         rpc.slot_subscribe(session, subscriber);

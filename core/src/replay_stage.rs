@@ -308,10 +308,8 @@ impl ReplayStage {
 
                     // Vote on a fork
                     if let Some(ref vote_bank) = vote_bank {
-                        subscriptions.notify_subscribers(
-                            block_commitment_cache.read().unwrap().slot(),
-                            &bank_forks,
-                        );
+                        subscriptions
+                            .notify_subscribers(block_commitment_cache.read().unwrap().slot());
                         if let Some(votable_leader) =
                             leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
                         {
@@ -2060,12 +2058,6 @@ pub(crate) mod tests {
             );
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let exit = Arc::new(AtomicBool::new(false));
-            let subscriptions = Arc::new(RpcSubscriptions::new(
-                &exit,
-                Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
-                    blockstore.clone(),
-                ))),
-            ));
             let mut bank_forks = BankForks::new(0, bank0);
 
             // Insert a non-root bank so that the propagation logic will update this
@@ -2089,7 +2081,14 @@ pub(crate) mod tests {
             assert!(progress.get_propagated_stats(1).unwrap().is_leader_slot);
             bank1.freeze();
             bank_forks.insert(bank1);
-            let bank_forks = RwLock::new(bank_forks);
+            let bank_forks = Arc::new(RwLock::new(bank_forks));
+            let subscriptions = Arc::new(RpcSubscriptions::new(
+                &exit,
+                bank_forks.clone(),
+                Arc::new(RwLock::new(BlockCommitmentCache::default_with_blockstore(
+                    blockstore.clone(),
+                ))),
+            ));
 
             // Insert shreds for slot NUM_CONSECUTIVE_LEADER_SLOTS,
             // chaining to slot 1
