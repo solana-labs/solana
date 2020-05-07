@@ -856,3 +856,54 @@ impl fmt::Display for CliBlockTime {
         )
     }
 }
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CliSignOnlyData {
+    pub blockhash: String,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub signers: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub absent: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub bad_sig: Vec<String>,
+}
+
+impl fmt::Display for CliSignOnlyData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Blockhash:", &self.blockhash)?;
+        if !self.signers.is_empty() {
+            writeln!(f, "{}", style("Signers (Pubkey=Signature):").bold())?;
+            for signer in self.signers.iter() {
+                writeln!(f, " {}", signer)?;
+            }
+        }
+        if !self.absent.is_empty() {
+            writeln!(f, "{}", style("Absent Signers (Pubkey):").bold())?;
+            for pubkey in self.absent.iter() {
+                writeln!(f, " {}", pubkey)?;
+            }
+        }
+        if !self.bad_sig.is_empty() {
+            writeln!(f, "{}", style("Bad Signatures (Pubkey):").bold())?;
+            for pubkey in self.bad_sig.iter() {
+                writeln!(f, " {}", pubkey)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliSignature {
+    pub signature: String,
+}
+
+impl fmt::Display for CliSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Signature:", &self.signature)?;
+        Ok(())
+    }
+}

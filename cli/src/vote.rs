@@ -458,7 +458,7 @@ pub fn process_create_vote_account(
         &tx.message,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-    log_instruction_custom_error::<SystemError>(result)
+    log_instruction_custom_error::<SystemError>(result, &config)
 }
 
 pub fn process_vote_authorize(
@@ -499,7 +499,7 @@ pub fn process_vote_authorize(
     )?;
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
-    log_instruction_custom_error::<VoteError>(result)
+    log_instruction_custom_error::<VoteError>(result, &config)
 }
 
 pub fn process_vote_update_validator(
@@ -532,7 +532,7 @@ pub fn process_vote_update_validator(
         &tx.message,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-    log_instruction_custom_error::<VoteError>(result)
+    log_instruction_custom_error::<VoteError>(result, &config)
 }
 
 fn get_vote_account(
@@ -638,7 +638,7 @@ pub fn process_withdraw_from_vote_account(
     )?;
     let result =
         rpc_client.send_and_confirm_transaction_with_spinner(&mut transaction, &config.signers);
-    log_instruction_custom_error::<VoteError>(result)
+    log_instruction_custom_error::<VoteError>(result, &config)
 }
 
 #[cfg(test)]
