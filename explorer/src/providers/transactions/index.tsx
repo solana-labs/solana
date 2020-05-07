@@ -7,7 +7,7 @@ import {
   SignatureResult
 } from "@solana/web3.js";
 import { useQuery } from "../../utils/url";
-import { useCluster, Cluster } from "../cluster";
+import { useCluster, Cluster, ClusterStatus } from "../cluster";
 import {
   DetailsProvider,
   StateContext as DetailsStateContext,
@@ -127,7 +127,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
     transactions: {}
   });
 
-  const { cluster, url } = useCluster();
+  const { cluster, status: clusterStatus, url } = useCluster();
   const accountsDispatch = useAccountsDispatch();
   const query = useQuery();
   const testFlag = query.get("test");
@@ -140,14 +140,14 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
         signature,
         source: Source.Url
       });
-      checkTransactionStatus(dispatch, signature, url);
+      fetchTransactionStatus(dispatch, signature, url, clusterStatus);
     });
 
     // Create a test transaction
     if (cluster === Cluster.Devnet && testFlag !== null) {
-      createTestTransaction(dispatch, accountsDispatch, url);
+      createTestTransaction(dispatch, accountsDispatch, url, clusterStatus);
     }
-  }, [testFlag, cluster, url]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [testFlag, cluster, clusterStatus, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check for transactions in the url params
   const values = TX_ALIASES.flatMap(key => [
@@ -167,7 +167,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
           signature,
           source: Source.Url
         });
-        checkTransactionStatus(dispatch, signature, url);
+        fetchTransactionStatus(dispatch, signature, url, clusterStatus);
       });
   }, [values.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -183,7 +183,8 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
 async function createTestTransaction(
   dispatch: Dispatch,
   accountsDispatch: AccountsDispatch,
-  url: string
+  url: string,
+  clusterStatus: ClusterStatus
 ) {
   const testKey = process.env.REACT_APP_TEST_KEY;
   let testAccount = new Account();
@@ -203,7 +204,7 @@ async function createTestTransaction(
       signature,
       source: Source.Test
     });
-    checkTransactionStatus(dispatch, signature, url);
+    fetchTransactionStatus(dispatch, signature, url, clusterStatus);
     accountsDispatch({
       type: AccountsActionType.Input,
       pubkey: testAccount.publicKey
@@ -226,22 +227,26 @@ async function createTestTransaction(
       signature,
       source: Source.Test
     });
-    checkTransactionStatus(dispatch, signature, url);
+    fetchTransactionStatus(dispatch, signature, url, clusterStatus);
   } catch (error) {
     console.error("Failed to create test failure transaction", error);
   }
 }
 
-export async function checkTransactionStatus(
+export async function fetchTransactionStatus(
   dispatch: Dispatch,
   signature: TransactionSignature,
-  url: string
+  url: string,
+  status: ClusterStatus
 ) {
   dispatch({
     type: ActionType.UpdateStatus,
     signature,
     fetchStatus: FetchStatus.Fetching
   });
+
+  // We will auto-refetch when status is no longer connecting
+  if (status === ClusterStatus.Connecting) return;
 
   let fetchStatus;
   let info: TransactionStatusInfo | undefined;
@@ -317,16 +322,6 @@ export function useTransactionDetails(signature: TransactionSignature) {
   return context[signature];
 }
 
-export function useTransactionsDispatch() {
-  const context = React.useContext(DispatchContext);
-  if (!context) {
-    throw new Error(
-      `useTransactionsDispatch must be used within a TransactionsProvider`
-    );
-  }
-  return context;
-}
-
 export function useDetailsDispatch() {
   const context = React.useContext(DetailsDispatchContext);
   if (!context) {
@@ -335,4 +330,26 @@ export function useDetailsDispatch() {
     );
   }
   return context;
+}
+
+export function useFetchTransactionStatus() {
+  const dispatch = React.useContext(DispatchContext);
+  if (!dispatch) {
+    throw new Error(
+      `useFetchTransactionStatus must be used within a TransactionsProvider`
+    );
+  }
+
+  const { url, status } = useCluster();
+  return (signature: TransactionSignature, source?: Source) => {
+    if (source !== undefined) {
+      dispatch({
+        type: ActionType.FetchSignature,
+        signature,
+        source
+      });
+    }
+
+    fetchTransactionStatus(dispatch, signature, url, status);
+  };
 }

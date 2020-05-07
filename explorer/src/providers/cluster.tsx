@@ -61,28 +61,24 @@ interface State {
   status: ClusterStatus;
 }
 
-interface Connecting {
-  status: ClusterStatus.Connecting;
+interface Action {
+  status: ClusterStatus;
   cluster: Cluster;
   customUrl: string;
 }
 
-interface Connected {
-  status: ClusterStatus.Connected;
-}
-
-interface Failure {
-  status: ClusterStatus.Failure;
-}
-
-type Action = Connected | Connecting | Failure;
 type Dispatch = (action: Action) => void;
 
 function clusterReducer(state: State, action: Action): State {
   switch (action.status) {
     case ClusterStatus.Connected:
     case ClusterStatus.Failure: {
-      return Object.assign({}, state, { status: action.status });
+      if (
+        state.cluster !== action.cluster ||
+        state.customUrl !== action.customUrl
+      )
+        return state;
+      return action;
     }
     case ClusterStatus.Connecting: {
       return action;
@@ -197,10 +193,10 @@ async function updateCluster(
   try {
     const connection = new Connection(clusterUrl(cluster, customUrl));
     await connection.getRecentBlockhash();
-    dispatch({ status: ClusterStatus.Connected });
+    dispatch({ status: ClusterStatus.Connected, cluster, customUrl });
   } catch (error) {
     console.error("Failed to update cluster", error);
-    dispatch({ status: ClusterStatus.Failure });
+    dispatch({ status: ClusterStatus.Failure, cluster, customUrl });
   }
 }
 

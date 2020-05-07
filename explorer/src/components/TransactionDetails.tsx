@@ -2,12 +2,10 @@ import React from "react";
 import bs58 from "bs58";
 import {
   Source,
+  useFetchTransactionStatus,
   useTransactionStatus,
   useTransactionDetails,
-  useTransactionsDispatch,
   useDetailsDispatch,
-  checkTransactionStatus,
-  ActionType,
   FetchStatus
 } from "../providers/transactions";
 import { fetchDetails } from "providers/transactions/details";
@@ -28,8 +26,7 @@ import { useHistory, useLocation } from "react-router-dom";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
-  const dispatch = useTransactionsDispatch();
-  const { url } = useCluster();
+  const fetchTransaction = useFetchTransactionStatus();
   const [, setShow] = useClusterModal();
   const [search, setSearch] = React.useState(signature);
   const history = useHistory();
@@ -41,13 +38,8 @@ export default function TransactionDetails({ signature }: Props) {
 
   // Fetch transaction on load
   React.useEffect(() => {
-    dispatch({
-      type: ActionType.FetchSignature,
-      signature,
-      source: Source.Url
-    });
-    checkTransactionStatus(dispatch, signature, url);
-  }, [signature, dispatch, url]);
+    fetchTransaction(signature, Source.Url);
+  }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchInput = (
     <input
@@ -104,20 +96,15 @@ export default function TransactionDetails({ signature }: Props) {
 
 function StatusCard({ signature }: Props) {
   const status = useTransactionStatus(signature);
-  const dispatch = useTransactionsDispatch();
+  const refresh = useFetchTransactionStatus();
   const details = useTransactionDetails(signature);
-  const { url } = useCluster();
-
-  const refreshStatus = () => {
-    checkTransactionStatus(dispatch, signature, url);
-  };
 
   if (!status || status.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (status?.fetchStatus === FetchStatus.FetchFailed) {
-    return <RetryCard retry={refreshStatus} text="Fetch Failed" />;
+    return <RetryCard retry={() => refresh(signature)} text="Fetch Failed" />;
   } else if (!status.info) {
-    return <RetryCard retry={refreshStatus} text="Not Found" />;
+    return <RetryCard retry={() => refresh(signature)} text="Not Found" />;
   }
 
   const { info } = status;
@@ -141,7 +128,10 @@ function StatusCard({ signature }: Props) {
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Status</h3>
-        <button className="btn btn-white btn-sm" onClick={refreshStatus}>
+        <button
+          className="btn btn-white btn-sm"
+          onClick={() => refresh(signature)}
+        >
           <span className="fe fe-refresh-cw mr-2"></span>
           Refresh
         </button>
@@ -179,14 +169,25 @@ function AccountsCard({ signature }: Props) {
   const dispatch = useDetailsDispatch();
   const { url } = useCluster();
 
+  const fetchStatus = useFetchTransactionStatus();
+  const refreshStatus = () => fetchStatus(signature);
   const refreshDetails = () => fetchDetails(dispatch, signature, url);
   const transaction = details?.transaction?.transaction;
   const message = React.useMemo(() => {
     return transaction?.compileMessage();
   }, [transaction]);
 
-  if (!details) {
+  const status = useTransactionStatus(signature);
+
+  if (!status || !status.info) {
     return null;
+  } else if (!details) {
+    return (
+      <RetryCard
+        retry={refreshStatus}
+        text="Details are not available until the transaction reaches MAX confirmations"
+      />
+    );
   } else if (details.fetchStatus === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details?.fetchStatus === FetchStatus.FetchFailed) {
@@ -571,11 +572,17 @@ function LoadingCard() {
 function RetryCard({ retry, text }: { retry: () => void; text: string }) {
   return (
     <div className="card">
-      <div className="card-body">
+      <div className="card-body text-center">
         {text}
-        <span className="btn btn-white ml-3" onClick={retry}>
+        <span className="btn btn-white ml-3 d-none d-md-inline" onClick={retry}>
           Try Again
         </span>
+        <div className="d-block d-md-none mt-4">
+          <hr></hr>
+          <span className="btn btn-white" onClick={retry}>
+            Try Again
+          </span>
+        </div>
       </div>
     </div>
   );
