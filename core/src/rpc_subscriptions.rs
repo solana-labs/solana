@@ -209,7 +209,7 @@ fn filter_account_result(
     last_notified_slot: Slot,
 ) -> (Box<dyn Iterator<Item = RpcAccount>>, Slot) {
     if let Some((account, fork)) = result {
-        if fork > last_notified_slot {
+        if fork != last_notified_slot {
             return (Box::new(iter::once(RpcAccount::encode(account))), fork);
         }
     }
