@@ -5,7 +5,10 @@ mod tests {
     use log::*;
     use solana_core::{
         commitment::BlockCommitmentCache,
-        storage_stage::{test_cluster_info, StorageStage, StorageState, SLOTS_PER_TURN_TEST, get_identity_index_from_signature},
+        storage_stage::{
+            get_identity_index_from_signature, test_cluster_info, StorageStage, StorageState,
+            SLOTS_PER_TURN_TEST,
+        },
     };
     use solana_ledger::{
         bank_forks::BankForks,
@@ -19,7 +22,7 @@ mod tests {
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
-        signature::{Keypair, Signer, Signature},
+        signature::{Keypair, Signature, Signer},
         transaction::Transaction,
     };
     use solana_storage_program::storage_instruction::{self, StorageAccountType};

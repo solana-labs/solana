@@ -648,7 +648,6 @@ pub fn get_identity_index_from_signature(key: &Signature) -> usize {
     res
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

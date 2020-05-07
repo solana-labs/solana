@@ -198,7 +198,6 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        sigverify_disabled: bool,
         sender: CrossbeamSender<Vec<Packets>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
@@ -214,7 +213,6 @@ impl ClusterInfoVoteListener {
                 let _ = Self::recv_loop(
                     exit_,
                     &cluster_info,
-                    sigverify_disabled,
                     verified_vote_packets_sender,
                     verified_vote_transactions_sender,
                 );
@@ -263,7 +261,6 @@ impl ClusterInfoVoteListener {
     fn recv_loop(
         exit: Arc<AtomicBool>,
         cluster_info: &ClusterInfo,
-        sigverify_disabled: bool,
         verified_vote_packets_sender: VerifiedVotePacketsSender,
         verified_vote_transactions_sender: VerifiedVoteTransactionsSender,
     ) -> Result<()> {
@@ -277,7 +274,7 @@ impl ClusterInfoVoteListener {
 
             last_ts = new_ts;
             if !votes.is_empty() {
-                let (vote_txs, packets) = Self::verify_votes(votes, labels, sigverify_disabled);
+                let (vote_txs, packets) = Self::verify_votes(votes, labels);
                 verified_vote_transactions_sender.send(vote_txs)?;
                 verified_vote_packets_sender.send(packets)?;
             }
@@ -289,14 +286,9 @@ impl ClusterInfoVoteListener {
     fn verify_votes(
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
-        sigverify_disabled: bool,
     ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Packets)>) {
         let msgs = packet::to_packets_chunked(&votes, 1);
-        let r = if sigverify_disabled {
-            sigverify::ed25519_verify_disabled(&msgs)
-        } else {
-            sigverify::ed25519_verify_cpu(&msgs)
-        };
+        let r = sigverify::ed25519_verify_cpu(&msgs);
 
         assert_eq!(
             r.iter()
@@ -986,7 +978,7 @@ mod tests {
         solana_logger::setup();
         let votes = vec![];
         let labels = vec![];
-        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels, false);
+        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert!(vote_txs.is_empty());
         assert!(packets.is_empty());
     }
@@ -1017,7 +1009,7 @@ mod tests {
         let vote_tx = test_vote_tx();
         let votes = vec![vote_tx.clone()];
         let labels = vec![CrdsValueLabel::Vote(0, Pubkey::new_rand())];
-        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels, false);
+        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 1);
         verify_packets_len(&packets, 1);
     }
@@ -1033,7 +1025,7 @@ mod tests {
             .into_iter()
             .map(|_| label.clone())
             .collect();
-        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels, false);
+        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 2);
         verify_packets_len(&packets, 2);
     }
