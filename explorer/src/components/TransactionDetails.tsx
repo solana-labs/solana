@@ -119,6 +119,7 @@ function StatusCard({ signature }: Props) {
   };
 
   const fee = details?.transaction?.meta?.fee;
+  const blockhash = details?.transaction?.transaction.recentBlockhash;
   return (
     <div className="card">
       <div className="card-header align-items-center">
@@ -139,14 +140,23 @@ function StatusCard({ signature }: Props) {
         </tr>
 
         <tr>
+          <td>Confirmations</td>
+          <td className="text-right text-uppercase">{info.confirmations}</td>
+        </tr>
+
+        <tr>
           <td>Block</td>
           <td className="text-right">{info.slot}</td>
         </tr>
 
-        <tr>
-          <td>Confirmations</td>
-          <td className="text-right text-uppercase">{info.confirmations}</td>
-        </tr>
+        {blockhash && (
+          <tr>
+            <td>Blockhash</td>
+            <td className="text-right">
+              <code>{blockhash}</code>
+            </td>
+          </tr>
+        )}
 
         {fee && (
           <tr>
