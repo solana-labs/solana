@@ -447,7 +447,7 @@ pub fn process_authorize_nonce_account(
         &tx.message,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-    log_instruction_custom_error::<NonceError>(result)
+    log_instruction_custom_error::<NonceError>(result, &config)
 }
 
 pub fn process_create_nonce_account(
@@ -524,7 +524,7 @@ pub fn process_create_nonce_account(
         &tx.message,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-    log_instruction_custom_error::<SystemError>(result)
+    log_instruction_custom_error::<SystemError>(result, &config)
 }
 
 pub fn process_get_nonce(rpc_client: &RpcClient, nonce_account_pubkey: &Pubkey) -> ProcessResult {
@@ -566,7 +566,7 @@ pub fn process_new_nonce(
     )?;
     let result = rpc_client
         .send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0], nonce_authority]);
-    log_instruction_custom_error::<SystemError>(result)
+    log_instruction_custom_error::<SystemError>(result, &config)
 }
 
 pub fn process_show_nonce_account(
@@ -625,7 +625,7 @@ pub fn process_withdraw_from_nonce_account(
         &tx.message,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-    log_instruction_custom_error::<NonceError>(result)
+    log_instruction_custom_error::<NonceError>(result, &config)
 }
 
 #[cfg(test)]

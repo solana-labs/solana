@@ -856,7 +856,7 @@ pub fn process_create_stake_account(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -870,7 +870,7 @@ pub fn process_create_stake_account(
             &tx.message,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-        log_instruction_custom_error::<SystemError>(result)
+        log_instruction_custom_error::<SystemError>(result, &config)
     }
 }
 
@@ -921,7 +921,7 @@ pub fn process_stake_authorize(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -935,7 +935,7 @@ pub fn process_stake_authorize(
             &tx.message,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-        log_instruction_custom_error::<StakeError>(result)
+        log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
 
@@ -975,7 +975,7 @@ pub fn process_deactivate_stake_account(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -989,7 +989,7 @@ pub fn process_deactivate_stake_account(
             &tx.message,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-        log_instruction_custom_error::<StakeError>(result)
+        log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
 
@@ -1038,7 +1038,7 @@ pub fn process_withdraw_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1052,7 +1052,7 @@ pub fn process_withdraw_stake(
             &tx.message,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-        log_instruction_custom_error::<SystemError>(result)
+        log_instruction_custom_error::<SystemError>(result, &config)
     }
 }
 
@@ -1172,7 +1172,7 @@ pub fn process_split_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1186,7 +1186,7 @@ pub fn process_split_stake(
             &tx.message,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-        log_instruction_custom_error::<StakeError>(result)
+        log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
 
@@ -1229,7 +1229,7 @@ pub fn process_stake_set_lockup(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1243,7 +1243,7 @@ pub fn process_stake_set_lockup(
             &tx.message,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-        log_instruction_custom_error::<StakeError>(result)
+        log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
 
@@ -1437,7 +1437,7 @@ pub fn process_delegate_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx)
+        return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1451,7 +1451,7 @@ pub fn process_delegate_stake(
             &tx.message,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-        log_instruction_custom_error::<StakeError>(result)
+        log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
 

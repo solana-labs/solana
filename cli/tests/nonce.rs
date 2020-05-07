@@ -1,6 +1,7 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    cli_output::OutputFormat,
     nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
@@ -91,6 +92,7 @@ fn full_battery_tests(
         &faucet_addr,
         &config_payer.signers[0].pubkey(),
         2000,
+        &config_payer,
     )
     .unwrap();
     check_balance(2000, &rpc_client, &config_payer.signers[0].pubkey());
@@ -247,6 +249,7 @@ fn test_create_account_with_seed() {
     let offline_nonce_authority_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     let online_nonce_creator_signer = keypair_from_seed(&[2u8; 32]).unwrap();
     let to_address = Pubkey::new(&[3u8; 32]);
+    let config = CliConfig::default();
 
     // Setup accounts
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
@@ -255,6 +258,7 @@ fn test_create_account_with_seed() {
         &faucet_addr,
         &offline_nonce_authority_signer.pubkey(),
         42,
+        &config,
     )
     .unwrap();
     request_and_confirm_airdrop(
@@ -262,6 +266,7 @@ fn test_create_account_with_seed() {
         &faucet_addr,
         &online_nonce_creator_signer.pubkey(),
         4242,
+        &config,
     )
     .unwrap();
     check_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
@@ -316,6 +321,7 @@ fn test_create_account_with_seed() {
         nonce_authority: 0,
         fee_payer: 0,
     };
+    authority_config.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&authority_config).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_only_reply);
     let authority_presigner = sign_only.presigner_of(&authority_pubkey).unwrap();

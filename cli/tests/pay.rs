@@ -3,6 +3,7 @@ use serde_json::Value;
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, PayCommand},
+    cli_output::OutputFormat,
     nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
@@ -57,6 +58,7 @@ fn test_cli_timestamp_tx() {
         &faucet_addr,
         &config_payer.signers[0].pubkey(),
         50,
+        &config_witness,
     )
     .unwrap();
     check_balance(50, &rpc_client, &config_payer.signers[0].pubkey());
@@ -66,6 +68,7 @@ fn test_cli_timestamp_tx() {
         &faucet_addr,
         &config_witness.signers[0].pubkey(),
         1,
+        &config_witness,
     )
     .unwrap();
 
@@ -142,6 +145,7 @@ fn test_cli_witness_tx() {
         &faucet_addr,
         &config_payer.signers[0].pubkey(),
         50,
+        &config_witness,
     )
     .unwrap();
     request_and_confirm_airdrop(
@@ -149,6 +153,7 @@ fn test_cli_witness_tx() {
         &faucet_addr,
         &config_witness.signers[0].pubkey(),
         1,
+        &config_witness,
     )
     .unwrap();
 
@@ -222,6 +227,7 @@ fn test_cli_cancel_tx() {
         &faucet_addr,
         &config_payer.signers[0].pubkey(),
         50,
+        &config_witness,
     )
     .unwrap();
 
@@ -295,6 +301,7 @@ fn test_offline_pay_tx() {
         &faucet_addr,
         &config_offline.signers[0].pubkey(),
         50,
+        &config_offline,
     )
     .unwrap();
 
@@ -303,6 +310,7 @@ fn test_offline_pay_tx() {
         &faucet_addr,
         &config_online.signers[0].pubkey(),
         50,
+        &config_offline,
     )
     .unwrap();
     check_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
@@ -316,6 +324,7 @@ fn test_offline_pay_tx() {
         sign_only: true,
         ..PayCommand::default()
     });
+    config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
 
     check_balance(50, &rpc_client, &config_offline.signers[0].pubkey());
@@ -376,6 +385,7 @@ fn test_nonced_pay_tx() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         50 + minimum_nonce_balance,
+        &config,
     )
     .unwrap();
     check_balance(

@@ -243,7 +243,7 @@ pub fn process_create_storage_account(
         &tx.message,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
-    log_instruction_custom_error::<SystemError>(result)
+    log_instruction_custom_error::<SystemError>(result, &config)
 }
 
 pub fn process_claim_storage_reward(
