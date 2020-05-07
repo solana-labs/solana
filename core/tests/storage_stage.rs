@@ -5,7 +5,7 @@ mod tests {
     use log::*;
     use solana_core::{
         commitment::BlockCommitmentCache,
-        storage_stage::{test_cluster_info, StorageStage, StorageState, SLOTS_PER_TURN_TEST},
+        storage_stage::{test_cluster_info, StorageStage, StorageState, SLOTS_PER_TURN_TEST, get_identity_index_from_signature},
     };
     use solana_ledger::{
         bank_forks::BankForks,
@@ -19,7 +19,7 @@ mod tests {
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::{Keypair, Signer, Signature},
         transaction::Transaction,
     };
     use solana_storage_program::storage_instruction::{self, StorageAccountType};
@@ -33,6 +33,11 @@ mod tests {
         thread::sleep,
         time::Duration,
     };
+
+    fn get_mining_result(storage_state: &StorageState, key: &Signature) -> Hash {
+        let idx = get_identity_index_from_signature(key);
+        storage_state.state.read().unwrap().storage_results[idx]
+    }
 
     #[test]
     fn test_storage_stage_process_account_proofs() {
@@ -205,7 +210,7 @@ mod tests {
         let hash = Hash::default();
         let signature = keypair.sign_message(&hash.as_ref());
 
-        let mut result = storage_state.get_mining_result(&signature);
+        let mut result = get_mining_result(&storage_state, &signature);
 
         assert_eq!(result, Hash::default());
 
@@ -228,7 +233,7 @@ mod tests {
 
         if solana_perf::perf_libs::api().is_some() {
             for _ in 0..5 {
-                result = storage_state.get_mining_result(&signature);
+                result = get_mining_result(&storage_state, &signature);
                 if result != Hash::default() {
                     info!("found result = {:?} sleeping..", result);
                     break;
