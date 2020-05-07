@@ -1023,25 +1023,34 @@ impl AccountsDB {
         }
     }
 
-    pub fn hash_stored_account(slot: Slot, account: &StoredAccount) -> Hash {
+    pub fn hash_stored_account(slot: Slot, account: &StoredAccount, include_owner: bool) -> Hash {
         Self::hash_account_data(
             slot,
             account.account_meta.lamports,
+            &account.account_meta.owner,
             account.account_meta.executable,
             account.account_meta.rent_epoch,
             account.data,
             &account.meta.pubkey,
+            include_owner,
         )
     }
 
-    pub fn hash_account(slot: Slot, account: &Account, pubkey: &Pubkey) -> Hash {
+    pub fn hash_account(
+        slot: Slot,
+        account: &Account,
+        pubkey: &Pubkey,
+        include_owner: bool,
+    ) -> Hash {
         Self::hash_account_data(
             slot,
             account.lamports,
+            &account.owner,
             account.executable,
             account.rent_epoch,
             &account.data,
             pubkey,
+            include_owner,
         )
     }
 
@@ -1060,13 +1069,20 @@ impl AccountsDB {
         hasher.result()
     }
 
+    pub fn include_owner_in_hash(slot: Slot) -> bool {
+        // Account hashing updated to include owner activates at this slot on the mainnet-beta
+        slot >= 11_000_000
+    }
+
     pub fn hash_account_data(
         slot: Slot,
         lamports: u64,
+        owner: &Pubkey,
         executable: bool,
         rent_epoch: Epoch,
         data: &[u8],
         pubkey: &Pubkey,
+        include_owner: bool,
     ) -> Hash {
         if lamports == 0 {
             return Hash::default();
@@ -1090,6 +1106,10 @@ impl AccountsDB {
             hasher.hash(&[1u8; 1]);
         } else {
             hasher.hash(&[0u8; 1]);
+        }
+
+        if include_owner {
+            hasher.hash(&owner.as_ref());
         }
 
         hasher.hash(&pubkey.as_ref());
@@ -1258,7 +1278,11 @@ impl AccountsDB {
                                 let account = store.accounts.get_account(account_info.offset)?.0;
 
                                 if check_hash {
-                                    let hash = Self::hash_stored_account(*slot, &account);
+                                    let hash = Self::hash_stored_account(
+                                        *slot,
+                                        &account,
+                                        Self::include_owner_in_hash(*slot),
+                                    );
                                     if hash != *account.hash {
                                         mismatch_found.store(true, Ordering::Relaxed);
                                     }
@@ -1460,7 +1484,12 @@ impl AccountsDB {
             .iter()
             .map(|(pubkey, account)| {
                 stats.update(account);
-                Self::hash_account(slot_id, account, pubkey)
+                Self::hash_account(
+                    slot_id,
+                    account,
+                    pubkey,
+                    Self::include_owner_in_hash(slot_id),
+                )
             })
             .collect();
 
@@ -3022,18 +3051,32 @@ pub mod tests {
             hash: &hash,
         };
         let account = stored_account.clone_account();
-        let expected_account_hash =
+        let expected_account_hash_without_owner =
             Hash::from_str("GGTsxvxwnMsNfN6yYbBVQaRgvbVLfxeWnGXNyB8iXDyE").unwrap();
 
         assert_eq!(
-            AccountsDB::hash_stored_account(slot, &stored_account),
-            expected_account_hash,
+            AccountsDB::hash_stored_account(slot, &stored_account, false),
+            expected_account_hash_without_owner,
             "StoredAccount's data layout might be changed; update hashing if needed."
         );
         assert_eq!(
-            AccountsDB::hash_account(slot, &account, &stored_account.meta.pubkey),
-            expected_account_hash,
+            AccountsDB::hash_account(slot, &account, &stored_account.meta.pubkey, false),
+            expected_account_hash_without_owner,
             "Account-based hashing must be consistent with StoredAccount-based one."
+        );
+
+        let expected_account_hash_with_owner =
+            Hash::from_str("5iRNZVcAnq9JLYjSF2ibFhGEeq48r9Eq9HXxwm3BxywN").unwrap();
+
+        assert_eq!(
+            AccountsDB::hash_stored_account(slot, &stored_account, true),
+            expected_account_hash_with_owner,
+            "StoredAccount's data layout might be changed; update hashing if needed (with owner)."
+        );
+        assert_eq!(
+            AccountsDB::hash_account(slot, &account, &stored_account.meta.pubkey, true),
+            expected_account_hash_with_owner,
+            "Account-based hashing must be consistent with StoredAccount-based one (with owner)."
         );
     }
 
@@ -3175,7 +3218,7 @@ pub mod tests {
                 let loaded_account = db.load_slow(&ancestors, key).unwrap().0;
                 assert_eq!(
                     loaded_account.hash,
-                    AccountsDB::hash_account(some_slot, &account, &key)
+                    AccountsDB::hash_account(some_slot, &account, &key, false)
                 );
             }
         }
