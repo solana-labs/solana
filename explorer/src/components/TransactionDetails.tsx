@@ -561,7 +561,7 @@ function RawDetails({ ix }: { ix: TransactionInstruction }) {
 function LoadingCard() {
   return (
     <div className="card">
-      <div className="card-body">
+      <div className="card-body text-center">
         <span className="spinner-grow spinner-grow-sm mr-2"></span>
         Loading
       </div>
