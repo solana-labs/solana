@@ -1306,6 +1306,7 @@ impl AccountsDB {
     }
 
     pub fn include_owner_in_hash(slot: Slot) -> bool {
+        // Account hashing updated to include owner activates at this slot on the testnet
         slot >= 14_000_000
     }
 
