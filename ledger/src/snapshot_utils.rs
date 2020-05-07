@@ -204,13 +204,13 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     let args = vec![
         archive_options,
         archive_path.to_str().unwrap(),
+        "--use-compress-program",
+        compression_option,
         "-C",
         staging_dir.path().to_str().unwrap(),
         TAR_ACCOUNTS_DIR,
         TAR_SNAPSHOTS_DIR,
         TAR_VERSION_FILE,
-        "-I",
-        compression_option,
     ];
 
     let output = std::process::Command::new("tar").args(&args).output()?;
