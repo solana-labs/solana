@@ -9,8 +9,8 @@ steps:
       NUMBER_OF_VALIDATOR_NODES: 10
       ENABLE_GPU: "true"
       VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
-      NUMBER_OF_CLIENT_NODES: 2
-      CLIENT_OPTIONS: "bench-tps=2=--tx_count 15000 --thread-batch-sleep-ms 250"
+      NUMBER_OF_CLIENT_NODES: 1
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 10000 --thread-batch-sleep-ms 250"
       TESTNET_ZONES: "us-west1-a"
       USE_PUBLIC_IP_ADDRESSES: "true"
       ADDITIONAL_FLAGS: "--dedicated"
