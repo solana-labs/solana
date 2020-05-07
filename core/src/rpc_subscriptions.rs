@@ -159,7 +159,7 @@ where
             },
         ) in hashmap.iter()
         {
-            let mut slot = match commitment.commitment {
+            let slot = match commitment.commitment {
                 CommitmentLevel::Max => largest_confirmed_root,
                 CommitmentLevel::Recent => current_slot,
                 CommitmentLevel::Root => node_root,
@@ -173,9 +173,6 @@ where
             };
             let mut w_last_notified_slot = last_notified_slot.write().unwrap();
             let (filter_results, result_slot) = filter_results(results, *w_last_notified_slot);
-            if result_slot != *w_last_notified_slot {
-                slot = result_slot;
-            }
             for result in filter_results {
                 notifier.notify(
                     Response {
@@ -185,7 +182,7 @@ where
                     sink,
                 );
                 notified_set.insert(sub_id.clone());
-                *w_last_notified_slot = slot;
+                *w_last_notified_slot = result_slot;
             }
         }
     }
@@ -262,6 +259,7 @@ pub struct RpcSubscriptions {
     t_cleanup: Option<JoinHandle<()>>,
     notifier_runtime: Option<Runtime>,
     bank_forks: Arc<RwLock<BankForks>>,
+    block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     exit: Arc<AtomicBool>,
 }
 
@@ -292,6 +290,7 @@ impl RpcSubscriptions {
         let notification_sender = Arc::new(Mutex::new(notification_sender));
 
         let _bank_forks = bank_forks.clone();
+        let _block_commitment_cache = block_commitment_cache.clone();
         let exit_clone = exit.clone();
         let subscriptions = Subscriptions {
             account_subscriptions,
@@ -318,7 +317,7 @@ impl RpcSubscriptions {
                     notification_receiver,
                     _subscriptions,
                     _bank_forks,
-                    block_commitment_cache,
+                    _block_commitment_cache,
                 );
             })
             .unwrap();
@@ -329,6 +328,7 @@ impl RpcSubscriptions {
             notifier_runtime: Some(notifier_runtime),
             t_cleanup: Some(t_cleanup),
             bank_forks,
+            block_commitment_cache,
             exit: exit.clone(),
         }
     }
@@ -417,12 +417,24 @@ impl RpcSubscriptions {
         subscriber: Subscriber<Response<RpcAccount>>,
     ) {
         let mut subscriptions = self.subscriptions.account_subscriptions.write().unwrap();
+        let slot = match commitment
+            .unwrap_or_else(CommitmentConfig::recent)
+            .commitment
+        {
+            CommitmentLevel::Max => self
+                .block_commitment_cache
+                .read()
+                .unwrap()
+                .largest_confirmed_root(),
+            CommitmentLevel::Recent => self.block_commitment_cache.read().unwrap().slot(),
+            CommitmentLevel::Root => self.block_commitment_cache.read().unwrap().root(),
+        };
         let last_notified_slot = if let Some((_account, slot)) = self
             .bank_forks
             .read()
             .unwrap()
-            .working_bank()
-            .get_account_modified_slot(&pubkey)
+            .get(slot)
+            .and_then(|bank| bank.get_account_modified_slot(&pubkey))
         {
             slot
         } else {
