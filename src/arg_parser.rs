@@ -1,6 +1,4 @@
-use crate::args::{
-    Args, BalancesArgs, Command, DistributeStakeArgs, DistributeTokensArgs, PrintDbArgs,
-};
+use crate::args::{Args, BalancesArgs, Command, DistributeTokensArgs, PrintDbArgs, StakeArgs};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::input_validators::{is_valid_pubkey, is_valid_signer};
 use solana_cli_config::CONFIG_FILE;
@@ -108,8 +106,8 @@ where
                         .help("Transactions database file"),
                 )
                 .arg(
-                    Arg::with_name("allocations_csv")
-                        .long("allocations-csv")
+                    Arg::with_name("input_csv")
+                        .long("input-csv")
                         .required(true)
                         .takes_value(true)
                         .value_name("FILE")
@@ -124,6 +122,14 @@ where
                     Arg::with_name("no_wait")
                         .long("no-wait")
                         .help("Don't wait for transaction confirmations"),
+                )
+                .arg(
+                    Arg::with_name("sender_keypair")
+                        .long("from")
+                        .takes_value(true)
+                        .value_name("SENDING_KEYPAIR")
+                        .validator(is_valid_signer)
+                        .help("Keypair to fund accounts"),
                 )
                 .arg(
                     Arg::with_name("stake_account_address")
@@ -214,7 +220,7 @@ where
         .get_matches_from(args)
 }
 
-fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String> {
+fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String, String> {
     DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: matches.is_present("from_bids"),
@@ -225,20 +231,28 @@ fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArg
         sender_keypair: value_t!(matches, "sender_keypair", String).ok(),
         fee_payer: value_t!(matches, "fee_payer", String).ok(),
         force: matches.is_present("force"),
+        stake_args: None,
     }
 }
 
-fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeStakeArgs<String, String> {
-    DistributeStakeArgs {
-        allocations_csv: value_t_or_exit!(matches, "allocations_csv", String),
-        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
-        dry_run: matches.is_present("dry_run"),
-        no_wait: matches.is_present("no_wait"),
+fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String, String> {
+    let stake_args = StakeArgs {
         stake_account_address: value_t_or_exit!(matches, "stake_account_address", String),
         sol_for_fees: value_t_or_exit!(matches, "sol_for_fees", f64),
         stake_authority: value_t!(matches, "stake_authority", String).ok(),
         withdraw_authority: value_t!(matches, "withdraw_authority", String).ok(),
+    };
+    DistributeTokensArgs {
+        input_csv: value_t_or_exit!(matches, "input_csv", String),
+        from_bids: false,
+        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
+        dollars_per_sol: None,
+        dry_run: matches.is_present("dry_run"),
+        no_wait: matches.is_present("no_wait"),
+        sender_keypair: value_t!(matches, "sender_keypair", String).ok(),
         fee_payer: value_t!(matches, "fee_payer", String).ok(),
+        force: false,
+        stake_args: Some(stake_args),
     }
 }
 
@@ -271,7 +285,7 @@ where
             Command::DistributeTokens(parse_distribute_tokens_args(matches))
         }
         ("distribute-stake", Some(matches)) => {
-            Command::DistributeStake(parse_distribute_stake_args(matches))
+            Command::DistributeTokens(parse_distribute_stake_args(matches))
         }
         ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)),
         ("print-database", Some(matches)) => Command::PrintDb(parse_print_db_args(matches)),

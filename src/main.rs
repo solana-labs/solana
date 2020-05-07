@@ -20,9 +20,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         Command::DistributeTokens(args) => {
             tokens::process_distribute_tokens(&thin_client, &args)?;
         }
-        Command::DistributeStake(args) => {
-            tokens::process_distribute_stake(&thin_client, &args)?;
-        }
         Command::Balances(args) => {
             tokens::process_balances(&thin_client, &args)?;
         }
