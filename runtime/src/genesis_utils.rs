@@ -28,14 +28,6 @@ impl ValidatorVoteKeypairs {
             stake_keypair,
         }
     }
-
-    pub fn new_rand() -> Self {
-        Self {
-            node_keypair: Keypair::new(),
-            vote_keypair: Keypair::new(),
-            stake_keypair: Keypair::new(),
-        }
-    }
 }
 
 pub struct GenesisConfigInfo {
