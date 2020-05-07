@@ -18,8 +18,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::TransactionStatus;
-use std::path::Path;
-use std::process;
+use std::{path::Path, process, cmp};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
@@ -315,7 +314,7 @@ fn read_allocations(
 pub fn process_distribute_tokens<T: Client>(
     client: &ThinClient<T>,
     args: &DistributeTokensArgs<Box<dyn Signer>>,
-) -> Result<(), Error> {
+) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
 
@@ -334,9 +333,9 @@ pub fn process_distribute_tokens<T: Client>(
     }
 
     let mut db = open_db(&args.transactions_db, args.dry_run)?;
-    let still_finalizing = update_finalized_transactions(client, &mut db)?;
-    if still_finalizing {
-        eprintln!("warning: some transactions not yet finalized");
+    let confirmations = update_finalized_transactions(client, &mut db)?;
+    if confirmations.is_some() {
+        eprintln!("warning: unfinalized transactions");
     }
 
     let transaction_infos = read_transaction_infos(&db);
@@ -344,7 +343,7 @@ pub fn process_distribute_tokens<T: Client>(
 
     if allocations.is_empty() {
         eprintln!("No work to do");
-        return Ok(());
+        return Ok(confirmations);
     }
 
     // Sanity check: the recipient should not have tokens yet. If they do, it
@@ -414,17 +413,18 @@ pub fn process_distribute_tokens<T: Client>(
 
     distribute_tokens(client, &mut db, &allocations, args)?;
 
-    Ok(())
+    let confirmations = update_finalized_transactions(client, &mut db)?;
+    Ok(confirmations)
 }
 
 // Set the finalized bit in the database if the transaction is rooted.
 // Remove the TransactionInfo from the database if the transaction failed.
-// Return true if still waiting to finalize.
+// Return the number of confirmations on the transaction or None if finalized.
 fn update_finalized_transaction(
     db: &mut PickleDb,
     signature: &Signature,
     opt_transaction_status: Option<TransactionStatus>,
-) -> Result<bool, pickledb::error::Error> {
+) -> Result<Option<usize>, pickledb::error::Error> {
     if opt_transaction_status.is_none() {
         eprintln!(
             "Signature not found {}. If its blockhash is expired, remove it from the database",
@@ -433,13 +433,13 @@ fn update_finalized_transaction(
 
         // Return true because the transaction might still be in flight and get accepted onto
         // the ledger.
-        return Ok(true);
+        return Ok(Some(0));
     }
     let transaction_status = opt_transaction_status.unwrap();
 
-    if transaction_status.confirmations.is_some() {
+    if let Some(confirmations) = transaction_status.confirmations {
         // The transaction was found but is not yet finalized.
-        return Ok(true);
+        return Ok(Some(confirmations));
     }
 
     if let Err(e) = &transaction_status.status {
@@ -451,21 +451,22 @@ fn update_finalized_transaction(
         );
         eprintln!("Discarding transaction record");
         db.rem(&signature.to_string())?;
-        return Ok(false);
+        return Ok(None);
     }
 
     // Transaction is rooted. Set finalized in the database.
     let mut transaction_info = db.get::<TransactionInfo>(&signature.to_string()).unwrap();
     transaction_info.finalized = true;
     db.set(&signature.to_string(), &transaction_info)?;
-    Ok(false)
+    Ok(None)
 }
 
 // Update the finalized bit on any transactions that are now rooted
+// Return the lowest number of confirmations on the unfinalized transactions or None if all are finalized.
 fn update_finalized_transactions<T: Client>(
     client: &ThinClient<T>,
     db: &mut PickleDb,
-) -> Result<bool, Error> {
+) -> Result<Option<usize>, Error> {
     let transaction_data = read_transaction_data(db);
     let unconfirmed_signatures: Vec<_> = transaction_data
         .iter()
@@ -478,20 +479,22 @@ fn update_finalized_transactions<T: Client>(
         })
         .collect();
     let transaction_statuses = client.get_signature_statuses(&unconfirmed_signatures)?;
-    let mut still_finalizing = false;
+    let mut confirmations = None;
     for (signature, opt_transaction_status) in unconfirmed_signatures
         .into_iter()
         .zip(transaction_statuses.into_iter())
     {
-        still_finalizing |= update_finalized_transaction(db, &signature, opt_transaction_status)?;
+        if let Some(confs) = update_finalized_transaction(db, &signature, opt_transaction_status)? {
+            confirmations = Some(cmp::min(confs, confirmations.unwrap_or(usize::MAX)));
+        }
     }
-    Ok(still_finalizing)
+    Ok(confirmations)
 }
 
 pub fn process_distribute_stake<T: Client>(
     client: &ThinClient<T>,
     args: &DistributeStakeArgs<Pubkey, Box<dyn Signer>>,
-) -> Result<(), Error> {
+) -> Result<Option<usize>, Error> {
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
         .from_path(&args.allocations_csv)?;
@@ -501,9 +504,9 @@ pub fn process_distribute_stake<T: Client>(
         .collect();
 
     let mut db = open_db(&args.transactions_db, args.dry_run)?;
-    let still_finalizing = update_finalized_transactions(client, &mut db)?;
-    if still_finalizing {
-        eprintln!("warning: some transactions not yet finalized");
+    let confirmations = update_finalized_transactions(client, &mut db)?;
+    if confirmations.is_some() {
+        eprintln!("warning: unfinalized transactions");
     }
 
     let mut allocations = merge_allocations(&allocations);
@@ -512,12 +515,13 @@ pub fn process_distribute_stake<T: Client>(
 
     if allocations.is_empty() {
         eprintln!("No work to do");
-        return Ok(());
+        return Ok(confirmations);
     }
 
     distribute_stake(client, &mut db, &allocations, args)?;
 
-    Ok(())
+    let confirmations = update_finalized_transactions(client, &mut db)?;
+    Ok(confirmations)
 }
 
 pub fn process_balances<T: Client>(
@@ -609,7 +613,9 @@ pub fn test_process_distribute_bids_with_client<C: Client>(client: C, sender_key
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(&thin_client, &args).unwrap();
+    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
+    assert_eq!(confirmations, None);
+
     let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
@@ -666,7 +672,9 @@ pub fn test_process_distribute_allocations_with_client<C: Client>(
         dollars_per_sol: None,
         force: false,
     };
-    process_distribute_tokens(&thin_client, &args).unwrap();
+    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
+    assert_eq!(confirmations, None);
+
     let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
@@ -757,7 +765,9 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         allocations_csv,
         transactions_db: transactions_db.clone(),
     };
-    process_distribute_stake(&thin_client, &args).unwrap();
+    let confirmations = process_distribute_stake(&thin_client, &args).unwrap();
+    assert_eq!(confirmations, None);
+
     let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
@@ -867,7 +877,7 @@ mod tests {
         db.set(&signature.to_string(), &transaction_info).unwrap();
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, None).unwrap(),
-            true
+            Some(0)
         );
 
         // Unchanged
@@ -893,7 +903,7 @@ mod tests {
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status)).unwrap(),
-            true
+            Some(1)
         );
 
         // Unchanged
@@ -920,7 +930,7 @@ mod tests {
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status)).unwrap(),
-            false
+            None
         );
 
         // Ensure TransactionInfo has been purged.
@@ -943,7 +953,7 @@ mod tests {
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status)).unwrap(),
-            false
+            None
         );
 
         transaction_info.finalized = true;
