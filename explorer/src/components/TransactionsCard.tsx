@@ -2,24 +2,20 @@ import React from "react";
 import { Link } from "react-router-dom";
 import {
   useTransactions,
-  useTransactionsDispatch,
-  checkTransactionStatus,
-  ActionType,
   TransactionStatus,
   Source,
-  FetchStatus
+  FetchStatus,
+  useFetchTransactionStatus
 } from "../providers/transactions";
 import bs58 from "bs58";
 import { assertUnreachable } from "../utils";
-import { useCluster } from "../providers/cluster";
 import Copyable from "./Copyable";
 
 function TransactionsCard() {
   const { transactions, idCounter } = useTransactions();
-  const dispatch = useTransactionsDispatch();
+  const fetchTransaction = useFetchTransactionStatus();
   const signatureInput = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState("");
-  const { url } = useCluster();
 
   const onNew = (signature: string) => {
     if (signature.length === 0) return;
@@ -37,13 +33,7 @@ function TransactionsCard() {
       return;
     }
 
-    dispatch({
-      type: ActionType.FetchSignature,
-      signature,
-      source: Source.Input
-    });
-    checkTransactionStatus(dispatch, signature, url);
-
+    fetchTransaction(signature, Source.Input);
     const inputEl = signatureInput.current;
     if (inputEl) {
       inputEl.value = "";
@@ -98,9 +88,7 @@ function TransactionsCard() {
               <td>-</td>
               <td></td>
             </tr>
-            {transactions.map(transaction =>
-              renderTransactionRow(transaction, dispatch, url)
-            )}
+            {transactions.map(transaction => renderTransactionRow(transaction))}
           </tbody>
         </table>
       </div>
@@ -120,11 +108,7 @@ const renderHeader = () => {
   );
 };
 
-const renderTransactionRow = (
-  transactionStatus: TransactionStatus,
-  dispatch: any,
-  url: string
-) => {
+const renderTransactionRow = (transactionStatus: TransactionStatus) => {
   const { fetchStatus, info, signature, id } = transactionStatus;
 
   let statusText;
@@ -162,30 +146,6 @@ const renderTransactionRow = (
     confirmationsText = `${info.confirmations}`;
   }
 
-  const renderDetails = () => {
-    if (info?.confirmations === "max") {
-      return (
-        <Link
-          to={location => ({ ...location, pathname: "/tx/" + signature })}
-          className="btn btn-rounded-circle btn-white btn-sm"
-        >
-          <span className="fe fe-arrow-right"></span>
-        </Link>
-      );
-    } else {
-      return (
-        <button
-          className="btn btn-rounded-circle btn-white btn-sm"
-          onClick={() => {
-            checkTransactionStatus(dispatch, signature, url);
-          }}
-        >
-          <span className="fe fe-refresh-cw"></span>
-        </button>
-      );
-    }
-  };
-
   return (
     <tr key={signature}>
       <td>
@@ -201,7 +161,14 @@ const renderTransactionRow = (
       </td>
       <td className="text-uppercase">{confirmationsText}</td>
       <td>{slotText}</td>
-      <td>{renderDetails()}</td>
+      <td>
+        <Link
+          to={location => ({ ...location, pathname: "/tx/" + signature })}
+          className="btn btn-rounded-circle btn-white btn-sm"
+        >
+          <span className="fe fe-arrow-right"></span>
+        </Link>
+      </td>
     </tr>
   );
 };
