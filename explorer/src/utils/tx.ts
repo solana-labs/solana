@@ -58,9 +58,9 @@ export function decodeTransfer(
   ix: TransactionInstruction
 ): TransferParams | null {
   if (!ix.programId.equals(SystemProgram.programId)) return null;
-  if (SystemInstruction.decodeInstructionType(ix) !== "Transfer") return null;
 
   try {
+    if (SystemInstruction.decodeInstructionType(ix) !== "Transfer") return null;
     return SystemInstruction.decodeTransfer(ix);
   } catch (err) {
     console.error(ix, err);
@@ -72,9 +72,9 @@ export function decodeCreate(
   ix: TransactionInstruction
 ): CreateAccountParams | null {
   if (!ix.programId.equals(SystemProgram.programId)) return null;
-  if (SystemInstruction.decodeInstructionType(ix) !== "Create") return null;
 
   try {
+    if (SystemInstruction.decodeInstructionType(ix) !== "Create") return null;
     return SystemInstruction.decodeCreateAccount(ix);
   } catch (err) {
     console.error(ix, err);
