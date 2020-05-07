@@ -21,6 +21,7 @@ use crate::{
     status_cache::{SlotDelta, StatusCache},
     storage_utils,
     storage_utils::StorageAccounts,
+    supply::Supply,
     system_instruction_processor::{self, get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
@@ -358,6 +359,9 @@ pub struct Bank {
 
     #[serde(skip)]
     pub skip_drop: AtomicBool,
+
+    #[serde(skip)]
+    pub supply: Supply,
 }
 
 impl Default for BlockhashQueue {
@@ -470,6 +474,7 @@ impl Bank {
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
             skip_drop: AtomicBool::new(false),
+            supply: parent.supply.clone(),
         };
 
         datapoint_info!(
@@ -479,6 +484,12 @@ impl Bank {
         );
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+        new.update_epoch_stakes(leader_schedule_epoch);
+        new.ancestors.insert(new.slot(), 0);
+        new.parents().iter().enumerate().for_each(|(i, p)| {
+            new.ancestors.insert(p.slot(), i + 1);
+        });
+
         if parent.epoch() < new.epoch() {
             if let Some(entered_epoch_callback) =
                 parent.entered_epoch_callback.read().unwrap().as_ref()
@@ -486,12 +497,6 @@ impl Bank {
                 entered_epoch_callback(&mut new)
             }
         }
-
-        new.update_epoch_stakes(leader_schedule_epoch);
-        new.ancestors.insert(new.slot(), 0);
-        new.parents().iter().enumerate().for_each(|(i, p)| {
-            new.ancestors.insert(p.slot(), i + 1);
-        });
 
         new.update_slot_hashes();
         new.update_rewards(parent.epoch());
@@ -567,16 +572,20 @@ impl Bank {
         old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
     }
 
+    pub fn clock(&self) -> sysvar::clock::Clock {
+        sysvar::clock::Clock {
+            slot: self.slot,
+            segment: get_segment_from_slot(self.slot, self.slots_per_segment),
+            epoch: self.epoch_schedule.get_epoch(self.slot),
+            leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
+            unix_timestamp: self.unix_timestamp(),
+        }
+    }
+
     fn update_clock(&self) {
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            sysvar::clock::Clock {
-                slot: self.slot,
-                segment: get_segment_from_slot(self.slot, self.slots_per_segment),
-                epoch: self.epoch_schedule.get_epoch(self.slot),
-                leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
-                unix_timestamp: self.unix_timestamp(),
-            }
-            .create_account(self.inherit_sysvar_account_balance(account))
+            self.clock()
+                .create_account(self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -782,6 +791,19 @@ impl Bank {
                 recent_blockhash_iter,
             )
         });
+    }
+
+    pub fn update_supply(&mut self, non_circulating: u64, non_circulating_accounts: Vec<Pubkey>) {
+        debug!("non_circulating balance: {:?}", non_circulating);
+        debug!(
+            "circulating balance: {:?}",
+            self.capitalization() - non_circulating
+        );
+        self.supply = Supply {
+            circulating: self.capitalization() - non_circulating,
+            non_circulating,
+            non_circulating_accounts,
+        }
     }
 
     // If the point values are not `normal`, bring them back into range and
@@ -2545,6 +2567,35 @@ mod tests {
         }));
         let bank2 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH * 2 + 1);
         assert_eq!(bank.capitalization(), bank2.capitalization());
+    }
+
+    #[test]
+    fn test_bank_update_supply() {
+        let key = Pubkey::default();
+        let bank = Arc::new(Bank::new(&GenesisConfig {
+            accounts: (0..42)
+                .into_iter()
+                .map(|_| (Pubkey::new_rand(), Account::new(42, 0, &key)))
+                .collect(),
+            ..GenesisConfig::default()
+        }));
+        let expected_capitalization = 42 * 42;
+        assert_eq!(bank.capitalization(), expected_capitalization);
+
+        let non_circulating_account = Pubkey::new_rand();
+        let non_circulating_supply = 99;
+        bank.set_entered_epoch_callback(Box::new(move |bank: &mut Bank| {
+            bank.update_supply(non_circulating_supply, vec![non_circulating_account]);
+        }));
+        let bank1 = Bank::new_from_parent(&bank, &key, MINIMUM_SLOTS_PER_EPOCH + 1);
+        assert_eq!(
+            bank1.supply,
+            Supply {
+                circulating: expected_capitalization - non_circulating_supply,
+                non_circulating: non_circulating_supply,
+                non_circulating_accounts: vec![non_circulating_account],
+            }
+        );
     }
 
     #[test]

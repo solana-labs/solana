@@ -1,11 +1,13 @@
+mod non_circulating_accounts;
+mod update_supply;
+
+use crate::update_supply::update_supply;
 use log::*;
 use solana_runtime::bank::{Bank, EnteredEpochCallback};
 use solana_sdk::{
     clock::Epoch, genesis_config::OperatingMode, inflation::Inflation,
     move_loader::solana_move_loader_program, pubkey::Pubkey,
 };
-
-mod non_circulating_accounts;
 
 #[macro_use]
 extern crate solana_bpf_loader_program;
@@ -105,6 +107,7 @@ pub fn get_entered_epoch_callback(operating_mode: OperatingMode) -> EnteredEpoch
                 bank.add_native_program(name, program_id);
             }
         }
+        update_supply(bank);
     })
 }
 

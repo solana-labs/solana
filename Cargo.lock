@@ -4358,6 +4358,7 @@ dependencies = [
  "solana-exchange-program",
  "solana-runtime",
  "solana-sdk",
+ "solana-stake-program",
  "solana-storage-program",
  "solana-vest-program",
 ]

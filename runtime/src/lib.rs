@@ -17,6 +17,7 @@ mod serde_utils;
 pub mod stakes;
 pub mod status_cache;
 pub mod storage_utils;
+mod supply;
 mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod transaction_utils;
