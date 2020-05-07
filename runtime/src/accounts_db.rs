@@ -1071,7 +1071,7 @@ impl AccountsDB {
 
     pub fn include_owner_in_hash(slot: Slot) -> bool {
         // Account hashing updated to include owner activates at this slot on the mainnet-beta
-        slot >= 10_000_000
+        slot >= 11_000_000
     }
 
     pub fn hash_account_data(
