@@ -18,7 +18,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::TransactionStatus;
-use std::{path::Path, process, cmp};
+use std::{cmp, path::Path, process};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
@@ -26,7 +26,7 @@ struct Bid {
     primary_address: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 struct Allocation {
     recipient: String,
     amount: f64,
@@ -559,83 +559,7 @@ pub fn process_balances<T: Client>(
 
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
-pub fn test_process_distribute_bids_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient(client);
-    let fee_payer = Keypair::new();
-    thin_client
-        .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
-        .unwrap();
-
-    let alice_pubkey = Pubkey::new_rand();
-    let bid = Bid {
-        primary_address: alice_pubkey.to_string(),
-        accepted_amount_dollars: 1000.0,
-    };
-    let bids_file = NamedTempFile::new().unwrap();
-    let input_csv = bids_file.path().to_str().unwrap().to_string();
-    let mut wtr = csv::WriterBuilder::new().from_writer(bids_file);
-    wtr.serialize(&bid).unwrap();
-    wtr.flush().unwrap();
-
-    let dir = tempdir().unwrap();
-    let transactions_db = dir
-        .path()
-        .join("transactions.csv")
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let args: DistributeTokensArgs<Box<dyn Signer>> = DistributeTokensArgs {
-        sender_keypair: Some(Box::new(sender_keypair)),
-        fee_payer: Some(Box::new(fee_payer)),
-        dry_run: false,
-        no_wait: false,
-        from_bids: true,
-        input_csv,
-        transactions_db: transactions_db.clone(),
-        dollars_per_sol: Some(0.22),
-        force: false,
-    };
-    process_distribute_tokens(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
-    assert_eq!(transaction_infos.len(), 1);
-    assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount =
-        sol_to_lamports(bid.accepted_amount_dollars / args.dollars_per_sol.unwrap());
-    assert_eq!(
-        sol_to_lamports(transaction_infos[0].amount),
-        expected_amount
-    );
-
-    assert_eq!(
-        thin_client.get_balance(&alice_pubkey).unwrap(),
-        expected_amount,
-    );
-
-    // Now, run it again, and check there's no double-spend.
-    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
-    assert_eq!(confirmations, None);
-
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
-    assert_eq!(transaction_infos.len(), 1);
-    assert_eq!(transaction_infos[0].recipient, alice_pubkey.to_string());
-    let expected_amount =
-        sol_to_lamports(bid.accepted_amount_dollars / args.dollars_per_sol.unwrap());
-    assert_eq!(
-        sol_to_lamports(transaction_infos[0].amount),
-        expected_amount
-    );
-
-    assert_eq!(
-        thin_client.get_balance(&alice_pubkey).unwrap(),
-        expected_amount,
-    );
-}
-
-pub fn test_process_distribute_allocations_with_client<C: Client>(
-    client: C,
-    sender_keypair: Keypair,
-) {
+pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_keypair: Keypair) {
     let thin_client = ThinClient(client);
     let fee_payer = Keypair::new();
     thin_client
@@ -656,7 +580,7 @@ pub fn test_process_distribute_allocations_with_client<C: Client>(
     let dir = tempdir().unwrap();
     let transactions_db = dir
         .path()
-        .join("transactions.csv")
+        .join("transactions.db")
         .to_str()
         .unwrap()
         .to_string();
@@ -749,7 +673,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     let dir = tempdir().unwrap();
     let transactions_db = dir
         .path()
-        .join("transactions.csv")
+        .join("transactions.db")
         .to_str()
         .unwrap()
         .to_string();
@@ -818,19 +742,11 @@ mod tests {
     use solana_sdk::{genesis_config::create_genesis_config, transaction::TransactionError};
 
     #[test]
-    fn test_process_distribute_bids() {
+    fn test_process_distribute_tokens() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
-        test_process_distribute_bids_with_client(bank_client, sender_keypair);
-    }
-
-    #[test]
-    fn test_process_distribute_allocations() {
-        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank = Bank::new(&genesis_config);
-        let bank_client = BankClient::new(bank);
-        test_process_distribute_allocations_with_client(bank_client, sender_keypair);
+        test_process_distribute_tokens_with_client(bank_client, sender_keypair);
     }
 
     #[test]
@@ -839,6 +755,45 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let bank_client = BankClient::new(bank);
         test_process_distribute_stake_with_client(bank_client, sender_keypair);
+    }
+
+    #[test]
+    fn test_read_allocations() {
+        let alice_pubkey = Pubkey::new_rand();
+        let allocation = Allocation {
+            recipient: alice_pubkey.to_string(),
+            amount: 42.0,
+        };
+        let file = NamedTempFile::new().unwrap();
+        let input_csv = file.path().to_str().unwrap().to_string();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
+        wtr.serialize(&allocation).unwrap();
+        wtr.flush().unwrap();
+
+        assert_eq!(read_allocations(&input_csv, false, None), vec![allocation]);
+    }
+
+    #[test]
+    fn test_read_allocations_from_bids() {
+        let alice_pubkey = Pubkey::new_rand();
+        let bid = Bid {
+            primary_address: alice_pubkey.to_string(),
+            accepted_amount_dollars: 42.0,
+        };
+        let file = NamedTempFile::new().unwrap();
+        let input_csv = file.path().to_str().unwrap().to_string();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
+        wtr.serialize(&bid).unwrap();
+        wtr.flush().unwrap();
+
+        let allocation = Allocation {
+            recipient: bid.primary_address,
+            amount: 84.0,
+        };
+        assert_eq!(
+            read_allocations(&input_csv, true, Some(0.5)),
+            vec![allocation]
+        );
     }
 
     #[test]
