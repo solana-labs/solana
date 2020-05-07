@@ -75,7 +75,6 @@ impl<'a> StoredAccount<'a> {
             executable: self.account_meta.executable,
             rent_epoch: self.account_meta.rent_epoch,
             data: self.data.to_vec(),
-            hash: *self.hash,
         }
     }
 

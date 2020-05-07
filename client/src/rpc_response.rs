@@ -93,7 +93,6 @@ impl RpcAccount {
             })?,
             executable: self.executable,
             rent_epoch: self.rent_epoch,
-            ..Account::default()
         })
     }
 }

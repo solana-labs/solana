@@ -550,16 +550,7 @@ impl Bank {
         F: Fn(&Option<Account>) -> Account,
     {
         let old_account = self.get_sysvar_account(pubkey);
-        let mut new_account = updater(&old_account);
-
-        // Normally, just use the hash from parent slot. However, use the
-        // existing stored hash if any for the sake of bank hash's idempotent.
-        if let Some((modified_account, _)) = self.get_account_modified_since_parent(pubkey) {
-            new_account.hash = modified_account.hash;
-        } else if let Some(old_account) = old_account {
-            new_account.hash = old_account.hash;
-        }
-
+        let new_account = updater(&old_account);
         self.store_account(pubkey, &new_account);
     }
 
@@ -4518,7 +4509,6 @@ mod tests {
             .create_account(1)
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
-        //let added_bank_hash = BankHash::from_hash(&current_account.hash);
         assert_eq!(
             expected_next_slot,
             Clock::from_account(&current_account).unwrap().slot
