@@ -369,10 +369,17 @@ impl Tower {
                     // 1) Only consider lockouts a tips of forks as that
                     //    includes all ancestors of that fork.
                     // 2) Don't consider lockouts on the `last_vote` itself
-                    //    or any of its descendants
+                    // 3) Don't consider lockouts on any descendants of
+                    //    `last_vote`
                     if !descendants.is_empty()
                         || candidate_slot == last_vote
-                        || ancestors.get(&candidate_slot).unwrap().contains(last_vote)
+                        || ancestors
+                            .get(&candidate_slot)
+                            .expect(
+                                "empty descendants implies this is a child, not parent of root, so must
+                                exist in the ancestors map",
+                            )
+                            .contains(last_vote)
                     {
                         continue;
                     }
@@ -728,17 +735,21 @@ pub mod test {
             }
             let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
-                ReplayStage::handle_new_root(
-                    new_root,
-                    &self.bank_forks,
-                    &mut self.progress,
-                    &None,
-                    &mut PubkeyReferences::default(),
-                    None,
-                );
+                self.set_root(new_root);
             }
 
             vec![]
+        }
+
+        pub fn set_root(&mut self, new_root: Slot) {
+            ReplayStage::handle_new_root(
+                new_root,
+                &self.bank_forks,
+                &mut self.progress,
+                &None,
+                &mut PubkeyReferences::default(),
+                None,
+            )
         }
 
         fn create_and_vote_new_branch(
@@ -1037,11 +1048,7 @@ pub mod test {
         // If we set a root, then any lockout intervals below the root shouldn't
         // count toward the switch threshold. This means the other validator's
         // vote lockout no longer counts
-        vote_simulator
-            .bank_forks
-            .write()
-            .unwrap()
-            .set_root(43, &None, None);
+        vote_simulator.set_root(43);
         assert!(!tower.check_switch_threshold(
             110,
             &vote_simulator.bank_forks.read().unwrap().ancestors(),
