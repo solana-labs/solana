@@ -160,7 +160,7 @@ test('parse wire format and serialize', () => {
 });
 
 test('transaction from rpc result', () => {
-  const rawBlockhash = new PublicKey(0).toBuffer();
+  const recentBlockhash = new PublicKey(1).toString();
   const rpcResult = {
     message: {
       accountKeys: [
@@ -182,7 +182,7 @@ test('transaction from rpc result', () => {
           programIdIndex: 4,
         },
       ],
-      recentBlockhash: rawBlockhash,
+      recentBlockhash,
     },
     signatures: [
       bs58.encode(Buffer.alloc(64).fill(1)),
@@ -190,7 +190,6 @@ test('transaction from rpc result', () => {
     ],
   };
 
-  const recentBlockhash = new PublicKey(rawBlockhash).toBase58();
   const transaction = Transaction.fromRpcResult(rpcResult);
   expect(transaction.instructions.length).toEqual(1);
   expect(transaction.signatures.length).toEqual(2);

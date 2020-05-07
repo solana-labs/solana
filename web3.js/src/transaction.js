@@ -537,7 +537,7 @@ export class Transaction {
         numReadonlySignedAccounts,
         numReadonlyUnsignedAccounts,
       },
-      recentBlockhash: bs58.encode(Buffer.from(recentBlockhash)),
+      recentBlockhash,
       accountKeys: accounts.map(account => new PublicKey(account)),
       instructions,
     };
