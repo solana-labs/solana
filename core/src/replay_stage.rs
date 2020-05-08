@@ -103,6 +103,42 @@ pub struct ReplayStageConfig {
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
 }
 
+#[derive(Default)]
+pub struct ReplayTiming {
+    num_iterations: u64,
+    compute_bank_stats_elapsed: u64,
+    select_vote_and_reset_forks_elapsed: u64,
+}
+impl ReplayTiming {
+    fn update(
+        &mut self,
+        compute_bank_stats_elapsed: u64,
+        select_vote_and_reset_forks_elapsed: u64,
+    ) {
+        self.num_iterations += 1;
+        self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
+        self.select_vote_and_reset_forks_elapsed += select_vote_and_reset_forks_elapsed;
+        if self.num_iterations == 100 {
+            datapoint_info!(
+                "replay-loop-timing-stats",
+                (
+                    "compute_bank_stats_elapsed",
+                    self.compute_bank_stats_elapsed as i64 / 100,
+                    i64
+                ),
+                (
+                    "select_vote_and_reset_forks_elapsed",
+                    self.select_vote_and_reset_forks_elapsed as i64 / 100,
+                    i64
+                ),
+            );
+            self.num_iterations = 0;
+            self.compute_bank_stats_elapsed = 0;
+            self.select_vote_and_reset_forks_elapsed = 0;
+        }
+    }
+}
+
 pub struct ReplayStage {
     t_replay: JoinHandle<Result<()>>,
     commitment_service: AggregateCommitmentService,
@@ -181,11 +217,11 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
+                let mut replay_timing = ReplayTiming::default();
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
                     thread_mem_usage::datapoint("solana-replay-stage");
-                    let now = Instant::now();
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -240,6 +276,7 @@ impl ReplayStage {
                         .filter(|(slot, _)| *slot >= forks_root)
                         .map(|(_, bank)| bank)
                         .collect();
+                    let now = Instant::now();
                     let newly_computed_slot_stats = Self::compute_bank_stats(
                         &my_pubkey,
                         &ancestors,
@@ -251,6 +288,7 @@ impl ReplayStage {
                         &bank_forks,
                         &mut all_pubkeys,
                     );
+                    let compute_bank_stats_elapsed = now.elapsed().as_micros();
                     for slot in newly_computed_slot_stats {
                         let fork_stats = progress.get_fork_stats(slot).unwrap();
                         let confirmed_forks = Self::confirm_forks(
@@ -275,6 +313,7 @@ impl ReplayStage {
 
                     Self::report_memory(&allocated, "select_fork", start);
 
+                    let now = Instant::now();
                     let (vote_bank, reset_bank, failure_reasons) =
                         Self::select_vote_and_reset_forks(
                             &heaviest_bank,
@@ -284,6 +323,11 @@ impl ReplayStage {
                             &progress,
                             &tower,
                         );
+                    let select_vote_and_reset_forks_elapsed = now.elapsed().as_micros();
+                    replay_timing.update(
+                        compute_bank_stats_elapsed as u64,
+                        select_vote_and_reset_forks_elapsed as u64,
+                    );
 
                     if heaviest_bank.is_some()
                         && tower.is_recent(heaviest_bank.as_ref().unwrap().slot())
