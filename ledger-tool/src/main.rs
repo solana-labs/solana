@@ -779,6 +779,14 @@ fn main() {
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
+            SubCommand::with_name("capitalization")
+            .about("Print capitalization (aka, total suppy)")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
+            .arg(&hard_forks_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
+        ).subcommand(
             SubCommand::with_name("prune")
             .about("Prune the ledger from a yaml file containing a list of slots to prune.")
             .arg(
@@ -1105,6 +1113,76 @@ fn main() {
                         println!("  - data: '{}'", bs58::encode(account.data).into_string());
                         println!("  - data_len: {}", data_len);
                     }
+                }
+                Err(err) => {
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                }
+            }
+        }
+        ("capitalization", Some(arg_matches)) => {
+            let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+            let process_options = ProcessOptions {
+                dev_halt_at_slot,
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                poh_verify: false,
+                ..ProcessOptions::default()
+            };
+            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+            match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                    let slot = bank_forks.working_bank().slot();
+                    let bank = bank_forks.get(slot).unwrap_or_else(|| {
+                        eprintln!("Error: Slot {} is not available", slot);
+                        exit(1);
+                    });
+
+                    use solana_sdk::native_token::LAMPORTS_PER_SOL;
+                    use std::fmt::{Display, Formatter, Result};
+                    pub struct Sol(u64);
+
+                    impl Display for Sol {
+                        fn fmt(&self, f: &mut Formatter) -> Result {
+                            write!(
+                                f,
+                                "{}.{:09} SOL",
+                                self.0 / LAMPORTS_PER_SOL,
+                                self.0 % LAMPORTS_PER_SOL
+                            )
+                        }
+                    }
+
+                    let computed_capitalization: u64 = bank
+                        .get_program_accounts(None)
+                        .into_iter()
+                        .filter_map(|(_pubkey, account)| {
+                            if account.lamports == u64::max_value() {
+                                return None;
+                            }
+
+                            let is_specially_retained =
+                                solana_sdk::native_loader::check_id(&account.owner)
+                                    || solana_sdk::sysvar::check_id(&account.owner);
+
+                            if is_specially_retained {
+                                // specially retained accounts are ensured to exist by
+                                // alwaysing having a balance of 1 lamports, which is
+                                // outside the capitalization calculation.
+                                Some(account.lamports - 1)
+                            } else {
+                                Some(account.lamports)
+                            }
+                        })
+                        .sum();
+
+                    if bank.capitalization() != computed_capitalization {
+                        panic!(
+                            "Capitalization mismatch!?: {} != {}",
+                            bank.capitalization(),
+                            computed_capitalization
+                        );
+                    }
+                    println!("Capitalization: {}", Sol(bank.capitalization()));
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);

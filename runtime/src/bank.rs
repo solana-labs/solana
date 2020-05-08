@@ -563,8 +563,12 @@ impl Bank {
         self.store_account(pubkey, &new_account);
     }
 
+    fn inherit_sysvar_account_balance(&self, old_account: &Option<Account>) -> u64 {
+        old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
+    }
+
     fn update_clock(&self) {
-        self.update_sysvar_account(&sysvar::clock::id(), |_| {
+        self.update_sysvar_account(&sysvar::clock::id(), |account| {
             sysvar::clock::Clock {
                 slot: self.slot,
                 segment: get_segment_from_slot(self.slot, self.slots_per_segment),
@@ -572,7 +576,7 @@ impl Bank {
                 leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
                 unix_timestamp: self.unix_timestamp(),
             }
-            .create_account(1)
+            .create_account(self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -583,7 +587,7 @@ impl Bank {
                 .map(|account| SlotHistory::from_account(&account).unwrap())
                 .unwrap_or_default();
             slot_history.add(self.slot());
-            slot_history.create_account(1)
+            slot_history.create_account(self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -594,7 +598,7 @@ impl Bank {
                 .map(|account| SlotHashes::from_account(&account).unwrap())
                 .unwrap_or_default();
             slot_hashes.add(self.parent_slot, self.parent_hash);
-            slot_hashes.create_account(1)
+            slot_hashes.create_account(self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -629,20 +633,29 @@ impl Bank {
     }
 
     fn update_fees(&self) {
-        self.update_sysvar_account(&sysvar::fees::id(), |_| {
-            sysvar::fees::create_account(1, &self.fee_calculator)
+        self.update_sysvar_account(&sysvar::fees::id(), |account| {
+            sysvar::fees::create_account(
+                self.inherit_sysvar_account_balance(account),
+                &self.fee_calculator,
+            )
         });
     }
 
     fn update_rent(&self) {
-        self.update_sysvar_account(&sysvar::rent::id(), |_| {
-            sysvar::rent::create_account(1, &self.rent_collector.rent)
+        self.update_sysvar_account(&sysvar::rent::id(), |account| {
+            sysvar::rent::create_account(
+                self.inherit_sysvar_account_balance(account),
+                &self.rent_collector.rent,
+            )
         });
     }
 
     fn update_epoch_schedule(&self) {
-        self.update_sysvar_account(&sysvar::epoch_schedule::id(), |_| {
-            sysvar::epoch_schedule::create_account(1, &self.epoch_schedule)
+        self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
+            sysvar::epoch_schedule::create_account(
+                self.inherit_sysvar_account_balance(account),
+                &self.epoch_schedule,
+            )
         });
     }
 
@@ -651,8 +664,11 @@ impl Bank {
             return;
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
-        self.update_sysvar_account(&sysvar::stake_history::id(), |_| {
-            sysvar::stake_history::create_account(1, self.stakes.read().unwrap().history())
+        self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
+            sysvar::stake_history::create_account(
+                self.inherit_sysvar_account_balance(account),
+                self.stakes.read().unwrap().history(),
+            )
         });
     }
 
@@ -687,8 +703,12 @@ impl Bank {
             validator_rewards / validator_points as f64,
             storage_rewards / storage_points as f64,
         );
-        self.update_sysvar_account(&sysvar::rewards::id(), |_| {
-            sysvar::rewards::create_account(1, validator_point_value, storage_point_value)
+        self.update_sysvar_account(&sysvar::rewards::id(), |account| {
+            sysvar::rewards::create_account(
+                self.inherit_sysvar_account_balance(account),
+                validator_point_value,
+                storage_point_value,
+            )
         });
 
         let validator_rewards = self.pay_validator_rewards(validator_point_value);
@@ -754,10 +774,13 @@ impl Bank {
     }
 
     pub fn update_recent_blockhashes(&self) {
-        self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |_| {
+        self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
             let blockhash_queue = self.blockhash_queue.read().unwrap();
             let recent_blockhash_iter = blockhash_queue.get_recent_blockhashes();
-            sysvar::recent_blockhashes::create_account_with_data(1, recent_blockhash_iter)
+            sysvar::recent_blockhashes::create_account_with_data(
+                self.inherit_sysvar_account_balance(account),
+                recent_blockhash_iter,
+            )
         });
     }
 
@@ -1945,12 +1968,13 @@ impl Bank {
         }
 
         info!(
-            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {}",
+            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}",
             self.slot(),
             hash,
             accounts_delta_hash.hash,
             self.signature_count(),
             self.last_blockhash(),
+            self.capitalization(),
         );
 
         info!(
@@ -3556,6 +3580,27 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         bank.transfer(500, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
+    }
+
+    #[test]
+    fn test_transfer_to_sysvar() {
+        solana_logger::setup();
+        let (genesis_config, mint_keypair) = create_genesis_config(10_000);
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        let normal_pubkey = Pubkey::new_rand();
+        let sysvar_pubkey = sysvar::clock::id();
+        assert_eq!(bank.get_balance(&normal_pubkey), 0);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 1);
+
+        bank.transfer(500, &mint_keypair, &normal_pubkey).unwrap();
+        bank.transfer(500, &mint_keypair, &sysvar_pubkey).unwrap();
+        assert_eq!(bank.get_balance(&normal_pubkey), 500);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 501);
+
+        let bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.get_balance(&normal_pubkey), 500);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 501);
     }
 
     #[test]
