@@ -528,9 +528,9 @@ impl ReplayStage {
                 // Purging should have already been taken care of by logic
                 // in repair_service, so make sure drop implementation doesn't
                 // run
-                w_bank_forks
-                    .get(*d)
-                    .map(|b| b.skip_drop.store(true, Ordering::Relaxed));
+                if let Some(b) = w_bank_forks.get(*d) {
+                    b.skip_drop.store(true, Ordering::Relaxed)
+                }
                 w_bank_forks.remove(*d);
             }
         }
