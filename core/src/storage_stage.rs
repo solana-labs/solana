@@ -51,7 +51,7 @@ type ArchiverMap = Vec<HashMap<Pubkey, Vec<Proof>>>;
 
 #[derive(Default)]
 pub struct StorageStateInner {
-    storage_results: StorageResults,
+    pub storage_results: StorageResults,
     pub storage_keys: StorageKeys,
     archiver_map: ArchiverMap,
     storage_blockhash: Hash,
@@ -86,16 +86,6 @@ const KEY_SIZE: usize = 64;
 
 type InstructionSender = Sender<Instruction>;
 
-fn get_identity_index_from_signature(key: &Signature) -> usize {
-    let rkey = key.as_ref();
-    let mut res: usize = (rkey[0] as usize)
-        | ((rkey[1] as usize) << 8)
-        | ((rkey[2] as usize) << 16)
-        | ((rkey[3] as usize) << 24);
-    res &= NUM_IDENTITIES - 1;
-    res
-}
-
 impl StorageState {
     pub fn new(hash: &Hash, slots_per_turn: u64, slots_per_segment: u64) -> Self {
         let storage_keys = vec![0u8; KEY_SIZE * NUM_IDENTITIES];
@@ -115,16 +105,6 @@ impl StorageState {
         StorageState {
             state: Arc::new(RwLock::new(state)),
         }
-    }
-
-    pub fn get_mining_key(&self, key: &Signature) -> Vec<u8> {
-        let idx = get_identity_index_from_signature(key);
-        self.state.read().unwrap().storage_keys[idx..idx + KEY_SIZE].to_vec()
-    }
-
-    pub fn get_mining_result(&self, key: &Signature) -> Hash {
-        let idx = get_identity_index_from_signature(key);
-        self.state.read().unwrap().storage_results[idx]
     }
 
     pub fn get_storage_blockhash(&self) -> Hash {
@@ -656,6 +636,16 @@ pub fn test_cluster_info(id: &Pubkey) -> Arc<ClusterInfo> {
     let contact_info = ContactInfo::new_localhost(id, 0);
     let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
     Arc::new(cluster_info)
+}
+
+pub fn get_identity_index_from_signature(key: &Signature) -> usize {
+    let rkey = key.as_ref();
+    let mut res: usize = (rkey[0] as usize)
+        | ((rkey[1] as usize) << 8)
+        | ((rkey[2] as usize) << 16)
+        | ((rkey[3] as usize) << 24);
+    res &= NUM_IDENTITIES - 1;
+    res
 }
 
 #[cfg(test)]

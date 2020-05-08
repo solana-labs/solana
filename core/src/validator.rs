@@ -59,7 +59,6 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
-    pub dev_sigverify_disabled: bool,
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
@@ -87,7 +86,6 @@ pub struct ValidatorConfig {
 impl Default for ValidatorConfig {
     fn default() -> Self {
         Self {
-            dev_sigverify_disabled: false,
             dev_halt_at_slot: None,
             expected_genesis_hash: None,
             expected_shred_version: None,
@@ -441,7 +439,6 @@ impl Validator {
             retransmit_slots_sender,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
-                sigverify_disabled: config.dev_sigverify_disabled,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
                     .halt_on_trusted_validators_accounts_hash_mismatch,
                 shred_version: node.info.shred_version,
@@ -449,10 +446,6 @@ impl Validator {
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
             },
         );
-
-        if config.dev_sigverify_disabled {
-            warn!("signature verification disabled");
-        }
 
         let tpu = Tpu::new(
             &cluster_info,
@@ -462,7 +455,6 @@ impl Validator {
             node.sockets.tpu,
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
-            config.dev_sigverify_disabled,
             transaction_status_sender,
             &blockstore,
             &config.broadcast_stage_type,

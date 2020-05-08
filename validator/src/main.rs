@@ -573,12 +573,6 @@ pub fn main() {
                 .help("Skip the RPC vote account sanity check")
         )
         .arg(
-            Arg::with_name("dev_no_sigverify")
-                .long("dev-no-sigverify")
-                .takes_value(false)
-                .help("Run without signature verification"),
-        )
-        .arg(
             Arg::with_name("dev_halt_at_slot")
                 .long("dev-halt-at-slot")
                 .value_name("SLOT")
@@ -867,7 +861,6 @@ pub fn main() {
     };
 
     let mut validator_config = ValidatorConfig {
-        dev_sigverify_disabled: matches.is_present("dev_no_sigverify"),
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
