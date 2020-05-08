@@ -1404,7 +1404,7 @@
         "x": 14,
         "y": 5
       },
-      "id": 14,
+      "id": 13,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -1560,7 +1560,7 @@
         "x": 0,
         "y": 6
       },
-      "id": 13,
+      "id": 14,
       "legend": {
         "avg": false,
         "current": false,
@@ -1826,7 +1826,7 @@
         "x": 14,
         "y": 10
       },
-      "id": 16,
+      "id": 15,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -1938,7 +1938,7 @@
         "x": 0,
         "y": 15
       },
-      "id": 19,
+      "id": 16,
       "panels": [],
       "title": "Stability",
       "type": "row"
@@ -1956,7 +1956,7 @@
         "x": 0,
         "y": 16
       },
-      "id": 26,
+      "id": 17,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -2112,7 +2112,7 @@
         "x": 8,
         "y": 16
       },
-      "id": 72,
+      "id": 18,
       "legend": {
         "avg": false,
         "current": false,
@@ -2348,7 +2348,7 @@
         "x": 15,
         "y": 16
       },
-      "id": 21,
+      "id": 19,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2459,7 +2459,7 @@
         "x": 19,
         "y": 16
       },
-      "id": 22,
+      "id": 20,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2570,7 +2570,7 @@
         "x": 22,
         "y": 16
       },
-      "id": 24,
+      "id": 21,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -2670,7 +2670,7 @@
         "x": 15,
         "y": 18
       },
-      "id": 25,
+      "id": 22,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -2788,7 +2788,7 @@
         "x": 20,
         "y": 18
       },
-      "id": 28,
+      "id": 23,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -2906,7 +2906,7 @@
         "x": 0,
         "y": 19
       },
-      "id": 29,
+      "id": 24,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3059,7 +3059,7 @@
         "x": 0,
         "y": 22
       },
-      "id": 34,
+      "id": 25,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3147,7 +3147,7 @@
         "x": 15,
         "y": 22
       },
-      "id": 31,
+      "id": 26,
       "legend": {
         "avg": false,
         "current": false,
@@ -3628,7 +3628,7 @@
         "x": 0,
         "y": 28
       },
-      "id": 30,
+      "id": 27,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3713,7 +3713,7 @@
         "x": 8,
         "y": 28
       },
-      "id": 32,
+      "id": 28,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3798,7 +3798,7 @@
         "x": 16,
         "y": 28
       },
-      "id": 33,
+      "id": 29,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3881,7 +3881,7 @@
         "x": 0,
         "y": 34
       },
-      "id": 42,
+      "id": 30,
       "panels": [],
       "title": "Validator Streamer",
       "type": "row"
@@ -3899,7 +3899,7 @@
         "x": 0,
         "y": 35
       },
-      "id": 43,
+      "id": 31,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4104,7 +4104,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -4138,7 +4138,7 @@
         "x": 8,
         "y": 35
       },
-      "id": 44,
+      "id": 32,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4386,7 +4386,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -4420,7 +4420,7 @@
         "x": 16,
         "y": 35
       },
-      "id": 45,
+      "id": 33,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4590,7 +4590,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -4631,7 +4631,7 @@
         "x": 0,
         "y": 41
       },
-      "id": 46,
+      "id": 34,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4957,7 +4957,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -4980,19 +4980,10 @@
     },
     {
       "aliasColors": {
-        "banking_stage-buffered_packets.sum": "#3f6833",
-        "banking_stage-consumed_buffered_packets.last": "#65c5db",
-        "banking_stage-consumed_buffered_packets.sum": "#614d93",
-        "banking_stage-forwarded_packets.last": "#f9ba8f",
-        "banking_stage-forwarded_packets.sum": "#b7dbab",
-        "banking_stage-rebuffered_packets.last": "#e5a8e2",
         "cluster-info.repair": "#ba43a9",
-        "fetch_stage-discard_forwards.sum": "#00ffbb",
-        "fetch_stage-honor_forwards.sum": "#bf1b00",
-        "poh_recorder-record_lock_contention.sum": "#5195ce",
-        "poh_recorder-tick_lock_contention.sum": "#962d82",
         "replay_stage-new_leader.last": "#00ffbb",
-        "tower-vote.last": "#00ffbb",
+        "tower-observed.squash_account": "#0a437c",
+        "tower-observed.squash_cache": "#ea6460",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
       },
@@ -5007,7 +4998,7 @@
         "x": 8,
         "y": 41
       },
-      "id": 47,
+      "id": 64,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5019,14 +5010,23 @@
         "values": false
       },
       "lines": true,
-      "linewidth": 2,
+      "linewidth": 1,
       "links": [],
-      "nullPointMode": "null as zero",
+      "nullPointMode": "connected",
       "percentage": false,
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
-      "seriesOverrides": [],
+      "seriesOverrides": [
+        {
+          "alias": "replay-slot-stats.total_shreds",
+          "yaxis": 2
+        },
+        {
+          "alias": "replay-slot-stats.total_entries",
+          "yaxis": 2
+        }
+      ],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
@@ -5046,46 +5046,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "F",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "policy": "autogen",
+          "query": "SELECT mean(\"compute_bank_stats_elapsed\") AS \"compute_bank_stats_elapsed\" FROM \"$testnet\".\"autogen\".\"replay-loop-timing-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -5093,13 +5058,13 @@
             [
               {
                 "params": [
-                  "value"
+                  "count"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "mean"
+                "type": "sum"
               }
             ]
           ],
@@ -5120,9 +5085,11 @@
               "type": "fill"
             }
           ],
+          "hide": false,
+          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "policy": "autogen",
+          "query": "SELECT mean(\"select_vote_and_reset_forks_elapsed\") AS \"select_vote_and_reset_forks_elapsed\" FROM \"$testnet\".\"autogen\".\"replay-loop-timing-stats\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -5130,50 +5097,13 @@
             [
               {
                 "params": [
-                  "value"
+                  "count"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
+                "type": "sum"
               }
             ]
           ],
@@ -5183,7 +5113,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "PoH Lock Contention ($hostid)",
+      "title": "Replay Loop Time Elapsed ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -5199,7 +5129,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -5212,7 +5142,7 @@
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": false
+          "show": true
         }
       ],
       "yaxis": {
@@ -5240,7 +5170,7 @@
         "x": 16,
         "y": 41
       },
-      "id": 48,
+      "id": 36,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5561,7 +5491,7 @@
         "x": 0,
         "y": 47
       },
-      "id": 49,
+      "id": 37,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5963,19 +5893,35 @@
       }
     },
     {
-      "aliasColors": {},
+      "aliasColors": {
+        "banking_stage-buffered_packets.sum": "#3f6833",
+        "banking_stage-consumed_buffered_packets.last": "#65c5db",
+        "banking_stage-consumed_buffered_packets.sum": "#614d93",
+        "banking_stage-forwarded_packets.last": "#f9ba8f",
+        "banking_stage-forwarded_packets.sum": "#b7dbab",
+        "banking_stage-rebuffered_packets.last": "#e5a8e2",
+        "cluster-info.repair": "#ba43a9",
+        "fetch_stage-discard_forwards.sum": "#00ffbb",
+        "fetch_stage-honor_forwards.sum": "#bf1b00",
+        "poh_recorder-record_lock_contention.sum": "#5195ce",
+        "poh_recorder-tick_lock_contention.sum": "#962d82",
+        "replay_stage-new_leader.last": "#00ffbb",
+        "tower-vote.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
       "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 8,
         "x": 8,
         "y": 47
       },
-      "id": 50,
+      "id": 35,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5987,11 +5933,11 @@
         "values": false
       },
       "lines": true,
-      "linewidth": 1,
+      "linewidth": 2,
       "links": [],
-      "nullPointMode": "null",
+      "nullPointMode": "null as zero",
       "percentage": false,
-      "pointradius": 5,
+      "pointradius": 2,
       "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
@@ -6014,24 +5960,23 @@
               "type": "fill"
             }
           ],
-          "measurement": "cluster_info-vote-count",
           "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
-          "refId": "A",
+          "refId": "F",
           "resultFormat": "time_series",
           "select": [
             [
               {
                 "params": [
-                  "count"
+                  "value"
                 ],
                 "type": "field"
               },
               {
                 "params": [],
-                "type": "sum"
+                "type": "mean"
               }
             ]
           ],
@@ -6054,9 +5999,83 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-consume\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_lock_contention\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-tick_overhead\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"poh_recorder-record_ms\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
           "resultFormat": "time_series",
           "select": [
             [
@@ -6078,7 +6097,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Window",
+      "title": "PoH Lock Contention ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -6094,7 +6113,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -6107,7 +6126,7 @@
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": true
+          "show": false
         }
       ],
       "yaxis": {
@@ -6135,7 +6154,7 @@
         "x": 16,
         "y": 47
       },
-      "id": 51,
+      "id": 39,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6435,123 +6454,6 @@
       }
     },
     {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "description": "(Must pick a host id for this to make sense)",
-      "fill": 1,
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 8,
-        "y": 52
-      },
-      "id": 52,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT count(\"slot\") AS \"num_my_leader_slots\" FROM \"$testnet\".\"autogen\".\"replay_stage-my_leader_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) fill(null)\n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "My Leader Slots ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
       "aliasColors": {
         "banking_stage-buffered_packets.sum": "#3f6833",
         "banking_stage-consumed_buffered_packets.last": "#65c5db",
@@ -6578,7 +6480,7 @@
         "x": 0,
         "y": 53
       },
-      "id": 53,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6877,10 +6779,163 @@
       "gridPos": {
         "h": 5,
         "w": 8,
+        "x": 8,
+        "y": 53
+      },
+      "id": 38,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"streamer-recv_window-consume\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Window",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
         "x": 16,
         "y": 53
       },
-      "id": 54,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6997,7 +7052,7 @@
         "x": 0,
         "y": 58
       },
-      "id": 55,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7148,6 +7203,123 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "description": "(Must pick a host id for this to make sense)",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 58
+      },
+      "id": 40,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT count(\"slot\") AS \"num_my_leader_slots\" FROM \"$testnet\".\"autogen\".\"replay_stage-my_leader_slot\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "My Leader Slots ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -7155,7 +7327,7 @@
         "x": 16,
         "y": 58
       },
-      "id": 56,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7266,7 +7438,7 @@
         "x": 0,
         "y": 64
       },
-      "id": 57,
+      "id": 45,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -7289,7 +7461,7 @@
         "x": 0,
         "y": 65
       },
-      "id": 58,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7449,7 +7621,7 @@
         "x": 8,
         "y": 65
       },
-      "id": 59,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7609,7 +7781,7 @@
         "x": 16,
         "y": 65
       },
-      "id": 60,
+      "id": 48,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7794,7 +7966,7 @@
         "x": 0,
         "y": 70
       },
-      "id": 61,
+      "id": 49,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -7813,7 +7985,7 @@
         "x": 0,
         "y": 71
       },
-      "id": 62,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8046,7 +8218,7 @@
         "x": 12,
         "y": 71
       },
-      "id": 63,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8199,7 +8371,7 @@
         "x": 0,
         "y": 76
       },
-      "id": 64,
+      "id": 52,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -8217,7 +8389,7 @@
         "x": 0,
         "y": 77
       },
-      "id": 65,
+      "id": 53,
       "legend": {
         "avg": false,
         "current": false,
@@ -8419,7 +8591,7 @@
         "x": 12,
         "y": 77
       },
-      "id": 66,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8568,7 +8740,7 @@
         "x": 0,
         "y": 82
       },
-      "id": 67,
+      "id": 55,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -8586,7 +8758,7 @@
         "x": 0,
         "y": 83
       },
-      "id": 68,
+      "id": 56,
       "legend": {
         "avg": false,
         "current": false,
@@ -8778,7 +8950,7 @@
         "x": 8,
         "y": 83
       },
-      "id": 69,
+      "id": 57,
       "legend": {
         "avg": false,
         "current": false,
@@ -9046,7 +9218,7 @@
         "x": 16,
         "y": 83
       },
-      "id": 70,
+      "id": 58,
       "legend": {
         "avg": false,
         "current": false,
@@ -9235,7 +9407,7 @@
         "x": 0,
         "y": 89
       },
-      "id": 35,
+      "id": 59,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -9253,7 +9425,7 @@
         "x": 0,
         "y": 90
       },
-      "id": 36,
+      "id": 60,
       "legend": {
         "avg": false,
         "current": false,
@@ -9368,7 +9540,7 @@
         "x": 7,
         "y": 90
       },
-      "id": 37,
+      "id": 61,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9562,7 +9734,7 @@
       },
       "yaxes": [
         {
-          "format": "\u00b5s",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -9593,7 +9765,7 @@
         "x": 14,
         "y": 90
       },
-      "id": 38,
+      "id": 62,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -9681,7 +9853,7 @@
         "x": 0,
         "y": 95
       },
-      "id": 17,
+      "id": 63,
       "legend": {
         "avg": false,
         "current": false,
