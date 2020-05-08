@@ -557,7 +557,8 @@ impl Bank {
     }
 
     fn inherit_sysvar_account_balance(&self, old_account: &Option<Account>) -> u64 {
-        if self.epoch() >= 24 {
+        // Corrent sysvar account balance maintenance activates at this epoch on the mainnet-beta
+        if self.epoch() >= 25 {
             old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
         } else {
             1
