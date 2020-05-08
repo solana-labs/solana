@@ -255,10 +255,11 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
     use solana_sdk::{
         account::Account, instruction::CompiledInstruction, message::Message, rent::Rent,
     };
-    use std::{cell::RefCell, fs::File, io::Read, rc::Rc};
+    use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 
     #[derive(Debug, Default)]
     pub struct MockInvokeContext {}
@@ -504,6 +505,68 @@ mod tests {
                 &vec![],
                 &mut MockInvokeContext::default()
             )
+        );
+    }
+
+    /// fuzzing utility function
+    fn fuzz<F>(
+        bytes: &[u8],
+        outer_iters: usize,
+        inner_iters: usize,
+        offset: Range<usize>,
+        value: Range<u8>,
+        work: F,
+    ) where
+        F: Fn(&mut [u8]),
+    {
+        let mut rng = rand::thread_rng();
+        for _ in 0..outer_iters {
+            let mut mangled_bytes = bytes.to_vec();
+            for _ in 0..inner_iters {
+                let offset = rng.gen_range(offset.start, offset.end);
+                let value = rng.gen_range(value.start, value.end);
+                mangled_bytes[offset] = value;
+                work(&mut mangled_bytes);
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_fuzz() {
+        let program_id = Pubkey::new_rand();
+        let program_key = Pubkey::new_rand();
+
+        // Create program account
+        let mut file = File::open("test_elfs/noop.so").expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+
+        info!("mangle the whole file");
+        fuzz(
+            &elf,
+            1_000_000_000,
+            100,
+            0..elf.len(),
+            0..255,
+            |bytes: &mut [u8]| {
+                let program_account = Account::new_ref(1, 0, &program_id);
+                program_account.borrow_mut().data = bytes.to_vec();
+                program_account.borrow_mut().executable = true;
+
+                let parameter_account = Account::new_ref(1, 0, &program_id);
+                let keyed_accounts = vec![
+                    KeyedAccount::new(&program_key, false, &program_account),
+                    KeyedAccount::new(&program_key, false, &parameter_account),
+                ];
+
+                let _result = process_instruction(
+                    &bpf_loader::id(),
+                    &keyed_accounts,
+                    &vec![],
+                    &mut MockInvokeContext::default(),
+                );
+            },
         );
     }
 }
