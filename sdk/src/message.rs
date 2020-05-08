@@ -57,11 +57,23 @@ impl InstructionKeys {
     }
 }
 
+/// Return the pubkey of the first writable signer in the given set of instructions.
+pub fn get_first_writable_signer(instructions: &[Instruction]) -> Option<&Pubkey> {
+    for instruction in instructions {
+        for account in &instruction.accounts {
+            if account.is_signer && account.is_writable {
+                return Some(&account.pubkey);
+            }
+        }
+    }
+    None
+}
+
 /// Return pubkeys referenced by all instructions, with the ones needing signatures first. If the
 /// payer key is provided, it is always placed first in the list of signed keys. Read-only signed
 /// accounts are placed last in the set of signed accounts. Read-only unsigned accounts,
 /// including program ids, are placed last in the set. No duplicates and order is preserved.
-fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
+fn get_keys(instructions: &[Instruction], payer: &Pubkey) -> InstructionKeys {
     let programs: Vec<_> = get_program_ids(instructions)
         .iter()
         .map(|program_id| AccountMeta {
@@ -81,15 +93,12 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
             .then(y.is_writable.cmp(&x.is_writable))
     });
 
-    let payer_account_meta;
-    if let Some(payer) = payer {
-        payer_account_meta = AccountMeta {
-            pubkey: *payer,
-            is_signer: true,
-            is_writable: true,
-        };
-        keys_and_signed.insert(0, &payer_account_meta);
-    }
+    let payer_account_meta = AccountMeta {
+        pubkey: *payer,
+        is_signer: true,
+        is_writable: true,
+    };
+    keys_and_signed.insert(0, &payer_account_meta);
 
     let mut signed_keys = vec![];
     let mut unsigned_keys = vec![];
@@ -225,6 +234,9 @@ impl Message {
     }
 
     pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
+        let payer = payer.unwrap_or_else(|| {
+            get_first_writable_signer(instructions).expect("no signer for fee-payer")
+        });
         let InstructionKeys {
             mut signed_keys,
             unsigned_keys,
@@ -364,37 +376,7 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
             ],
-            None,
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_signed_and_payer() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[Instruction::new(
-                program_id,
-                &0,
-                vec![AccountMeta::new(id0, true)],
-            )],
-            Some(&id0),
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_unsigned_and_payer() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::default();
-        let keys = get_keys(
-            &[Instruction::new(
-                program_id,
-                &0,
-                vec![AccountMeta::new(id0, false)],
-            )],
-            Some(&id0),
+            &id0,
         );
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
@@ -408,24 +390,9 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
             ],
-            None,
+            &id0,
         );
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
-    }
-
-    #[test]
-    fn test_message_unique_keys_order_preserved() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::new_rand();
-        let id1 = Pubkey::default(); // Key less than id0
-        let keys = get_keys(
-            &[
-                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
-                Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
-            ],
-            None,
-        );
-        assert_eq!(keys, InstructionKeys::new(vec![], vec![id0, id1], 0, 0));
     }
 
     #[test]
@@ -439,7 +406,7 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
             ],
-            None,
+            &id0,
         );
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![id1], 0, 0));
     }
@@ -454,7 +421,7 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
             ],
-            None,
+            &id1,
         );
         assert_eq!(keys, InstructionKeys::new(vec![id1], vec![id0], 0, 0));
     }
@@ -464,10 +431,6 @@ mod tests {
     fn test_message_signed_keys_len() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
-        let message = Message::new(&[ix]);
-        assert_eq!(message.header.num_required_signatures, 0);
-
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(&[ix]);
         assert_eq!(message.header.num_required_signatures, 1);
@@ -487,7 +450,7 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id2, false)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id3, true)]),
             ],
-            None,
+            &id3,
         );
         assert_eq!(
             keys,
@@ -554,11 +517,11 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
                 Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id1, true)]),
             ],
-            None,
+            &id1,
         );
         assert_eq!(
             keys,
-            InstructionKeys::new(vec![id1], vec![id0, program_id], 1, 2)
+            InstructionKeys::new(vec![id1], vec![id0, program_id], 0, 2)
         );
     }
 
@@ -620,5 +583,24 @@ mod tests {
             message.get_account_keys_by_lock_type(),
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
         );
+    }
+
+    #[test]
+    fn test_get_first_writable_signer() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::new_rand();
+        let id1 = Pubkey::new_rand();
+        let id2 = Pubkey::new_rand();
+        let id3 = Pubkey::new_rand();
+        let id4 = Pubkey::new_rand();
+        let instructions = [
+            Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id1, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id2, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id3, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id4, true)]),
+        ];
+        assert_eq!(get_first_writable_signer(&instructions[..3]), None);
+        assert_eq!(get_first_writable_signer(&instructions), Some(&id3));
     }
 }
