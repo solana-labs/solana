@@ -3829,7 +3829,7 @@ name = "solana-archiver"
 version = "1.2.0"
 dependencies = [
  "clap",
- "console 0.10.3",
+ "console 0.11.2",
  "solana-archiver-lib",
  "solana-clap-utils",
  "solana-core",
@@ -4074,7 +4074,7 @@ dependencies = [
  "bs58 0.3.1",
  "chrono",
  "clap",
- "console 0.10.3",
+ "console 0.11.2",
  "criterion-stats",
  "ctrlc",
  "dirs 2.0.2",
@@ -4274,7 +4274,7 @@ name = "solana-download-utils"
 version = "1.2.0"
 dependencies = [
  "bzip2",
- "console 0.10.3",
+ "console 0.11.2",
  "indicatif",
  "log 0.4.8",
  "reqwest",
@@ -4384,7 +4384,7 @@ dependencies = [
  "bzip2",
  "chrono",
  "clap",
- "console 0.10.3",
+ "console 0.11.2",
  "ctrlc",
  "dirs 2.0.2",
  "indicatif",
@@ -4728,7 +4728,7 @@ name = "solana-remote-wallet"
 version = "1.2.0"
 dependencies = [
  "base32",
- "console 0.10.3",
+ "console 0.11.2",
  "dialoguer",
  "hidapi",
  "log 0.4.8",
@@ -4862,7 +4862,7 @@ name = "solana-stake-monitor"
 version = "1.2.0"
 dependencies = [
  "clap",
- "console 0.10.3",
+ "console 0.11.2",
  "log 0.4.8",
  "serde",
  "serde_yaml",
@@ -4970,7 +4970,7 @@ version = "1.2.0"
 dependencies = [
  "chrono",
  "clap",
- "console 0.10.3",
+ "console 0.11.2",
  "libc",
  "log 0.4.8",
  "rand 0.7.3",
