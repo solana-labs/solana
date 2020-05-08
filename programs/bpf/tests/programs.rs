@@ -93,7 +93,7 @@ mod bpf {
                 .native_instruction_processors
                 .push(solana_bpf_loader_program!());
             let bank = Arc::new(Bank::new(&genesis_config));
-            // Create bank with specific slot, used by solana_bpf_rust_sysvar test
+            // Create bank with a specific slot, used by solana_bpf_rust_sysvar test
             let bank =
                 Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
             let bank_client = BankClient::new(bank);
