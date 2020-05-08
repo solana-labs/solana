@@ -1,5 +1,4 @@
 import React from "react";
-import bs58 from "bs58";
 import {
   Source,
   useFetchTransactionStatus,
@@ -10,19 +9,15 @@ import {
 } from "../providers/transactions";
 import { fetchDetails } from "providers/transactions/details";
 import { useCluster, useClusterModal } from "providers/cluster";
-import {
-  TransactionSignature,
-  TransactionInstruction,
-  TransferParams,
-  CreateAccountParams,
-  SystemProgram,
-  SignatureResult
-} from "@solana/web3.js";
+import { TransactionSignature, SystemInstruction } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
 import { lamportsToSolString } from "utils";
-import { displayAddress, decodeCreate, decodeTransfer } from "utils/tx";
+import { displayAddress } from "utils/tx";
 import Copyable from "./Copyable";
 import { useHistory, useLocation } from "react-router-dom";
+import { TransferDetailsCard } from "./instruction/TransferDetailsCard";
+import { CreateDetailsCard } from "./instruction/CreateDetailsCard";
+import { RawDetailsCard } from "./instruction/RawDetailsCard";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -265,50 +260,6 @@ function AccountsCard({ signature }: Props) {
   );
 }
 
-function ixResult(result: SignatureResult, index: number) {
-  if (result.err) {
-    const err = result.err as any;
-    const ixError = err["InstructionError"];
-    if (ixError && Array.isArray(ixError)) {
-      const [errorIndex, error] = ixError;
-      if (Number.isInteger(errorIndex) && errorIndex === index) {
-        return ["warning", `Error: ${JSON.stringify(error)}`];
-      }
-    }
-    return ["dark"];
-  }
-  return ["success"];
-}
-
-type InstructionProps = {
-  title: string;
-  children: React.ReactNode;
-  result: SignatureResult;
-  index: number;
-};
-
-function InstructionCard({ title, children, result, index }: InstructionProps) {
-  const [resultClass, errorString] = ixResult(result, index);
-  return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          <span className={`badge badge-soft-${resultClass} mr-2`}>
-            #{index + 1}
-          </span>
-          {title}
-        </h3>
-        <h3 className="mb-0">
-          <span className="badge badge-soft-warning text-monospace">
-            {errorString}
-          </span>
-        </h3>
-      </div>
-      <TableCardBody>{children}</TableCardBody>
-    </div>
-  );
-}
-
 function InstructionsSection({ signature }: Props) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
@@ -325,39 +276,24 @@ function InstructionsSection({ signature }: Props) {
 
   const result = status.info.result;
   const instructionDetails = transaction.instructions.map((ix, index) => {
-    const transfer = decodeTransfer(ix);
-    if (transfer) {
-      return (
-        <InstructionCard
-          key={index}
-          title="Transfer"
-          result={result}
-          index={index}
-        >
-          <TransferDetails ix={ix} transfer={transfer} />
-        </InstructionCard>
-      );
+    const props = { ix, result, index };
+
+    let instructionType;
+    try {
+      instructionType = SystemInstruction.decodeInstructionType(ix);
+    } catch (err) {
+      console.error(err);
+      return <RawDetailsCard {...props} />;
     }
 
-    const create = decodeCreate(ix);
-    if (create) {
-      return (
-        <InstructionCard
-          key={index}
-          title="Create Account"
-          result={result}
-          index={index}
-        >
-          <CreateDetails ix={ix} create={create} />
-        </InstructionCard>
-      );
+    switch (instructionType) {
+      case "Transfer":
+        return <TransferDetailsCard {...props} />;
+      case "Create":
+        return <CreateDetailsCard {...props} />;
+      default:
+        return <RawDetailsCard {...props} />;
     }
-
-    return (
-      <InstructionCard key={index} title="Raw" result={result} index={index}>
-        <RawDetails ix={ix} />
-      </InstructionCard>
-    );
   });
 
   return (
@@ -370,190 +306,6 @@ function InstructionsSection({ signature }: Props) {
         </div>
       </div>
       {instructionDetails}
-    </>
-  );
-}
-
-function TransferDetails({
-  ix,
-  transfer
-}: {
-  ix: TransactionInstruction;
-  transfer: TransferParams;
-}) {
-  const from = transfer.fromPubkey.toBase58();
-  const to = transfer.toPubkey.toBase58();
-  const [fromMeta, toMeta] = ix.keys;
-  return (
-    <>
-      <tr>
-        <td>Program</td>
-        <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId)}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      <tr>
-        <td>
-          <div className="mr-2 d-md-inline">From Address</div>
-          {!fromMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {fromMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
-        <td className="text-right">
-          <Copyable text={from}>
-            <code>{from}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      <tr>
-        <td>
-          <div className="mr-2 d-md-inline">To Address</div>
-          {!toMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {toMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
-        <td className="text-right">
-          <Copyable text={to}>
-            <code>{to}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      <tr>
-        <td>Transfer Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(transfer.lamports)}</td>
-      </tr>
-    </>
-  );
-}
-
-function CreateDetails({
-  ix,
-  create
-}: {
-  ix: TransactionInstruction;
-  create: CreateAccountParams;
-}) {
-  const from = create.fromPubkey.toBase58();
-  const newKey = create.newAccountPubkey.toBase58();
-  const [fromMeta, newMeta] = ix.keys;
-
-  return (
-    <>
-      <tr>
-        <td>Program</td>
-        <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId)}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      <tr>
-        <td>
-          <div className="mr-2 d-md-inline">From Address</div>
-          {!fromMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {fromMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
-        <td className="text-right">
-          <Copyable text={from}>
-            <code>{from}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      <tr>
-        <td>
-          <div className="mr-2 d-md-inline">New Address</div>
-          {!newMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {newMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
-        <td className="text-right">
-          <Copyable text={newKey}>
-            <code>{newKey}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      <tr>
-        <td>Transfer Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(create.lamports)}</td>
-      </tr>
-
-      <tr>
-        <td>Allocated Space (Bytes)</td>
-        <td className="text-right">{create.space}</td>
-      </tr>
-
-      <tr>
-        <td>Assigned Owner</td>
-        <td className="text-right">
-          <Copyable text={create.programId.toBase58()}>
-            <code>{displayAddress(create.programId)}</code>
-          </Copyable>
-        </td>
-      </tr>
-    </>
-  );
-}
-
-function RawDetails({ ix }: { ix: TransactionInstruction }) {
-  return (
-    <>
-      <tr>
-        <td>Program</td>
-        <td className="text-right">
-          <Copyable bottom text={ix.programId.toBase58()}>
-            <code>{displayAddress(ix.programId)}</code>
-          </Copyable>
-        </td>
-      </tr>
-
-      {ix.keys.map(({ pubkey, isSigner, isWritable }, keyIndex) => (
-        <tr key={keyIndex}>
-          <td>
-            <div className="mr-2 d-md-inline">Account #{keyIndex + 1}</div>
-            {!isWritable && (
-              <span className="badge badge-soft-dark mr-1">Readonly</span>
-            )}
-            {isSigner && (
-              <span className="badge badge-soft-dark mr-1">Signer</span>
-            )}
-          </td>
-          <td className="text-right">
-            <Copyable text={pubkey.toBase58()}>
-              <code>{pubkey.toBase58()}</code>
-            </Copyable>
-          </td>
-        </tr>
-      ))}
-
-      <tr>
-        <td>Raw Data (Base58)</td>
-        <td className="text-right">
-          <Copyable text={bs58.encode(ix.data)}>
-            <code>{bs58.encode(ix.data)}</code>
-          </Copyable>
-        </td>
-      </tr>
     </>
   );
 }

@@ -4,10 +4,6 @@ import {
   StakeProgram,
   VOTE_PROGRAM_ID,
   BpfLoader,
-  TransferParams,
-  SystemInstruction,
-  CreateAccountParams,
-  TransactionInstruction,
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
   SYSVAR_REWARDS_PUBKEY,
@@ -52,32 +48,4 @@ export function displayAddress(pubkey: PublicKey): string {
     SYSVAR_IDS[address] ||
     address
   );
-}
-
-export function decodeTransfer(
-  ix: TransactionInstruction
-): TransferParams | null {
-  if (!ix.programId.equals(SystemProgram.programId)) return null;
-
-  try {
-    if (SystemInstruction.decodeInstructionType(ix) !== "Transfer") return null;
-    return SystemInstruction.decodeTransfer(ix);
-  } catch (err) {
-    console.error(ix, err);
-    return null;
-  }
-}
-
-export function decodeCreate(
-  ix: TransactionInstruction
-): CreateAccountParams | null {
-  if (!ix.programId.equals(SystemProgram.programId)) return null;
-
-  try {
-    if (SystemInstruction.decodeInstructionType(ix) !== "Create") return null;
-    return SystemInstruction.decodeCreateAccount(ix);
-  } catch (err) {
-    console.error(ix, err);
-    return null;
-  }
 }
