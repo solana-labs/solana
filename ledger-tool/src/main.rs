@@ -1156,21 +1156,21 @@ fn main() {
                         .get_program_accounts(None)
                         .into_iter()
                         .filter_map(|(_pubkey, account)| {
-                            if account.lamports != u64::max_value() {
-                                let is_specially_retained =
-                                    solana_sdk::native_loader::check_id(&account.owner)
-                                        || solana_sdk::sysvar::check_id(&account.owner);
+                            if account.lamports == u64::max_value() {
+                                return None;
+                            }
 
-                                if is_specially_retained {
-                                    // specially retained accounts are ensured to exist by
-                                    // alwaysing having a balance of 1 lamports, which is
-                                    // outside the capitalization calculation.
-                                    Some(account.lamports - 1)
-                                } else {
-                                    Some(account.lamports)
-                                }
+                            let is_specially_retained =
+                                solana_sdk::native_loader::check_id(&account.owner)
+                                    || solana_sdk::sysvar::check_id(&account.owner);
+
+                            if is_specially_retained {
+                                // specially retained accounts are ensured to exist by
+                                // alwaysing having a balance of 1 lamports, which is
+                                // outside the capitalization calculation.
+                                Some(account.lamports - 1)
                             } else {
-                                None
+                                Some(account.lamports)
                             }
                         })
                         .sum();
