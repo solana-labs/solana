@@ -1,4 +1,4 @@
-use crate::args::{BalancesArgs, DistributeTokensArgs, PrintDbArgs, StakeArgs};
+use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
 use crate::thin_client::{Client, ThinClient};
 use console::style;
 use csv::{ReaderBuilder, Trim};
@@ -235,7 +235,7 @@ fn open_db(path: &str, dry_run: bool) -> Result<PickleDb, pickledb::error::Error
     }
 }
 
-pub fn print_db<P: AsRef<Path>>(db: &PickleDb, path: &P) -> Result<(), io::Error> {
+pub fn write_transaction_log<P: AsRef<Path>>(db: &PickleDb, path: &P) -> Result<(), io::Error> {
     let mut wtr = csv::WriterBuilder::new().from_path(path).unwrap();
     for (signature, info) in read_transaction_data(db) {
         let signed_info = SignedTransactionInfo {
@@ -518,9 +518,9 @@ pub fn process_balances<T: Client>(
     Ok(())
 }
 
-pub fn process_print_db(args: &PrintDbArgs) -> Result<(), Error> {
+pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
     let db = open_db(&args.transactions_db, true)?;
-    print_db(&db, &args.output_path)?;
+    write_transaction_log(&db, &args.output_path)?;
     Ok(())
 }
 
@@ -893,7 +893,7 @@ mod tests {
     }
 
     #[test]
-    fn test_print_db() {
+    fn test_write_transaction_log() {
         let mut db =
             PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
         let signature = Signature::default();
@@ -901,7 +901,7 @@ mod tests {
         db.set(&signature.to_string(), &transaction_info).unwrap();
 
         let csv_file = NamedTempFile::new().unwrap();
-        print_db(&db, &csv_file).unwrap();
+        write_transaction_log(&db, &csv_file).unwrap();
 
         let mut rdr = ReaderBuilder::new().trim(Trim::All).from_reader(csv_file);
         let signed_infos: Vec<SignedTransactionInfo> =

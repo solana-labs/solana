@@ -23,8 +23,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         Command::Balances(args) => {
             tokens::process_balances(&thin_client, &args)?;
         }
-        Command::PrintDb(args) => {
-            tokens::process_print_db(&args)?;
+        Command::TransactionLog(args) => {
+            tokens::process_transaction_log(&args)?;
         }
     }
     Ok(())

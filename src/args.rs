@@ -30,7 +30,7 @@ pub struct BalancesArgs {
     pub dollars_per_sol: Option<f64>,
 }
 
-pub struct PrintDbArgs {
+pub struct TransactionLogArgs {
     pub transactions_db: String,
     pub output_path: String,
 }
@@ -38,7 +38,7 @@ pub struct PrintDbArgs {
 pub enum Command<P, K> {
     DistributeTokens(DistributeTokensArgs<P, K>),
     Balances(BalancesArgs),
-    PrintDb(PrintDbArgs),
+    TransactionLog(TransactionLogArgs),
 }
 
 pub struct Args<P, K> {
@@ -100,6 +100,6 @@ pub fn resolve_command(
             Ok(Command::DistributeTokens(resolved_args))
         }
         Command::Balances(args) => Ok(Command::Balances(args)),
-        Command::PrintDb(args) => Ok(Command::PrintDb(args)),
+        Command::TransactionLog(args) => Ok(Command::TransactionLog(args)),
     }
 }

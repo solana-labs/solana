@@ -1,4 +1,6 @@
-use crate::args::{Args, BalancesArgs, Command, DistributeTokensArgs, PrintDbArgs, StakeArgs};
+use crate::args::{
+    Args, BalancesArgs, Command, DistributeTokensArgs, StakeArgs, TransactionLogArgs,
+};
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::input_validators::{is_valid_pubkey, is_valid_signer};
 use solana_cli_config::CONFIG_FILE;
@@ -198,7 +200,7 @@ where
                 ),
         )
         .subcommand(
-            SubCommand::with_name("print-database")
+            SubCommand::with_name("transaction-log")
                 .about("Print the database to a CSV file")
                 .arg(
                     Arg::with_name("transactions_db")
@@ -264,8 +266,8 @@ fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
     }
 }
 
-fn parse_print_db_args(matches: &ArgMatches<'_>) -> PrintDbArgs {
-    PrintDbArgs {
+fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
+    TransactionLogArgs {
         transactions_db: value_t_or_exit!(matches, "transactions_db", String),
         output_path: value_t_or_exit!(matches, "output_path", String),
     }
@@ -288,7 +290,9 @@ where
             Command::DistributeTokens(parse_distribute_stake_args(matches))
         }
         ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)),
-        ("print-database", Some(matches)) => Command::PrintDb(parse_print_db_args(matches)),
+        ("transaction-log", Some(matches)) => {
+            Command::TransactionLog(parse_transaction_log_args(matches))
+        }
         _ => {
             eprintln!("{}", matches.usage());
             exit(1);
