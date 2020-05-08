@@ -333,10 +333,10 @@ mod bpf {
             let bank = Arc::new(Bank::new(&genesis_config));
             let bank_client = BankClient::new_shared(&bank);
 
-            let program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
+            let invoke_program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
             let invoked_program_id = load_bpf_program(&bank_client, &mint_keypair, program.1);
 
-            let account = Account::new(42, 100, &program_id);
+            let account = Account::new(42, 100, &invoke_program_id);
             let argument_keypair = Keypair::new();
             bank.store_account(&argument_keypair.pubkey(), &account);
 
@@ -344,9 +344,11 @@ mod bpf {
             let invoked_argument_keypair = Keypair::new();
             bank.store_account(&invoked_argument_keypair.pubkey(), &account);
 
-            let derived_key =
-                Pubkey::create_program_address(&["Lil'", "Bits"], &invoked_program_id).unwrap();
+            let derived_key1 =
+                Pubkey::create_program_address(&["You pass butter"], &invoke_program_id).unwrap();
             let derived_key2 =
+                Pubkey::create_program_address(&["Lil'", "Bits"], &invoked_program_id).unwrap();
+            let derived_key3 =
                 Pubkey::create_program_address(&["Gar Ma Nar Nar"], &invoked_program_id).unwrap();
 
             let account_metas = vec![
@@ -356,11 +358,12 @@ mod bpf {
                 AccountMeta::new(invoked_argument_keypair.pubkey(), true),
                 AccountMeta::new_readonly(invoked_program_id, false),
                 AccountMeta::new(argument_keypair.pubkey(), true),
-                AccountMeta::new(derived_key, false),
-                AccountMeta::new_readonly(derived_key2, false),
+                AccountMeta::new(derived_key1, false),
+                AccountMeta::new(derived_key2, false),
+                AccountMeta::new_readonly(derived_key3, false),
             ];
 
-            let instruction = Instruction::new(program_id, &1u8, account_metas);
+            let instruction = Instruction::new(invoke_program_id, &1u8, account_metas);
             let message = Message::new(&[instruction]);
 
             assert!(bank_client

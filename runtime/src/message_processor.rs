@@ -229,6 +229,11 @@ impl InvokeContext for ThisInvokeContext {
             None => Err(InstructionError::GenericError), // Should never happen
         }
     }
+    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
+        self.program_ids
+            .last()
+            .ok_or(InstructionError::GenericError)
+    }
 }
 
 pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;

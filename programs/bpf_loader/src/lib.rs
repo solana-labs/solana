@@ -262,7 +262,9 @@ mod tests {
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 
     #[derive(Debug, Default)]
-    pub struct MockInvokeContext {}
+    pub struct MockInvokeContext {
+        key: Pubkey,
+    }
     impl InvokeContext for MockInvokeContext {
         fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
             Ok(())
@@ -276,6 +278,9 @@ mod tests {
             _accounts: &[Rc<RefCell<Account>>],
         ) -> Result<(), InstructionError> {
             Ok(())
+        }
+        fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
+            Ok(&self.key)
         }
     }
 
