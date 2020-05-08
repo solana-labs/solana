@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let config = Config::load(&command_args.config_file)?;
     let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
     let client = RpcClient::new(json_rpc_url);
-    let thin_client = ThinClient(client);
+    let thin_client = ThinClient::new(client);
 
     match resolve_command(command_args.command)? {
         Command::DistributeTokens(args) => {

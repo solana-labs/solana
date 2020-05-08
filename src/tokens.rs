@@ -426,11 +426,12 @@ fn finalize_transactions<T: Client>(
     let progress_bar = new_spinner_progress_bar();
 
     while opt_confirmations.is_some() || !unconfirmed_transactions.is_empty() {
-        let confirmations = opt_confirmations.unwrap();
-        progress_bar.set_message(&format!(
-            "[{}/{}] Finalizing transactions",
-            confirmations, 32,
-        ));
+        if let Some(confirmations) = opt_confirmations {
+            progress_bar.set_message(&format!(
+                "[{}/{}] Finalizing transactions",
+                confirmations, 32,
+            ));
+        }
 
         if !dry_run {
             for transaction in unconfirmed_transactions {
@@ -589,7 +590,7 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
 pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient(client);
+    let thin_client = ThinClient::new(client);
     let fee_payer = Keypair::new();
     thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
@@ -661,7 +662,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
 }
 
 pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient(client);
+    let thin_client = ThinClient::new(client);
     let fee_payer = Keypair::new();
     thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())

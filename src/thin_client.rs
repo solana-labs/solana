@@ -115,9 +115,13 @@ impl Client for BankClient {
     }
 }
 
-pub struct ThinClient<C: Client>(pub C);
+pub struct ThinClient<C: Client>(C);
 
 impl<C: Client> ThinClient<C> {
+    pub fn new(client: C) -> Self {
+        Self(client)
+    }
+
     pub fn async_send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         self.0.async_send_transaction1(transaction)
     }
