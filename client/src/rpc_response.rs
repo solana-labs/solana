@@ -199,3 +199,12 @@ pub struct RpcAccountBalance {
     pub address: String,
     pub lamports: u64,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcCirculatingSupply {
+    pub epoch: Epoch,
+    pub circulating_supply: u64,
+    pub non_circulating_supply: u64,
+    pub non_circulating_accounts: Vec<String>,
+}

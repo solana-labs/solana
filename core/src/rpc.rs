@@ -302,6 +302,25 @@ impl JsonRpcRequestProcessor {
         )
     }
 
+    fn get_circulating_supply(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcCirculatingSupply> {
+        let bank = self.bank(commitment)?;
+        let epoch = bank.epoch();
+        Ok(RpcCirculatingSupply {
+            epoch,
+            circulating_supply: bank.supply.circulating,
+            non_circulating_supply: bank.supply.non_circulating,
+            non_circulating_accounts: bank
+                .supply
+                .non_circulating_accounts
+                .iter()
+                .map(|pubkey| pubkey.to_string())
+                .collect(),
+        })
+    }
+
     fn get_vote_accounts(
         &self,
         commitment: Option<CommitmentConfig>,
@@ -800,6 +819,13 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Vec<RpcAccountBalance>>;
 
+    #[rpc(meta, name = "getCirculatingSupply")]
+    fn get_circulating_supply(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcCirculatingSupply>;
+
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(
         &self,
@@ -1211,6 +1237,18 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_largest_accounts(commitment)
+    }
+
+    fn get_circulating_supply(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcCirculatingSupply> {
+        debug!("get_circulating_supply rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_circulating_supply(commitment)
     }
 
     fn request_airdrop(
