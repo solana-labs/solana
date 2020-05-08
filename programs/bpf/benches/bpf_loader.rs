@@ -133,7 +133,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
 }
 
 #[derive(Debug, Default)]
-pub struct MockInvokeContext {}
+pub struct MockInvokeContext {
+    key: Pubkey,
+}
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
         Ok(())
@@ -147,5 +149,8 @@ impl InvokeContext for MockInvokeContext {
         _accounts: &[Rc<RefCell<Account>>],
     ) -> Result<(), InstructionError> {
         Ok(())
+    }
+    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
+        Ok(&self.key)
     }
 }
