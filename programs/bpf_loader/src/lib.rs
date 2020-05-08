@@ -542,7 +542,7 @@ mod tests {
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 
-        println!("mangle the whole file");
+        info!("mangle the whole file");
         fuzz(
             &elf,
             1_000_000_000,
@@ -566,9 +566,6 @@ mod tests {
                     &vec![],
                     &mut MockInvokeContext::default(),
                 );
-                // if result.is_err() {
-                //     println!("{:?}", result);
-                // }
             },
         );
     }
