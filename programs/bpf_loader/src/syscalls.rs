@@ -697,8 +697,7 @@ fn call<'a>(
     let callee_program_id = message.account_keys[callee_program_id_index];
     let caller_program_id = invoke_context
         .get_caller()
-        .map_err(|err| SyscallError::InstructionError(err))?
-        .into();
+        .map_err(SyscallError::InstructionError)?;
     let (accounts, refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
