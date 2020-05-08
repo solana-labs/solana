@@ -74,6 +74,7 @@ fi
 if [[ -e "$ledgerDir"/genesis.bin ]]; then
   echo "Use existing genesis"
 else
+  # shellcheck disable=SC2086
   solana-genesis \
     --hashes-per-tick sleep \
     --faucet-pubkey "$dataDir"/faucet.json \
@@ -83,7 +84,8 @@ else
       "$dataDir"/validator-vote-account.json \
       "$dataDir"/validator-stake-account.json \
     --ledger "$ledgerDir" \
-    --operating-mode development
+    --operating-mode development \
+    $SOLANA_RUN_SH_GENESIS_ARGS
 fi
 
 abort() {
