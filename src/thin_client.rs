@@ -1,6 +1,7 @@
 use solana_client::rpc_client::RpcClient;
 use solana_runtime::bank_client::BankClient;
 use solana_sdk::{
+    account::Account,
     client::{AsyncClient, SyncClient},
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -9,6 +10,10 @@ use solana_sdk::{
     signature::{Signature, Signer},
     signers::Signers,
     system_instruction,
+    sysvar::{
+        recent_blockhashes::{self, RecentBlockhashes},
+        Sysvar,
+    },
     transaction::Transaction,
     transport::{Result, TransportError},
 };
@@ -26,6 +31,7 @@ pub trait Client {
     ) -> Result<Vec<Option<TransactionStatus>>>;
     fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64>;
     fn get_recent_blockhash1(&self) -> Result<(Hash, FeeCalculator)>;
+    fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
 }
 
 impl Client for RpcClient {
@@ -56,6 +62,12 @@ impl Client for RpcClient {
 
     fn get_recent_blockhash1(&self) -> Result<(Hash, FeeCalculator)> {
         self.get_recent_blockhash()
+            .map_err(|e| TransportError::Custom(e.to_string()))
+    }
+
+    fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+        self.get_account(pubkey)
+            .map(Some)
             .map_err(|e| TransportError::Custom(e.to_string()))
     }
 }
@@ -96,6 +108,10 @@ impl Client for BankClient {
 
     fn get_recent_blockhash1(&self) -> Result<(Hash, FeeCalculator)> {
         self.get_recent_blockhash()
+    }
+
+    fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+        self.get_account(pubkey)
     }
 }
 
@@ -143,5 +159,17 @@ impl<C: Client> ThinClient<C> {
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
         self.0.get_balance1(pubkey)
+    }
+
+    pub fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+        self.0.get_account1(pubkey)
+    }
+
+    pub fn get_recent_blockhashes(&self) -> Result<Vec<Hash>> {
+        let opt_blockhashes_account = self.get_account(&recent_blockhashes::id())?;
+        let blockhashes_account = opt_blockhashes_account.unwrap();
+        let recent_blockhashes = RecentBlockhashes::from_account(&blockhashes_account).unwrap();
+        let hashes = recent_blockhashes.iter().map(|x| x.blockhash).collect();
+        Ok(hashes)
     }
 }

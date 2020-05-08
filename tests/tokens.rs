@@ -5,7 +5,6 @@ use solana_tokens::tokens::test_process_distribute_tokens_with_client;
 use std::fs::remove_dir_all;
 
 #[test]
-#[ignore]
 fn test_process_distribute_with_rpc_client() {
     let validator = TestValidator::run_with_options(TestValidatorOptions {
         mint_lamports: sol_to_lamports(9_000_000.0),

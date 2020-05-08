@@ -3445,6 +3445,7 @@ dependencies = [
  "console 0.10.3",
  "csv",
  "indexmap",
+ "indicatif",
  "itertools 0.9.0",
  "pickledb",
  "serde",
