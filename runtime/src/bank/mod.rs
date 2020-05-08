@@ -72,6 +72,8 @@ pub const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+const SYSVAR_BALANCE_ACTIVATION_EPOCH: Epoch = 25;
+
 type BankStatusCache = StatusCache<Result<()>>;
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
@@ -558,7 +560,7 @@ impl Bank {
 
     fn inherit_sysvar_account_balance(&self, old_account: &Option<Account>) -> u64 {
         // Corrent sysvar account balance maintenance activates at this epoch on the mainnet-beta
-        if self.epoch() >= 25 {
+        if self.epoch() >= SYSVAR_BALANCE_ACTIVATION_EPOCH {
             old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
         } else {
             1
@@ -3516,7 +3518,7 @@ mod tests {
     #[test]
     fn test_transfer_to_sysvar() {
         solana_logger::setup();
-        let (genesis_config, mint_keypair) = create_genesis_config(10_000);
+        let (genesis_config, mint_keypair) = create_genesis_config(10_000_000);
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let normal_pubkey = Pubkey::new_rand();
@@ -3531,7 +3533,25 @@ mod tests {
 
         let bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_balance(&normal_pubkey), 500);
-        assert_eq!(bank.get_balance(&sysvar_pubkey), 501);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 1);
+
+        let bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config
+                .epoch_schedule
+                .get_first_slot_in_epoch(SYSVAR_BALANCE_ACTIVATION_EPOCH),
+        ));
+
+        let normal_pubkey = Pubkey::new_rand();
+        bank.transfer(6000, &mint_keypair, &normal_pubkey).unwrap();
+        bank.transfer(6000, &mint_keypair, &sysvar_pubkey).unwrap();
+        assert_eq!(bank.get_balance(&normal_pubkey), 3561);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 6001);
+
+        let bank = Arc::new(new_from_parent(&bank));
+        assert_eq!(bank.get_balance(&normal_pubkey), 3561);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 6001);
     }
 
     #[test]
