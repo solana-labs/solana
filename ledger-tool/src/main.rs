@@ -731,7 +731,6 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
-            .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("prune")
             .about("Prune the ledger at the block height")
@@ -1063,10 +1062,17 @@ fn main() {
                 poh_verify: false,
                 ..ProcessOptions::default()
             };
-            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+            let genesis_config = open_genesis_config(&ledger_path);
             match load_bank_forks(arg_matches, &ledger_path, &genesis_config, process_options) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
-                    let slot = bank_forks.working_bank().slot();
+                Ok((bank_forks, bank_forks_info, _leader_schedule_cache, _snapshot_hash)) => {
+                    let slot = dev_halt_at_slot.unwrap_or_else(|| {
+                        if bank_forks_info.len() > 1 {
+                            eprintln!("Error: multiple forks present");
+                            exit(1);
+                        }
+                        bank_forks_info[0].bank_slot
+                    });
+
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);
                         exit(1);

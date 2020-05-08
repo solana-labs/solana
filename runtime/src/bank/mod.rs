@@ -557,7 +557,11 @@ impl Bank {
     }
 
     fn inherit_sysvar_account_balance(&self, old_account: &Option<Account>) -> u64 {
-        old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
+        if self.epoch() >= 24 {
+            old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
+        } else {
+            1
+        }
     }
 
     fn update_clock(&self) {
