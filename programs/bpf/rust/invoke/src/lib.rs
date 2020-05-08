@@ -4,7 +4,7 @@
 
 extern crate solana_sdk;
 
-use solana_bpf_rust_invoked::instruction::create_instruction;
+use solana_bpf_rust_invoked::instruction::*;
 use solana_sdk::{
     account_info::AccountInfo,
     entrypoint,
@@ -21,8 +21,9 @@ const INVOKED_PROGRAM_INDEX: usize = 2;
 const INVOKED_ARGUMENT_INDEX: usize = 3;
 const INVOKED_PROGRAM_DUP_INDEX: usize = 4;
 // const ARGUMENT_DUP_INDEX: usize = 5;
-const DERIVED_KEY_INDEX: usize = 6;
+const DERIVED_KEY1_INDEX: usize = 6;
 const DERIVED_KEY2_INDEX: usize = 7;
+const DERIVED_KEY3_INDEX: usize = 8;
 
 entrypoint!(process_instruction);
 fn process_instruction(
@@ -49,7 +50,7 @@ fn process_instruction(
                 (accounts[INVOKED_PROGRAM_INDEX].key, false, false),
                 (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
             ],
-            vec![0, 1, 2, 3, 4, 5],
+            vec![TEST_VERIFY_TRANSLATIONS, 1, 2, 3, 4, 5],
         );
         invoke(&instruction, accounts)?;
     }
@@ -59,7 +60,7 @@ fn process_instruction(
         let instruction = create_instruction(
             *accounts[INVOKED_PROGRAM_INDEX].key,
             &[(accounts[ARGUMENT_INDEX].key, true, true)],
-            vec![1],
+            vec![TEST_RETURN_ERROR],
         );
         assert_eq!(
             invoke(&instruction, accounts),
@@ -69,21 +70,24 @@ fn process_instruction(
 
     info!("Test derived signers");
     {
-        assert!(!accounts[DERIVED_KEY_INDEX].is_signer);
+        assert!(!accounts[DERIVED_KEY1_INDEX].is_signer);
         assert!(!accounts[DERIVED_KEY2_INDEX].is_signer);
+        assert!(!accounts[DERIVED_KEY3_INDEX].is_signer);
 
         let invoked_instruction = create_instruction(
             *accounts[INVOKED_PROGRAM_INDEX].key,
             &[
-                (accounts[DERIVED_KEY_INDEX].key, true, true),
-                (accounts[DERIVED_KEY2_INDEX].key, false, true),
+                (accounts[INVOKED_PROGRAM_INDEX].key, false, false),
+                (accounts[DERIVED_KEY1_INDEX].key, true, true),
+                (accounts[DERIVED_KEY2_INDEX].key, true, false),
+                (accounts[DERIVED_KEY3_INDEX].key, false, false),
             ],
-            vec![2],
+            vec![TEST_DERIVED_SIGNERS],
         );
         invoke_signed(
             &invoked_instruction,
             accounts,
-            &[&["Lil'", "Bits"], &["Gar Ma Nar Nar"]],
+            &[&["You pass butter"], &["Lil'", "Bits"]],
         )?;
     }
 
@@ -92,7 +96,7 @@ fn process_instruction(
         let invoked_instruction = create_instruction(
             *accounts[INVOKED_PROGRAM_INDEX].key,
             &[(accounts[ARGUMENT_INDEX].key, false, true)],
-            vec![3],
+            vec![TEST_VERIFY_WRITER],
         );
         invoke(&invoked_instruction, accounts)?;
     }
@@ -100,8 +104,6 @@ fn process_instruction(
     info!("Test nested invoke");
     {
         assert!(accounts[ARGUMENT_INDEX].is_signer);
-        assert!(!accounts[DERIVED_KEY_INDEX].is_signer);
-        assert!(!accounts[DERIVED_KEY2_INDEX].is_signer);
 
         **accounts[ARGUMENT_INDEX].lamports.borrow_mut() -= 5;
         **accounts[INVOKED_ARGUMENT_INDEX].lamports.borrow_mut() += 5;
@@ -112,11 +114,10 @@ fn process_instruction(
             &[
                 (accounts[ARGUMENT_INDEX].key, true, true),
                 (accounts[INVOKED_ARGUMENT_INDEX].key, true, true),
-                (accounts[DERIVED_KEY_INDEX].key, true, false),
                 (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
                 (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
             ],
-            vec![4],
+            vec![TEST_NESTED_INVOKE],
         );
         invoke(&instruction, accounts)?;
         info!("2nd invoke from first program");

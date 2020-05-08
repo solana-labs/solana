@@ -6,10 +6,15 @@ pub mod instruction;
 
 extern crate solana_sdk;
 
-use crate::instruction::create_instruction;
+use crate::instruction::*;
 use solana_sdk::{
-    account_info::AccountInfo, bpf_loader, entrypoint, entrypoint::ProgramResult, info,
-    program::invoke_signed, program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo,
+    bpf_loader, entrypoint,
+    entrypoint::ProgramResult,
+    info,
+    program::{invoke, invoke_signed},
+    program_error::ProgramError,
+    pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
@@ -22,7 +27,7 @@ fn process_instruction(
     info!("Invoked program");
 
     match instruction_data[0] {
-        0 => {
+        TEST_VERIFY_TRANSLATIONS => {
             info!("verify data translations");
 
             const ARGUMENT_INDEX: usize = 0;
@@ -30,7 +35,7 @@ fn process_instruction(
             const INVOKED_PROGRAM_INDEX: usize = 2;
             const INVOKED_PROGRAM_DUP_INDEX: usize = 3;
 
-            assert_eq!(instruction_data, &[0, 1, 2, 3, 4, 5]);
+            assert_eq!(&instruction_data[1..], &[1, 2, 3, 4, 5]);
             assert_eq!(accounts.len(), 4);
 
             assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42);
@@ -100,51 +105,76 @@ fn process_instruction(
                 info!(data[0], 0, 0, 0, 0);
             }
         }
-        1 => {
+        TEST_RETURN_ERROR => {
             info!("return error");
             return Err(ProgramError::Custom(42));
         }
-        2 => {
+        TEST_DERIVED_SIGNERS => {
             info!("verify derived signers");
-            const DERIVED_KEY_INDEX: usize = 0;
-            const DERIVED_KEY2_INDEX: usize = 1;
+            const INVOKED_PROGRAM_INDEX: usize = 0;
+            const DERIVED_KEY1_INDEX: usize = 1;
+            const DERIVED_KEY2_INDEX: usize = 2;
+            const DERIVED_KEY3_INDEX: usize = 3;
 
-            assert!(accounts[DERIVED_KEY_INDEX].is_signer);
-            assert!(accounts[DERIVED_KEY2_INDEX].is_signer);
+            assert!(accounts[DERIVED_KEY1_INDEX].is_signer);
+            assert!(!accounts[DERIVED_KEY2_INDEX].is_signer);
+            assert!(!accounts[DERIVED_KEY3_INDEX].is_signer);
+
+            let invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[
+                    (accounts[DERIVED_KEY1_INDEX].key, true, false),
+                    (accounts[DERIVED_KEY2_INDEX].key, true, true),
+                    (accounts[DERIVED_KEY3_INDEX].key, false, true),
+                ],
+                vec![TEST_VERIFY_NESTED_SIGNERS],
+            );
+            invoke_signed(
+                &invoked_instruction,
+                accounts,
+                &[&["Lil'", "Bits"], &["Gar Ma Nar Nar"]],
+            )?;
         }
-        3 => {
+        TEST_VERIFY_NESTED_SIGNERS => {
+            info!("verify nested derived signers");
+            const DERIVED_KEY1_INDEX: usize = 0;
+            const DERIVED_KEY2_INDEX: usize = 1;
+            const DERIVED_KEY3_INDEX: usize = 2;
+
+            assert!(!accounts[DERIVED_KEY1_INDEX].is_signer);
+            assert!(accounts[DERIVED_KEY2_INDEX].is_signer);
+            assert!(accounts[DERIVED_KEY3_INDEX].is_signer);
+        }
+        TEST_VERIFY_WRITER => {
             info!("verify writable");
             const ARGUMENT_INDEX: usize = 0;
 
             assert!(!accounts[ARGUMENT_INDEX].is_writable);
         }
-        4 => {
+        TEST_NESTED_INVOKE => {
             info!("nested invoke");
 
             const ARGUMENT_INDEX: usize = 0;
             const INVOKED_ARGUMENT_INDEX: usize = 1;
-            const DERIVED_KEY_INDEX: usize = 2;
             const INVOKED_PROGRAM_INDEX: usize = 3;
 
             assert!(accounts[INVOKED_ARGUMENT_INDEX].is_signer);
 
             **accounts[INVOKED_ARGUMENT_INDEX].lamports.borrow_mut() -= 1;
             **accounts[ARGUMENT_INDEX].lamports.borrow_mut() += 1;
-            if accounts.len() > 3 {
+            if accounts.len() > 2 {
                 info!("Invoke again");
                 let invoked_instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
                     &[
                         (accounts[ARGUMENT_INDEX].key, true, true),
                         (accounts[INVOKED_ARGUMENT_INDEX].key, true, true),
-                        (accounts[DERIVED_KEY_INDEX].key, true, true),
                     ],
-                    vec![4],
+                    vec![TEST_NESTED_INVOKE],
                 );
-                invoke_signed(&invoked_instruction, accounts, &[&["Lil'", "Bits"]])?;
+                invoke(&invoked_instruction, accounts)?;
             } else {
                 info!("Last invoked");
-                assert!(accounts[DERIVED_KEY_INDEX].is_signer);
                 {
                     let mut data = accounts[INVOKED_ARGUMENT_INDEX].try_borrow_mut_data()?;
                     for i in 0..10 {

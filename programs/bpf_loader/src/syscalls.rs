@@ -693,8 +693,12 @@ fn call<'a>(
 
     let instruction = syscall.translate_instruction(instruction_addr, ro_regions)?;
     let message = Message::new(&[instruction]);
-    let program_id_index = message.instructions[0].program_id_index as usize;
-    let program_id = message.account_keys[program_id_index];
+    let callee_program_id_index = message.instructions[0].program_id_index as usize;
+    let callee_program_id = message.account_keys[callee_program_id_index];
+    let caller_program_id = invoke_context
+        .get_caller()
+        .map_err(|err| SyscallError::InstructionError(err))?
+        .into();
     let (accounts, refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
@@ -703,7 +707,7 @@ fn call<'a>(
         rw_regions,
     )?;
     let signers = syscall.translate_signers(
-        &program_id,
+        caller_program_id,
         signers_seeds_addr,
         signers_seeds_len as usize,
         ro_regions,
@@ -711,12 +715,12 @@ fn call<'a>(
 
     // Process instruction
 
-    let program_account = (*accounts[program_id_index]).clone();
+    let program_account = (*accounts[callee_program_id_index]).clone();
     if program_account.borrow().owner != bpf_loader::id() {
         // Only BPF programs supported for now
         return Err(SyscallError::ProgramNotSupported.into());
     }
-    let executable_accounts = vec![(program_id, program_account)];
+    let executable_accounts = vec![(callee_program_id, program_account)];
 
     #[allow(clippy::deref_addrof)]
     match MessageProcessor::process_cross_program_instruction(
