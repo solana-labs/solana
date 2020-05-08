@@ -18,6 +18,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getBalance](jsonrpc-api.md#getbalance)
 * [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
 * [getBlockTime](jsonrpc-api.md#getblocktime)
+* [getCirculatingSupply](jsonrpc-api.md#getcirculatingsupply)
 * [getClusterNodes](jsonrpc-api.md#getclusternodes)
 * [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 * [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
@@ -242,6 +243,35 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":1574721591,"id":1}
+```
+
+### getCirculatingSupply
+
+Returns information about the current circulating and non-circulating supply.
+Supply information is calculated at the beginning of each epoch, and does not
+reflect mid-epoch changes.
+
+#### Parameters:
+
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result field will be a JSON object, with the following fields:
+
+* `epoch: <u64>` - Epoch the supply balances were calculated
+* `circulatingSupply: <u64>` - Circulating supply in lamports
+* `nonCirculatingSupply: <u64>` - Non-circulating supply in lamports
+* `nonCirculatingAccounts: <array>` - an array of account addresses of non-circulating accounts, as strings
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getCirculatingSupply"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"circulatingSupply":16000,"epoch":42,"nonCirculatingAccounts":["FEy8pTbP5fEoqMV1GdTz83byuA8EKByqYat1PKDgVAq5","9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA","3mi1GmwEE3zo2jmfDuzvjSX9ovRXsDUKHvsntpkhuLJ9","BYxEJTDerkaRWBem3XgnVcdhppktBXa2HbkHPKj2Ui4Z],"nonCirculatingSupply":1000000}],"id":1}
 ```
 
 ### getClusterNodes
