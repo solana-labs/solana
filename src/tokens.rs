@@ -461,7 +461,7 @@ fn update_finalized_transaction(
     if opt_transaction_status.is_none() {
         if !recent_blockhashes.contains(blockhash) {
             eprintln!("Signature not found {} and blockhash expired", signature);
-            println!("Discarding transaction record");
+            eprintln!("Discarding transaction record");
             db.rem(&signature.to_string())?;
             return Ok(None);
         }
