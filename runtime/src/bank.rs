@@ -567,16 +567,20 @@ impl Bank {
         old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
     }
 
+    pub fn clock(&self) -> sysvar::clock::Clock {
+        sysvar::clock::Clock {
+            slot: self.slot,
+            segment: get_segment_from_slot(self.slot, self.slots_per_segment),
+            epoch: self.epoch_schedule.get_epoch(self.slot),
+            leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
+            unix_timestamp: self.unix_timestamp(),
+        }
+    }
+
     fn update_clock(&self) {
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            sysvar::clock::Clock {
-                slot: self.slot,
-                segment: get_segment_from_slot(self.slot, self.slots_per_segment),
-                epoch: self.epoch_schedule.get_epoch(self.slot),
-                leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
-                unix_timestamp: self.unix_timestamp(),
-            }
-            .create_account(self.inherit_sysvar_account_balance(account))
+            self.clock()
+                .create_account(self.inherit_sysvar_account_balance(account))
         });
     }
 
