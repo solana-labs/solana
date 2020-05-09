@@ -221,8 +221,7 @@ fn new_update_manifest(
         let mut transaction = Transaction::new_unsigned_instructions(&instructions);
         let signers = [from_keypair, update_manifest_keypair];
         transaction.sign(&signers, recent_blockhash);
-
-        rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
+        rpc_client.send_and_confirm_transaction(&transaction)?;
     }
     Ok(())
 }
@@ -245,8 +244,8 @@ fn store_update_manifest(
     );
 
     let message = Message::new_with_payer(&[instruction], Some(&from_keypair.pubkey()));
-    let mut transaction = Transaction::new(&signers, message, recent_blockhash);
-    rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
+    let transaction = Transaction::new(&signers, message, recent_blockhash);
+    rpc_client.send_and_confirm_transaction(&transaction)?;
     Ok(())
 }
 

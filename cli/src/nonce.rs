@@ -446,7 +446,7 @@ pub fn process_authorize_nonce_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<NonceError>(result, &config)
 }
 
@@ -523,7 +523,7 @@ pub fn process_create_nonce_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -564,8 +564,7 @@ pub fn process_new_nonce(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client
-        .send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0], nonce_authority]);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -624,7 +623,7 @@ pub fn process_withdraw_from_nonce_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<NonceError>(result, &config)
 }
 

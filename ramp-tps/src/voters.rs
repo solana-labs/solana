@@ -138,7 +138,7 @@ fn delegate_stake(
             }
         };
 
-        let mut transaction = Transaction::new_signed_instructions(
+        let transaction = Transaction::new_signed_instructions(
             &[faucet_keypair, &stake_account_keypair],
             &stake_instruction::create_account_and_delegate_stake(
                 &faucet_keypair.pubkey(),
@@ -160,10 +160,7 @@ fn delegate_stake(
             }
         }
 
-        if let Err(err) = rpc_client.send_and_confirm_transaction(
-            &mut transaction,
-            &[faucet_keypair, &stake_account_keypair],
-        ) {
+        if let Err(err) = rpc_client.send_and_confirm_transaction(&transaction) {
             error!(
                 "Failed to delegate stake (retries: {}): {}",
                 retry_count, err

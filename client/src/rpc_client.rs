@@ -24,7 +24,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
     signers::Signers,
-    transaction::{self, Transaction, TransactionError},
+    transaction::{self, Transaction},
 };
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, TransactionEncoding, TransactionStatus,
@@ -449,10 +449,9 @@ impl RpcClient {
             .map_err(|err| ClientError::new_with_command(err.into(), "MinimumLedgerSlot"))
     }
 
-    pub fn send_and_confirm_transaction<T: Signers>(
+    pub fn send_and_confirm_transaction(
         &self,
-        transaction: &mut Transaction,
-        signer_keys: &T,
+        transaction: &Transaction,
     ) -> ClientResult<Signature> {
         let mut send_retries = 20;
         loop {
@@ -476,11 +475,6 @@ impl RpcClient {
             send_retries = if let Some(result) = status.clone() {
                 match result {
                     Ok(_) => return Ok(signature),
-                    Err(TransactionError::AccountInUse) => {
-                        // Fetch a new blockhash and re-sign the transaction before sending it again
-                        self.resign_transaction(transaction, signer_keys)?;
-                        send_retries - 1
-                    }
                     Err(_) => 0,
                 }
             } else {
@@ -491,7 +485,9 @@ impl RpcClient {
                     return Err(err.unwrap_err().into());
                 } else {
                     return Err(
-                        RpcError::ForUser("unable to confirm transaction. This can happen in situations such as transaction expiration and insufficient fee-payer funds".to_string()).into(),
+                        RpcError::ForUser("unable to confirm transaction. \
+                                          This can happen in situations such as transaction expiration \
+                                          and insufficient fee-payer funds".to_string()).into(),
                     );
                 }
             }
@@ -1088,10 +1084,9 @@ impl RpcClient {
         Ok(confirmations)
     }
 
-    pub fn send_and_confirm_transaction_with_spinner<T: Signers>(
+    pub fn send_and_confirm_transaction_with_spinner(
         &self,
-        transaction: &mut Transaction,
-        signer_keys: &T,
+        transaction: &Transaction,
     ) -> ClientResult<Signature> {
         let mut confirmations = 0;
 
@@ -1128,11 +1123,6 @@ impl RpcClient {
             send_retries = if let Some(result) = status.clone() {
                 match result {
                     Ok(_) => 0,
-                    Err(TransactionError::AccountInUse) => {
-                        // Fetch a new blockhash and re-sign the transaction before sending it again
-                        self.resign_transaction(transaction, signer_keys)?;
-                        send_retries - 1
-                    }
                     // If transaction errors, return right away; no point in counting confirmations
                     Err(_) => 0,
                 }
@@ -1150,9 +1140,13 @@ impl RpcClient {
                         }
                     }
                 } else {
-                    return Err(
-                        RpcError::ForUser("unable to confirm transaction. This can happen in situations such as transaction expiration and insufficient fee-payer funds".to_string()).into(),
-                    );
+                    return Err(RpcError::ForUser(
+                        "unable to confirm transaction. \
+                            This can happen in situations such as transaction \
+                            expiration and insufficient fee-payer funds"
+                            .to_string(),
+                    )
+                    .into());
                 }
             }
         };
@@ -1177,7 +1171,9 @@ impl RpcClient {
                 .unwrap_or(confirmations);
             if now.elapsed().as_secs() >= MAX_HASH_AGE_IN_SECONDS as u64 {
                 return Err(
-                    RpcError::ForUser("transaction not finalized. This can happen when a transaction lands in an abandoned fork. Please retry.".to_string()).into(),
+                    RpcError::ForUser("transaction not finalized. \
+                                      This can happen when a transaction lands in an abandoned fork. \
+                                      Please retry.".to_string()).into(),
                 );
             }
         }
@@ -1380,17 +1376,16 @@ mod tests {
         let key = Keypair::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let mut tx = system_transaction::transfer(&key, &to, 50, blockhash);
-
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
+        let tx = system_transaction::transfer(&key, &to, 50, blockhash);
+        let result = rpc_client.send_and_confirm_transaction(&tx);
         result.unwrap();
 
         let rpc_client = RpcClient::new_mock("account_in_use".to_string());
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
+        let result = rpc_client.send_and_confirm_transaction(&tx);
         assert!(result.is_err());
 
         let rpc_client = RpcClient::new_mock("instruction_error".to_string());
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
+        let result = rpc_client.send_and_confirm_transaction(&tx);
         assert_matches!(
             result.unwrap_err().kind(),
             ClientErrorKind::TransactionError(TransactionError::InstructionError(
@@ -1400,7 +1395,7 @@ mod tests {
         );
 
         let rpc_client = RpcClient::new_mock("sig_not_found".to_string());
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
+        let result = rpc_client.send_and_confirm_transaction(&tx);
         if let ClientErrorKind::Io(err) = result.unwrap_err().kind() {
             assert_eq!(err.kind(), io::ErrorKind::Other);
         }
