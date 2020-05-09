@@ -29,6 +29,7 @@ pub mod genesis_utils;
 pub mod gossip_service;
 pub mod ledger_cleanup_service;
 pub mod local_vote_signer_service;
+pub mod non_circulating_supply;
 pub mod packet;
 pub mod poh_recorder;
 pub mod poh_service;

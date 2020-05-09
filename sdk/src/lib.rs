@@ -57,6 +57,7 @@ pub mod timing;
 /// assert_eq!(id(), my_id);
 /// ```
 pub use solana_sdk_macro::declare_id;
+pub use solana_sdk_macro::pubkeys;
 
 // On-chain program specific modules
 pub mod account_info;
