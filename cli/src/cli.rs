@@ -203,6 +203,7 @@ pub enum CliCommand {
     },
     Supply {
         commitment_config: CommitmentConfig,
+        print_accounts: bool,
     },
     TotalSupply {
         commitment_config: CommitmentConfig,
@@ -1700,9 +1701,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetSlot { commitment_config } => {
             process_get_slot(&rpc_client, *commitment_config)
         }
-        CliCommand::Supply { commitment_config } => {
-            process_supply(&rpc_client, config, *commitment_config)
-        }
+        CliCommand::Supply {
+            commitment_config,
+            print_accounts,
+        } => process_supply(&rpc_client, config, *commitment_config, *print_accounts),
         CliCommand::TotalSupply { commitment_config } => {
             process_total_supply(&rpc_client, *commitment_config)
         }

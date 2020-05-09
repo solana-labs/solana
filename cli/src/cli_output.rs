@@ -916,7 +916,7 @@ pub struct CliSupply {
     pub non_circulating: u64,
     pub non_circulating_accounts: Vec<String>,
     #[serde(skip_serializing)]
-    pub verbose: bool,
+    pub print_accounts: bool,
 }
 
 impl From<RpcSupply> for CliSupply {
@@ -926,7 +926,7 @@ impl From<RpcSupply> for CliSupply {
             circulating: rpc_supply.circulating,
             non_circulating: rpc_supply.non_circulating,
             non_circulating_accounts: rpc_supply.non_circulating_accounts,
-            verbose: false,
+            print_accounts: false,
         }
     }
 }
@@ -944,7 +944,7 @@ impl fmt::Display for CliSupply {
             "Non-Circulating:",
             &format!("{} SOL", lamports_to_sol(self.non_circulating)),
         )?;
-        if self.verbose {
+        if self.print_accounts {
             writeln!(f)?;
             writeln_name_value(f, "Non-Circulating Accounts:", " ")?;
             for account in &self.non_circulating_accounts {
