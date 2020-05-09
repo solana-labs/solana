@@ -162,7 +162,7 @@ fn send_message<S: Signers>(
 ) -> Result<Signature, ClientError> {
     let mut transaction = Transaction::new_unsigned(message);
     client.resign_transaction(&mut transaction, signers)?;
-    client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
+    client.send_and_confirm_transaction_with_spinner(&transaction)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

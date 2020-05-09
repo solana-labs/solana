@@ -457,7 +457,7 @@ pub fn process_create_vote_account(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -497,8 +497,7 @@ pub fn process_vote_authorize(
         &fee_calculator,
         &tx.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &[config.signers[0]]);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -531,7 +530,7 @@ pub fn process_vote_update_validator(
         &fee_calculator,
         &tx.message,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&mut tx, &config.signers);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -636,8 +635,7 @@ pub fn process_withdraw_from_vote_account(
         &fee_calculator,
         &transaction.message,
     )?;
-    let result =
-        rpc_client.send_and_confirm_transaction_with_spinner(&mut transaction, &config.signers);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
