@@ -593,17 +593,6 @@ declare module '@solana/web3.js' {
     programId: PublicKey,
   |};
 
-  declare export type TransferParams = {|
-    fromPubkey: PublicKey,
-    toPubkey: PublicKey,
-    lamports: number,
-  |};
-
-  declare export type AssignParams = {|
-    fromPubkey: PublicKey,
-    programId: PublicKey,
-  |};
-
   declare export type CreateAccountWithSeedParams = {|
     fromPubkey: PublicKey,
     newAccountPubkey: PublicKey,
@@ -612,6 +601,37 @@ declare module '@solana/web3.js' {
     lamports: number,
     space: number,
     programId: PublicKey,
+  |};
+
+  declare export type AllocateParams = {|
+    accountPubkey: PublicKey,
+    space: number,
+  |};
+
+  declare export type AllocateWithSeedParams = {|
+    accountPubkey: PublicKey,
+    basePubkey: PublicKey,
+    seed: string,
+    space: number,
+    programId: PublicKey,
+  |};
+
+  declare export type AssignParams = {|
+    accountPubkey: PublicKey,
+    programId: PublicKey,
+  |};
+
+  declare export type AssignWithSeedParams = {|
+    accountPubkey: PublicKey,
+    basePubkey: PublicKey,
+    seed: string,
+    programId: PublicKey,
+  |};
+
+  declare export type TransferParams = {|
+    fromPubkey: PublicKey,
+    toPubkey: PublicKey,
+    lamports: number,
   |};
 
   declare export type CreateNonceAccountParams = {|
@@ -657,11 +677,14 @@ declare module '@solana/web3.js' {
     static programId: PublicKey;
 
     static createAccount(params: CreateAccountParams): Transaction;
-    static transfer(params: TransferParams): Transaction;
-    static assign(params: AssignParams): Transaction;
     static createAccountWithSeed(
       params: CreateAccountWithSeedParams,
     ): Transaction;
+    static allocate(
+      params: AllocateParams | AllocateWithSeedParams,
+    ): Transaction;
+    static assign(params: AssignParams | AssignWithSeedParams): Transaction;
+    static transfer(params: TransferParams): Transaction;
     static createNonceAccount(
       params: CreateNonceAccountParams | CreateNonceAccountWithSeedParams,
     ): Transaction;
@@ -672,9 +695,12 @@ declare module '@solana/web3.js' {
 
   declare export type SystemInstructionType =
     | 'Create'
-    | 'Assign'
-    | 'Transfer'
     | 'CreateWithSeed'
+    | 'Allocate'
+    | 'AllocateWithSeed'
+    | 'Assign'
+    | 'AssignWithSeed'
+    | 'Transfer'
     | 'AdvanceNonceAccount'
     | 'WithdrawNonceAccount'
     | 'InitializeNonceAccount'
@@ -691,11 +717,18 @@ declare module '@solana/web3.js' {
     static decodeCreateAccount(
       instruction: TransactionInstruction,
     ): CreateAccountParams;
-    static decodeTransfer(instruction: TransactionInstruction): TransferParams;
-    static decodeAssign(instruction: TransactionInstruction): AssignParams;
     static decodeCreateWithSeed(
       instruction: TransactionInstruction,
     ): CreateAccountWithSeedParams;
+    static decodeAllocate(instruction: TransactionInstruction): AllocateParams;
+    static decodeAllocateWithSeed(
+      instruction: TransactionInstruction,
+    ): AllocateWithSeedParams;
+    static decodeAssign(instruction: TransactionInstruction): AssignParams;
+    static decodeAssignWithSeed(
+      instruction: TransactionInstruction,
+    ): AssignWithSeedParams;
+    static decodeTransfer(instruction: TransactionInstruction): TransferParams;
     static decodeNonceInitialize(
       instruction: TransactionInstruction,
     ): InitializeNonceParams;

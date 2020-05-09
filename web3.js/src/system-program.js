@@ -42,11 +42,11 @@ export type TransferParams = {|
 /**
  * Assign system transaction params
  * @typedef {Object} AssignParams
- * @property {PublicKey} fromPubkey
+ * @property {PublicKey} accountPubkey
  * @property {PublicKey} programId
  */
 export type AssignParams = {|
-  fromPubkey: PublicKey,
+  accountPubkey: PublicKey,
   programId: PublicKey,
 |};
 
@@ -156,6 +156,49 @@ export type AuthorizeNonceParams = {|
 |};
 
 /**
+ * Allocate account system transaction params
+ * @typedef {Object} AllocateParams
+ * @property {PublicKey} accountPubkey
+ * @property {number} space
+ */
+export type AllocateParams = {|
+  accountPubkey: PublicKey,
+  space: number,
+|};
+
+/**
+ * Allocate account with seed system transaction params
+ * @typedef {Object} AllocateWithSeedParams
+ * @property {PublicKey} accountPubkey
+ * @property {PublicKey} basePubkey
+ * @property {string} seed
+ * @property {number} space
+ * @property {PublicKey} programId
+ */
+export type AllocateWithSeedParams = {|
+  accountPubkey: PublicKey,
+  basePubkey: PublicKey,
+  seed: string,
+  space: number,
+  programId: PublicKey,
+|};
+
+/**
+ * Assign account with seed system transaction params
+ * @typedef {Object} AssignWithSeedParams
+ * @property {PublicKey} accountPubkey
+ * @property {PublicKey} basePubkey
+ * @property {string} seed
+ * @property {PublicKey} programId
+ */
+export type AssignWithSeedParams = {|
+  accountPubkey: PublicKey,
+  basePubkey: PublicKey,
+  seed: string,
+  programId: PublicKey,
+|};
+
+/**
  * System Instruction class
  */
 export class SystemInstruction {
@@ -227,6 +270,47 @@ export class SystemInstruction {
   }
 
   /**
+   * Decode an allocate system instruction and retrieve the instruction params.
+   */
+  static decodeAllocate(instruction: TransactionInstruction): AllocateParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 1);
+
+    const {space} = decodeData(
+      SYSTEM_INSTRUCTION_LAYOUTS.Allocate,
+      instruction.data,
+    );
+
+    return {
+      accountPubkey: instruction.keys[0].pubkey,
+      space,
+    };
+  }
+
+  /**
+   * Decode an allocate with seed system instruction and retrieve the instruction params.
+   */
+  static decodeAllocateWithSeed(
+    instruction: TransactionInstruction,
+  ): AllocateWithSeedParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 1);
+
+    const {base, seed, space, programId} = decodeData(
+      SYSTEM_INSTRUCTION_LAYOUTS.AllocateWithSeed,
+      instruction.data,
+    );
+
+    return {
+      accountPubkey: instruction.keys[0].pubkey,
+      basePubkey: new PublicKey(base),
+      seed,
+      space,
+      programId: new PublicKey(programId),
+    };
+  }
+
+  /**
    * Decode an assign system instruction and retrieve the instruction params.
    */
   static decodeAssign(instruction: TransactionInstruction): AssignParams {
@@ -239,7 +323,29 @@ export class SystemInstruction {
     );
 
     return {
-      fromPubkey: instruction.keys[0].pubkey,
+      accountPubkey: instruction.keys[0].pubkey,
+      programId: new PublicKey(programId),
+    };
+  }
+
+  /**
+   * Decode an assign with seed system instruction and retrieve the instruction params.
+   */
+  static decodeAssignWithSeed(
+    instruction: TransactionInstruction,
+  ): AssignWithSeedParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 1);
+
+    const {base, seed, programId} = decodeData(
+      SYSTEM_INSTRUCTION_LAYOUTS.AssignWithSeed,
+      instruction.data,
+    );
+
+    return {
+      accountPubkey: instruction.keys[0].pubkey,
+      basePubkey: new PublicKey(base),
+      seed,
       programId: new PublicKey(programId),
     };
   }
@@ -444,6 +550,32 @@ export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze({
       Layout.publicKey('authorized'),
     ]),
   },
+  Allocate: {
+    index: 8,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      BufferLayout.ns64('space'),
+    ]),
+  },
+  AllocateWithSeed: {
+    index: 9,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.publicKey('base'),
+      Layout.rustString('seed'),
+      BufferLayout.ns64('space'),
+      Layout.publicKey('programId'),
+    ]),
+  },
+  AssignWithSeed: {
+    index: 10,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.publicKey('base'),
+      Layout.rustString('seed'),
+      Layout.publicKey('programId'),
+    ]),
+  },
 });
 
 /**
@@ -498,12 +630,22 @@ export class SystemProgram {
   /**
    * Generate a Transaction that assigns an account to a program
    */
-  static assign(params: AssignParams): Transaction {
-    const type = SYSTEM_INSTRUCTION_LAYOUTS.Assign;
-    const data = encodeData(type, {programId: params.programId.toBuffer()});
+  static assign(params: AssignParams | AssignWithSeedParams): Transaction {
+    let data;
+    if (params.basePubkey) {
+      const type = SYSTEM_INSTRUCTION_LAYOUTS.AssignWithSeed;
+      data = encodeData(type, {
+        base: params.basePubkey.toBuffer(),
+        seed: params.seed,
+        programId: params.programId.toBuffer(),
+      });
+    } else {
+      const type = SYSTEM_INSTRUCTION_LAYOUTS.Assign;
+      data = encodeData(type, {programId: params.programId.toBuffer()});
+    }
 
     return new Transaction().add({
-      keys: [{pubkey: params.fromPubkey, isSigner: true, isWritable: true}],
+      keys: [{pubkey: params.accountPubkey, isSigner: true, isWritable: true}],
       programId: this.programId,
       data,
     });
@@ -662,6 +804,35 @@ export class SystemProgram {
         {pubkey: params.noncePubkey, isSigner: false, isWritable: true},
         {pubkey: params.authorizedPubkey, isSigner: true, isWritable: false},
       ],
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a Transaction that allocates space in an account without funding
+   */
+  static allocate(
+    params: AllocateParams | AllocateWithSeedParams,
+  ): Transaction {
+    let data;
+    if (params.basePubkey) {
+      const type = SYSTEM_INSTRUCTION_LAYOUTS.AllocateWithSeed;
+      data = encodeData(type, {
+        base: params.basePubkey.toBuffer(),
+        seed: params.seed,
+        space: params.space,
+        programId: params.programId.toBuffer(),
+      });
+    } else {
+      const type = SYSTEM_INSTRUCTION_LAYOUTS.Allocate;
+      data = encodeData(type, {
+        space: params.space,
+      });
+    }
+
+    return new Transaction().add({
+      keys: [{pubkey: params.accountPubkey, isSigner: true, isWritable: true}],
       programId: this.programId,
       data,
     });
