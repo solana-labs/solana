@@ -5,32 +5,37 @@ import {
   SignatureResult,
   SystemInstruction
 } from "@solana/web3.js";
-import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";
 import { InstructionCard } from "./InstructionCard";
 import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "./UnknownDetailsCard";
 
-export function TransferDetailsCard(props: {
+export function NonceInitializeDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
 }) {
   const { ix, index, result } = props;
 
-  let transfer;
+  let params;
   try {
-    transfer = SystemInstruction.decodeTransfer(ix);
+    params = SystemInstruction.decodeNonceInitialize(ix);
   } catch (err) {
     console.error(err);
     return <UnknownDetailsCard {...props} />;
   }
 
-  const from = transfer.fromPubkey.toBase58();
-  const to = transfer.toPubkey.toBase58();
-  const [fromMeta, toMeta] = ix.keys;
+  const nonceKey = params.noncePubkey.toBase58();
+  const authorizedKey = params.authorizedPubkey.toBase58();
+  const [nonceMeta] = ix.keys;
+
   return (
-    <InstructionCard ix={ix} index={index} result={result} title="Transfer">
+    <InstructionCard
+      ix={ix}
+      index={index}
+      result={result}
+      title="Initialize Nonce"
+    >
       <tr>
         <td>Program</td>
         <td className="text-right">
@@ -42,41 +47,28 @@ export function TransferDetailsCard(props: {
 
       <tr>
         <td>
-          <div className="mr-2 d-md-inline">From Address</div>
-          {!fromMeta.isWritable && (
+          <div className="mr-2 d-md-inline">Nonce Address</div>
+          {!nonceMeta.isWritable && (
             <span className="badge badge-soft-dark mr-1">Readonly</span>
           )}
-          {fromMeta.isSigner && (
+          {nonceMeta.isSigner && (
             <span className="badge badge-soft-dark mr-1">Signer</span>
           )}
         </td>
         <td className="text-right">
-          <Copyable text={from}>
-            <code>{from}</code>
+          <Copyable text={nonceKey}>
+            <code>{nonceKey}</code>
           </Copyable>
         </td>
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">To Address</div>
-          {!toMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {toMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>Authorized Address</td>
         <td className="text-right">
-          <Copyable text={to}>
-            <code>{to}</code>
+          <Copyable text={authorizedKey}>
+            <code>{authorizedKey}</code>
           </Copyable>
         </td>
-      </tr>
-
-      <tr>
-        <td>Transfer Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(transfer.lamports)}</td>
       </tr>
     </InstructionCard>
   );
