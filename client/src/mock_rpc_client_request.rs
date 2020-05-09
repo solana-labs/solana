@@ -40,11 +40,11 @@ impl MockRpcClientRequest {
 impl GenericRpcClientRequest for MockRpcClientRequest {
     fn send(
         &self,
-        request: &RpcRequest,
+        request: RpcRequest,
         params: serde_json::Value,
         _retries: usize,
     ) -> Result<serde_json::Value> {
-        if let Some(value) = self.mocks.write().unwrap().remove(request) {
+        if let Some(value) = self.mocks.write().unwrap().remove(&request) {
             return Ok(value);
         }
         if self.url == "fails" {
