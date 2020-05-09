@@ -299,7 +299,7 @@ function InstructionsSection({ signature }: Props) {
     const props = { ix, result, index };
 
     if (!ix.programId.equals(SystemProgram.programId)) {
-      return <UnknownDetailsCard {...props} />;
+      return <UnknownDetailsCard key={index} {...props} />;
     }
 
     let systemInstructionType;
@@ -307,28 +307,28 @@ function InstructionsSection({ signature }: Props) {
       systemInstructionType = SystemInstruction.decodeInstructionType(ix);
     } catch (err) {
       console.error(err);
-      return <UnknownDetailsCard {...props} />;
+      return <UnknownDetailsCard key={index} {...props} />;
     }
 
     switch (systemInstructionType) {
       case "Create":
-        return <CreateDetailsCard {...props} />;
+        return <CreateDetailsCard key={index} {...props} />;
       case "Assign":
-        return <AssignDetailsCard {...props} />;
+        return <AssignDetailsCard key={index} {...props} />;
       case "Transfer":
-        return <TransferDetailsCard {...props} />;
+        return <TransferDetailsCard key={index} {...props} />;
       case "CreateWithSeed":
-        return <CreateWithSeedDetailsCard {...props} />;
+        return <CreateWithSeedDetailsCard key={index} {...props} />;
       case "AdvanceNonceAccount":
-        return <NonceAdvanceDetailsCard {...props} />;
+        return <NonceAdvanceDetailsCard key={index} {...props} />;
       case "WithdrawNonceAccount":
-        return <NonceWithdrawDetailsCard {...props} />;
+        return <NonceWithdrawDetailsCard key={index} {...props} />;
       case "AuthorizeNonceAccount":
-        return <NonceAuthorizeDetailsCard {...props} />;
+        return <NonceAuthorizeDetailsCard key={index} {...props} />;
       case "InitializeNonceAccount":
-        return <NonceInitializeDetailsCard {...props} />;
+        return <NonceInitializeDetailsCard key={index} {...props} />;
       default:
-        return <UnknownDetailsCard {...props} />;
+        return <UnknownDetailsCard key={index} {...props} />;
     }
   });
 
