@@ -3,7 +3,7 @@ use crate::{
     cli_output::*,
     display::println_name_value,
 };
-use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
+use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use solana_clap_utils::{
@@ -120,7 +120,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             .arg(commitment_arg()),
         )
         .subcommand(
+            SubCommand::with_name("supply").about("Get information about the cluster supply of SOL")
+            .arg(commitment_arg()),
+        )
+        .subcommand(
             SubCommand::with_name("total-supply").about("Get total number of SOL")
+            .setting(AppSettings::Hidden)
             .arg(commitment_arg()),
         )
         .subcommand(
@@ -337,6 +342,14 @@ pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
     let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
         command: CliCommand::GetEpoch { commitment_config },
+        signers: vec![],
+    })
+}
+
+pub fn parse_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+    Ok(CliCommandInfo {
+        command: CliCommand::Supply { commitment_config },
         signers: vec![],
     })
 }
@@ -790,6 +803,17 @@ pub fn process_show_block_production(
         verbose: config.verbose,
     };
     Ok(config.output_format.formatted_string(&block_production))
+}
+
+pub fn process_supply(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    commitment_config: CommitmentConfig,
+) -> ProcessResult {
+    let supply_response = rpc_client.supply_with_commitment(commitment_config.clone())?;
+    let mut supply: CliSupply = supply_response.value.into();
+    supply.verbose = config.verbose;
+    Ok(config.output_format.formatted_string(&supply))
 }
 
 pub fn process_total_supply(
