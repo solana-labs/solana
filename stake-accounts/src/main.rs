@@ -214,7 +214,7 @@ fn send_message<S: Signers>(
     if no_wait {
         client.send_transaction(&transaction)
     } else {
-        client.send_and_confirm_transaction_with_spinner(&mut transaction, signers)
+        client.send_and_confirm_transaction_with_spinner(&transaction)
     }
 }
 
