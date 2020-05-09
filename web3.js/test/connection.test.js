@@ -132,7 +132,7 @@ test('get program accounts', async () => {
     },
   ]);
   let transaction = SystemProgram.assign({
-    fromPubkey: account0.publicKey,
+    accountPubkey: account0.publicKey,
     programId: programId.publicKey,
   });
   await sendAndConfirmTransaction(connection, transaction, account0);
@@ -176,7 +176,7 @@ test('get program accounts', async () => {
     },
   ]);
   transaction = SystemProgram.assign({
-    fromPubkey: account1.publicKey,
+    accountPubkey: account1.publicKey,
     programId: programId.publicKey,
   });
 

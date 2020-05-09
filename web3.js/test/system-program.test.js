@@ -49,15 +49,57 @@ test('transfer', () => {
   expect(params).toEqual(SystemInstruction.decodeTransfer(systemInstruction));
 });
 
+test('allocate', () => {
+  const params = {
+    accountPubkey: new Account().publicKey,
+    space: 42,
+  };
+  const transaction = SystemProgram.allocate(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [systemInstruction] = transaction.instructions;
+  expect(params).toEqual(SystemInstruction.decodeAllocate(systemInstruction));
+});
+
+test('allocateWithSeed', () => {
+  const params = {
+    accountPubkey: new Account().publicKey,
+    basePubkey: new Account().publicKey,
+    seed: '你好',
+    space: 42,
+    programId: new Account().publicKey,
+  };
+  const transaction = SystemProgram.allocate(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [systemInstruction] = transaction.instructions;
+  expect(params).toEqual(
+    SystemInstruction.decodeAllocateWithSeed(systemInstruction),
+  );
+});
+
 test('assign', () => {
   const params = {
-    fromPubkey: new Account().publicKey,
+    accountPubkey: new Account().publicKey,
     programId: new Account().publicKey,
   };
   const transaction = SystemProgram.assign(params);
   expect(transaction.instructions).toHaveLength(1);
   const [systemInstruction] = transaction.instructions;
   expect(params).toEqual(SystemInstruction.decodeAssign(systemInstruction));
+});
+
+test('assignWithSeed', () => {
+  const params = {
+    accountPubkey: new Account().publicKey,
+    basePubkey: new Account().publicKey,
+    seed: '你好',
+    programId: new Account().publicKey,
+  };
+  const transaction = SystemProgram.assign(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [systemInstruction] = transaction.instructions;
+  expect(params).toEqual(
+    SystemInstruction.decodeAssignWithSeed(systemInstruction),
+  );
 });
 
 test('createAccountWithSeed', () => {
