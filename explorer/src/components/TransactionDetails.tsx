@@ -11,23 +11,17 @@ import { fetchDetails } from "providers/transactions/details";
 import { useCluster, useClusterModal } from "providers/cluster";
 import {
   TransactionSignature,
-  SystemInstruction,
-  SystemProgram
+  SystemProgram,
+  StakeProgram
 } from "@solana/web3.js";
 import ClusterStatusButton from "components/ClusterStatusButton";
 import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";
 import Copyable from "./Copyable";
 import { useHistory, useLocation } from "react-router-dom";
-import { TransferDetailsCard } from "./instruction/system/TransferDetailsCard";
-import { AssignDetailsCard } from "./instruction/system/AssignDetailsCard";
-import { CreateDetailsCard } from "./instruction/system/CreateDetailsCard";
-import { CreateWithSeedDetailsCard } from "./instruction/system/CreateWithSeedDetailsCard";
 import { UnknownDetailsCard } from "./instruction/UnknownDetailsCard";
-import { NonceInitializeDetailsCard } from "./instruction/system/NonceInitializeDetailsCard";
-import { NonceAdvanceDetailsCard } from "./instruction/system/NonceAdvanceDetailsCard";
-import { NonceWithdrawDetailsCard } from "./instruction/system/NonceWithdrawDetailsCard";
-import { NonceAuthorizeDetailsCard } from "./instruction/system/NonceAuthorizeDetailsCard";
+import { SystemDetailsCard } from "./instruction/system/SystemDetailsCard";
+import { StakeDetailsCard } from "./instruction/stake/StakeDetailsCard";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {
@@ -298,37 +292,12 @@ function InstructionsSection({ signature }: Props) {
   const instructionDetails = transaction.instructions.map((ix, index) => {
     const props = { ix, result, index };
 
-    if (!ix.programId.equals(SystemProgram.programId)) {
+    if (SystemProgram.programId.equals(ix.programId)) {
+      return <SystemDetailsCard key={index} {...props} />;
+    } else if (StakeProgram.programId.equals(ix.programId)) {
+      return <StakeDetailsCard key={index} {...props} />;
+    } else {
       return <UnknownDetailsCard key={index} {...props} />;
-    }
-
-    let systemInstructionType;
-    try {
-      systemInstructionType = SystemInstruction.decodeInstructionType(ix);
-    } catch (err) {
-      console.error(err);
-      return <UnknownDetailsCard key={index} {...props} />;
-    }
-
-    switch (systemInstructionType) {
-      case "Create":
-        return <CreateDetailsCard key={index} {...props} />;
-      case "Assign":
-        return <AssignDetailsCard key={index} {...props} />;
-      case "Transfer":
-        return <TransferDetailsCard key={index} {...props} />;
-      case "CreateWithSeed":
-        return <CreateWithSeedDetailsCard key={index} {...props} />;
-      case "AdvanceNonceAccount":
-        return <NonceAdvanceDetailsCard key={index} {...props} />;
-      case "WithdrawNonceAccount":
-        return <NonceWithdrawDetailsCard key={index} {...props} />;
-      case "AuthorizeNonceAccount":
-        return <NonceAuthorizeDetailsCard key={index} {...props} />;
-      case "InitializeNonceAccount":
-        return <NonceInitializeDetailsCard key={index} {...props} />;
-      default:
-        return <UnknownDetailsCard key={index} {...props} />;
     }
   });
 

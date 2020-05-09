@@ -29,7 +29,6 @@ export function CreateWithSeedDetailsCard(props: {
   const from = params.fromPubkey.toBase58();
   const newKey = params.newAccountPubkey.toBase58();
   const baseKey = params.basePubkey.toBase58();
-  const [fromMeta, newMeta] = ix.keys;
 
   return (
     <InstructionCard
@@ -48,15 +47,7 @@ export function CreateWithSeedDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">From Address</div>
-          {!fromMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {fromMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>From Address</td>
         <td className="text-right">
           <Copyable text={from}>
             <code>{from}</code>
@@ -65,15 +56,7 @@ export function CreateWithSeedDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">New Address</div>
-          {!newMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {newMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>New Address</td>
         <td className="text-right">
           <Copyable text={newKey}>
             <code>{newKey}</code>
@@ -82,15 +65,7 @@ export function CreateWithSeedDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">New Address</div>
-          {!newMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {newMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>New Address</td>
         <td className="text-right">
           <Copyable text={newKey}>
             <code>{newKey}</code>

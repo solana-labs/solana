@@ -1,65 +1,65 @@
 import React from "react";
 import {
   TransactionInstruction,
-  SystemProgram,
   SignatureResult,
-  SystemInstruction
+  StakeInstruction,
+  StakeProgram
 } from "@solana/web3.js";
-import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
 import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 
-export function TransferDetailsCard(props: {
+export function DeactivateDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
 }) {
   const { ix, index, result } = props;
 
-  let transfer;
+  let params;
   try {
-    transfer = SystemInstruction.decodeTransfer(ix);
+    params = StakeInstruction.decodeDeactivate(ix);
   } catch (err) {
     console.error(err);
     return <UnknownDetailsCard {...props} />;
   }
 
-  const from = transfer.fromPubkey.toBase58();
-  const to = transfer.toPubkey.toBase58();
+  const stakePubkey = params.stakePubkey.toBase58();
+  const authorizedPubkey = params.authorizedPubkey.toBase58();
+
   return (
-    <InstructionCard ix={ix} index={index} result={result} title="Transfer">
+    <InstructionCard
+      ix={ix}
+      index={index}
+      result={result}
+      title="Deactivate Stake"
+    >
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId)}</code>
+          <Copyable bottom text={StakeProgram.programId.toBase58()}>
+            <code>{displayAddress(StakeProgram.programId)}</code>
           </Copyable>
         </td>
       </tr>
 
       <tr>
-        <td>From Address</td>
+        <td>Stake Address</td>
         <td className="text-right">
-          <Copyable text={from}>
-            <code>{from}</code>
+          <Copyable text={stakePubkey}>
+            <code>{stakePubkey}</code>
           </Copyable>
         </td>
       </tr>
 
       <tr>
-        <td>To Address</td>
+        <td>Authorized Address</td>
         <td className="text-right">
-          <Copyable text={to}>
-            <code>{to}</code>
+          <Copyable text={authorizedPubkey}>
+            <code>{authorizedPubkey}</code>
           </Copyable>
         </td>
-      </tr>
-
-      <tr>
-        <td>Transfer Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(transfer.lamports)}</td>
       </tr>
     </InstructionCard>
   );
