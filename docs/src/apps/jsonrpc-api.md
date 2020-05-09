@@ -43,8 +43,8 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 * [getStoragePubkeysForSlot](jsonrpc-api.md#getstoragepubkeysforslot)
 * [getStorageTurn](jsonrpc-api.md#getstorageturn)
 * [getStorageTurnRate](jsonrpc-api.md#getstorageturnrate)
+* [getSupply](jsonrpc-api.md#getsupply)
 * [getTransactionCount](jsonrpc-api.md#gettransactioncount)
-* [getTotalSupply](jsonrpc-api.md#gettotalsupply)
 * [getVersion](jsonrpc-api.md#getversion)
 * [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
 * [minimumLedgerSlot](jsonrpc-api.md#minimumledgerslot)
@@ -944,6 +944,32 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":1024,"id":1}
 ```
 
+### getSupply
+
+Returns information about the current supply.
+
+#### Parameters:
+
+* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
+
+* `total: <u64>` - Total supply in lamports
+* `circulating: <u64>` - Circulating supply in lamports
+* `nonCirculating: <u64>` - Non-circulating supply in lamports
+* `nonCirculatingAccounts: <array>` - an array of account addresses of non-circulating accounts, as strings
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getCirculatingSupply"}' http://localhost:8899
+// Result
+{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"circulating":16000,"nonCirculating":1000000,"nonCirculatingAccounts":["FEy8pTbP5fEoqMV1GdTz83byuA8EKByqYat1PKDgVAq5","9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA","3mi1GmwEE3zo2jmfDuzvjSX9ovRXsDUKHvsntpkhuLJ9","BYxEJTDerkaRWBem3XgnVcdhppktBXa2HbkHPKj2Ui4Z],total:1016000}},"id":1}
+```
+
 ### getTransactionCount
 
 Returns the current Transaction count from the ledger
@@ -964,28 +990,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":268,"id":1}
-```
-
-### getTotalSupply
-
-Returns the current total supply in lamports
-
-#### Parameters:
-
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-* `<u64>` - Total supply
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getTotalSupply"}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":10126,"id":1}
 ```
 
 ### getVersion
