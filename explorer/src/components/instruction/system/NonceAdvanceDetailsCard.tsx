@@ -27,7 +27,6 @@ export function NonceAdvanceDetailsCard(props: {
 
   const nonceKey = params.noncePubkey.toBase58();
   const authorizedKey = params.authorizedPubkey.toBase58();
-  const [nonceMeta, , authorizedMeta] = ix.keys;
 
   return (
     <InstructionCard
@@ -46,15 +45,7 @@ export function NonceAdvanceDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">Nonce Address</div>
-          {!nonceMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {nonceMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>Nonce Address</td>
         <td className="text-right">
           <Copyable text={nonceKey}>
             <code>{nonceKey}</code>
@@ -63,15 +54,7 @@ export function NonceAdvanceDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">Authorized Address</div>
-          {!authorizedMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {authorizedMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>Authorized Address</td>
         <td className="text-right">
           <Copyable text={authorizedKey}>
             <code>{authorizedKey}</code>

@@ -26,7 +26,6 @@ export function AssignDetailsCard(props: {
   }
 
   const from = params.fromPubkey.toBase58();
-  const [fromMeta] = ix.keys;
 
   return (
     <InstructionCard
@@ -45,15 +44,7 @@ export function AssignDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">From Address</div>
-          {!fromMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {fromMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>From Address</td>
         <td className="text-right">
           <Copyable text={from}>
             <code>{from}</code>

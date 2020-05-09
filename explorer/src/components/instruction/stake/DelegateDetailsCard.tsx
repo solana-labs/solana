@@ -1,17 +1,16 @@
 import React from "react";
 import {
   TransactionInstruction,
-  SystemProgram,
   SignatureResult,
-  SystemInstruction
+  StakeInstruction,
+  StakeProgram
 } from "@solana/web3.js";
-import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";
 import { InstructionCard } from "../InstructionCard";
 import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 
-export function CreateDetailsCard(props: {
+export function DelegateDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
@@ -20,64 +19,55 @@ export function CreateDetailsCard(props: {
 
   let params;
   try {
-    params = SystemInstruction.decodeCreateAccount(ix);
+    params = StakeInstruction.decodeDelegate(ix);
   } catch (err) {
     console.error(err);
     return <UnknownDetailsCard {...props} />;
   }
 
-  const from = params.fromPubkey.toBase58();
-  const newKey = params.newAccountPubkey.toBase58();
+  const stakePubkey = params.stakePubkey.toBase58();
+  const votePubkey = params.votePubkey.toBase58();
+  const authorizedPubkey = params.authorizedPubkey.toBase58();
 
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Create Account"
+      title="Delegate Stake"
     >
       <tr>
         <td>Program</td>
         <td className="text-right">
-          <Copyable bottom text={SystemProgram.programId.toBase58()}>
-            <code>{displayAddress(SystemProgram.programId)}</code>
+          <Copyable bottom text={StakeProgram.programId.toBase58()}>
+            <code>{displayAddress(StakeProgram.programId)}</code>
           </Copyable>
         </td>
       </tr>
 
       <tr>
-        <td>From Address</td>
+        <td>Stake Address</td>
         <td className="text-right">
-          <Copyable text={from}>
-            <code>{from}</code>
+          <Copyable text={stakePubkey}>
+            <code>{stakePubkey}</code>
           </Copyable>
         </td>
       </tr>
 
       <tr>
-        <td>New Address</td>
+        <td>Delegated Vote Address</td>
         <td className="text-right">
-          <Copyable text={newKey}>
-            <code>{newKey}</code>
+          <Copyable text={votePubkey}>
+            <code>{votePubkey}</code>
           </Copyable>
         </td>
       </tr>
 
       <tr>
-        <td>Transfer Amount (SOL)</td>
-        <td className="text-right">{lamportsToSolString(params.lamports)}</td>
-      </tr>
-
-      <tr>
-        <td>Allocated Space (Bytes)</td>
-        <td className="text-right">{params.space}</td>
-      </tr>
-
-      <tr>
-        <td>Assigned Owner</td>
+        <td>Authorized Address</td>
         <td className="text-right">
-          <Copyable text={params.programId.toBase58()}>
-            <code>{displayAddress(params.programId)}</code>
+          <Copyable text={authorizedPubkey}>
+            <code>{authorizedPubkey}</code>
           </Copyable>
         </td>
       </tr>
