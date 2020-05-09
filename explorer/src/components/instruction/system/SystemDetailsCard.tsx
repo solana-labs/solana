@@ -7,7 +7,10 @@ import {
 
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { TransferDetailsCard } from "./TransferDetailsCard";
+import { AllocateDetailsCard } from "./AllocateDetailsCard";
+import { AllocateWithSeedDetailsCard } from "./AllocateWithSeedDetailsCard";
 import { AssignDetailsCard } from "./AssignDetailsCard";
+import { AssignWithSeedDetailsCard } from "./AssignWithSeedDetailsCard";
 import { CreateDetailsCard } from "./CreateDetailsCard";
 import { CreateWithSeedDetailsCard } from "./CreateWithSeedDetailsCard";
 import { NonceInitializeDetailsCard } from "./NonceInitializeDetailsCard";
@@ -33,12 +36,18 @@ export function SystemDetailsCard(props: DetailsProps) {
   switch (systemInstructionType) {
     case "Create":
       return <CreateDetailsCard {...props} />;
-    case "Assign":
-      return <AssignDetailsCard {...props} />;
-    case "Transfer":
-      return <TransferDetailsCard {...props} />;
     case "CreateWithSeed":
       return <CreateWithSeedDetailsCard {...props} />;
+    case "Allocate":
+      return <AllocateDetailsCard {...props} />;
+    case "AllocateWithSeed":
+      return <AllocateWithSeedDetailsCard {...props} />;
+    case "Assign":
+      return <AssignDetailsCard {...props} />;
+    case "AssignWithSeed":
+      return <AssignWithSeedDetailsCard {...props} />;
+    case "Transfer":
+      return <TransferDetailsCard {...props} />;
     case "AdvanceNonceAccount":
       return <NonceAdvanceDetailsCard {...props} />;
     case "WithdrawNonceAccount":

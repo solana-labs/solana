@@ -10,7 +10,7 @@ import { InstructionCard } from "../InstructionCard";
 import Copyable from "components/Copyable";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 
-export function AssignDetailsCard(props: {
+export function AllocateDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
@@ -19,7 +19,7 @@ export function AssignDetailsCard(props: {
 
   let params;
   try {
-    params = SystemInstruction.decodeAssign(ix);
+    params = SystemInstruction.decodeAllocate(ix);
   } catch (err) {
     console.error(err);
     return <UnknownDetailsCard {...props} />;
@@ -32,7 +32,7 @@ export function AssignDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Assign Account"
+      title="Allocate Account"
     >
       <tr>
         <td>Program</td>
@@ -53,12 +53,8 @@ export function AssignDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Assigned Owner</td>
-        <td className="text-right">
-          <Copyable text={params.programId.toBase58()}>
-            <code>{displayAddress(params.programId)}</code>
-          </Copyable>
-        </td>
+        <td>Allocated Space (Bytes)</td>
+        <td className="text-right">{params.space}</td>
       </tr>
     </InstructionCard>
   );
