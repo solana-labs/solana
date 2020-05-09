@@ -5,12 +5,13 @@ import {
   SignatureResult,
   SystemInstruction
 } from "@solana/web3.js";
+import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";
-import { InstructionCard } from "./InstructionCard";
+import { InstructionCard } from "../InstructionCard";
 import Copyable from "components/Copyable";
-import { UnknownDetailsCard } from "./UnknownDetailsCard";
+import { UnknownDetailsCard } from "../UnknownDetailsCard";
 
-export function AssignDetailsCard(props: {
+export function CreateDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
@@ -19,21 +20,22 @@ export function AssignDetailsCard(props: {
 
   let params;
   try {
-    params = SystemInstruction.decodeAssign(ix);
+    params = SystemInstruction.decodeCreateAccount(ix);
   } catch (err) {
     console.error(err);
     return <UnknownDetailsCard {...props} />;
   }
 
   const from = params.fromPubkey.toBase58();
-  const [fromMeta] = ix.keys;
+  const newKey = params.newAccountPubkey.toBase58();
+  const [fromMeta, newMeta] = ix.keys;
 
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Assign Account"
+      title="Create Account"
     >
       <tr>
         <td>Program</td>
@@ -59,6 +61,33 @@ export function AssignDetailsCard(props: {
             <code>{from}</code>
           </Copyable>
         </td>
+      </tr>
+
+      <tr>
+        <td>
+          <div className="mr-2 d-md-inline">New Address</div>
+          {!newMeta.isWritable && (
+            <span className="badge badge-soft-dark mr-1">Readonly</span>
+          )}
+          {newMeta.isSigner && (
+            <span className="badge badge-soft-dark mr-1">Signer</span>
+          )}
+        </td>
+        <td className="text-right">
+          <Copyable text={newKey}>
+            <code>{newKey}</code>
+          </Copyable>
+        </td>
+      </tr>
+
+      <tr>
+        <td>Transfer Amount (SOL)</td>
+        <td className="text-right">{lamportsToSolString(params.lamports)}</td>
+      </tr>
+
+      <tr>
+        <td>Allocated Space (Bytes)</td>
+        <td className="text-right">{params.space}</td>
       </tr>
 
       <tr>

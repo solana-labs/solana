@@ -6,11 +6,11 @@ import {
   SystemInstruction
 } from "@solana/web3.js";
 import { displayAddress } from "utils/tx";
-import { InstructionCard } from "./InstructionCard";
+import { InstructionCard } from "../InstructionCard";
 import Copyable from "components/Copyable";
-import { UnknownDetailsCard } from "./UnknownDetailsCard";
+import { UnknownDetailsCard } from "../UnknownDetailsCard";
 
-export function NonceAdvanceDetailsCard(props: {
+export function NonceInitializeDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
@@ -19,7 +19,7 @@ export function NonceAdvanceDetailsCard(props: {
 
   let params;
   try {
-    params = SystemInstruction.decodeNonceAdvance(ix);
+    params = SystemInstruction.decodeNonceInitialize(ix);
   } catch (err) {
     console.error(err);
     return <UnknownDetailsCard {...props} />;
@@ -27,14 +27,14 @@ export function NonceAdvanceDetailsCard(props: {
 
   const nonceKey = params.noncePubkey.toBase58();
   const authorizedKey = params.authorizedPubkey.toBase58();
-  const [nonceMeta, , authorizedMeta] = ix.keys;
+  const [nonceMeta] = ix.keys;
 
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Advance Nonce"
+      title="Initialize Nonce"
     >
       <tr>
         <td>Program</td>
@@ -63,15 +63,7 @@ export function NonceAdvanceDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>
-          <div className="mr-2 d-md-inline">Authorized Address</div>
-          {!authorizedMeta.isWritable && (
-            <span className="badge badge-soft-dark mr-1">Readonly</span>
-          )}
-          {authorizedMeta.isSigner && (
-            <span className="badge badge-soft-dark mr-1">Signer</span>
-          )}
-        </td>
+        <td>Authorized Address</td>
         <td className="text-right">
           <Copyable text={authorizedKey}>
             <code>{authorizedKey}</code>

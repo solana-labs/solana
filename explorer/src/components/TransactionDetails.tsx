@@ -19,15 +19,15 @@ import { lamportsToSolString } from "utils";
 import { displayAddress } from "utils/tx";
 import Copyable from "./Copyable";
 import { useHistory, useLocation } from "react-router-dom";
-import { TransferDetailsCard } from "./instruction/TransferDetailsCard";
-import { AssignDetailsCard } from "./instruction/AssignDetailsCard";
-import { CreateDetailsCard } from "./instruction/CreateDetailsCard";
-import { CreateWithSeedDetailsCard } from "./instruction/CreateWithSeedDetailsCard";
+import { TransferDetailsCard } from "./instruction/system/TransferDetailsCard";
+import { AssignDetailsCard } from "./instruction/system/AssignDetailsCard";
+import { CreateDetailsCard } from "./instruction/system/CreateDetailsCard";
+import { CreateWithSeedDetailsCard } from "./instruction/system/CreateWithSeedDetailsCard";
 import { UnknownDetailsCard } from "./instruction/UnknownDetailsCard";
-import { NonceInitializeDetailsCard } from "./instruction/NonceInitializeDetailsCard";
-import { NonceAdvanceDetailsCard } from "./instruction/NonceAdvanceDetailsCard";
-import { NonceWithdrawDetailsCard } from "./instruction/NonceWithdrawDetailsCard";
-import { NonceAuthorizeDetailsCard } from "./instruction/NonceAuthorizeDetailsCard";
+import { NonceInitializeDetailsCard } from "./instruction/system/NonceInitializeDetailsCard";
+import { NonceAdvanceDetailsCard } from "./instruction/system/NonceAdvanceDetailsCard";
+import { NonceWithdrawDetailsCard } from "./instruction/system/NonceWithdrawDetailsCard";
+import { NonceAuthorizeDetailsCard } from "./instruction/system/NonceAuthorizeDetailsCard";
 
 type Props = { signature: TransactionSignature };
 export default function TransactionDetails({ signature }: Props) {

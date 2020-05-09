@@ -6,9 +6,9 @@ import {
   SystemInstruction
 } from "@solana/web3.js";
 import { displayAddress } from "utils/tx";
-import { InstructionCard } from "./InstructionCard";
+import { InstructionCard } from "../InstructionCard";
 import Copyable from "components/Copyable";
-import { UnknownDetailsCard } from "./UnknownDetailsCard";
+import { UnknownDetailsCard } from "../UnknownDetailsCard";
 
 export function NonceAuthorizeDetailsCard(props: {
   ix: TransactionInstruction;
