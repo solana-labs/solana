@@ -4,6 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     commitment::{BlockCommitmentArray, BlockCommitmentCache},
     contact_info::ContactInfo,
+    non_circulating_supply::calculate_non_circulating_supply,
     storage_stage::StorageState,
     validator::ValidatorExit,
 };
@@ -299,6 +300,25 @@ impl JsonRpcRequestProcessor {
                 lamports,
             })
             .collect(),
+        )
+    }
+
+    fn get_supply(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcSupply> {
+        let bank = self.bank(commitment)?;
+        let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+        let total_supply = bank.capitalization();
+        new_response(
+            &bank,
+            RpcSupply {
+                total: total_supply,
+                circulating: total_supply - non_circulating_supply.lamports,
+                non_circulating: non_circulating_supply.lamports,
+                non_circulating_accounts: non_circulating_supply
+                    .accounts
+                    .iter()
+                    .map(|pubkey| pubkey.to_string())
+                    .collect(),
+            },
         )
     }
 
@@ -786,6 +806,7 @@ pub trait RpcSol {
         commitment: Option<CommitmentConfig>,
     ) -> Result<u64>;
 
+    // DEPRECATED
     #[rpc(meta, name = "getTotalSupply")]
     fn get_total_supply(
         &self,
@@ -799,6 +820,13 @@ pub trait RpcSol {
         meta: Self::Metadata,
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Vec<RpcAccountBalance>>;
+
+    #[rpc(meta, name = "getSupply")]
+    fn get_supply(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<RpcSupply>;
 
     #[rpc(meta, name = "requestAirdrop")]
     fn request_airdrop(
@@ -1211,6 +1239,18 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_largest_accounts(commitment)
+    }
+
+    fn get_supply(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<RpcSupply> {
+        debug!("get_supply rpc request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_supply(commitment)
     }
 
     fn request_airdrop(
