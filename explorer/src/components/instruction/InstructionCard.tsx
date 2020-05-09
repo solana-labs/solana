@@ -1,20 +1,27 @@
 import React from "react";
-import { SignatureResult } from "@solana/web3.js";
+import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
+import { RawDetails } from "./RawDetails";
 
 type InstructionProps = {
   title: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   result: SignatureResult;
   index: number;
+  ix: TransactionInstruction;
+  defaultRaw?: boolean;
 };
 
 export function InstructionCard({
   title,
   children,
   result,
-  index
+  index,
+  ix,
+  defaultRaw
 }: InstructionProps) {
-  const [resultClass, errorString] = ixResult(result, index);
+  const [resultClass] = ixResult(result, index);
+  const [showRaw, setShowRaw] = React.useState(defaultRaw || false);
+
   return (
     <div className="card">
       <div className="card-header">
@@ -24,15 +31,22 @@ export function InstructionCard({
           </span>
           {title}
         </h3>
-        <h3 className="mb-0">
-          <span className="badge badge-soft-warning text-monospace">
-            {errorString}
-          </span>
-        </h3>
+
+        <button
+          className={`btn btn-sm d-flex ${
+            showRaw ? "btn-dark active" : "btn-white"
+          }`}
+          onClick={() => setShowRaw(r => !r)}
+        >
+          <span className="fe fe-code mr-1"></span>
+          Raw
+        </button>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
-          <tbody className="list">{children}</tbody>
+          <tbody className="list">
+            {showRaw ? <RawDetails ix={ix} /> : children}
+          </tbody>
         </table>
       </div>
     </div>
