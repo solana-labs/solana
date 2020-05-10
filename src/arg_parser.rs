@@ -59,7 +59,6 @@ where
                 .arg(
                     Arg::with_name("dollars_per_sol")
                         .long("dollars-per-sol")
-                        .required(true)
                         .takes_value(true)
                         .value_name("NUMBER")
                         .help("Dollars per SOL, if input CSV contains bids"),
