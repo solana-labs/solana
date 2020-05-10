@@ -697,16 +697,11 @@ impl Archiver {
                 RpcClient::new_socket(rpc_peers[node_index].rpc)
             };
             Ok(rpc_client
-                .send(
-                    &RpcRequest::GetSlotsPerSegment,
+                .send::<u64>(
+                    RpcRequest::GetSlotsPerSegment,
                     serde_json::json!([client_commitment]),
                     0,
                 )
-                .map_err(|err| {
-                    warn!("Error while making rpc request {:?}", err);
-                    ArchiverError::ClientError(err)
-                })?
-                .as_u64()
                 .unwrap())
         } else {
             Err(ArchiverError::NoRpcPeers)
@@ -749,21 +744,14 @@ impl Archiver {
                     let node_index = thread_rng().gen_range(0, rpc_peers.len());
                     RpcClient::new_socket(rpc_peers[node_index].rpc)
                 };
-                let response = rpc_client
-                    .send(
-                        &RpcRequest::GetStorageTurn,
-                        serde_json::value::Value::Null,
-                        0,
-                    )
-                    .map_err(|err| {
-                        warn!("Error while making rpc request {:?}", err);
-                        ArchiverError::ClientError(err)
-                    })?;
                 let RpcStorageTurn {
                     blockhash: storage_blockhash,
                     slot: turn_slot,
-                } = serde_json::from_value::<RpcStorageTurn>(response)
-                    .map_err(ArchiverError::JsonError)?;
+                } = rpc_client.send(
+                    RpcRequest::GetStorageTurn,
+                    serde_json::value::Value::Null,
+                    0,
+                )?;
                 let turn_blockhash = storage_blockhash.parse().map_err(|err| {
                     io::Error::new(
                         io::ErrorKind::Other,
