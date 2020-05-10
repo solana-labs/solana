@@ -14,7 +14,7 @@ jsonrpc-core = "14.1.0"
 jsonrpc-derive = "14.1.0"
 jsonrpc-http-server = "14.1.0"
 log = "0.4.8"
-serde_json = "1.0.51"
+serde_json = "1.0.53"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-metrics = { path = "../metrics", version = "1.2.0" }
 solana-sdk = { path = "../sdk", version = "1.2.0" }
