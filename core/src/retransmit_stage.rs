@@ -19,11 +19,12 @@ use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::Packets;
 use solana_sdk::epoch_schedule::EpochSchedule;
+use solana_sdk::timing::timestamp;
 use solana_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
     net::UdpSocket,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::channel,
     sync::mpsc::RecvTimeoutError,
     sync::Mutex,
@@ -36,6 +37,91 @@ use std::{
 // it doesn't pull up too much work.
 const MAX_PACKET_BATCH_SIZE: usize = 100;
 
+#[derive(Default)]
+struct RetransmitStats {
+    total_packets: AtomicU64,
+    total_batches: AtomicU64,
+    total_time: AtomicU64,
+    repair_total: AtomicU64,
+    discard_total: AtomicU64,
+    retransmit_total: AtomicU64,
+    last_ts: AtomicU64,
+    compute_turbine_peers_total: AtomicU64,
+}
+
+fn update_retransmit_stats(
+    stats: &Arc<RetransmitStats>,
+    total_time: u64,
+    total_packets: usize,
+    retransmit_total: u64,
+    discard_total: u64,
+    repair_total: u64,
+    compute_turbine_peers_total: u64,
+    peers_len: usize,
+) {
+    stats.total_time.fetch_add(total_time, Ordering::Relaxed);
+    stats
+        .total_packets
+        .fetch_add(total_packets as u64, Ordering::Relaxed);
+    stats
+        .retransmit_total
+        .fetch_add(retransmit_total, Ordering::Relaxed);
+    stats
+        .repair_total
+        .fetch_add(repair_total, Ordering::Relaxed);
+    stats
+        .discard_total
+        .fetch_add(discard_total, Ordering::Relaxed);
+    stats
+        .compute_turbine_peers_total
+        .fetch_add(compute_turbine_peers_total, Ordering::Relaxed);
+    stats.total_batches.fetch_add(1, Ordering::Relaxed);
+
+    let now = timestamp();
+    let last = stats.last_ts.load(Ordering::Relaxed);
+    if now - last > 2000 && stats.last_ts.compare_and_swap(last, now, Ordering::Relaxed) == last {
+        datapoint_info!("retransmit-num_nodes", ("count", peers_len, i64));
+        datapoint_info!(
+            "retransmit-stage",
+            (
+                "total_time",
+                stats.total_time.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "total_batches",
+                stats.total_batches.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "total_packets",
+                stats.total_packets.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "retransmit_total",
+                stats.retransmit_total.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "compute_turbine",
+                stats.compute_turbine_peers_total.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "repair_total",
+                stats.repair_total.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "discard_total",
+                stats.discard_total.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+        );
+    }
+}
+
 fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -43,6 +129,7 @@ fn retransmit(
     r: &Arc<Mutex<PacketReceiver>>,
     sock: &UdpSocket,
     id: u32,
+    stats: &Arc<RetransmitStats>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -104,7 +191,7 @@ fn retransmit(
             let neighbors: Vec<_> = neighbors.into_iter().map(|index| &peers[index]).collect();
             let children: Vec<_> = children.into_iter().map(|index| &peers[index]).collect();
             compute_turbine_peers.stop();
-            compute_turbine_peers_total += compute_turbine_peers.as_ms();
+            compute_turbine_peers_total += compute_turbine_peers.as_us();
 
             let leader =
                 leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
@@ -116,7 +203,7 @@ fn retransmit(
                 ClusterInfo::retransmit_to(&children, packet, leader, sock, true)?;
             }
             retransmit_time.stop();
-            retransmit_total += retransmit_time.as_ms();
+            retransmit_total += retransmit_time.as_us();
         }
     }
     timer_start.stop();
@@ -127,16 +214,17 @@ fn retransmit(
         retransmit_total,
         id,
     );
-    datapoint_debug!("cluster_info-num_nodes", ("count", peers_len, i64));
-    datapoint_debug!(
-        "retransmit-stage",
-        ("total_time", timer_start.as_ms() as i64, i64),
-        ("total_packets", total_packets as i64, i64),
-        ("retransmit_total", retransmit_total as i64, i64),
-        ("compute_turbine", compute_turbine_peers_total as i64, i64),
-        ("repair_total", i64::from(repair_total), i64),
-        ("discard_total", i64::from(discard_total), i64),
+    update_retransmit_stats(
+        stats,
+        timer_start.as_us(),
+        total_packets,
+        retransmit_total,
+        discard_total,
+        repair_total,
+        compute_turbine_peers_total,
+        peers_len,
     );
+
     Ok(())
 }
 
@@ -155,6 +243,7 @@ pub fn retransmitter(
     cluster_info: Arc<ClusterInfo>,
     r: Arc<Mutex<PacketReceiver>>,
 ) -> Vec<JoinHandle<()>> {
+    let stats = Arc::new(RetransmitStats::default());
     (0..sockets.len())
         .map(|s| {
             let sockets = sockets.clone();
@@ -162,6 +251,7 @@ pub fn retransmitter(
             let leader_schedule_cache = leader_schedule_cache.clone();
             let r = r.clone();
             let cluster_info = cluster_info.clone();
+            let stats = stats.clone();
 
             Builder::new()
                 .name("solana-retransmitter".to_string())
@@ -175,6 +265,7 @@ pub fn retransmitter(
                             &r,
                             &sockets[s],
                             s as u32,
+                            &stats,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
