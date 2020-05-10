@@ -14,7 +14,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 console = "0.10.1"
 log = "0.4.8"
 rand = "0.7.0"
-serde_json = "1.0.51"
+serde_json = "1.0.53"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-client = { path = "../client", version = "1.2.0" }
 solana-core = { path = "../core", version = "1.2.0" }
