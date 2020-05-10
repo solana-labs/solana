@@ -12,7 +12,7 @@ edition = "2018"
 bincode = "1.2.1"
 bs58 = "0.3.1"
 solana-sdk = { path = "../sdk", version = "1.2.0" }
-serde = "1.0.106"
+serde = "1.0.110"
 serde_derive = "1.0.103"
 
 [package.metadata.docs.rs]
