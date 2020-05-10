@@ -16,6 +16,8 @@ use std::{
 };
 use thiserror::Error;
 
+pub use crate::snapshot_utils::SnapshotVersion;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CompressionType {
     Bzip2,
@@ -36,6 +38,9 @@ pub struct SnapshotConfig {
     pub snapshot_path: PathBuf,
 
     pub compression: CompressionType,
+
+    // Snapshot version to generate
+    pub snapshot_version: SnapshotVersion,
 }
 
 #[derive(Error, Debug)]
@@ -319,7 +324,7 @@ impl BankForks {
 
         let storages: Vec<_> = bank.get_snapshot_storages();
         let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-        snapshot_utils::add_snapshot(&config.snapshot_path, &bank, &storages)?;
+        snapshot_utils::add_snapshot(&config.snapshot_path, &bank, &storages, config.snapshot_version)?;
         add_snapshot_time.stop();
         inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
@@ -338,6 +343,7 @@ impl BankForks {
             &config.snapshot_package_output_path,
             storages,
             config.compression.clone(),
+	    config.snapshot_version,
         )?;
 
         accounts_package_sender.send(package)?;

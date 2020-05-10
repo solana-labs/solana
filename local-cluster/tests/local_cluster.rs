@@ -1223,6 +1223,7 @@ fn setup_snapshot_validator_config(
         snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
         snapshot_path: PathBuf::from(snapshot_dir.path()),
         compression: CompressionType::Bzip2,
+	snapshot_version: snapshot_utils::SnapshotVersion::default(),
     };
 
     // Create the account paths

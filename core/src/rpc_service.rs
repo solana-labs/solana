@@ -388,6 +388,7 @@ mod tests {
         bank_forks::CompressionType,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
+	snapshot_utils::SnapshotVersion,
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::Signer;
@@ -486,6 +487,7 @@ mod tests {
                 snapshot_package_output_path: PathBuf::from("/"),
                 snapshot_path: PathBuf::from("/"),
                 compression: CompressionType::Bzip2,
+		snapshot_version: SnapshotVersion::default(),
             }),
             cluster_info,
             None,

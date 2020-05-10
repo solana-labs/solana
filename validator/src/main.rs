@@ -22,7 +22,7 @@ use solana_core::{
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
 use solana_ledger::{
-    bank_forks::{CompressionType, SnapshotConfig},
+    bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
 use solana_perf::recycler::enable_recycler_warming;
@@ -679,6 +679,18 @@ pub fn main() {
                 .help("Number of slots between generating accounts hash."),
         )
         .arg(
+            Arg::with_name("snapshot_version")
+                .long("snapshot-version")
+                .value_name("SNAPSHOT_VERSION")
+		.validator(|arg| arg.parse::<SnapshotVersion>()
+			   .map(|_| ())
+			   .map_err(|e| e.to_string()))
+                .takes_value(true)
+		.multiple(false)
+		.required(false)
+                .help("Number of slots between generating snapshots, 0 to disable snapshots"),
+        )
+        .arg(
             Arg::with_name("limit_ledger_size")
                 .long("limit-ledger-size")
                 .value_name("SHRED_COUNT")
@@ -948,6 +960,11 @@ pub fn main() {
             _ => panic!("Compression type not recognized: {}", compression_str),
         }
     }
+    let snapshot_version = match matches.value_of("snapshot_version") {
+	Some(s) => s.parse::<SnapshotVersion>()
+	    .unwrap_or_else(|e| { eprintln!("Error: {}", e); exit(1) }),
+	None => SnapshotVersion::default(),
+    };
     validator_config.snapshot_config = Some(SnapshotConfig {
         snapshot_interval_slots: if snapshot_interval_slots > 0 {
             snapshot_interval_slots
@@ -957,6 +974,7 @@ pub fn main() {
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
         compression: snapshot_compression,
+	snapshot_version,
     });
 
     validator_config.accounts_hash_interval_slots =

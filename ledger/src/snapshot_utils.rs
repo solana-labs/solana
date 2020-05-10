@@ -9,10 +9,16 @@ use log::*;
 use regex::Regex;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    accounts_db::{SnapshotStorage, SnapshotStorages},
     bank::{
-        self, deserialize_from_snapshot, Bank, BankRcSerialize, BankSlotDelta,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        Bank, BankSlotDelta,
+    },
+    serde_utils::{
+	context_bankrc_to_stream,
+	context_bankrc_from_stream,
+	SnapshotStorage,
+	SnapshotStorages,
+	SerdeContextV1_1_0,
+	SerdeContextV1_1_1,
     },
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
@@ -22,6 +28,7 @@ use std::{
     io::{BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::ExitStatus,
+    str::FromStr,
 };
 use tar::Archive;
 use tempfile::TempDir;
@@ -32,7 +39,52 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
-pub const SNAPSHOT_VERSION: &str = "1.1.0";
+const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
+const VERSION_STRING_V1_1_0: &str = "1.1.0";
+const VERSION_STRING_V1_1_1: &str = "1.1.1";
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum SnapshotVersion {
+    V1_1_0,
+    V1_1_1,
+}
+
+impl Default for SnapshotVersion {
+    fn default() -> Self {
+	Self::V1_1_0
+    }
+}
+
+impl From<SnapshotVersion> for &'static str {
+    fn from(snapshot_version: SnapshotVersion) -> &'static str {
+	match snapshot_version {
+	    SnapshotVersion::V1_1_0 => VERSION_STRING_V1_1_0,
+	    SnapshotVersion::V1_1_1 => VERSION_STRING_V1_1_1,
+	}
+    }
+}
+
+impl FromStr for SnapshotVersion {
+    type Err = &'static str;
+
+    fn from_str(version_string: &str) -> std::result::Result<Self, Self::Err> {
+	match version_string {
+	    VERSION_STRING_V1_1_0 => Ok(SnapshotVersion::V1_1_0),
+	    VERSION_STRING_V1_1_1 => Ok(SnapshotVersion::V1_1_1),
+	    _ => Err("unsupported snapshot version")
+	}
+    }
+}
+
+impl SnapshotVersion {
+    pub fn as_str(self) -> &'static str {
+	<&str as From<Self>>::from(self)
+    }
+
+    fn maybe_from_string(version_string: &str) -> Option<SnapshotVersion> {
+	version_string.parse::<Self>().ok()
+    }
+}
 
 #[derive(PartialEq, Ord, Eq, Debug)]
 pub struct SlotSnapshotPaths {
@@ -92,6 +144,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_path: P,
     snapshot_storages: SnapshotStorages,
     compression: CompressionType,
+    snapshot_version: SnapshotVersion,
 ) -> Result<AccountsPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -122,6 +175,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_package_output_file,
         bank.get_accounts_hash(),
         compression,
+	snapshot_version,
     );
 
     Ok(package)
@@ -192,7 +246,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     // Write version file
     {
         let mut f = std::fs::File::create(staging_version_file)?;
-        f.write_all(&SNAPSHOT_VERSION.to_string().into_bytes())?;
+        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())?;
     }
 
     let (compression_option, file_ext) = get_compression_ext(&snapshot_package.compression);
@@ -291,11 +345,38 @@ where
 
 pub fn serialize_snapshot_data_file<F>(
     data_file_path: &Path,
-    maximum_file_size: u64,
-    mut serializer: F,
+    serializer: F,
 ) -> Result<u64>
 where
-    F: FnMut(&mut BufWriter<File>) -> Result<()>,
+    F: FnOnce(&mut BufWriter<File>) -> Result<()>,
+{
+    serialize_snapshot_data_file_capped::<F>(
+	data_file_path,
+	MAX_SNAPSHOT_DATA_FILE_SIZE,
+	serializer)
+}
+
+pub fn deserialize_snapshot_data_file<F, T>(
+    data_file_path: &Path,
+    deserializer: F,
+) -> Result<T>
+where
+    F: FnOnce(&mut BufReader<File>) -> Result<T>,
+{
+    deserialize_snapshot_data_file_capped::<F, T>(
+	data_file_path,
+	MAX_SNAPSHOT_DATA_FILE_SIZE,
+	deserializer,
+    )
+}
+
+fn serialize_snapshot_data_file_capped<F>(
+    data_file_path: &Path,
+    maximum_file_size: u64,
+    serializer: F,
+) -> Result<u64>
+where
+    F: FnOnce(&mut BufWriter<File>) -> Result<()>,
 {
     let data_file = File::create(data_file_path)?;
     let mut data_file_stream = BufWriter::new(data_file);
@@ -313,13 +394,13 @@ where
     Ok(consumed_size)
 }
 
-pub fn deserialize_snapshot_data_file<F, T>(
+fn deserialize_snapshot_data_file_capped<F, T>(
     data_file_path: &Path,
     maximum_file_size: u64,
-    mut deserializer: F,
+    deserializer: F,
 ) -> Result<T>
 where
-    F: FnMut(&mut BufReader<File>) -> Result<T>,
+    F: FnOnce(&mut BufReader<File>) -> Result<T>,
 {
     let file_size = fs::metadata(&data_file_path)?.len();
 
@@ -349,10 +430,95 @@ where
     Ok(ret)
 }
 
+fn create_versioned_bank_snapshot_serializer<'a>(
+    snapshot_version: SnapshotVersion,
+    bank: &'a Bank,
+    snapshot_storages: &'a [SnapshotStorage],
+) -> Result<Box<dyn Fn(&mut BufWriter<File>) -> Result<()> + 'a>> {
+    match snapshot_version {
+	SnapshotVersion::V1_1_0 => Ok(Box::new(
+	    move |stream: &mut BufWriter<File>| -> Result<()> {
+		serialize_into(stream.by_ref(), bank)?;
+		context_bankrc_to_stream::<SerdeContextV1_1_0, _>(
+		    stream.by_ref(),
+		    &bank.rc,
+		    snapshot_storages)?;
+		Ok(())
+            }
+	)),
+	SnapshotVersion::V1_1_1 => Ok(Box::new(
+	    move |stream: &mut BufWriter<File>| -> Result<()> {
+		serialize_into(stream.by_ref(), bank)?;
+		context_bankrc_to_stream::<SerdeContextV1_1_1, _>(
+		    stream.by_ref(),
+		    &bank.rc,
+		    snapshot_storages)?;
+		Ok(())
+            }
+	)),
+	//If additional snapshot version were defined but not implemented...
+	//_ => Err(get_io_error(&format!("unsupported snapshot version: {}", snapshot_version.to_string()))),
+    }
+}
+
+fn create_versioned_bank_snapshot_deserializer<'a, P: AsRef<Path>>(
+    snapshot_version: &str,
+    account_paths: &'a [PathBuf],
+    frozen_account_pubkeys: &'a [Pubkey],
+    append_vecs_path: &'a P,
+    genesis_config: &GenesisConfig,
+) -> Result<Box<dyn Fn(&mut BufReader<File>) -> Result<Bank> + 'a>> {
+    let operating_mode = genesis_config.operating_mode;
+    match SnapshotVersion::maybe_from_string(snapshot_version) {
+	Some(SnapshotVersion::V1_1_0) => Ok(Box::new(
+	    move |stream: &mut BufReader<File>| {
+		let mut bank: Bank = bincode::config()
+		    .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+		    .deserialize_from(stream.by_ref())?;
+		bank.operating_mode = Some(operating_mode);
+		info!("Rebuilding accounts...");
+		let rc = context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
+		    account_paths,
+		    bank.slot(),
+		    &bank.ancestors,
+		    frozen_account_pubkeys,
+		    stream.by_ref(),
+		    &append_vecs_path,
+		)?;
+		bank.rc = rc;
+		bank.finish_init();
+		Ok(bank)
+	    }
+	)),
+	Some(SnapshotVersion::V1_1_1) => Ok(Box::new(
+	    move |stream: &mut BufReader<File>| {
+		let mut bank: Bank = bincode::config()
+		    .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+		    .deserialize_from(stream.by_ref())?;
+		bank.operating_mode = Some(operating_mode);
+		info!("Rebuilding accounts...");
+		let rc = context_bankrc_from_stream::<SerdeContextV1_1_1, _, _>(
+		    account_paths,
+		    bank.slot(),
+		    &bank.ancestors,
+		    frozen_account_pubkeys,
+		    stream.by_ref(),
+		    &append_vecs_path,
+		)?;
+		bank.rc = rc;
+		bank.finish_init();
+		Ok(bank)
+	    }
+	)),
+	_ => Err(get_io_error(&format!("unsupported snapshot version: {}", snapshot_version))),
+    }
+}
+
 pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_path: P,
     bank: &Bank,
     snapshot_storages: &[SnapshotStorage],
+    snapshot_version: SnapshotVersion,
 ) -> Result<SlotSnapshotPaths> {
     let slot = bank.slot();
     // snapshot_path/slot
@@ -367,20 +533,14 @@ pub fn add_snapshot<P: AsRef<Path>>(
     );
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
+    let bank_snapshot_serializer = create_versioned_bank_snapshot_serializer(
+	snapshot_version,
+	bank,
+	snapshot_storages
+    )?;
     let consumed_size = serialize_snapshot_data_file(
         &snapshot_bank_file_path,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
-        |stream| {
-            serialize_into(stream.by_ref(), &*bank)?;
-            serialize_into(
-                stream.by_ref(),
-                &BankRcSerialize {
-                    bank_rc: &bank.rc,
-                    snapshot_storages,
-                },
-            )?;
-            Ok(())
-        },
+	bank_snapshot_serializer,
     )?;
     bank_serialize.stop();
 
@@ -416,7 +576,6 @@ pub fn serialize_status_cache(
     let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
     let consumed_size = serialize_snapshot_data_file(
         &snapshot_status_cache_file_path,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             serialize_into(stream, slot_deltas)?;
             Ok(())
@@ -633,42 +792,26 @@ where
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
 
     info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
+    let bank_snapshot_deserializer = create_versioned_bank_snapshot_deserializer(
+	snapshot_version,
+	account_paths,
+	frozen_account_pubkeys,
+	&append_vecs_path,
+	genesis_config,
+    )?;
     let bank = deserialize_snapshot_data_file(
         &root_paths.snapshot_file_path,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
-        |stream| {
-            let mut bank: Bank = match snapshot_version {
-                SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
-                _ => {
-                    return Err(get_io_error(&format!(
-                        "unsupported snapshot version: {}",
-                        snapshot_version
-                    )));
-                }
-            };
-            bank.operating_mode = Some(genesis_config.operating_mode);
-            info!("Rebuilding accounts...");
-            let rc = bank::BankRc::from_stream(
-                account_paths,
-                bank.slot(),
-                &bank.ancestors,
-                frozen_account_pubkeys,
-                stream.by_ref(),
-                &append_vecs_path,
-            )?;
-            bank.set_bank_rc(rc, bank::StatusCacheRc::default());
-            bank.finish_init();
-            Ok(bank)
-        },
+	bank_snapshot_deserializer,
     )?;
 
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
     let slot_deltas = deserialize_snapshot_data_file(
         &status_cache_path,
-        MAX_SNAPSHOT_DATA_FILE_SIZE,
         |stream| {
             info!("Rebuilding status cache...");
-            let slot_deltas: Vec<BankSlotDelta> = deserialize_from_snapshot(stream)?;
+            let slot_deltas: Vec<BankSlotDelta> = bincode::config()
+		.limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+		.deserialize_from(stream)?;
             Ok(slot_deltas)
         },
     )?;
@@ -726,7 +869,7 @@ mod tests {
     fn test_serialize_snapshot_data_file_under_limit() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let expected_consumed_size = size_of::<u32>() as u64;
-        let consumed_size = serialize_snapshot_data_file(
+        let consumed_size = serialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size,
             |stream| {
@@ -742,7 +885,7 @@ mod tests {
     fn test_serialize_snapshot_data_file_over_limit() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let expected_consumed_size = size_of::<u32>() as u64;
-        let result = serialize_snapshot_data_file(
+        let result = serialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size - 1,
             |stream| {
@@ -759,7 +902,7 @@ mod tests {
         let expected_consumed_size = size_of::<u32>() as u64;
 
         let temp_dir = tempfile::TempDir::new().unwrap();
-        serialize_snapshot_data_file(
+        serialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size,
             |stream| {
@@ -769,7 +912,7 @@ mod tests {
         )
         .unwrap();
 
-        let actual_data = deserialize_snapshot_data_file(
+        let actual_data = deserialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size,
             |stream| Ok(deserialize_from::<_, u32>(stream)?),
@@ -784,7 +927,7 @@ mod tests {
         let expected_consumed_size = size_of::<u32>() as u64;
 
         let temp_dir = tempfile::TempDir::new().unwrap();
-        serialize_snapshot_data_file(
+        serialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size,
             |stream| {
@@ -794,7 +937,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = deserialize_snapshot_data_file(
+        let result = deserialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size - 1,
             |stream| Ok(deserialize_from::<_, u32>(stream)?),
@@ -808,7 +951,7 @@ mod tests {
         let expected_consumed_size = size_of::<u32>() as u64;
 
         let temp_dir = tempfile::TempDir::new().unwrap();
-        serialize_snapshot_data_file(
+        serialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size * 2,
             |stream| {
@@ -819,7 +962,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = deserialize_snapshot_data_file(
+        let result = deserialize_snapshot_data_file_capped(
             &temp_dir.path().join("data-file"),
             expected_consumed_size * 2,
             |stream| Ok(deserialize_from::<_, u32>(stream)?),

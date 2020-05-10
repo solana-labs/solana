@@ -181,6 +181,7 @@ mod tests {
         hash::hash,
         signature::{Keypair, Signer},
     };
+    use solana_ledger::snapshot_utils::SnapshotVersion;
 
     #[test]
     fn test_should_halt() {
@@ -239,6 +240,7 @@ mod tests {
                 tar_output_file: PathBuf::from("."),
                 storages: vec![],
                 compression: CompressionType::Bzip2,
+		snapshot_version: SnapshotVersion::default(),
             };
 
             AccountsHashVerifier::process_accounts_package(

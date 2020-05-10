@@ -57,6 +57,7 @@ mod tests {
             snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
             snapshot_path: PathBuf::from(snapshot_dir.path()),
             compression: CompressionType::Bzip2,
+	    snapshot_version: snapshot_utils::SnapshotVersion::default(),
         };
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         SnapshotTestConfig {
@@ -130,6 +131,7 @@ mod tests {
         let accounts_dir = &snapshot_test_config.accounts_dir;
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
+	let snapshot_version = bank_forks.snapshot_config.as_ref().unwrap().snapshot_version;
 
         let (s, _r) = channel();
         let sender = Some(s);
@@ -159,6 +161,7 @@ mod tests {
             &snapshot_config.snapshot_package_output_path,
             storages,
             CompressionType::Bzip2,
+	    snapshot_version,
         )
         .unwrap();
 
@@ -219,11 +222,12 @@ mod tests {
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
         let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
+	let snapshot_version = bank_forks.snapshot_config.as_ref().unwrap().snapshot_version;
 
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
         let storages: Vec<_> = bank0.get_snapshot_storages();
-        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &storages).unwrap();
+        snapshot_utils::add_snapshot(&snapshot_config.snapshot_path, bank0, &storages, snapshot_version).unwrap();
 
         // Set up snapshotting channels
         let (sender, receiver) = channel();
@@ -344,7 +348,6 @@ mod tests {
             &saved_snapshots_dir
                 .path()
                 .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILE_NAME),
-            solana_runtime::bank::MAX_SNAPSHOT_DATA_FILE_SIZE,
             |stream| {
                 serialize_into(stream, &dummy_slot_deltas)?;
                 Ok(())
