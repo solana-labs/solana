@@ -183,13 +183,7 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<RpcSupply> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetSupply, json!([commitment_config]), 0)
-            .map_err(|err| err.into_with_command("GetSupply"))?;
-
-        serde_json::from_value::<Response<RpcSupply>>(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetSupply"))
+        self.send(RpcRequest::GetSupply, json!([commitment_config]), 0)
     }
 
     pub fn total_supply(&self) -> ClientResult<u64> {
