@@ -96,32 +96,25 @@ impl RpcClient {
 
     pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
         let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
-        let response =
-            self.client
-                .send(&RpcRequest::SendTransaction, json!([serialized_encoded]), 5)?;
 
-        match response.as_str() {
-            None => {
-                Err(RpcError::ForUser("Received result of an unexpected type".to_string()).into())
-            }
-            Some(signature_base58_str) => {
-                let signature = signature_base58_str.parse::<Signature>().map_err(|err| {
-                    Into::<ClientError>::into(RpcError::ParseError(err.to_string()))
-                })?;
-                // A mismatching RPC response signature indicates an issue with the RPC node, and
-                // should not be passed along to confirmation methods. The transaction may or may
-                // not have been submitted to the cluster, so callers should verify the success of
-                // the correct transaction signature independently.
-                if signature != transaction.signatures[0] {
-                    Err(RpcError::RpcRequestError(format!(
-                        "RPC node returned mismatched signature {:?}, expected {:?}",
-                        signature, transaction.signatures[0]
-                    ))
-                    .into())
-                } else {
-                    Ok(transaction.signatures[0])
-                }
-            }
+        let signature_base58_str: String =
+            self.send(RpcRequest::SendTransaction, json!([serialized_encoded]), 5)?;
+
+        let signature = signature_base58_str
+            .parse::<Signature>()
+            .map_err(|err| Into::<ClientError>::into(RpcError::ParseError(err.to_string())))?;
+        // A mismatching RPC response signature indicates an issue with the RPC node, and
+        // should not be passed along to confirmation methods. The transaction may or may
+        // not have been submitted to the cluster, so callers should verify the success of
+        // the correct transaction signature independently.
+        if signature != transaction.signatures[0] {
+            Err(RpcError::RpcRequestError(format!(
+                "RPC node returned mismatched signature {:?}, expected {:?}",
+                signature, transaction.signatures[0]
+            ))
+            .into())
+        } else {
+            Ok(transaction.signatures[0])
         }
     }
 
@@ -137,11 +130,7 @@ impl RpcClient {
         signatures: &[Signature],
     ) -> RpcResult<Vec<Option<TransactionStatus>>> {
         let signatures: Vec<_> = signatures.iter().map(|s| s.to_string()).collect();
-        let signature_status =
-            self.client
-                .send(&RpcRequest::GetSignatureStatuses, json!([signatures]), 5)?;
-        Ok(serde_json::from_value(signature_status)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?)
+        self.send(RpcRequest::GetSignatureStatuses, json!([signatures]), 5)
     }
 
     pub fn get_signature_status_with_commitment(
@@ -149,14 +138,11 @@ impl RpcClient {
         signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Option<transaction::Result<()>>> {
-        let signature_status = self.client.send(
-            &RpcRequest::GetSignatureStatuses,
+        let result: Response<Vec<Option<TransactionStatus>>> = self.send(
+            RpcRequest::GetSignatureStatuses,
             json!([[signature.to_string()]]),
             5,
         )?;
-        let result: Response<Vec<Option<TransactionStatus>>> =
-            serde_json::from_value(signature_status)
-                .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?;
         Ok(result.value[0]
             .clone()
             .filter(|result| result.satisfies_commitment(commitment_config))
@@ -169,16 +155,13 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
         search_transaction_history: bool,
     ) -> ClientResult<Option<transaction::Result<()>>> {
-        let signature_status = self.client.send(
-            &RpcRequest::GetSignatureStatuses,
+        let result: Response<Vec<Option<TransactionStatus>>> = self.send(
+            RpcRequest::GetSignatureStatuses,
             json!([[signature.to_string()], {
                 "searchTransactionHistory": search_transaction_history
             }]),
             5,
         )?;
-        let result: Response<Vec<Option<TransactionStatus>>> =
-            serde_json::from_value(signature_status)
-                .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?;
         Ok(result.value[0]
             .clone()
             .filter(|result| result.satisfies_commitment(commitment_config))
@@ -193,13 +176,7 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Slot> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetSlot, json!([commitment_config]), 0)
-            .map_err(|err| err.into_with_command("GetSlot"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetSlot"))
+        self.send(RpcRequest::GetSlot, json!([commitment_config]), 0)
     }
 
     pub fn total_supply(&self) -> ClientResult<u64> {
@@ -210,13 +187,7 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<u64> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetTotalSupply, json!([commitment_config]), 0)
-            .map_err(|err| err.into_with_command("GetTotalSupply"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetTotalSupply"))
+        self.send(RpcRequest::GetTotalSupply, json!([commitment_config]), 0)
     }
 
     pub fn get_vote_accounts(&self) -> ClientResult<RpcVoteAccountStatus> {
@@ -227,23 +198,11 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<RpcVoteAccountStatus> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetVoteAccounts, json!([commitment_config]), 0)
-            .map_err(|err| err.into_with_command("GetVoteAccounts"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetVoteAccounts"))
+        self.send(RpcRequest::GetVoteAccounts, json!([commitment_config]), 0)
     }
 
     pub fn get_cluster_nodes(&self) -> ClientResult<Vec<RpcContactInfo>> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetClusterNodes, Value::Null, 0)
-            .map_err(|err| err.into_with_command("GetClusterNodes"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetClusterNodes"))
+        self.send(RpcRequest::GetClusterNodes, Value::Null, 0)
     }
 
     pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<ConfirmedBlock> {
@@ -255,13 +214,7 @@ impl RpcClient {
         slot: Slot,
         encoding: TransactionEncoding,
     ) -> ClientResult<ConfirmedBlock> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetConfirmedBlock, json!([slot, encoding]), 0)
-            .map_err(|err| err.into_with_command("GetConfirmedBlock"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetConfirmedBlock"))
+        self.send(RpcRequest::GetConfirmedBlock, json!([slot, encoding]), 0)
     }
 
     pub fn get_confirmed_blocks(
@@ -269,17 +222,11 @@ impl RpcClient {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> ClientResult<Vec<Slot>> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetConfirmedBlocks,
-                json!([start_slot, end_slot]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetConfirmedBlocks"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetConfirmedBlocks"))
+        self.send(
+            RpcRequest::GetConfirmedBlocks,
+            json!([start_slot, end_slot]),
+            0,
+        )
     }
 
     pub fn get_confirmed_signatures_for_address(
@@ -288,19 +235,11 @@ impl RpcClient {
         start_slot: Slot,
         end_slot: Slot,
     ) -> ClientResult<Vec<Signature>> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetConfirmedSignaturesForAddress,
-                json!([address.to_string(), start_slot, end_slot]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetConfirmedSignaturesForAddress"))?;
-
-        let signatures_base58_str: Vec<String> =
-            serde_json::from_value(response).map_err(|err| {
-                ClientError::new_with_command(err.into(), "GetConfirmedSignaturesForAddress")
-            })?;
+        let signatures_base58_str: Vec<String> = self.send(
+            RpcRequest::GetConfirmedSignaturesForAddress,
+            json!([address.to_string(), start_slot, end_slot]),
+            0,
+        )?;
 
         let mut signatures = vec![];
         for signature_base58_str in signatures_base58_str {
@@ -318,23 +257,16 @@ impl RpcClient {
         signature: &Signature,
         encoding: TransactionEncoding,
     ) -> ClientResult<ConfirmedTransaction> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetConfirmedTransaction,
-                json!([signature.to_string(), encoding]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetConfirmedTransaction"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetConfirmedTransaction"))
+        self.send(
+            RpcRequest::GetConfirmedTransaction,
+            json!([signature.to_string(), encoding]),
+            0,
+        )
     }
 
     pub fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetBlockTime, json!([slot]), 0);
+        let request = RpcRequest::GetBlockTime;
+        let response = self.client.send(request, json!([slot]), 0);
 
         response
             .map(|result_json| {
@@ -342,11 +274,11 @@ impl RpcClient {
                     return Err(RpcError::ForUser(format!("Block Not Found: slot={}", slot)).into());
                 }
                 let result = serde_json::from_value(result_json)
-                    .map_err(|err| ClientError::new_with_command(err.into(), "GetBlockTime"))?;
+                    .map_err(|err| ClientError::new_with_request(err.into(), request))?;
                 trace!("Response block timestamp {:?} {:?}", slot, result);
                 Ok(result)
             })
-            .map_err(|err| err.into_with_command("GetBlockTime"))?
+            .map_err(|err| err.into_with_request(request))?
     }
 
     pub fn get_epoch_info(&self) -> ClientResult<RpcEpochInfo> {
@@ -357,13 +289,7 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<RpcEpochInfo> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetEpochInfo, json!([commitment_config]), 0)
-            .map_err(|err| err.into_with_command("GetEpochInfo"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetEpochInfo"))
+        self.send(RpcRequest::GetEpochInfo, json!([commitment_config]), 0)
     }
 
     pub fn get_leader_schedule(
@@ -378,75 +304,38 @@ impl RpcClient {
         slot: Option<Slot>,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Option<RpcLeaderSchedule>> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetLeaderSchedule,
-                json!([slot, commitment_config]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetLeaderSchedule"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetLeaderSchedule"))
+        self.send(
+            RpcRequest::GetLeaderSchedule,
+            json!([slot, commitment_config]),
+            0,
+        )
     }
 
     pub fn get_epoch_schedule(&self) -> ClientResult<EpochSchedule> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetEpochSchedule, Value::Null, 0)
-            .map_err(|err| err.into_with_command("GetEpochSchedule"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetEpochSchedule"))
+        self.send(RpcRequest::GetEpochSchedule, Value::Null, 0)
     }
 
     pub fn get_identity(&self) -> ClientResult<Pubkey> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetIdentity, Value::Null, 0)
-            .map_err(|err| err.into_with_command("GetIdentity"))?;
+        let rpc_identity: RpcIdentity = self.send(RpcRequest::GetIdentity, Value::Null, 0)?;
 
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetIdentity"))
-            .and_then(|rpc_identity: RpcIdentity| {
-                rpc_identity.identity.parse::<Pubkey>().map_err(|_| {
-                    ClientError::new_with_command(
-                        RpcError::ParseError("Pubkey".to_string()).into(),
-                        "GetIdentity",
-                    )
-                })
-            })
+        rpc_identity.identity.parse::<Pubkey>().map_err(|_| {
+            ClientError::new_with_request(
+                RpcError::ParseError("Pubkey".to_string()).into(),
+                RpcRequest::GetIdentity,
+            )
+        })
     }
 
     pub fn get_inflation(&self) -> ClientResult<Inflation> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetInflation, Value::Null, 0)
-            .map_err(|err| err.into_with_command("GetInflation"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetInflation"))
+        self.send(RpcRequest::GetInflation, Value::Null, 0)
     }
 
     pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetVersion, Value::Null, 0)
-            .map_err(|err| err.into_with_command("GetVersion"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetVersion"))
+        self.send(RpcRequest::GetVersion, Value::Null, 0)
     }
 
     pub fn minimum_ledger_slot(&self) -> ClientResult<Slot> {
-        let response = self
-            .client
-            .send(&RpcRequest::MinimumLedgerSlot, Value::Null, 0)
-            .map_err(|err| err.into_with_command("MinimumLedgerSlot"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "MinimumLedgerSlot"))
+        self.send(RpcRequest::MinimumLedgerSlot, Value::Null, 0)
     }
 
     pub fn send_and_confirm_transaction(
@@ -600,18 +489,15 @@ impl RpcClient {
         pubkey: &Pubkey,
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
+        let request = RpcRequest::GetBalance;
         let balance_json = self
             .client
-            .send(
-                &RpcRequest::GetBalance,
-                json!([pubkey.to_string()]),
-                retries,
-            )
-            .map_err(|err| err.into_with_command("RetryGetBalance"))?;
+            .send(request, json!([pubkey.to_string()]), retries)
+            .map_err(|err| err.into_with_request(request))?;
 
         Ok(Some(
             serde_json::from_value::<Response<u64>>(balance_json)
-                .map_err(|err| ClientError::new_with_command(err.into(), "RetryGetBalance"))?
+                .map_err(|err| ClientError::new_with_request(err.into(), request))?
                 .value,
         ))
     }
@@ -628,7 +514,7 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
         let response = self.client.send(
-            &RpcRequest::GetAccountInfo,
+            RpcRequest::GetAccountInfo,
             json!([pubkey.to_string(), commitment_config]),
             0,
         );
@@ -664,18 +550,14 @@ impl RpcClient {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64> {
+        let request = RpcRequest::GetMinimumBalanceForRentExemption;
         let minimum_balance_json = self
             .client
-            .send(
-                &RpcRequest::GetMinimumBalanceForRentExemption,
-                json!([data_len]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetMinimumBalanceForRentExemption"))?;
+            .send(request, json!([data_len]), 0)
+            .map_err(|err| err.into_with_request(request))?;
 
-        let minimum_balance: u64 = serde_json::from_value(minimum_balance_json).map_err(|err| {
-            ClientError::new_with_command(err.into(), "GetMinimumBalanceForRentExemption")
-        })?;
+        let minimum_balance: u64 = serde_json::from_value(minimum_balance_json)
+            .map_err(|err| ClientError::new_with_request(err.into(), request))?;
         trace!(
             "Response minimum balance {:?} {:?}",
             data_len,
@@ -696,39 +578,25 @@ impl RpcClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<u64> {
-        let balance_json = self
-            .client
-            .send(
-                &RpcRequest::GetBalance,
-                json!([pubkey.to_string(), commitment_config]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetBalance"))?;
-
-        serde_json::from_value::<Response<u64>>(balance_json)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetBalance"))
+        self.send(
+            RpcRequest::GetBalance,
+            json!([pubkey.to_string(), commitment_config]),
+            0,
+        )
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> ClientResult<Vec<(Pubkey, Account)>> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetProgramAccounts,
-                json!([pubkey.to_string()]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetProgramAccounts"))?;
-
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value::<Vec<RpcKeyedAccount>>(response)
-                .map_err(|err| ClientError::new_with_command(err.into(), "GetProgramAccounts"))?;
-
+        let accounts: Vec<RpcKeyedAccount> = self.send(
+            RpcRequest::GetProgramAccounts,
+            json!([pubkey.to_string()]),
+            0,
+        )?;
         let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
         for RpcKeyedAccount { pubkey, account } in accounts.into_iter() {
             let pubkey = pubkey.parse().map_err(|_| {
-                ClientError::new_with_command(
+                ClientError::new_with_request(
                     RpcError::ParseError("Pubkey".to_string()).into(),
-                    "GetProgramAccounts",
+                    RpcRequest::GetProgramAccounts,
                 )
             })?;
             pubkey_accounts.push((pubkey, account.decode().unwrap()));
@@ -745,17 +613,11 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<u64> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetTransactionCount,
-                json!([commitment_config]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetTransactionCount"))?;
-
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetTransactionCount"))
+        self.send(
+            RpcRequest::GetTransactionCount,
+            json!([commitment_config]),
+            0,
+        )
     }
 
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
@@ -768,15 +630,6 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<(Hash, FeeCalculator)> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetRecentBlockhash,
-                json!([commitment_config]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetRecentBlockhash"))?;
-
         let Response {
             context,
             value:
@@ -784,12 +637,16 @@ impl RpcClient {
                     blockhash,
                     fee_calculator,
                 },
-        } = serde_json::from_value::<Response<RpcBlockhashFeeCalculator>>(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetRecentBlockhash"))?;
+        } = self.send::<Response<RpcBlockhashFeeCalculator>>(
+            RpcRequest::GetRecentBlockhash,
+            json!([commitment_config]),
+            0,
+        )?;
+
         let blockhash = blockhash.parse().map_err(|_| {
-            ClientError::new_with_command(
+            ClientError::new_with_request(
                 RpcError::ParseError("Hash".to_string()).into(),
-                "GetRecentBlockhash",
+                RpcRequest::GetRecentBlockhash,
             )
         })?;
         Ok(Response {
@@ -802,31 +659,25 @@ impl RpcClient {
         &self,
         blockhash: &Hash,
     ) -> ClientResult<Option<FeeCalculator>> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetFeeCalculatorForBlockhash,
-                json!([blockhash.to_string()]),
-                0,
-            )
-            .map_err(|err| err.into_with_command("GetFeeCalculatorForBlockhash"))?;
-        let Response { value, .. } = serde_json::from_value::<Response<Option<RpcFeeCalculator>>>(
-            response,
-        )
-        .map_err(|e| ClientError::new_with_command(e.into(), "GetFeeCalculatorForBlockhash"))?;
+        let Response { value, .. } = self.send::<Response<Option<RpcFeeCalculator>>>(
+            RpcRequest::GetFeeCalculatorForBlockhash,
+            json!([blockhash.to_string()]),
+            0,
+        )?;
+
         Ok(value.map(|rf| rf.fee_calculator))
     }
 
     pub fn get_fee_rate_governor(&self) -> RpcResult<FeeRateGovernor> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetFeeRateGovernor, Value::Null, 0)
-            .map_err(|err| err.into_with_command("GetFeeRateGovernor"))?;
         let Response {
             context,
             value: RpcFeeRateGovernor { fee_rate_governor },
-        } = serde_json::from_value::<Response<RpcFeeRateGovernor>>(response)
-            .map_err(|e| ClientError::new_with_command(e.into(), "GetFeeRateGovernor"))?;
+        } = self.send::<Response<RpcFeeRateGovernor>>(
+            RpcRequest::GetFeeRateGovernor,
+            Value::Null,
+            0,
+        )?;
+
         Ok(Response {
             context,
             value: fee_rate_governor,
@@ -860,18 +711,11 @@ impl RpcClient {
     }
 
     pub fn get_genesis_hash(&self) -> ClientResult<Hash> {
-        let response = self
-            .client
-            .send(&RpcRequest::GetGenesisHash, Value::Null, 0)
-            .map_err(|err| err.into_with_command("GetGenesisHash"))?;
-
-        let hash = serde_json::from_value::<String>(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetGenesisHash"))?;
-
-        let hash = hash.parse().map_err(|_| {
-            ClientError::new_with_command(
+        let hash_str: String = self.send(RpcRequest::GetGenesisHash, Value::Null, 0)?;
+        let hash = hash_str.parse().map_err(|_| {
+            ClientError::new_with_request(
                 RpcError::ParseError("Hash".to_string()).into(),
-                "GetGenesisHash",
+                RpcRequest::GetGenesisHash,
             )
         })?;
         Ok(hash)
@@ -927,7 +771,7 @@ impl RpcClient {
                 return balance_result.ok();
             }
             trace!(
-                "retry_get_balance[{}] {:?} {:?}",
+                "wait_for_balance_with_commitment [{}] {:?} {:?}",
                 run,
                 balance_result,
                 expected_balance
@@ -1060,23 +904,18 @@ impl RpcClient {
         &self,
         signature: &Signature,
     ) -> ClientResult<usize> {
-        let response = self
-            .client
-            .send(
-                &RpcRequest::GetSignatureStatuses,
-                json!([[signature.to_string()]]),
-                5,
-            )
-            .map_err(|err| err.into_with_command("GetSignatureStatuses"))?;
-        let result: Response<Vec<Option<TransactionStatus>>> = serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "GetSignatureStatuses"))?;
+        let result: Response<Vec<Option<TransactionStatus>>> = self.send(
+            RpcRequest::GetSignatureStatuses,
+            json!([[signature.to_string()]]),
+            5,
+        )?;
 
         let confirmations = result.value[0]
             .clone()
             .ok_or_else(|| {
-                ClientError::new_with_command(
+                ClientError::new_with_request(
                     ClientErrorKind::Custom("signature not found".to_string()),
-                    "GetSignatureStatuses",
+                    RpcRequest::GetSignatureStatuses,
                 )
             })?
             .confirmations
@@ -1180,17 +1019,20 @@ impl RpcClient {
     }
 
     pub fn validator_exit(&self) -> ClientResult<bool> {
-        let response = self
-            .client
-            .send(&RpcRequest::ValidatorExit, Value::Null, 0)
-            .map_err(|err| err.into_with_command("ValidatorExit"))?;
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_command(err.into(), "ValidatorExit"))
+        self.send(RpcRequest::ValidatorExit, Value::Null, 0)
     }
 
-    pub fn send(&self, request: &RpcRequest, params: Value, retries: usize) -> ClientResult<Value> {
+    pub fn send<T>(&self, request: RpcRequest, params: Value, retries: usize) -> ClientResult<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
         assert!(params.is_array() || params.is_null());
-        self.client.send(request, params, retries)
+        let response = self
+            .client
+            .send(request, params, retries)
+            .map_err(|err| err.into_with_request(request))?;
+        serde_json::from_value(response)
+            .map_err(|err| ClientError::new_with_request(err.into(), request))
     }
 }
 
@@ -1260,21 +1102,23 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_socket(rpc_addr);
 
-        let balance = rpc_client.send(
-            &RpcRequest::GetBalance,
-            json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"]),
-            0,
-        );
-        assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
+        let balance: u64 = rpc_client
+            .send(
+                RpcRequest::GetBalance,
+                json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"]),
+                0,
+            )
+            .unwrap();
+        assert_eq!(balance, 50);
 
-        let blockhash = rpc_client.send(&RpcRequest::GetRecentBlockhash, Value::Null, 0);
-        assert_eq!(
-            blockhash.unwrap().as_str().unwrap(),
-            "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
-        );
+        let blockhash: String = rpc_client
+            .send(RpcRequest::GetRecentBlockhash, Value::Null, 0)
+            .unwrap();
+        assert_eq!(blockhash, "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx");
 
         // Send erroneous parameter
-        let blockhash = rpc_client.send(&RpcRequest::GetRecentBlockhash, json!(["parameter"]), 0);
+        let blockhash: ClientResult<String> =
+            rpc_client.send(RpcRequest::GetRecentBlockhash, json!(["parameter"]), 0);
         assert_eq!(blockhash.is_err(), true);
     }
 
@@ -1308,12 +1152,14 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_socket(rpc_addr);
 
-        let balance = rpc_client.send(
-            &RpcRequest::GetBalance,
-            json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"]),
-            10,
-        );
-        assert_eq!(balance.unwrap().as_u64().unwrap(), 5);
+        let balance: u64 = rpc_client
+            .send(
+                RpcRequest::GetBalance,
+                json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"]),
+                10,
+            )
+            .unwrap();
+        assert_eq!(balance, 5);
     }
 
     #[test]

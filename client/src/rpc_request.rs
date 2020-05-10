@@ -1,7 +1,8 @@
 use serde_json::{json, Value};
+use std::fmt;
 use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum RpcRequest {
     DeregisterNode,
     ValidatorExit,
@@ -42,12 +43,8 @@ pub enum RpcRequest {
     MinimumLedgerSlot,
 }
 
-pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
-pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
-
-impl RpcRequest {
-    pub(crate) fn build_request_json(&self, id: u64, params: Value) -> Value {
-        let jsonrpc = "2.0";
+impl fmt::Display for RpcRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let method = match self {
             RpcRequest::DeregisterNode => "deregisterNode",
             RpcRequest::ValidatorExit => "validatorExit",
@@ -87,10 +84,21 @@ impl RpcRequest {
             RpcRequest::GetMinimumBalanceForRentExemption => "getMinimumBalanceForRentExemption",
             RpcRequest::MinimumLedgerSlot => "minimumLedgerSlot",
         };
+
+        write!(f, "{}", method)
+    }
+}
+
+pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
+pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
+
+impl RpcRequest {
+    pub(crate) fn build_request_json(self, id: u64, params: Value) -> Value {
+        let jsonrpc = "2.0";
         json!({
            "jsonrpc": jsonrpc,
            "id": id,
-           "method": method,
+           "method": format!("{}", self),
            "params": params,
         })
     }

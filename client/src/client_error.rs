@@ -50,28 +50,29 @@ impl Into<TransportError> for ClientErrorKind {
 #[derive(Error, Debug)]
 #[error("{kind}")]
 pub struct ClientError {
-    command: Option<&'static str>,
+    request: Option<rpc_request::RpcRequest>,
+
     #[source]
     kind: ClientErrorKind,
 }
 
 impl ClientError {
-    pub fn new_with_command(kind: ClientErrorKind, command: &'static str) -> Self {
+    pub fn new_with_request(kind: ClientErrorKind, request: rpc_request::RpcRequest) -> Self {
         Self {
-            command: Some(command),
+            request: Some(request),
             kind,
         }
     }
 
-    pub fn into_with_command(self, command: &'static str) -> Self {
+    pub fn into_with_request(self, request: rpc_request::RpcRequest) -> Self {
         Self {
-            command: Some(command),
+            request: Some(request),
             ..self
         }
     }
 
-    pub fn command(&self) -> Option<&'static str> {
-        self.command
+    pub fn request(&self) -> Option<&rpc_request::RpcRequest> {
+        self.request.as_ref()
     }
 
     pub fn kind(&self) -> &ClientErrorKind {
@@ -82,7 +83,7 @@ impl ClientError {
 impl From<ClientErrorKind> for ClientError {
     fn from(kind: ClientErrorKind) -> Self {
         Self {
-            command: None,
+            request: None,
             kind,
         }
     }
@@ -91,7 +92,7 @@ impl From<ClientErrorKind> for ClientError {
 impl From<TransportError> for ClientError {
     fn from(err: TransportError) -> Self {
         Self {
-            command: None,
+            request: None,
             kind: err.into(),
         }
     }
@@ -106,7 +107,7 @@ impl Into<TransportError> for ClientError {
 impl From<std::io::Error> for ClientError {
     fn from(err: std::io::Error) -> Self {
         Self {
-            command: None,
+            request: None,
             kind: err.into(),
         }
     }
@@ -115,7 +116,7 @@ impl From<std::io::Error> for ClientError {
 impl From<reqwest::Error> for ClientError {
     fn from(err: reqwest::Error) -> Self {
         Self {
-            command: None,
+            request: None,
             kind: err.into(),
         }
     }
@@ -124,7 +125,7 @@ impl From<reqwest::Error> for ClientError {
 impl From<rpc_request::RpcError> for ClientError {
     fn from(err: rpc_request::RpcError) -> Self {
         Self {
-            command: None,
+            request: None,
             kind: err.into(),
         }
     }
@@ -133,7 +134,7 @@ impl From<rpc_request::RpcError> for ClientError {
 impl From<serde_json::error::Error> for ClientError {
     fn from(err: serde_json::error::Error) -> Self {
         Self {
-            command: None,
+            request: None,
             kind: err.into(),
         }
     }
@@ -142,7 +143,7 @@ impl From<serde_json::error::Error> for ClientError {
 impl From<SignerError> for ClientError {
     fn from(err: SignerError) -> Self {
         Self {
-            command: None,
+            request: None,
             kind: err.into(),
         }
     }
@@ -151,7 +152,7 @@ impl From<SignerError> for ClientError {
 impl From<TransactionError> for ClientError {
     fn from(err: TransactionError) -> Self {
         Self {
-            command: None,
+            request: None,
             kind: err.into(),
         }
     }

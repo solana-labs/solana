@@ -31,7 +31,7 @@ impl RpcClientRequest {
 impl GenericRpcClientRequest for RpcClientRequest {
     fn send(
         &self,
-        request: &RpcRequest,
+        request: RpcRequest,
         params: serde_json::Value,
         mut retries: usize,
     ) -> Result<serde_json::Value> {
