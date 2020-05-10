@@ -939,8 +939,8 @@ impl Blockstore {
                 // ToDo: This is a potential slashing condition
                 warn!("Received multiple erasure configs for the same erasure set!!!");
                 warn!(
-                    "Stored config: {:#?}, new config: {:#?}",
-                    erasure_meta.config, erasure_config
+                    "Slot: {}, shred index: {}, set_index: {}, is_duplicate: {}, stored config: {:#?}, new config: {:#?}",
+                    slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config, erasure_config
                 );
             }
 
