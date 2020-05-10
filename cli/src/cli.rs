@@ -201,6 +201,10 @@ pub enum CliCommand {
     GetSlot {
         commitment_config: CommitmentConfig,
     },
+    Supply {
+        commitment_config: CommitmentConfig,
+        print_accounts: bool,
+    },
     TotalSupply {
         commitment_config: CommitmentConfig,
     },
@@ -612,6 +616,7 @@ pub fn parse_command(
         }),
         ("epoch", Some(matches)) => parse_get_epoch(matches),
         ("slot", Some(matches)) => parse_get_slot(matches),
+        ("supply", Some(matches)) => parse_supply(matches),
         ("total-supply", Some(matches)) => parse_total_supply(matches),
         ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
         ("leader-schedule", Some(_matches)) => Ok(CliCommandInfo {
@@ -1696,6 +1701,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetSlot { commitment_config } => {
             process_get_slot(&rpc_client, *commitment_config)
         }
+        CliCommand::Supply {
+            commitment_config,
+            print_accounts,
+        } => process_supply(&rpc_client, config, *commitment_config, *print_accounts),
         CliCommand::TotalSupply { commitment_config } => {
             process_total_supply(&rpc_client, *commitment_config)
         }
