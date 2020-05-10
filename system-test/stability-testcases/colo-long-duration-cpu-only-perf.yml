@@ -9,7 +9,7 @@ steps:
       TEST_DURATION_SECONDS: 3600
       NUMBER_OF_VALIDATOR_NODES: 3
       NUMBER_OF_CLIENT_NODES: 1
-      CLIENT_OPTIONS: "bench-tps=1=--tx_count 30000 --thread-batch-sleep-ms 250"
+      CLIENT_OPTIONS: "bench-tps=1=--tx_count 10000 --thread-batch-sleep-ms 250"
       ADDITIONAL_FLAGS: ""
       TEST_TYPE: "fixed_duration"
     agents:
