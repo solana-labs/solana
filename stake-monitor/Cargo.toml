@@ -13,7 +13,7 @@ clap = "2.33.0"
 console = "0.10.1"
 log = "0.4.8"
 serde = "1.0.110"
-serde_yaml = "0.8.11"
+serde_yaml = "0.8.12"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-cli-config = { path = "../cli-config", version = "1.2.0" }
 solana-client = { path = "../client", version = "1.2.0" }
