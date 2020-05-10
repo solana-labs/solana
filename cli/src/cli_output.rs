@@ -4,9 +4,10 @@ use console::{style, Emoji};
 use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use solana_client::rpc_response::{RpcEpochInfo, RpcKeyedAccount, RpcVoteAccountInfo};
+use solana_client::rpc_response::{RpcEpochInfo, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo};
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
+    native_token::lamports_to_sol,
     stake_history::StakeHistoryEntry,
 };
 use solana_stake_program::stake_state::{Authorized, Lockup};
@@ -904,6 +905,52 @@ impl fmt::Display for CliSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         writeln_name_value(f, "Signature:", &self.signature)?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliSupply {
+    pub total: u64,
+    pub circulating: u64,
+    pub non_circulating: u64,
+    pub non_circulating_accounts: Vec<String>,
+    #[serde(skip_serializing)]
+    pub print_accounts: bool,
+}
+
+impl From<RpcSupply> for CliSupply {
+    fn from(rpc_supply: RpcSupply) -> Self {
+        Self {
+            total: rpc_supply.total,
+            circulating: rpc_supply.circulating,
+            non_circulating: rpc_supply.non_circulating,
+            non_circulating_accounts: rpc_supply.non_circulating_accounts,
+            print_accounts: false,
+        }
+    }
+}
+
+impl fmt::Display for CliSupply {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Total:", &format!("{} SOL", lamports_to_sol(self.total)))?;
+        writeln_name_value(
+            f,
+            "Circulating:",
+            &format!("{} SOL", lamports_to_sol(self.circulating)),
+        )?;
+        writeln_name_value(
+            f,
+            "Non-Circulating:",
+            &format!("{} SOL", lamports_to_sol(self.non_circulating)),
+        )?;
+        if self.print_accounts {
+            writeln!(f)?;
+            writeln_name_value(f, "Non-Circulating Accounts:", " ")?;
+            for account in &self.non_circulating_accounts {
+                writeln!(f, "  {}", account)?;
+            }
+        }
         Ok(())
     }
 }
