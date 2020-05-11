@@ -946,7 +946,7 @@ impl Blockstore {
 
             // Should be safe to modify index_meta here. Two cases
             // 1) Recovery happens: Then all inserted erasure metas are removed
-            // from just_received_coding_shreds, and nothing wll be committed by
+            // from just_received_coding_shreds, and nothing will be committed by
             // `check_insert_coding_shred`, so the coding index meta will not be
             // committed
             index_meta.coding_mut().set_present(shred_index, true);
