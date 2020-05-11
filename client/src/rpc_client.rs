@@ -179,6 +179,13 @@ impl RpcClient {
         self.send(RpcRequest::GetSlot, json!([commitment_config]), 0)
     }
 
+    pub fn supply_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> RpcResult<RpcSupply> {
+        self.send(RpcRequest::GetSupply, json!([commitment_config]), 0)
+    }
+
     pub fn total_supply(&self) -> ClientResult<u64> {
         self.total_supply_with_commitment(CommitmentConfig::default())
     }
