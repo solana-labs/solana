@@ -27,9 +27,7 @@ use lazy_static::lazy_static;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::{prelude::*, ThreadPool};
-use serde::{
-    Deserialize, Serialize,
-};
+use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
@@ -141,7 +139,9 @@ pub enum AccountStorageStatus {
 }
 
 impl Default for AccountStorageStatus {
-    fn default() -> Self { Self::Available }
+    fn default() -> Self {
+        Self::Available
+    }
 }
 
 #[derive(Debug)]
@@ -172,12 +172,12 @@ pub struct AccountStorageEntry {
 
 impl Default for AccountStorageEntry {
     fn default() -> Self {
-	Self {
-	    id: 0,
-	    slot: 0,
-	    accounts: AppendVec::new_empty_map(0),
+        Self {
+            id: 0,
+            slot: 0,
+            accounts: AppendVec::new_empty_map(0),
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
-	}
+        }
     }
 }
 
@@ -1882,23 +1882,17 @@ pub mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
     use crate::{
-	accounts_index::RefCount,
-	append_vec::AccountMeta,
-	serde_utils::{
-	    accountsdb_from_stream,
-	    accountsdb_to_stream,
-	},
+        accounts_index::RefCount,
+        append_vec::AccountMeta,
+        serde_utils::{accountsdb_from_stream, accountsdb_to_stream},
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{account::Account, hash::HASH_BYTES};
     use std::{
-	fs,
-	io::{
-	    BufReader,
-	    Cursor,
-	},
-	str::FromStr,
+        fs,
+        io::{BufReader, Cursor},
+        str::FromStr,
     };
     use tempfile::TempDir;
 
@@ -2764,24 +2758,14 @@ pub mod tests {
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDB, slot: Slot) -> AccountsDB {
         let mut writer = Cursor::new(vec![]);
         let snapshot_storages = accounts.get_snapshot_storages(slot);
-	accountsdb_to_stream(
-            &mut writer,
-            &accounts,
-	    slot,
-	    &snapshot_storages
-	)
-        .unwrap();
+        accountsdb_to_stream(&mut writer, &accounts, slot, &snapshot_storages).unwrap();
 
         let buf = writer.into_inner();
         let mut reader = BufReader::new(&buf[..]);
         let copied_accounts = TempDir::new().unwrap();
         // Simulate obtaining a copy of the AppendVecs from a tarball
         copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
-        let daccounts = accountsdb_from_stream(
-	    &mut reader,
-	    &[],
-	    copied_accounts.path()
-	).unwrap();
+        let daccounts = accountsdb_from_stream(&mut reader, &[], copied_accounts.path()).unwrap();
 
         print_count_and_status("daccounts", &daccounts);
 

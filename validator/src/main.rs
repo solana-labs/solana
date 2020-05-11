@@ -961,9 +961,11 @@ pub fn main() {
         }
     }
     let snapshot_version = match matches.value_of("snapshot_version") {
-	Some(s) => s.parse::<SnapshotVersion>()
-	    .unwrap_or_else(|e| { eprintln!("Error: {}", e); exit(1) }),
-	None => SnapshotVersion::default(),
+        Some(s) => s.parse::<SnapshotVersion>().unwrap_or_else(|e| {
+            eprintln!("Error: {}", e);
+            exit(1)
+        }),
+        None => SnapshotVersion::default(),
     };
     validator_config.snapshot_config = Some(SnapshotConfig {
         snapshot_interval_slots: if snapshot_interval_slots > 0 {
@@ -974,7 +976,7 @@ pub fn main() {
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
         compression: snapshot_compression,
-	snapshot_version,
+        snapshot_version,
     });
 
     validator_config.accounts_hash_interval_slots =

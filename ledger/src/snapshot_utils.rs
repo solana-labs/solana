@@ -9,16 +9,10 @@ use log::*;
 use regex::Regex;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    bank::{
-        Bank, BankSlotDelta,
-    },
+    bank::{Bank, BankSlotDelta},
     serde_utils::{
-	context_bankrc_to_stream,
-	context_bankrc_from_stream,
-	SnapshotStorage,
-	SnapshotStorages,
-	SerdeContextV1_1_0,
-	SerdeContextV1_1_1,
+        context_bankrc_from_stream, context_bankrc_to_stream, SerdeContextV1_1_0,
+        SerdeContextV1_1_1, SnapshotStorage, SnapshotStorages,
     },
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
@@ -51,16 +45,16 @@ pub enum SnapshotVersion {
 
 impl Default for SnapshotVersion {
     fn default() -> Self {
-	Self::V1_1_0
+        Self::V1_1_0
     }
 }
 
 impl From<SnapshotVersion> for &'static str {
     fn from(snapshot_version: SnapshotVersion) -> &'static str {
-	match snapshot_version {
-	    SnapshotVersion::V1_1_0 => VERSION_STRING_V1_1_0,
-	    SnapshotVersion::V1_1_1 => VERSION_STRING_V1_1_1,
-	}
+        match snapshot_version {
+            SnapshotVersion::V1_1_0 => VERSION_STRING_V1_1_0,
+            SnapshotVersion::V1_1_1 => VERSION_STRING_V1_1_1,
+        }
     }
 }
 
@@ -68,21 +62,21 @@ impl FromStr for SnapshotVersion {
     type Err = &'static str;
 
     fn from_str(version_string: &str) -> std::result::Result<Self, Self::Err> {
-	match version_string {
-	    VERSION_STRING_V1_1_0 => Ok(SnapshotVersion::V1_1_0),
-	    VERSION_STRING_V1_1_1 => Ok(SnapshotVersion::V1_1_1),
-	    _ => Err("unsupported snapshot version")
-	}
+        match version_string {
+            VERSION_STRING_V1_1_0 => Ok(SnapshotVersion::V1_1_0),
+            VERSION_STRING_V1_1_1 => Ok(SnapshotVersion::V1_1_1),
+            _ => Err("unsupported snapshot version"),
+        }
     }
 }
 
 impl SnapshotVersion {
     pub fn as_str(self) -> &'static str {
-	<&str as From<Self>>::from(self)
+        <&str as From<Self>>::from(self)
     }
 
     fn maybe_from_string(version_string: &str) -> Option<SnapshotVersion> {
-	version_string.parse::<Self>().ok()
+        version_string.parse::<Self>().ok()
     }
 }
 
@@ -175,7 +169,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_package_output_file,
         bank.get_accounts_hash(),
         compression,
-	snapshot_version,
+        snapshot_version,
     );
 
     Ok(package)
@@ -343,30 +337,25 @@ where
     }
 }
 
-pub fn serialize_snapshot_data_file<F>(
-    data_file_path: &Path,
-    serializer: F,
-) -> Result<u64>
+pub fn serialize_snapshot_data_file<F>(data_file_path: &Path, serializer: F) -> Result<u64>
 where
     F: FnOnce(&mut BufWriter<File>) -> Result<()>,
 {
     serialize_snapshot_data_file_capped::<F>(
-	data_file_path,
-	MAX_SNAPSHOT_DATA_FILE_SIZE,
-	serializer)
+        data_file_path,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        serializer,
+    )
 }
 
-pub fn deserialize_snapshot_data_file<F, T>(
-    data_file_path: &Path,
-    deserializer: F,
-) -> Result<T>
+pub fn deserialize_snapshot_data_file<F, T>(data_file_path: &Path, deserializer: F) -> Result<T>
 where
     F: FnOnce(&mut BufReader<File>) -> Result<T>,
 {
     deserialize_snapshot_data_file_capped::<F, T>(
-	data_file_path,
-	MAX_SNAPSHOT_DATA_FILE_SIZE,
-	deserializer,
+        data_file_path,
+        MAX_SNAPSHOT_DATA_FILE_SIZE,
+        deserializer,
     )
 }
 
@@ -436,28 +425,30 @@ fn create_versioned_bank_snapshot_serializer<'a>(
     snapshot_storages: &'a [SnapshotStorage],
 ) -> Result<Box<dyn Fn(&mut BufWriter<File>) -> Result<()> + 'a>> {
     match snapshot_version {
-	SnapshotVersion::V1_1_0 => Ok(Box::new(
-	    move |stream: &mut BufWriter<File>| -> Result<()> {
-		serialize_into(stream.by_ref(), bank)?;
-		context_bankrc_to_stream::<SerdeContextV1_1_0, _>(
-		    stream.by_ref(),
-		    &bank.rc,
-		    snapshot_storages)?;
-		Ok(())
-            }
-	)),
-	SnapshotVersion::V1_1_1 => Ok(Box::new(
-	    move |stream: &mut BufWriter<File>| -> Result<()> {
-		serialize_into(stream.by_ref(), bank)?;
-		context_bankrc_to_stream::<SerdeContextV1_1_1, _>(
-		    stream.by_ref(),
-		    &bank.rc,
-		    snapshot_storages)?;
-		Ok(())
-            }
-	)),
-	//If additional snapshot version were defined but not implemented...
-	//_ => Err(get_io_error(&format!("unsupported snapshot version: {}", snapshot_version.to_string()))),
+        SnapshotVersion::V1_1_0 => Ok(Box::new(
+            move |stream: &mut BufWriter<File>| -> Result<()> {
+                serialize_into(stream.by_ref(), bank)?;
+                context_bankrc_to_stream::<SerdeContextV1_1_0, _>(
+                    stream.by_ref(),
+                    &bank.rc,
+                    snapshot_storages,
+                )?;
+                Ok(())
+            },
+        )),
+        SnapshotVersion::V1_1_1 => Ok(Box::new(
+            move |stream: &mut BufWriter<File>| -> Result<()> {
+                serialize_into(stream.by_ref(), bank)?;
+                context_bankrc_to_stream::<SerdeContextV1_1_1, _>(
+                    stream.by_ref(),
+                    &bank.rc,
+                    snapshot_storages,
+                )?;
+                Ok(())
+            },
+        )),
+        //If additional snapshot version were defined but not implemented...
+        //_ => Err(get_io_error(&format!("unsupported snapshot version: {}", snapshot_version.to_string()))),
     }
 }
 
@@ -470,47 +461,46 @@ fn create_versioned_bank_snapshot_deserializer<'a, P: AsRef<Path>>(
 ) -> Result<Box<dyn Fn(&mut BufReader<File>) -> Result<Bank> + 'a>> {
     let operating_mode = genesis_config.operating_mode;
     match SnapshotVersion::maybe_from_string(snapshot_version) {
-	Some(SnapshotVersion::V1_1_0) => Ok(Box::new(
-	    move |stream: &mut BufReader<File>| {
-		let mut bank: Bank = bincode::config()
-		    .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-		    .deserialize_from(stream.by_ref())?;
-		bank.operating_mode = Some(operating_mode);
-		info!("Rebuilding accounts...");
-		let rc = context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
-		    account_paths,
-		    bank.slot(),
-		    &bank.ancestors,
-		    frozen_account_pubkeys,
-		    stream.by_ref(),
-		    &append_vecs_path,
-		)?;
-		bank.rc = rc;
-		bank.finish_init();
-		Ok(bank)
-	    }
-	)),
-	Some(SnapshotVersion::V1_1_1) => Ok(Box::new(
-	    move |stream: &mut BufReader<File>| {
-		let mut bank: Bank = bincode::config()
-		    .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-		    .deserialize_from(stream.by_ref())?;
-		bank.operating_mode = Some(operating_mode);
-		info!("Rebuilding accounts...");
-		let rc = context_bankrc_from_stream::<SerdeContextV1_1_1, _, _>(
-		    account_paths,
-		    bank.slot(),
-		    &bank.ancestors,
-		    frozen_account_pubkeys,
-		    stream.by_ref(),
-		    &append_vecs_path,
-		)?;
-		bank.rc = rc;
-		bank.finish_init();
-		Ok(bank)
-	    }
-	)),
-	_ => Err(get_io_error(&format!("unsupported snapshot version: {}", snapshot_version))),
+        Some(SnapshotVersion::V1_1_0) => Ok(Box::new(move |stream: &mut BufReader<File>| {
+            let mut bank: Bank = bincode::config()
+                .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+                .deserialize_from(stream.by_ref())?;
+            bank.operating_mode = Some(operating_mode);
+            info!("Rebuilding accounts...");
+            let rc = context_bankrc_from_stream::<SerdeContextV1_1_0, _, _>(
+                account_paths,
+                bank.slot(),
+                &bank.ancestors,
+                frozen_account_pubkeys,
+                stream.by_ref(),
+                &append_vecs_path,
+            )?;
+            bank.rc = rc;
+            bank.finish_init();
+            Ok(bank)
+        })),
+        Some(SnapshotVersion::V1_1_1) => Ok(Box::new(move |stream: &mut BufReader<File>| {
+            let mut bank: Bank = bincode::config()
+                .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+                .deserialize_from(stream.by_ref())?;
+            bank.operating_mode = Some(operating_mode);
+            info!("Rebuilding accounts...");
+            let rc = context_bankrc_from_stream::<SerdeContextV1_1_1, _, _>(
+                account_paths,
+                bank.slot(),
+                &bank.ancestors,
+                frozen_account_pubkeys,
+                stream.by_ref(),
+                &append_vecs_path,
+            )?;
+            bank.rc = rc;
+            bank.finish_init();
+            Ok(bank)
+        })),
+        _ => Err(get_io_error(&format!(
+            "unsupported snapshot version: {}",
+            snapshot_version
+        ))),
     }
 }
 
@@ -533,15 +523,10 @@ pub fn add_snapshot<P: AsRef<Path>>(
     );
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
-    let bank_snapshot_serializer = create_versioned_bank_snapshot_serializer(
-	snapshot_version,
-	bank,
-	snapshot_storages
-    )?;
-    let consumed_size = serialize_snapshot_data_file(
-        &snapshot_bank_file_path,
-	bank_snapshot_serializer,
-    )?;
+    let bank_snapshot_serializer =
+        create_versioned_bank_snapshot_serializer(snapshot_version, bank, snapshot_storages)?;
+    let consumed_size =
+        serialize_snapshot_data_file(&snapshot_bank_file_path, bank_snapshot_serializer)?;
     bank_serialize.stop();
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
@@ -574,13 +559,10 @@ pub fn serialize_status_cache(
         snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
 
     let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
-    let consumed_size = serialize_snapshot_data_file(
-        &snapshot_status_cache_file_path,
-        |stream| {
-            serialize_into(stream, slot_deltas)?;
-            Ok(())
-        },
-    )?;
+    let consumed_size = serialize_snapshot_data_file(&snapshot_status_cache_file_path, |stream| {
+        serialize_into(stream, slot_deltas)?;
+        Ok(())
+    })?;
     status_cache_serialize.stop();
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
@@ -793,28 +775,23 @@ where
 
     info!("Loading bank from {:?}", &root_paths.snapshot_file_path);
     let bank_snapshot_deserializer = create_versioned_bank_snapshot_deserializer(
-	snapshot_version,
-	account_paths,
-	frozen_account_pubkeys,
-	&append_vecs_path,
-	genesis_config,
+        snapshot_version,
+        account_paths,
+        frozen_account_pubkeys,
+        &append_vecs_path,
+        genesis_config,
     )?;
-    let bank = deserialize_snapshot_data_file(
-        &root_paths.snapshot_file_path,
-	bank_snapshot_deserializer,
-    )?;
+    let bank =
+        deserialize_snapshot_data_file(&root_paths.snapshot_file_path, bank_snapshot_deserializer)?;
 
     let status_cache_path = unpacked_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
-    let slot_deltas = deserialize_snapshot_data_file(
-        &status_cache_path,
-        |stream| {
-            info!("Rebuilding status cache...");
-            let slot_deltas: Vec<BankSlotDelta> = bincode::config()
-		.limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
-		.deserialize_from(stream)?;
-            Ok(slot_deltas)
-        },
-    )?;
+    let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
+        info!("Rebuilding status cache...");
+        let slot_deltas: Vec<BankSlotDelta> = bincode::config()
+            .limit(MAX_SNAPSHOT_DATA_FILE_SIZE)
+            .deserialize_from(stream)?;
+        Ok(slot_deltas)
+    })?;
 
     bank.src.append(&slot_deltas);
 

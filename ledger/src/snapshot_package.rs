@@ -36,7 +36,7 @@ impl AccountsPackage {
         tar_output_file: PathBuf,
         hash: Hash,
         compression: CompressionType,
-	snapshot_version: SnapshotVersion,
+        snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
             root,
@@ -47,7 +47,7 @@ impl AccountsPackage {
             tar_output_file,
             hash,
             compression,
-	    snapshot_version,
+            snapshot_version,
         }
     }
 }

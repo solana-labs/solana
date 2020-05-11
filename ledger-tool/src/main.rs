@@ -562,7 +562,7 @@ fn load_bank_forks(
             snapshot_package_output_path: ledger_path.clone(),
             snapshot_path: ledger_path.clone().join("snapshot"),
             compression: CompressionType::Bzip2,
-	    snapshot_version: snapshot_utils::SnapshotVersion::default(),
+            snapshot_version: snapshot_utils::SnapshotVersion::default(),
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
@@ -633,9 +633,11 @@ fn main() {
     let snapshot_version_arg = Arg::with_name("snapshot_version")
         .long("snapshot-version")
         .value_name("VERSION")
-        .validator(|arg| arg.parse::<snapshot_utils::SnapshotVersion>()
-		   .map(|_| ())
-		   .map_err(|e| e.to_string()))
+        .validator(|arg| {
+            arg.parse::<snapshot_utils::SnapshotVersion>()
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        })
         .multiple(false)
         .required(false)
         .takes_value(true)
@@ -1027,11 +1029,15 @@ fn main() {
         ("create-snapshot", Some(arg_matches)) => {
             let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
-	    let snapshot_version = match arg_matches.value_of("snapshot_version") {
-		Some(s) => s.parse::<snapshot_utils::SnapshotVersion>()
-		    .unwrap_or_else(|e| { eprintln!("Error: {}", e); exit(1) }),
-		None => snapshot_utils::SnapshotVersion::default(),
-	    };
+            let snapshot_version = match arg_matches.value_of("snapshot_version") {
+                Some(s) => s
+                    .parse::<snapshot_utils::SnapshotVersion>()
+                    .unwrap_or_else(|e| {
+                        eprintln!("Error: {}", e);
+                        exit(1)
+                    }),
+                None => snapshot_utils::SnapshotVersion::default(),
+            };
             let process_options = ProcessOptions {
                 dev_halt_at_slot: Some(snapshot_slot),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -1065,7 +1071,7 @@ fn main() {
                                 output_directory,
                                 storages,
                                 CompressionType::Bzip2,
-				snapshot_version,
+                                snapshot_version,
                             )
                         })
                         .and_then(|package| {

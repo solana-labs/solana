@@ -66,11 +66,11 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub(crate) fn new_empty() -> Self {
-	Self {
+        Self {
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
-	    ..Self::default()
-	}
+            ..Self::default()
+        }
     }
 
     pub fn new(paths: Vec<PathBuf>) -> Self {
@@ -775,10 +775,7 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
-    use crate::{
-        bank::HashAgeKind,
-        rent_collector::RentCollector,
-    };
+    use crate::{bank::HashAgeKind, rent_collector::RentCollector};
     use solana_sdk::{
         account::Account,
         epoch_schedule::EpochSchedule,

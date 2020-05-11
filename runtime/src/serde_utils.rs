@@ -1,109 +1,57 @@
 use {
     crate::{
-	accounts::{
-	    Accounts,
-	},
-	accounts_db::{
-	    AccountsDB,
-	    AccountStorage,
-	    AccountStorageEntry,
-	    AccountStorageStatus,
-	    AppendVecId,
-	    BankHashInfo,
-	    SlotStores,
-	},
-	append_vec::AppendVec,
-	bank::BankRc,
+        accounts::Accounts,
+        accounts_db::{
+            AccountStorage, AccountStorageEntry, AccountStorageStatus, AccountsDB, AppendVecId,
+            BankHashInfo, SlotStores,
+        },
+        append_vec::AppendVec,
+        bank::BankRc,
     },
-    bincode::{
-	deserialize_from,
-	serialize_into,
-    },
+    bincode::{deserialize_from, serialize_into},
     fs_extra::dir::CopyOptions,
-    log::{
-	info,
-	warn,
-    },
+    log::{info, warn},
+    rand::{thread_rng, Rng},
     serde::{
-	Deserialize,
-	Deserializer,
-	Serialize,
-	Serializer,
-	de::{
-	    DeserializeOwned,
-	    Visitor,
-	},
+        de::{DeserializeOwned, Visitor},
+        Deserialize, Deserializer, Serialize, Serializer,
     },
-    rand::{
-	thread_rng,
-	Rng,
-    },
-    solana_sdk::{
-	clock::Slot,
-	pubkey::Pubkey,
-    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
-	cmp::min,
-	collections::HashMap,
-	fmt::{
-	    Formatter,
-	    Result as FormatResult,
-	},
-	io::{
-	    BufReader,
-	    BufWriter,
-	    Cursor,
-	    Error as IoError,
-	    ErrorKind as IoErrorKind,
-	    Read,
-	    Write,
-	},
-	path::{
-	    Path,
-	    PathBuf,
-	},
-	result::Result,
-	sync::{
-	    Arc,
-	    atomic::Ordering,
-	    RwLock,
-	},
+        cmp::min,
+        collections::HashMap,
+        fmt::{Formatter, Result as FormatResult},
+        io::{
+            BufReader, BufWriter, Cursor, Error as IoError, ErrorKind as IoErrorKind, Read, Write,
+        },
+        path::{Path, PathBuf},
+        result::Result,
+        sync::{atomic::Ordering, Arc, RwLock},
     },
 };
 
-
-pub use crate::accounts_db::{
-    SnapshotStorage,
-    SnapshotStorages,
-};
-
+pub use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
 
 pub trait SerdeContext<'a> {
-    type SerializableAccountStorageEntry
-	: Serialize
-	+ DeserializeOwned
-	+ From<&'a AccountStorageEntry>
-	+ Into<AccountStorageEntry>;
+    type SerializableAccountStorageEntry: Serialize
+        + DeserializeOwned
+        + From<&'a AccountStorageEntry>
+        + Into<AccountStorageEntry>;
 }
-
 
 pub struct SerdeContextV1_1_0 {}
 impl<'a> SerdeContext<'a> for SerdeContextV1_1_0 {
     type SerializableAccountStorageEntry = SerializableAccountStorageEntryV1_1_0;
 }
 
-
 pub struct SerdeContextV1_1_1 {}
 impl<'a> SerdeContext<'a> for SerdeContextV1_1_1 {
     type SerializableAccountStorageEntry = SerializableAccountStorageEntryV1_1_1;
 }
 
-
 type DefaultSerdeContext = SerdeContextV1_1_1;
 
-
 const MAX_ACCOUNTS_DB_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
-
 
 fn bankrc_to_io_error<T: ToString>(error: T) -> IoError {
     let msg = error.to_string();
@@ -111,13 +59,11 @@ fn bankrc_to_io_error<T: ToString>(error: T) -> IoError {
     IoError::new(IoErrorKind::Other, msg)
 }
 
-
 fn accountsdb_to_io_error<T: ToString>(error: T) -> IoError {
     let msg = error.to_string();
     warn!("AccountsDB error: {:?}", msg);
     IoError::new(IoErrorKind::Other, msg)
 }
-
 
 pub fn bankrc_from_stream<R, P>(
     account_paths: &[PathBuf],
@@ -129,18 +75,17 @@ pub fn bankrc_from_stream<R, P>(
 ) -> std::result::Result<BankRc, IoError>
 where
     R: Read,
-    P: AsRef<Path>
+    P: AsRef<Path>,
 {
     context_bankrc_from_stream::<DefaultSerdeContext, R, P>(
-	account_paths,
-	slot,
-	ancestors,
-	frozen_account_pubkeys,
-	stream,
-	stream_append_vecs_path,
+        account_paths,
+        slot,
+        ancestors,
+        frozen_account_pubkeys,
+        stream,
+        stream_append_vecs_path,
     )
 }
-
 
 pub fn bankrc_to_stream<W>(
     stream: &mut BufWriter<W>,
@@ -150,13 +95,8 @@ pub fn bankrc_to_stream<W>(
 where
     W: Write,
 {
-    context_bankrc_to_stream::<DefaultSerdeContext, W>(
-	stream,
-	bank_rc,
-	snapshot_storages,
-    )
+    context_bankrc_to_stream::<DefaultSerdeContext, W>(stream, bank_rc, snapshot_storages)
 }
-
 
 #[cfg(test)]
 pub(crate) fn accounts_from_stream<R, P>(
@@ -171,14 +111,13 @@ where
     P: AsRef<Path>,
 {
     context_accounts_from_stream::<DefaultSerdeContext, R, P>(
-	account_paths,
-	ancestors,
-	frozen_account_pubkeys,
-	stream,
-	stream_append_vecs_path,
+        account_paths,
+        ancestors,
+        frozen_account_pubkeys,
+        stream,
+        stream_append_vecs_path,
     )
 }
-
 
 #[cfg(test)]
 pub(crate) fn accountsdb_to_stream<W: Write>(
@@ -191,13 +130,12 @@ where
     W: Write,
 {
     context_accountsdb_to_stream::<DefaultSerdeContext, W>(
-	stream,
-	accounts_db,
-	slot,
-	account_storage_entries,
+        stream,
+        accounts_db,
+        slot,
+        account_storage_entries,
     )
 }
-
 
 #[cfg(test)]
 pub(crate) fn accountsdb_from_stream<R, P>(
@@ -210,12 +148,11 @@ where
     P: AsRef<Path>,
 {
     context_accountsdb_from_stream::<DefaultSerdeContext, R, P>(
-	stream,
-	account_paths,
-	stream_append_vecs_path,
+        stream,
+        account_paths,
+        stream_append_vecs_path,
     )
 }
-
 
 pub fn context_bankrc_from_stream<'a, C, R, P>(
     account_paths: &[PathBuf],
@@ -228,11 +165,10 @@ pub fn context_bankrc_from_stream<'a, C, R, P>(
 where
     C: SerdeContext<'a>,
     R: Read,
-    P: AsRef<Path>
+    P: AsRef<Path>,
 {
     // read and discard the prepended serialized byte vector length
-    let _len: usize =
-        deserialize_from(&mut stream).map_err(bankrc_to_io_error)?;
+    let _len: usize = deserialize_from(&mut stream).map_err(bankrc_to_io_error)?;
 
     // read and deserialise the accounts database directly from the stream
     let accounts = context_accounts_from_stream::<C, R, P>(
@@ -250,7 +186,6 @@ where
     })
 }
 
-
 pub fn context_bankrc_to_stream<'a, 'b, C, W>(
     stream: &'b mut BufWriter<W>,
     bank_rc: &'a BankRc,
@@ -261,42 +196,44 @@ where
     W: Write,
 {
     struct BankRcSerialize<'a, C> {
-	bank_rc: &'a BankRc,
-	snapshot_storages: &'a [SnapshotStorage],
-	phantom: std::marker::PhantomData<C>,
+        bank_rc: &'a BankRc,
+        snapshot_storages: &'a [SnapshotStorage],
+        phantom: std::marker::PhantomData<C>,
     }
 
     impl<'a, C: SerdeContext<'a>> Serialize for BankRcSerialize<'a, C> {
-	fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-	where
+        fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+        where
             S: serde::ser::Serializer,
-	{
-	    // first serialize the accounts database to a byte vector
-	    let mut buf = Vec::new();
-	    context_accountsdb_to_stream::<C, _>(
-		&mut Cursor::new(&mut buf),
-		&*self.bank_rc.accounts.accounts_db,
-		self.bank_rc.slot,
-		self.snapshot_storages)
-		.map_err(serde::ser::Error::custom)?;
+        {
+            // first serialize the accounts database to a byte vector
+            let mut buf = Vec::new();
+            context_accountsdb_to_stream::<C, _>(
+                &mut Cursor::new(&mut buf),
+                &*self.bank_rc.accounts.accounts_db,
+                self.bank_rc.slot,
+                self.snapshot_storages,
+            )
+            .map_err(serde::ser::Error::custom)?;
 
-	    // then serialize the byte vector to the stream
-	    // as compared to serializing directory to the stream,
-	    // this effectively prepends a u64 containing the length
-	    // of the byte vector to the serialized output
+            // then serialize the byte vector to the stream
+            // as compared to serializing directory to the stream,
+            // this effectively prepends a u64 containing the length
+            // of the byte vector to the serialized output
             serializer.serialize_bytes(&buf)
-	}
+        }
     }
 
-    serialize_into(stream,
-		   &BankRcSerialize::<C> {
-		       bank_rc,
-		       snapshot_storages,
-		       phantom: std::marker::PhantomData::default(),
-		   })
-	.map_err(bankrc_to_io_error)
+    serialize_into(
+        stream,
+        &BankRcSerialize::<C> {
+            bank_rc,
+            snapshot_storages,
+            phantom: std::marker::PhantomData::default(),
+        },
+    )
+    .map_err(bankrc_to_io_error)
 }
-
 
 pub(crate) fn context_accounts_from_stream<'a, C, R, P>(
     account_paths: &[PathBuf],
@@ -310,20 +247,16 @@ where
     R: Read,
     P: AsRef<Path>,
 {
-    let mut accounts_db = context_accountsdb_from_stream::<C, R, P>(
-	stream,
-	account_paths,
-	stream_append_vecs_path
-    )?;
+    let mut accounts_db =
+        context_accountsdb_from_stream::<C, R, P>(stream, account_paths, stream_append_vecs_path)?;
 
     accounts_db.freeze_accounts(ancestors, frozen_account_pubkeys);
 
     Ok(Accounts {
-	accounts_db: Arc::new(accounts_db),
-	..Accounts::new_empty()
+        accounts_db: Arc::new(accounts_db),
+        ..Accounts::new_empty()
     })
 }
-
 
 pub(crate) fn context_accountsdb_from_stream<'a, C, R, P>(
     mut stream: &mut BufReader<R>,
@@ -340,28 +273,26 @@ where
     // read and discard u64 byte vector length
     // (artifact from accountsdb_to_stream serializing first
     // into byte vector and then into stream)
-    let serialized_len: u64 =
-        deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?;
+    let serialized_len: u64 = deserialize_from(&mut stream).map_err(accountsdb_to_io_error)?;
 
     // read map of slots to account storage entries
-    let storage: HashMap<Slot, Vec<C::SerializableAccountStorageEntry>> =
-	bincode::config()
-	.limit(min(serialized_len, MAX_ACCOUNTS_DB_STREAM_SIZE))
-	.deserialize_from(&mut stream)
-	.map_err(accountsdb_to_io_error)?;
+    let storage: HashMap<Slot, Vec<C::SerializableAccountStorageEntry>> = bincode::config()
+        .limit(min(serialized_len, MAX_ACCOUNTS_DB_STREAM_SIZE))
+        .deserialize_from(&mut stream)
+        .map_err(accountsdb_to_io_error)?;
 
     // convert to two level map of slot -> id -> account storage entry
     let storage = {
         let mut map = HashMap::new();
-	for (slot, entries) in storage.into_iter() {
-	    let sub_map = map.entry(slot).or_insert_with(HashMap::new);
-	    for entry in entries.into_iter() {
-		let mut entry: AccountStorageEntry = entry.into();
+        for (slot, entries) in storage.into_iter() {
+            let sub_map = map.entry(slot).or_insert_with(HashMap::new);
+            for entry in entries.into_iter() {
+                let mut entry: AccountStorageEntry = entry.into();
                 entry.slot = slot;
                 sub_map.insert(entry.id, Arc::new(entry));
-	    }
-	}
-	map
+            }
+        }
+        map
     };
 
     // Remap the deserialized AppendVec paths to point to correct local paths
@@ -377,8 +308,7 @@ where
 
                 // Move the corresponding AppendVec from the snapshot into the directory pointed
                 // at by `local_dir`
-                let append_vec_relative_path =
-                    AppendVec::new_relative_path(slot, storage_entry.id);
+                let append_vec_relative_path = AppendVec::new_relative_path(slot, storage_entry.id);
                 let append_vec_abs_path = stream_append_vecs_path
                     .as_ref()
                     .join(&append_vec_relative_path);
@@ -391,10 +321,13 @@ where
                         &local_dir,
                         &copy_options,
                     )
-                        .map_err(|e| format!(
-			    "unable to move {:?} to {:?}: {}",
-			    append_vec_abs_path, local_dir, e))
-		.map_err(accountsdb_to_io_error);
+                    .map_err(|e| {
+                        format!(
+                            "unable to move {:?} to {:?}: {}",
+                            append_vec_abs_path, local_dir, e
+                        )
+                    })
+                    .map_err(accountsdb_to_io_error);
                     if e.is_err() {
                         info!("{:?}", e);
                         continue;
@@ -428,7 +361,11 @@ where
     let (slot, bank_hash): (Slot, BankHashInfo) = deserialize_from(&mut stream)
         .map_err(|e| format!("bank hashes deserialize error: {}", e.to_string()))
         .map_err(accountsdb_to_io_error)?;
-    accounts_db.bank_hashes.write().unwrap().insert(slot, bank_hash);
+    accounts_db
+        .bank_hashes
+        .write()
+        .unwrap()
+        .insert(slot, bank_hash);
 
     // Process deserialized data, set necessary fields in self
     let max_id: usize = *storage
@@ -444,11 +381,12 @@ where
     }
 
     accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
-    accounts_db.write_version.fetch_add(version, Ordering::Relaxed);
+    accounts_db
+        .write_version
+        .fetch_add(version, Ordering::Relaxed);
     accounts_db.generate_index();
     Ok(accounts_db)
 }
-
 
 pub(crate) fn context_accountsdb_to_stream<'a, 'b, C, W>(
     stream: &'b mut W,
@@ -461,73 +399,81 @@ where
     W: Write,
 {
     struct AccountsDBSerialize<'a, C> {
-	accounts_db: &'a AccountsDB,
-	slot: Slot,
-	account_storage_entries: &'a [SnapshotStorage],
-	phantom: std::marker::PhantomData<C>,
+        accounts_db: &'a AccountsDB,
+        slot: Slot,
+        account_storage_entries: &'a [SnapshotStorage],
+        phantom: std::marker::PhantomData<C>,
     }
 
     impl<'a, C: SerdeContext<'a>> Serialize for AccountsDBSerialize<'a, C> {
-	fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-	where
+        fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+        where
             S: serde::ser::Serializer,
-	{
+        {
             use serde::ser::Error;
-	    let mut buf = vec![];
-	    {
-		let mut wr = Cursor::new(&mut buf);
+            let mut buf = vec![];
+            {
+                let mut wr = Cursor::new(&mut buf);
 
-		// sample write version before serializing storage entries
-		let version = self.accounts_db.write_version.load(Ordering::Relaxed);
+                // sample write version before serializing storage entries
+                let version = self.accounts_db.write_version.load(Ordering::Relaxed);
 
-		// write the list of account storage entry lists out as a map
-		serialize_into(&mut wr, &(
-		    self.account_storage_entries
-			.iter()
-			.map(|x| (
-			    x.first().unwrap().slot,
-			    x.iter()
-				.map(|x| C::SerializableAccountStorageEntry::from(x.as_ref()))
-				.collect::<Vec<_>>()
-			))
-			.collect::<HashMap<Slot, _>>()
-		))
-		    .map_err(Error::custom)?;
+                // write the list of account storage entry lists out as a map
+                serialize_into(
+                    &mut wr,
+                    &(self
+                        .account_storage_entries
+                        .iter()
+                        .map(|x| {
+                            (
+                                x.first().unwrap().slot,
+                                x.iter()
+                                    .map(|x| C::SerializableAccountStorageEntry::from(x.as_ref()))
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect::<HashMap<Slot, _>>()),
+                )
+                .map_err(Error::custom)?;
 
-		// write the current write version sampled before the account
-		// storage entries were written out
-		serialize_into(&mut wr, &version)
-		    .map_err(Error::custom)?;
+                // write the current write version sampled before the account
+                // storage entries were written out
+                serialize_into(&mut wr, &version).map_err(Error::custom)?;
 
-		// write out bank hashes
-		serialize_into(&mut wr, &(
-		    self.slot,
-		    &*self
-			.accounts_db
-			.bank_hashes
-			.read()
-			.unwrap()
-			.get(&self.slot)
-			.unwrap_or_else(|| panic!("No bank_hashes entry for slot {}",
-						  self.slot)),
-		))
-		    .map_err(Error::custom)?;
-	    }
+                // write out bank hashes
+                serialize_into(
+                    &mut wr,
+                    &(
+                        self.slot,
+                        &*self
+                            .accounts_db
+                            .bank_hashes
+                            .read()
+                            .unwrap()
+                            .get(&self.slot)
+                            .unwrap_or_else(|| {
+                                panic!("No bank_hashes entry for slot {}", self.slot)
+                            }),
+                    ),
+                )
+                .map_err(Error::custom)?;
+            }
 
             serializer.serialize_bytes(&buf)
-	}
+        }
     }
 
-    serialize_into(stream,
-		   &AccountsDBSerialize::<'a, C> {
-		       accounts_db,
-		       slot,
-		       account_storage_entries,
-		       phantom: std::marker::PhantomData::default(),
-		   })
-	.map_err(bankrc_to_io_error)
+    serialize_into(
+        stream,
+        &AccountsDBSerialize::<'a, C> {
+            accounts_db,
+            slot,
+            account_storage_entries,
+            phantom: std::marker::PhantomData::default(),
+        },
+    )
+    .map_err(bankrc_to_io_error)
 }
-
 
 // Serializable version of AccountStorageEntry for snapshot format V1_1_0
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -537,27 +483,24 @@ pub struct SerializableAccountStorageEntryV1_1_0 {
     count_and_status: (usize, AccountStorageStatus),
 }
 
-
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_1_0 {
     fn from(rhs: &AccountStorageEntry) -> Self {
-	Self {
-	    id: rhs.id,
-	    accounts: SerializableAppendVecV1_1_0::from(&rhs.accounts),
-	    ..Self::default()
-	}
+        Self {
+            id: rhs.id,
+            accounts: SerializableAppendVecV1_1_0::from(&rhs.accounts),
+            ..Self::default()
+        }
     }
 }
-
 
 impl Into<AccountStorageEntry> for SerializableAccountStorageEntryV1_1_0 {
     fn into(self) -> AccountStorageEntry {
-	let mut ase = AccountStorageEntry::default();
-	ase.id = self.id;
-	ase.accounts = self.accounts.into();
-	ase
+        let mut ase = AccountStorageEntry::default();
+        ase.id = self.id;
+        ase.accounts = self.accounts.into();
+        ase
     }
 }
-
 
 // Serializable version of AppendVec for snapshot format V1_1_0
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -565,22 +508,19 @@ struct SerializableAppendVecV1_1_0 {
     current_len: usize,
 }
 
-
 impl From<&AppendVec> for SerializableAppendVecV1_1_0 {
     fn from(rhs: &AppendVec) -> SerializableAppendVecV1_1_0 {
-	SerializableAppendVecV1_1_0 {
-	    current_len: rhs.len(),
-	}
+        SerializableAppendVecV1_1_0 {
+            current_len: rhs.len(),
+        }
     }
 }
-
 
 impl Into<AppendVec> for SerializableAppendVecV1_1_0 {
     fn into(self) -> AppendVec {
-	AppendVec::new_empty_map(self.current_len)
+        AppendVec::new_empty_map(self.current_len)
     }
 }
-
 
 // Serialization of AppendVec V1_1_0 requires serialization of u64 to
 // eight byte vector which is then itself serialized to the stream
@@ -590,14 +530,12 @@ impl Serialize for SerializableAppendVecV1_1_0 {
         S: Serializer,
     {
         const LEN: usize = std::mem::size_of::<usize>();
-	let mut buf = [0u8; LEN];
-        serialize_into(Cursor::new(&mut buf[..]),
-		       &(self.current_len as u64))
+        let mut buf = [0u8; LEN];
+        serialize_into(Cursor::new(&mut buf[..]), &(self.current_len as u64))
             .map_err(serde::ser::Error::custom)?;
-	serializer.serialize_bytes(&buf)
+        serializer.serialize_bytes(&buf)
     }
 }
-
 
 // Deserialization of AppendVec V1_1_0 requires deserialization
 // of eight byte vector from which u64 is then deserialized
@@ -606,31 +544,32 @@ impl<'de> Deserialize<'de> for SerializableAppendVecV1_1_0 {
     where
         D: Deserializer<'de>,
     {
-	use serde::de::Error;
-	struct SerializableAppendVecV1_1_0Visitor;
-	impl<'a> Visitor<'a> for SerializableAppendVecV1_1_0Visitor {
-	    type Value = SerializableAppendVecV1_1_0;
-	    fn expecting(&self, formatter: &mut Formatter) -> FormatResult {
-		formatter.write_str("Expecting SerializableAppendVecV1_1_0")
-	    }
-	    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
-	    where
-		E: Error,
-	    {
-		const LEN: u64 = std::mem::size_of::<usize>() as u64;
-		let mut rd = Cursor::new(&data[..]);
-		let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
-		if rd.position() != LEN {
-		    Err(Error::custom("SerializableAppendVecV1_1_0: unexpected length"))
-		} else {
-		    Ok(SerializableAppendVecV1_1_0 { current_len })
-		}
-	    }
-	}
+        use serde::de::Error;
+        struct SerializableAppendVecV1_1_0Visitor;
+        impl<'a> Visitor<'a> for SerializableAppendVecV1_1_0Visitor {
+            type Value = SerializableAppendVecV1_1_0;
+            fn expecting(&self, formatter: &mut Formatter) -> FormatResult {
+                formatter.write_str("Expecting SerializableAppendVecV1_1_0")
+            }
+            fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                const LEN: u64 = std::mem::size_of::<usize>() as u64;
+                let mut rd = Cursor::new(&data[..]);
+                let current_len: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
+                if rd.position() != LEN {
+                    Err(Error::custom(
+                        "SerializableAppendVecV1_1_0: unexpected length",
+                    ))
+                } else {
+                    Ok(SerializableAppendVecV1_1_0 { current_len })
+                }
+            }
+        }
         deserializer.deserialize_bytes(SerializableAppendVecV1_1_0Visitor)
     }
 }
-
 
 // Serializable version of AccountStorageEntry for snapshot format V1_1_1
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -639,61 +578,42 @@ pub struct SerializableAccountStorageEntryV1_1_1 {
     accounts_current_len: usize,
 }
 
-
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_1_1 {
     fn from(rhs: &AccountStorageEntry) -> Self {
-	Self {
-	    id: rhs.id,
-	    accounts_current_len: rhs.accounts.len(),
-	    ..Self::default()
-	}
+        Self {
+            id: rhs.id,
+            accounts_current_len: rhs.accounts.len(),
+            ..Self::default()
+        }
     }
 }
-
 
 impl Into<AccountStorageEntry> for SerializableAccountStorageEntryV1_1_1 {
     fn into(self) -> AccountStorageEntry {
-	AccountStorageEntry {
-	    id: self.id,
-	    accounts: AppendVec::new_empty_map(self.accounts_current_len),
-	    ..AccountStorageEntry::default()
-	}
+        AccountStorageEntry {
+            id: self.id,
+            accounts: AppendVec::new_empty_map(self.accounts_current_len),
+            ..AccountStorageEntry::default()
+        }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use {
-	super::*,
-	crate::{
-	    accounts::{
-		Accounts,
-		create_test_accounts,
-	    },
-	    accounts_db::{
-		get_temp_accounts_paths,
-		tests::copy_append_vecs,
-	    },
-	},
-	rand::{
-	    thread_rng,
-	    Rng,
-	},
-	solana_sdk::{
-	    account::Account,
-	    pubkey::Pubkey,
-	},
-	std::{
-	    collections::HashMap,
-	    io::{
-		BufReader,
-		Cursor,
-	    },
-	},
-	tempfile::TempDir,
+        super::*,
+        crate::{
+            accounts::{create_test_accounts, Accounts},
+            accounts_db::{get_temp_accounts_paths, tests::copy_append_vecs},
+        },
+        rand::{thread_rng, Rng},
+        solana_sdk::{account::Account, pubkey::Pubkey},
+        std::{
+            collections::HashMap,
+            io::{BufReader, Cursor},
+        },
+        tempfile::TempDir,
     };
-
 
     fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
         for _ in 1..num {
@@ -707,7 +627,6 @@ mod tests {
             assert_eq!(account, account1);
         }
     }
-
 
     #[test]
     fn test_accounts_serialize() {
