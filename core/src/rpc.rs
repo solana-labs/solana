@@ -6,15 +6,18 @@ use crate::{
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
     packet::PACKET_DATA_SIZE,
+    rpc_error::RpcCustomError,
     storage_stage::StorageState,
     validator::ValidatorExit,
 };
 use bincode::serialize;
-use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
+use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_response::*;
 use solana_faucet::faucet::request_airdrop_transaction;
-use solana_ledger::{bank_forks::BankForks, blockstore::Blockstore};
+use solana_ledger::{
+    bank_forks::BankForks, blockstore::Blockstore, blockstore_db::BlockstoreError,
+};
 use solana_runtime::{accounts::AccountAddressFilter, bank::Bank};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
@@ -41,7 +44,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-const JSON_RPC_SERVER_ERROR_0: i64 = -32000;
 const MAX_QUERY_ITEMS: usize = 256;
 const MAX_SLOT_RANGE: u64 = 10_000;
 const NUM_LARGEST_ACCOUNTS: usize = 20;
@@ -100,18 +102,13 @@ impl JsonRpcRequestProcessor {
                 .unwrap()
                 .largest_confirmed_root();
             debug!("RPC using block: {:?}", cluster_root);
-            r_bank_forks
-                .get(cluster_root)
-                .cloned()
-                .ok_or_else(|| Error {
-                    code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_0),
-                    message: format!(
-                        "Cluster largest_confirmed_root {} does not exist on node. Node root: {}",
-                        cluster_root,
-                        r_bank_forks.root(),
-                    ),
-                    data: None,
-                })
+            r_bank_forks.get(cluster_root).cloned().ok_or_else(|| {
+                RpcCustomError::NonexistentClusterRoot {
+                    cluster_root,
+                    node_root: r_bank_forks.root(),
+                }
+                .into()
+            })
         }
     }
 
@@ -421,6 +418,29 @@ impl JsonRpcRequestProcessor {
         }
     }
 
+    fn check_slot_cleaned_up<T>(
+        &self,
+        result: &std::result::Result<T, BlockstoreError>,
+        slot: Slot,
+    ) -> Result<()>
+    where
+        T: std::fmt::Debug,
+    {
+        if result.is_err() {
+            if let BlockstoreError::SlotCleanedUp = result.as_ref().unwrap_err() {
+                return Err(RpcCustomError::BlockCleanedUp {
+                    slot,
+                    first_available_block: self
+                        .blockstore
+                        .get_first_available_block()
+                        .unwrap_or_default(),
+                }
+                .into());
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
@@ -434,7 +454,9 @@ impl JsonRpcRequestProcessor {
                     .unwrap()
                     .largest_confirmed_root()
         {
-            Ok(self.blockstore.get_confirmed_block(slot, encoding).ok())
+            let result = self.blockstore.get_confirmed_block(slot, encoding);
+            self.check_slot_cleaned_up(&result, slot)?;
+            Ok(result.ok())
         } else {
             Ok(None)
         }
@@ -482,11 +504,9 @@ impl JsonRpcRequestProcessor {
             let stakes = HashMap::new();
             let stakes = bank.epoch_vote_accounts(epoch).unwrap_or(&stakes);
 
-            Ok(self
-                .blockstore
-                .get_block_time(slot, slot_duration, stakes)
-                .ok()
-                .unwrap_or(None))
+            let result = self.blockstore.get_block_time(slot, slot_duration, stakes);
+            self.check_slot_cleaned_up(&result, slot)?;
+            Ok(result.ok().unwrap_or(None))
         } else {
             Ok(None)
         }
