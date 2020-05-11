@@ -16,7 +16,11 @@ use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
-    input_parsers::*, input_validators::*, keypair::signer_from_path, offline::SIGN_ONLY_ARG,
+    commitment::{commitment_arg_with_default, COMMITMENT_ARG},
+    input_parsers::*,
+    input_validators::*,
+    keypair::signer_from_path,
+    offline::SIGN_ONLY_ARG,
     ArgConstant,
 };
 use solana_client::{
@@ -409,6 +413,7 @@ pub enum CliCommand {
     Balance {
         pubkey: Option<Pubkey>,
         use_lamports_unit: bool,
+        commitment_config: CommitmentConfig,
     },
     Cancel(Pubkey),
     Confirm(Signature),
@@ -573,6 +578,7 @@ impl Default for CliConfig<'_> {
             command: CliCommand::Balance {
                 pubkey: Some(Pubkey::default()),
                 use_lamports_unit: false,
+                commitment_config: CommitmentConfig::default(),
             },
             json_rpc_url: Self::default_json_rpc_url(),
             websocket_url: Self::default_websocket_url(),
@@ -787,6 +793,7 @@ pub fn parse_command(
         }
         ("balance", Some(matches)) => {
             let pubkey = pubkey_of_signer(matches, "pubkey", wallet_manager)?;
+            let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
@@ -801,6 +808,7 @@ pub fn parse_command(
                 command: CliCommand::Balance {
                     pubkey,
                     use_lamports_unit: matches.is_present("lamports"),
+                    commitment_config,
                 },
                 signers,
             })
@@ -1183,19 +1191,17 @@ fn process_balance(
     config: &CliConfig,
     pubkey: &Option<Pubkey>,
     use_lamports_unit: bool,
+    commitment_config: CommitmentConfig,
 ) -> ProcessResult {
     let pubkey = if let Some(pubkey) = pubkey {
         *pubkey
     } else {
         config.pubkey()?
     };
-    let balance = rpc_client.retry_get_balance(&pubkey, 5)?;
-    match balance {
-        Some(lamports) => Ok(build_balance_message(lamports, use_lamports_unit, true)),
-        None => Err(
-            CliError::RpcRequestError("Received result of an unexpected type".to_string()).into(),
-        ),
-    }
+    let balance = rpc_client
+        .get_balance_with_commitment(&pubkey, commitment_config)?
+        .value;
+    Ok(build_balance_message(balance, use_lamports_unit, true))
 }
 
 fn process_confirm(
@@ -2135,7 +2141,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Balance {
             pubkey,
             use_lamports_unit,
-        } => process_balance(&rpc_client, config, &pubkey, *use_lamports_unit),
+            commitment_config,
+        } => process_balance(
+            &rpc_client,
+            config,
+            &pubkey,
+            *use_lamports_unit,
+            *commitment_config,
+        ),
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
@@ -2400,7 +2413,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
-                ),
+                )
+                .arg(commitment_arg_with_default("max")),
         )
         .subcommand(
             SubCommand::with_name("cancel")
@@ -2797,7 +2811,8 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
-                    use_lamports_unit: false
+                    use_lamports_unit: false,
+                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2813,7 +2828,8 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
-                    use_lamports_unit: true
+                    use_lamports_unit: true,
+                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2827,7 +2843,8 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: None,
-                    use_lamports_unit: true
+                    use_lamports_unit: true,
+                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3297,12 +3314,14 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: true,
+            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
+            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
 
@@ -3536,6 +3555,7 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
+            commitment_config: CommitmentConfig::default(),
         };
         assert!(process_command(&config).is_err());
 
