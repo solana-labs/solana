@@ -16,9 +16,12 @@ use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
-    input_parsers::*, input_validators::*, keypair::signer_from_path, offline::SIGN_ONLY_ARG,
-    ArgConstant,
     commitment::{commitment_arg_with_default, COMMITMENT_ARG},
+    input_parsers::*,
+    input_validators::*,
+    keypair::signer_from_path,
+    offline::SIGN_ONLY_ARG,
+    ArgConstant,
 };
 use solana_client::{
     client_error::{ClientErrorKind, Result as ClientResult},
@@ -1195,7 +1198,9 @@ fn process_balance(
     } else {
         config.pubkey()?
     };
-    let balance = rpc_client.get_balance_with_commitment(&pubkey, commitment_config)?.value;
+    let balance = rpc_client
+        .get_balance_with_commitment(&pubkey, commitment_config)?
+        .value;
     Ok(build_balance_message(balance, use_lamports_unit, true))
 }
 
@@ -2137,7 +2142,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             pubkey,
             use_lamports_unit,
             commitment_config,
-        } => process_balance(&rpc_client, config, &pubkey, *use_lamports_unit, *commitment_config),
+        } => process_balance(
+            &rpc_client,
+            config,
+            &pubkey,
+            *use_lamports_unit,
+            *commitment_config,
+        ),
         // Cancel a contract by contract Pubkey
         CliCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
         // Confirm the last client transaction by signature
@@ -2801,7 +2812,7 @@ mod tests {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
                     use_lamports_unit: false,
-                        commitment_config: CommitmentConfig::default(),
+                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2817,8 +2828,8 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
-                    use_lamports_unit: true
-                        commitment_config: CommitmentConfig::default(),
+                    use_lamports_unit: true,
+                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![],
             }
@@ -2832,8 +2843,8 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: None,
-                    use_lamports_unit: true
-                        commitment_config: CommitmentConfig::default(),
+                    use_lamports_unit: true,
+                    commitment_config: CommitmentConfig::default(),
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3303,14 +3314,14 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: true,
-                        commitment_config: CommitmentConfig::default(),
+            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
-                        commitment_config: CommitmentConfig::default(),
+            commitment_config: CommitmentConfig::default(),
         };
         assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
 
@@ -3544,7 +3555,7 @@ mod tests {
         config.command = CliCommand::Balance {
             pubkey: None,
             use_lamports_unit: false,
-                        commitment_config: CommitmentConfig::default(),
+            commitment_config: CommitmentConfig::default(),
         };
         assert!(process_command(&config).is_err());
 
