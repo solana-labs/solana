@@ -259,7 +259,8 @@ The result field will be an array of JSON objects, each with the following sub f
 * `pubkey: <string>` - Node public key, as base-58 encoded string
 * `gossip: <string>` - Gossip network address for the node
 * `tpu: <string>` - TPU network address for the node
-* `rpc: <string>` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
+* `rpc: <string>|null` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
+* `version: <string>|null` - The software version of the node, or `null` if the version information is not available
 
 #### Example:
 
@@ -268,7 +269,7 @@ The result field will be an array of JSON objects, each with the following sub f
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","pubkey":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"}],"id":1}
+{"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","pubkey":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"},"version":"1.0.0 c375ce1f"],"id":1}
 ```
 
 ### getConfirmedBlock
