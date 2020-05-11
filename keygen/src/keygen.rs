@@ -208,7 +208,7 @@ fn grind_parse_args(
 fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")

@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_metrics::set_panic_hook("faucet");
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("keypair")
                 .short("k")

@@ -156,7 +156,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = app(
         crate_name!(),
         crate_description!(),
-        solana_clap_utils::version!(),
+        solana_version::version!(),
     )
     .arg({
         let arg = Arg::with_name("config_file")

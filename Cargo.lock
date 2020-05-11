@@ -3700,6 +3700,7 @@ dependencies = [
  "solana-metrics",
  "solana-net-utils",
  "solana-sdk",
+ "solana-version",
 ]
 
 [[package]]
@@ -3790,6 +3791,7 @@ dependencies = [
  "solana-net-utils",
  "solana-runtime",
  "solana-sdk",
+ "solana-version",
 ]
 
 [[package]]
@@ -3801,6 +3803,7 @@ dependencies = [
  "solana-logger",
  "solana-net-utils",
  "solana-streamer",
+ "solana-version",
 ]
 
 [[package]]
@@ -3829,6 +3832,7 @@ dependencies = [
  "solana-net-utils",
  "solana-runtime",
  "solana-sdk",
+ "solana-version",
 ]
 
 [[package]]
@@ -3966,6 +3970,7 @@ dependencies = [
  "solana-stake-program",
  "solana-storage-program",
  "solana-transaction-status",
+ "solana-version",
  "solana-vote-program",
  "solana-vote-signer",
  "tempfile",
@@ -4132,6 +4137,7 @@ dependencies = [
  "solana-net-utils",
  "solana-runtime",
  "solana-sdk",
+ "solana-version",
 ]
 
 [[package]]
@@ -4188,6 +4194,7 @@ dependencies = [
  "solana-logger",
  "solana-metrics",
  "solana-sdk",
+ "solana-version",
  "tokio 0.1.22",
  "tokio-codec",
 ]
@@ -4209,6 +4216,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-storage-program",
+ "solana-version",
  "solana-vote-program",
  "tempfile",
 ]
@@ -4238,6 +4246,7 @@ dependencies = [
  "solana-logger",
  "solana-net-utils",
  "solana-sdk",
+ "solana-version",
 ]
 
 [[package]]
@@ -4265,6 +4274,7 @@ dependencies = [
  "solana-config-program",
  "solana-logger",
  "solana-sdk",
+ "solana-version",
  "tar",
  "tempdir",
  "url 2.1.1",
@@ -4284,6 +4294,7 @@ dependencies = [
  "solana-cli-config",
  "solana-remote-wallet",
  "solana-sdk",
+ "solana-version",
  "tiny-bip39",
 ]
 
@@ -4354,6 +4365,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-transaction-status",
+ "solana-version",
  "solana-vote-program",
  "tempfile",
 ]
@@ -4411,6 +4423,7 @@ dependencies = [
  "serde_json",
  "solana-clap-utils",
  "solana-logger",
+ "solana-version",
 ]
 
 [[package]]
@@ -4513,6 +4526,7 @@ dependencies = [
  "socket2",
  "solana-clap-utils",
  "solana-logger",
+ "solana-version",
  "tokio 0.1.22",
  "tokio-codec",
 ]
@@ -4743,6 +4757,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-transaction-status",
+ "solana-version",
  "tempfile",
 ]
 
@@ -4805,6 +4820,7 @@ dependencies = [
  "nix",
  "solana-clap-utils",
  "solana-logger",
+ "solana-version",
  "sysctl",
  "unix_socket2",
  "users",
@@ -4853,6 +4869,7 @@ dependencies = [
  "solana-perf",
  "solana-runtime",
  "solana-sdk",
+ "solana-version",
  "solana-vote-program",
  "solana-vote-signer",
 ]
@@ -4910,6 +4927,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-metrics",
  "solana-sdk",
+ "solana-version",
 ]
 
 [[package]]
@@ -4929,6 +4947,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-transaction-status",
+ "solana-version",
  "solana-vote-program",
 ]
 

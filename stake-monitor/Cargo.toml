@@ -22,6 +22,7 @@ solana-metrics = { path = "../metrics", version = "1.2.0" }
 solana-sdk = { path = "../sdk", version = "1.2.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.0" }
 solana-transaction-status = { path = "../transaction-status", version = "1.2.0" }
+solana-version = { path = "../version", version = "1.2.0" }
 
 [dev-dependencies]
 serial_test = "0.4.0"

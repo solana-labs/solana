@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("rpc-url")
