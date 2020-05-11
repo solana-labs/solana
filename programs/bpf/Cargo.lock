@@ -487,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "goblin"
-version = "0.2.1"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1390,7 +1390,7 @@ dependencies = [
  "solana-logger 1.2.0",
  "solana-runtime 1.2.0",
  "solana-sdk 1.2.0",
- "solana_rbpf 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.16 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1405,7 +1405,7 @@ dependencies = [
  "solana-logger 1.2.0",
  "solana-runtime 1.2.0",
  "solana-sdk 1.2.0",
- "solana_rbpf 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1759,12 +1759,12 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.1.27"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "combine 2.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "goblin 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "goblin 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash32 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.69 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2389,7 +2389,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum generic-array 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6d2664c2cf08049036f31015b04c6ac3671379a1d86f52ed2416893f16022deb"
 "checksum gethostname 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "e692e296bfac1d2533ef168d0b60ff5897b8b70a4009276834014dd8924cc028"
 "checksum getrandom 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)" = "7abc8dd8451921606d809ba32e95b6111925cd2906060d2dcc29c070220503eb"
-"checksum goblin 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ddd5e3132801a1ac34ac53b97acde50c4685414dd2f291b9ea52afa6f07468c8"
+"checksum goblin 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "d20fd25aa456527ce4f544271ae4fea65d2eda4a6561ea56f39fb3ee4f7e3884"
 "checksum h2 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "377038bf3c89d18d6ca1431e7a5027194fbd724ca10592b9487ede5e8e144f42"
 "checksum hash32 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d4041af86e63ac4298ce40e5cca669066e75b6f1aa3390fe2561ffa5e1d9f4cc"
 "checksum hermit-abi 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "61565ff7aaace3525556587bd2dc31d4a07071957be715e63ce7b1eccf51a8f4"
@@ -2490,7 +2490,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum slab 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
 "checksum smallvec 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)" = "f7b0758c52e15a8b5e3691eae6cc559f08eee9406e548a4477ba4e67770a82b6"
 "checksum smallvec 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c7cb5678e1615754284ec264d9bb5b4c27d2018577fd90ac0ceb578591ed5ee4"
-"checksum solana_rbpf 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)" = "e7baa2550500e75413f031f239fe0c4da2d477ae1b1ff7cb671eba483f963d91"
+"checksum solana_rbpf 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)" = "3a556eca8a56761a16d712ed3e62a420da220f43749237befac3e4bf820f939c"
 "checksum spin 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 "checksum subtle 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2d67a5a62ba6e01cb2192ff309324cb4875d0c451d55fe2319433abe7a05a8ee"
 "checksum subtle 2.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7c65d530b10ccaeac294f349038a597e435b18fb456aadd0840a623f83b9e941"
