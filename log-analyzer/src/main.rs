@@ -200,7 +200,7 @@ fn main() {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(solana_version::version!())
         .subcommand(
             SubCommand::with_name("iftop")
                 .about("Process iftop log file")

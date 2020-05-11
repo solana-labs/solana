@@ -119,7 +119,7 @@ fn main() {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
             Arg::with_name("data_file")

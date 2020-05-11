@@ -59,6 +59,7 @@ members = [
     "transaction-status",
     "upload-perf",
     "net-utils",
+    "version",
     "vote-signer",
     "cli",
     "rayon-threadlimit",

@@ -24,7 +24,7 @@ fn main() {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("identity_keypair")
                 .short("i")
@@ -105,7 +105,7 @@ fn main() {
     println!(
         "{} version {} (branch={}, commit={})",
         style(crate_name!()).bold(),
-        solana_clap_utils::version!(),
+        solana_version::version!(),
         option_env!("CI_BRANCH").unwrap_or("unknown"),
         option_env!("CI_COMMIT").unwrap_or("unknown")
     );

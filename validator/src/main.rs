@@ -472,7 +472,7 @@ pub fn main() {
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
-        .version(solana_clap_utils::version!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
@@ -1017,7 +1017,7 @@ pub fn main() {
         env::set_var("RUST_BACKTRACE", "1")
     }
 
-    info!("{} {}", crate_name!(), solana_clap_utils::version!());
+    info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
