@@ -13,7 +13,7 @@ dirs = "2.0.2"
 lazy_static = "1.4.0"
 serde = "1.0.110"
 serde_derive = "1.0.103"
-serde_yaml = "0.8.11"
+serde_yaml = "0.8.12"
 url = "2.1.1"
 
 [package.metadata.docs.rs]
