@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 bincode = "1.2.1"
-clap = "2.33.0"
+clap = "2.33.1"
 log = "0.4.8"
 rand = "0.7.0"
 rayon = "1.3.0"

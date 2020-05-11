@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-clap = "2.33.0"
+clap = "2.33.1"
 log = "0.4.8"
 humantime = "2.0.0"
 reqwest = { version = "0.10.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }

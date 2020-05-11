@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-clap = "2.33.0"
+clap = "2.33.1"
 solana-clap-utils = { path = "../clap-utils", version = "1.2.0" }
 solana-core = { path = "../core", version = "1.2.0" }
 solana-client = { path = "../client", version = "1.2.0" }

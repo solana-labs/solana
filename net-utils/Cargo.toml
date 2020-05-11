@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 bincode = "1.2.1"
 bytes = "0.4"
-clap = "2.33.0"
+clap = "2.33.1"
 log = "0.4.8"
 nix = "0.17.0"
 rand = "0.7.0"
