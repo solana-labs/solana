@@ -1300,14 +1300,14 @@ fn process_show_account(
                     writeln!(
                         &mut account_string,
                         "Data (base58): {}",
-                        &bs58::encode(data.clone()).into_string()
+                        &bs58::encode(data).into_string()
                     )?;
                 }
                 AccountDataOutputFormat::Base64 => {
                     writeln!(
                         &mut account_string,
                         "Data (base64): {}",
-                        &base64::encode(data.clone()).to_string()
+                        &base64::encode(data)
                     )?;
                 }
                 AccountDataOutputFormat::Hex => {
