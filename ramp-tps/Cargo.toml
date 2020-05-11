@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 bzip2 = "0.3.3"
-clap = "2.33.0"
+clap = "2.33.1"
 log = "0.4.8"
 reqwest = { version = "0.10.4", default-features = false }
 serde = "1.0.110"

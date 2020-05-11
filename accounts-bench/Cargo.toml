@@ -15,7 +15,7 @@ solana-runtime = { path = "../runtime", version = "1.2.0" }
 solana-measure = { path = "../measure", version = "1.2.0" }
 solana-sdk = { path = "../sdk", version = "1.2.0" }
 rand = "0.7.0"
-clap = "2.33.0"
+clap = "2.33.1"
 crossbeam-channel = "0.4"
 
 [package.metadata.docs.rs]
