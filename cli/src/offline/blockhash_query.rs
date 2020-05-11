@@ -344,7 +344,7 @@ mod tests {
         )
         .unwrap();
         let nonce_pubkey = Pubkey::new(&[4u8; 32]);
-        let rpc_nonce_account = RpcAccount::encode(nonce_account);
+        let rpc_nonce_account = RpcAccount::encode_with_base58(nonce_account);
         let get_account_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(Some(rpc_nonce_account.clone())),

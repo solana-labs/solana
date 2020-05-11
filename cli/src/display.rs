@@ -235,6 +235,7 @@ pub fn output_accounts(
     account_data_output: AccountDataOutputFormat,
 ) -> String {
     let mut cli_accounts = std::collections::BTreeMap::new();
+
     for (pubkey, account) in accounts {
         let rpc_account = match account_data_output {
             AccountDataOutputFormat::Base58 => RpcAccount::encode_with_base58(account.clone()),
@@ -243,6 +244,7 @@ pub fn output_accounts(
         };
         cli_accounts.insert(pubkey.to_string(), rpc_account);
     }
+
     output_format.formatted_string(&CliAccounts {
         accounts: cli_accounts,
         use_lamports_unit,
