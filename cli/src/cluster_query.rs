@@ -671,7 +671,7 @@ pub fn process_show_block_production(
     slot_limit: Option<u64>,
 ) -> ProcessResult {
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::max())?;
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::root())?;
 
     let epoch = epoch.unwrap_or(epoch_info.epoch);
     if epoch > epoch_info.epoch {
@@ -730,7 +730,7 @@ pub fn process_show_block_production(
 
     progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
     let leader_schedule = rpc_client
-        .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::max())?;
+        .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::root())?;
     if leader_schedule.is_none() {
         return Err(format!("Unable to fetch leader schedule for slot {}", start_slot).into());
     }
