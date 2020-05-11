@@ -61,6 +61,7 @@ solana-sdk = { path = "../sdk", version = "1.2.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.2.0" }
 solana-storage-program = { path = "../programs/storage", version = "1.2.0" }
 solana-streamer = { path = "../streamer", version = "1.2.0" }
+solana-version = { path = "../version", version = "1.2.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.2.0" }
 solana-sys-tuner = { path = "../sys-tuner", version = "1.2.0" }

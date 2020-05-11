@@ -75,6 +75,7 @@ pub enum CrdsData {
     SnapshotHashes(SnapshotHash),
     AccountsHashes(SnapshotHash),
     EpochSlots(EpochSlotsIndex, EpochSlots),
+    Version(Version),
 }
 
 impl Sanitize for CrdsData {
@@ -101,6 +102,7 @@ impl Sanitize for CrdsData {
                 }
                 val.sanitize()
             }
+            CrdsData::Version(version) => version.sanitize(),
         }
     }
 }
@@ -206,6 +208,33 @@ impl Vote {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Version {
+    pub from: Pubkey,
+    pub wallclock: u64,
+    pub version: solana_version::Version,
+}
+
+impl Sanitize for Version {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.from.sanitize()?;
+        self.version.sanitize()
+    }
+}
+
+impl Version {
+    pub fn new(from: Pubkey) -> Self {
+        Self {
+            from,
+            wallclock: timestamp(),
+            version: solana_version::Version::default(),
+        }
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -216,6 +245,7 @@ pub enum CrdsValueLabel {
     SnapshotHashes(Pubkey),
     EpochSlots(EpochSlotsIndex, Pubkey),
     AccountsHashes(Pubkey),
+    Version(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -227,6 +257,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHash({})", self.pubkey()),
             CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
+            CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
         }
     }
 }
@@ -240,6 +271,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::EpochSlots(_, p) => *p,
             CrdsValueLabel::AccountsHashes(p) => *p,
+            CrdsValueLabel::Version(p) => *p,
         }
     }
 }
@@ -257,7 +289,7 @@ impl CrdsValue {
         value.sign(keypair);
         value
     }
-    /// Totally unsecure unverfiable wallclock of the node that generated this message
+    /// Totally unsecure unverifiable wallclock of the node that generated this message
     /// Latest wallclock is always picked.
     /// This is used to time out push messages.
     pub fn wallclock(&self) -> u64 {
@@ -268,6 +300,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::AccountsHashes(hash) => hash.wallclock,
             CrdsData::EpochSlots(_, p) => p.wallclock,
+            CrdsData::Version(version) => version.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -278,6 +311,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::AccountsHashes(hash) => hash.from,
             CrdsData::EpochSlots(_, p) => p.from,
+            CrdsData::Version(version) => version.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -288,6 +322,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
+            CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -338,6 +373,13 @@ impl CrdsValue {
         }
     }
 
+    pub fn version(&self) -> Option<&Version> {
+        match &self.data {
+            CrdsData::Version(version) => Some(version),
+            _ => None,
+        }
+    }
+
     /// Return all the possible labels for a record identified by Pubkey.
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
@@ -345,6 +387,7 @@ impl CrdsValue {
             CrdsValueLabel::LowestSlot(*key),
             CrdsValueLabel::SnapshotHashes(*key),
             CrdsValueLabel::AccountsHashes(*key),
+            CrdsValueLabel::Version(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels.extend((0..MAX_EPOCH_SLOTS).map(|ix| CrdsValueLabel::EpochSlots(ix, *key)));
@@ -395,7 +438,7 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 4 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
+        let mut hits = [false; 5 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
@@ -403,9 +446,10 @@ mod test {
                 CrdsValueLabel::LowestSlot(_) => hits[1] = true,
                 CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
                 CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 4] = true,
+                CrdsValueLabel::Version(_) => hits[4] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 5] = true,
                 CrdsValueLabel::EpochSlots(ix, _) => {
-                    hits[*ix as usize + MAX_VOTES as usize + 4] = true
+                    hits[*ix as usize + MAX_VOTES as usize + 5] = true
                 }
             }
         }

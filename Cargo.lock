@@ -4081,6 +4081,7 @@ dependencies = [
  "solana-streamer",
  "solana-sys-tuner",
  "solana-transaction-status",
+ "solana-version",
  "solana-vote-program",
  "solana-vote-signer",
  "systemstat",
@@ -4854,6 +4855,15 @@ dependencies = [
  "solana-sdk",
  "solana-vote-program",
  "solana-vote-signer",
+]
+
+[[package]]
+name = "solana-version"
+version = "1.2.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-sdk",
 ]
 
 [[package]]
