@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-archiver"
-version = "1.0.22"
+version = "1.0.23"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -10,13 +10,13 @@ homepage = "https://solana.com/"
 [dependencies]
 clap = "2.33.0"
 console = "0.9.2"
-solana-clap-utils = { path = "../clap-utils", version = "1.0.22" }
-solana-core = { path = "../core", version = "1.0.22" }
-solana-logger = { path = "../logger", version = "1.0.22" }
-solana-metrics = { path = "../metrics", version = "1.0.22" }
-solana-archiver-lib = { path = "../archiver-lib", version = "1.0.22" }
-solana-net-utils = { path = "../net-utils", version = "1.0.22" }
-solana-sdk = { path = "../sdk", version = "1.0.22" }
+solana-clap-utils = { path = "../clap-utils", version = "1.0.23" }
+solana-core = { path = "../core", version = "1.0.23" }
+solana-logger = { path = "../logger", version = "1.0.23" }
+solana-metrics = { path = "../metrics", version = "1.0.23" }
+solana-archiver-lib = { path = "../archiver-lib", version = "1.0.23" }
+solana-net-utils = { path = "../net-utils", version = "1.0.23" }
+solana-sdk = { path = "../sdk", version = "1.0.23" }
 
 
 [package.metadata.docs.rs]

@@ -1,6 +1,6 @@
 [package]
 name = "solana-librapay"
-version = "1.0.22"
+version = "1.0.23"
 description = "Solana Libra Payment"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -11,10 +11,10 @@ edition = "2018"
 [dependencies]
 bincode = "1.2.0"
 log = "0.4.8"
-solana-logger = { path = "../../logger", version = "1.0.22" }
-solana-move-loader-program = { path = "../move_loader", version = "1.0.22" }
-solana-runtime = { path = "../../runtime", version = "1.0.22" }
-solana-sdk = { path = "../../sdk", version = "1.0.22" }
+solana-logger = { path = "../../logger", version = "1.0.23" }
+solana-move-loader-program = { path = "../move_loader", version = "1.0.23" }
+solana-runtime = { path = "../../runtime", version = "1.0.23" }
+solana-sdk = { path = "../../sdk", version = "1.0.23" }
 types = { version = "0.0.1-sol4", package = "solana_libra_types" }
 
 [lib]

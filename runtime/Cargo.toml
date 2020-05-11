@@ -1,6 +1,6 @@
 [package]
 name = "solana-runtime"
-version = "1.0.22"
+version = "1.0.23"
 description = "Solana runtime"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -26,15 +26,15 @@ rand = "0.7.0"
 rayon = "1.2.0"
 serde = { version = "1.0.104", features = ["rc"] }
 serde_derive = "1.0.103"
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.0.22" }
-solana-logger = { path = "../logger", version = "1.0.22" }
-solana-measure = { path = "../measure", version = "1.0.22" }
-solana-metrics = { path = "../metrics", version = "1.0.22" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.0.22" }
-solana-sdk = { path = "../sdk", version = "1.0.22" }
-solana-stake-program = { path = "../programs/stake", version = "1.0.22" }
-solana-storage-program = { path = "../programs/storage", version = "1.0.22" }
-solana-vote-program = { path = "../programs/vote", version = "1.0.22" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.0.23" }
+solana-logger = { path = "../logger", version = "1.0.23" }
+solana-measure = { path = "../measure", version = "1.0.23" }
+solana-metrics = { path = "../metrics", version = "1.0.23" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.0.23" }
+solana-sdk = { path = "../sdk", version = "1.0.23" }
+solana-stake-program = { path = "../programs/stake", version = "1.0.23" }
+solana-storage-program = { path = "../programs/storage", version = "1.0.23" }
+solana-vote-program = { path = "../programs/vote", version = "1.0.23" }
 tempfile = "3.1.0"
 thiserror = "1.0"
 
@@ -45,7 +45,7 @@ name = "solana_runtime"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-solana-noop-program = { path = "../programs/noop", version = "1.0.22" }
+solana-noop-program = { path = "../programs/noop", version = "1.0.23" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
