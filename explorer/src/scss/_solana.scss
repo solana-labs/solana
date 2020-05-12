@@ -117,3 +117,13 @@ h4.slot-pill {
 .min-width-0 {
   min-width: 0;
 }
+
+.mb-last-0 {
+  &:last-child {
+    margin-bottom: 0 !important;
+  }
+}
+
+.vertical-top {
+  vertical-align: top !important;
+}
