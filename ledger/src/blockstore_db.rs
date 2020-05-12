@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder};
 use log::*;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator,
+    self, ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBIterator, DBRawIterator,
     IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
 use serde::de::DeserializeOwned;
@@ -834,6 +834,7 @@ fn get_cf_options() -> Options {
     options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
+    options.set_compression_type(DBCompressionType::Lz4);
     options
 }
 
