@@ -18,8 +18,8 @@ use crate::{
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
-        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash, Vote,
-        MAX_WALLCLOCK,
+        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
+        Version, Vote, MAX_WALLCLOCK,
     },
     epoch_slots::EpochSlots,
     result::{Error, Result},
@@ -378,6 +378,7 @@ impl ClusterInfo {
                     archivers += 1;
                 }
 
+                let node_version = self.get_node_version(&node.id);
                 if my_shred_version != 0 && (node.shred_version != 0 && node.shred_version != my_shred_version) {
                     different_shred_nodes += 1;
                     None
@@ -393,10 +394,9 @@ impl ClusterInfo {
                             "none".to_string()
                         }
                     }
-
                     let ip_addr = node.gossip.ip();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} | {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^15}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         if ContactInfo::is_valid_address(&node.gossip) {
                             ip_addr.to_string()
                         } else {
@@ -405,6 +405,11 @@ impl ClusterInfo {
                         if node.id == my_pubkey { "me" } else { "" }.to_string(),
                         now.saturating_sub(last_updated),
                         node.id.to_string(),
+                        if let Some(node_version) = node_version {
+                            node_version.to_string()
+                        } else {
+                            "-".to_string()
+                        },
                         addr_to_string(&ip_addr, &node.gossip),
                         addr_to_string(&ip_addr, &node.tpu),
                         addr_to_string(&ip_addr, &node.tpu_forwards),
@@ -412,7 +417,6 @@ impl ClusterInfo {
                         addr_to_string(&ip_addr, &node.tvu_forwards),
                         addr_to_string(&ip_addr, &node.repair),
                         addr_to_string(&ip_addr, &node.serve_repair),
-                        addr_to_string(&ip_addr, &node.storage_addr),
                         addr_to_string(&ip_addr, &node.rpc),
                         addr_to_string(&ip_addr, &node.rpc_pubsub),
                         node.shred_version,
@@ -423,9 +427,9 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|Storag| RPC  |PubSub|ShredVer\n\
-             ------------------+-------+----------------------------------------------+\
-             ------+------+------+------+------+------+------+------+------+------+--------\n\
+             | Version       |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR| RPC  |PubSub|ShredVer\n\
+             ------------------+-------+----------------------------------------------+---------------+\
+             ------+------+------+------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}{}",
             nodes.join(""),
@@ -440,7 +444,7 @@ impl ClusterInfo {
             } else {
                 "".to_string()
             },
-            if spy_nodes > 0 {
+            if different_shred_nodes > 0 {
                 format!(
                     "\nNodes with different shred version: {}",
                     different_shred_nodes
@@ -701,6 +705,18 @@ impl ClusterInfo {
         let max = vals.iter().map(|x| x.1).max().or(since);
         let vec = vals.into_iter().map(|x| x.0).collect();
         (vec, max)
+    }
+
+    pub fn get_node_version(&self, pubkey: &Pubkey) -> Option<solana_version::Version> {
+        self.gossip
+            .read()
+            .unwrap()
+            .crds
+            .table
+            .get(&CrdsValueLabel::Version(*pubkey))
+            .map(|x| x.value.version())
+            .flatten()
+            .map(|version| version.version.clone())
     }
 
     /// all validators that have a valid rpc port regardless of `shred_version`.
@@ -1313,6 +1329,9 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut adopt_shred_version = obj.my_shred_version() == 0;
                 let recycler = PacketsRecycler::default();
+
+                let message = CrdsData::Version(Version::new(obj.id()));
+                obj.push_message(CrdsValue::new_signed(message, &obj.keypair));
                 loop {
                     let start = timestamp();
                     thread_mem_usage::datapoint("solana-gossip");
