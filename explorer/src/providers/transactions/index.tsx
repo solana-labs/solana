@@ -27,12 +27,6 @@ export enum FetchStatus {
   Fetched
 }
 
-export enum Source {
-  Url,
-  Input,
-  Test
-}
-
 export type Confirmations = number | "max";
 
 export interface TransactionStatusInfo {
@@ -43,7 +37,6 @@ export interface TransactionStatusInfo {
 
 export interface TransactionStatus {
   id: number;
-  source: Source;
   fetchStatus: FetchStatus;
   signature: TransactionSignature;
   info?: TransactionStatusInfo;
@@ -52,7 +45,6 @@ export interface TransactionStatus {
 type Transactions = { [signature: string]: TransactionStatus };
 interface State {
   idCounter: number;
-  selected?: TransactionSignature;
   transactions: Transactions;
 }
 
@@ -71,7 +63,6 @@ interface UpdateStatus {
 interface FetchSignature {
   type: ActionType.FetchSignature;
   signature: TransactionSignature;
-  source: Source;
 }
 
 type Action = UpdateStatus | FetchSignature;
@@ -88,7 +79,6 @@ function reducer(state: State, action: Action): State {
         ...state.transactions,
         [action.signature]: {
           id: nextId,
-          source: action.source,
           signature: action.signature,
           fetchStatus: FetchStatus.Fetching
         }
@@ -137,8 +127,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
     Object.keys(state.transactions).forEach(signature => {
       dispatch({
         type: ActionType.FetchSignature,
-        signature,
-        source: Source.Url
+        signature
       });
       fetchTransactionStatus(dispatch, signature, url, clusterStatus);
     });
@@ -164,8 +153,7 @@ export function TransactionsProvider({ children }: TransactionsProviderProps) {
       .forEach(signature => {
         dispatch({
           type: ActionType.FetchSignature,
-          signature,
-          source: Source.Url
+          signature
         });
         fetchTransactionStatus(dispatch, signature, url, clusterStatus);
       });
@@ -201,8 +189,7 @@ async function createTestTransaction(
     );
     dispatch({
       type: ActionType.FetchSignature,
-      signature,
-      source: Source.Test
+      signature
     });
     fetchTransactionStatus(dispatch, signature, url, clusterStatus);
     accountsDispatch({
@@ -224,8 +211,7 @@ async function createTestTransaction(
     const signature = await connection.sendTransaction(tx, testAccount);
     dispatch({
       type: ActionType.FetchSignature,
-      signature,
-      source: Source.Test
+      signature
     });
     fetchTransactionStatus(dispatch, signature, url, clusterStatus);
   } catch (error) {
@@ -341,15 +327,11 @@ export function useFetchTransactionStatus() {
   }
 
   const { url, status } = useCluster();
-  return (signature: TransactionSignature, source?: Source) => {
-    if (source !== undefined) {
-      dispatch({
-        type: ActionType.FetchSignature,
-        signature,
-        source
-      });
-    }
-
+  return (signature: TransactionSignature) => {
+    dispatch({
+      type: ActionType.FetchSignature,
+      signature
+    });
     fetchTransactionStatus(dispatch, signature, url, status);
   };
 }

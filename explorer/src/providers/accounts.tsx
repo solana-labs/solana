@@ -23,11 +23,6 @@ export type History = Map<
   Map<TransactionSignature, TransactionError | null>
 >;
 
-enum Source {
-  Url,
-  Input
-}
-
 export interface Details {
   executable: boolean;
   owner: PublicKey;
@@ -37,7 +32,6 @@ export interface Details {
 export interface Account {
   id: number;
   pubkey: PublicKey;
-  source: Source;
   status: Status;
   lamports?: number;
   details?: Details;
@@ -92,7 +86,6 @@ function reducer(state: State, action: Action): State {
         [address]: {
           id: idCounter,
           status: Status.Checking,
-          source: Source.Input,
           pubkey: action.pubkey
         }
       };
@@ -154,7 +147,6 @@ function initState(): State {
       accounts[address] = {
         id,
         status: Status.Checking,
-        source: Source.Url,
         pubkey
       };
     } catch (err) {

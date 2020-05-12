@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Source,
   useFetchTransactionStatus,
   useTransactionStatus,
   useTransactionDetails,
@@ -37,7 +36,7 @@ export default function TransactionDetails({ signature }: Props) {
 
   // Fetch transaction on load
   React.useEffect(() => {
-    fetchTransaction(signature, Source.Url);
+    fetchTransaction(signature);
   }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchInput = (
