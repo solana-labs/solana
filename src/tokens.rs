@@ -24,7 +24,7 @@ use solana_stake_program::{
 use solana_transaction_status::TransactionStatus;
 use std::{
     cmp::{self, Ordering},
-    io,
+    fs, io,
     path::Path,
     thread::sleep,
     time::Duration,
@@ -220,17 +220,22 @@ fn distribute_tokens<T: Client>(
     Ok(())
 }
 
-fn open_db(path: &str, dry_run: bool) -> Result<PickleDb, pickledb::error::Error> {
+fn open_db(path: &str, dry_run: bool) -> Result<PickleDb, Error> {
     let policy = if dry_run {
         PickleDbDumpPolicy::NeverDump
     } else {
         PickleDbDumpPolicy::AutoDump
     };
-    if Path::new(path).exists() {
-        PickleDb::load_yaml(path, policy)
+    let path = Path::new(path);
+    let db = if path.exists() {
+        PickleDb::load_yaml(path, policy)?
     } else {
-        Ok(PickleDb::new_yaml(path, policy))
-    }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        PickleDb::new_yaml(path, policy)
+    };
+    Ok(db)
 }
 
 fn compare_transaction_infos(a: &TransactionInfo, b: &TransactionInfo) -> Ordering {

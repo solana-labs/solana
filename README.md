@@ -17,7 +17,7 @@ primary_address,bid_amount_dollars
 ```
 
 ```bash
-solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --from-bids --input-csv <BIDS_CSV> --transaction-db <FILE> --fee-payer <KEYPAIR>
+solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --from-bids --input-csv <BIDS_CSV> --fee-payer <KEYPAIR>
 ```
 
 Example transaction log before:
@@ -31,7 +31,7 @@ Send tokens to the recipients in `<BIDS_CSV>` if the distribution is
 not already recordered in the transaction log.
 
 ```bash
-solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --from-bids --input-csv <BIDS_CSV> --transaction-db <FILE> --fee-payer <KEYPAIR>
+solana-tokens distribute-tokens --from <KEYPAIR> --dollars-per-sol <NUMBER> --from-bids --input-csv <BIDS_CSV> --fee-payer <KEYPAIR>
 ```
 
 Example output:
@@ -45,6 +45,10 @@ UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
 
 
 Example transaction log after:
+
+```bash
+solana-tokens transaction-log --output-path transactions.csv
+```
 
 ```text
 recipient,amount,signature
@@ -60,7 +64,7 @@ List the differences between a list of expected distributions and the record of 
 transactions have already been sent.
 
 ```bash
-solana-tokens distribute-tokens --dollars-per-sol <NUMBER> --dry-run --from-bids --input-csv <BIDS_CSV> --transaction-db <FILE>
+solana-tokens distribute-tokens --dollars-per-sol <NUMBER> --dry-run --from-bids --input-csv <BIDS_CSV>
 ```
 
 Example bids.csv:
@@ -91,7 +95,6 @@ the new accounts inherit any lockup or custodian settings of the original.
 ```bash
 solana-tokens distribute-stake --stake-account-address <ACCOUNT_ADDRESS> \
     --input-csv <ALLOCATIONS_CSV> \
-    --transaction-db <FILE> \
     --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> --fee-payer <KEYPAIR>
 ```
 

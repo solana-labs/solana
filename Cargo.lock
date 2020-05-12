@@ -3445,6 +3445,7 @@ dependencies = [
  "clap",
  "console 0.10.3",
  "csv",
+ "dirs",
  "indexmap",
  "indicatif",
  "itertools 0.9.0",

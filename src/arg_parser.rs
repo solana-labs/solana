@@ -36,12 +36,11 @@ where
             SubCommand::with_name("distribute-tokens")
                 .about("Distribute tokens")
                 .arg(
-                    Arg::with_name("transaction_db")
-                        .long("transaction-db")
-                        .required(true)
+                    Arg::with_name("campaign_name")
+                        .long("campaign-name")
                         .takes_value(true)
-                        .value_name("FILE")
-                        .help("Transaction database file"),
+                        .value_name("NAME")
+                        .help("Campaign name for storing transaction data"),
                 )
                 .arg(
                     Arg::with_name("from_bids")
@@ -91,12 +90,11 @@ where
             SubCommand::with_name("distribute-stake")
                 .about("Distribute stake accounts")
                 .arg(
-                    Arg::with_name("transaction_db")
-                        .long("transaction-db")
-                        .required(true)
+                    Arg::with_name("campaign_name")
+                        .long("campaign-name")
                         .takes_value(true)
-                        .value_name("FILE")
-                        .help("Transaction database file"),
+                        .value_name("NAME")
+                        .help("Campaign name for storing transaction data"),
                 )
                 .arg(
                     Arg::with_name("input_csv")
@@ -193,12 +191,11 @@ where
             SubCommand::with_name("transaction-log")
                 .about("Print the database to a CSV file")
                 .arg(
-                    Arg::with_name("transaction_db")
-                        .long("transaction-db")
-                        .required(true)
+                    Arg::with_name("campaign_name")
+                        .long("campaign-name")
                         .takes_value(true)
-                        .value_name("FILE")
-                        .help("Transactions database file"),
+                        .value_name("NAME")
+                        .help("Campaign name for storing transaction data"),
                 )
                 .arg(
                     Arg::with_name("output_path")
@@ -212,11 +209,27 @@ where
         .get_matches_from(args)
 }
 
+fn create_db_path(campaign_name: Option<String>) -> String {
+    let (prefix, hyphen) = if let Some(name) = campaign_name {
+        (name, "-")
+    } else {
+        ("".to_string(), "")
+    };
+    let path = dirs::home_dir().unwrap();
+    let filename = format!("{}{}transactions.db", prefix, hyphen);
+    path.join(".config")
+        .join("solana-tokens")
+        .join(filename)
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
 fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs<String, String> {
     DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: matches.is_present("from_bids"),
-        transaction_db: value_t_or_exit!(matches, "transaction_db", String),
+        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
         dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
         dry_run: matches.is_present("dry_run"),
         sender_keypair: value_t_or_exit!(matches, "sender_keypair", String),
@@ -235,7 +248,7 @@ fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs
     DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: false,
-        transaction_db: value_t_or_exit!(matches, "transaction_db", String),
+        transaction_db: create_db_path(value_t!(matches, "campaign_name", String).ok()),
         dollars_per_sol: None,
         dry_run: matches.is_present("dry_run"),
         sender_keypair: value_t_or_exit!(matches, "sender_keypair", String),
