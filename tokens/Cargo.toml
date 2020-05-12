@@ -1,0 +1,34 @@
+[package]
+name = "solana-tokens"
+description = "Blockchain, Rebuilt for Scale"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+edition = "2018"
+version = "0.1.3"
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+clap = "2.33.0"
+console = "0.10.3"
+csv = "1.1.3"
+dirs = "2.0.2"
+indexmap = "1.3.2"
+indicatif = "0.14.0"
+itertools = "0.9.0"
+pickledb = "0.4.1"
+serde = { version = "1.0", features = ["derive"] }
+solana-clap-utils = "1.1.12"
+solana-cli-config = "1.1.12"
+solana-client = "1.1.12"
+solana-remote-wallet = "1.1.12"
+solana-runtime = "1.1.12"
+solana-sdk = "1.1.12"
+solana-stake-program = "1.1.12"
+solana-transaction-status = "1.1.12"
+tempfile = "3.1.0"
+thiserror = "1.0"
+
+[dev-dependencies]
+solana-core = "1.1.12"
