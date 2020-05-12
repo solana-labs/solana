@@ -1,7 +1,0 @@
-language: rust
-addons:
-  apt:
-    packages:
-    - pkg-config
-    - libudev-dev
-    update: true
