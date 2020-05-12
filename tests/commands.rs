@@ -1,7 +1,7 @@
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
 use solana_sdk::native_token::sol_to_lamports;
-use solana_tokens::tokens::test_process_distribute_tokens_with_client;
+use solana_tokens::commands::test_process_distribute_tokens_with_client;
 use std::fs::remove_dir_all;
 
 #[test]

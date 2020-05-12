@@ -4,8 +4,8 @@ use solana_client::rpc_client::RpcClient;
 use solana_tokens::{
     arg_parser::parse_args,
     args::{resolve_command, Command},
+    commands,
     thin_client::ThinClient,
-    tokens,
 };
 use std::env;
 use std::error::Error;
@@ -30,14 +30,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     match resolve_command(command_args.command)? {
         Command::DistributeTokens(args) => {
             let thin_client = ThinClient::new(client, args.dry_run);
-            tokens::process_distribute_tokens(&thin_client, &args)?;
+            commands::process_distribute_tokens(&thin_client, &args)?;
         }
         Command::Balances(args) => {
             let thin_client = ThinClient::new(client, false);
-            tokens::process_balances(&thin_client, &args)?;
+            commands::process_balances(&thin_client, &args)?;
         }
         Command::TransactionLog(args) => {
-            tokens::process_transaction_log(&args)?;
+            commands::process_transaction_log(&args)?;
         }
     }
     Ok(())
