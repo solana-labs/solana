@@ -396,8 +396,8 @@ impl<'a, 'b> Serialize for AccountsDBSerialize<'a, 'b> {
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BankHashStats {
+    pub num_updated_accounts: u64,
     pub num_removed_accounts: u64,
-    pub num_added_accounts: u64,
     pub num_lamports_stored: u64,
     pub total_data_len: u64,
     pub num_executable_accounts: u64,
@@ -405,10 +405,10 @@ pub struct BankHashStats {
 
 impl BankHashStats {
     pub fn update(&mut self, account: &Account) {
-        if Hash::default() == account.hash {
-            self.num_added_accounts += 1;
-        } else {
+        if account.lamports == 0 {
             self.num_removed_accounts += 1;
+        } else {
+            self.num_updated_accounts += 1;
         }
         self.total_data_len = self.total_data_len.wrapping_add(account.data.len() as u64);
         if account.executable {
@@ -418,8 +418,8 @@ impl BankHashStats {
     }
 
     pub fn merge(&mut self, other: &BankHashStats) {
+        self.num_updated_accounts += other.num_updated_accounts;
         self.num_removed_accounts += other.num_removed_accounts;
-        self.num_added_accounts += other.num_added_accounts;
         self.total_data_len = self.total_data_len.wrapping_add(other.total_data_len);
         self.num_lamports_stored = self
             .num_lamports_stored
@@ -956,6 +956,7 @@ impl AccountsDB {
                         stored_accounts.push((
                             account.meta.pubkey,
                             account.clone_account(),
+                            *account.hash,
                             next - start,
                             (store.id, account.offset),
                             account.meta.write_version,
@@ -980,7 +981,14 @@ impl AccountsDB {
             stored_accounts
                 .iter()
                 .filter(
-                    |(pubkey, _account, _storage_size, (store_id, offset), _write_version)| {
+                    |(
+                        pubkey,
+                        _account,
+                        _account_hash,
+                        _storage_size,
+                        (store_id, offset),
+                        _write_version,
+                    )| {
                         if let Some((list, _)) = accounts_index.get(pubkey, &no_ancestors) {
                             list.iter()
                                 .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
@@ -994,7 +1002,11 @@ impl AccountsDB {
 
         let alive_total: u64 = alive_accounts
             .iter()
-            .map(|(_pubkey, _account, account_size, _location, _write_verion)| *account_size as u64)
+            .map(
+                |(_pubkey, _account, _account_hash, account_size, _location, _write_verion)| {
+                    *account_size as u64
+                },
+            )
             .sum();
         let aligned_total: u64 = (alive_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
 
@@ -1012,9 +1024,9 @@ impl AccountsDB {
             let mut hashes = Vec::with_capacity(alive_accounts.len());
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
-            for (pubkey, account, _size, _location, write_version) in alive_accounts {
+            for (pubkey, account, account_hash, _size, _location, write_version) in alive_accounts {
                 accounts.push((pubkey, account));
-                hashes.push(account.hash);
+                hashes.push(*account_hash);
                 write_versions.push(*write_version);
             }
 
@@ -1181,6 +1193,19 @@ impl AccountsDB {
         } else {
             None
         }
+    }
+
+    #[cfg(test)]
+    fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {
+        let accounts_index = self.accounts_index.read().unwrap();
+        let (lock, index) = accounts_index.get(pubkey, ancestors).unwrap();
+        let slot = lock[index].0;
+        let storage = self.storage.read().unwrap();
+        let slot_storage = storage.0.get(&slot).unwrap();
+        let info = &lock[index].1;
+        let entry = slot_storage.get(&info.store_id).unwrap();
+        let account = entry.accounts.get_account(info.offset);
+        *account.as_ref().unwrap().0.hash
     }
 
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
@@ -3500,16 +3525,16 @@ pub mod tests {
 
         db.store(some_slot, &[(&key, &account)]);
         let mut account = db.load_slow(&ancestors, &key).unwrap().0;
-        account.lamports += 1;
+        account.lamports -= 1;
         account.executable = true;
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
 
         let bank_hashes = db.bank_hashes.read().unwrap();
         let bank_hash = bank_hashes.get(&some_slot).unwrap();
+        assert_eq!(bank_hash.stats.num_updated_accounts, 1);
         assert_eq!(bank_hash.stats.num_removed_accounts, 1);
-        assert_eq!(bank_hash.stats.num_added_accounts, 1);
-        assert_eq!(bank_hash.stats.num_lamports_stored, 3);
+        assert_eq!(bank_hash.stats.num_lamports_stored, 1);
         assert_eq!(bank_hash.stats.total_data_len, 2 * some_data_len as u64);
         assert_eq!(bank_hash.stats.num_executable_accounts, 1);
     }
@@ -3622,9 +3647,8 @@ pub mod tests {
             db.store(some_slot, &account_refs);
 
             for (key, account) in &accounts_keys {
-                let loaded_account = db.load_slow(&ancestors, key).unwrap().0;
                 assert_eq!(
-                    loaded_account.hash,
+                    db.load_account_hash(&ancestors, key),
                     AccountsDB::hash_account(some_slot, &account, &key)
                 );
             }

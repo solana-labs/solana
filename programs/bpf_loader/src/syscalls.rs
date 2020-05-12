@@ -13,7 +13,6 @@ use solana_sdk::{
     bpf_loader,
     entrypoint::SUCCESS,
     entrypoint_native::InvokeContext,
-    hash::Hash,
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
@@ -399,7 +398,6 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
                         executable: account_info.executable,
                         owner: *owner,
                         rent_epoch: account_info.rent_epoch,
-                        hash: Hash::default(),
                     })));
                     refs.push((lamports_ref, data));
                     continue 'root;
@@ -599,7 +597,6 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
                         executable: account_info.executable,
                         owner: *owner,
                         rent_epoch: account_info.rent_epoch,
-                        hash: Hash::default(),
                     })));
                     refs.push((lamports_ref, data));
                     continue 'root;

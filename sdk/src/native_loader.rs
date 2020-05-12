@@ -1,4 +1,4 @@
-use crate::{account::Account, hash::Hash};
+use crate::account::Account;
 
 crate::declare_id!("NativeLoader1111111111111111111111111111111");
 
@@ -10,6 +10,5 @@ pub fn create_loadable_account(name: &str) -> Account {
         data: name.as_bytes().to_vec(),
         executable: true,
         rent_epoch: 0,
-        hash: Hash::default(),
     }
 }
