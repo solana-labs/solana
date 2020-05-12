@@ -3,6 +3,7 @@ use crate::{
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
+    rpc_config::RpcLargestAccountsConfig,
     rpc_request::{RpcError, RpcRequest},
     rpc_response::*,
 };
@@ -195,6 +196,13 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> ClientResult<u64> {
         self.send(RpcRequest::GetTotalSupply, json!([commitment_config]), 0)
+    }
+
+    pub fn get_largest_accounts_with_config(
+        &self,
+        config: RpcLargestAccountsConfig,
+    ) -> RpcResult<Vec<RpcAccountBalance>> {
+        self.send(RpcRequest::GetLargestAccounts, json!([config]), 0)
     }
 
     pub fn get_vote_accounts(&self) -> ClientResult<RpcVoteAccountStatus> {

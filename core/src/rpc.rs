@@ -15,7 +15,8 @@ use jsonrpc_derive::rpc;
 use solana_client::{
     rpc_config::*,
     rpc_request::{
-        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+        MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::*,
 };
@@ -49,8 +50,6 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-
-const NUM_LARGEST_ACCOUNTS: usize = 20;
 
 type RpcResponse<T> = Result<Response<T>>;
 

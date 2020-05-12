@@ -93,6 +93,7 @@ impl fmt::Display for RpcRequest {
     }
 }
 
+pub const NUM_LARGEST_ACCOUNTS: usize = 20;
 pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
 pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
 

@@ -26,6 +26,7 @@ use solana_clap_utils::{
 use solana_client::{
     client_error::{ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
+    rpc_config::RpcLargestAccountsFilter,
     rpc_response::{RpcAccount, RpcKeyedAccount},
 };
 #[cfg(not(test))]
@@ -204,6 +205,10 @@ pub enum CliCommand {
     },
     GetSlot {
         commitment_config: CommitmentConfig,
+    },
+    LargestAccounts {
+        commitment_config: CommitmentConfig,
+        filter: Option<RpcLargestAccountsFilter>,
     },
     Supply {
         commitment_config: CommitmentConfig,
@@ -622,6 +627,7 @@ pub fn parse_command(
         }),
         ("epoch", Some(matches)) => parse_get_epoch(matches),
         ("slot", Some(matches)) => parse_get_slot(matches),
+        ("largest-accounts", Some(matches)) => parse_largest_accounts(matches),
         ("supply", Some(matches)) => parse_supply(matches),
         ("total-supply", Some(matches)) => parse_total_supply(matches),
         ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
@@ -1707,6 +1713,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetSlot { commitment_config } => {
             process_get_slot(&rpc_client, *commitment_config)
         }
+        CliCommand::LargestAccounts {
+            commitment_config,
+            filter,
+        } => process_largest_accounts(&rpc_client, config, *commitment_config, filter.clone()),
         CliCommand::Supply {
             commitment_config,
             print_accounts,
