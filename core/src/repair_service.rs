@@ -776,7 +776,7 @@ mod test {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
-            let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+            let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
 
             let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {
@@ -886,7 +886,7 @@ mod test {
         );
 
         // Insert some shreds to create a SlotMeta, should make repairs
-        let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+        let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
         let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
         blockstore
             .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
@@ -919,7 +919,7 @@ mod test {
         };
 
         // Insert some shreds to create a SlotMeta,
-        let num_entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+        let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
         let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
         blockstore
             .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)

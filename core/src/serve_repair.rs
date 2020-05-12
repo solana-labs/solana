@@ -473,7 +473,7 @@ impl ServeRepair {
                 nonce,
             );
 
-            if let Ok(Some(packet)) = packet {
+            if let Some(packet) = packet {
                 inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
                 return Some(Packets::new_with_recycler_data(
                     recycler,
@@ -514,8 +514,7 @@ impl ServeRepair {
                 meta.received - 1,
                 from_addr,
                 nonce,
-            )
-            .ok()??;
+            )?;
             return Some(Packets::new_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
@@ -540,6 +539,11 @@ impl ServeRepair {
                 if meta.received == 0 {
                     break;
                 }
+                let nonce = if Shred::is_nonce_unlocked(slot) {
+                    nonce
+                } else {
+                    None
+                };
                 let packet = repair_response::repair_response_packet(
                     blockstore,
                     slot,
@@ -547,7 +551,7 @@ impl ServeRepair {
                     from_addr,
                     nonce,
                 );
-                if let Ok(Some(packet)) = packet {
+                if let Some(packet) = packet {
                     res.packets.push(packet);
                 }
                 if meta.is_parent_set() && res.packets.len() <= max_responses {
@@ -600,15 +604,15 @@ mod tests {
             );
             assert!(rv.is_none());
 
+            let slot = 2;
             let _ = fill_blockstore_slot_with_ticks(
                 &blockstore,
-                max_ticks_per_n_shreds(1) + 1,
-                2,
+                max_ticks_per_n_shreds(1, None) + 1,
+                slot,
                 1,
                 Hash::default(),
             );
 
-            let slot = 2;
             let index = 1;
             let rv = ServeRepair::run_highest_window_request(
                 &recycler,
@@ -819,7 +823,16 @@ mod tests {
     }
 
     #[test]
-    fn run_orphan() {
+    fn test_run_orphan() {
+        run_orphan(UNLOCK_NONCE_SLOT + 1, 3, Some(9));
+        // Test where the response will be for some slots <= UNLOCK_NONCE_SLOT,
+        // and some of the response will be for some slots > UNLOCK_NONCE_SLOT.
+        // Should not panic.
+        run_orphan(UNLOCK_NONCE_SLOT, 3, None);
+        run_orphan(UNLOCK_NONCE_SLOT, 3, Some(9));
+    }
+
+    fn run_orphan(slot: Slot, num_slots: u64, nonce: Option<Nonce>) {
         solana_logger::setup();
         let recycler = PacketsRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
@@ -843,7 +856,7 @@ mod tests {
                 .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");
 
-            // We don't have slot 4, so we don't know how to service this requeset
+            // We don't have slot `slot + num_slots`, so we don't know how to service this request
             let rv = ServeRepair::run_orphan(
                 &recycler,
                 &socketaddr_any!(),
@@ -877,7 +890,12 @@ mod tests {
 
             let expected: Vec<_> = (1..=3)
                 .rev()
-                .map(|slot| {
+                .filter_map(|slot| {
+                    let nonce = if Shred::is_nonce_unlocked(slot) {
+                        nonce
+                    } else {
+                        None
+                    };
                     let index = blockstore.meta(slot).unwrap().unwrap().received - 1;
                     repair_response::repair_response_packet(
                         &blockstore,
@@ -886,8 +904,6 @@ mod tests {
                         &socketaddr_any!(),
                         0,
                     )
-                    .unwrap()
-                    .unwrap()
                 })
                 .collect();
             assert_eq!(rv, expected);

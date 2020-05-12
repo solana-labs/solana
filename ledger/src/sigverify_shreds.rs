@@ -1,5 +1,5 @@
 #![allow(clippy::implicit_hasher)]
-use crate::shred::{ShredType, SIZE_OF_NONCE};
+use crate::shred::{Shred, ShredType, SIZE_OF_NONCE};
 use rayon::{
     iter::{
         IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
@@ -16,9 +16,12 @@ use solana_perf::{
     sigverify::{self, batch_size, TxOffset},
 };
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::{
+    clock::Slot,
+    pubkey::Pubkey,
+    signature::Signature,
+    signature::{Keypair, Signer},
+};
 use std::sync::Arc;
 use std::{collections::HashMap, mem::size_of};
 
@@ -46,11 +49,6 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
     let slot_start = sig_end + size_of::<ShredType>();
     let slot_end = slot_start + size_of::<u64>();
     let msg_start = sig_end;
-    let msg_end = if packet.meta.repair {
-        packet.meta.size.saturating_sub(SIZE_OF_NONCE)
-    } else {
-        packet.meta.size
-    };
     if packet.meta.discard {
         return Some(0);
     }
@@ -59,6 +57,11 @@ fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) -> O
         return Some(0);
     }
     let slot: u64 = limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
+    let msg_end = if packet.meta.repair && Shred::is_nonce_unlocked(slot) {
+        packet.meta.size.saturating_sub(SIZE_OF_NONCE)
+    } else {
+        packet.meta.size
+    };
     trace!("slot {}", slot);
     let pubkey = slot_leaders.get(&slot)?;
     if packet.meta.size < sig_end {
@@ -98,10 +101,10 @@ fn slot_key_data_for_gpu<
     batches: &[Packets],
     slot_keys: &HashMap<u64, T>,
     recycler_cache: &RecyclerCache,
-) -> (PinnedVec<u8>, TxOffset, usize) {
+) -> (PinnedVec<u8>, TxOffset, usize, Vec<Vec<Slot>>) {
     //TODO: mark Pubkey::default shreds as failed after the GPU returns
     assert_eq!(slot_keys.get(&std::u64::MAX), Some(&T::default()));
-    let slots: Vec<Vec<u64>> = SIGVERIFY_THREAD_POOL.install(|| {
+    let slots: Vec<Vec<Slot>> = SIGVERIFY_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
             .map(|p| {
@@ -161,7 +164,7 @@ fn slot_key_data_for_gpu<
     trace!("keyvec.len: {}", keyvec.len());
     trace!("keyvec: {:?}", keyvec);
     trace!("offsets: {:?}", offsets);
-    (keyvec, offsets, num_in_packets)
+    (keyvec, offsets, num_in_packets, slots)
 }
 
 fn vec_size_in_packets(keyvec: &PinnedVec<u8>) -> usize {
@@ -181,6 +184,7 @@ fn shred_gpu_offsets(
     mut pubkeys_end: usize,
     batches: &[Packets],
     recycler_cache: &RecyclerCache,
+    slots: Option<Vec<Vec<Slot>>>,
 ) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
     let mut signature_offsets = recycler_cache.offsets().allocate("shred_signatures");
     signature_offsets.set_pinnable();
@@ -189,13 +193,26 @@ fn shred_gpu_offsets(
     let mut msg_sizes = recycler_cache.offsets().allocate("shred_msg_sizes");
     msg_sizes.set_pinnable();
     let mut v_sig_lens = vec![];
-    for batch in batches {
+    let mut slots_iter;
+    let mut slots_iter_ref: &mut dyn Iterator<Item = Vec<Slot>> = &mut std::iter::repeat(vec![]);
+    if let Some(slots) = slots {
+        slots_iter = slots.into_iter();
+        slots_iter_ref = &mut slots_iter;
+    }
+    for (batch, slots) in batches.iter().zip(slots_iter_ref) {
         let mut sig_lens = Vec::new();
-        for packet in &batch.packets {
+        let mut inner_slot_iter;
+        let mut inner_slot_iter_ref: &mut dyn Iterator<Item = Slot> = &mut std::iter::repeat(0);
+        if !slots.is_empty() {
+            inner_slot_iter = slots.into_iter();
+            inner_slot_iter_ref = &mut inner_slot_iter;
+        };
+
+        for (packet, slot) in batch.packets.iter().zip(inner_slot_iter_ref) {
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>();
             let msg_start = sig_end;
-            let msg_end = if packet.meta.repair {
+            let msg_end = if packet.meta.repair && Shred::is_nonce_unlocked(slot) {
                 sig_start + packet.meta.size.saturating_sub(SIZE_OF_NONCE)
             } else {
                 sig_start + packet.meta.size
@@ -230,7 +247,7 @@ pub fn verify_shreds_gpu(
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
     let count = batch_size(batches);
-    let (pubkeys, pubkey_offsets, mut num_packets) =
+    let (pubkeys, pubkey_offsets, mut num_packets, slots) =
         slot_key_data_for_gpu(0, batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `Packets` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
@@ -238,7 +255,7 @@ pub fn verify_shreds_gpu(
     trace!("num_packets: {}", num_packets);
     trace!("pubkeys_len: {}", pubkeys_len);
     let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
-        shred_gpu_offsets(pubkeys_len, batches, recycler_cache);
+        shred_gpu_offsets(pubkeys_len, batches, recycler_cache, Some(slots));
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
     elems.push(
@@ -375,7 +392,7 @@ pub fn sign_shreds_gpu(
 
     trace!("offset: {}", offset);
     let (signature_offsets, msg_start_offsets, msg_sizes, _v_sig_lens) =
-        shred_gpu_offsets(offset, batches, recycler_cache);
+        shred_gpu_offsets(offset, batches, recycler_cache, None);
     let total_sigs = signature_offsets.len();
     let mut signatures_out = recycler_cache.buffer().allocate("ed25519 signatures");
     signatures_out.set_pinnable();
@@ -455,16 +472,14 @@ pub mod tests {
     use super::*;
     use crate::{
         repair_response,
-        shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD},
+        shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD, UNLOCK_NONCE_SLOT},
     };
     use solana_sdk::signature::{Keypair, Signer};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-    #[test]
-    fn test_sigverify_shred_cpu() {
+    fn run_test_sigverify_shred_cpu(slot: Slot) {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let slot = 0xdeadc0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -504,9 +519,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shred_cpu_repair() {
+    fn test_sigverify_shred_cpu() {
+        run_test_sigverify_shred_cpu(UNLOCK_NONCE_SLOT);
+        run_test_sigverify_shred_cpu(UNLOCK_NONCE_SLOT + 1);
+    }
+
+    fn run_test_sigverify_shred_cpu_repair(slot: Slot) {
         solana_logger::setup();
-        let slot = 0xdeadc0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -522,8 +541,13 @@ pub mod tests {
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         trace!("signature {}", shred.common_header.signature);
-        let nonce = 9;
+        let nonce = if Shred::is_nonce_unlocked(slot) {
+            Some(9)
+        } else {
+            None
+        };
         let mut packet = repair_response::repair_response_packet_from_shred(
+            slot,
             shred.payload,
             &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             nonce,
@@ -551,10 +575,14 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_cpu() {
+    fn test_sigverify_shred_cpu_repair() {
+        run_test_sigverify_shred_cpu_repair(UNLOCK_NONCE_SLOT);
+        run_test_sigverify_shred_cpu_repair(UNLOCK_NONCE_SLOT + 1);
+    }
+
+    fn run_test_sigverify_shreds_cpu(slot: Slot) {
         solana_logger::setup();
         let mut batch = [Packets::default()];
-        let slot = 0xdeadc0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -601,12 +629,16 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_gpu() {
+    fn test_sigverify_shreds_cpu() {
+        run_test_sigverify_shreds_cpu(UNLOCK_NONCE_SLOT);
+        run_test_sigverify_shreds_cpu(UNLOCK_NONCE_SLOT + 1);
+    }
+
+    fn run_test_sigverify_shreds_gpu(slot: Slot) {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
         let mut batch = [Packets::default()];
-        let slot = 0xdeadc0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -662,14 +694,18 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_sign_gpu() {
+    fn test_sigverify_shreds_gpu() {
+        run_test_sigverify_shreds_gpu(UNLOCK_NONCE_SLOT);
+        run_test_sigverify_shreds_gpu(UNLOCK_NONCE_SLOT + 1);
+    }
+
+    fn run_test_sigverify_shreds_sign_gpu(slot: Slot) {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
         let mut packets = Packets::default();
         let num_packets = 32;
         let num_batches = 100;
-        let slot = 0xdeadc0de;
         packets.packets.resize(num_packets, Packet::default());
         for (i, p) in packets.packets.iter_mut().enumerate() {
             let shred = Shred::new_from_data(
@@ -709,11 +745,15 @@ pub mod tests {
     }
 
     #[test]
-    fn test_sigverify_shreds_sign_cpu() {
+    fn test_sigverify_shreds_sign_gpu() {
+        run_test_sigverify_shreds_sign_gpu(UNLOCK_NONCE_SLOT);
+        run_test_sigverify_shreds_sign_gpu(UNLOCK_NONCE_SLOT + 1);
+    }
+
+    fn run_test_sigverify_shreds_sign_cpu(slot: Slot) {
         solana_logger::setup();
 
         let mut batch = [Packets::default()];
-        let slot = 0xdeadc0de;
         let keypair = Keypair::new();
         let shred = Shred::new_from_data(
             slot,
@@ -743,5 +783,11 @@ pub mod tests {
         sign_shreds_cpu(&keypair, &mut batch);
         let rv = verify_shreds_cpu(&batch, &pubkeys);
         assert_eq!(rv, vec![vec![1]]);
+    }
+
+    #[test]
+    fn test_sigverify_shreds_sign_cpu() {
+        run_test_sigverify_shreds_sign_cpu(UNLOCK_NONCE_SLOT);
+        run_test_sigverify_shreds_sign_cpu(UNLOCK_NONCE_SLOT + 1);
     }
 }

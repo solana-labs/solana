@@ -1,7 +1,6 @@
 use crate::{
     blockstore::Blockstore,
-    blockstore_db::Result,
-    shred::{Nonce, SHRED_PAYLOAD_SIZE, SIZE_OF_NONCE},
+    shred::{Nonce, Shred, SIZE_OF_NONCE},
 };
 use solana_perf::packet::limited_deserialize;
 use solana_sdk::{clock::Slot, packet::Packet};
@@ -12,20 +11,36 @@ pub fn repair_response_packet(
     slot: Slot,
     shred_index: u64,
     dest: &SocketAddr,
-    nonce: Nonce,
-) -> Result<Option<Packet>> {
-    let shred = blockstore.get_data_shred(slot, shred_index)?;
-    Ok(shred.map(|shred| repair_response_packet_from_shred(shred, dest, nonce)))
+    nonce: Option<Nonce>,
+) -> Option<Packet> {
+    if Shred::is_nonce_unlocked(slot) && nonce.is_none()
+        || !Shred::is_nonce_unlocked(slot) && nonce.is_some()
+    {
+        return None;
+    }
+    let shred = blockstore
+        .get_data_shred(slot, shred_index)
+        .expect("Blockstore could not get data shred");
+    shred.map(|shred| repair_response_packet_from_shred(slot, shred, dest, nonce))
 }
 
 pub fn repair_response_packet_from_shred(
+    slot: Slot,
     shred: Vec<u8>,
     dest: &SocketAddr,
     nonce: Nonce,
 ) -> Packet {
-    assert!(shred.len() <= SHRED_PAYLOAD_SIZE);
+    let size_of_nonce = {
+        if Shred::is_nonce_unlocked(slot) {
+            assert!(nonce.is_some());
+            SIZE_OF_NONCE
+        } else {
+            assert!(nonce.is_none());
+            0
+        }
+    };
     let mut packet = Packet::default();
-    packet.meta.size = shred.len() + SIZE_OF_NONCE;
+    packet.meta.size = shred.len() + size_of_nonce;
     packet.meta.set_addr(dest);
     packet.data[..shred.len()].copy_from_slice(&shred);
     let mut wr = io::Cursor::new(&mut packet.data[shred.len()..]);

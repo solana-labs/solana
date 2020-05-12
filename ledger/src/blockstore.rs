@@ -3096,7 +3096,7 @@ pub mod tests {
     #[test]
     fn test_insert_get_bytes() {
         // Create enough entries to ensure there are at least two shreds created
-        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         assert!(num_entries > 1);
 
         let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
@@ -3356,7 +3356,7 @@ pub mod tests {
     #[test]
     fn test_insert_data_shreds_basic() {
         // Create enough entries to ensure there are at least two shreds created
-        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         assert!(num_entries > 1);
 
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
@@ -3403,7 +3403,7 @@ pub mod tests {
     #[test]
     fn test_insert_data_shreds_reverse() {
         let num_shreds = 10;
-        let num_entries = max_ticks_per_n_shreds(num_shreds);
+        let num_entries = max_ticks_per_n_shreds(num_shreds, None);
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
@@ -3580,7 +3580,7 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             // Create enough entries to ensure there are at least two shreds created
-            let min_entries = max_ticks_per_n_shreds(1) + 1;
+            let min_entries = max_ticks_per_n_shreds(1, None) + 1;
             for i in 0..4 {
                 let slot = i;
                 let parent_slot = if i == 0 { 0 } else { i - 1 };
@@ -4004,7 +4004,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let num_slots = 15;
             // Create enough entries to ensure there are at least two shreds created
-            let entries_per_slot = max_ticks_per_n_shreds(1) + 1;
+            let entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
             assert!(entries_per_slot > 1);
 
             let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
@@ -4374,7 +4374,7 @@ pub mod tests {
         let gap: u64 = 10;
         assert!(gap > 3);
         // Create enough entries to ensure there are at least two shreds created
-        let num_entries = max_ticks_per_n_shreds(1) + 1;
+        let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         let entries = create_ticks(num_entries, 0, Hash::default());
         let mut shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
