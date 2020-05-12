@@ -103,7 +103,6 @@ impl Sanitize for EpochIncompleteSlots {
         //these values
         Ok(())
     }
-    Version(Version),
 }
 
 impl Sanitize for CrdsData {
@@ -456,6 +455,7 @@ mod test {
                 CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
                 CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
                 CrdsValueLabel::Version(_) => hits[4] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 5] = true,
             }
         }
         assert!(hits.iter().all(|x| *x));

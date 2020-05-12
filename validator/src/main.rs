@@ -399,8 +399,8 @@ fn check_vote_account(
     node_pubkey: &Pubkey,
 ) -> Result<(), String> {
     let found_vote_account = rpc_client
-        .get_account(vote_pubkey)
-        .map_err(|err| format!("Failed to get vote account: {}", err.to_string()))?;
+        .get_account_with_commitment(vote_pubkey, CommitmentConfig::root())
+        .map_err(|err| format!("Failed to get vote account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("vote account does not exist: {}", vote_pubkey))?;
 
@@ -412,8 +412,8 @@ fn check_vote_account(
     }
 
     let found_node_account = rpc_client
-        .get_account(node_pubkey)
-        .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?;
+        .get_account_with_commitment(node_pubkey, CommitmentConfig::root())
+        .map_err(|err| format!("Failed to get identity account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("identity account does not exist: {}", node_pubkey))?;
 

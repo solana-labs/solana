@@ -20,7 +20,8 @@ use crate::{
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
-        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Version, Vote, MAX_WALLCLOCK,
+        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlots, SnapshotHash, Version, Vote,
+        MAX_WALLCLOCK,
     },
     packet::{Packet, PACKET_DATA_SIZE},
     result::{Error, Result},
@@ -562,8 +563,6 @@ impl ClusterInfo {
 
     pub fn get_node_version(&self, pubkey: &Pubkey) -> Option<solana_version::Version> {
         self.gossip
-            .read()
-            .unwrap()
             .crds
             .table
             .get(&CrdsValueLabel::Version(*pubkey))
@@ -1217,9 +1216,14 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut adopt_shred_version = obj.read().unwrap().my_data().shred_version == 0;
                 let recycler = PacketsRecycler::default();
-
-                let message = CrdsData::Version(Version::new(obj.id()));
-                obj.push_message(CrdsValue::new_signed(message, &obj.keypair));
+                {
+                    let mut obj = obj.write().unwrap();
+                    let message = CrdsValue::new_signed(
+                        CrdsData::Version(Version::new(obj.id())),
+                        &obj.keypair,
+                    );
+                    obj.push_message(message);
+                }
                 loop {
                     let start = timestamp();
                     thread_mem_usage::datapoint("solana-gossip");
