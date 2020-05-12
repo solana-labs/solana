@@ -1,4 +1,7 @@
-use crate::progress_map::ProgressMap;
+use crate::{
+    progress_map::{LockoutIntervals, ProgressMap},
+    pubkey_references::PubkeyReferences,
+};
 use chrono::prelude::*;
 use solana_ledger::bank_forks::BankForks;
 use solana_runtime::bank::Bank;
@@ -12,12 +15,14 @@ use solana_vote_program::vote_state::{
     BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY, TIMESTAMP_SLOT_INTERVAL,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
+    ops::Bound::{Included, Unbounded},
     sync::Arc,
 };
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
+pub const SWITCH_FORK_THRESHOLD: f64 = 0.38;
 
 #[derive(Default, Debug, Clone)]
 pub struct StakeLockout {
@@ -89,13 +94,17 @@ impl Tower {
         bank_slot: u64,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<u64>>,
-    ) -> (HashMap<Slot, StakeLockout>, u64, u128)
+        all_pubkeys: &mut PubkeyReferences,
+    ) -> (HashMap<Slot, StakeLockout>, u64, u128, LockoutIntervals)
     where
         F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
         let mut stake_lockouts = HashMap::new();
         let mut total_stake = 0;
         let mut total_weight = 0;
+        // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
+        // keyed by end of the range
+        let mut lockout_intervals = BTreeMap::new();
         for (key, (lamports, account)) in vote_accounts {
             if lamports == 0 {
                 continue;
@@ -114,6 +123,14 @@ impl Tower {
                 continue;
             }
             let mut vote_state = vote_state.unwrap();
+
+            for vote in &vote_state.votes {
+                let key = all_pubkeys.get_or_insert(&key);
+                lockout_intervals
+                    .entry(vote.expiration_slot())
+                    .or_insert_with(|| vec![])
+                    .push((vote.slot, key));
+            }
 
             if key == self.node_pubkey || vote_state.node_pubkey == self.node_pubkey {
                 debug!("vote state {:?}", vote_state);
@@ -180,7 +197,7 @@ impl Tower {
             }
             total_stake += lamports;
         }
-        (stake_lockouts, total_stake, total_weight)
+        (stake_lockouts, total_stake, total_weight, lockout_intervals)
     }
 
     pub fn is_slot_confirmed(
@@ -319,6 +336,98 @@ impl Tower {
 
         false
     }
+
+    pub(crate) fn check_switch_threshold(
+        &self,
+        switch_slot: u64,
+        ancestors: &HashMap<Slot, HashSet<u64>>,
+        descendants: &HashMap<Slot, HashSet<u64>>,
+        progress: &ProgressMap,
+        total_stake: u64,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
+    ) -> bool {
+        self.last_vote()
+            .slots
+            .last()
+            .map(|last_vote| {
+                let last_vote_ancestors = ancestors.get(&last_vote).unwrap();
+                let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
+
+                if switch_slot == *last_vote || switch_slot_ancestors.contains(last_vote) {
+                    // If the `switch_slot is a descendant of the last vote,
+                    // no switching proof is neceessary
+                    return true;
+                }
+
+                // Should never consider switching to an ancestor
+                // of your last vote
+                assert!(!last_vote_ancestors.contains(&switch_slot));
+
+                let mut locked_out_stake = 0;
+                let mut locked_out_vote_accounts = HashSet::new();
+                for (candidate_slot, descendants) in descendants.iter() {
+                    // 1) Only consider lockouts a tips of forks as that
+                    //    includes all ancestors of that fork.
+                    // 2) Don't consider lockouts on the `last_vote` itself
+                    // 3) Don't consider lockouts on any descendants of
+                    //    `last_vote`
+                    if !descendants.is_empty()
+                        || candidate_slot == last_vote
+                        || ancestors
+                            .get(&candidate_slot)
+                            .expect(
+                                "empty descendants implies this is a child, not parent of root, so must
+                                exist in the ancestors map",
+                            )
+                            .contains(last_vote)
+                    {
+                        continue;
+                    }
+
+                    // By the time we reach here, any ancestors of the `last_vote`,
+                    // should have been filtered out, as they all have a descendant,
+                    // namely the `last_vote` itself.
+                    assert!(!last_vote_ancestors.contains(candidate_slot));
+
+                    // Evaluate which vote accounts in the bank are locked out
+                    // in the interval candidate_slot..last_vote, which means
+                    // finding any lockout intervals in the `lockout_intervals` tree
+                    // for this bank that contain `last_vote`.
+                    let lockout_intervals = &progress
+                        .get(&candidate_slot)
+                        .unwrap()
+                        .fork_stats
+                        .lockout_intervals;
+                    // Find any locked out intervals in this bank with endpoint >= last_vote,
+                    // implies they are locked out at last_vote
+                    for (_, value) in lockout_intervals.range((Included(last_vote), Unbounded)) {
+                        for (lockout_interval_start, vote_account_pubkey) in value {
+                            // Only count lockouts on slots that are:
+                            // 1) Not ancestors of `last_vote`
+                            // 2) Not from before the current root as we can't determine if
+                            // anything before the root was an ancestor of `last_vote` or not
+                            if !last_vote_ancestors.contains(lockout_interval_start)
+                                // The check if the key exists in the ancestors map
+                                // is equivalent to checking if the key is above the
+                                // current root.
+                                && ancestors.contains_key(lockout_interval_start)
+                                && !locked_out_vote_accounts.contains(vote_account_pubkey)
+                            {
+                                let stake = epoch_vote_accounts
+                                    .get(vote_account_pubkey)
+                                    .map(|(stake, _)| *stake)
+                                    .unwrap_or(0);
+                                locked_out_stake += stake;
+                                locked_out_vote_accounts.insert(vote_account_pubkey);
+                            }
+                        }
+                    }
+                }
+                (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD
+            })
+            .unwrap_or(true)
+    }
+
     pub fn check_vote_stake_threshold(
         &self,
         slot: Slot,
@@ -351,18 +460,6 @@ impl Tower {
         } else {
             true
         }
-    }
-
-    pub(crate) fn check_switch_threshold(
-        &self,
-        _slot: Slot,
-        _ancestors: &HashMap<Slot, HashSet<u64>>,
-        _descendants: &HashMap<Slot, HashSet<u64>>,
-        _progress: &ProgressMap,
-        _total_epoch_stake: u64,
-        _epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
-    ) -> bool {
-        true
     }
 
     /// Update lockouts for all the ancestors
@@ -410,8 +507,12 @@ impl Tower {
     }
 
     fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<Slot, HashSet<Slot>>) -> u128 {
-        let (_, _, bank_weight) =
-            self.collect_vote_lockouts(bank.slot(), bank.vote_accounts().into_iter(), ancestors);
+        let (_, _, bank_weight, _) = self.collect_vote_lockouts(
+            bank.slot(),
+            bank.vote_accounts().into_iter(),
+            ancestors,
+            &mut PubkeyReferences::default(),
+        );
         bank_weight
     }
 
@@ -501,9 +602,12 @@ pub mod test {
         vote_state::{Vote, VoteStateVersions},
         vote_transaction,
     };
-    use std::collections::HashMap;
-    use std::sync::RwLock;
-    use std::{thread::sleep, time::Duration};
+    use std::{
+        collections::HashMap,
+        rc::Rc,
+        sync::RwLock,
+        {thread::sleep, time::Duration},
+    };
     use trees::{tr, Tree, TreeWalk};
 
     pub(crate) struct VoteSimulator {
@@ -593,7 +697,7 @@ pub mod test {
                 .cloned()
                 .collect();
 
-            ReplayStage::compute_bank_stats(
+            let _ = ReplayStage::compute_bank_stats(
                 &my_pubkey,
                 &ancestors,
                 &mut frozen_banks,
@@ -602,7 +706,7 @@ pub mod test {
                 &VoteTracker::default(),
                 &ClusterSlots::default(),
                 &self.bank_forks,
-                &mut HashSet::new(),
+                &mut PubkeyReferences::default(),
             );
 
             let vote_bank = self
@@ -631,17 +735,60 @@ pub mod test {
             }
             let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
-                ReplayStage::handle_new_root(
-                    new_root,
-                    &self.bank_forks,
-                    &mut self.progress,
-                    &None,
-                    &mut HashSet::new(),
-                    None,
-                );
+                self.set_root(new_root);
             }
 
             vec![]
+        }
+
+        pub fn set_root(&mut self, new_root: Slot) {
+            ReplayStage::handle_new_root(
+                new_root,
+                &self.bank_forks,
+                &mut self.progress,
+                &None,
+                &mut PubkeyReferences::default(),
+                None,
+            )
+        }
+
+        fn create_and_vote_new_branch(
+            &mut self,
+            start_slot: Slot,
+            end_slot: Slot,
+            cluster_votes: &HashMap<Pubkey, Vec<u64>>,
+            votes_to_simulate: &HashSet<Slot>,
+            my_pubkey: &Pubkey,
+            tower: &mut Tower,
+        ) -> HashMap<Slot, Vec<HeaviestForkFailures>> {
+            (start_slot + 1..=end_slot)
+                .filter_map(|slot| {
+                    let mut fork_tip_parent = tr(slot - 1);
+                    fork_tip_parent.push_front(tr(slot));
+                    self.fill_bank_forks(fork_tip_parent, &cluster_votes);
+                    if votes_to_simulate.contains(&slot) {
+                        Some((slot, self.simulate_vote(slot, &my_pubkey, tower)))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        }
+
+        fn simulate_lockout_interval(
+            &mut self,
+            slot: Slot,
+            lockout_interval: (u64, u64),
+            vote_account_pubkey: &Pubkey,
+        ) {
+            self.progress
+                .entry(slot)
+                .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0))
+                .fork_stats
+                .lockout_intervals
+                .entry(lockout_interval.1)
+                .or_default()
+                .push((lockout_interval.0, Rc::new(*vote_account_pubkey)));
         }
 
         fn can_progress_on_fork(
@@ -791,6 +938,182 @@ pub mod test {
     }
 
     #[test]
+    fn test_switch_threshold() {
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(2);
+        let my_pubkey = vote_simulator.node_pubkeys[0];
+        let other_vote_account = vote_simulator.vote_pubkeys[1];
+        let bank0 = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .clone();
+        let total_stake = bank0.total_epoch_stake();
+        assert_eq!(
+            total_stake,
+            vote_simulator.validator_keypairs.len() as u64 * 10_000
+        );
+
+        // Create the tree of banks
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    // Minor fork 1
+                    / (tr(10) / (tr(11) / (tr(12) / (tr(13) / (tr(14))))))
+                    / (tr(43)
+                        / (tr(44)
+                            // Minor fork 2
+                            / (tr(45) / (tr(46) / (tr(47) / (tr(48) / (tr(49) / (tr(50)))))))
+                            / (tr(110))))));
+
+        // Fill the BankForks according to the above fork structure
+        vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut tower = Tower::new_with_key(&my_pubkey);
+
+        // Last vote is 47
+        tower.record_vote(47, Hash::default());
+
+        // Trying to switch to a descendant of last vote should always work
+        assert!(tower.check_switch_threshold(
+            48,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
+
+        // Trying to switch to another fork at 110 should fail
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
+
+        // Adding another validator lockout on a descendant of last vote should
+        // not count toward the switch threshold
+        vote_simulator.simulate_lockout_interval(50, (49, 100), &other_vote_account);
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
+
+        // Adding another validator lockout on an ancestor of last vote should
+        // not count toward the switch threshold
+        vote_simulator.simulate_lockout_interval(50, (45, 100), &other_vote_account);
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
+
+        // Adding another validator lockout on a different fork, but the lockout
+        // doesn't cover the last vote, should not satisfy the switch threshold
+        vote_simulator.simulate_lockout_interval(14, (12, 46), &other_vote_account);
+        assert!(!tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
+
+        // Adding another validator lockout on a different fork, and the lockout
+        // covers the last vote, should satisfy the switch threshold
+        vote_simulator.simulate_lockout_interval(14, (12, 47), &other_vote_account);
+        assert!(tower.check_switch_threshold(
+            110,
+            &ancestors,
+            &descendants,
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
+
+        // If we set a root, then any lockout intervals below the root shouldn't
+        // count toward the switch threshold. This means the other validator's
+        // vote lockout no longer counts
+        vote_simulator.set_root(43);
+        assert!(!tower.check_switch_threshold(
+            110,
+            &vote_simulator.bank_forks.read().unwrap().ancestors(),
+            &vote_simulator.bank_forks.read().unwrap().descendants(),
+            &vote_simulator.progress,
+            total_stake,
+            bank0.epoch_vote_accounts(0).unwrap(),
+        ));
+    }
+
+    #[test]
+    fn test_switch_threshold_votes() {
+        // Init state
+        let mut vote_simulator = VoteSimulator::new(4);
+        let my_pubkey = vote_simulator.node_pubkeys[0];
+        let mut tower = Tower::new_with_key(&my_pubkey);
+        let forks = tr(0)
+            / (tr(1)
+                / (tr(2)
+                    // Minor fork 1
+                    / (tr(10) / (tr(11) / (tr(12) / (tr(13) / (tr(14))))))
+                    / (tr(43)
+                        / (tr(44)
+                            // Minor fork 2
+                            / (tr(45) / (tr(46))))
+                            / (tr(110)))));
+
+        // Have two validators, each representing 20% of the stake vote on
+        // minor fork 2 at slots 46 + 47
+        let mut cluster_votes: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
+        cluster_votes.insert(vote_simulator.node_pubkeys[1], vec![46]);
+        cluster_votes.insert(vote_simulator.node_pubkeys[2], vec![47]);
+        vote_simulator.fill_bank_forks(forks, &cluster_votes);
+
+        // Vote on the first minor fork at slot 14, should succeed
+        assert!(vote_simulator
+            .simulate_vote(14, &my_pubkey, &mut tower,)
+            .is_empty());
+
+        // The other two validators voted at slots 46, 47, which
+        // will only both show up in slot 48, at which point
+        // 2/5 > SWITCH_FORK_THRESHOLD of the stake has voted
+        // on another fork, so switching should suceed
+        let votes_to_simulate = (46..=48).into_iter().collect();
+        let results = vote_simulator.create_and_vote_new_branch(
+            45,
+            48,
+            &cluster_votes,
+            &votes_to_simulate,
+            &my_pubkey,
+            &mut tower,
+        );
+        for slot in 46..=48 {
+            if slot == 48 {
+                assert!(results.get(&slot).unwrap().is_empty());
+            } else {
+                assert_eq!(
+                    *results.get(&slot).unwrap(),
+                    vec![HeaviestForkFailures::FailedSwitchThreshold(slot)]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_double_partition() {
         // Init state
         let mut vote_simulator = VoteSimulator::new(2);
@@ -878,8 +1201,12 @@ pub mod test {
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
-        let (staked_lockouts, total_staked, bank_weight) =
-            tower.collect_vote_lockouts(1, accounts.into_iter(), &ancestors);
+        let (staked_lockouts, total_staked, bank_weight, _) = tower.collect_vote_lockouts(
+            1,
+            accounts.into_iter(),
+            &ancestors,
+            &mut PubkeyReferences::default(),
+        );
         assert_eq!(staked_lockouts[&0].stake, 2);
         assert_eq!(staked_lockouts[&0].lockout, 2 + 2 + 4 + 4);
         assert_eq!(total_staked, 2);
@@ -915,10 +1242,11 @@ pub mod test {
             + root_weight;
         let expected_bank_weight = 2 * vote_account_expected_weight;
         assert_eq!(tower.lockouts.root_slot, Some(0));
-        let (staked_lockouts, _total_staked, bank_weight) = tower.collect_vote_lockouts(
+        let (staked_lockouts, _total_staked, bank_weight, _) = tower.collect_vote_lockouts(
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
+            &mut PubkeyReferences::default(),
         );
         for i in 0..MAX_LOCKOUT_HISTORY {
             assert_eq!(staked_lockouts[&(i as u64)].stake, 2);
@@ -1323,16 +1651,24 @@ pub mod test {
         for vote in &tower_votes {
             tower.record_vote(*vote, Hash::default());
         }
-        let (staked_lockouts, total_staked, _) =
-            tower.collect_vote_lockouts(vote_to_evaluate, accounts.clone().into_iter(), &ancestors);
+        let (staked_lockouts, total_staked, _, _) = tower.collect_vote_lockouts(
+            vote_to_evaluate,
+            accounts.clone().into_iter(),
+            &ancestors,
+            &mut PubkeyReferences::default(),
+        );
         assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &staked_lockouts, total_staked));
 
         // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
         // will expire the vote in one of the vote accounts, so we should have insufficient
         // stake to pass the threshold
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
-        let (staked_lockouts, total_staked, _) =
-            tower.collect_vote_lockouts(vote_to_evaluate, accounts.into_iter(), &ancestors);
+        let (staked_lockouts, total_staked, _, _) = tower.collect_vote_lockouts(
+            vote_to_evaluate,
+            accounts.into_iter(),
+            &ancestors,
+            &mut PubkeyReferences::default(),
+        );
         assert!(!tower.check_vote_stake_threshold(
             vote_to_evaluate,
             &staked_lockouts,
