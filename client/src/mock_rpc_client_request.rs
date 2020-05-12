@@ -117,7 +117,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 };
                 Value::String(signature)
             }
-            RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(1234)),
+            RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(20)),
             _ => Value::Null,
         };
         Ok(val)

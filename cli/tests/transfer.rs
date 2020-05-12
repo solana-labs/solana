@@ -69,6 +69,22 @@ fn test_transfer() {
     check_balance(49_989, &rpc_client, &sender_pubkey);
     check_balance(10, &rpc_client, &recipient_pubkey);
 
+    // Plain ole transfer, failure due to InsufficientFundsForSpendAndFee
+    config.command = CliCommand::Transfer {
+        amount: TransferAmount::Some(49_989),
+        to: recipient_pubkey,
+        from: 0,
+        sign_only: false,
+        no_wait: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    assert!(process_command(&config).is_err());
+    check_balance(49_989, &rpc_client, &sender_pubkey);
+    check_balance(10, &rpc_client, &recipient_pubkey);
+
     let mut offline = CliConfig::default();
     offline.json_rpc_url = String::default();
     offline.signers = vec![&default_offline_signer];

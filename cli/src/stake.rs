@@ -1,8 +1,9 @@
 use crate::{
     cli::{
-        check_account_for_fee, check_unique_pubkeys, fee_payer_arg, generate_unique_signers,
-        log_instruction_custom_error, nonce_authority_arg, return_signers, CliCommand,
-        CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex, FEE_PAYER_ARG,
+        check_account_for_fee, check_accounts_for_spend_and_fee, check_unique_pubkeys,
+        fee_payer_arg, generate_unique_signers, log_instruction_custom_error, nonce_authority_arg,
+        return_signers, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
+        SignerIndex, FEE_PAYER_ARG,
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
@@ -863,11 +864,13 @@ pub fn process_create_stake_account(
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_accounts_for_spend_and_fee(
             rpc_client,
-            &tx.message.account_keys[0],
+            &from.pubkey(),
+            &fee_payer.pubkey(),
             &fee_calculator,
             &tx.message,
+            lamports,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<SystemError>(result, &config)

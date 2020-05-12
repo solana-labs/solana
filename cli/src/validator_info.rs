@@ -1,5 +1,8 @@
 use crate::{
-    cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+    cli::{
+        check_account_for_spend_and_fee, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult,
+    },
     cli_output::{CliValidatorInfo, CliValidatorInfoVec},
 };
 use bincode::deserialize;
@@ -310,6 +313,9 @@ pub fn process_set_validator_info(
         .poll_get_balance_with_commitment(&info_pubkey, CommitmentConfig::default())
         .unwrap_or(0);
 
+    let lamports =
+        rpc_client.get_minimum_balance_for_rent_exemption(ValidatorInfo::max_space() as usize)?;
+
     let keys = vec![(id(), false), (config.signers[0].pubkey(), true)];
     let (message, signers): (Message, Vec<&dyn Signer>) = if balance == 0 {
         if info_pubkey != info_keypair.pubkey() {
@@ -323,8 +329,6 @@ pub fn process_set_validator_info(
             "Publishing info for Validator {:?}",
             config.signers[0].pubkey()
         );
-        let lamports = rpc_client
-            .get_minimum_balance_for_rent_exemption(ValidatorInfo::max_space() as usize)?;
         let mut instructions = config_instruction::create_account::<ValidatorInfo>(
             &config.signers[0].pubkey(),
             &info_keypair.pubkey(),
@@ -361,11 +365,12 @@ pub fn process_set_validator_info(
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&signers, recent_blockhash)?;
-    check_account_for_fee(
+    check_account_for_spend_and_fee(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        lamports,
     )?;
     let signature_str = rpc_client.send_and_confirm_transaction_with_spinner(&tx)?;
 

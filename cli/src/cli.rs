@@ -457,8 +457,12 @@ pub enum CliError {
     BadParameter(String),
     #[error("command not recognized: {0}")]
     CommandNotRecognized(String),
-    #[error("insuficient funds for fee")]
-    InsufficientFundsForFee,
+    #[error("insufficient funds for fee ({0} SOL)")]
+    InsufficientFundsForFee(f64),
+    #[error("insufficient funds for spend ({0} SOL)")]
+    InsufficientFundsForSpend(f64),
+    #[error("insufficient funds for spend ({0} SOL) and fee ({1} SOL)")]
+    InsufficientFundsForSpendAndFee(f64, f64),
     #[error(transparent)]
     InvalidNonce(CliNonceError),
     #[error("dynamic program error: {0}")]
@@ -1026,17 +1030,77 @@ fn check_account_for_multiple_fees(
     fee_calculator: &FeeCalculator,
     messages: &[&Message],
 ) -> Result<(), Box<dyn error::Error>> {
-    let balance = rpc_client.retry_get_balance(account_pubkey, 5)?;
-    if let Some(lamports) = balance {
-        let fee = messages
-            .iter()
-            .map(|message| fee_calculator.calculate_fee(message))
-            .sum();
-        if lamports != 0 && lamports >= fee {
-            return Ok(());
+    let fee = calculate_fee(fee_calculator, messages);
+    if !check_account_for_balance(rpc_client, account_pubkey, fee)? {
+        return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)).into());
+    }
+    Ok(())
+}
+
+pub fn check_account_for_spend_and_fee(
+    rpc_client: &RpcClient,
+    account_pubkey: &Pubkey,
+    fee_calculator: &FeeCalculator,
+    message: &Message,
+    lamports: u64,
+) -> Result<(), Box<dyn error::Error>> {
+    check_accounts_for_spend_and_fee(
+        rpc_client,
+        account_pubkey,
+        account_pubkey,
+        fee_calculator,
+        message,
+        lamports,
+    )
+}
+
+pub fn check_accounts_for_spend_and_fee(
+    rpc_client: &RpcClient,
+    from_pubkey: &Pubkey,
+    fee_pubkey: &Pubkey,
+    fee_calculator: &FeeCalculator,
+    message: &Message,
+    lamports: u64,
+) -> Result<(), Box<dyn error::Error>> {
+    let fee = calculate_fee(fee_calculator, &[message]);
+    if from_pubkey == fee_pubkey {
+        if !check_account_for_balance(rpc_client, from_pubkey, fee + lamports)? {
+            return Err(CliError::InsufficientFundsForSpendAndFee(
+                lamports_to_sol(lamports),
+                lamports_to_sol(fee),
+            )
+            .into());
+        }
+    } else {
+        if !check_account_for_balance(rpc_client, fee_pubkey, fee)? {
+            return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)).into());
+        }
+        if !check_account_for_balance(rpc_client, from_pubkey, lamports)? {
+            return Err(CliError::InsufficientFundsForSpend(lamports_to_sol(lamports)).into());
         }
     }
-    Err(CliError::InsufficientFundsForFee.into())
+    Ok(())
+}
+
+fn calculate_fee(fee_calculator: &FeeCalculator, messages: &[&Message]) -> u64 {
+    messages
+        .iter()
+        .map(|message| fee_calculator.calculate_fee(message))
+        .sum()
+}
+
+fn check_account_for_balance(
+    rpc_client: &RpcClient,
+    account_pubkey: &Pubkey,
+    balance: u64,
+) -> Result<bool, Box<dyn error::Error>> {
+    let current_balance = rpc_client.retry_get_balance(account_pubkey, 5)?;
+    if let Some(lamports) = current_balance {
+        if lamports != 0 && lamports >= balance {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub fn check_unique_pubkeys(
@@ -1433,11 +1497,12 @@ fn process_pay(
                 let nonce_account = rpc_client.get_account(nonce_account)?;
                 check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &blockhash)?;
             }
-            check_account_for_fee(
+            check_account_for_spend_and_fee(
                 rpc_client,
                 &config.signers[0].pubkey(),
                 &fee_calculator,
                 &tx.message,
+                lamports,
             )?;
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
             log_instruction_custom_error::<SystemError>(result, &config)
@@ -1468,11 +1533,12 @@ fn process_pay(
             return_signers(&tx, &config)
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
-            check_account_for_fee(
+            check_account_for_spend_and_fee(
                 rpc_client,
                 &config.signers[0].pubkey(),
                 &fee_calculator,
                 &tx.message,
+                lamports,
             )?;
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
             let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
@@ -1511,11 +1577,12 @@ fn process_pay(
         } else {
             tx.try_sign(&[config.signers[0], &contract_state], blockhash)?;
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-            check_account_for_fee(
+            check_account_for_spend_and_fee(
                 rpc_client,
                 &config.signers[0].pubkey(),
                 &fee_calculator,
                 &tx.message,
+                lamports,
             )?;
             let signature = log_instruction_custom_error::<BudgetError>(result, &config)?;
             Ok(json!({
@@ -1621,11 +1688,13 @@ fn process_transfer(
             let nonce_account = rpc_client.get_account(nonce_account)?;
             check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
         }
-        check_account_for_fee(
+        check_accounts_for_spend_and_fee(
             rpc_client,
-            &tx.message.account_keys[0],
+            &from.pubkey(),
+            &fee_payer.pubkey(),
             &fee_calculator,
             &tx.message,
+            lamports,
         )?;
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
@@ -3389,7 +3458,7 @@ mod tests {
                 unix_timestamp: 0,
                 custodian,
             },
-            lamports: 1234,
+            lamports: 30,
             sign_only: false,
             blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
             nonce_account: None,
@@ -3443,7 +3512,7 @@ mod tests {
             nonce_authority: 0,
             split_stake_account: 1,
             seed: None,
-            lamports: 1234,
+            lamports: 30,
             fee_payer: 0,
         };
         config.signers = vec![&keypair, &split_stake_account];

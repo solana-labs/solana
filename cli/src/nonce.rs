@@ -1,8 +1,8 @@
 use crate::{
     cli::{
-        check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult, SignerIndex,
+        check_account_for_fee, check_account_for_spend_and_fee, check_unique_pubkeys,
+        generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
+        CliConfig, CliError, ProcessResult, SignerIndex,
     },
     cli_output::CliNonceAccount,
 };
@@ -517,11 +517,12 @@ pub fn process_create_nonce_account(
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
 
-    check_account_for_fee(
+    check_account_for_spend_and_fee(
         rpc_client,
         &config.signers[0].pubkey(),
         &fee_calculator,
         &tx.message,
+        lamports,
     )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)

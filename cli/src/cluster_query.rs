@@ -1,5 +1,8 @@
 use crate::{
-    cli::{check_account_for_fee, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+    cli::{
+        check_account_for_spend_and_fee, CliCommand, CliCommandInfo, CliConfig, CliError,
+        ProcessResult,
+    },
     cli_output::*,
     display::println_name_value,
 };
@@ -930,11 +933,12 @@ pub fn process_ping(
         let message = Message::new(&[ix]);
         let mut transaction = Transaction::new_unsigned(message);
         transaction.try_sign(&config.signers, recent_blockhash)?;
-        check_account_for_fee(
+        check_account_for_spend_and_fee(
             rpc_client,
             &config.signers[0].pubkey(),
             &fee_calculator,
             &transaction.message,
+            lamports,
         )?;
 
         match rpc_client.send_transaction(&transaction) {
