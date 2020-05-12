@@ -175,7 +175,7 @@ mod tests {
         hasher.hash(&buf[..size]);
 
         //  golden needs to be updated if shred structure changes....
-        let golden: Hash = "5kyztn8oKr1CDm3x42rUvSgmy2XL2VAvEYqo6nNJvKGA"
+        let golden: Hash = "2rq8nR6rns2T5zsbQAGBDZb41NVtacneLgkCH17CVxZm"
             .parse()
             .unwrap();
 

@@ -225,11 +225,25 @@ impl Shred {
         }
     }
 
-    pub fn new_from_serialized_shred(payload: Vec<u8>) -> Result<Self> {
+    pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self> {
         let mut start = 0;
         let common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
 
+        let slot = common_header.slot;
+        let expected_data_size = Self::get_expected_payload_size_from_slot(slot);
+
+        if payload.len() > expected_data_size {
+            error!("got payload size mismatch for shred slot: {}, index: {}, payload_len: {}, expected: {}", slot, common_header.index, payload.len(), expected_data_size);
+        }
+        // Safe because any payload from the network must have passed through
+        // window service,  which implies payload wll be of size
+        // PACKET_DATA_SIZE, and `expected_data_size` <= PACKET_DATA_SIZE.
+        //
+        // On the other hand, if this function is called locally, the payload size should match
+        // the `expected_data_size`.
+        assert!(payload.len() >= expected_data_size);
+        payload.truncate(expected_data_size);
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
@@ -244,7 +258,7 @@ impl Shred {
                 Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
             if u64::from(data_header.parent_offset) > common_header.slot {
                 return Err(ShredError::InvalidParentOffset {
-                    slot: common_header.slot,
+                    slot,
                     parent_offset: data_header.parent_offset,
                 });
             }
@@ -928,12 +942,7 @@ impl Shredder {
             return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
         }
         let slot = shreds[0].slot();
-        let expected_payload_size = shreds[0].payload.len();
-        if expected_payload_size != PACKET_DATA_SIZE && expected_payload_size != SHRED_PAYLOAD_SIZE
-        {
-            error!("{} Shreds for slot: {} are unsupported size", caller, slot);
-            return Err(reed_solomon_erasure::Error::IncorrectShardSize);
-        }
+        let expected_payload_size = Shred::get_expected_payload_size_from_slot(slot);
         for shred in shreds {
             if shred.payload.len() != expected_payload_size {
                 error!(
@@ -947,13 +956,6 @@ impl Shredder {
             }
         }
 
-        let expected_payload_size_from_slot = Shred::get_expected_payload_size_from_slot(slot);
-        if expected_payload_size_from_slot != expected_payload_size {
-            warn!(
-                "{} Expected shred payload size mismatch!, leader for slot {} has not upgraded",
-                caller, slot
-            );
-        }
         Ok(expected_payload_size)
     }
 }
