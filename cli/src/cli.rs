@@ -161,6 +161,22 @@ pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     nonce::nonce_authority_arg().requires(NONCE_ARG.name)
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum TransferAmount {
+    All,
+    Some(u64),
+}
+
+impl From<Option<u64>> for TransferAmount {
+    fn from(maybe_lamports: Option<u64>) -> Self {
+        if let Some(lamports) = maybe_lamports {
+            Self::Some(lamports)
+        } else {
+            Self::All
+        }
+    }
+}
+
 #[derive(Default, Debug, PartialEq)]
 pub struct PayCommand {
     pub lamports: u64,
@@ -432,7 +448,7 @@ pub enum CliCommand {
     },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Transfer {
-        lamports: u64,
+        amount: TransferAmount,
         to: Pubkey,
         from: SignerIndex,
         sign_only: bool,
@@ -962,7 +978,7 @@ pub fn parse_command(
             })
         }
         ("transfer", Some(matches)) => {
-            let lamports = lamports_of_sol(matches, "amount").unwrap();
+            let amount = lamports_of_sol(matches, "amount").into();
             let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let no_wait = matches.is_present("no_wait");
@@ -988,7 +1004,7 @@ pub fn parse_command(
 
             Ok(CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports,
+                    amount,
                     to,
                     sign_only,
                     no_wait,
@@ -1643,7 +1659,7 @@ fn process_time_elapsed(
 fn process_transfer(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    lamports: u64,
+    amount: TransferAmount,
     to: &Pubkey,
     from: SignerIndex,
     sign_only: bool,
@@ -1662,10 +1678,27 @@ fn process_transfer(
 
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
-    let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
+
+    let lamports = match amount {
+        TransferAmount::All => {
+            let sigs = config.signers.len();
+            let fee = sigs as u64 * fee_calculator.lamports_per_signature;
+            let from_balance = rpc_client
+                .retry_get_balance(&from.pubkey(), 5)?
+                .unwrap_or_default();
+            if from.pubkey() == fee_payer.pubkey() {
+                from_balance.saturating_sub(fee)
+            } else {
+                from_balance
+            }
+        }
+        TransferAmount::Some(lamports) => lamports,
+    };
+
+    let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
 
     let message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
@@ -2282,7 +2315,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_time_elapsed(&rpc_client, config, &to, &pubkey, *dt)
         }
         CliCommand::Transfer {
-            lamports,
+            amount,
             to,
             from,
             sign_only,
@@ -2294,7 +2327,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_transfer(
             &rpc_client,
             config,
-            *lamports,
+            *amount,
             to,
             *from,
             *sign_only,
@@ -2701,9 +2734,9 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount)
+                        .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to send, in SOL"),
+                        .help("The amount to send, in SOL; accepts keyword ALL"),
                 )
                 .arg(
                     pubkey!(Arg::with_name("from")
@@ -3757,7 +3790,29 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42_000_000_000,
+                    amount: TransferAmount::Some(42_000_000_000),
+                    to: to_pubkey,
+                    from: 0,
+                    sign_only: false,
+                    no_wait: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test Transfer ALL
+        let test_transfer = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "transfer", &to_string, "ALL"]);
+        assert_eq!(
+            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    amount: TransferAmount::All,
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
@@ -3783,7 +3838,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42_000_000_000,
+                    amount: TransferAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
@@ -3813,7 +3868,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42_000_000_000,
+                    amount: TransferAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: true,
@@ -3848,7 +3903,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42_000_000_000,
+                    amount: TransferAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
@@ -3887,7 +3942,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    lamports: 42_000_000_000,
+                    amount: TransferAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,

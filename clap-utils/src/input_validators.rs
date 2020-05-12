@@ -147,6 +147,17 @@ pub fn is_amount(amount: String) -> Result<(), String> {
     }
 }
 
+pub fn is_amount_or_all(amount: String) -> Result<(), String> {
+    if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() || amount == "ALL" {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unable to parse input amount as integer or float, provided: {}",
+            amount
+        ))
+    }
+}
+
 pub fn is_rfc3339_datetime(value: String) -> Result<(), String> {
     DateTime::parse_from_rfc3339(&value)
         .map(|_| ())

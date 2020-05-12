@@ -1,6 +1,6 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
-    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, TransferAmount},
     cli_output::OutputFormat,
     nonce,
     offline::{
@@ -311,7 +311,7 @@ fn test_create_account_with_seed() {
     authority_config.command = CliCommand::ClusterVersion;
     process_command(&authority_config).unwrap_err();
     authority_config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: TransferAmount::Some(10),
         to: to_address,
         from: 0,
         sign_only: true,
@@ -333,7 +333,7 @@ fn test_create_account_with_seed() {
         format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     submit_config.signers = vec![&authority_presigner];
     submit_config.command = CliCommand::Transfer {
-        lamports: 10,
+        amount: TransferAmount::Some(10),
         to: to_address,
         from: 0,
         sign_only: false,
