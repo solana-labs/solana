@@ -3,22 +3,22 @@ name = "solana-stake-accounts"
 description = "Blockchain, Rebuilt for Scale"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
-version = "1.1.11"
+version = "1.1.12"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-solana-clap-utils = { path = "../clap-utils", version = "1.1.11" }
-solana-cli-config = { path = "../cli-config", version = "1.1.11" }
-solana-client = { path = "../client", version = "1.1.11" }
-solana-remote-wallet = { path = "../remote-wallet", version = "1.1.11" }
-solana-sdk = { path = "../sdk", version = "1.1.11" }
-solana-stake-program = { path = "../programs/stake", version = "1.1.11" }
+solana-clap-utils = { path = "../clap-utils", version = "1.1.12" }
+solana-cli-config = { path = "../cli-config", version = "1.1.12" }
+solana-client = { path = "../client", version = "1.1.12" }
+solana-remote-wallet = { path = "../remote-wallet", version = "1.1.12" }
+solana-sdk = { path = "../sdk", version = "1.1.12" }
+solana-stake-program = { path = "../programs/stake", version = "1.1.12" }
 
 [dev-dependencies]
-solana-runtime = { path = "../runtime", version = "1.1.11" }
+solana-runtime = { path = "../runtime", version = "1.1.12" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
