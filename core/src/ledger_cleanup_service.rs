@@ -3,7 +3,6 @@
 use solana_ledger::blockstore::Blockstore;
 use solana_ledger::blockstore_db::Result as BlockstoreResult;
 use solana_measure::measure::Measure;
-use solana_metrics::datapoint_debug;
 use solana_sdk::clock::Slot;
 use std::string::ToString;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -78,7 +77,7 @@ impl LedgerCleanupService {
         blockstore: &Arc<Blockstore>,
         root: Slot,
         max_ledger_shreds: u64,
-    ) -> (u64, Slot, Slot) {
+    ) -> (u64, Slot, Slot, u64) {
         let mut shreds = Vec::new();
         let mut iterate_time = Measure::start("iterate_time");
         let mut total_shreds = 0;
@@ -104,7 +103,7 @@ impl LedgerCleanupService {
             iterate_time
         );
         if (total_shreds as u64) < max_ledger_shreds {
-            return (0, 0, 0);
+            return (0, 0, 0, total_shreds);
         }
         let mut cur_shreds = 0;
         let mut lowest_slot_to_clean = shreds[0].0;
@@ -116,7 +115,7 @@ impl LedgerCleanupService {
             }
         }
 
-        (cur_shreds, lowest_slot_to_clean, first_slot)
+        (cur_shreds, lowest_slot_to_clean, first_slot, total_shreds)
     }
 
     pub fn cleanup_ledger(
@@ -140,7 +139,7 @@ impl LedgerCleanupService {
             );
             *last_purge_slot = root;
 
-            let (num_shreds_to_clean, lowest_slot_to_clean, mut first_slot) =
+            let (num_shreds_to_clean, lowest_slot_to_clean, mut first_slot, total_shreds) =
                 Self::find_slots_to_clean(blockstore, root, max_ledger_shreds);
 
             if num_shreds_to_clean > 0 {
@@ -174,19 +173,24 @@ impl LedgerCleanupService {
 
             let disk_utilization_post = blockstore.storage_size();
 
-            Self::report_disk_metrics(disk_utilization_pre, disk_utilization_post);
+            Self::report_disk_metrics(disk_utilization_pre, disk_utilization_post, total_shreds);
         }
 
         Ok(())
     }
 
-    fn report_disk_metrics(pre: BlockstoreResult<u64>, post: BlockstoreResult<u64>) {
+    fn report_disk_metrics(
+        pre: BlockstoreResult<u64>,
+        post: BlockstoreResult<u64>,
+        total_shreds: u64,
+    ) {
         if let (Ok(pre), Ok(post)) = (pre, post) {
-            datapoint_debug!(
+            datapoint_info!(
                 "ledger_disk_utilization",
                 ("disk_utilization_pre", pre as i64, i64),
                 ("disk_utilization_post", post as i64, i64),
-                ("disk_utilization_delta", (pre as i64 - post as i64), i64)
+                ("disk_utilization_delta", (pre as i64 - post as i64), i64),
+                ("total_shreds", total_shreds, i64),
             );
         }
     }
