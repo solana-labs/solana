@@ -676,7 +676,7 @@ mod tests {
             amount: 1.0,
             new_stake_account_address: None,
             finalized_date: None,
-            transaction: Transaction::new_unsigned_instructions(vec![]),
+            transaction: Transaction::new_unsigned_instructions(&[]),
         }];
         apply_previous_transactions(&mut allocations, &transaction_infos);
         assert_eq!(allocations.len(), 1);
