@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import {
   useTransactions,
   TransactionStatus,
-  Source,
   FetchStatus,
   useFetchTransactionStatus
 } from "../providers/transactions";
@@ -33,7 +32,7 @@ function TransactionsCard() {
       return;
     }
 
-    fetchTransaction(signature, Source.Input);
+    fetchTransaction(signature);
     const inputEl = signatureInput.current;
     if (inputEl) {
       inputEl.value = "";
