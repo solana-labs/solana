@@ -20,11 +20,7 @@ use solana_sdk::{
 use solana_transaction_status::TransactionStatus;
 
 pub trait Client {
-    fn async_send_transaction1(&self, transaction: Transaction) -> Result<Signature>;
-
-    // TODO: Work to delete this
-    fn send_and_confirm_transaction1(&self, transaction: Transaction) -> Result<Signature>;
-
+    fn send_transaction1(&self, transaction: Transaction) -> Result<Signature>;
     fn get_signature_statuses1(
         &self,
         signatures: &[Signature],
@@ -35,14 +31,8 @@ pub trait Client {
 }
 
 impl Client for RpcClient {
-    fn async_send_transaction1(&self, transaction: Transaction) -> Result<Signature> {
+    fn send_transaction1(&self, transaction: Transaction) -> Result<Signature> {
         self.send_transaction(&transaction)
-            .map_err(|e| TransportError::Custom(e.to_string()))
-    }
-
-    fn send_and_confirm_transaction1(&self, mut transaction: Transaction) -> Result<Signature> {
-        let signers: Vec<&dyn Signer> = vec![]; // Don't allow resigning
-        self.send_and_confirm_transaction_with_spinner(&mut transaction, &signers)
             .map_err(|e| TransportError::Custom(e.to_string()))
     }
 
@@ -73,14 +63,8 @@ impl Client for RpcClient {
 }
 
 impl Client for BankClient {
-    fn async_send_transaction1(&self, transaction: Transaction) -> Result<Signature> {
+    fn send_transaction1(&self, transaction: Transaction) -> Result<Signature> {
         self.async_send_transaction(transaction)
-    }
-
-    fn send_and_confirm_transaction1(&self, transaction: Transaction) -> Result<Signature> {
-        let signature = self.async_send_transaction1(transaction)?;
-        self.poll_for_signature(&signature)?;
-        Ok(signature)
     }
 
     fn get_signature_statuses1(
@@ -115,34 +99,45 @@ impl Client for BankClient {
     }
 }
 
-pub struct ThinClient<C: Client>(C);
+pub struct ThinClient<C: Client> {
+    client: C,
+    dry_run: bool,
+}
 
 impl<C: Client> ThinClient<C> {
-    pub fn new(client: C) -> Self {
-        Self(client)
+    pub fn new(client: C, dry_run: bool) -> Self {
+        Self { client, dry_run }
     }
 
-    pub fn async_send_transaction(&self, transaction: Transaction) -> Result<Signature> {
-        self.0.async_send_transaction1(transaction)
+    pub fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
+        if self.dry_run {
+            return Ok(Signature::default());
+        }
+        self.client.send_transaction1(transaction)
+    }
+
+    pub fn poll_for_confirmation(&self, signature: &Signature) -> Result<()> {
+        while self.get_signature_statuses(&[*signature])?[0].is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        Ok(())
     }
 
     pub fn get_signature_statuses(
         &self,
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>> {
-        self.0.get_signature_statuses1(signatures)
+        self.client.get_signature_statuses1(signatures)
     }
 
-    pub fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
-        // TODO: implement this in terms of ThinClient methods and then remove
-        // send_and_confirm_transaction1 from from the Client trait.
-        self.0.send_and_confirm_transaction1(transaction)
-    }
-
-    pub fn send_message<S: Signers>(&self, message: Message, signers: &S) -> Result<Signature> {
+    pub fn send_message<S: Signers>(&self, message: Message, signers: &S) -> Result<Transaction> {
+        if self.dry_run {
+            return Ok(Transaction::new_unsigned(message));
+        }
         let (blockhash, _fee_caluclator) = self.get_recent_blockhash()?;
         let transaction = Transaction::new(signers, message, blockhash);
-        self.send_transaction(transaction)
+        self.send_transaction(transaction.clone())?;
+        Ok(transaction)
     }
 
     pub fn transfer<S: Signer>(
@@ -150,7 +145,7 @@ impl<C: Client> ThinClient<C> {
         lamports: u64,
         sender_keypair: &S,
         to_pubkey: &Pubkey,
-    ) -> Result<Signature> {
+    ) -> Result<Transaction> {
         let create_instruction =
             system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
         let message = Message::new(&[create_instruction]);
@@ -158,15 +153,15 @@ impl<C: Client> ThinClient<C> {
     }
 
     pub fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
-        self.0.get_recent_blockhash1()
+        self.client.get_recent_blockhash1()
     }
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
-        self.0.get_balance1(pubkey)
+        self.client.get_balance1(pubkey)
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
-        self.0.get_account1(pubkey)
+        self.client.get_account1(pubkey)
     }
 
     pub fn get_recent_blockhashes(&self) -> Result<Vec<Hash>> {

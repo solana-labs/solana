@@ -36,12 +36,12 @@ where
             SubCommand::with_name("distribute-tokens")
                 .about("Distribute tokens")
                 .arg(
-                    Arg::with_name("transactions_db")
+                    Arg::with_name("transaction_db")
+                        .long("transaction-db")
                         .required(true)
-                        .index(1)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Transactions database file"),
+                        .help("Transaction database file"),
                 )
                 .arg(
                     Arg::with_name("from_bids")
@@ -69,13 +69,9 @@ where
                         .help("Do not execute any transfers"),
                 )
                 .arg(
-                    Arg::with_name("no_wait")
-                        .long("no-wait")
-                        .help("Don't wait for transaction confirmations"),
-                )
-                .arg(
                     Arg::with_name("sender_keypair")
                         .long("from")
+                        .required(true)
                         .takes_value(true)
                         .value_name("SENDING_KEYPAIR")
                         .validator(is_valid_signer)
@@ -84,27 +80,23 @@ where
                 .arg(
                     Arg::with_name("fee_payer")
                         .long("fee-payer")
+                        .required(true)
                         .takes_value(true)
                         .value_name("KEYPAIR")
                         .validator(is_valid_signer)
                         .help("Fee payer"),
-                )
-                .arg(
-                    Arg::with_name("force")
-                        .long("force")
-                        .help("Do not block transfers is recipients have a non-zero balance"),
                 ),
         )
         .subcommand(
             SubCommand::with_name("distribute-stake")
                 .about("Distribute stake accounts")
                 .arg(
-                    Arg::with_name("transactions_db")
+                    Arg::with_name("transaction_db")
+                        .long("transaction-db")
                         .required(true)
-                        .index(1)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Transactions database file"),
+                        .help("Transaction database file"),
                 )
                 .arg(
                     Arg::with_name("input_csv")
@@ -120,13 +112,9 @@ where
                         .help("Do not execute any transfers"),
                 )
                 .arg(
-                    Arg::with_name("no_wait")
-                        .long("no-wait")
-                        .help("Don't wait for transaction confirmations"),
-                )
-                .arg(
                     Arg::with_name("sender_keypair")
                         .long("from")
+                        .required(true)
                         .takes_value(true)
                         .value_name("SENDING_KEYPAIR")
                         .validator(is_valid_signer)
@@ -152,6 +140,7 @@ where
                 .arg(
                     Arg::with_name("stake_authority")
                         .long("stake-authority")
+                        .required(true)
                         .takes_value(true)
                         .value_name("KEYPAIR")
                         .validator(is_valid_signer)
@@ -160,6 +149,7 @@ where
                 .arg(
                     Arg::with_name("withdraw_authority")
                         .long("withdraw-authority")
+                        .required(true)
                         .takes_value(true)
                         .value_name("KEYPAIR")
                         .validator(is_valid_signer)
@@ -168,6 +158,7 @@ where
                 .arg(
                     Arg::with_name("fee_payer")
                         .long("fee-payer")
+                        .required(true)
                         .takes_value(true)
                         .value_name("KEYPAIR")
                         .validator(is_valid_signer)
@@ -202,9 +193,9 @@ where
             SubCommand::with_name("transaction-log")
                 .about("Print the database to a CSV file")
                 .arg(
-                    Arg::with_name("transactions_db")
+                    Arg::with_name("transaction_db")
+                        .long("transaction-db")
                         .required(true)
-                        .index(1)
                         .takes_value(true)
                         .value_name("FILE")
                         .help("Transactions database file"),
@@ -225,13 +216,11 @@ fn parse_distribute_tokens_args(matches: &ArgMatches<'_>) -> DistributeTokensArg
     DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: matches.is_present("from_bids"),
-        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
+        transaction_db: value_t_or_exit!(matches, "transaction_db", String),
         dollars_per_sol: value_t!(matches, "dollars_per_sol", f64).ok(),
         dry_run: matches.is_present("dry_run"),
-        no_wait: matches.is_present("no_wait"),
-        sender_keypair: value_t!(matches, "sender_keypair", String).ok(),
-        fee_payer: value_t!(matches, "fee_payer", String).ok(),
-        force: matches.is_present("force"),
+        sender_keypair: value_t_or_exit!(matches, "sender_keypair", String),
+        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         stake_args: None,
     }
 }
@@ -240,19 +229,17 @@ fn parse_distribute_stake_args(matches: &ArgMatches<'_>) -> DistributeTokensArgs
     let stake_args = StakeArgs {
         stake_account_address: value_t_or_exit!(matches, "stake_account_address", String),
         sol_for_fees: value_t_or_exit!(matches, "sol_for_fees", f64),
-        stake_authority: value_t!(matches, "stake_authority", String).ok(),
-        withdraw_authority: value_t!(matches, "withdraw_authority", String).ok(),
+        stake_authority: value_t_or_exit!(matches, "stake_authority", String),
+        withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),
     };
     DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
         from_bids: false,
-        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
+        transaction_db: value_t_or_exit!(matches, "transaction_db", String),
         dollars_per_sol: None,
         dry_run: matches.is_present("dry_run"),
-        no_wait: matches.is_present("no_wait"),
-        sender_keypair: value_t!(matches, "sender_keypair", String).ok(),
-        fee_payer: value_t!(matches, "fee_payer", String).ok(),
-        force: false,
+        sender_keypair: value_t_or_exit!(matches, "sender_keypair", String),
+        fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         stake_args: Some(stake_args),
     }
 }
@@ -267,7 +254,7 @@ fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
 
 fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
     TransactionLogArgs {
-        transactions_db: value_t_or_exit!(matches, "transactions_db", String),
+        transaction_db: value_t_or_exit!(matches, "transaction_db", String),
         output_path: value_t_or_exit!(matches, "output_path", String),
     }
 }

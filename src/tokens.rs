@@ -21,7 +21,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::TransactionStatus;
-use std::{cmp, io, path::Path, process, thread::sleep, time::Duration};
+use std::{cmp, io, path::Path, thread::sleep, time::Duration};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
@@ -137,88 +137,78 @@ fn distribute_tokens<T: Client>(
     for allocation in allocations {
         let new_stake_account_keypair = Keypair::new();
         let new_stake_account_address = new_stake_account_keypair.pubkey();
-        let signers = if args.dry_run {
-            vec![]
-        } else {
-            let mut signers = vec![
-                &**args.fee_payer.as_ref().unwrap(),
-                &**args.sender_keypair.as_ref().unwrap(),
-            ];
-            if let Some(stake_args) = &args.stake_args {
-                signers.push(&**stake_args.stake_authority.as_ref().unwrap());
-                signers.push(&**stake_args.withdraw_authority.as_ref().unwrap());
-                signers.push(&new_stake_account_keypair);
-            }
-            unique_signers(signers)
-        };
+
+        let mut signers = vec![&*args.fee_payer, &*args.sender_keypair];
+        if let Some(stake_args) = &args.stake_args {
+            signers.push(&*stake_args.stake_authority);
+            signers.push(&*stake_args.withdraw_authority);
+            signers.push(&new_stake_account_keypair);
+        }
+        let signers = unique_signers(signers);
 
         println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
-        let result = if args.dry_run {
-            Ok(Signature::default())
+        let instructions = if let Some(stake_args) = &args.stake_args {
+            let sol_for_fees = stake_args.sol_for_fees;
+            let sender_pubkey = args.sender_keypair.pubkey();
+            let stake_authority = stake_args.stake_authority.pubkey();
+            let withdraw_authority = stake_args.withdraw_authority.pubkey();
+
+            let mut instructions = stake_instruction::split(
+                &stake_args.stake_account_address,
+                &stake_authority,
+                sol_to_lamports(allocation.amount - sol_for_fees),
+                &new_stake_account_address,
+            );
+
+            let recipient = allocation.recipient.parse().unwrap();
+
+            // Make the recipient the new stake authority
+            instructions.push(stake_instruction::authorize(
+                &new_stake_account_address,
+                &stake_authority,
+                &recipient,
+                StakeAuthorize::Staker,
+            ));
+
+            // Make the recipient the new withdraw authority
+            instructions.push(stake_instruction::authorize(
+                &new_stake_account_address,
+                &withdraw_authority,
+                &recipient,
+                StakeAuthorize::Withdrawer,
+            ));
+
+            instructions.push(system_instruction::transfer(
+                &sender_pubkey,
+                &recipient,
+                sol_to_lamports(sol_for_fees),
+            ));
+
+            instructions
         } else {
-            let instructions = if let Some(stake_args) = &args.stake_args {
-                let sol_for_fees = stake_args.sol_for_fees;
-                let sender_pubkey = args.sender_keypair.as_ref().unwrap().pubkey();
-                let stake_authority = stake_args.stake_authority.as_ref().unwrap().pubkey();
-                let withdraw_authority = stake_args.withdraw_authority.as_ref().unwrap().pubkey();
-
-                let mut instructions = stake_instruction::split(
-                    &stake_args.stake_account_address,
-                    &stake_authority,
-                    sol_to_lamports(allocation.amount - sol_for_fees),
-                    &new_stake_account_address,
-                );
-
-                let recipient = allocation.recipient.parse().unwrap();
-
-                // Make the recipient the new stake authority
-                instructions.push(stake_instruction::authorize(
-                    &new_stake_account_address,
-                    &stake_authority,
-                    &recipient,
-                    StakeAuthorize::Staker,
-                ));
-
-                // Make the recipient the new withdraw authority
-                instructions.push(stake_instruction::authorize(
-                    &new_stake_account_address,
-                    &withdraw_authority,
-                    &recipient,
-                    StakeAuthorize::Withdrawer,
-                ));
-
-                instructions.push(system_instruction::transfer(
-                    &sender_pubkey,
-                    &recipient,
-                    sol_to_lamports(sol_for_fees),
-                ));
-
-                instructions
-            } else {
-                let from = args.sender_keypair.as_ref().unwrap().pubkey();
-                let to = allocation.recipient.parse().unwrap();
-                let lamports = sol_to_lamports(allocation.amount);
-                let instruction = system_instruction::transfer(&from, &to, lamports);
-                vec![instruction]
-            };
-
-            let fee_payer_pubkey = args.fee_payer.as_ref().unwrap().pubkey();
-            let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
-            let (blockhash, _fee_caluclator) = client.get_recent_blockhash()?;
-            let transaction = Transaction::new(&signers, message, blockhash);
-            set_transaction_info(
-                db,
-                &allocation,
-                &transaction,
-                Some(&new_stake_account_address),
-                false,
-            )?;
-
-            client.async_send_transaction(transaction)
+            let from = args.sender_keypair.pubkey();
+            let to = allocation.recipient.parse().unwrap();
+            let lamports = sol_to_lamports(allocation.amount);
+            let instruction = system_instruction::transfer(&from, &to, lamports);
+            vec![instruction]
         };
-        if let Err(e) = result {
-            eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
-        }
+
+        let fee_payer_pubkey = args.fee_payer.pubkey();
+        let message = Message::new_with_payer(&instructions, Some(&fee_payer_pubkey));
+        match client.send_message(message, &signers) {
+            Ok(transaction) => {
+                set_transaction_info(
+                    db,
+                    &allocation,
+                    &transaction,
+                    Some(&new_stake_account_address),
+                    false,
+                )?;
+            }
+            Err(e) => {
+                eprintln!("Error sending tokens to {}: {}", allocation.recipient, e);
+            }
+        };
     }
     Ok(())
 }
@@ -327,10 +317,10 @@ pub fn process_distribute_tokens<T: Client>(
         );
     }
 
-    let mut db = open_db(&args.transactions_db, args.dry_run)?;
+    let mut db = open_db(&args.transaction_db, args.dry_run)?;
 
     // Start by finalizing any transactions from the previous run.
-    let confirmations = finalize_transactions(client, &mut db, args.dry_run, args.no_wait)?;
+    let confirmations = finalize_transactions(client, &mut db)?;
 
     let transaction_infos = read_transaction_infos(&db);
     apply_previous_transactions(&mut allocations, &transaction_infos);
@@ -338,27 +328,6 @@ pub fn process_distribute_tokens<T: Client>(
     if allocations.is_empty() {
         eprintln!("No work to do");
         return Ok(confirmations);
-    }
-
-    // Sanity check: the recipient should not have tokens yet. If they do, it
-    // is probably because:
-    //  1. The signature couldn't be found in a previous run, though the transaction was
-    //     successful. If so, manually add a row to the transaction log.
-    //  2. The recipient already has tokens. If so, update this code to include a `--force` flag.
-    //  3. The recipient correctly got tokens in a previous run, and then later registered the same
-    //     address for another bid. If so, update this code to check for that case.
-    for allocation in &allocations {
-        let address = allocation.recipient.parse().unwrap();
-        let balance = client.get_balance(&address).unwrap();
-        if args.stake_args.is_none() && !args.force && balance != 0 {
-            eprintln!(
-                "Error: Non-zero balance {}, refusing to send {} to {}",
-                lamports_to_sol(balance),
-                allocation.amount,
-                allocation.recipient,
-            );
-            process::exit(1);
-        }
     }
 
     println!(
@@ -407,25 +376,19 @@ pub fn process_distribute_tokens<T: Client>(
 
     distribute_tokens(client, &mut db, &allocations, args)?;
 
-    finalize_transactions(client, &mut db, args.dry_run, args.no_wait)
+    let opt_confirmations = finalize_transactions(client, &mut db)?;
+    Ok(opt_confirmations)
 }
 
 fn finalize_transactions<T: Client>(
     client: &ThinClient<T>,
     db: &mut PickleDb,
-    dry_run: bool,
-    no_wait: bool,
 ) -> Result<Option<usize>, Error> {
-    let (mut opt_confirmations, mut unconfirmed_transactions) =
-        update_finalized_transactions(client, db)?;
-
-    if no_wait {
-        return Ok(opt_confirmations);
-    }
+    let mut opt_confirmations = update_finalized_transactions(client, db)?;
 
     let progress_bar = new_spinner_progress_bar();
 
-    while opt_confirmations.is_some() || !unconfirmed_transactions.is_empty() {
+    while opt_confirmations.is_some() {
         if let Some(confirmations) = opt_confirmations {
             progress_bar.set_message(&format!(
                 "[{}/{}] Finalizing transactions",
@@ -433,17 +396,10 @@ fn finalize_transactions<T: Client>(
             ));
         }
 
-        if !dry_run {
-            for transaction in unconfirmed_transactions {
-                client.async_send_transaction(transaction)?;
-            }
-        }
-
         // Sleep for about 1 slot
         sleep(Duration::from_millis(500));
-        let (opt_conf, unconfirmed) = update_finalized_transactions(client, db)?;
+        let opt_conf = update_finalized_transactions(client, db)?;
         opt_confirmations = opt_conf;
-        unconfirmed_transactions = unconfirmed;
     }
 
     Ok(opt_confirmations)
@@ -467,8 +423,8 @@ fn update_finalized_transaction(
             return Ok(None);
         }
 
-        // Return an error to signal the option resend the transaction.
-        return Err(Error::SignatureNotFound);
+        // Return zero to signal the transaction may still be in flight.
+        return Ok(Some(0));
     }
     let transaction_status = opt_transaction_status.unwrap();
 
@@ -498,11 +454,10 @@ fn update_finalized_transaction(
 
 // Update the finalized bit on any transactions that are now rooted
 // Return the lowest number of confirmations on the unfinalized transactions or None if all are finalized.
-// Also return the unconfirmed transactions with valid blockhashes.
 fn update_finalized_transactions<T: Client>(
     client: &ThinClient<T>,
     db: &mut PickleDb,
-) -> Result<(Option<usize>, Vec<Transaction>), Error> {
+) -> Result<Option<usize>, Error> {
     let transaction_infos = read_transaction_infos(db);
     let unconfirmed_transactions: Vec<_> = transaction_infos
         .iter()
@@ -517,12 +472,12 @@ fn update_finalized_transactions<T: Client>(
     let unconfirmed_signatures = unconfirmed_transactions
         .iter()
         .map(|tx| tx.signatures[0])
+        .filter(|sig| *sig != Signature::default()) // Filter out dry-run signatures
         .collect_vec();
     let transaction_statuses = client.get_signature_statuses(&unconfirmed_signatures)?;
     let recent_blockhashes = client.get_recent_blockhashes()?;
 
     let mut confirmations = None;
-    let mut mia_transactions = vec![];
     for (transaction, opt_transaction_status) in unconfirmed_transactions
         .into_iter()
         .zip(transaction_statuses.into_iter())
@@ -537,15 +492,12 @@ fn update_finalized_transactions<T: Client>(
             Ok(Some(confs)) => {
                 confirmations = Some(cmp::min(confs, confirmations.unwrap_or(usize::MAX)));
             }
-            Err(Error::SignatureNotFound) => {
-                mia_transactions.push(transaction.clone());
-            }
             result => {
                 result?;
             }
         }
     }
-    Ok((confirmations, mia_transactions))
+    Ok(confirmations)
 }
 
 pub fn process_balances<T: Client>(
@@ -582,7 +534,7 @@ pub fn process_balances<T: Client>(
 }
 
 pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
-    let db = open_db(&args.transactions_db, true)?;
+    let db = open_db(&args.transaction_db, true)?;
     write_transaction_log(&db, &args.output_path)?;
     Ok(())
 }
@@ -590,10 +542,13 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
 pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient::new(client);
+    let thin_client = ThinClient::new(client, false);
     let fee_payer = Keypair::new();
-    thin_client
+    let transaction = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
+        .unwrap();
+    thin_client
+        .poll_for_confirmation(&transaction.signatures[0])
         .unwrap();
 
     let alice_pubkey = Pubkey::new_rand();
@@ -608,7 +563,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
     wtr.flush().unwrap();
 
     let dir = tempdir().unwrap();
-    let transactions_db = dir
+    let transaction_db = dir
         .path()
         .join("transactions.db")
         .to_str()
@@ -616,21 +571,19 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
         .to_string();
 
     let args: DistributeTokensArgs<Pubkey, Box<dyn Signer>> = DistributeTokensArgs {
-        sender_keypair: Some(Box::new(sender_keypair)),
-        fee_payer: Some(Box::new(fee_payer)),
+        sender_keypair: Box::new(sender_keypair),
+        fee_payer: Box::new(fee_payer),
         dry_run: false,
-        no_wait: false,
         input_csv,
         from_bids: false,
-        transactions_db: transactions_db.clone(),
+        transaction_db: transaction_db.clone(),
         dollars_per_sol: None,
-        force: false,
         stake_args: None,
     };
     let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     let expected_amount = sol_to_lamports(allocation.amount);
@@ -646,7 +599,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
 
     // Now, run it again, and check there's no double-spend.
     process_distribute_tokens(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     let expected_amount = sol_to_lamports(allocation.amount);
@@ -662,10 +615,13 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
 }
 
 pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient::new(client);
+    let thin_client = ThinClient::new(client, false);
     let fee_payer = Keypair::new();
-    thin_client
+    let transaction = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
+        .unwrap();
+    thin_client
+        .poll_for_confirmation(&transaction.signatures[0])
         .unwrap();
 
     let stake_account_keypair = Keypair::new();
@@ -701,7 +657,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     wtr.flush().unwrap();
 
     let dir = tempdir().unwrap();
-    let transactions_db = dir
+    let transaction_db = dir
         .path()
         .join("transactions.db")
         .to_str()
@@ -710,26 +666,24 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
 
     let stake_args: StakeArgs<Pubkey, Box<dyn Signer>> = StakeArgs {
         stake_account_address,
-        stake_authority: Some(Box::new(stake_authority)),
-        withdraw_authority: Some(Box::new(withdraw_authority)),
+        stake_authority: Box::new(stake_authority),
+        withdraw_authority: Box::new(withdraw_authority),
         sol_for_fees: 1.0,
     };
     let args: DistributeTokensArgs<Pubkey, Box<dyn Signer>> = DistributeTokensArgs {
-        fee_payer: Some(Box::new(fee_payer)),
+        fee_payer: Box::new(fee_payer),
         dry_run: false,
-        no_wait: false,
         input_csv,
-        transactions_db: transactions_db.clone(),
+        transaction_db: transaction_db.clone(),
         stake_args: Some(stake_args),
-        force: false,
         from_bids: false,
-        sender_keypair: Some(Box::new(sender_keypair)),
+        sender_keypair: Box::new(sender_keypair),
         dollars_per_sol: None,
     };
     let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     let expected_amount = sol_to_lamports(allocation.amount);
@@ -750,7 +704,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
 
     // Now, run it again, and check there's no double-spend.
     process_distribute_tokens(&thin_client, &args).unwrap();
-    let transaction_infos = read_transaction_infos(&open_db(&transactions_db, true).unwrap());
+    let transaction_infos = read_transaction_infos(&open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     let expected_amount = sol_to_lamports(allocation.amount);
@@ -870,8 +824,8 @@ mod tests {
         db.set(&signature.to_string(), &transaction_info).unwrap();
         assert!(matches!(
             update_finalized_transaction(&mut db, &signature, None, &blockhash, &[blockhash])
-                .unwrap_err(),
-            Error::SignatureNotFound
+                .unwrap(),
+            Some(0)
         ));
 
         // Unchanged
