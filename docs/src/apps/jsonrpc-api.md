@@ -642,7 +642,9 @@ Returns the 20 largest accounts, by lamport balance
 
 #### Parameters:
 
-* `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+* `<object>` - (optional) Configuration object containing the following optional fields:
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  * (optional) `filter: <string>` - filter results by account type; currently supported: `circulating|nonCirculating`
 
 #### Results:
 
