@@ -28,6 +28,7 @@ use solana_ledger::{
 use solana_perf::recycler::enable_recycler_warming;
 use solana_sdk::{
     clock::Slot,
+    commitment_config::CommitmentConfig,
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -282,8 +283,10 @@ fn check_vote_account(
     authorized_voter_pubkeys: &[Pubkey],
 ) -> Result<(), String> {
     let vote_account = rpc_client
-        .get_account(vote_account_address)
-        .map_err(|err| format!("vote account not found: {}", err.to_string()))?;
+        .get_account_with_commitment(vote_account_address, CommitmentConfig::root())
+        .map_err(|err| format!("failed to fetch vote account: {}", err.to_string()))?
+        .value
+        .ok_or_else(|| format!("vote account does not exist: {}", vote_account_address))?;
 
     if vote_account.owner != solana_vote_program::id() {
         return Err(format!(
@@ -293,8 +296,10 @@ fn check_vote_account(
     }
 
     let identity_account = rpc_client
-        .get_account(identity_pubkey)
-        .map_err(|err| format!("Identity account not found: {}", err.to_string()))?;
+        .get_account_with_commitment(identity_pubkey, CommitmentConfig::root())
+        .map_err(|err| format!("failed to fetch identity account: {}", err.to_string()))?
+        .value
+        .ok_or_else(|| format!("identity account does not exist: {}", identity_pubkey))?;
 
     let vote_state = solana_vote_program::vote_state::VoteState::from(&vote_account);
     if let Some(vote_state) = vote_state {
@@ -1181,7 +1186,7 @@ pub fn main() {
                 })
                 .and_then(|_| {
                     if let Some(snapshot_hash) = snapshot_hash {
-                        rpc_client.get_slot()
+                        rpc_client.get_slot_with_commitment(CommitmentConfig::root())
                             .map_err(|err| format!("Failed to get RPC node slot: {}", err))
                             .and_then(|slot| {
                                info!("RPC node root slot: {}", slot);
