@@ -1,5 +1,6 @@
 use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
 use crate::thin_client::{Client, ThinClient};
+use chrono::prelude::*;
 use console::style;
 use csv::{ReaderBuilder, Trim};
 use indexmap::IndexMap;
@@ -21,7 +22,13 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::TransactionStatus;
-use std::{cmp, io, path::Path, thread::sleep, time::Duration};
+use std::{
+    cmp::{self, Ordering},
+    io,
+    path::Path,
+    thread::sleep,
+    time::Duration,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Bid {
@@ -40,7 +47,7 @@ struct TransactionInfo {
     recipient: Pubkey,
     amount: f64,
     new_stake_account_address: Option<Pubkey>,
-    finalized: bool,
+    finalized_date: Option<DateTime<Utc>>,
     transaction: Transaction,
 }
 
@@ -52,7 +59,7 @@ impl Default for TransactionInfo {
             recipient: Pubkey::default(),
             amount: 0.0,
             new_stake_account_address: None,
-            finalized: false,
+            finalized_date: None,
             transaction,
         }
     }
@@ -63,7 +70,7 @@ struct SignedTransactionInfo {
     recipient: String,
     amount: f64,
     new_stake_account_address: String,
-    finalized: bool,
+    finalized_date: Option<DateTime<Utc>>,
     signature: String,
 }
 
@@ -226,9 +233,24 @@ fn open_db(path: &str, dry_run: bool) -> Result<PickleDb, pickledb::error::Error
     }
 }
 
+fn compare_transaction_infos(a: &TransactionInfo, b: &TransactionInfo) -> Ordering {
+    let ordering = match (a.finalized_date, b.finalized_date) {
+        (Some(a), Some(b)) => a.cmp(&b),
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less, // Future finalized date will be greater
+        _ => Ordering::Equal,
+    };
+    if ordering == Ordering::Equal {
+        return a.recipient.to_string().cmp(&b.recipient.to_string());
+    }
+    ordering
+}
+
 pub fn write_transaction_log<P: AsRef<Path>>(db: &PickleDb, path: &P) -> Result<(), io::Error> {
     let mut wtr = csv::WriterBuilder::new().from_path(path).unwrap();
-    for info in read_transaction_infos(db) {
+    let mut transaction_infos = read_transaction_infos(db);
+    transaction_infos.sort_by(compare_transaction_infos);
+    for info in transaction_infos {
         let signed_info = SignedTransactionInfo {
             recipient: info.recipient.to_string(),
             amount: info.amount,
@@ -236,7 +258,7 @@ pub fn write_transaction_log<P: AsRef<Path>>(db: &PickleDb, path: &P) -> Result<
                 .new_stake_account_address
                 .map(|x| x.to_string())
                 .unwrap_or_else(|| "".to_string()),
-            finalized: info.finalized,
+            finalized_date: info.finalized_date,
             signature: info.transaction.signatures[0].to_string(),
         };
         wtr.serialize(&signed_info)?;
@@ -257,11 +279,12 @@ fn set_transaction_info(
     new_stake_account_address: Option<&Pubkey>,
     finalized: bool,
 ) -> Result<(), pickledb::error::Error> {
+    let finalized_date = if finalized { Some(Utc::now()) } else { None };
     let transaction_info = TransactionInfo {
         recipient: allocation.recipient.parse().unwrap(),
         amount: allocation.amount,
         new_stake_account_address: new_stake_account_address.cloned(),
-        finalized,
+        finalized_date,
         transaction: transaction.clone(),
     };
     let signature = transaction.signatures[0];
@@ -447,7 +470,7 @@ fn update_finalized_transaction(
 
     // Transaction is rooted. Set finalized in the database.
     let mut transaction_info = db.get::<TransactionInfo>(&signature.to_string()).unwrap();
-    transaction_info.finalized = true;
+    transaction_info.finalized_date = Some(Utc::now());
     db.set(&signature.to_string(), &transaction_info)?;
     Ok(None)
 }
@@ -462,7 +485,7 @@ fn update_finalized_transactions<T: Client>(
     let unconfirmed_transactions: Vec<_> = transaction_infos
         .iter()
         .filter_map(|info| {
-            if info.finalized {
+            if info.finalized_date.is_some() {
                 None
             } else {
                 Some(&info.transaction)
@@ -802,7 +825,7 @@ mod tests {
             recipient: bob,
             amount: 1.0,
             new_stake_account_address: None,
-            finalized: true,
+            finalized_date: Some(Utc::now()),
             transaction: Transaction::new_unsigned_instructions(vec![]),
         }];
         apply_previous_transactions(&mut allocations, &transaction_infos);
@@ -917,7 +940,7 @@ mod tests {
             PickleDb::new_yaml(NamedTempFile::new().unwrap(), PickleDbDumpPolicy::NeverDump);
         let signature = Signature::default();
         let blockhash = Hash::default();
-        let mut transaction_info = TransactionInfo::default();
+        let transaction_info = TransactionInfo::default();
         db.set(&signature.to_string(), &transaction_info).unwrap();
         let transaction_status = TransactionStatus {
             slot: 0,
@@ -937,11 +960,37 @@ mod tests {
             None
         );
 
-        transaction_info.finalized = true;
-        assert_eq!(
-            db.get::<TransactionInfo>(&signature.to_string()).unwrap(),
-            transaction_info
-        );
+        assert!(db
+            .get::<TransactionInfo>(&signature.to_string())
+            .unwrap()
+            .finalized_date
+            .is_some());
+    }
+
+    #[test]
+    fn test_sort_transaction_infos_finalized_first() {
+        let info0 = TransactionInfo {
+            finalized_date: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)),
+            ..TransactionInfo::default()
+        };
+        let info1 = TransactionInfo {
+            finalized_date: Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 42)),
+            ..TransactionInfo::default()
+        };
+        let info2 = TransactionInfo::default();
+        let info3 = TransactionInfo {
+            recipient: Pubkey::new_rand(),
+            ..TransactionInfo::default()
+        };
+
+        // Sorted first by date
+        assert_eq!(compare_transaction_infos(&info0, &info1), Ordering::Less);
+
+        // Finalized transactions should be before unfinalized ones
+        assert_eq!(compare_transaction_infos(&info1, &info2), Ordering::Less);
+
+        // Then sorted by recipient
+        assert_eq!(compare_transaction_infos(&info2, &info3), Ordering::Less);
     }
 
     #[test]
