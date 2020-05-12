@@ -1,26 +1,22 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import {
   useAccounts,
-  useAccountsDispatch,
-  Dispatch,
-  fetchAccountInfo,
-  ActionType,
   Account,
-  Status
+  Status,
+  useFetchAccountInfo
 } from "../providers/accounts";
 import { assertUnreachable } from "../utils";
 import { displayAddress } from "../utils/tx";
-import { useCluster } from "../providers/cluster";
 import { PublicKey } from "@solana/web3.js";
 import Copyable from "./Copyable";
 import { lamportsToSolString } from "utils";
 
 function AccountsCard() {
   const { accounts, idCounter } = useAccounts();
-  const dispatch = useAccountsDispatch();
+  const fetchAccountInfo = useFetchAccountInfo();
   const addressInput = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState("");
-  const { url } = useCluster();
 
   const onNew = (address: string) => {
     if (address.length === 0) return;
@@ -32,9 +28,7 @@ function AccountsCard() {
       return;
     }
 
-    dispatch({ type: ActionType.Input, pubkey });
-    fetchAccountInfo(dispatch, address, url);
-
+    fetchAccountInfo(pubkey);
     const inputEl = addressInput.current;
     if (inputEl) {
       inputEl.value = "";
@@ -91,7 +85,7 @@ function AccountsCard() {
               <td>-</td>
               <td></td>
             </tr>
-            {accounts.map(account => renderAccountRow(account, dispatch, url))}
+            {accounts.map(account => renderAccountRow(account))}
           </tbody>
         </table>
       </div>
@@ -111,11 +105,7 @@ const renderHeader = () => {
   );
 };
 
-const renderAccountRow = (
-  account: Account,
-  dispatch: Dispatch,
-  url: string
-) => {
+const renderAccountRow = (account: Account) => {
   let statusText;
   let statusClass;
   switch (account.status) {
@@ -158,42 +148,6 @@ const renderAccountRow = (
     balance = lamportsToSolString(account.lamports);
   }
 
-  const renderDetails = () => {
-    let onClick, icon;
-    switch (account.status) {
-      case Status.Success:
-        icon = "more-horizontal";
-        onClick = () =>
-          dispatch({
-            type: ActionType.Select,
-            address: account.pubkey.toBase58()
-          });
-        break;
-
-      case Status.CheckFailed:
-      case Status.HistoryFailed: {
-        icon = "refresh-cw";
-        onClick = () => {
-          fetchAccountInfo(dispatch, account.pubkey.toBase58(), url);
-        };
-        break;
-      }
-
-      default: {
-        return null;
-      }
-    }
-
-    return (
-      <button
-        className="btn btn-rounded-circle btn-white btn-sm"
-        onClick={onClick}
-      >
-        <span className={`fe fe-${icon}`}></span>
-      </button>
-    );
-  };
-
   const base58AccountPubkey = account.pubkey.toBase58();
   return (
     <tr key={account.id}>
@@ -219,7 +173,17 @@ const renderAccountRow = (
           </Copyable>
         )}
       </td>
-      <td>{renderDetails()}</td>
+      <td>
+        <Link
+          to={location => ({
+            ...location,
+            pathname: "/account/" + base58AccountPubkey
+          })}
+          className="btn btn-rounded-circle btn-white btn-sm"
+        >
+          <span className="fe fe-arrow-right"></span>
+        </Link>
+      </td>
     </tr>
   );
 };

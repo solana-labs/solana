@@ -6,7 +6,7 @@ import {
   TransactionError,
   SignatureStatus
 } from "@solana/web3.js";
-import { findGetParameter, findPathSegment } from "../utils/url";
+import { useQuery } from "../utils/url";
 import { useCluster, ClusterStatus } from "./cluster";
 
 export enum Status {
@@ -42,18 +42,16 @@ type Accounts = { [address: string]: Account };
 interface State {
   idCounter: number;
   accounts: Accounts;
-  selected?: string;
 }
 
 export enum ActionType {
   Update,
-  Input,
-  Select
+  Fetch
 }
 
 interface Update {
   type: ActionType.Update;
-  address: string;
+  pubkey: PublicKey;
   data: {
     status: Status;
     lamports?: number;
@@ -62,50 +60,53 @@ interface Update {
   };
 }
 
-interface Input {
-  type: ActionType.Input;
+interface Fetch {
+  type: ActionType.Fetch;
   pubkey: PublicKey;
 }
 
-interface Select {
-  type: ActionType.Select;
-  address?: string;
-}
-
-type Action = Update | Input | Select;
+type Action = Update | Fetch;
 export type Dispatch = (action: Action) => void;
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case ActionType.Input: {
+    case ActionType.Fetch: {
       const address = action.pubkey.toBase58();
-      if (!!state.accounts[address]) return state;
-      const idCounter = state.idCounter + 1;
-      const accounts = {
-        ...state.accounts,
-        [address]: {
-          id: idCounter,
-          status: Status.Checking,
-          pubkey: action.pubkey
-        }
-      };
-      return { ...state, accounts, idCounter };
-    }
-
-    case ActionType.Select: {
-      return { ...state, selected: action.address };
+      const account = state.accounts[address];
+      if (account) {
+        const accounts = {
+          ...state.accounts,
+          [address]: {
+            id: account.id,
+            pubkey: account.pubkey,
+            status: Status.Checking
+          }
+        };
+        return { ...state, accounts };
+      } else {
+        const idCounter = state.idCounter + 1;
+        const accounts = {
+          ...state.accounts,
+          [address]: {
+            id: idCounter,
+            status: Status.Checking,
+            pubkey: action.pubkey
+          }
+        };
+        return { ...state, accounts, idCounter };
+      }
     }
 
     case ActionType.Update: {
-      let account = state.accounts[action.address];
+      const address = action.pubkey.toBase58();
+      const account = state.accounts[address];
       if (account) {
-        account = {
-          ...account,
-          ...action.data
-        };
         const accounts = {
           ...state.accounts,
-          [action.address]: account
+          [address]: {
+            ...account,
+            ...action.data
+          }
         };
         return { ...state, accounts };
       }
@@ -115,66 +116,48 @@ function reducer(state: State, action: Action): State {
   return state;
 }
 
-export const ACCOUNT_PATHS = [
-  "/account",
-  "/accounts",
-  "/address",
-  "/addresses"
-];
-
-function urlAddresses(): Array<string> {
-  const addresses: Array<string> = [];
-
-  ACCOUNT_PATHS.forEach(path => {
-    const name = path.slice(1);
-    const params = findGetParameter(name)?.split(",") || [];
-    const segments = findPathSegment(name)?.split(",") || [];
-    addresses.push(...params);
-    addresses.push(...segments);
-  });
-
-  return addresses.filter(a => a.length > 0);
-}
-
-function initState(): State {
-  let idCounter = 0;
-  const addresses = urlAddresses();
-  const accounts = addresses.reduce((accounts: Accounts, address) => {
-    if (!!accounts[address]) return accounts;
-    try {
-      const pubkey = new PublicKey(address);
-      const id = ++idCounter;
-      accounts[address] = {
-        id,
-        status: Status.Checking,
-        pubkey
-      };
-    } catch (err) {
-      // TODO display to user
-      console.error(err);
-    }
-    return accounts;
-  }, {});
-  return { idCounter, accounts };
-}
+export const ACCOUNT_ALIASES = ["account", "address"];
+export const ACCOUNT_ALIASES_PLURAL = ["accounts", "addresses"];
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type AccountsProviderProps = { children: React.ReactNode };
 export function AccountsProvider({ children }: AccountsProviderProps) {
-  const [state, dispatch] = React.useReducer(reducer, undefined, initState);
+  const [state, dispatch] = React.useReducer(reducer, {
+    idCounter: 0,
+    accounts: {}
+  });
 
   const { status, url } = useCluster();
 
   // Check account statuses on startup and whenever cluster updates
   React.useEffect(() => {
-    if (status !== ClusterStatus.Connected) return;
-
     Object.keys(state.accounts).forEach(address => {
-      fetchAccountInfo(dispatch, address, url);
+      fetchAccountInfo(dispatch, new PublicKey(address), url, status);
     });
   }, [status, url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const query = useQuery();
+  const values = ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map(key =>
+    query.get(key)
+  );
+  React.useEffect(() => {
+    values
+      .filter((value): value is string => value !== null)
+      .flatMap(value => value.split(","))
+      // Remove duplicates
+      .filter((item, pos, self) => self.indexOf(item) === pos)
+      .filter(address => !state.accounts[address])
+      .forEach(address => {
+        try {
+          fetchAccountInfo(dispatch, new PublicKey(address), url, status);
+        } catch (err) {
+          console.error(err);
+          // TODO handle bad addresses
+        }
+      });
+  }, [values.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
@@ -185,29 +168,28 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
   );
 }
 
-export async function fetchAccountInfo(
+async function fetchAccountInfo(
   dispatch: Dispatch,
-  address: string,
-  url: string
+  pubkey: PublicKey,
+  url: string,
+  status: ClusterStatus
 ) {
   dispatch({
-    type: ActionType.Update,
-    address,
-    data: {
-      status: Status.Checking
-    }
+    type: ActionType.Fetch,
+    pubkey
   });
 
-  let status;
+  // We will auto-refetch when status is no longer connecting
+  if (status === ClusterStatus.Connecting) return;
+
+  let fetchStatus;
   let details;
   let lamports;
   try {
-    const result = await new Connection(url, "recent").getAccountInfo(
-      new PublicKey(address)
-    );
+    const result = await new Connection(url, "recent").getAccountInfo(pubkey);
     if (result === null) {
       lamports = 0;
-      status = Status.NotFound;
+      fetchStatus = Status.NotFound;
     } else {
       lamports = result.lamports;
       details = {
@@ -215,29 +197,35 @@ export async function fetchAccountInfo(
         executable: result.executable,
         owner: result.owner
       };
-      status = Status.FetchingHistory;
-      fetchAccountHistory(dispatch, address, url);
+      fetchStatus = Status.FetchingHistory;
+      fetchAccountHistory(dispatch, pubkey, url);
     }
   } catch (error) {
     console.error("Failed to fetch account info", error);
-    status = Status.CheckFailed;
+    fetchStatus = Status.CheckFailed;
   }
-  const data = { status, lamports, details };
-  dispatch({ type: ActionType.Update, data, address });
+  const data = { status: fetchStatus, lamports, details };
+  dispatch({ type: ActionType.Update, data, pubkey });
 }
 
 async function fetchAccountHistory(
   dispatch: Dispatch,
-  address: string,
+  pubkey: PublicKey,
   url: string
 ) {
+  dispatch({
+    type: ActionType.Update,
+    data: { status: Status.FetchingHistory },
+    pubkey
+  });
+
   let history;
   let status;
   try {
     const connection = new Connection(url);
     const currentSlot = await connection.getSlot();
     const signatures = await connection.getConfirmedSignaturesForAddress(
-      new PublicKey(address),
+      pubkey,
       Math.max(0, currentSlot - 10000 + 1),
       currentSlot
     );
@@ -268,7 +256,7 @@ async function fetchAccountHistory(
     status = Status.HistoryFailed;
   }
   const data = { status, history };
-  dispatch({ type: ActionType.Update, data, address });
+  dispatch({ type: ActionType.Update, data, pubkey });
 }
 
 export function useAccounts() {
@@ -284,16 +272,14 @@ export function useAccounts() {
   };
 }
 
-export function useSelectedAccount() {
+export function useAccountInfo(address: string) {
   const context = React.useContext(StateContext);
+
   if (!context) {
-    throw new Error(
-      `useSelectedAccount must be used within a AccountsProvider`
-    );
+    throw new Error(`useAccountInfo must be used within a AccountsProvider`);
   }
 
-  if (!context.selected) return undefined;
-  return context.accounts[context.selected];
+  return context.accounts[address];
 }
 
 export function useAccountsDispatch() {
@@ -304,4 +290,32 @@ export function useAccountsDispatch() {
     );
   }
   return context;
+}
+
+export function useFetchAccountInfo() {
+  const dispatch = React.useContext(DispatchContext);
+  if (!dispatch) {
+    throw new Error(
+      `useFetchAccountInfo must be used within a AccountsProvider`
+    );
+  }
+
+  const { url, status } = useCluster();
+  return (pubkey: PublicKey) => {
+    fetchAccountInfo(dispatch, pubkey, url, status);
+  };
+}
+
+export function useFetchAccountHistory() {
+  const dispatch = React.useContext(DispatchContext);
+  if (!dispatch) {
+    throw new Error(
+      `useFetchAccountHistory must be used within a AccountsProvider`
+    );
+  }
+
+  const { url } = useCluster();
+  return (pubkey: PublicKey) => {
+    fetchAccountHistory(dispatch, pubkey, url);
+  };
 }

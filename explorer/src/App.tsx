@@ -2,20 +2,19 @@ import React from "react";
 import { Link, Switch, Route, Redirect } from "react-router-dom";
 
 import AccountsCard from "./components/AccountsCard";
+import AccountDetails from "./components/AccountDetails";
 import TransactionsCard from "./components/TransactionsCard";
 import TransactionDetails from "./components/TransactionDetails";
 import ClusterModal from "./components/ClusterModal";
-import AccountModal from "./components/AccountModal";
 import Logo from "./img/logos-solana/light-explorer-logo.svg";
 import { TX_ALIASES } from "./providers/transactions";
-import { ACCOUNT_PATHS } from "./providers/accounts";
+import { ACCOUNT_ALIASES, ACCOUNT_ALIASES_PLURAL } from "./providers/accounts";
 import TabbedPage from "components/TabbedPage";
 
 function App() {
   return (
     <>
       <ClusterModal />
-      <AccountModal />
       <div className="main-content">
         <nav className="navbar navbar-expand-xl navbar-light">
           <div className="container">
@@ -44,7 +43,16 @@ function App() {
               <TransactionsCard />
             </TabbedPage>
           </Route>
-          <Route path={ACCOUNT_PATHS}>
+          <Route
+            exact
+            path={ACCOUNT_ALIASES.concat(ACCOUNT_ALIASES_PLURAL).map(
+              account => `/${account}/:address`
+            )}
+            render={({ match }) => (
+              <AccountDetails address={match.params.address} />
+            )}
+          />
+          <Route exact path={ACCOUNT_ALIASES_PLURAL.map(alias => "/" + alias)}>
             <TabbedPage tab="Accounts">
               <AccountsCard />
             </TabbedPage>
