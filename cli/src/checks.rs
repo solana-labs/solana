@@ -27,51 +27,6 @@ pub fn check_account_for_multiple_fees(
     Ok(())
 }
 
-pub fn check_account_for_spend_and_fee(
-    rpc_client: &RpcClient,
-    account_pubkey: &Pubkey,
-    fee_calculator: &FeeCalculator,
-    message: &Message,
-    lamports: u64,
-) -> Result<(), Box<dyn error::Error>> {
-    check_accounts_for_spend_and_fee(
-        rpc_client,
-        account_pubkey,
-        account_pubkey,
-        fee_calculator,
-        message,
-        lamports,
-    )
-}
-
-pub fn check_accounts_for_spend_and_fee(
-    rpc_client: &RpcClient,
-    from_pubkey: &Pubkey,
-    fee_pubkey: &Pubkey,
-    fee_calculator: &FeeCalculator,
-    message: &Message,
-    lamports: u64,
-) -> Result<(), Box<dyn error::Error>> {
-    let fee = calculate_fee(fee_calculator, &[message]);
-    if from_pubkey == fee_pubkey {
-        if !check_account_for_balance(rpc_client, from_pubkey, fee + lamports)? {
-            return Err(CliError::InsufficientFundsForSpendAndFee(
-                lamports_to_sol(lamports),
-                lamports_to_sol(fee),
-            )
-            .into());
-        }
-    } else {
-        if !check_account_for_balance(rpc_client, fee_pubkey, fee)? {
-            return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)).into());
-        }
-        if !check_account_for_balance(rpc_client, from_pubkey, lamports)? {
-            return Err(CliError::InsufficientFundsForSpend(lamports_to_sol(lamports)).into());
-        }
-    }
-    Ok(())
-}
-
 pub fn calculate_fee(fee_calculator: &FeeCalculator, messages: &[&Message]) -> u64 {
     messages
         .iter()
