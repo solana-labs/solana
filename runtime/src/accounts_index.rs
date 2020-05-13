@@ -23,7 +23,7 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     fn do_scan_accounts<F, I>(&self, ancestors: &Ancestors, mut func: F, iter: I)
     where
         F: FnMut(&Pubkey, (&T, Slot)) -> (),
-        I: Iterator<Item = (&'a Pubkey, &'a AccountMapEntry<T>)>,
+        I: Iterator<Item = (&'a Pubkey, &'a RwLock<AccountMapEntry<T>>)>,
     {
         for (pubkey, list) in iter {
             let list_r = &list.read().unwrap().1;

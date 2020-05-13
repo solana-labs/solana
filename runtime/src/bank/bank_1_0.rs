@@ -19,6 +19,7 @@ use solana_sdk::{
     clock::{Epoch, Slot, UnixTimestamp},
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
+    genesis_config::OperatingMode,
     hard_forks::HardForks,
     hash::Hash,
     inflation::Inflation,
@@ -170,7 +171,7 @@ pub struct Bank1_0 {
 }
 
 impl Bank1_0 {
-    pub fn convert_to_current(self) -> Bank {
+    pub fn convert_to_current(self, operating_mode: OperatingMode) -> Bank {
         let old_epoch_stakes = self.epoch_stakes;
         let epoch_stakes = old_epoch_stakes
             .iter()
@@ -215,6 +216,8 @@ impl Bank1_0 {
             entered_epoch_callback: self.entered_epoch_callback,
             last_vote_sync: self.last_vote_sync,
             rewards: self.rewards,
+            operating_mode: Some(operating_mode),
+            lazy_rent_collection: AtomicBool::default(),
         }
     }
 }

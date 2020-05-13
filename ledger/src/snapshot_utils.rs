@@ -599,7 +599,7 @@ where
             let mut bank: Bank = match snapshot_version {
                 SNAPSHOT_VERSION_1_0 => {
                     let bank_1_0: Bank1_0 = deserialize_from_snapshot(stream.by_ref())?;
-                    bank_1_0.convert_to_current()
+                    bank_1_0.convert_to_current(genesis_config.operating_mode)
                 }
                 SNAPSHOT_VERSION => deserialize_from_snapshot(stream.by_ref())?,
                 _ => {
