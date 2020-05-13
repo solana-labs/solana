@@ -4147,6 +4147,11 @@ mod tests {
 
             ..GenesisConfig::default()
         }));
+
+        // enable lazy rent collection because this test depends on rent-due accounts
+        // not being eagerly-collected for exact rewards calculation
+        bank.lazy_rent_collection.store(true, Ordering::Relaxed);
+
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
         assert_eq!(bank.rewards, None);
 
