@@ -47,7 +47,7 @@ pub const SIZE_OF_NONCE_DATA_SHRED_PAYLOAD: usize = SIZE_OF_DATA_SHRED_PAYLOAD -
 
 pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
 pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
-pub const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
+pub const NONCE_SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 pub const UNLOCK_NONCE_SLOT: Slot = 13_461_046;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -232,10 +232,6 @@ impl Shred {
 
         let slot = common_header.slot;
         let expected_data_size = Self::get_expected_payload_size_from_slot(slot);
-
-        if payload.len() > expected_data_size {
-            error!("got payload size mismatch for shred slot: {}, index: {}, payload_len: {}, expected: {}", slot, common_header.index, payload.len(), expected_data_size);
-        }
         // Safe because any payload from the network must have passed through
         // window service,  which implies payload wll be of size
         // PACKET_DATA_SIZE, and `expected_data_size` <= PACKET_DATA_SIZE.
@@ -281,7 +277,7 @@ impl Shred {
         coding_header: CodingShredHeader,
         payload_size: usize,
     ) -> Self {
-        assert!(payload_size == SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
+        assert!(payload_size == NONCE_SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
         let mut payload = vec![0; payload_size];
         let mut start = 0;
         Self::serialize_obj_into(
@@ -317,7 +313,7 @@ impl Shred {
     }
 
     pub fn new_empty_data_shred(payload_size: usize) -> Self {
-        assert!(payload_size == SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
+        assert!(payload_size == NONCE_SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
         Self::new_empty_from_header(
             ShredCommonHeader::default(),
             DataShredHeader::default(),
@@ -435,7 +431,7 @@ impl Shred {
 
     fn get_expected_payload_size_from_slot(slot: Slot) -> usize {
         if Self::is_nonce_unlocked(slot) {
-            SHRED_PAYLOAD_SIZE
+            NONCE_SHRED_PAYLOAD_SIZE
         } else {
             PACKET_DATA_SIZE
         }
@@ -747,7 +743,7 @@ impl Shredder {
     ) -> Vec<Vec<u8>> {
         // Safe to assert because window service should filter out any packets
         // with unsupported payload sizes
-        assert!(payload_size == SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
+        assert!(payload_size == NONCE_SHRED_PAYLOAD_SIZE || payload_size == PACKET_DATA_SIZE);
         let end_index = index_found.saturating_sub(1);
         // The index of current shred must be within the range of shreds that are being
         // recovered

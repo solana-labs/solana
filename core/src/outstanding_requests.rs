@@ -174,7 +174,7 @@ where
 pub(crate) mod tests {
     use super::*;
     use crate::serve_repair::RepairType;
-    use solana_ledger::shred::{Shred, SHRED_PAYLOAD_SIZE};
+    use solana_ledger::shred::{Shred, NONCE_SHRED_PAYLOAD_SIZE};
 
     #[test]
     fn test_add_request() {
@@ -198,7 +198,7 @@ pub(crate) mod tests {
         let mut nonce = node_outstanding_requests.nonce;
         node_outstanding_requests.add_request(repair_type);
 
-        let shred = Shred::new_empty_data_shred(SHRED_PAYLOAD_SIZE);
+        let shred = Shred::new_empty_data_shred(NONCE_SHRED_PAYLOAD_SIZE);
         let mut expire_timestamp = node_outstanding_requests
             .requests
             .get(&nonce)

@@ -1,9 +1,10 @@
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use rand::{thread_rng, Rng};
-use solana_core::contact_info::ContactInfo;
-use solana_core::gossip_service::discover;
-use solana_core::serve_repair::RepairProtocol;
+use solana_core::{
+    contact_info::ContactInfo, gossip_service::discover, serve_repair::RepairProtocol,
+};
+use solana_ledger::shred::UNLOCK_NONCE_SLOT;
 use solana_sdk::pubkey::Pubkey;
 use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
@@ -45,18 +46,18 @@ fn run_dos(
     contact.id = Pubkey::new_rand();
     match data_type.as_str() {
         "repair_highest" => {
-            let slot = 100;
-            let req = RepairProtocol::WindowIndex(contact, slot, 0, 0);
+            let slot = UNLOCK_NONCE_SLOT + 1;
+            let req = RepairProtocol::WindowIndexWithNonce(contact, slot, 0, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "repair_shred" => {
-            let slot = 100;
-            let req = RepairProtocol::HighestWindowIndex(contact, slot, 0, 0);
+            let slot = UNLOCK_NONCE_SLOT + 1;
+            let req = RepairProtocol::HighestWindowIndexWithNonce(contact, slot, 0, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "repair_orphan" => {
-            let slot = 100;
-            let req = RepairProtocol::Orphan(contact, slot, 0);
+            let slot = UNLOCK_NONCE_SLOT + 1;
+            let req = RepairProtocol::OrphanWithNonce(contact, slot, 0);
             data = bincode::serialize(&req).unwrap();
         }
         "random" => {

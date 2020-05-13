@@ -352,8 +352,13 @@ impl RepairService {
 
                 if let Some(repairs) = repairs {
                     for repair_type in repairs {
-                        let nonce =
-                            outstanding_requests.add_request(&repair_addr, repair_type.clone());
+                        let nonce = if Shred::is_nonce_unlocked(*slot) {
+                            Some(
+                                outstanding_requests.add_request(&repair_addr, repair_type.clone()),
+                            )
+                        } else {
+                            None
+                        };
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
@@ -381,7 +386,7 @@ impl RepairService {
         to: &SocketAddr,
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
-        nonce: Nonce,
+        nonce: Option<Nonce>,
     ) -> Result<()> {
         let req = serve_repair.map_repair_request(&repair_type, repair_stats, nonce)?;
         repair_socket.send_to(&req, to)?;

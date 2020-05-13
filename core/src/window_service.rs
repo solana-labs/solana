@@ -20,7 +20,7 @@ use solana_ledger::{
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
     repair_response,
-    shred::{Nonce, Shred, SHRED_PAYLOAD_SIZE},
+    shred::{Nonce, Shred, NONCE_SHRED_PAYLOAD_SIZE},
 };
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::Packets;
@@ -203,7 +203,7 @@ where
                             None
                         } else {
                             if packet.meta.size != PACKET_DATA_SIZE
-                                && packet.meta.size != SHRED_PAYLOAD_SIZE
+                                && packet.meta.size != NONCE_SHRED_PAYLOAD_SIZE
                             {
                                 return None;
                             }
@@ -591,7 +591,7 @@ mod test {
         entry::{create_ticks, Entry},
         genesis_utils::create_genesis_config_with_leader,
         get_tmp_ledger_path,
-        shred::{DataShredHeader, Shredder, SHRED_PAYLOAD_SIZE},
+        shred::{DataShredHeader, Shredder, NONCE_SHRED_PAYLOAD_SIZE},
     };
     use solana_perf::packet::Packet;
     use solana_sdk::{
@@ -667,7 +667,7 @@ mod test {
             common,
             DataShredHeader::default(),
             coding,
-            SHRED_PAYLOAD_SIZE,
+            NONCE_SHRED_PAYLOAD_SIZE,
         );
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
         assert_eq!(

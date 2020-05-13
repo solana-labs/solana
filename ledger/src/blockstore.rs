@@ -2946,7 +2946,7 @@ pub mod tests {
         entry::{next_entry, next_entry_mut},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule::{FixedSchedule, LeaderSchedule},
-        shred::{max_ticks_per_n_shreds, DataShredHeader, SHRED_PAYLOAD_SIZE},
+        shred::{max_ticks_per_n_shreds, DataShredHeader, NONCE_SHRED_PAYLOAD_SIZE},
     };
     use assert_matches::assert_matches;
     use bincode::serialize;
@@ -4686,7 +4686,7 @@ pub mod tests {
                 shred.clone(),
                 DataShredHeader::default(),
                 coding.clone(),
-                SHRED_PAYLOAD_SIZE,
+                NONCE_SHRED_PAYLOAD_SIZE,
             );
 
             // Insert a good coding shred
@@ -4719,7 +4719,7 @@ pub mod tests {
                     shred.clone(),
                     DataShredHeader::default(),
                     coding.clone(),
-                    SHRED_PAYLOAD_SIZE,
+                    NONCE_SHRED_PAYLOAD_SIZE,
                 );
                 let index = index_cf.get(shred.slot).unwrap().unwrap();
                 assert!(Blockstore::should_insert_coding_shred(
@@ -4735,7 +4735,7 @@ pub mod tests {
                     shred.clone(),
                     DataShredHeader::default(),
                     coding.clone(),
-                    SHRED_PAYLOAD_SIZE,
+                    NONCE_SHRED_PAYLOAD_SIZE,
                 );
                 let index = coding_shred.coding_header.position - 1;
                 coding_shred.set_index(index as u32);
@@ -4754,7 +4754,7 @@ pub mod tests {
                     shred.clone(),
                     DataShredHeader::default(),
                     coding.clone(),
-                    SHRED_PAYLOAD_SIZE,
+                    NONCE_SHRED_PAYLOAD_SIZE,
                 );
                 coding_shred.coding_header.num_coding_shreds = 0;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
@@ -4771,7 +4771,7 @@ pub mod tests {
                     shred.clone(),
                     DataShredHeader::default(),
                     coding.clone(),
-                    SHRED_PAYLOAD_SIZE,
+                    NONCE_SHRED_PAYLOAD_SIZE,
                 );
                 coding_shred.coding_header.num_coding_shreds = coding_shred.coding_header.position;
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
@@ -4789,7 +4789,7 @@ pub mod tests {
                     shred.clone(),
                     DataShredHeader::default(),
                     coding.clone(),
-                    SHRED_PAYLOAD_SIZE,
+                    NONCE_SHRED_PAYLOAD_SIZE,
                 );
                 coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
                 coding_shred.coding_header.num_coding_shreds = 3;
@@ -4822,7 +4822,7 @@ pub mod tests {
                     shred.clone(),
                     DataShredHeader::default(),
                     coding.clone(),
-                    SHRED_PAYLOAD_SIZE,
+                    NONCE_SHRED_PAYLOAD_SIZE,
                 );
                 let index = index_cf.get(coding_shred.slot()).unwrap().unwrap();
                 coding_shred.set_slot(*last_root.read().unwrap());

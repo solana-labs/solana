@@ -28,7 +28,7 @@ pub fn repair_response_packet_from_shred(
     slot: Slot,
     shred: Vec<u8>,
     dest: &SocketAddr,
-    nonce: Nonce,
+    nonce: Option<Nonce>,
 ) -> Packet {
     let size_of_nonce = {
         if Shred::is_nonce_unlocked(slot) {
@@ -44,14 +44,16 @@ pub fn repair_response_packet_from_shred(
     packet.meta.set_addr(dest);
     packet.data[..shred.len()].copy_from_slice(&shred);
     let mut wr = io::Cursor::new(&mut packet.data[shred.len()..]);
-    bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");
+    if let Some(nonce) = nonce {
+        bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");
+    }
     packet
 }
 
-pub fn shred(buf: &[u8]) -> &[u8] {
-    &buf[..buf.len() - SIZE_OF_NONCE]
-}
-
 pub fn nonce(buf: &[u8]) -> Option<Nonce> {
-    limited_deserialize(&buf[buf.len() - SIZE_OF_NONCE..]).ok()
+    if buf.len() < SIZE_OF_NONCE {
+        None
+    } else {
+        limited_deserialize(&buf[buf.len() - SIZE_OF_NONCE..]).ok()
+    }
 }
