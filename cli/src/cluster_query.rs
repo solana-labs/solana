@@ -17,7 +17,12 @@ use solana_clap_utils::{
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
     rpc_client::RpcClient,
+<<<<<<< HEAD
     rpc_response::RpcVoteAccountInfo,
+=======
+    rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
+    rpc_request::MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -113,6 +118,41 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             .arg(commitment_arg()),
         )
         .subcommand(
+<<<<<<< HEAD
+=======
+            SubCommand::with_name("largest-accounts").about("Get addresses of largest cluster accounts")
+            .arg(
+                Arg::with_name("circulating")
+                    .long("circulating")
+                    .takes_value(false)
+                    .help("Filter address list to only circulating accounts")
+            )
+            .arg(
+                Arg::with_name("non_circulating")
+                    .long("non-circulating")
+                    .takes_value(false)
+                    .conflicts_with("circulating")
+                    .help("Filter address list to only non-circulating accounts")
+            )
+            .arg(commitment_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("supply").about("Get information about the cluster supply of SOL")
+            .arg(
+                Arg::with_name("print_accounts")
+                    .long("print-accounts")
+                    .takes_value(false)
+                    .help("Print list of non-circualting account addresses")
+            )
+            .arg(commitment_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("total-supply").about("Get total number of SOL")
+            .setting(AppSettings::Hidden)
+            .arg(commitment_arg()),
+        )
+        .subcommand(
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
             SubCommand::with_name("transaction-count").about("Get current transaction count")
             .alias("get-transaction-count")
             .arg(commitment_arg()),
@@ -295,6 +335,47 @@ pub fn parse_get_epoch(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
     })
 }
 
+<<<<<<< HEAD
+=======
+pub fn parse_largest_accounts(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+    let filter = if matches.is_present("circulating") {
+        Some(RpcLargestAccountsFilter::Circulating)
+    } else if matches.is_present("non_circulating") {
+        Some(RpcLargestAccountsFilter::NonCirculating)
+    } else {
+        None
+    };
+    Ok(CliCommandInfo {
+        command: CliCommand::LargestAccounts {
+            commitment_config,
+            filter,
+        },
+        signers: vec![],
+    })
+}
+
+pub fn parse_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+    let print_accounts = matches.is_present("print_accounts");
+    Ok(CliCommandInfo {
+        command: CliCommand::Supply {
+            commitment_config,
+            print_accounts,
+        },
+        signers: vec![],
+    })
+}
+
+pub fn parse_total_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
+    Ok(CliCommandInfo {
+        command: CliCommand::TotalSupply { commitment_config },
+        signers: vec![],
+    })
+}
+
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
 pub fn parse_get_transaction_count(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let commitment_config = commitment_of(matches, COMMITMENT_ARG.long).unwrap();
     Ok(CliCommandInfo {
@@ -719,12 +800,49 @@ pub fn process_show_block_production(
         total_slots,
         total_blocks,
         total_slots_skipped,
+<<<<<<< HEAD
         total_slots_skipped as f64 / total_slots as f64 * 100.
     );
     println!(
         "  (using data from {} slots: {} to {})",
         total_slots, start_slot, end_slot
     );
+=======
+        leaders,
+        individual_slot_status,
+        verbose: config.verbose,
+    };
+    Ok(config.output_format.formatted_string(&block_production))
+}
+
+pub fn process_largest_accounts(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    commitment_config: CommitmentConfig,
+    filter: Option<RpcLargestAccountsFilter>,
+) -> ProcessResult {
+    let accounts = rpc_client
+        .get_largest_accounts_with_config(RpcLargestAccountsConfig {
+            commitment: Some(commitment_config),
+            filter,
+        })?
+        .value;
+    let largest_accounts = CliAccountBalances { accounts };
+    Ok(config.output_format.formatted_string(&largest_accounts))
+}
+
+pub fn process_supply(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    commitment_config: CommitmentConfig,
+    print_accounts: bool,
+) -> ProcessResult {
+    let supply_response = rpc_client.supply_with_commitment(commitment_config.clone())?;
+    let mut supply: CliSupply = supply_response.value.into();
+    supply.print_accounts = print_accounts;
+    Ok(config.output_format.formatted_string(&supply))
+}
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
 
     if config.verbose {
         println!(

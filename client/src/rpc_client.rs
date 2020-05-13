@@ -3,6 +3,7 @@ use crate::{
     generic_rpc_client_request::GenericRpcClientRequest,
     mock_rpc_client_request::{MockRpcClientRequest, Mocks},
     rpc_client_request::RpcClientRequest,
+    rpc_config::RpcLargestAccountsConfig,
     rpc_request::{RpcError, RpcRequest},
     rpc_response::{
         Response, RpcAccount, RpcBlockhashFeeCalculator, RpcContactInfo, RpcEpochInfo,
@@ -189,6 +190,13 @@ impl RpcClient {
 
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_command(err.into(), "GetSlot"))
+    }
+
+    pub fn get_largest_accounts_with_config(
+        &self,
+        config: RpcLargestAccountsConfig,
+    ) -> RpcResult<Vec<RpcAccountBalance>> {
+        self.send(RpcRequest::GetLargestAccounts, json!([config]), 0)
     }
 
     pub fn get_vote_accounts(&self) -> ClientResult<RpcVoteAccountStatus> {

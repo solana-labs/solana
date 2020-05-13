@@ -21,6 +21,11 @@ use solana_clap_utils::{
 use solana_client::{
     client_error::{ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
+<<<<<<< HEAD
+=======
+    rpc_config::RpcLargestAccountsFilter,
+    rpc_response::{RpcAccount, RpcKeyedAccount},
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -194,6 +199,20 @@ pub enum CliCommand {
     GetSlot {
         commitment_config: CommitmentConfig,
     },
+<<<<<<< HEAD
+=======
+    LargestAccounts {
+        commitment_config: CommitmentConfig,
+        filter: Option<RpcLargestAccountsFilter>,
+    },
+    Supply {
+        commitment_config: CommitmentConfig,
+        print_accounts: bool,
+    },
+    TotalSupply {
+        commitment_config: CommitmentConfig,
+    },
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
     GetTransactionCount {
         commitment_config: CommitmentConfig,
     },
@@ -589,6 +608,12 @@ pub fn parse_command(
         }),
         ("epoch", Some(matches)) => parse_get_epoch(matches),
         ("slot", Some(matches)) => parse_get_slot(matches),
+<<<<<<< HEAD
+=======
+        ("largest-accounts", Some(matches)) => parse_largest_accounts(matches),
+        ("supply", Some(matches)) => parse_supply(matches),
+        ("total-supply", Some(matches)) => parse_total_supply(matches),
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
         ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
         ("leader-schedule", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::LeaderSchedule,
@@ -1652,6 +1677,20 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::GetSlot { commitment_config } => {
             process_get_slot(&rpc_client, *commitment_config)
         }
+<<<<<<< HEAD
+=======
+        CliCommand::LargestAccounts {
+            commitment_config,
+            filter,
+        } => process_largest_accounts(&rpc_client, config, *commitment_config, filter.clone()),
+        CliCommand::Supply {
+            commitment_config,
+            print_accounts,
+        } => process_supply(&rpc_client, config, *commitment_config, *print_accounts),
+        CliCommand::TotalSupply { commitment_config } => {
+            process_total_supply(&rpc_client, *commitment_config)
+        }
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
         CliCommand::GetTransactionCount { commitment_config } => {
             process_get_transaction_count(&rpc_client, *commitment_config)
         }

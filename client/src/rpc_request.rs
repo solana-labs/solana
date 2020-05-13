@@ -18,6 +18,7 @@ pub enum RpcRequest {
     GetGenesisHash,
     GetIdentity,
     GetInflation,
+    GetLargestAccounts,
     GetLeaderSchedule,
     GetProgramAccounts,
     GetRecentBlockhash,
@@ -60,6 +61,7 @@ impl RpcRequest {
             RpcRequest::GetGenesisHash => "getGenesisHash",
             RpcRequest::GetIdentity => "getIdentity",
             RpcRequest::GetInflation => "getInflation",
+            RpcRequest::GetLargestAccounts => "getLargestAccounts",
             RpcRequest::GetLeaderSchedule => "getLeaderSchedule",
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
@@ -82,6 +84,21 @@ impl RpcRequest {
             RpcRequest::GetMinimumBalanceForRentExemption => "getMinimumBalanceForRentExemption",
             RpcRequest::MinimumLedgerSlot => "minimumLedgerSlot",
         };
+<<<<<<< HEAD
+=======
+
+        write!(f, "{}", method)
+    }
+}
+
+pub const NUM_LARGEST_ACCOUNTS: usize = 20;
+pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
+pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
+
+impl RpcRequest {
+    pub(crate) fn build_request_json(self, id: u64, params: Value) -> Value {
+        let jsonrpc = "2.0";
+>>>>>>> ee7f15eff... Rpc: optionally filter getLargestAccounts by circulating/nonCirculating (#10007)
         json!({
            "jsonrpc": jsonrpc,
            "id": id,
