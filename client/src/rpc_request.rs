@@ -19,6 +19,7 @@ pub enum RpcRequest {
     GetGenesisHash,
     GetIdentity,
     GetInflation,
+    GetLargestAccounts,
     GetLeaderSchedule,
     GetProgramAccounts,
     GetRecentBlockhash,
@@ -62,6 +63,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetGenesisHash => "getGenesisHash",
             RpcRequest::GetIdentity => "getIdentity",
             RpcRequest::GetInflation => "getInflation",
+            RpcRequest::GetLargestAccounts => "getLargestAccounts",
             RpcRequest::GetLeaderSchedule => "getLeaderSchedule",
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
@@ -91,6 +93,7 @@ impl fmt::Display for RpcRequest {
     }
 }
 
+pub const NUM_LARGEST_ACCOUNTS: usize = 20;
 pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
 pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
 
