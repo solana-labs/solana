@@ -431,25 +431,25 @@ mod test {
         let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
             id: Pubkey::new_rand(),
             shred_version: 123,
-            gossip: gossip.clone(),
+            gossip,
             ..ContactInfo::default()
         }));
         let spy = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
             id: Pubkey::new_rand(),
             shred_version: 0,
-            gossip: gossip.clone(),
+            gossip,
             ..ContactInfo::default()
         }));
         let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
             id: Pubkey::new_rand(),
             shred_version: 123,
-            gossip: gossip.clone(),
+            gossip,
             ..ContactInfo::default()
         }));
         let node_456 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
             id: Pubkey::new_rand(),
             shred_version: 456,
-            gossip: gossip.clone(),
+            gossip,
             ..ContactInfo::default()
         }));
 
@@ -560,12 +560,12 @@ mod test {
         )));
         let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
-        node_crds.insert(entry.clone(), 0).unwrap();
+        node_crds.insert(entry, 0).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
             0,
         )));
-        node_crds.insert(new.clone(), 0).unwrap();
+        node_crds.insert(new, 0).unwrap();
         let req = node.new_pull_request(
             &node_crds,
             &node_pubkey,
@@ -606,13 +606,13 @@ mod test {
         )));
         let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
-        node_crds.insert(entry.clone(), 0).unwrap();
+        node_crds.insert(entry, 0).unwrap();
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
             0,
         )));
-        node_crds.insert(new.clone(), 0).unwrap();
+        node_crds.insert(new, 0).unwrap();
 
         let mut dest = CrdsGossipPull::default();
         let mut dest_crds = Crds::default();
@@ -698,7 +698,7 @@ mod test {
         let node_label = entry.label();
         let node_pubkey = node_label.pubkey();
         let mut node = CrdsGossipPull::default();
-        node_crds.insert(entry.clone(), 0).unwrap();
+        node_crds.insert(entry, 0).unwrap();
         let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::new_rand(),
             0,
@@ -731,6 +731,7 @@ mod test {
         assert_eq!(node.purged_values.len(), 0);
     }
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_crds_filter_mask() {
         let filter = CrdsFilter::new_rand(1, 128);
         assert_eq!(filter.mask, !0x0);
@@ -738,7 +739,7 @@ mod test {
         //1000/9 = 111, so 7 bits are needed to mask it
         assert_eq!(CrdsFilter::mask_bits(1000f64, 9f64), 7u32);
         let filter = CrdsFilter::new_rand(1000, 10);
-        assert_eq!(filter.mask & 0x00ffffffff, 0x00ffffffff);
+        assert_eq!(filter.mask & 0x00_ffff_ffff, 0x00_ffff_ffff);
     }
     #[test]
     fn test_crds_filter_add_no_mask() {
@@ -800,7 +801,6 @@ mod test {
     }
     fn run_test_mask(mask_bits: u32) {
         let masks: Vec<_> = (0..2u64.pow(mask_bits))
-            .into_iter()
             .map(|seed| CrdsFilter::compute_mask(seed, mask_bits))
             .dedup()
             .collect();
@@ -854,7 +854,7 @@ mod test {
                 &mut node_crds,
                 &peer_pubkey,
                 &timeouts,
-                vec![peer_entry.clone()],
+                vec![peer_entry],
                 node.msg_timeout + 1,
             ),
             0
@@ -883,7 +883,7 @@ mod test {
                 &mut node_crds,
                 &peer_pubkey,
                 &timeouts,
-                vec![peer_vote.clone()],
+                vec![peer_vote],
                 node.msg_timeout + 1,
             ),
             1

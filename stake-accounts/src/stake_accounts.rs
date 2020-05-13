@@ -315,7 +315,6 @@ mod tests {
         num_accounts: usize,
     ) -> Vec<(Pubkey, u64)> {
         (0..num_accounts)
-            .into_iter()
             .map(|i| {
                 let address = derive_stake_account_address(&base_pubkey, i);
                 (address, client.get_balance(&address).unwrap())
@@ -329,7 +328,6 @@ mod tests {
         num_accounts: usize,
     ) -> Vec<(Pubkey, Lockup)> {
         (0..num_accounts)
-            .into_iter()
             .map(|i| {
                 let address = derive_stake_account_address(&base_pubkey, i);
                 let account = client.get_account(&address).unwrap().unwrap();

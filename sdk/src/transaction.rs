@@ -526,7 +526,7 @@ mod tests {
         tx.message.account_keys.resize(4, Pubkey::default());
         assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));
 
-        tx = o.clone();
+        tx = o;
         tx.message.header.num_readonly_signed_accounts = 2;
         tx.message.header.num_required_signatures = 1;
         assert_eq!(tx.sanitize(), Err(SanitizeError::IndexOutOfBounds));

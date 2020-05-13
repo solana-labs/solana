@@ -52,6 +52,7 @@ mod test {
     use super::*;
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_years_as_slots() {
         let tick_duration = Duration::from_micros(1000 * 1000 / 160);
 

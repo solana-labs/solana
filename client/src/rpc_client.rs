@@ -1057,7 +1057,6 @@ mod tests {
     use jsonrpc_core::{Error, IoHandler, Params};
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
     use serde_json::Number;
-    use solana_logger;
     use solana_sdk::{
         instruction::InstructionError, signature::Keypair, system_transaction,
         transaction::TransactionError,

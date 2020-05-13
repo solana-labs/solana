@@ -323,9 +323,9 @@ pub mod tests {
 
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
         for i in 0..MAX_LOCKOUT_HISTORY + 42 {
-            vote_state
-                .as_mut()
-                .map(|v| v.process_slot_vote_unchecked(i as u64));
+            if let Some(v) = vote_state.as_mut() {
+                v.process_slot_vote_unchecked(i as u64)
+            }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
             match versioned {

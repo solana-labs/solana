@@ -67,10 +67,7 @@ mod tests {
         hf.register(10);
         hf.register(20);
 
-        assert_eq!(
-            hf.iter().map(|i| *i).collect::<Vec<_>>(),
-            vec![(10, 1), (20, 2), (30, 1)]
-        );
+        assert_eq!(hf.hard_forks, vec![(10, 1), (20, 2), (30, 1)]);
     }
 
     #[test]

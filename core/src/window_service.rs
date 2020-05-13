@@ -594,7 +594,7 @@ mod test {
         let shreds =
             local_entries_to_shred(&[Entry::default()], slot + 1, slot - 1, &leader_keypair);
         assert_eq!(
-            should_retransmit_and_persist(&shreds[0], Some(bank.clone()), &cache, &me_id, slot, 0),
+            should_retransmit_and_persist(&shreds[0], Some(bank), &cache, &me_id, slot, 0),
             false
         );
 

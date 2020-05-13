@@ -248,8 +248,8 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = Pubkey::new_rand();
         let k2 = Pubkey::new_rand();
-        map.insert(Arc::new(k1.clone()), std::u64::MAX / 2);
-        map.insert(Arc::new(k2.clone()), 0);
+        map.insert(Arc::new(k1), std::u64::MAX / 2);
+        map.insert(Arc::new(k2), 0);
         cs.cluster_slots
             .write()
             .unwrap()
@@ -270,14 +270,14 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = Pubkey::new_rand();
         let k2 = Pubkey::new_rand();
-        map.insert(Arc::new(k2.clone()), 0);
+        map.insert(Arc::new(k2), 0);
         cs.cluster_slots
             .write()
             .unwrap()
             .insert(0, Arc::new(RwLock::new(map)));
         //make sure default weights are used as well
         let validator_stakes: HashMap<_, _> = vec![(
-            *Arc::new(k1.clone()),
+            *Arc::new(k1),
             NodeVoteAccounts {
                 total_stake: std::u64::MAX / 2,
                 vote_accounts: vec![Pubkey::default()],

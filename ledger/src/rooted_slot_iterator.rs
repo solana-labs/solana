@@ -139,7 +139,6 @@ mod tests {
         // Trying to get an iterator on any slot on the root fork should succeed
         let result: Vec<_> = RootedSlotIterator::new(3, &blockstore)
             .unwrap()
-            .into_iter()
             .map(|(slot, _)| slot)
             .collect();
         let expected = vec![3];
@@ -147,7 +146,6 @@ mod tests {
 
         let result: Vec<_> = RootedSlotIterator::new(0, &blockstore)
             .unwrap()
-            .into_iter()
             .map(|(slot, _)| slot)
             .collect();
         let expected = vec![0, 1, 2, 3];
@@ -207,7 +205,6 @@ mod tests {
         // should not return a SlotMeta
         let result: Vec<_> = RootedSlotIterator::new(3, &blockstore)
             .unwrap()
-            .into_iter()
             .map(|(slot, meta)| (slot, meta.is_some()))
             .collect();
         let expected = vec![(3, true), (10, false)];
@@ -221,7 +218,6 @@ mod tests {
 
         let result: Vec<_> = RootedSlotIterator::new(0, &blockstore)
             .unwrap()
-            .into_iter()
             .map(|(slot, meta)| (slot, meta.is_some()))
             .collect();
         let expected = vec![

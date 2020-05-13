@@ -508,9 +508,7 @@ mod tests {
         let mut info = Map::new();
         info.insert("name".to_string(), Value::String("Alice".to_string()));
         let info_string = serde_json::to_string(&Value::Object(info.clone())).unwrap();
-        let validator_info = ValidatorInfo {
-            info: info_string.clone(),
-        };
+        let validator_info = ValidatorInfo { info: info_string };
         let data = serialize(&(config, validator_info)).unwrap();
 
         assert_eq!(
@@ -547,9 +545,7 @@ mod tests {
         info.insert("details".to_string(), Value::String(max_long_string));
         let info_string = serde_json::to_string(&Value::Object(info)).unwrap();
 
-        let validator_info = ValidatorInfo {
-            info: info_string.clone(),
-        };
+        let validator_info = ValidatorInfo { info: info_string };
 
         assert_eq!(
             serialized_size(&validator_info).unwrap(),

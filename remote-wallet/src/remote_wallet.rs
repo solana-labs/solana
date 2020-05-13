@@ -535,7 +535,7 @@ mod tests {
             manufacturer: "Ledger".to_string(),
             model: "Nano S".to_string(),
             serial: "0001".to_string(),
-            pubkey: pubkey.clone(),
+            pubkey,
             error: None,
         };
         let mut test_info = RemoteWalletInfo::default();

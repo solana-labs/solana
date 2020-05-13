@@ -497,6 +497,7 @@ mod test {
     use solana_sdk::system_instruction;
     use std::mem;
 
+    #[allow(clippy::too_many_arguments)]
     fn try_calc(
         scaler: u64,
         primary_tokens: u64,
@@ -604,7 +605,7 @@ mod test {
 
         client
             .send_message(&[owner, &new], Message::new(&[instruction]))
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
         new.pubkey()
     }
 
@@ -613,7 +614,7 @@ mod test {
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
             .send_instruction(owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
         new
     }
 
@@ -627,7 +628,7 @@ mod test {
         );
         client
             .send_instruction(owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
     }
 
     fn trade(
@@ -655,7 +656,7 @@ mod test {
         );
         client
             .send_instruction(owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
         (trade, src)
     }
 
@@ -708,7 +709,7 @@ mod test {
         );
         client
             .send_instruction(&owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let new_account_data = client.get_account_data(&new).unwrap().unwrap();
 
@@ -795,7 +796,7 @@ mod test {
             exchange_instruction::swap_request(&owner.pubkey(), &to_trade, &from_trade, &profit);
         client
             .send_instruction(&owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let to_trade_account_data = client.get_account_data(&to_trade).unwrap().unwrap();
         let from_trade_account_data = client.get_account_data(&from_trade).unwrap().unwrap();
@@ -862,7 +863,7 @@ mod test {
             exchange_instruction::swap_request(&owner.pubkey(), &to_trade, &from_trade, &profit);
         client
             .send_instruction(&owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let new = create_token_account(&client, &owner);
 
@@ -870,13 +871,13 @@ mod test {
             exchange_instruction::transfer_request(&owner.pubkey(), &new, &to_trade, Token::B, 1);
         client
             .send_instruction(&owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let instruction =
             exchange_instruction::transfer_request(&owner.pubkey(), &new, &from_trade, Token::A, 1);
         client
             .send_instruction(&owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+            .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
         let new_account_data = client.get_account_data(&new).unwrap().unwrap();
 

@@ -639,42 +639,39 @@ pub mod test {
             assert!(self.bank_forks.read().unwrap().get(root).is_some());
 
             let mut walk = TreeWalk::from(forks);
-            loop {
-                if let Some(visit) = walk.get() {
-                    let slot = visit.node().data;
-                    self.progress
-                        .entry(slot)
-                        .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
-                    if self.bank_forks.read().unwrap().get(slot).is_some() {
-                        walk.forward();
-                        continue;
-                    }
-                    let parent = walk.get_parent().unwrap().data;
-                    let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap().clone();
-                    let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
-                    for (pubkey, vote) in cluster_votes.iter() {
-                        if vote.contains(&parent) {
-                            let keypairs = self.validator_keypairs.get(pubkey).unwrap();
-                            let last_blockhash = parent_bank.last_blockhash();
-                            let vote_tx = vote_transaction::new_vote_transaction(
-                                // Must vote > root to be processed
-                                vec![parent],
-                                parent_bank.hash(),
-                                last_blockhash,
-                                &keypairs.node_keypair,
-                                &keypairs.vote_keypair,
-                                &keypairs.vote_keypair,
-                            );
-                            info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
-                            new_bank.process_transaction(&vote_tx).unwrap();
-                        }
-                    }
-                    new_bank.freeze();
-                    self.bank_forks.write().unwrap().insert(new_bank);
+
+            while let Some(visit) = walk.get() {
+                let slot = visit.node().data;
+                self.progress
+                    .entry(slot)
+                    .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
+                if self.bank_forks.read().unwrap().get(slot).is_some() {
                     walk.forward();
-                } else {
-                    break;
+                    continue;
                 }
+                let parent = walk.get_parent().unwrap().data;
+                let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap().clone();
+                let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
+                for (pubkey, vote) in cluster_votes.iter() {
+                    if vote.contains(&parent) {
+                        let keypairs = self.validator_keypairs.get(pubkey).unwrap();
+                        let last_blockhash = parent_bank.last_blockhash();
+                        let vote_tx = vote_transaction::new_vote_transaction(
+                            // Must vote > root to be processed
+                            vec![parent],
+                            parent_bank.hash(),
+                            last_blockhash,
+                            &keypairs.node_keypair,
+                            &keypairs.vote_keypair,
+                            &keypairs.vote_keypair,
+                        );
+                        info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
+                        new_bank.process_transaction(&vote_tx).unwrap();
+                    }
+                }
+                new_bank.freeze();
+                self.bank_forks.write().unwrap().insert(new_bank);
+                walk.forward();
             }
         }
 
@@ -1092,7 +1089,7 @@ pub mod test {
         // will only both show up in slot 48, at which point
         // 2/5 > SWITCH_FORK_THRESHOLD of the stake has voted
         // on another fork, so switching should suceed
-        let votes_to_simulate = (46..=48).into_iter().collect();
+        let votes_to_simulate = (46..=48).collect();
         let results = vote_simulator.create_and_vote_new_branch(
             45,
             48,
@@ -1146,11 +1143,11 @@ pub mod test {
         let mut my_votes: Vec<Slot> = vec![];
         let next_unlocked_slot = 110;
         // Vote on the first minor fork
-        my_votes.extend((0..=14).into_iter());
+        my_votes.extend(0..=14);
         // Come back to the main fork
-        my_votes.extend((43..=44).into_iter());
+        my_votes.extend(43..=44);
         // Vote on the second minor fork
-        my_votes.extend((45..=50).into_iter());
+        my_votes.extend(45..=50);
         // Vote to come back to main fork
         my_votes.push(next_unlocked_slot);
         cluster_votes.insert(node_pubkey, my_votes.clone());
@@ -1219,14 +1216,14 @@ pub mod test {
 
     #[test]
     fn test_collect_vote_lockouts_root() {
-        let votes: Vec<u64> = (0..MAX_LOCKOUT_HISTORY as u64).into_iter().collect();
+        let votes: Vec<u64> = (0..MAX_LOCKOUT_HISTORY as u64).collect();
         //two accounts voting for slots 0..MAX_LOCKOUT_HISTORY with 1 token staked
         let accounts = gen_stakes(&[(1, &votes), (1, &votes)]);
         let mut tower = Tower::new_for_tests(0, 0.67);
         let mut ancestors = HashMap::new();
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
             tower.record_vote(i as u64, Hash::default());
-            ancestors.insert(i as u64, (0..i as u64).into_iter().collect());
+            ancestors.insert(i as u64, (0..i as u64).collect());
         }
         let root = Lockout {
             confirmation_count: MAX_LOCKOUT_HISTORY as u32,

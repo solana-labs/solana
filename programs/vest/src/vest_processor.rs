@@ -280,7 +280,7 @@ mod tests {
 
         assert_eq!(
             verify_signed_account(&keyed_account, &date_pubkey).unwrap_err(),
-            InstructionError::MissingRequiredSignature.into()
+            InstructionError::MissingRequiredSignature
         );
     }
 

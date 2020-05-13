@@ -768,7 +768,7 @@ mod tests {
                     .expect("run_orphan packets")
                     .packets
                     .iter()
-                    .map(|b| b.clone())
+                    .cloned()
                     .collect();
             let expected: Vec<_> = (1..=3)
                 .rev()

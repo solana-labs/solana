@@ -319,7 +319,7 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
             process_instruction(
                 &bpf_loader::id(),
-                &vec![],
+                &[],
                 &instruction_data,
                 &mut MockInvokeContext::default()
             )
@@ -385,7 +385,7 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
             process_instruction(
                 &bpf_loader::id(),
-                &vec![],
+                &[],
                 &instruction_data,
                 &mut MockInvokeContext::default()
             )
@@ -453,8 +453,8 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
             process_instruction(
                 &bpf_loader::id(),
-                &vec![],
-                &vec![],
+                &[],
+                &[],
                 &mut MockInvokeContext::default()
             )
         );
@@ -465,7 +465,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &keyed_accounts,
-                &vec![],
+                &[],
                 &mut MockInvokeContext::default()
             )
         );
@@ -477,7 +477,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &keyed_accounts,
-                &vec![],
+                &[],
                 &mut MockInvokeContext::default()
             )
         );
@@ -491,7 +491,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &keyed_accounts,
-                &vec![],
+                &[],
                 &mut MockInvokeContext::default()
             )
         );
@@ -507,7 +507,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &keyed_accounts,
-                &vec![],
+                &[],
                 &mut MockInvokeContext::default()
             )
         );
@@ -568,7 +568,7 @@ mod tests {
                 let _result = process_instruction(
                     &bpf_loader::id(),
                     &keyed_accounts,
-                    &vec![],
+                    &[],
                     &mut MockInvokeContext::default(),
                 );
             },

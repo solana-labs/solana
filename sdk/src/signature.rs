@@ -396,7 +396,7 @@ mod tests {
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
         let keypair = Keypair::new();
 
-        format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey()).to_string()
+        format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey())
     }
 
     #[test]

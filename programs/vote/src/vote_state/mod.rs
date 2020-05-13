@@ -1353,13 +1353,11 @@ mod tests {
         let mut vote_state_b = VoteState::new_for_test(&account_b);
 
         // process some votes on account a
-        (0..5)
-            .into_iter()
-            .for_each(|i| vote_state_a.process_slot_vote_unchecked(i as u64));
+        (0..5).for_each(|i| vote_state_a.process_slot_vote_unchecked(i as u64));
         assert_ne!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
 
         // as long as b has missed less than "NUM_RECENT" votes both accounts should be in sync
-        let slots = (0u64..MAX_RECENT_VOTES as u64).into_iter().collect();
+        let slots = (0u64..MAX_RECENT_VOTES as u64).collect();
         let vote = Vote::new(slots, Hash::default());
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
 
@@ -1389,7 +1387,7 @@ mod tests {
 
         let vote = Vote::new(vec![0], Hash::default());
         assert_eq!(
-            vote_state.check_slots_are_valid(&vote, &vec![]),
+            vote_state.check_slots_are_valid(&vote, &[]),
             Err(VoteError::VoteTooOld)
         );
     }
@@ -1642,7 +1640,7 @@ mod tests {
 
     #[test]
     fn test_vote_process_timestamp() {
-        let (slot, timestamp) = (15, 1575412285);
+        let (slot, timestamp) = (15, 1_575_412_285);
         let mut vote_state = VoteState::default();
         vote_state.last_timestamp = BlockTimestamp { slot, timestamp };
 
@@ -1767,13 +1765,13 @@ mod tests {
         let new_voter = Pubkey::new_rand();
         // Set a new authorized voter
         vote_state
-            .set_new_authorized_voter(&new_voter, 0, 0 + epoch_offset, |_| Ok(()))
+            .set_new_authorized_voter(&new_voter, 0, epoch_offset, |_| Ok(()))
             .unwrap();
 
         assert_eq!(vote_state.prior_voters.idx, 0);
         assert_eq!(
             vote_state.prior_voters.last(),
-            Some(&(original_voter, 0, 0 + epoch_offset))
+            Some(&(original_voter, 0, epoch_offset))
         );
 
         // Trying to set authorized voter for same epoch again should fail

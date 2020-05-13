@@ -89,6 +89,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_inflation_basic() {
         let inflation = Inflation::default();
 

@@ -78,10 +78,10 @@ mod tests {
 
     #[test]
     fn test() {
-        let mut account = RefCell::new(create_account(0, &Config::default()));
+        let account = RefCell::new(create_account(0, &Config::default()));
         assert_eq!(Config::from(&account.borrow()), Some(Config::default()));
         assert_eq!(
-            from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &mut account)),
+            from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &account)),
             Err(InstructionError::InvalidArgument)
         );
     }

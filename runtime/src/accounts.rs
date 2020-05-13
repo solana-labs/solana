@@ -819,7 +819,7 @@ mod tests {
 
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
-        ka: &Vec<(Pubkey, Account)>,
+        ka: &[(Pubkey, Account)],
         fee_calculator: &FeeCalculator,
         rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
@@ -832,7 +832,7 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let res = accounts.load_accounts(
+        accounts.load_accounts(
             &ancestors,
             &[tx],
             None,
@@ -840,13 +840,12 @@ mod tests {
             &hash_queue,
             error_counters,
             rent_collector,
-        );
-        res
+        )
     }
 
     fn load_accounts_with_fee(
         tx: Transaction,
-        ka: &Vec<(Pubkey, Account)>,
+        ka: &[(Pubkey, Account)],
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
@@ -856,7 +855,7 @@ mod tests {
 
     fn load_accounts(
         tx: Transaction,
-        ka: &Vec<(Pubkey, Account)>,
+        ka: &[(Pubkey, Account)],
         error_counters: &mut ErrorCounters,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         let fee_calculator = FeeCalculator::default();
@@ -1090,7 +1089,7 @@ mod tests {
         // Fee leaves non-zero, but sub-min_balance balance fails
         accounts[0].1.lamports = 3 * min_balance / 2;
         let loaded_accounts = load_accounts_with_fee_and_rent(
-            tx.clone(),
+            tx,
             &accounts,
             &fee_calculator,
             &rent_collector,
@@ -1473,7 +1472,7 @@ mod tests {
         accounts.bank_hash_at(1);
     }
 
-    fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {
+    fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
         for _ in 1..num {
             let idx = thread_rng().gen_range(0, num - 1);
             let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1701,7 +1700,7 @@ mod tests {
                 }
             }
         });
-        let counter_clone = counter.clone();
+        let counter_clone = counter;
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
             let results = accounts_arc.clone().lock_accounts(&txs, None);
@@ -1768,7 +1767,7 @@ mod tests {
             Some(HashAgeKind::Extant),
         );
 
-        let transaction_accounts1 = vec![account1, account2.clone()];
+        let transaction_accounts1 = vec![account1, account2];
         let transaction_loaders1 = vec![];
         let transaction_rent1 = 0;
         let loaded1 = (
@@ -1804,12 +1803,10 @@ mod tests {
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()
-            .find(|(pubkey, _account)| *pubkey == &keypair0.pubkey())
-            .is_some());
+            .any(|(pubkey, _account)| *pubkey == &keypair0.pubkey()));
         assert!(collected_accounts
             .iter()
-            .find(|(pubkey, _account)| *pubkey == &keypair1.pubkey())
-            .is_some());
+            .any(|(pubkey, _account)| *pubkey == &keypair1.pubkey()));
 
         // Ensure readonly_lock reflects lock
         let readonly_locks = accounts.readonly_locks.read().unwrap();

@@ -65,6 +65,7 @@ fn retransmit(
     shred
 }
 
+#[allow(clippy::type_complexity)]
 fn run_simulation(stakes: &[u64], fanout: usize) {
     let num_threads = num_threads();
     // set timeout to 5 minutes
@@ -91,7 +92,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     let range: Vec<_> = (1..=stakes.len()).collect();
     let chunk_size = (stakes.len() + num_threads - 1) / num_threads;
     range.chunks(chunk_size).for_each(|chunk| {
-        chunk.into_iter().for_each(|i| {
+        chunk.iter().for_each(|i| {
             //distribute neighbors across threads to maximize parallel compute
             let batch_ix = *i as usize % batches.len();
             let node = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
@@ -121,16 +122,15 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                 &stakes_and_index,
                 seed,
             );
-            let peers = shuffled_stakes_and_indexes
+            shuffled_stakes_and_indexes
                 .into_iter()
                 .map(|(_, i)| peers[i].clone())
-                .collect();
-            peers
+                .collect()
         })
         .collect();
 
     // create some "shreds".
-    (0..shreds_len).into_iter().for_each(|i| {
+    (0..shreds_len).for_each(|i| {
         let broadcast_table = &shuffled_peers[i];
         find_insert_shred(&broadcast_table[0].id, i as i32, &mut batches);
     });

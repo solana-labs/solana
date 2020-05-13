@@ -259,7 +259,7 @@ pub mod tests {
 
         //start cluster_info1
         let cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
-        cluster_info1.insert_info(leader.info.clone());
+        cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 
         let (blockstore_path, _) = create_new_tmp_ledger!(&genesis_config);

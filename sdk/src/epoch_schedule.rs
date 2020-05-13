@@ -183,10 +183,8 @@ mod tests {
                     //   until they reach slots_per_epoch
 
                     let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
-                    if slots_in_epoch != last_slots_in_epoch {
-                        if slots_in_epoch != slots_per_epoch {
-                            assert_eq!(slots_in_epoch, last_slots_in_epoch * 2);
-                        }
+                    if slots_in_epoch != last_slots_in_epoch && slots_in_epoch != slots_per_epoch {
+                        assert_eq!(slots_in_epoch, last_slots_in_epoch * 2);
                     }
                     last_slots_in_epoch = slots_in_epoch;
                 }

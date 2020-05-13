@@ -117,15 +117,17 @@ mod tests {
         let keypair = Keypair::new();
         let hash = Hash::new(&[1; 32]);
         let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
-        let rv = to_packets(&vec![tx.clone(); 1]);
+        let rv = to_packets(&[tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].packets.len(), 1);
 
+        #[allow(clippy::useless_vec)]
         let rv = to_packets(&vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].packets.len(), NUM_PACKETS);
 
-        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS + 1]);
+        #[allow(clippy::useless_vec)]
+        let rv = to_packets(&vec![tx; NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
         assert_eq!(rv[0].packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].packets.len(), 1);

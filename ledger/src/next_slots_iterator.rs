@@ -91,21 +91,18 @@ mod tests {
 
         // Trying to get an iterator on any slot on the root fork should succeed
         let result: HashSet<_> = NextSlotsIterator::new(0, &blockstore)
-            .into_iter()
             .map(|(slot, _)| slot)
             .collect();
         let expected = vec![0, 1, 2, 3, 4].into_iter().collect();
         assert_eq!(result, expected);
 
         let result: HashSet<_> = NextSlotsIterator::new(2, &blockstore)
-            .into_iter()
             .map(|(slot, _)| slot)
             .collect();
         let expected = vec![2, 3].into_iter().collect();
         assert_eq!(result, expected);
 
         let result: HashSet<_> = NextSlotsIterator::new(4, &blockstore)
-            .into_iter()
             .map(|(slot, _)| slot)
             .collect();
         let expected = vec![4].into_iter().collect();

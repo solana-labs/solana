@@ -456,6 +456,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_age_sanity() {
         assert!(MAX_CACHE_ENTRIES <= MAX_RECENT_BLOCKHASHES);
     }

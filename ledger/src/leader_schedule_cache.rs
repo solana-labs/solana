@@ -400,11 +400,11 @@ mod tests {
         );
         assert_eq!(
             cache.next_leader_slot(&pubkey, 0, &bank, None, std::u64::MAX),
-            Some((1, 863999))
+            Some((1, 863_999))
         );
         assert_eq!(
             cache.next_leader_slot(&pubkey, 1, &bank, None, std::u64::MAX),
-            Some((2, 863999))
+            Some((2, 863_999))
         );
         assert_eq!(
             cache.next_leader_slot(

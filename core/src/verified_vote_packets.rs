@@ -94,7 +94,7 @@ mod tests {
         let (new_update_version, updates) = verified_vote_packets.get_latest_votes(1);
         assert_eq!(new_update_version, 2);
         assert_eq!(updates.len(), 1);
-        assert!(updates[0].packets.len() > 0);
+        assert_eq!(updates[0].packets.is_empty(), false);
 
         // If the given timestamp is greater than all timestamps in any update,
         // returned timestamp should be the same as the given timestamp, and
@@ -123,8 +123,7 @@ mod tests {
         };
 
         let later_packets = Packets::new(vec![data, Packet::default()]);
-        s.send(vec![(label1.clone(), later_packets.clone())])
-            .unwrap();
+        s.send(vec![(label1.clone(), later_packets)]).unwrap();
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
             .get_and_process_vote_packets(&r, &mut update_version)

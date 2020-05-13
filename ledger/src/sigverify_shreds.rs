@@ -452,7 +452,7 @@ pub mod tests {
     fn test_sigverify_shred_cpu() {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let slot = 0xdeadc0de;
+        let slot = 0xdead_c0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -495,7 +495,7 @@ pub mod tests {
     fn test_sigverify_shreds_cpu() {
         solana_logger::setup();
         let mut batch = [Packets::default()];
-        let slot = 0xdeadc0de;
+        let slot = 0xdead_c0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -547,7 +547,7 @@ pub mod tests {
         let recycler_cache = RecyclerCache::default();
 
         let mut batch = [Packets::default()];
-        let slot = 0xdeadc0de;
+        let slot = 0xdead_c0de;
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -610,7 +610,7 @@ pub mod tests {
         let mut packets = Packets::default();
         let num_packets = 32;
         let num_batches = 100;
-        let slot = 0xdeadc0de;
+        let slot = 0xdead_c0de;
         packets.packets.resize(num_packets, Packet::default());
         for (i, p) in packets.packets.iter_mut().enumerate() {
             let shred = Shred::new_from_data(
@@ -654,7 +654,7 @@ pub mod tests {
         solana_logger::setup();
 
         let mut batch = [Packets::default()];
-        let slot = 0xdeadc0de;
+        let slot = 0xdead_c0de;
         let keypair = Keypair::new();
         let shred = Shred::new_from_data(
             slot,

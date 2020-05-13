@@ -1102,7 +1102,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone()).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]); // slot 1 isn't "full", we stop at slot zero
 
@@ -1197,8 +1197,8 @@ pub mod tests {
             .parents()
             .iter()
             .map(|bank| bank.slot())
-            .collect::<Vec<_>>()
-            .is_empty());
+            .next()
+            .is_none());
 
         // Ensure bank_forks holds the right banks
         verify_fork_infos(&bank_forks);
@@ -1488,8 +1488,8 @@ pub mod tests {
             .parents()
             .iter()
             .map(|bank| bank.slot())
-            .collect::<Vec<_>>()
-            .is_empty());
+            .next()
+            .is_none());
     }
 
     #[test]
@@ -1756,7 +1756,7 @@ pub mod tests {
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
-        assert_eq!(process_entries(&bank, &[tick.clone()], true, None), Ok(()));
+        assert_eq!(process_entries(&bank, &[tick], true, None), Ok(()));
         assert_eq!(bank.tick_height(), 1);
     }
 
@@ -2026,9 +2026,9 @@ pub mod tests {
         assert!(process_entries(
             &bank,
             &[
-                entry_1_to_mint.clone(),
-                entry_2_to_3_and_1_to_mint.clone(),
-                entry_conflict_itself.clone()
+                entry_1_to_mint,
+                entry_2_to_3_and_1_to_mint,
+                entry_conflict_itself,
             ],
             false,
             None,
@@ -2199,21 +2199,18 @@ pub mod tests {
 
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
-        assert_eq!(process_entries(&bank, &vec![entry], true, None), Ok(()));
+        assert_eq!(process_entries(&bank, &[entry], true, None), Ok(()));
         bank.squash();
 
         // Even number keypair should have balance of 2 * initial_lamports and
         // odd number keypair should have balance of 0, which proves
         // that even in case of random order of execution, overall state remains
         // consistent.
-        for i in 0..num_accounts {
+        for (i, keypair) in keypairs.iter().enumerate() {
             if i % 2 == 0 {
-                assert_eq!(
-                    bank.get_balance(&keypairs[i].pubkey()),
-                    2 * initial_lamports
-                );
+                assert_eq!(bank.get_balance(&keypair.pubkey()), 2 * initial_lamports);
             } else {
-                assert_eq!(bank.get_balance(&keypairs[i].pubkey()), 0);
+                assert_eq!(bank.get_balance(&keypair.pubkey()), 0);
             }
         }
     }
@@ -2260,12 +2257,7 @@ pub mod tests {
             system_transaction::transfer(&keypair1, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(
-                &bank,
-                &[entry_1.clone(), tick.clone(), entry_2.clone()],
-                true,
-                None
-            ),
+            process_entries(&bank, &[entry_1, tick, entry_2.clone()], true, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -2539,7 +2531,9 @@ pub mod tests {
             .expect("process ticks failed");
 
             if i % 16 == 0 {
-                root.map(|old_root| old_root.squash());
+                if let Some(old_root) = root {
+                    old_root.squash();
+                }
                 root = Some(bank.clone());
             }
             i += 1;
@@ -2584,7 +2578,7 @@ pub mod tests {
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths(&genesis_config, account_paths, &[]);
-        bank.epoch_schedule().clone()
+        *bank.epoch_schedule()
     }
 
     fn frozen_bank_slots(bank_forks: &BankForks) -> Vec<Slot> {

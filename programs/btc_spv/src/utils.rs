@@ -106,7 +106,7 @@ mod test {
 
         assert_eq!(106, value_a);
         assert_eq!(550, value_b);
-        assert_eq!(998000, value_c);
+        assert_eq!(998_000, value_c);
     }
 
     #[test]

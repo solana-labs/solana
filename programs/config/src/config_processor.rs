@@ -119,7 +119,7 @@ mod tests {
     }
     impl Default for MyConfig {
         fn default() -> Self {
-            Self { item: 123456789 }
+            Self { item: 123_456_789 }
         }
     }
     impl MyConfig {
@@ -172,7 +172,7 @@ mod tests {
     fn test_process_create_ok() {
         solana_logger::setup();
         let keys = vec![];
-        let (_, config_account) = create_config_account(keys.clone());
+        let (_, config_account) = create_config_account(keys);
         assert_eq!(
             Some(MyConfig::default()),
             deserialize(get_config_data(&config_account.borrow().data).unwrap()).ok()
@@ -187,7 +187,7 @@ mod tests {
         let config_pubkey = config_keypair.pubkey();
         let my_config = MyConfig::new(42);
 
-        let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
+        let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
@@ -208,8 +208,7 @@ mod tests {
         let config_pubkey = config_keypair.pubkey();
         let my_config = MyConfig::new(42);
 
-        let mut instruction =
-            config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
+        let mut instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
         instruction.data = vec![0; 123]; // <-- Replace data with a vector that's too large
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
@@ -223,7 +222,7 @@ mod tests {
     fn test_process_store_fail_account0_not_signer() {
         solana_logger::setup();
         let keys = vec![];
-        let (config_keypair, config_account) = create_config_account(keys.clone());
+        let (config_keypair, config_account) = create_config_account(keys);
         let config_pubkey = config_keypair.pubkey();
         let my_config = MyConfig::new(42);
 
@@ -283,8 +282,7 @@ mod tests {
         let config_pubkey = config_keypair.pubkey();
         let my_config = MyConfig::new(42);
 
-        let instruction =
-            config_instruction::store(&config_pubkey, false, keys.clone(), &my_config);
+        let instruction = config_instruction::store(&config_pubkey, false, keys, &my_config);
         let signer0_account = RefCell::new(Account::default());
         let accounts = vec![(&signer0_pubkey, true, &signer0_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
@@ -306,7 +304,7 @@ mod tests {
         let config_pubkey = config_keypair.pubkey();
         let my_config = MyConfig::new(42);
 
-        let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
+        let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
 
         // Config-data pubkey doesn't match signer
         let accounts = vec![
@@ -385,8 +383,7 @@ mod tests {
 
         // Attempt update with incomplete signatures
         let keys = vec![(pubkey, false), (signer0_pubkey, true)];
-        let instruction =
-            config_instruction::store(&config_pubkey, false, keys.clone(), &my_config);
+        let instruction = config_instruction::store(&config_pubkey, false, keys, &my_config);
         let accounts = vec![
             (&config_pubkey, false, &config_account),
             (&signer0_pubkey, true, &signer0_account),
@@ -404,8 +401,7 @@ mod tests {
             (signer0_pubkey, true),
             (signer2_pubkey, true),
         ];
-        let instruction =
-            config_instruction::store(&config_pubkey, false, keys.clone(), &my_config);
+        let instruction = config_instruction::store(&config_pubkey, false, keys, &my_config);
         let accounts = vec![
             (&config_pubkey, false, &config_account),
             (&signer0_pubkey, true, &signer0_account),
@@ -429,7 +425,7 @@ mod tests {
             (signer0_pubkey, true),
             (signer0_pubkey, true),
         ]; // Dummy keys for account sizing
-        let (config_keypair, config_account) = create_config_account(keys.clone());
+        let (config_keypair, config_account) = create_config_account(keys);
         let config_pubkey = config_keypair.pubkey();
         let my_config = MyConfig::new(42);
 
@@ -472,7 +468,7 @@ mod tests {
 
         // Attempt update with incomplete signatures
         let keys = vec![(pubkey, false), (config_keypair.pubkey(), true)];
-        let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
+        let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(

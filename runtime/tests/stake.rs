@@ -211,7 +211,7 @@ fn test_stake_account_lifetime() {
     if let StakeState::Stake(_meta, stake) = stake_state {
         assert_eq!(stake.delegation.stake, 1_000_000);
     } else {
-        assert!(false, "wrong account type found")
+        panic!("wrong account type found")
     }
 
     // Test that we cannot withdraw anything until deactivation
@@ -235,7 +235,7 @@ fn test_stake_account_lifetime() {
     if let StakeState::Stake(_meta, stake) = stake_state {
         assert_eq!(stake.delegation.stake, 1_000_000);
     } else {
-        assert!(false, "wrong account type found")
+        panic!("wrong account type found")
     }
 
     loop {
@@ -453,6 +453,6 @@ fn test_create_stake_account_from_seed() {
     if let StakeState::Stake(_meta, stake) = stake_state {
         assert_eq!(stake.delegation.stake, 1_000_000);
     } else {
-        assert!(false, "wrong account type found")
+        panic!("wrong account type found")
     }
 }
