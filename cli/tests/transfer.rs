@@ -1,12 +1,13 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
-    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig, TransferAmount},
+    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
     nonce,
     offline::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
+    spend_utils::SpendAmount,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
@@ -55,7 +56,7 @@ fn test_transfer() {
 
     // Plain ole transfer
     config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(10),
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -71,7 +72,7 @@ fn test_transfer() {
 
     // Plain ole transfer, failure due to InsufficientFundsForSpendAndFee
     config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(49_989),
+        amount: SpendAmount::Some(49_989),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -99,7 +100,7 @@ fn test_transfer() {
     // Offline transfer
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     offline.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(10),
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: true,
@@ -116,7 +117,7 @@ fn test_transfer() {
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(10),
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -154,7 +155,7 @@ fn test_transfer() {
     // Nonced transfer
     config.signers = vec![&default_signer];
     config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(10),
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -195,7 +196,7 @@ fn test_transfer() {
     // Offline, nonced transfer
     offline.signers = vec![&default_offline_signer];
     offline.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(10),
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: true,
@@ -211,7 +212,7 @@ fn test_transfer() {
     let offline_presigner = sign_only.presigner_of(&offline_pubkey).unwrap();
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(10),
+        amount: SpendAmount::Some(10),
         to: recipient_pubkey,
         from: 0,
         sign_only: false,
@@ -288,7 +289,7 @@ fn test_transfer_multisession_signing() {
     fee_payer_config.command = CliCommand::ClusterVersion;
     process_command(&fee_payer_config).unwrap_err();
     fee_payer_config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(42),
+        amount: SpendAmount::Some(42),
         to: to_pubkey,
         from: 1,
         sign_only: true,
@@ -314,7 +315,7 @@ fn test_transfer_multisession_signing() {
     from_config.command = CliCommand::ClusterVersion;
     process_command(&from_config).unwrap_err();
     from_config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(42),
+        amount: SpendAmount::Some(42),
         to: to_pubkey,
         from: 1,
         sign_only: true,
@@ -337,7 +338,7 @@ fn test_transfer_multisession_signing() {
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&fee_payer_presigner, &from_presigner];
     config.command = CliCommand::Transfer {
-        amount: TransferAmount::Some(42),
+        amount: SpendAmount::Some(42),
         to: to_pubkey,
         from: 1,
         sign_only: false,
@@ -393,7 +394,7 @@ fn test_transfer_all() {
 
     // Plain ole transfer
     config.command = CliCommand::Transfer {
-        amount: TransferAmount::All,
+        amount: SpendAmount::All,
         to: recipient_pubkey,
         from: 0,
         sign_only: false,

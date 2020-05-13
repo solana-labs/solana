@@ -5,7 +5,7 @@ use crate::{
     display::println_name_value,
     nonce::{self, *},
     offline::{blockhash_query::BlockhashQuery, *},
-    spend_utils::resolve_spend_tx_and_check_account_balances,
+    spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     stake::*,
     storage::*,
     validator_info::*,
@@ -161,28 +161,6 @@ impl std::ops::Deref for KeypairEq {
 
 pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     nonce::nonce_authority_arg().requires(NONCE_ARG.name)
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum TransferAmount {
-    All,
-    Some(u64),
-}
-
-impl TransferAmount {
-    pub fn new(amount: Option<u64>, sign_only: bool) -> Self {
-        match amount {
-            Some(lamports) => Self::Some(lamports),
-            None if !sign_only => Self::All,
-            _ => panic!("ALL amount not supported for sign-only operations"),
-        }
-    }
-
-    pub fn new_from_matches(matches: &ArgMatches<'_>, name: &str) -> Self {
-        let amount = lamports_of_sol(matches, name);
-        let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-        TransferAmount::new(amount, sign_only)
-    }
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -456,7 +434,7 @@ pub enum CliCommand {
     },
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>), // TimeElapsed(to, process_id, timestamp)
     Transfer {
-        amount: TransferAmount,
+        amount: SpendAmount,
         to: Pubkey,
         from: SignerIndex,
         sign_only: bool,
@@ -986,7 +964,7 @@ pub fn parse_command(
             })
         }
         ("transfer", Some(matches)) => {
-            let amount = TransferAmount::new_from_matches(matches, "amount");
+            let amount = SpendAmount::new_from_matches(matches, "amount");
             let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
             let no_wait = matches.is_present("no_wait");
@@ -1565,7 +1543,7 @@ fn process_time_elapsed(
 fn process_transfer(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    amount: TransferAmount,
+    amount: SpendAmount,
     to: &Pubkey,
     from: SignerIndex,
     sign_only: bool,
@@ -3691,7 +3669,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    amount: TransferAmount::Some(42_000_000_000),
+                    amount: SpendAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
@@ -3713,7 +3691,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    amount: TransferAmount::All,
+                    amount: SpendAmount::All,
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
@@ -3739,7 +3717,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    amount: TransferAmount::Some(42_000_000_000),
+                    amount: SpendAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
@@ -3769,7 +3747,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    amount: TransferAmount::Some(42_000_000_000),
+                    amount: SpendAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: true,
@@ -3804,7 +3782,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    amount: TransferAmount::Some(42_000_000_000),
+                    amount: SpendAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
@@ -3843,7 +3821,7 @@ mod tests {
             parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
-                    amount: TransferAmount::Some(42_000_000_000),
+                    amount: SpendAmount::Some(42_000_000_000),
                     to: to_pubkey,
                     from: 0,
                     sign_only: false,
