@@ -5522,20 +5522,14 @@ mod tests {
     #[test]
     fn test_zero_signatures() {
         solana_logger::setup();
-        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
         bank.fee_calculator.lamports_per_signature = 2;
         let key = Keypair::new();
 
-        let mut transfer_instruction =
-            system_instruction::transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
-        transfer_instruction.accounts[0].is_signer = false;
-
-        let tx = Transaction::new_signed_instructions(
-            &Vec::<&Keypair>::new(),
-            &[transfer_instruction],
-            bank.last_blockhash(),
-        );
+        let mut message = Message::new_with_payer(&[], Some(&Pubkey::default()));
+        message.header.num_required_signatures = 0; // Attack! Don't require a signature.
+        let tx = Transaction::new(&Vec::<&Keypair>::new(), message, bank.last_blockhash());
 
         assert_eq!(
             bank.process_transaction(&tx),

@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn tx_uses_nonce_empty_ix_fail() {
-        let tx = Transaction::new_signed_instructions(&[&Keypair::new(); 0], &[], Hash::default());
+        let tx = Transaction::new_with_payer(&[], Some(&Pubkey::default()));
         assert!(transaction_uses_durable_nonce(&tx).is_none());
     }
 

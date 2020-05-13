@@ -608,7 +608,7 @@ mod tests {
         for owned_index in (1..depth_reached).rev() {
             let not_owned_index = owned_index - 1;
             let metas = vec![
-                AccountMeta::new(keys[not_owned_index], false),
+                AccountMeta::new(keys[not_owned_index], true),
                 AccountMeta::new(keys[owned_index], false),
             ];
             let message =
@@ -620,7 +620,7 @@ mod tests {
                 .verify_and_update(
                     &message,
                     &message.instructions[0],
-                    &[],
+                    &[keys[not_owned_index]],
                     &accounts[not_owned_index..owned_index + 1],
                 )
                 .unwrap();
@@ -636,7 +636,7 @@ mod tests {
                 invoke_context.verify_and_update(
                     &message,
                     &message.instructions[0],
-                    &[],
+                    &[keys[not_owned_index]],
                     &accounts[not_owned_index..owned_index + 1],
                 ),
                 Err(InstructionError::ExternalAccountDataModified)
@@ -1431,7 +1431,7 @@ mod tests {
             vec![owned_preaccount, not_owned_preaccount],
         );
         let metas = vec![
-            AccountMeta::new(owned_key, false),
+            AccountMeta::new(owned_key, true),
             AccountMeta::new(not_owned_key, false),
         ];
 
@@ -1447,7 +1447,7 @@ mod tests {
                 &message,
                 &executable_accounts,
                 &accounts,
-                &[],
+                &[owned_key],
                 mock_process_instruction,
                 &mut invoke_context,
             ),
@@ -1476,7 +1476,7 @@ mod tests {
                     &message,
                     &executable_accounts,
                     &accounts,
-                    &[],
+                    &[owned_key],
                     mock_process_instruction,
                     &mut invoke_context,
                 ),
