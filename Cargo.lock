@@ -1359,6 +1359,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d36fab90f82edc3c747f9d438e06cf0a491055896f2a279638bb5beed6c40177"
+
+[[package]]
 name = "hash32"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2573,6 +2579,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pickledb"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9161694d67f6c5163519d42be942ae36bbdb55f439460144f105bc4f9f7d1d61"
+dependencies = [
+ "bincode",
+ "serde",
+ "serde_cbor",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "pin-project"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3424,6 +3443,16 @@ version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bf487fbf5c6239d7ea2ff8b10cb6b811cd4b5080d1c2aeed1dec18753c06e10"
 dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_cbor"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
+dependencies = [
+ "half",
  "serde",
 ]
 
@@ -4824,6 +4853,33 @@ dependencies = [
  "sysctl",
  "unix_socket2",
  "users",
+]
+
+[[package]]
+name = "solana-tokens"
+version = "1.2.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "console 0.10.3",
+ "csv",
+ "dirs 2.0.2",
+ "indexmap",
+ "indicatif",
+ "itertools 0.9.0",
+ "pickledb",
+ "serde",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-client",
+ "solana-core",
+ "solana-remote-wallet",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-stake-program",
+ "solana-transaction-status",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
