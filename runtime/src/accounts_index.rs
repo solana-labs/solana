@@ -6,6 +6,7 @@ use std::{
 
 pub type Slot = u64;
 type SlotList<T> = Vec<(Slot, T)>;
+pub type Ancestors = HashMap<Slot, usize>;
 pub type RefCount = u64;
 type AccountMapEntry<T> = (RefCount, SlotList<T>);
 
@@ -19,7 +20,7 @@ pub struct AccountsIndex<T> {
 
 impl<T: Clone> AccountsIndex<T> {
     /// call func with every pubkey and index visible from a given set of ancestors
-    pub fn scan_accounts<F>(&self, ancestors: &HashMap<Slot, usize>, mut func: F)
+    pub fn scan_accounts<F>(&self, ancestors: &Ancestors, mut func: F)
     where
         F: FnMut(&Pubkey, (&T, Slot)) -> (),
     {
@@ -54,7 +55,7 @@ impl<T: Clone> AccountsIndex<T> {
 
     // find the latest slot and T in a list for a given ancestor
     // returns index into 'list' if found, None if not.
-    fn latest_slot(&self, ancestors: &HashMap<Slot, usize>, list: &[(Slot, T)]) -> Option<usize> {
+    fn latest_slot(&self, ancestors: &Ancestors, list: &[(Slot, T)]) -> Option<usize> {
         let mut max = 0;
         let mut rv = None;
         for (i, (slot, _t)) in list.iter().rev().enumerate() {
@@ -71,7 +72,7 @@ impl<T: Clone> AccountsIndex<T> {
     pub fn get(
         &self,
         pubkey: &Pubkey,
-        ancestors: &HashMap<Slot, usize>,
+        ancestors: &Ancestors,
     ) -> Option<(RwLockReadGuard<AccountMapEntry<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let list_r = list.read().unwrap();
