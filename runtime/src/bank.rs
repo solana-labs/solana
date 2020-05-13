@@ -856,7 +856,12 @@ impl Bank {
 
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.collect_rent_eagerly(); // update the docs
+
+            // DANGER: Remove this guard after tds has transitioned to the eager rent
+            // collection and ABSOLUTELY before the mainnet-beta transitions to v1.1.
+            if !(self.operating_mode() == OperatingMode::Preview && self.epoch() < 45) {
+                self.collect_rent_eagerly();
+            }
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
