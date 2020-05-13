@@ -481,7 +481,7 @@ mod tests {
         hash::{hash, Hash},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_instruction, system_transaction,
+        system_transaction,
         transaction::Transaction,
     };
 
@@ -684,8 +684,7 @@ mod tests {
     #[test]
     fn test_verify_tick_hash_count() {
         let hashes_per_tick = 10;
-        let ix = system_instruction::transfer(&Pubkey::new_rand(), &Pubkey::new_rand(), 0);
-        let tx = Transaction::new_unsigned_instructions(&[ix]);
+        let tx = Transaction::new_with_payer(&[], Some(&Pubkey::default()));
         let tx_entry = Entry::new(&Hash::default(), 1, vec![tx]);
         let full_tick_entry = Entry::new_tick(hashes_per_tick, &Hash::default());
         let partial_tick_entry = Entry::new_tick(hashes_per_tick - 1, &Hash::default());
