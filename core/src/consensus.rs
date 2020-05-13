@@ -447,7 +447,10 @@ impl Tower {
         let root = self.lockouts.root_slot.unwrap_or(0);
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap();
+                let last_vote_ancestors = match ancestors.get(&last_voted_slot) {
+                    None => return SwitchForkDecision::NoSwitch, // last_vote may not be in ancestors after restarting from a snapshot
+                    Some(last_vote_ancestors) => last_vote_ancestors,
+                };
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
                 if switch_slot == last_voted_slot || switch_slot_ancestors.contains(&last_voted_slot) {
