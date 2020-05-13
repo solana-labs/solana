@@ -840,6 +840,7 @@ fn test_snapshot_download() {
 #[test]
 #[serial]
 fn test_snapshot_restart_tower() {
+    solana_logger::setup();
     // First set up the cluster with 2 nodes
     let snapshot_interval_slots = 10;
     let num_account_paths = 2;

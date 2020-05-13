@@ -378,12 +378,15 @@ impl Tower {
             .slots
             .last()
             .map(|last_vote| {
-                let last_vote_ancestors = ancestors.get(&last_vote).unwrap();
+                let last_vote_ancestors = match ancestors.get(&last_vote) {
+                    None => return true, // last_vote may not be in ancestors after restarting from a snapshot
+                    Some(last_vote_ancestors) => last_vote_ancestors,
+                };
                 let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
 
                 if switch_slot == *last_vote || switch_slot_ancestors.contains(last_vote) {
                     // If the `switch_slot is a descendant of the last vote,
-                    // no switching proof is neceessary
+                    // no switching proof is necessary
                     return true;
                 }
 
