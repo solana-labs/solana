@@ -1,5 +1,5 @@
 use crate::{
-    checks::{check_account_for_fee, check_accounts_for_spend_and_fee, check_unique_pubkeys},
+    checks::{check_account_for_fee, check_unique_pubkeys},
     cli::{
         fee_payer_arg, generate_unique_signers, log_instruction_custom_error, nonce_authority_arg,
         return_signers, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
@@ -8,6 +8,7 @@ use crate::{
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::{check_nonce_account, nonce_arg, NONCE_ARG, NONCE_AUTHORITY_ARG},
     offline::{blockhash_query::BlockhashQuery, *},
+    spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, offline::*, ArgConstant};
@@ -84,9 +85,9 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount)
+                        .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to send to the stake account, in SOL")
+                        .help("The amount to send to the stake account, in SOL; accepts keyword ALL")
                 )
                 .arg(
                     pubkey!(Arg::with_name("custodian")
@@ -394,7 +395,7 @@ pub fn parse_stake_create_account(
     let custodian = pubkey_of_signer(matches, "custodian", wallet_manager)?.unwrap_or_default();
     let staker = pubkey_of_signer(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let withdrawer = pubkey_of_signer(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
-    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let amount = SpendAmount::new_from_matches(matches, "amount");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
@@ -423,7 +424,7 @@ pub fn parse_stake_create_account(
                 epoch,
                 unix_timestamp,
             },
-            lamports,
+            amount,
             sign_only,
             blockhash_query,
             nonce_account,
@@ -768,7 +769,7 @@ pub fn process_create_stake_account(
     staker: &Option<Pubkey>,
     withdrawer: &Option<Pubkey>,
     lockup: &Lockup,
-    lamports: u64,
+    amount: SpendAmount,
     sign_only: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
@@ -788,7 +789,50 @@ pub fn process_create_stake_account(
         (&stake_account_address, "stake_account".to_string()),
     )?;
 
-    if !sign_only {
+    let fee_payer = config.signers[fee_payer];
+    let nonce_authority = config.signers[nonce_authority];
+
+    let build_message = |lamports| {
+        let authorized = Authorized {
+            staker: staker.unwrap_or(from.pubkey()),
+            withdrawer: withdrawer.unwrap_or(from.pubkey()),
+        };
+
+        let ixs = if let Some(seed) = seed {
+            stake_instruction::create_account_with_seed(
+                &from.pubkey(),          // from
+                &stake_account_address,  // to
+                &stake_account.pubkey(), // base
+                seed,                    // seed
+                &authorized,
+                lockup,
+                lamports,
+            )
+        } else {
+            stake_instruction::create_account(
+                &from.pubkey(),
+                &stake_account.pubkey(),
+                &authorized,
+                lockup,
+                lamports,
+            )
+        };
+        if let Some(nonce_account) = &nonce_account {
+            Message::new_with_nonce(
+                ixs,
+                Some(&fee_payer.pubkey()),
+                nonce_account,
+                &nonce_authority.pubkey(),
+            )
+        } else {
+            Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
+        }
+    };
+
+    let (recent_blockhash, fee_calculator) =
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
+
+    let additional_online_checks = |lamports| {
         if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
             let err_msg = if stake_account.owner == solana_stake_program::id() {
                 format!("Stake account {} already exists", stake_account_address)
@@ -811,67 +855,30 @@ pub fn process_create_stake_account(
             ))
             .into());
         }
-    }
 
-    let authorized = Authorized {
-        staker: staker.unwrap_or(from.pubkey()),
-        withdrawer: withdrawer.unwrap_or(from.pubkey()),
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = rpc_client.get_account(nonce_account)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+        Ok(())
     };
 
-    let ixs = if let Some(seed) = seed {
-        stake_instruction::create_account_with_seed(
-            &from.pubkey(),          // from
-            &stake_account_address,  // to
-            &stake_account.pubkey(), // base
-            seed,                    // seed
-            &authorized,
-            lockup,
-            lamports,
-        )
-    } else {
-        stake_instruction::create_account(
-            &from.pubkey(),
-            &stake_account.pubkey(),
-            &authorized,
-            lockup,
-            lamports,
-        )
-    };
-    let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client)?;
-
-    let fee_payer = config.signers[fee_payer];
-    let nonce_authority = config.signers[nonce_authority];
-
-    let message = if let Some(nonce_account) = &nonce_account {
-        Message::new_with_nonce(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            nonce_account,
-            &nonce_authority.pubkey(),
-        )
-    } else {
-        Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
-    };
-    let mut tx = Transaction::new_unsigned(message);
+    let mut tx = resolve_spend_tx_and_check_account_balances(
+        rpc_client,
+        sign_only,
+        amount,
+        &fee_calculator,
+        &from.pubkey(),
+        &fee_payer.pubkey(),
+        build_message,
+        additional_online_checks,
+    )?;
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
         return_signers(&tx, &config)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
-        if let Some(nonce_account) = &nonce_account {
-            let nonce_account = rpc_client.get_account(nonce_account)?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
-        }
-        check_accounts_for_spend_and_fee(
-            rpc_client,
-            &from.pubkey(),
-            &fee_payer.pubkey(),
-            &fee_calculator,
-            &tx.message,
-            lamports,
-        )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<SystemError>(result, &config)
     }
@@ -2028,7 +2035,7 @@ mod tests {
                         unix_timestamp: 0,
                         custodian,
                     },
-                    lamports: 50_000_000_000,
+                    amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -2070,7 +2077,7 @@ mod tests {
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup::default(),
-                    lamports: 50_000_000_000,
+                    amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -2128,7 +2135,7 @@ mod tests {
                     staker: None,
                     withdrawer: None,
                     lockup: Lockup::default(),
-                    lamports: 50_000_000_000,
+                    amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
