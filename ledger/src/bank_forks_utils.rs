@@ -69,11 +69,7 @@ pub fn load(
                     &process_options.frozen_accounts,
                     &snapshot_config.snapshot_path,
                     &archive_filename,
-<<<<<<< HEAD
-=======
-                    compression,
                     genesis_config,
->>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
                 )
                 .expect("Load from snapshot failed");
 

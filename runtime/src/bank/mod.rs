@@ -36,14 +36,10 @@ use solana_metrics::{
 };
 use solana_sdk::{
     account::Account,
-<<<<<<< HEAD:runtime/src/bank/mod.rs
-    clock::{get_segment_from_slot, Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
-=======
     clock::{
         get_segment_from_slot, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp,
-        DEFAULT_TICKS_PER_SECOND, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
+        DEFAULT_TICKS_PER_SECOND, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
     },
->>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527):runtime/src/bank.rs
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::{GenesisConfig, OperatingMode},
@@ -382,18 +378,12 @@ pub struct Bank {
     /// Rewards that were paid out immediately after this bank was created
     #[serde(skip)]
     pub rewards: Option<Vec<(Pubkey, i64)>>,
-<<<<<<< HEAD:runtime/src/bank/mod.rs
-=======
-
-    #[serde(skip)]
-    pub skip_drop: AtomicBool,
 
     #[serde(skip)]
     pub operating_mode: Option<OperatingMode>,
 
     #[serde(skip)]
     pub lazy_rent_collection: AtomicBool,
->>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527):runtime/src/bank.rs
 }
 
 impl Default for BlockhashQueue {
@@ -505,14 +495,10 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Ordering::Relaxed)),
             rewards: None,
-<<<<<<< HEAD:runtime/src/bank/mod.rs
-=======
-            skip_drop: AtomicBool::new(false),
             operating_mode: parent.operating_mode,
             lazy_rent_collection: AtomicBool::new(
                 parent.lazy_rent_collection.load(Ordering::Relaxed),
             ),
->>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527):runtime/src/bank.rs
         };
 
         datapoint_info!(
