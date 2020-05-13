@@ -3913,6 +3913,7 @@ mod tests {
             let accounts_index = self.rc.accounts.accounts_db.accounts_index.read().unwrap();
             let (accounts, _) = accounts_index.get(&pubkey, &ancestors).unwrap();
             accounts
+                .1
                 .iter()
                 .map(|(slot, _)| *slot)
                 .collect::<Vec<Slot>>()
