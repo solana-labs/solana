@@ -25,8 +25,7 @@ struct SignedTransactionInfo {
 
 impl Default for TransactionInfo {
     fn default() -> Self {
-        let mut transaction = Transaction::new_unsigned_instructions(&[]);
-        transaction.signatures.push(Signature::default());
+        let transaction = Transaction::new_with_payer(&[], Some(&Pubkey::default()));
         Self {
             recipient: Pubkey::default(),
             amount: 0.0,
