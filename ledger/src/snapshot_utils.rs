@@ -13,7 +13,7 @@ use solana_runtime::{
         MAX_SNAPSHOT_DATA_FILE_SIZE,
     },
 };
-use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
 use std::{
     cmp::Ordering,
     env,
@@ -439,6 +439,11 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     frozen_account_pubkeys: &[Pubkey],
     snapshot_path: &PathBuf,
     snapshot_tar: P,
+<<<<<<< HEAD
+=======
+    compression: CompressionType,
+    genesis_config: &GenesisConfig,
+>>>>>>> 1eb40c3fe... Introduce eager rent collection (#9527)
 ) -> Result<Bank> {
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -458,6 +463,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         frozen_account_pubkeys,
         &unpacked_snapshots_dir,
         unpacked_accounts_dir,
+        genesis_config,
     )?;
 
     if !bank.verify_snapshot_bank() {
@@ -584,6 +590,7 @@ fn rebuild_bank_from_snapshots<P>(
     frozen_account_pubkeys: &[Pubkey],
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
+    genesis_config: &GenesisConfig,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
@@ -612,6 +619,7 @@ where
                     )));
                 }
             };
+            bank.operating_mode = Some(genesis_config.operating_mode);
             info!("Rebuilding accounts...");
             let rc = bank::BankRc::from_stream(
                 account_paths,
