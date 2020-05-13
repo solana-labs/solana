@@ -359,7 +359,7 @@ fn update_finalized_transactions<T: Client>(
             &recent_blockhashes,
         ) {
             Ok(Some(confs)) => {
-                confirmations = Some(cmp::min(confs, confirmations.unwrap_or(usize::MAX)));
+                confirmations = Some(cmp::min(confs, confirmations.unwrap_or(std::usize::MAX)));
             }
             result => {
                 result?;
