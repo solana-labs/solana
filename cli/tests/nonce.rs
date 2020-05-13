@@ -127,7 +127,7 @@ fn full_battery_tests(
         nonce_account: 1,
         seed,
         nonce_authority: optional_authority,
-        lamports: 1000,
+        amount: SpendAmount::Some(1000),
     };
 
     process_command(&config_payer).unwrap();
@@ -290,7 +290,7 @@ fn test_create_account_with_seed() {
         nonce_account: 0,
         seed: Some(seed),
         nonce_authority: Some(authority_pubkey),
-        lamports: 241,
+        amount: SpendAmount::Some(241),
     };
     process_command(&creator_config).unwrap();
     check_balance(241, &rpc_client, &nonce_address);

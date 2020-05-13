@@ -9,6 +9,7 @@ use solana_cli::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
+    spend_utils::SpendAmount,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
@@ -400,7 +401,7 @@ fn test_nonced_pay_tx() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(config.signers[0].pubkey()),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     config.signers.push(&nonce_account);
     process_command(&config).unwrap();

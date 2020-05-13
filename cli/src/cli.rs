@@ -259,7 +259,7 @@ pub enum CliCommand {
         nonce_account: SignerIndex,
         seed: Option<String>,
         nonce_authority: Option<Pubkey>,
-        lamports: u64,
+        amount: SpendAmount,
     },
     GetNonce(Pubkey),
     NewNonce {
@@ -1767,14 +1767,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_account,
             seed,
             nonce_authority,
-            lamports,
+            amount,
         } => process_create_nonce_account(
             &rpc_client,
             config,
             *nonce_account,
             seed.clone(),
             *nonce_authority,
-            *lamports,
+            *amount,
         ),
         // Get the current nonce
         CliCommand::GetNonce(nonce_account_pubkey) => {

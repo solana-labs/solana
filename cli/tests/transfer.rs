@@ -141,7 +141,7 @@ fn test_transfer() {
         nonce_account: 1,
         seed: None,
         nonce_authority: None,
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
     check_balance(49_987 - minimum_nonce_balance, &rpc_client, &sender_pubkey);

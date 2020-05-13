@@ -7,6 +7,7 @@ use solana_cli::{
         blockhash_query::{self, BlockhashQuery},
         parse_sign_only_reply_string,
     },
+    spend_utils::SpendAmount,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::{TestValidator, TestValidatorOptions};
@@ -495,7 +496,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(config.signers[0].pubkey()),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
 
@@ -735,7 +736,7 @@ fn test_stake_authorize() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_authority_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
 
@@ -1016,7 +1017,7 @@ fn test_stake_split() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
@@ -1273,7 +1274,7 @@ fn test_stake_set_lockup() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
     check_balance(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
@@ -1393,7 +1394,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
-        lamports: minimum_nonce_balance,
+        amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
 

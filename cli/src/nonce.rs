@@ -1,10 +1,11 @@
 use crate::{
-    checks::{check_account_for_fee, check_account_for_spend_and_fee, check_unique_pubkeys},
+    checks::{check_account_for_fee, check_unique_pubkeys},
     cli::{
         generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
         CliConfig, CliError, ProcessResult, SignerIndex,
     },
     cli_output::CliNonceAccount,
+    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
@@ -128,8 +129,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_amount)
-                        .help("The amount to load the nonce account with, in SOL"),
+                        .validator(is_amount_or_all)
+                        .help("The amount to load the nonce account with, in SOL; accepts keyword ALL"),
                 )
                 .arg(
                     pubkey!(Arg::with_name(NONCE_AUTHORITY_ARG.name)
@@ -296,7 +297,7 @@ pub fn parse_nonce_create_account(
     let (nonce_account, nonce_account_pubkey) =
         signer_of(matches, "nonce_account_keypair", wallet_manager)?;
     let seed = matches.value_of("seed").map(|s| s.to_string());
-    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let amount = SpendAmount::new_from_matches(matches, "amount");
     let nonce_authority = pubkey_of_signer(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
     let payer_provided = None;
@@ -312,7 +313,7 @@ pub fn parse_nonce_create_account(
             nonce_account: signer_info.index_of(nonce_account_pubkey).unwrap(),
             seed,
             nonce_authority,
-            lamports,
+            amount,
         },
         signers: signer_info.signers,
     })
@@ -456,7 +457,7 @@ pub fn process_create_nonce_account(
     nonce_account: SignerIndex,
     seed: Option<String>,
     nonce_authority: Option<Pubkey>,
-    lamports: u64,
+    amount: SpendAmount,
 ) -> ProcessResult {
     let nonce_account_pubkey = config.signers[nonce_account].pubkey();
     let nonce_account_address = if let Some(ref seed) = seed {
@@ -470,60 +471,66 @@ pub fn process_create_nonce_account(
         (&nonce_account_address, "nonce_account".to_string()),
     )?;
 
-    if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
-        let err_msg = if state_from_account(&nonce_account).is_ok() {
-            format!("Nonce account {} already exists", nonce_account_address)
-        } else {
-            format!(
-                "Account {} already exists and is not a nonce account",
-                nonce_account_address
-            )
-        };
-        return Err(CliError::BadParameter(err_msg).into());
-    }
+    let additional_online_checks = |lamports| {
+        if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
+            let err_msg = if state_from_account(&nonce_account).is_ok() {
+                format!("Nonce account {} already exists", nonce_account_address)
+            } else {
+                format!(
+                    "Account {} already exists and is not a nonce account",
+                    nonce_account_address
+                )
+            };
+            return Err(CliError::BadParameter(err_msg).into());
+        }
 
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
-    if lamports < minimum_balance {
-        return Err(CliError::BadParameter(format!(
-            "need at least {} lamports for nonce account to be rent exempt, provided lamports: {}",
-            minimum_balance, lamports
-        ))
-        .into());
-    }
+        let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
+        if lamports < minimum_balance {
+            return Err(CliError::BadParameter(format!(
+                "need at least {} lamports for nonce account to be rent exempt, provided lamports: {}",
+                minimum_balance, lamports
+            ))
+            .into());
+        }
+        Ok(())
+    };
 
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.signers[0].pubkey());
 
-    let ixs = if let Some(seed) = seed {
-        create_nonce_account_with_seed(
-            &config.signers[0].pubkey(), // from
-            &nonce_account_address,      // to
-            &nonce_account_pubkey,       // base
-            &seed,                       // seed
-            &nonce_authority,
-            lamports,
-        )
-    } else {
-        create_nonce_account(
-            &config.signers[0].pubkey(),
-            &nonce_account_pubkey,
-            &nonce_authority,
-            lamports,
-        )
+    let build_message = |lamports| {
+        let ixs = if let Some(seed) = seed.clone() {
+            create_nonce_account_with_seed(
+                &config.signers[0].pubkey(), // from
+                &nonce_account_address,      // to
+                &nonce_account_pubkey,       // base
+                &seed,                       // seed
+                &nonce_authority,
+                lamports,
+            )
+        } else {
+            create_nonce_account(
+                &config.signers[0].pubkey(),
+                &nonce_account_pubkey,
+                &nonce_authority,
+                lamports,
+            )
+        };
+        Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()))
     };
 
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let message = Message::new_with_payer(&ixs, Some(&config.signers[0].pubkey()));
-    let mut tx = Transaction::new_unsigned(message);
+    let mut tx = resolve_spend_tx_and_check_account_balance(
+        rpc_client,
+        false,
+        amount,
+        &fee_calculator,
+        &config.signers[0].pubkey(),
+        build_message,
+        additional_online_checks,
+    )?;
     tx.try_sign(&config.signers, recent_blockhash)?;
 
-    check_account_for_spend_and_fee(
-        rpc_client,
-        &config.signers[0].pubkey(),
-        &fee_calculator,
-        &tx.message,
-        lamports,
-    )?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
@@ -730,7 +737,7 @@ mod tests {
                     nonce_account: 1,
                     seed: None,
                     nonce_authority: None,
-                    lamports: 50_000_000_000,
+                    amount: SpendAmount::Some(50_000_000_000),
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -755,7 +762,7 @@ mod tests {
                     nonce_account: 1,
                     seed: None,
                     nonce_authority: Some(nonce_authority_keypair.pubkey()),
-                    lamports: 50_000_000_000,
+                    amount: SpendAmount::Some(50_000_000_000),
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
