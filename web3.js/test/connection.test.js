@@ -453,6 +453,7 @@ test('get cluster nodes', async () => {
           gossip: '127.0.0.0:1234',
           tpu: '127.0.0.0:1235',
           rpc: null,
+          version: '1.1.10',
         },
       ],
     },

@@ -111,15 +111,17 @@ export type SignatureStatusConfig = {
  *
  * @typedef {Object} ContactInfo
  * @property {string} pubkey Identity public key of the node
- * @property {string} gossip Gossip network address for the node
- * @property {string} tpu TPU network address for the node (null if not available)
+ * @property {string|null} gossip Gossip network address for the node
+ * @property {string|null} tpu TPU network address for the node (null if not available)
  * @property {string|null} rpc JSON RPC network address for the node (null if not available)
+ * @property {string|null} version Software version of the node (null if not available)
  */
 type ContactInfo = {
   pubkey: string,
-  gossip: string,
+  gossip: string | null,
   tpu: string | null,
   rpc: string | null,
+  version: string | null,
 };
 
 /**
@@ -477,9 +479,10 @@ const GetClusterNodes = jsonRpcResult(
   struct.array([
     struct({
       pubkey: 'string',
-      gossip: 'string',
+      gossip: struct.union(['null', 'string']),
       tpu: struct.union(['null', 'string']),
       rpc: struct.union(['null', 'string']),
+      version: struct.union(['null', 'string']),
     }),
   ]),
 );

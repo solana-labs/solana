@@ -78,9 +78,10 @@ declare module '@solana/web3.js' {
 
   export type ContactInfo = {
     pubkey: string;
-    gossip: string;
+    gossip?: string;
     tpu?: string;
     rpc?: string;
+    version?: string;
   };
 
   export type ConfirmedTransactionMeta = {
