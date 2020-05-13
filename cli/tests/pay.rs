@@ -77,7 +77,7 @@ fn test_cli_timestamp_tx() {
     let date_string = "\"2018-09-19T17:30:59Z\"";
     let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
     config_payer.command = CliCommand::Pay(PayCommand {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: bob_pubkey,
         timestamp: Some(dt),
         timestamp_pubkey: Some(config_witness.signers[0].pubkey()),
@@ -160,7 +160,7 @@ fn test_cli_witness_tx() {
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
     config_payer.command = CliCommand::Pay(PayCommand {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: bob_pubkey,
         witnesses: Some(vec![config_witness.signers[0].pubkey()]),
         ..PayCommand::default()
@@ -234,7 +234,7 @@ fn test_cli_cancel_tx() {
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
     config_payer.command = CliCommand::Pay(PayCommand {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: bob_pubkey,
         witnesses: Some(vec![config_witness.signers[0].pubkey()]),
         cancelable: true,
@@ -319,7 +319,7 @@ fn test_offline_pay_tx() {
 
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::Pay(PayCommand {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: bob_pubkey,
         blockhash_query: BlockhashQuery::None(blockhash),
         sign_only: true,
@@ -340,7 +340,7 @@ fn test_offline_pay_tx() {
     let online_pubkey = config_online.signers[0].pubkey();
     config_online.signers = vec![&offline_presigner];
     config_online.command = CliCommand::Pay(PayCommand {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: bob_pubkey,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         ..PayCommand::default()
@@ -418,7 +418,7 @@ fn test_nonced_pay_tx() {
     let bob_pubkey = Pubkey::new_rand();
     config.signers = vec![&default_signer];
     config.command = CliCommand::Pay(PayCommand {
-        lamports: 10,
+        amount: SpendAmount::Some(10),
         to: bob_pubkey,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),

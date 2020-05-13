@@ -17,6 +17,12 @@ pub enum SpendAmount {
     Some(u64),
 }
 
+impl Default for SpendAmount {
+    fn default() -> Self {
+        Self::Some(u64::default())
+    }
+}
+
 impl SpendAmount {
     pub fn new(amount: Option<u64>, sign_only: bool) -> Self {
         match amount {
