@@ -1,7 +1,7 @@
 use crate::{
-    checks::check_account_for_spend_and_fee,
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::{CliValidatorInfo, CliValidatorInfoVec},
+    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use bincode::deserialize;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
@@ -23,7 +23,6 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    transaction::Transaction,
 };
 use std::{error, sync::Arc};
 
@@ -314,8 +313,7 @@ pub fn process_set_validator_info(
     let lamports =
         rpc_client.get_minimum_balance_for_rent_exemption(ValidatorInfo::max_space() as usize)?;
 
-    let keys = vec![(id(), false), (config.signers[0].pubkey(), true)];
-    let (message, signers): (Message, Vec<&dyn Signer>) = if balance == 0 {
+    let signers = if balance == 0 {
         if info_pubkey != info_keypair.pubkey() {
             println!(
                 "Account {:?} does not exist. Generating new keypair...",
@@ -323,53 +321,59 @@ pub fn process_set_validator_info(
             );
             info_pubkey = info_keypair.pubkey();
         }
-        println!(
-            "Publishing info for Validator {:?}",
-            config.signers[0].pubkey()
-        );
-        let mut instructions = config_instruction::create_account::<ValidatorInfo>(
-            &config.signers[0].pubkey(),
-            &info_keypair.pubkey(),
-            lamports,
-            keys.clone(),
-        );
-        instructions.extend_from_slice(&[config_instruction::store(
-            &info_keypair.pubkey(),
-            true,
-            keys,
-            &validator_info,
-        )]);
-        let signers = vec![config.signers[0], &info_keypair];
-        let message = Message::new(&instructions);
-        (message, signers)
+        vec![config.signers[0], &info_keypair]
     } else {
-        println!(
-            "Updating Validator {:?} info at: {:?}",
-            config.signers[0].pubkey(),
-            info_pubkey
-        );
-        let instructions = vec![config_instruction::store(
-            &info_pubkey,
-            false,
-            keys,
-            &validator_info,
-        )];
-        let message = Message::new_with_payer(&instructions, Some(&config.signers[0].pubkey()));
-        let signers = vec![config.signers[0]];
-        (message, signers)
+        vec![config.signers[0]]
+    };
+
+    let build_message = |lamports| {
+        let keys = vec![(id(), false), (config.signers[0].pubkey(), true)];
+        if balance == 0 {
+            println!(
+                "Publishing info for Validator {:?}",
+                config.signers[0].pubkey()
+            );
+            let mut instructions = config_instruction::create_account::<ValidatorInfo>(
+                &config.signers[0].pubkey(),
+                &info_pubkey,
+                lamports,
+                keys.clone(),
+            );
+            instructions.extend_from_slice(&[config_instruction::store(
+                &info_pubkey,
+                true,
+                keys,
+                &validator_info,
+            )]);
+            Message::new(&instructions)
+        } else {
+            println!(
+                "Updating Validator {:?} info at: {:?}",
+                config.signers[0].pubkey(),
+                info_pubkey
+            );
+            let instructions = vec![config_instruction::store(
+                &info_pubkey,
+                false,
+                keys,
+                &validator_info,
+            )];
+            Message::new_with_payer(&instructions, Some(&config.signers[0].pubkey()))
+        }
     };
 
     // Submit transaction
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&signers, recent_blockhash)?;
-    check_account_for_spend_and_fee(
+    let mut tx = resolve_spend_tx_and_check_account_balance(
         rpc_client,
-        &config.signers[0].pubkey(),
+        false,
+        SpendAmount::Some(lamports),
         &fee_calculator,
-        &tx.message,
-        lamports,
+        &config.signers[0].pubkey(),
+        build_message,
+        |_| Ok(()),
     )?;
+    tx.try_sign(&signers, recent_blockhash)?;
     let signature_str = rpc_client.send_and_confirm_transaction_with_spinner(&tx)?;
 
     println!("Success! Validator info published at: {:?}", info_pubkey);
