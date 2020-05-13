@@ -111,7 +111,7 @@ fn run_check_duplicate(
     Ok(())
 }
 
-fn verify_repair_addr(
+fn verify_repair(
     outstanding_requests: &OutstandingRequests<RepairType, Shred>,
     shred: &Shred,
     repair_info: &Option<RepairInfo>,
@@ -129,7 +129,7 @@ fn verify_repair_addr(
 }
 
 fn run_insert<F>(
-    shred_receiver: &CrossbeamReceiver<(Shred, Option<RepairInfo>)>,
+    shred_receiver: &CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairInfo>>)>,
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
@@ -140,16 +140,21 @@ where
     F: Fn(Shred) -> (),
 {
     let timer = Duration::from_millis(200);
-    let mut shreds = vec![];
-    let (shred, repair_info) = shred_receiver.recv_timeout(timer)?;
-    if verify_repair_addr(outstanding_requests, &shred, &repair_info) {
-        shreds.push(shred);
+    let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
+    while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
+        shreds.extend(more_shreds);
+        repair_infos.extend(more_repair_infos);
     }
-    while let Ok((shred, repair_info)) = shred_receiver.try_recv() {
-        if verify_repair_addr(outstanding_requests, &shred, &repair_info) {
-            shreds.push(shred);
-        }
-    }
+
+    assert_eq!(shreds.len(), repair_infos.len());
+    let mut i = 0;
+    shreds.retain(|shred| {
+        (
+            verify_repair(outstanding_requests, &shred, &repair_infos[i]),
+            i += 1,
+        )
+            .0
+    });
 
     blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -163,7 +168,7 @@ where
 
 fn recv_window<F>(
     blockstore: &Arc<Blockstore>,
-    insert_shred_senders: &[CrossbeamSender<(Shred, Option<RepairInfo>)>],
+    insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<RepairInfo>>)>,
     my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
     retransmit: &PacketSender,
@@ -187,7 +192,7 @@ where
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
     let last_root = blockstore.last_root();
-    let send_results: Vec<_> = thread_pool.install(|| {
+    let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .par_iter_mut()
             .flat_map(|packets| {
@@ -241,13 +246,7 @@ where
                                     }
                                     packet.meta.slot = shred.slot();
                                     packet.meta.seed = shred.seed();
-                                    if packet.meta.repair {
-                                        // If this was a repair, send it to repair inserter
-                                        Some(insert_shred_senders[0].send((shred, repair_info)))
-                                    } else {
-                                        // send others
-                                        Some(insert_shred_senders[1].send((shred, repair_info)))
-                                    }
+                                    Some((shred, repair_info))
                                 } else {
                                     packet.meta.discard = true;
                                     None
@@ -260,10 +259,11 @@ where
                     })
                     .collect::<Vec<_>>()
             })
-            .collect()
+            .unzip()
     });
 
-    trace!("{:?} shreds from packets", send_results.len());
+    trace!("{:?} shreds from packets", shreds.len());
+
     trace!("{} num total shreds received: {}", my_pubkey, total_packets);
 
     for packets in packets.into_iter() {
@@ -273,9 +273,7 @@ where
         }
     }
 
-    for result in send_results {
-        result?;
-    }
+    insert_shred_sender.send((shreds, repair_infos))?;
 
     trace!(
         "Elapsed processing time in recv_window(): {}",
@@ -310,7 +308,7 @@ impl Drop for Finalizer {
 
 pub struct WindowService {
     t_window: JoinHandle<()>,
-    t_inserts: Vec<JoinHandle<()>>,
+    t_insert: JoinHandle<()>,
     t_check_duplicate: JoinHandle<()>,
     repair_service: RepairService,
 }
@@ -354,29 +352,25 @@ impl WindowService {
         );
 
         let (insert_sender, insert_receiver) = unbounded();
-        let (repair_insert_sender, repair_insert_receiver) = unbounded();
-        let insert_senders = vec![insert_sender, repair_insert_sender];
-        let insert_receivers = vec![insert_receiver, repair_insert_receiver];
-
         let (duplicate_sender, duplicate_receiver) = unbounded();
 
         let t_check_duplicate =
             Self::start_check_duplicate_thread(exit, &blockstore, duplicate_receiver);
 
-        let t_inserts = Self::start_window_insert_threads(
+        let t_insert = Self::start_window_insert_thread(
             exit,
             &blockstore,
             leader_schedule_cache,
-            insert_receivers,
+            insert_receiver,
             duplicate_sender,
-            &outstanding_requests,
+            outstanding_requests,
         );
 
         let t_window = Self::start_recv_window_thread(
             cluster_info.id(),
             exit,
             &blockstore,
-            insert_senders,
+            insert_sender,
             verified_receiver,
             shred_filter,
             bank_forks,
@@ -385,7 +379,7 @@ impl WindowService {
 
         WindowService {
             t_window,
-            t_inserts,
+            t_insert,
             t_check_duplicate,
             repair_service,
         }
@@ -418,71 +412,63 @@ impl WindowService {
             .unwrap()
     }
 
-    fn start_window_insert_threads(
+    fn start_window_insert_thread(
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        insert_receivers: Vec<CrossbeamReceiver<(Shred, Option<RepairInfo>)>>,
+        insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairInfo>>)>,
         duplicate_sender: CrossbeamSender<Shred>,
-        outstanding_requests: &Arc<OutstandingRequests<RepairType, Shred>>,
-    ) -> Vec<JoinHandle<()>> {
+        outstanding_requests: Arc<OutstandingRequests<RepairType, Shred>>,
+    ) -> JoinHandle<()> {
+        let exit = exit.clone();
+        let blockstore = blockstore.clone();
+        let leader_schedule_cache = leader_schedule_cache.clone();
         let mut handle_timeout = || {};
         let handle_error = || {
             inc_new_counter_error!("solana-window-insert-error", 1, 1);
         };
 
-        insert_receivers
-            .into_iter()
-            .map(|insert_receiver| {
-                let duplicate_sender = duplicate_sender.clone();
-                let exit = exit.clone();
-                let outstanding_requests = outstanding_requests.clone();
-                let blockstore = blockstore.clone();
-                let leader_schedule_cache = leader_schedule_cache.clone();
-                Builder::new()
-                    .name("solana-window-insert".to_string())
-                    .spawn(move || {
-                        let handle_duplicate = |shred| {
-                            let _ = duplicate_sender.send(shred);
-                        };
-                        let mut metrics = BlockstoreInsertionMetrics::default();
-                        let mut last_print = Instant::now();
-                        loop {
-                            if exit.load(Ordering::Relaxed) {
-                                break;
-                            }
+        Builder::new()
+            .name("solana-window-insert".to_string())
+            .spawn(move || {
+                let handle_duplicate = |shred| {
+                    let _ = duplicate_sender.send(shred);
+                };
+                let mut metrics = BlockstoreInsertionMetrics::default();
+                let mut last_print = Instant::now();
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
 
-                            if let Err(e) = run_insert(
-                                &insert_receiver,
-                                &blockstore,
-                                &leader_schedule_cache,
-                                &handle_duplicate,
-                                &mut metrics,
-                                &outstanding_requests,
-                            ) {
-                                if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error)
-                                {
-                                    break;
-                                }
-                            }
-
-                            if last_print.elapsed().as_secs() > 2 {
-                                metrics.report_metrics("recv-window-insert-shreds");
-                                metrics = BlockstoreInsertionMetrics::default();
-                                last_print = Instant::now();
-                            }
+                    if let Err(e) = run_insert(
+                        &insert_receiver,
+                        &blockstore,
+                        &leader_schedule_cache,
+                        &handle_duplicate,
+                        &mut metrics,
+                        &outstanding_requests,
+                    ) {
+                        if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
+                            break;
                         }
-                    })
-                    .unwrap()
+                    }
+
+                    if last_print.elapsed().as_secs() > 2 {
+                        metrics.report_metrics("recv-window-insert-shreds");
+                        metrics = BlockstoreInsertionMetrics::default();
+                        last_print = Instant::now();
+                    }
+                }
             })
-            .collect()
+            .unwrap()
     }
 
     fn start_recv_window_thread<F>(
         id: Pubkey,
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
-        insert_senders: Vec<CrossbeamSender<(Shred, Option<RepairInfo>)>>,
+        insert_sender: CrossbeamSender<(Vec<Shred>, Vec<Option<RepairInfo>>)>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
@@ -523,7 +509,7 @@ impl WindowService {
                     };
                     if let Err(e) = recv_window(
                         &blockstore,
-                        &insert_senders,
+                        &insert_sender,
                         &id,
                         &verified_receiver,
                         &retransmit,
@@ -571,9 +557,7 @@ impl WindowService {
 
     pub fn join(self) -> thread::Result<()> {
         self.t_window.join()?;
-        for t_insert in self.t_inserts {
-            t_insert.join()?;
-        }
+        self.t_insert.join()?;
         self.t_check_duplicate.join()?;
         self.repair_service.join()
     }
