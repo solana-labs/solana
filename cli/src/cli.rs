@@ -1703,6 +1703,13 @@ fn process_transfer(
             Message::new_with_payer(&ixs, Some(&fee_payer.pubkey()))
         }
     };
+    let additional_online_checks = |_lamports| {
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = rpc_client.get_account(nonce_account)?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+        Ok(())
+    };
 
     let mut tx = resolve_spend_tx_and_check_account_balances(
         rpc_client,
@@ -1712,6 +1719,7 @@ fn process_transfer(
         &from.pubkey(),
         &fee_payer.pubkey(),
         build_message,
+        additional_online_checks,
     )?;
 
     if sign_only {

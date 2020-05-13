@@ -11,16 +11,18 @@ struct SpendAndFee {
     fee: u64,
 }
 
-pub fn resolve_spend_tx_and_check_account_balance<F>(
+pub fn resolve_spend_tx_and_check_account_balance<F, G>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: TransferAmount,
     fee_calculator: &FeeCalculator,
     from_pubkey: &Pubkey,
     build_message: F,
+    additional_online_checks: G,
 ) -> Result<Transaction, Box<dyn error::Error>>
 where
     F: Fn(u64) -> Message,
+    G: Fn(u64) -> Result<(), Box<dyn error::Error>>,
 {
     resolve_spend_tx_and_check_account_balances(
         rpc_client,
@@ -30,10 +32,11 @@ where
         from_pubkey,
         from_pubkey,
         build_message,
+        additional_online_checks,
     )
 }
 
-pub fn resolve_spend_tx_and_check_account_balances<F>(
+pub fn resolve_spend_tx_and_check_account_balances<F, G>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: TransferAmount,
@@ -41,9 +44,11 @@ pub fn resolve_spend_tx_and_check_account_balances<F>(
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
     build_message: F,
+    additional_online_checks: G,
 ) -> Result<Transaction, Box<dyn error::Error>>
 where
     F: Fn(u64) -> Message,
+    G: Fn(u64) -> Result<(), Box<dyn error::Error>>,
 {
     let message = if sign_only {
         let (message, _) = resolve_spend_message(
@@ -83,6 +88,7 @@ where
                 return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)).into());
             }
         }
+        additional_online_checks(spend)?;
         message
     };
     Ok(Transaction::new_unsigned(message))
