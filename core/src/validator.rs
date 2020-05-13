@@ -767,6 +767,15 @@ fn report_target_features() {
                 process::exit(1);
             }
         }
+        #[target_feature(enable = "avx2")]
+        {
+            if is_x86_feature_detected!("avx2") {
+                info!("AVX2 detected");
+            } else {
+                error!("Your machine does not have AVX2 support, please rebuild from source on your machine");
+                process::exit(1);
+            }
+        }
     }
 }
 
