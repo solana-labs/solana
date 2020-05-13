@@ -36,6 +36,7 @@ pub const TAR_VERSION_FILE: &str = "version";
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_1_0: &str = "1.1.0";
 const VERSION_STRING_V1_1_1: &str = "1.1.1";
+const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_1_1;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -45,7 +46,7 @@ pub enum SnapshotVersion {
 
 impl Default for SnapshotVersion {
     fn default() -> Self {
-        Self::V1_1_0
+        DEFAULT_SNAPSHOT_VERSION
     }
 }
 
@@ -138,7 +139,6 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_path: P,
     snapshot_storages: SnapshotStorages,
     compression: CompressionType,
-    snapshot_version: SnapshotVersion,
 ) -> Result<AccountsPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -169,7 +169,6 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_package_output_file,
         bank.get_accounts_hash(),
         compression,
-        snapshot_version,
     );
 
     Ok(package)
@@ -240,7 +239,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     // Write version file
     {
         let mut f = std::fs::File::create(staging_version_file)?;
-        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())?;
+        f.write_all(DEFAULT_SNAPSHOT_VERSION.as_str().as_bytes())?;
     }
 
     let (compression_option, file_ext) = get_compression_ext(&snapshot_package.compression);
@@ -447,7 +446,7 @@ fn create_versioned_bank_snapshot_serializer<'a>(
                 Ok(())
             },
         )),
-        //If additional snapshot version were defined but not implemented...
+        //If additional snapshot versions were defined but not implemented...
         //_ => Err(get_io_error(&format!("unsupported snapshot version: {}", snapshot_version.to_string()))),
     }
 }
@@ -508,7 +507,6 @@ pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_path: P,
     bank: &Bank,
     snapshot_storages: &[SnapshotStorage],
-    snapshot_version: SnapshotVersion,
 ) -> Result<SlotSnapshotPaths> {
     let slot = bank.slot();
     // snapshot_path/slot
@@ -523,8 +521,11 @@ pub fn add_snapshot<P: AsRef<Path>>(
     );
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
-    let bank_snapshot_serializer =
-        create_versioned_bank_snapshot_serializer(snapshot_version, bank, snapshot_storages)?;
+    let bank_snapshot_serializer = create_versioned_bank_snapshot_serializer(
+        DEFAULT_SNAPSHOT_VERSION,
+        bank,
+        snapshot_storages,
+    )?;
     let consumed_size =
         serialize_snapshot_data_file(&snapshot_bank_file_path, bank_snapshot_serializer)?;
     bank_serialize.stop();

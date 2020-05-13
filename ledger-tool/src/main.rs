@@ -562,7 +562,6 @@ fn load_bank_forks(
             snapshot_package_output_path: ledger_path.clone(),
             snapshot_path: ledger_path.clone().join("snapshot"),
             compression: CompressionType::Bzip2,
-            snapshot_version: snapshot_utils::SnapshotVersion::default(),
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
@@ -630,18 +629,6 @@ fn main() {
         .takes_value(true)
         .default_value(&default_genesis_archive_unpacked_size)
         .help("maximum total uncompressed size of unpacked genesis archive");
-    let snapshot_version_arg = Arg::with_name("snapshot_version")
-        .long("snapshot-version")
-        .value_name("VERSION")
-        .validator(|arg| {
-            arg.parse::<snapshot_utils::SnapshotVersion>()
-                .map(|_| ())
-                .map_err(|e| e.to_string())
-        })
-        .multiple(false)
-        .required(false)
-        .takes_value(true)
-        .help("Output snapshot in this version");
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -763,7 +750,6 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
-            .arg(&snapshot_version_arg)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -1029,15 +1015,7 @@ fn main() {
         ("create-snapshot", Some(arg_matches)) => {
             let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
-            let snapshot_version = match arg_matches.value_of("snapshot_version") {
-                Some(s) => s
-                    .parse::<snapshot_utils::SnapshotVersion>()
-                    .unwrap_or_else(|e| {
-                        eprintln!("Error: {}", e);
-                        exit(1)
-                    }),
-                None => snapshot_utils::SnapshotVersion::default(),
-            };
+
             let process_options = ProcessOptions {
                 dev_halt_at_slot: Some(snapshot_slot),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -1061,7 +1039,7 @@ fn main() {
                     });
 
                     let storages: Vec<_> = bank.get_snapshot_storages();
-                    snapshot_utils::add_snapshot(&temp_dir, &bank, &storages, snapshot_version)
+                    snapshot_utils::add_snapshot(&temp_dir, &bank, &storages)
                         .and_then(|slot_snapshot_paths| {
                             snapshot_utils::package_snapshot(
                                 &bank,
@@ -1071,7 +1049,6 @@ fn main() {
                                 output_directory,
                                 storages,
                                 CompressionType::Bzip2,
-                                snapshot_version,
                             )
                         })
                         .and_then(|package| {

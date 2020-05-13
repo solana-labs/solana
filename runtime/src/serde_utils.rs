@@ -5,6 +5,7 @@ use {
             AccountStorage, AccountStorageEntry, AccountStorageStatus, AccountsDB, AppendVecId,
             BankHashInfo, SlotStores,
         },
+        accounts_index::Ancestors,
         append_vec::AppendVec,
         bank::BankRc,
     },
@@ -68,7 +69,7 @@ fn accountsdb_to_io_error<T: ToString>(error: T) -> IoError {
 pub fn bankrc_from_stream<R, P>(
     account_paths: &[PathBuf],
     slot: Slot,
-    ancestors: &HashMap<Slot, usize>,
+    ancestors: &Ancestors,
     frozen_account_pubkeys: &[Pubkey],
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
@@ -101,7 +102,7 @@ where
 #[cfg(test)]
 pub(crate) fn accounts_from_stream<R, P>(
     account_paths: &[PathBuf],
-    ancestors: &HashMap<Slot, usize>,
+    ancestors: &Ancestors,
     frozen_account_pubkeys: &[Pubkey],
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
@@ -157,7 +158,7 @@ where
 pub fn context_bankrc_from_stream<'a, C, R, P>(
     account_paths: &[PathBuf],
     slot: Slot,
-    ancestors: &HashMap<Slot, usize>,
+    ancestors: &Ancestors,
     frozen_account_pubkeys: &[Pubkey],
     mut stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
@@ -237,7 +238,7 @@ where
 
 pub(crate) fn context_accounts_from_stream<'a, C, R, P>(
     account_paths: &[PathBuf],
-    ancestors: &HashMap<Slot, usize>,
+    ancestors: &Ancestors,
     frozen_account_pubkeys: &[Pubkey],
     stream: &mut BufReader<R>,
     stream_append_vecs_path: P,
@@ -583,7 +584,6 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntryV1_1_1 {
         Self {
             id: rhs.id,
             accounts_current_len: rhs.accounts.len(),
-            ..Self::default()
         }
     }
 }

@@ -81,7 +81,7 @@ mod tests {
     use solana_ledger::bank_forks::CompressionType;
     use solana_ledger::{
         snapshot_package::AccountsPackage,
-        snapshot_utils::{self, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
+        snapshot_utils::{self, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_runtime::{accounts_db::AccountStorageEntry, bank::BankSlotDelta};
     use solana_sdk::hash::Hash;
@@ -173,7 +173,6 @@ mod tests {
             output_tar_path.clone(),
             Hash::default(),
             CompressionType::Bzip2,
-            SnapshotVersion::default(),
         );
 
         // Make tarball from packageable snapshot
