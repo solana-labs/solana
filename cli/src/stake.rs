@@ -1,6 +1,6 @@
 use crate::{
+    checks::{check_account_for_fee, check_accounts_for_spend_and_fee, check_unique_pubkeys},
     cli::{
-        check_account_for_fee, check_accounts_for_spend_and_fee, check_unique_pubkeys,
         fee_payer_arg, generate_unique_signers, log_instruction_custom_error, nonce_authority_arg,
         return_signers, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
         SignerIndex, FEE_PAYER_ARG,

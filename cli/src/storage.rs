@@ -1,7 +1,9 @@
-use crate::cli::{
-    check_account_for_fee, check_unique_pubkeys, generate_unique_signers,
-    log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult,
-    SignerIndex,
+use crate::{
+    checks::{check_account_for_fee, check_unique_pubkeys},
+    cli::{
+        generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
+        CliConfig, CliError, ProcessResult, SignerIndex,
+    },
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::signer_from_path};

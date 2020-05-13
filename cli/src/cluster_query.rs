@@ -1,8 +1,6 @@
 use crate::{
-    cli::{
-        check_account_for_spend_and_fee, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
-    },
+    checks::check_account_for_spend_and_fee,
+    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
     display::println_name_value,
 };

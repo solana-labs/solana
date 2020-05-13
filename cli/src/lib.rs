@@ -21,6 +21,7 @@ macro_rules! pubkey {
 #[macro_use]
 extern crate serde_derive;
 
+pub mod checks;
 pub mod cli;
 pub mod cli_output;
 pub mod cluster_query;

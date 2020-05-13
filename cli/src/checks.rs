@@ -1,10 +1,7 @@
-use crate::cli::{calculate_fee, check_account_for_balance, CliError};
+use crate::cli::CliError;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    fee_calculator::FeeCalculator,
-    message::Message,
-    native_token::lamports_to_sol,
-    pubkey::Pubkey,
+    fee_calculator::FeeCalculator, message::Message, native_token::lamports_to_sol, pubkey::Pubkey,
 };
 use std::error;
 
@@ -17,7 +14,7 @@ pub fn check_account_for_fee(
     check_account_for_multiple_fees(rpc_client, account_pubkey, fee_calculator, &[message])
 }
 
-fn check_account_for_multiple_fees(
+pub fn check_account_for_multiple_fees(
     rpc_client: &RpcClient,
     account_pubkey: &Pubkey,
     fee_calculator: &FeeCalculator,

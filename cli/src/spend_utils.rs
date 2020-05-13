@@ -1,4 +1,7 @@
-use crate::cli::{calculate_fee, check_account_for_balance, CliError, TransferAmount};
+use crate::{
+    checks::{calculate_fee, check_account_for_balance},
+    cli::{CliError, TransferAmount},
+};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     fee_calculator::FeeCalculator, message::Message, native_token::lamports_to_sol, pubkey::Pubkey,
