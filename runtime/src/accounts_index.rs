@@ -4,15 +4,9 @@ use std::{
     sync::{RwLock, RwLockReadGuard},
 };
 
-<<<<<<< HEAD
 pub type Slot = u64;
 type SlotList<T> = Vec<(Slot, T)>;
-=======
-pub type SlotList<T> = Vec<(Slot, T)>;
-pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type Ancestors = HashMap<Slot, usize>;
-
->>>>>>> 991853922... Introduce type alias Ancestors (#9699)
 pub type RefCount = u64;
 type AccountMapEntry<T> = (RefCount, SlotList<T>);
 
@@ -59,15 +53,9 @@ impl<T: Clone> AccountsIndex<T> {
         (reclaims, list.is_empty())
     }
 
-<<<<<<< HEAD
     // find the latest slot and T in a list for a given ancestor
     // returns index into 'list' if found, None if not.
-    fn latest_slot(&self, ancestors: &HashMap<Slot, usize>, list: &[(Slot, T)]) -> Option<usize> {
-=======
-    // find the latest slot and T in a slice for a given ancestor
-    // returns index into 'slice' if found, None if not.
-    fn latest_slot(&self, ancestors: &Ancestors, slice: SlotSlice<T>) -> Option<usize> {
->>>>>>> 991853922... Introduce type alias Ancestors (#9699)
+    fn latest_slot(&self, ancestors: &Ancestors, list: &[(Slot, T)]) -> Option<usize> {
         let mut max = 0;
         let mut rv = None;
         for (i, (slot, _t)) in list.iter().rev().enumerate() {
@@ -84,13 +72,8 @@ impl<T: Clone> AccountsIndex<T> {
     pub fn get(
         &self,
         pubkey: &Pubkey,
-<<<<<<< HEAD
-        ancestors: &HashMap<Slot, usize>,
-    ) -> Option<(RwLockReadGuard<AccountMapEntry<T>>, usize)> {
-=======
         ancestors: &Ancestors,
-    ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
->>>>>>> 991853922... Introduce type alias Ancestors (#9699)
+    ) -> Option<(RwLockReadGuard<AccountMapEntry<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let list_r = list.read().unwrap();
             let lock = &list_r.1;

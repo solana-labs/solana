@@ -19,11 +19,7 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
-<<<<<<< HEAD
-    accounts_index::AccountsIndex,
-=======
-    accounts_index::{AccountsIndex, Ancestors, SlotList, SlotSlice},
->>>>>>> 991853922... Introduce type alias Ancestors (#9699)
+    accounts_index::{AccountsIndex, Ancestors},
     append_vec::{AppendVec, StoredAccount, StoredMeta},
     bank::deserialize_from_snapshot,
 };
