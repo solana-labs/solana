@@ -8,6 +8,7 @@ pub mod perf_utils;
 pub mod pubsub_client;
 pub mod rpc_client;
 pub mod rpc_client_request;
+pub mod rpc_config;
 pub mod rpc_request;
 pub mod rpc_response;
 pub mod thin_client;

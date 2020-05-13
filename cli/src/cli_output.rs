@@ -4,7 +4,9 @@ use console::{style, Emoji};
 use inflector::cases::titlecase::to_title_case;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use solana_client::rpc_response::{RpcEpochInfo, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo};
+use solana_client::rpc_response::{
+    RpcAccountBalance, RpcEpochInfo, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
+};
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
     native_token::lamports_to_sol,
@@ -905,6 +907,30 @@ impl fmt::Display for CliSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         writeln_name_value(f, "Signature:", &self.signature)?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliAccountBalances {
+    pub accounts: Vec<RpcAccountBalance>,
+}
+
+impl fmt::Display for CliAccountBalances {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "{}",
+            style(format!("{:<44}  {}", "Address", "Balance",)).bold()
+        )?;
+        for account in &self.accounts {
+            writeln!(
+                f,
+                "{:<44}  {}",
+                account.address,
+                &format!("{} SOL", lamports_to_sol(account.lamports))
+            )?;
+        }
         Ok(())
     }
 }

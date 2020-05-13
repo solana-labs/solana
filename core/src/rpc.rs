@@ -13,8 +13,10 @@ use bincode::serialize;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::{
+    rpc_config::*,
     rpc_request::{
-        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+        MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::*,
 };
@@ -49,8 +51,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NUM_LARGEST_ACCOUNTS: usize = 20;
-
 type RpcResponse<T> = Result<Response<T>>;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
@@ -65,12 +65,6 @@ pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcSignatureStatusConfig {
-    pub search_transaction_history: bool,
 }
 
 #[derive(Clone)]
@@ -281,22 +275,30 @@ impl JsonRpcRequestProcessor {
 
     fn get_largest_accounts(
         &self,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcLargestAccountsConfig>,
     ) -> RpcResponse<Vec<RpcAccountBalance>> {
-        let bank = self.bank(commitment)?;
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment)?;
+        let (addresses, address_filter) = if let Some(filter) = config.filter {
+            let non_circulating_supply = calculate_non_circulating_supply(bank.clone());
+            let addresses = non_circulating_supply.accounts.into_iter().collect();
+            let address_filter = match filter {
+                RpcLargestAccountsFilter::Circulating => AccountAddressFilter::Exclude,
+                RpcLargestAccountsFilter::NonCirculating => AccountAddressFilter::Include,
+            };
+            (addresses, address_filter)
+        } else {
+            (HashSet::new(), AccountAddressFilter::Exclude)
+        };
         new_response(
             &bank,
-            bank.get_largest_accounts(
-                NUM_LARGEST_ACCOUNTS,
-                &HashSet::new(),
-                AccountAddressFilter::Exclude,
-            )
-            .into_iter()
-            .map(|(address, lamports)| RpcAccountBalance {
-                address: address.to_string(),
-                lamports,
-            })
-            .collect(),
+            bank.get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)
+                .into_iter()
+                .map(|(address, lamports)| RpcAccountBalance {
+                    address: address.to_string(),
+                    lamports,
+                })
+                .collect(),
         )
     }
 
@@ -838,7 +840,7 @@ pub trait RpcSol {
     fn get_largest_accounts(
         &self,
         meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcLargestAccountsConfig>,
     ) -> RpcResponse<Vec<RpcAccountBalance>>;
 
     #[rpc(meta, name = "getSupply")]
@@ -1255,13 +1257,13 @@ impl RpcSol for RpcSolImpl {
     fn get_largest_accounts(
         &self,
         meta: Self::Metadata,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcLargestAccountsConfig>,
     ) -> RpcResponse<Vec<RpcAccountBalance>> {
         debug!("get_largest_accounts rpc request received");
         meta.request_processor
             .read()
             .unwrap()
-            .get_largest_accounts(commitment)
+            .get_largest_accounts(config)
     }
 
     fn get_supply(
@@ -1565,6 +1567,7 @@ pub mod tests {
     use super::*;
     use crate::{
         commitment::BlockCommitment, contact_info::ContactInfo,
+        non_circulating_supply::non_circulating_accounts,
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
     };
     use bincode::deserialize;
@@ -1717,6 +1720,9 @@ pub mod tests {
         let blockhash = bank.confirmed_last_blockhash().0;
         let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash);
         bank.process_transaction(&tx).expect("process transaction");
+        let tx =
+            system_transaction::transfer(&alice, &non_circulating_accounts()[0], 20, blockhash);
+        bank.process_transaction(&tx).expect("process transaction");
 
         let tx = system_transaction::transfer(&alice, pubkey, std::u64::MAX, blockhash);
         let _ = bank.process_transaction(&tx);
@@ -1868,7 +1874,7 @@ pub mod tests {
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":3,"id":1}}"#);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":4,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -1917,6 +1923,31 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_supply() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getSupply"}}"#);
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
+            .expect("actual response deserialization");
+        assert_eq!(supply.non_circulating, 20);
+        assert!(supply.circulating >= TEST_MINT_LAMPORTS);
+        assert!(supply.total >= TEST_MINT_LAMPORTS + 20);
+        let expected_accounts: Vec<String> = non_circulating_accounts()
+            .iter()
+            .map(|pubkey| pubkey.to_string())
+            .collect();
+        assert_eq!(
+            supply.non_circulating_accounts.len(),
+            expected_accounts.len()
+        );
+        for address in supply.non_circulating_accounts {
+            assert!(expected_accounts.contains(&address));
+        }
+    }
+
+    #[test]
     fn test_get_largest_accounts() {
         let bob_pubkey = Pubkey::new_rand();
         let RpcHandler {
@@ -1928,7 +1959,7 @@ pub mod tests {
         let largest_accounts: Vec<RpcAccountBalance> =
             serde_json::from_value(json["result"]["value"].clone())
                 .expect("actual response deserialization");
-        assert_eq!(largest_accounts.len(), 18);
+        assert_eq!(largest_accounts.len(), 19);
 
         // Get Alice balance
         let req = format!(
@@ -1949,7 +1980,7 @@ pub mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
             bob_pubkey
         );
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(&req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let bob_balance: u64 = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
@@ -1957,6 +1988,26 @@ pub mod tests {
             address: bob_pubkey.to_string(),
             lamports: bob_balance,
         }));
+
+        // Test Circulating/NonCirculating Filter
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{{"filter":"circulating"}}]}}"#
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let largest_accounts: Vec<RpcAccountBalance> =
+            serde_json::from_value(json["result"]["value"].clone())
+                .expect("actual response deserialization");
+        assert_eq!(largest_accounts.len(), 18);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestAccounts","params":[{{"filter":"nonCirculating"}}]}}"#
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let largest_accounts: Vec<RpcAccountBalance> =
+            serde_json::from_value(json["result"]["value"].clone())
+                .expect("actual response deserialization");
+        assert_eq!(largest_accounts.len(), 1);
     }
 
     #[test]

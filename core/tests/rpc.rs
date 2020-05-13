@@ -265,7 +265,7 @@ fn test_rpc_subscriptions() {
     }
 
     // Wait for all signature subscriptions
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(7);
     while !signature_set.is_empty() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match status_receiver.recv_timeout(timeout) {
